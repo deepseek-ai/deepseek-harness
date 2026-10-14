@@ -25,6 +25,7 @@ import type {
   PluginSpecInspection,
   ReadOnlyReason,
   Registry,
+  RestartReason,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import { normalizeRegistry, NPMMIRROR_REGISTRY, OFFICIAL_NPM_REGISTRY, REGISTRY_URL } from '@deepseek-ai/dsh-plugin-manager/registry'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -39,7 +40,7 @@ export type FailedAction = 'enable' | 'disable' | 'uninstall' | 'rowEnable' | 'r
 
 /** What the last action left to say, shown as a toast; `seq` tells one showing from the next. */
 export type ManagerNotice =
-  | { readonly kind: 'restart'; readonly packageName: string; readonly seq: number }
+  | { readonly kind: 'restart'; readonly packageName: string; readonly reason: RestartReason | undefined; readonly seq: number }
   | { readonly kind: 'overridden'; readonly packageName: string; readonly seq: number }
   | { readonly kind: 'cancelled'; readonly seq: number }
   | { readonly kind: 'refresh-failed'; readonly seq: number }
@@ -62,18 +63,14 @@ export type ManagerNotice =
 export interface PackageRow {
   /** The Loader entry carrying the row while the bundle is on; absent for a row of a bundle that is off. */
   readonly entryId?: PluginEntryId
-  /** Declared row id, or an internal identity for an anonymous scoped insertion. */
+  /** The row id as the bundle declares it. */
   readonly rowId: string
-  /** Outer preset row id for a scoped, read-only contribution. */
-  readonly preset?: string
   /** The module the row names. */
   readonly moduleName: string
   /** Local package display text and metadata diagnostics supplied by the Host. */
   readonly meta?: PluginLocalizedMeta
   /** Whether the entry runs; false for a row without a live entry. */
   readonly enabled: boolean
-  /** Whether a preset expression has not yet resolved this row's enablement. */
-  readonly conditional?: boolean
   /** The entry's fiber phase, null without a live fiber. */
   readonly phase: PluginInfo['fiberPhase']
   /** Why the Host refuses to switch the row, when it does. */
@@ -228,6 +225,8 @@ export interface InstallState {
   readonly installedVersion: string | null
   /** Whether the finished run's bundle waits for the next start to load. */
   readonly restartRequired: boolean
+  /** Why it waits, when the Host says. */
+  readonly restartReason?: RestartReason
   /**
    * The run's failure, once one settled the dialog: the Host's refusal
    * `code` with its diagnostic as `reason`, or the transport's words alone;
@@ -358,7 +357,7 @@ export interface PluginManagerFace {
   clearHighlight: () => void
   /** Put a bundle into, or take it out of, the profile's layer list. */
   setEnabled: (packageName: string, enabled: boolean) => void
-  /** Install the host's catalog version while retaining the current selection. */
+  /** Remove an installed package and install the host's catalog version, selected as the package was. */
   update: (packageName: string) => void
   /** Ask before removing a package from the profile. */
   uninstall: (packageName: string) => void
@@ -423,14 +422,6 @@ export function rowKey(entryId: string): string {
   return `row:${entryId}`
 }
 
-/** Identify a bundle row independently of equal child ids in other presets.
- * @param row Bundle declaration with its optional preset target.
- * @returns Stable identity for list and detail navigation.
- */
-export function packageRowKey(row: Pick<PackageRow, 'rowId' | 'preset'>): string {
-  return row.preset === undefined ? row.rowId : JSON.stringify([row.preset, row.rowId])
-}
-
 /**
  * One bundle as the page shows it: its rows joined with the Host's entries.
  * @param bundle - the Host's bundle.
@@ -440,17 +431,14 @@ export function packageRowKey(row: Pick<PackageRow, 'rowId' | 'preset'>): string
 export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]): PackageView {
   const rows = bundle.rows.map((row): PackageRow => {
     const live = row.entryId === undefined ? undefined : plugins.find(plugin => plugin.entryId === row.entryId)
-    const readOnlyReason = row.readOnlyReason ?? live?.readOnlyReason
     return {
       rowId: row.rowId,
-      ...row.preset === undefined ? {} : { preset: row.preset },
       moduleName: row.moduleName,
-      enabled: row.composition === undefined ? live?.enabled ?? false : row.composition.enabled === true,
-      phase: row.composition?.fiberPhase ?? live?.fiberPhase ?? null,
-      ...row.composition?.enabled === 'conditional' ? { conditional: true } : {},
+      enabled: live?.enabled ?? false,
+      phase: live?.fiberPhase ?? null,
       ...row.meta === undefined ? {} : { meta: row.meta },
       ...row.entryId === undefined ? {} : { entryId: row.entryId },
-      ...readOnlyReason === undefined ? {} : { readOnlyReason },
+      ...live?.readOnlyReason === undefined ? {} : { readOnlyReason: live.readOnlyReason },
     }
   })
   return {
@@ -676,7 +664,24 @@ export class PluginManagerController {
       },
       update: (packageName) => {
         const pkg = this.getSnapshot().packages.find(pkg => pkg.name === packageName)
-        if (pkg?.installTarget !== undefined && pkg.availability !== 'installation') this.openCatalogInstall(pkg, pkg.installTarget, pkg.enabled)
+        const target = pkg?.installTarget
+        if (pkg === undefined || target === undefined || pkg.availability === 'installation') return
+        if (!pkg.installed) {
+          this.openCatalogInstall(pkg, target, pkg.enabled)
+          return
+        }
+        // An installed package is removed before another version is installed. Without HMR a running bundle stays
+        // installed, and the installation over it waits for the restart.
+        void this.run(packageName, { packageName, action: 'uninstall' }, async () => {
+          const removed = await this.ctx.remote.pluginManager.removeBundle(packageName)
+          if (removed.ok && removed.value.error?.code === 'stop-profile') {
+            this.openCatalogInstall(pkg, target, pkg.enabled)
+            return
+          }
+          // A failed removal throws; without HMR a removal waits for the restart, and the installation follows it.
+          this.applied(removed, packageName)
+          this.openCatalogInstall(pkg, target, pkg.enabled)
+        })
       },
       uninstall: (packageName) => {
         this.pendingConfirm = () => this.run(packageName, { packageName, action: 'uninstall' }, async () => {
@@ -1041,6 +1046,7 @@ export class PluginManagerController {
         installed: result.bundle ?? null,
         installedVersion: result.version ?? null,
         restartRequired: result.application === 'restart-required',
+        ...result.restartReason === undefined ? {} : { restartReason: result.restartReason },
         approvedBuilds: result.approvedBuilds ?? [],
         ...asked,
       })
@@ -1212,7 +1218,7 @@ export class PluginManagerController {
         this.patch({ notice: { kind: 'cancelled', seq: ++this.noticeSeq } })
         return
       case 'restart-required':
-        this.patch({ notice: { kind: 'restart', packageName, seq: ++this.noticeSeq } })
+        this.patch({ notice: { kind: 'restart', packageName, reason: result.restartReason, seq: ++this.noticeSeq } })
         return
       case 'overridden':
         this.patch({ notice: { kind: 'overridden', packageName, seq: ++this.noticeSeq } })

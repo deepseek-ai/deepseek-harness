@@ -84,7 +84,7 @@ kind: "package-reference"
 
 #### What the model sees
 
-只要本包在调用方 Agent 的作用域内可见，模型就会收到生成的 [`schedule_create`、`schedule_list`、`schedule_update` 与 `schedule_delete` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-schedule)。
+只要本包在调用方 Agent 的作用域内可见，模型就会收到生成的 [`schedule_create`、`schedule_list`、`schedule_update` 与 `schedule_delete` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-schedule)。标题指引不会改写已存标题，也不会在现有的非空和长度检查之外增加校验。
 
 #### Token effect
 
@@ -117,7 +117,6 @@ kind: "package-reference"
 - **删除不会撤回已排队的消息** —— 宿主已经投递的提醒在 `schedule_delete` 之后仍留在 Session 收件箱中。
 - **提醒时间由宿主负责** —— 这些工具不提供目标时间校正、时钟来源或投递重试；这些限制属于该服务。
 - **每个工具都拒绝被委派的调用方** —— `schedule_create`、`schedule_list`、`schedule_update` 与 `schedule_delete` 都会在派发前读取调用方 Agent 的委派深度，当该深度大于零时返回 `{ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' }`。该守卫位于本包内，读取来自 `@deepseek-ai/dsh-subagent` 的 `delegationDepthOf`，即委派封顶本身执行的同一份记账，因此在任何挂载这些工具的 preset 下都成立。
-- **preset 的委派行让这四个工具从子 agent 的 prompt 中消失** —— `standard`、`cordis` 与 `ptc` preset 在 `tool-subagent` 与 `tool-subagent-fork` 两行上都声明 `toolFilter.deny`，拒绝 `schedule_create`、`schedule_delete`、`schedule_list` 和 `schedule_update`。provider 会在子作用域内通过 `ctx.tools.restrict()` 应用该过滤，因此这四个工具会从被委派子 agent 的 prompt 中消失；在子链上继续委派会沿链求交同一限制。
 - **被委派子 agent 拥有的 Session 不能设置提醒** —— 当 Session 的 Agent 委派深度大于零时，`ScheduleService.create` 会抛出 `ScheduleInputError`（code 为 `subagent_session`），`ScheduleService.update` 则返回非变更的 `subagent_session` 结果。委派深度正是委派封顶本身读取的同一份记账，持久化 session header 让它在冷恢复后仍然成立。这条规则在服务层而非这些工具里，因此其它进程内消费方（包括自动化任务页面）也会命中。`schedule_list` 与 `schedule_delete` 仍可服务该 Session，所以在这条规则之前存储的提醒仍可删除。
 
 <a id="dev-note"></a>

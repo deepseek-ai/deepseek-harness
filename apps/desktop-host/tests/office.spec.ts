@@ -1,6 +1,6 @@
 import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -9,12 +9,14 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import * as desktopOffice from '../src/office.ts'
 
 it('loads Desktop Office CLI paths and removes them on disposal', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-office-'))
+  vi.stubEnv('DSH_HOME', root)
   const ctx = new Context()
+
   try {
     const assets = join(root, 'runtime', 'office-skills')
     await cp(new URL('../../../packages/skill/skill-office/assets/', import.meta.url), assets, { recursive: true })
@@ -47,10 +49,10 @@ it('loads Desktop Office CLI paths and removes them on disposal', async () => {
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
     await ctx.loader.await()
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['office-docx', 'office-pptx', 'office-xlsx'])
-    expect((await ctx.skills.get('office-pptx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-pptx') })
-    expect((await ctx.skills.get('office-pptx'))?.content).toContain('libreofficeKit')
-    expect((await ctx.skills.get('office-pptx'))?.content).toContain(JSON.stringify(nodeDirectory).slice(1, -1))
+    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx'])
+    expect((await ctx.skills.get('office-pptx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-pptx').split(sep).join('/') })
+    expect((await ctx.skills.get('office-pptx'))?.content).toContain('office-render')
+    expect((await ctx.skills.get('office-pptx'))?.content).not.toContain(nodeDirectory)
     expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
     const entry = [...ctx.loader.entries()].find(entry => entry.options.name === 'office')
     expect(entry).toBeDefined()
@@ -58,7 +60,10 @@ it('loads Desktop Office CLI paths and removes them on disposal', async () => {
     expect(await ctx.skills.list()).toEqual([])
     expect(ctx.tools.schemas()).toEqual([])
   } finally {
-    await ctx.fiber.dispose()
-    await rm(root, { recursive: true, force: true })
+    try { await ctx.fiber.dispose() }
+    finally {
+      vi.unstubAllEnvs()
+      await rm(root, { recursive: true, force: true })
+    }
   }
 })

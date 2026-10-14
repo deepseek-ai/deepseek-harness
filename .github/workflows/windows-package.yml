@@ -1,0 +1,170 @@
+name: Package Desktop · Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: 'Machine preset (configured on the packaging runner)'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+      signing:
+        description: 'unsigned: test installer; signed: use the configured EV hardware token'
+        type: choice
+        options: [unsigned, signed]
+        default: unsigned
+        required: true
+      publish:
+        description: 'Publish successful signed packages and update the feed; test and production require approval'
+        type: boolean
+        default: false
+        required: true
+      test_release_id:
+        description: '测试环境的前缀，用于隔离外部用户访问，留空使用默认配置；测试连续升级时需使用相同值；建议定期轮换默认值。'
+        type: string
+        default: ''
+        required: false
+      source_ref:
+        description: 'Source: master or a dsh-v* tag containing the Desktop CI adapters'
+        type: string
+        default: master
+        required: true
+      update_channel:
+        description: 'Installer update channel; automatic updates stay on this channel'
+        type: choice
+        options: [nightly, latest]
+        default: nightly
+        required: true
+      version_mode:
+        description: 'default: production follows product, test auto; manual uses build_version'
+        type: choice
+        options: [default, product, auto, manual]
+        default: default
+        required: true
+      build_version:
+        description: 'Manual version only: product version or its supported prerelease suffix'
+        type: string
+        default: ''
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: dsh-win-package-trial
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
+      DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
+      DSH_TELEMETRY_DISABLED: '1'
+      DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      PACKAGE_PUBLISH: ${{ inputs.publish }}
+      PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
+      PACKAGE_SIGNING: ${{ inputs.signing }}
+    steps:
+      - name: Reset packaging checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $parent = [IO.Path]::GetFullPath($env:RUNNER_WORKSPACE)
+          if ([IO.Path]::GetDirectoryName($workspace) -ne $parent) { throw 'Checkout must be a direct child of RUNNER_WORKSPACE' }
+          for ($item = [IO.DirectoryInfo]::new($workspace); $null -ne $item; $item = $item.Parent) {
+            if ($item.Exists -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Checkout ancestors cannot be links' }
+          }
+          node -e "const fs = require('node:fs'); fs.rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 3 }); fs.mkdirSync(process.argv[1])" $workspace
+          if ($LASTEXITCODE -ne 0) { throw 'Checkout cleanup failed' }
+      - uses: actions/checkout@v7.0.1
+        id: checkout
+        with:
+          persist-credentials: false
+          clean: true
+          ref: ${{ inputs.source_ref }}
+      - name: Validate selected source and adapter support
+        run: >-
+          node -e "const fs=require('node:fs'); const ref=process.env.PACKAGE_SOURCE_REF;
+          if(ref!=='master' && !/^dsh-v[0-9][0-9A-Za-z.-]*$/.test(ref)) throw Error('Select master or dsh-v*');
+          const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+          if(ref!=='master' && ref!=='dsh-v'+v) throw Error('Source tag must match product version');
+          if(!fs.readFileSync('apps/desktop/scripts/desktop-ci-version.mjs','utf8').includes('PACKAGE_VERSION_MODE')) throw Error('Source lacks Desktop channel/version CI support; select a newer release');"
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          exit $LASTEXITCODE
+      - name: Validate preset and resolve build version
+        id: settings
+        env:
+          PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
+        run: node apps/desktop/scripts/prepare-windows-ci.mjs
+      - name: Check packaging configuration and toolchain
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          $packageArgs = @('run', 'package:desktop:win:x64', '--check', '--build-version', $env:PACKAGE_VERSION)
+          if ($env:PACKAGE_SIGNING -eq 'unsigned') { $packageArgs += '--unsigned' }
+          pnpm @packageArgs
+          exit $LASTEXITCODE
+      - name: Build installer and verify packaged runtime
+        env:
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: |
+          $packageArgs = @('run', 'package:desktop:win:x64', '--build-version', $env:PACKAGE_VERSION)
+          if ($env:PACKAGE_SIGNING -eq 'unsigned') { $packageArgs += '--unsigned' }
+          pnpm @packageArgs
+          exit $LASTEXITCODE
+      - name: Retain complete package outside the checkout
+        id: retained
+        env:
+          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts
+      - name: Retain packaging diagnostics
+        if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain verified unsigned installer
+        if: success() && inputs.signing == 'unsigned'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-x64-unsigned-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: ${{ steps.retained.outputs.directory }}/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain verified signed installer
+        if: success() && inputs.signing == 'signed'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-x64-signed-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: ${{ steps.retained.outputs.directory }}/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain publication request
+        if: success() && inputs.publish
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: desktop-publish-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.retained.outputs.directory }}/manifest.json
+          if-no-files-found: error
+          retention-days: 14

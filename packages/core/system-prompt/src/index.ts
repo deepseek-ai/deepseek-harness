@@ -172,6 +172,10 @@ const CONTEXT_ORDERS = {
   SANDBOX_POLICY: 110,
   APPROVAL_POLICY: 115,
   SUBAGENT_DELEGATION: 120,
+  TEAM_IDENTITY: 125,
+  // Process-specific paths and endpoints stay out of the cached system prompt.
+  HARNESS_SOURCE: 200,
+  WEB_SURFACE: 210,
 } as const
 
 /** Name of a centrally allocated runtime-context position. */

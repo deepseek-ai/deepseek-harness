@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add six experimental terminal tools to standard, cordis, and ptc. Each preset revision owns an isolated terminal registry with the platform shell backend; terminals remain Agent-owned. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Add six experimental global terminal tools to every Agent. The bundle owns an isolated terminal registry with the platform shell backend; terminals remain Agent-owned. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Add six experimental terminal tools to standard, cordis, and ptc. Each preset re
 
 In Web or Desktop, open Plugins and enable **Persistent terminals** in Official. Switch it off to remove its profile layer.
 
-New Agents and subsequently reopened Sessions use the selected composition; live Agents retain their existing plugins. The minimal preset and host-level tool catalog remain unchanged.
+Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
 
 -----
 
@@ -37,7 +37,7 @@ New Agents and subsequently reopened Sessions use the selected composition; live
 <details>
 <summary>Implementation details — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) contributes rows through `preset: preset-standard`, `preset: preset-cordis`, and `preset: preset-ptc`. Later profile patches can override their settings. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-persistent-terminals`, which registers the tools in the global tool layer. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
 
 </details>
 
@@ -57,13 +57,13 @@ Indirectly, through the [capability implementation](../tool-terminal/README.md),
 
 #### KV Cache effect
 
-The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results.
+The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results. Toggling the bundle changes the tool list of live Sessions, which invalidates their cached request prefix once.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Terminals belong to the Agent that created them. POSIX uses Bash and Windows uses PowerShell; the bundle does not share the minimal preset's terminal registry.
+- Terminals belong to the Agent that created them. POSIX uses Bash and Windows uses PowerShell; the bundle does not share another terminal registry.
 
 -----
 

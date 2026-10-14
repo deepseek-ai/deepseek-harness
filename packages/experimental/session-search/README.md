@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Give Agents five experimental read-only tools to search earlier sessions in standard, cordis, and ptc. The content index opens on the first search and is shared by Agents using the same preset revision. The bundle ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Give every Agent five experimental read-only global tools to search earlier sessions. The content index opens on the first search and is shared by all Agents. The bundle ships switched off in Web and Desktop. Select it in Plugins to enable it.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Give Agents five experimental read-only tools to search earlier sessions in stan
 
 In Web or Desktop, open Plugins and enable **Session search** in Official. Switch it off to remove its profile layer.
 
-New Agents and subsequently reopened Sessions use the selected composition; live Agents retain their existing plugins. The minimal preset and host-level tool catalog remain unchanged.
+Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
 
 This bundle enables Agent search tools. Sidebar search keeps its existing behavior.
 
@@ -39,9 +39,9 @@ This bundle enables Agent search tools. Sidebar search keeps its existing behavi
 <details>
 <summary>Implementation details — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) contributes rows through `preset: preset-standard`, `preset: preset-cordis`, and `preset: preset-ptc`. Later profile patches can override their settings. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-session-search`, which registers the tools in the global tool layer. Later profile patches can override its rows by id. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
 
-Each preset revision owns an isolated `sessionQuery` provider with a lazy `:memory:` index. A retired revision releases its index when its last Agent closes. The host's metadata service keeps `openAt: never`.
+The group owns an isolated `sessionQuery` provider with a lazy `:memory:` index, released when the bundle is switched off. The host's metadata service keeps `openAt: never`.
 
 </details>
 
@@ -61,13 +61,13 @@ Indirectly, through the [capability implementation](../tool-session-query/README
 
 #### KV Cache effect
 
-The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results.
+The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results. Toggling the bundle changes the tool list of live Sessions, which invalidates their cached request prefix once.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Each active or retained preset revision keeps its own in-memory index after the first search. Indexes are rebuilt after restarting the application. Search remains restricted to authorized workspaces.
+- The bundle keeps one in-memory index after the first search. The index is rebuilt after restarting the application or switching the bundle off and on. Search remains restricted to authorized workspaces.
 
 -----
 

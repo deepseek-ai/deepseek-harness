@@ -153,11 +153,15 @@ jobs:
           retention-days: 7
 
   # Blacksmith x64 CI builds use 2 vCPU for compilation, bundling, and wheel smokes.
+  # Release macOS builds use larger GitHub runners; ordinary CI and direct
+  # builder dispatches retain the standard native target matrix.
   build:
     needs: [plan, sdk-wheel]
     name: ${{ matrix.target }}
     runs-on: >-
-      ${{ inputs.ci && !inputs.release && matrix.target == 'node24-linux-x64'
+      ${{ inputs.release && matrix.target == 'node24-macos-x64' && 'macos-15-large'
+          || inputs.release && matrix.target == 'node24-macos-arm64' && 'macos-15-xlarge'
+          || inputs.ci && !inputs.release && matrix.target == 'node24-linux-x64'
           && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-2vcpu-ubuntu-2404'
           || inputs.ci && !inputs.release && matrix.target == 'node24-win-x64'
           && vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-2vcpu-windows-2025'
@@ -262,7 +266,7 @@ jobs:
           DSH_BUILD_CLIENT_PROFILE: official
         run: >-
           pnpm exec tsx scripts/build-exe-for-python-sdk.ts --targets=${{ matrix.target }}
-          ${{ inputs.ci && github.event_name == 'pull_request' && '--artifacts-only' || '' }}
+          ${{ inputs.ci && github.event_name == 'pull_request' && '--build-artifacts' || '' }}
 
       - name: Resolve platform outputs (POSIX)
         id: runtime-posix

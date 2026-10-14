@@ -8,16 +8,19 @@
 export function localMacOSPackageEnvironment(environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv
 
 /**
- * Read the target's required UTF-8 dotenv file; release settings never fall back to ambient values.
+ * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * @param platform Target platform.
  * @param environment Parent environment, retained only for unrelated build tools.
  * @param appRoot Desktop application directory; relative credential paths resolve here.
+ * @param options Unsigned presets and Windows preparation-only presets never read signing credentials.
  * @returns Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(
   platform: 'win32' | 'darwin',
   environment?: NodeJS.ProcessEnv,
   appRoot?: string,
+  options?: { unsigned?: boolean, prepareOnly?: boolean },
 ): NodeJS.ProcessEnv
 
 /**
@@ -30,5 +33,5 @@ export function loadDesktopPackageEnvironment(
 export function validateDesktopPackageEnvironment(
   environment: NodeJS.ProcessEnv,
   target: { platform: 'win32' | 'darwin', arch: string },
-  options?: { unsigned?: boolean, prepareOnly?: boolean },
+  options?: { unsigned?: boolean, prepareOnly?: boolean, skipNotarization?: boolean },
 ): void

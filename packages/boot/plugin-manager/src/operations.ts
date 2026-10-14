@@ -4,17 +4,17 @@ import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, open, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { execa } from 'execa'
+import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
   DEFAULT_PROFILE_BUNDLES, bundlePatchPaths, initProfile, PROFILE_TEMPLATES, readProfileManifest,
-  resolveBundleDir, resolveProfileDir, loadOverlayPatches, readProfileVersionExemptions,
+  resolveBundleDir, resolveProfileDir, loadOverlayPatches, composeEntries, readProfileVersionExemptions,
   evaluatePluginCompatibility, pluginCompatibilityWarning, type ProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { parseInstallSpec } from './install-spec.ts'
 import { awaitTreeGone, leadsOwnGroup, treeAlive, type RunTree } from './run-tree.ts'
 import { incompatiblePlugin } from './failure.ts'
-import { bundleDeclarations } from './bundle-rows.ts'
 import type { IncompatiblePlugin, PackageResult, Registry } from './types.ts'
 export { setProfileVersionExemption, readProfileVersionExemptions } from '@deepseek-ai/dsh-app-boot'
 
@@ -251,11 +251,15 @@ function bundleComponentManifests(manifest: ProfileManifest, dir: string, anchor
   if (bundle === undefined) return []
   const patches = bundlePatchPaths(dir, bundle).flatMap(file => loadOverlayPatches('dsh', file))
   const names = new Set<string>()
-  for (const { row } of bundleDeclarations(patches)) {
-    if (typeof row.name !== 'string' || row.name.startsWith('.') || row.name.startsWith('/') || row.name.includes(':')) continue
-    const parts = row.name.split('/')
-    names.add(parts.slice(0, row.name.startsWith('@') ? 2 : 1).join('/'))
+  const visit = (rows: EntryOptions[]) => {
+    for (const row of rows) {
+      if (row.group && Array.isArray(row.config)) visit(row.config as EntryOptions[])
+      if (typeof row.name !== 'string' || row.name.startsWith('.') || row.name.startsWith('/') || row.name.includes(':')) continue
+      const parts = row.name.split('/')
+      names.add(parts.slice(0, row.name.startsWith('@') ? 2 : 1).join('/'))
+    }
   }
+  visit(composeEntries([patches.filter(patch => patch.insert !== undefined)]))
   return [...names].flatMap((name) => {
     let packageDir: string
     try { packageDir = resolveBundleDir('dsh', name, anchor, dir) } catch (error) {
@@ -276,6 +280,7 @@ function bundleComponentManifests(manifest: ProfileManifest, dir: string, anchor
  * @param options Output, activation and cancellation policy.
  * @returns Exit status, whether the silence bound stopped the run, and the diagnostic path.
  * A compatibility denial returns exit code 1. Service output is bounded; CLI output uses inherited descriptors.
+ * The diagnostic file is closed on return or rejection, including preparation and spawn failures.
  */
 export async function runProfilePnpm(
   context: PackageOperationContext, args: readonly string[], options: PackageOperationOptions,
@@ -287,7 +292,7 @@ export async function runProfilePnpm(
   await mkdir(logRoot, { recursive: true, mode: 0o700 })
   const logDir = await mkdtemp(join(logRoot, 'operation-'))
   const logPath = join(logDir, 'pnpm.log')
-  const log = await open(logPath, 'wx', 0o600)
+  await using log = await open(logPath, 'wx', 0o600)
   if (active !== undefined) {
     await log.write(active)
     await log.close()
@@ -344,7 +349,7 @@ export async function runProfilePnpm(
       }
     } catch (error) { void error; continue }
   }
-  if (preflight.length > 0) return rejected(preflight, 'nothing was installed')
+  if (preflight.length > 0) return await rejected(preflight, 'nothing was installed')
   const cancellation = new AbortController()
   // A service run captures output, so execa terminates the tree it leads when the
   // run is killed: a lifecycle script outlives the pnpm process that started it.

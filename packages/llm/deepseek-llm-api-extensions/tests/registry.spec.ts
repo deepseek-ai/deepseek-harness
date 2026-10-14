@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import DeepSeekLlmApiExtensionRegistry from '../src/index.ts'
 
 declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions/types' {
@@ -121,15 +121,27 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     await expect(prepared.accept()).rejects.toBe(failure)
   })
 
-  it('rejects invalid field names and preparation failures before returning fields', async () => {
+  it('rejects invalid field names and omits a failing field, warning once', async () => {
     const ctx = await harness()
+    const warnings: unknown[][] = []
+    ctx.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
     expect(() => ctx.deepseekLlmApiExtensions.register('' as 'test_alpha', {
       prepare: () => ({ value: { value: 'x' } }),
     })).toThrow(/non-blank trimmed/)
-    ctx.deepseekLlmApiExtensions.register('test_alpha', {
-      prepare: () => { throw new Error('prepare failed') },
-    })
-    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })).rejects.toThrow('prepare failed')
+    const failure = new Error('prepare failed')
+    const accept = vi.fn()
+    ctx.deepseekLlmApiExtensions.register('test_alpha', { prepare: () => { throw failure } })
+    ctx.deepseekLlmApiExtensions.register('test_beta', { prepare: () => ({ value: [1], accept }) })
+    for (let request = 0; request < 2; request++) {
+      const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL })
+      expect(prepared.fields).toEqual({ test_beta: [1] })
+      await prepared.accept()
+    }
+    expect(accept).toHaveBeenCalledTimes(2)
+    expect(warnings).toEqual([[
+      'deepseek-llm-api-extensions: omitting field "test_alpha" from this request because its preparation failed: %o',
+      failure,
+    ]])
   })
 
   it('stops waiting for a provider that ignores request cancellation', async () => {
@@ -151,4 +163,20 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     controller.abort(new Error('cancelled during extension preparation'))
     await expect(pending).rejects.toBe(controller.signal.reason)
   }, 500)
+
+  it('does not log a provider failure caused by request cancellation', async () => {
+    const ctx = await harness()
+    const warnings: unknown[][] = []
+    ctx.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
+    const controller = new AbortController()
+    ctx.deepseekLlmApiExtensions.register('test_alpha', {
+      prepare: (request) => {
+        controller.abort(new Error('cancelled'))
+        request.signal.throwIfAborted()
+        return undefined
+      },
+    })
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: controller.signal })).rejects.toBe(controller.signal.reason)
+    expect(warnings).toEqual([])
+  })
 })

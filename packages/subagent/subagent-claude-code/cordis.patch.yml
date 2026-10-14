@@ -1,27 +1,6 @@
 - insert:
     - id: subagent-claude-code
       name: '@deepseek-ai/dsh-subagent-claude-code'
-
-- preset: preset-standard
-  insert:
-    - id: tool-subagent-claude-code
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: claude-code
-        toolName: subagent_claude_code
-        maxDepth: provider-managed
-
-- preset: preset-cordis
-  insert:
-    - id: tool-subagent-claude-code
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: claude-code
-        toolName: subagent_claude_code
-        maxDepth: provider-managed
-
-- preset: preset-ptc
-  insert:
     - id: tool-subagent-claude-code
       name: '@deepseek-ai/dsh-tool-subagent'
       config:

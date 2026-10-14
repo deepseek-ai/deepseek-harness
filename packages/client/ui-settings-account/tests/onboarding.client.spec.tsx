@@ -6,7 +6,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { AccountOnboarding } from '../src/client/AccountOnboarding.tsx'
 import type { AccountSnapshot } from '../src/client/AccountSection.tsx'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -22,6 +22,7 @@ it('claims onboarding while loading, offers API key fallback, and completes afte
   const globals: GlobalStandardProps = {
     usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
     useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
+    ...allowAllAccess,
   }
   const props = {
     ...globals,

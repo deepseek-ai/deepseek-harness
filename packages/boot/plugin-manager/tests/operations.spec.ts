@@ -471,7 +471,7 @@ it.each(['devDependencies', 'optionalDependencies'])('checks installed direct pl
   expect(await runProfilePnpm(context, ['install'], { execution: 'service', outputBytes: 8192 })).toMatchObject({ exitCode: 1 })
 })
 
-it.each([undefined, 'preset-standard'])('rejects an incompatible component contributed to %s by a newly installed bundle', async (preset) => {
+it('rejects an incompatible component declared by a newly installed bundle', async () => {
   const { dir, context, pnpm } = fixture()
   pnpm.mutate = (target) => {
     install(target, 'bundle')
@@ -481,16 +481,7 @@ it.each([undefined, 'preset-standard'])('rejects an incompatible component contr
     writeFileSync(join(component, 'package.json'), JSON.stringify({
       name: 'component', version: '1.0.0', peerDependencies: { '@deepseek-ai/dsh': '>=999.0.0' },
     }))
-    const unrelated = join(target, 'node_modules', 'component')
-    mkdirSync(unrelated, { recursive: true })
-    writeFileSync(join(unrelated, 'package.json'), JSON.stringify({ name: 'component', version: '2.0.0' }))
-    mkdirSync(join(packageDir, 'nested'))
-    writeFileSync(join(packageDir, 'nested', 'group.mjs'), 'export function apply() {}\n')
-    writeFileSync(join(packageDir, 'cordis.patch.yml'), JSON.stringify([{
-      ...preset === undefined ? {} : { preset }, insert: [{ id: 'relative-group', name: './nested/group.mjs', group: true,
-        config: [{ id: 'component', name: 'component/subpath' }],
-      }],
-    }]))
+    writeFileSync(join(packageDir, 'cordis.patch.yml'), '- insert:\n    - id: component\n      name: component/subpath\n')
   }
   const outcome = await runProfilePnpm(context, ['add', 'bundle'], { execution: 'service', outputBytes: 8192, activateNewBundles: false })
   expect(outcome.exitCode).toBe(1)
@@ -512,7 +503,7 @@ it('restores the manifest on malformed installed peer metadata and bounds the wa
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
 })
 
-it('validates nested preset contributions without requiring their target preset to be selected', async () => {
+it('checks scoped components in nested groups while leaving unresolved and local rows to startup', async () => {
   const { context, pnpm } = fixture()
   pnpm.mutate = (target) => {
     install(target, 'bundle')
@@ -520,7 +511,7 @@ it('validates nested preset contributions without requiring their target preset 
     const component = join(packageDir, 'node_modules', '@example', 'component')
     mkdirSync(component, { recursive: true })
     writeFileSync(join(component, 'package.json'), JSON.stringify({ name: '@example/component', version: '1.0.0' }))
-    writeFileSync(join(packageDir, 'cordis.patch.yml'), JSON.stringify([{ preset: 'preset-standard', insert: [
+    writeFileSync(join(packageDir, 'cordis.patch.yml'), JSON.stringify([{ insert: [
       { id: 'group', group: true, config: [{ id: 'component', name: '@example/component/subpath' }] },
       { id: 'empty-group', group: true, config: {} },
       { id: 'relative', name: './plugin.mjs' },

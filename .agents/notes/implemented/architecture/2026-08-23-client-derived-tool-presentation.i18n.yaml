@@ -9,11 +9,11 @@
   en: 9f34c53e647c69ca
   zh: 551776c7cc9618b5
 /agent-note-client-derived-presentation-from-raw-session-tool-events/decision:
-  en: bdbb99c01b4c4db0
-  zh: 570040471ad1f7f4
+  en: 5fcc5a3de9f757cd
+  zh: a693cefdb82784ee
 /agent-note-client-derived-presentation-from-raw-session-tool-events/decision/goals-and-non-goals:
-  en: 7e7a937dc4fe1b18
-  zh: 530f508b7e17b607
+  en: 40aceb58d71303b5
+  zh: 6954e41ae2fd1efd
 /agent-note-client-derived-presentation-from-raw-session-tool-events/terminology:
   en: 021106dd41176715
   zh: 131caff7bd37251b
@@ -72,11 +72,11 @@
   en: f40f0a8ee8c055c0
   zh: 6957b7372956113c
 /agent-note-client-derived-presentation-from-raw-session-tool-events/client-card-model-design/generic-tool-row:
-  en: 20ff82b092325c5c
-  zh: 1afd5441a9816117
+  en: d336c77d1b09f349
+  zh: 6e613f9c9108058f
 /agent-note-client-derived-presentation-from-raw-session-tool-events/client-card-model-design/terminal-card:
-  en: eab7f366df331b6e
-  zh: d82499e2a982206f
+  en: 492669c2134169b2
+  zh: 0247a38df2dd8a83
 /agent-note-client-derived-presentation-from-raw-session-tool-events/client-card-model-design/diff-card:
   en: ea384415c94f82da
   zh: 5f146c6cb534e1db
@@ -99,8 +99,8 @@
   en: e5b42aa311079bd7
   zh: ec4cf97037ece7e0
 /agent-note-client-derived-presentation-from-raw-session-tool-events/presentation-equivalence-matrix:
-  en: 30915c26728eeafe
-  zh: eea04dea7b4604a5
+  en: 7974f20a6ac687ac
+  zh: cb4c350325a6da67
 /agent-note-client-derived-presentation-from-raw-session-tool-events/client-extension-contract:
   en: 96619dfd5ef299cf
   zh: 253df98eb42ad75e

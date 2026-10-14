@@ -42,6 +42,7 @@ const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', im
 const reasoningConfigPath = fileURLToPath(new URL('./fixtures/cli.patch.yml', import.meta.url))
 const deepseekDefaultsConfigPath = fileURLToPath(new URL('./fixtures/deepseek-defaults.patch.yml', import.meta.url))
 const piAiDefaultsConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-defaults.patch.yml', import.meta.url))
+const piAiConversationUpdatesConfigPath = fileURLToPath(new URL('./fixtures/pi-ai-conversation-updates.patch.yml', import.meta.url))
 const headlessOverlayPath = fileURLToPath(new URL('./fixtures/headless-profile.patch.yml', import.meta.url))
 const headlessSessionExpected = join(goldensDir, 'headless-profile', 'session.expected.jsonl')
 const headlessReasoningExpected = join(goldensDir, 'headless-profile', 'reasoning.stderr.expected.txt')
@@ -145,6 +146,58 @@ async function deepseekDefaultsServer(
     requests,
     paths,
     close: () => new Promise(resolve => server.close(() => { resolve() })),
+  }
+}
+
+/** Script Chat Completions responses in request order: `read`, then `snapshot_ping`, then text. */
+async function piAiConversationServer(): Promise<DeepSeekDefaultsServer> {
+  const requests: JsonObject[] = []
+  const agentReplies = [
+    { tool_calls: [{ index: 0, id: 'call_read', type: 'function', function: { name: 'read', arguments: '{"file_path":"task.txt"}' } }] },
+    { tool_calls: [{ index: 0, id: 'call_ping', type: 'function', function: { name: 'snapshot_ping', arguments: '{}' } }] },
+    { content: 'DONE' },
+  ]
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    let body = ''
+    request.setEncoding('utf8')
+    request.on('data', (chunk: string) => { body += chunk })
+    request.on('end', () => {
+      requests.push(JSON.parse(body) as JsonObject)
+      const delta = agentReplies[requests.length - 1] ?? { content: 'UNEXPECTED' }
+      const finish = 'tool_calls' in delta ? 'tool_calls' : 'stop'
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end([
+        `data: ${JSON.stringify({ choices: [{ delta }] })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finish }], usage: { prompt_tokens: 3, completion_tokens: 1 } })}`,
+        'data: [DONE]',
+        '',
+      ].join('\n\n'))
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('pi-ai conversation snapshot server has no port')
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    requests,
+    paths: [],
+    close: () => new Promise(resolve => server.close(() => { resolve() })),
+  }
+}
+
+/** Project one Chat Completions request to its fixture-owned declarations and message roles, tools, and prompt markers. */
+function piAiTranscript(request: JsonObject): JsonObject {
+  const names = (tools: unknown): string[] => Array.isArray(tools)
+    ? tools.map(tool => ((tool as { function: { name: string } }).function.name))
+    : []
+  return {
+    // Profile tools change independently of this scenario; only the fixture's tool is recorded.
+    tools: names(request.tools).filter(name => name === 'snapshot_ping'),
+    messages: (request.messages as JsonObject[]).map(message => ({
+      role: message.role,
+      ...message.tools === undefined ? {} : { tools: names(message.tools) },
+      ...typeof message.content === 'string' && message.content.includes('Dynamic tool guidance') ? { guidance: true } : {},
+    })),
   }
 }
 
@@ -745,6 +798,113 @@ describe('headless stream-json snapshots', () => {
     }
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
+  it('sends pi-ai Kimi prompt and tool updates in conversation history', async () => {
+    const server = await piAiConversationServer()
+    try {
+      const result = await runLoaderSmoke({
+        label: 'pi-ai Kimi conversation updates headless stream-json snapshot',
+        tempDirPrefix: 'headless-snapshot-pi-ai-conversation-updates-',
+        binScript,
+        libBinScript: binScript,
+        configPath: piAiConversationUpdatesConfigPath,
+        binArgs: [
+          piAiConversationUpdatesConfigPath,
+          'read task.txt and follow it',
+        ],
+        tsconfigPath,
+        prepare: cwd => writeFile(join(cwd, 'task.txt'), 'Call snapshot_ping once.\n'),
+        env: {
+          MOONSHOT_API_KEY: 'snapshot-key',
+          DSH_SNAPSHOT_BASE_URL: server.url,
+          NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+        },
+      })
+
+      expect(result.stderr).toBe('')
+      expect(parseJsonl(result.stdout).at(-1)).toMatchObject({ type: 'result', output: 'DONE' })
+      expect(server.requests.map(piAiTranscript)).toMatchInlineSnapshot(`
+        [
+          {
+            "messages": [
+              {
+                "role": "system",
+              },
+              {
+                "role": "user",
+              },
+              {
+                "role": "user",
+              },
+            ],
+            "tools": [],
+          },
+          {
+            "messages": [
+              {
+                "role": "system",
+              },
+              {
+                "role": "user",
+              },
+              {
+                "role": "user",
+              },
+              {
+                "role": "assistant",
+              },
+              {
+                "role": "tool",
+              },
+              {
+                "guidance": true,
+                "role": "system",
+              },
+              {
+                "role": "system",
+                "tools": [
+                  "snapshot_ping",
+                ],
+              },
+            ],
+            "tools": [],
+          },
+          {
+            "messages": [
+              {
+                "role": "system",
+              },
+              {
+                "role": "user",
+              },
+              {
+                "role": "user",
+              },
+              {
+                "role": "assistant",
+              },
+              {
+                "role": "tool",
+              },
+              {
+                "guidance": true,
+                "role": "system",
+              },
+              {
+                "role": "assistant",
+              },
+              {
+                "role": "tool",
+              },
+            ],
+            "tools": [],
+          },
+        ]
+      `)
+    } finally {
+      await server.close()
+    }
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
   it('runs a keyless Agent Team with peer mail, dependent tasks, waiting, and Lead aggregation', async () => {
     let projection: unknown
     const result = await runLoaderSmoke({
@@ -804,14 +964,14 @@ describe('headless stream-json snapshots', () => {
               if (typeof message !== 'object' || message === null || Array.isArray(message)) return false
               const source = (message as JsonObject).source
               return typeof source === 'object' && source !== null && !Array.isArray(source)
-                && (source as JsonObject).kind === 'team-message'
+                && (source as JsonObject).kind === 'agent-message'
             })
         })
         const steeredMessageIndex = implementerRows.findIndex((row) => {
           if (row.type !== 'user/message') return false
           const source = (row.data as JsonObject).source
           return typeof source === 'object' && source !== null && !Array.isArray(source)
-            && (source as JsonObject).kind === 'team-message'
+            && (source as JsonObject).kind === 'agent-message'
         })
         const openTurnStart = implementerRows.findLastIndex((row, index) => (
           index < steeredMessageIndex && row.type === 'turn/start'
@@ -825,22 +985,26 @@ describe('headless stream-json snapshots', () => {
           if (data.name !== 'team_task_update' || typeof data.arguments !== 'string') return false
           return (JSON.parse(data.arguments) as JsonObject).action === 'complete'
         })
-        const identityReminders = logs.flatMap((log) => {
+        const identities = logs.flatMap((log) => {
           if (log === parent || log === workflowChild) return []
           const initial = parseJsonl(log.content).find(row => row.type === 'user/message'
             && ((row.data as JsonObject).source as JsonObject).kind === 'user')
           if (initial === undefined) throw new Error('Teammate Session has no initial task')
           const content = (initial.data as JsonObject).content as JsonObject[]
-          expect(content).toHaveLength(2)
-          const identity = content[0]!.text
-          if (typeof identity !== 'string') throw new Error('Teammate initial task has no identity text')
-          return [identity.trimEnd()]
+          expect(content).toHaveLength(1)
+          const context = parseJsonl(log.content).find(row => row.type === 'user/message'
+            && ((row.data as JsonObject).source as JsonObject).kind === 'runtime-context')
+          const source = (context?.data as JsonObject)?.source as JsonObject
+          const sections = source?.sections as JsonObject[] | undefined
+          const identity = sections?.find(section => section.name === 'team:identity')?.text
+          if (typeof identity !== 'string') throw new Error('Teammate runtime context has no identity')
+          return [identity]
         }).sort()
         projection = {
           sessions: logs.length,
           workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
           memberEdges: members.length,
-          identityReminders,
+          identities,
           activeMembers: members.filter(member => member.phase === 'active').map(member => member.name).sort(),
           tasks: latestTasks.map(task => ({
             subject: task.subject,
@@ -874,25 +1038,21 @@ describe('headless stream-json snapshots', () => {
           "researcher",
         ],
         "checkedRoster": true,
-        "deliveredMessages": 2,
-        "identityReminders": [
-          "<system-reminder>
-      You are teammate "implementer".
+        "deliveredMessages": 0,
+        "identities": [
+          "You are teammate "implementer".
       Your Team Lead is named "lead".
-      Use list_agents({}) to find your teammates and their names.
       To message your Team Lead, use send_message({ target: "lead", message: "..." }).
-      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).
-      </system-reminder>",
-          "<system-reminder>
-      You are teammate "researcher".
+      Use list_agents({}) to find your teammates and their names.
+      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).",
+          "You are teammate "researcher".
       Your Team Lead is named "lead".
-      Use list_agents({}) to find your teammates and their names.
       To message your Team Lead, use send_message({ target: "lead", message: "..." }).
-      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).
-      </system-reminder>",
+      Use list_agents({}) to find your teammates and their names.
+      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).",
         ],
         "memberEdges": 4,
-        "queuedMessages": 2,
+        "queuedMessages": 0,
         "sessions": 4,
         "steerEvidence": {
           "completedAfterMessage": true,

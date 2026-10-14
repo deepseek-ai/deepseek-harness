@@ -2,40 +2,42 @@
 
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type {
-  AssistantMessageNode, ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot,
+  AssistantMessageNode, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
+  ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
-  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode, UseChatNodeTurnData,
-  TranscriptViewMode, UserMessageNode,
+  ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
+  TranscriptViewMode, UserContentInput, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   SessionListState, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ConversationGroupedView,
-  ConversationSnapshot, ConversationViewSnapshotStore, GroupKey, GroupSnapshot, NodeKey, TurnLocation,
+  ConversationSnapshot, ConversationViewSnapshotStore, GroupKey, GroupSnapshot,
+  MessageImagesOwnerProps, NodeKey, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { createChatStore } from '../src/client/stores.ts'
-import { derivePresentationPolicy } from '../src/client/presentation-policy.ts'
+import { derivePresentationPolicy, type CollapseTiming } from '../src/client/presentation-policy.ts'
+import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
 import { ChatView } from '../src/client/chat/ChatView.tsx'
-import { ChatNodeSeat } from '../src/client/chat/ChatNodeSeat.tsx'
-import { useTurnDataValue } from '../src/client/chat/use-turn-data.ts'
-import { bindDisclosure } from '../src/client/chat/use-disclosure.ts'
+import { ChatFlow } from '../src/client/chat/ChatFlow.tsx'
 import { en, zh } from '../src/client/locale.ts'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { CommandNodeView, ManualCompactionNodeView } from '../src/client/chat/CommandNodeView.tsx'
@@ -52,6 +54,8 @@ import { ProcessState } from '../src/client/conversation-nodes/process-groups.ts
 import type { TurnProcessSpec } from '../src/client/contract/turn-process.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 import { installTurnNavigatorObserver } from './turn-navigator-fixture.ts'
+import { renderReasoningSlot } from './reasoning-component-fixture.tsx'
+import { createUserContentFixture } from './user-content-component-fixture.tsx'
 import { ConversationGroupStore } from '../../ui-conversation/src/client/conversation/group-store.ts'
 
 function installGroupedSnapshot(
@@ -84,7 +88,7 @@ beforeEach(() => {
 })
 
 const SID = 's1' as SessionId
-type RoutedChatNodeOwner = ChatNodeOwnerProps & { readonly node: ChatNode }
+type RoutedChatNodeOwner = Parameters<NodeRenderer>[1]
 
 interface TestSessionSnapshot extends SessionSnapshot {
   readonly testInbox?: InboxState
@@ -254,6 +258,108 @@ function bindKeyedSnapshotSelector<Value>(
   }) as KeyedSnapshotSelectorHook<Value>
 }
 
+declare const nodeDispatch: PropsRenderSlots<'conversation.chat.node'>['renderSlot']
+declare const flowDispatch: ChatViewSlotProps['renderSlot']
+type NodeRenderer = typeof nodeDispatch<'conversation.chat.node'>
+type FlowRenderer = typeof flowDispatch<'conversation.chat.flow'>
+type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
+type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories
+
+function isImageOwner(owner: object): owner is MessageImagesOwnerProps {
+  return 'images' in owner && Array.isArray(owner.images)
+    && 'loadImage' in owner && typeof owner.loadImage === 'function'
+    && 'align' in owner && (owner.align === 'start' || owner.align === 'end')
+}
+type ToolOwner = Pick<ChatNodeOwnerProps, 'openFile' | 'inspectCall'> & {
+  readonly callId: string
+  readonly toolName: string
+  readonly block: ToolCallBlock
+}
+
+const renderCommandSlot: React.ComponentProps<typeof CommandNodeView>['renderSlot'] =
+  (_key, _owner, opts) => opts?.fallback ?? null
+const renderTurnTailSlot: React.ComponentProps<typeof TurnTailNodeView>['renderSlot'] = () => null
+
+function HarnessChatFlow({ standard, owner, hookContext, renderSlot }: {
+  readonly standard: HarnessStandardProps
+  readonly owner: ChatFlowOwnerProps
+  readonly hookContext: ChatFlowHookContext
+  readonly renderSlot: ChatFlowSlotProps['renderSlot']
+}) {
+  const hooks = useMemo(() => ({
+    useGroupAction: CHAT_FLOW_INJECT.hooks.groupAction(standard, hookContext),
+    useGroupHeaderAction: CHAT_FLOW_INJECT.hooks.groupHeaderAction(standard, hookContext),
+  }), [standard, hookContext])
+  const { renderSlot: _rootRenderSlot, __renders: _rootRenders, ...shared } = standard
+  return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot} />
+}
+
+function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot }: {
+  readonly standard: HarnessStandardProps
+  readonly owner: RoutedChatNodeOwner
+  readonly hookContext: ChatNodeHookContext
+  readonly usePerformanceUsage: React.ComponentProps<typeof TurnTailNodeView>['usePerformanceUsage']
+  readonly toolOwners: ToolOwner[]
+  readonly fallback: React.ReactNode
+  readonly renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot']
+}) {
+  const hooks = useMemo(() => ({
+    useTurnData: CHAT_NODE_INJECT.hooks.turnData(standard, hookContext),
+    useDisclosure: CHAT_NODE_INJECT.hooks.disclosure(standard, hookContext),
+    useGroupAction: CHAT_NODE_INJECT.hooks.groupAction(standard, hookContext),
+  }), [standard, hookContext])
+  const { renderSlot: _rootRenderSlot, __renders: _rootRenders, ...shared } = standard
+  const nodeProps = { ...shared, ...owner, ...hooks }
+  switch (owner.node.kind) {
+    case 'user':
+      return <UserMessageNodeView {...nodeProps} node={owner.node} />
+    case 'steering':
+      return <UserMessageNodeView {...nodeProps} node={owner.node} />
+    case 'context':
+      return <ContextMessageNodeView {...nodeProps} node={owner.node} />
+    case 'assistant-step':
+      return <AssistantNodeView {...nodeProps} node={owner.node} renderSlot={renderAssistantSlot} />
+    case 'command':
+      return <CommandNodeView {...nodeProps} node={owner.node} renderSlot={renderCommandSlot} />
+    case 'manual-compaction':
+      return <ManualCompactionNodeView {...nodeProps} node={owner.node} />
+    case 'compaction':
+      return <CompactionNodeView {...nodeProps} node={owner.node} />
+    case 'model-retry':
+      return <RetryNodeView {...nodeProps} node={owner.node} />
+    case 'turn-error':
+      return <TurnErrorNodeView {...nodeProps} node={owner.node} />
+    case 'turn-max-tokens':
+      return <TurnMaxTokensNodeView {...nodeProps} node={owner.node} />
+    case 'turn-process':
+      return <TurnProcessNodeView {...nodeProps} node={owner.node} />
+    case 'system-prompt':
+      return <SystemPromptNodeView {...nodeProps} node={owner.node} />
+    case 'turn-tail':
+      return <TurnTailNodeView {...nodeProps} node={owner.node}
+        usePerformanceUsage={usePerformanceUsage} renderSlot={renderTurnTailSlot} />
+    case 'unknown':
+      return <UnknownNodeView {...nodeProps} node={owner.node} />
+    case 'tool-call': {
+      const block = owner.node.data.root
+      const toolName = 'kind' in block ? block.call?.name ?? '' : block.name
+      const tool = { callId: block.callId, toolName, block, openFile: owner.openFile, inspectCall: owner.inspectCall }
+      toolOwners.push(tool)
+      return (
+        <div
+          data-testid={`tool-seat-${tool.callId}`}
+          data-chat-anchor-key={`call:${tool.callId}`}
+          data-chat-call-id={tool.callId}
+        >
+          {tool.toolName || '(unnamed)'}:{tool.callId}
+        </div>
+      )
+    }
+    default:
+      return fallback ?? null
+  }
+}
+
 function makeHarness(
   init: HarnessUpdate = {},
   sessionOverrides: Partial<TestSessionSnapshot> = {},
@@ -293,7 +399,8 @@ function makeHarness(
     key => grouped?.groupSource(key as GroupKey) ?? absentGroup,
   )
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
-  const openSkill = vi.fn<(name: string) => void>()
+  const openUserFile = vi.fn<(path: string) => void>()
+  const renderUserContent = createUserContentFixture({ openFile: openUserFile })
   const loadOlder = vi.fn()
   const loadThrough = vi.fn<(seq: number) => Promise<void>>().mockResolvedValue(undefined)
   // Mutable outline holder: tests swap the value and drive a re-render via set().
@@ -309,111 +416,58 @@ function makeHarness(
   // Rows and the harness must observe the same chat-store instance.
   const chat = createChatStore().create()
   const transcriptView = createSnapshotStore<TranscriptViewMode>('compact')
+  const collapseTiming = createSnapshotStore<CollapseTiming>('completion')
   const performanceUsage = createSnapshotStore<'compact' | 'detailed'>('detailed')
   const t = makeTranslate(zh, commonZh)
-  const toolOwners: Array<{
-    callId: string
-    toolName: string
-    block: ToolCallBlock
-    openFile: ChatNodeOwnerProps['openFile']
-    inspectCall: ChatNodeOwnerProps['inspectCall']
-  }> = []
-  const renderCommandSlot = ((_key: string, _owner: object, opts?: { fallback?: React.ReactNode }) =>
-    opts?.fallback ?? null) as React.ComponentProps<typeof CommandNodeView>['renderSlot']
-  const renderTurnTailSlot = (() => null) as
-    React.ComponentProps<typeof TurnTailNodeView>['renderSlot']
-  let nodeSlotOverride: React.ComponentProps<typeof ChatNodeSeat>['renderSlot'] | undefined
-  const renderNodeSlot = ((key: string, owner: object, opts?: {
+  const toolOwners: ToolOwner[] = []
+  const usePerformanceUsage = bindSnapshotSelector(performanceUsage)
+  let nodeSlotOverride: NodeRenderer | undefined
+  let imageSlotOverride: ImageRenderer | undefined
+  const renderImages = (name: string, owner: object, options?: { fallback?: React.ReactNode }) => {
+    if ((name !== 'conversation.chat.user.images' && name !== 'conversation.chat.message.images') || !isImageOwner(owner)) {
+      throw new Error(`Unexpected Chat image Slot: ${name}`)
+    }
+    return imageSlotOverride?.(owner) ?? options?.fallback ?? null
+  }
+  const renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot'] = (name, owner, options) =>
+    name === 'conversation.chat.message.images' ? renderImages(name, owner, options) : renderReasoningSlot(name, owner, options)
+  const renderNodeSlot: NodeRenderer = (key, owner, opts) => {
+    if (nodeSlotOverride !== undefined) return nodeSlotOverride(key, owner, opts)
+    return <HarnessChatNode standard={props} owner={owner}
+      hookContext={opts.hookContext} usePerformanceUsage={usePerformanceUsage}
+      toolOwners={toolOwners} fallback={opts.fallback} renderAssistantSlot={renderAssistantSlot} />
+  }
+  const renderFlowSlot: ChatFlowSlotProps['renderSlot'] = (key: string, owner: object, opts?: {
     fallback?: React.ReactNode
     hookContext?: unknown
   }) => {
-    if (nodeSlotOverride !== undefined) return nodeSlotOverride(key as never, owner as never, opts as never)
-    if (key !== 'conversation.chat.node') return opts?.fallback ?? null
-    const nodeOwner = owner as RoutedChatNodeOwner
-    const { turnData, disclosureReset } = opts?.hookContext as ChatNodeHookContext
-    const useTurnData: UseChatNodeTurnData = dataKey => useTurnDataValue(turnData, dataKey)
-    const useDisclosure = bindDisclosure(disclosureReset)
-    const nodeProps = { ...props, ...nodeOwner, useTurnData, useDisclosure, __renders: undefined }
-    switch (nodeOwner.node.kind) {
-      case 'user':
-        return <UserMessageNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'steering':
-        return <UserMessageNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'context':
-        return <ContextMessageNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'assistant-step':
-        return <AssistantNodeView {...nodeProps} node={nodeOwner.node} usePresentation={props.usePresentation}
-          renderSlotChain={(_slot, _owner, options) => options?.fallback} />
-      case 'command':
-        return (
-          <CommandNodeView
-            {...nodeProps}
-            node={nodeOwner.node}
-            renderSlot={renderCommandSlot}
-            SessionProvider={props.SessionProvider}
-          />
-        )
-      case 'manual-compaction':
-        return <ManualCompactionNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'compaction':
-        return <CompactionNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'model-retry':
-        return <RetryNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'turn-error':
-        return <TurnErrorNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'turn-max-tokens':
-        return <TurnMaxTokensNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'turn-process':
-        return <TurnProcessNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'system-prompt':
-        return <SystemPromptNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'turn-tail':
-        return (
-          <TurnTailNodeView
-            usePerformanceUsage={bindSnapshotSelector(performanceUsage)}
-            {...nodeProps}
-            node={nodeOwner.node}
-            renderSlot={renderTurnTailSlot}
-            SessionProvider={props.SessionProvider}
-          />
-        )
-      case 'unknown':
-        return <UnknownNodeView {...nodeProps} node={nodeOwner.node} />
-      case 'tool-call': {
-        const block = nodeOwner.node.data.root
-        const toolName = 'kind' in block ? block.call?.name ?? '' : block.name
-        const tool = {
-          callId: block.callId,
-          toolName,
-          block,
-          openFile: nodeOwner.openFile,
-          inspectCall: nodeOwner.inspectCall,
-        }
-        toolOwners.push(tool)
-        return (
-          <div
-            data-testid={`tool-seat-${tool.callId}`}
-            data-chat-anchor-key={`call:${tool.callId}`}
-            data-chat-call-id={tool.callId}
-          >
-            {tool.toolName || '(unnamed)'}:{tool.callId}
-          </div>
-        )
-      }
-      default:
-        return opts?.fallback ?? null
+    if (key === 'conversation.chat.node') {
+      return renderNodeSlot(key, owner as RoutedChatNodeOwner, opts as Parameters<NodeRenderer>[2])
     }
-  }) as React.ComponentProps<typeof ChatNodeSeat>['renderSlot']
-  const renderSlot = renderNodeSlot
+    throw new Error(`Undeclared flow child: ${key}`)
+  }
+  const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner) => {
+    if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
+    return renderUserContent(owner as UserContentInput, renderImages, props.t)
+  }
+  const renderSlot: FlowRenderer = (key, owner, opts) => {
+    if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)
+    if ('renderSlot' in owner || 'useStore' in owner || 'actions' in owner) {
+      throw new Error('Flow owner data must not replace its rendering or store authority')
+    }
+    return <HarnessChatFlow standard={props} owner={owner} hookContext={opts.hookContext} renderSlot={renderFlowSlot} />
+  }
   // SessionProvider seat arrives with the session-scope child declaration;
   // ChatView never invokes it (pass-through stub).
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
-  const props: ChatViewSlotProps = {
+  const props: HarnessStandardProps = {
+    renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
     useSession: bindSnapshotSelector(session.source),
     useChat: bindSnapshotSelector(chatSource.source),
     useChatNode,
+    useChatNodeBottom: bindKeyedSnapshotSelector(key => chatSource.source.getSnapshot().nodes.bottomSource(key)),
     useChatNodeProcess,
     useChatGroup,
     useConversation: bindSnapshotSelector(conversation),
@@ -425,6 +479,7 @@ function makeHarness(
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
     ),
     useWorkspaces: emptyWorkspaces(),
+    ...allowAllAccess,
     useProjection: (key: string) => {
       const inbox = useTestSession(snapshot => snapshot.testInbox)
       return key === 'inbox' ? inbox : outlineValue
@@ -442,15 +497,15 @@ function makeHarness(
     },
     useStore: bindSnapshotSelector(chat),
     actions: chat.actions,
-    usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView)),
-    renderSlot,
+    usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming)),
+    // The fixture implements the concrete flow dispatch behind the generic slot signature.
+    renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
     inspectCall: (callId: string) => { openView('trajectory', callId) },
     viewRequest: null,
     openView,
     completeViewRequest: () => {},
     openFile,
-    openSkill,
     openExternalLink: vi.fn(),
     loadOlder,
     loadThrough,
@@ -481,7 +536,7 @@ function makeHarness(
   }
   return {
     set, setSession: session.set, setChat: chatSource.set, ChatView, props,
-    openFile, openSkill, loadOlder, loadThrough, openView,
+    openFile, openUserFile, loadOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
     chatScroll, forkAt, toolOwners,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
@@ -490,9 +545,42 @@ function makeHarness(
       conversation.set({ ...conversation.getSnapshot() })
     },
     setTranscriptView: (mode: TranscriptViewMode) => { transcriptView.set(mode) },
-    setNodeRenderer: (renderer: React.ComponentProps<typeof ChatNodeSeat>['renderSlot']) => {
-      nodeSlotOverride = renderer
-    },
+    setCollapseTiming: (timing: CollapseTiming) => { collapseTiming.set(timing) },
+    setNodeRenderer: (renderer: NodeRenderer) => { nodeSlotOverride = renderer },
+    setImageRenderer: (renderer: ImageRenderer) => { imageSlotOverride = renderer },
+  }
+}
+
+function makeCompletionHarness(mode: TranscriptViewMode, timing: CollapseTiming = 'completion') {
+  const nodes = [
+    userInTurn(1, 'old question', 1), reasoningAssistant(2, 'old analysis', 1, 1),
+    assistant(3, 'old answer', 1, 2),
+    userInTurn(5, 'current question', 2), reasoningAssistant(6, 'current analysis', 2, 1),
+  ]
+  const builder = new ChatSnapshotBuilder()
+  const groups = new ConversationGroupStore<ProcessGroupData>()
+  const state = new ProcessState()
+  const project = (closed: boolean, nextTurn = false) => installGroupedSnapshot(builder, state, groups, chatSnapshotFixture({
+    nodes: [
+      ...nodes,
+      ...closed ? [assistant(7, 'current answer', 2, 2)] : [],
+      ...nextTurn ? [userInTurn(9, 'next question', 3), reasoningAssistant(10, 'next analysis', 3, 1)] : [],
+    ],
+    turnTimings: new Map([[1, { startTime: 0 }], [2, { startTime: 5_000 }], ...nextTurn ? [[3, { startTime: 9_000 }] as const] : []]),
+    turnEnds: new Map(closed ? [[1, 4], [2, 8]] : [[1, 4]]),
+  }))
+  const h = makeHarness({ chat: project(false) }, { running: true })
+  h.setGrouped(groups)
+  h.setTranscriptView(mode)
+  h.setCollapseTiming(timing)
+  return {
+    ...h,
+    complete: () => { h.set({ chat: project(true), running: false }) },
+    startNext: () => { h.set({ chat: project(true, true), running: true, pendingSubmissions: [] }) },
+    sendNext: () => { h.setSession({ pendingSubmissions: [{
+      requestId: 'next-question' as SessionSnapshot['pendingSubmissions'][number]['requestId'],
+      placement: 'transcript', time: 9_000, text: 'next question', attachments: [],
+    }] }) },
   }
 }
 
@@ -679,11 +767,11 @@ describe('ChatView', () => {
     }, id => snapshot.nodes.get(id))
     groupStore.publish()
     h.setGrouped(groupStore)
-    h.setNodeRenderer(((slot: string, owner: object) => {
+    h.setNodeRenderer((slot, owner) => {
       if (slot !== 'conversation.chat.node' || !('node' in owner)) return null
-      const node = (owner as RoutedChatNodeOwner).node
+      const node = owner.node
       return <input aria-label={node.key} defaultValue={node.kind} />
-    }) as ChatViewSlotProps['renderSlot'])
+    })
     const view = render(<h.ChatView {...h.props} />)
     const groupHeader = view.container.querySelector<HTMLButtonElement>('[data-chat-group-key] [data-process-activity]')!
     fireEvent.click(groupHeader)
@@ -776,6 +864,113 @@ describe('ChatView', () => {
     expect(bodies.every(body => !body.hasAttribute('hidden'))).toBe(true)
     expect([...view.container.querySelectorAll<HTMLElement>('[data-chat-group-key]')]).toEqual(roots)
   })
+
+  it.each(['compact', 'standard', 'detailed', 'verbose'] as const)(
+    'defaults %s to completion-time historical presentation without motion', (mode) => {
+      const h = makeCompletionHarness(mode)
+      const view = render(<h.ChatView {...h.props} />)
+      const roots = [...view.container.querySelectorAll<HTMLElement>('[data-chat-group-key]')]
+      expect(roots).toHaveLength(2)
+      expect(view.container.querySelector('[data-chat-motion]')).toBeNull()
+      act(() => { h.complete() })
+      expect([...view.container.querySelectorAll('[data-chat-group-key]')]).toEqual(roots)
+      expect(roots.map(root => root.hasAttribute('hidden'))).toEqual([mode !== 'verbose', mode !== 'verbose'])
+      expect(roots.map(root => root.querySelector('[data-step-process-body]')?.hasAttribute('hidden')))
+        .toEqual([mode !== 'verbose', mode !== 'verbose'])
+      const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+      expect(control.disabled).toBe(mode === 'verbose')
+      if (mode !== 'verbose') expect(control.getAttribute('aria-expanded')).toBe('false')
+      expect(view.getByText('current answer').closest('[hidden]')).toBeNull()
+      expect(view.container.querySelector('[data-chat-motion]')).toBeNull()
+    },
+  )
+
+  it.each(['compact', 'standard', 'detailed', 'verbose'] as const)(
+    'keeps only the latest completed Turn expanded with next-input timing in %s', (mode) => {
+      const h = makeCompletionHarness(mode, 'next-input')
+      const view = render(<h.ChatView {...h.props} />)
+      const roots = [...view.container.querySelectorAll<HTMLElement>('[data-chat-group-key]')]
+      expect(roots).toHaveLength(2)
+      expect(view.container.querySelector('[data-chat-flow][data-chat-motion]')).not.toBeNull()
+      act(() => { h.complete() })
+      expect([...view.container.querySelectorAll('[data-chat-group-key]')]).toEqual(roots)
+      expect(roots[0]!.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      expect(roots[1]!.closest('[hidden]')).toBeNull()
+      const grouped = mode === 'compact' || mode === 'standard'
+      expect(roots[1]!.querySelector('[data-step-process-body]')?.hasAttribute('hidden')).toBe(grouped)
+      expect(roots[1]!.querySelector('[data-process-activity]')?.closest('[hidden]') !== null).toBe(!grouped)
+      const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+      expect(control.disabled).toBe(mode === 'verbose')
+      if (mode !== 'verbose') expect(control.getAttribute('aria-expanded')).toBe('true')
+      expect(view.getByText('current answer').closest('[hidden]')).toBeNull()
+    },
+  )
+
+  it.each(['compact', 'standard', 'detailed', 'verbose'] as const)(
+    'restores the previous Turn to %s history when an ordinary next message is sent', (mode) => {
+      const h = makeCompletionHarness(mode, 'next-input')
+      const view = render(<h.ChatView {...h.props} />)
+      act(() => { h.complete() })
+      const previous = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+      const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+      expect(previous.closest('[hidden]')).toBeNull()
+      act(() => { h.sendNext() })
+      expect(view.getByText('next question').closest('[data-submission-echo]')).not.toBeNull()
+      expect(previous.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      if (mode !== 'verbose') expect(control.getAttribute('aria-expanded')).toBe('false')
+      act(() => { h.startNext() })
+      expect(view.getAllByText('next question')).toHaveLength(1)
+      expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
+      expect(view.container.querySelector('[data-chat-group-key][data-chat-turn="2"]')).toBe(previous)
+      expect(previous.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      expect(previous.querySelector('[data-step-process-body]')?.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      expect(view.getByText('current answer').closest('[hidden]')).toBeNull()
+    },
+  )
+
+  it.each(['compact', 'standard', 'detailed'] as const)(
+    'retains manual open and closed choices when the latest %s Turn becomes history', (mode) => {
+      const h = makeCompletionHarness(mode, 'next-input')
+      const view = render(<h.ChatView {...h.props} />)
+      act(() => { h.complete() })
+      const root = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+      const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+      expect(control.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(control)
+      expect(control.getAttribute('aria-expanded')).toBe('false')
+      expect(root.getAttribute('hidden')).toBe('until-found')
+      act(() => { h.setSession({ running: false }) })
+      expect(root.getAttribute('hidden')).toBe('until-found')
+      fireEvent.click(control)
+      expect(control.getAttribute('aria-expanded')).toBe('true')
+      expect(root.closest('[hidden]')).toBeNull()
+      act(() => { h.sendNext() })
+      expect(control.getAttribute('aria-expanded')).toBe('true')
+      expect(root.closest('[hidden]')).toBeNull()
+      act(() => { h.startNext() })
+      expect(view.container.querySelector('[data-chat-group-key][data-chat-turn="2"]')).toBe(root)
+      expect(control.getAttribute('aria-expanded')).toBe('true')
+      expect(root.closest('[hidden]')).toBeNull()
+    },
+  )
+
+  it.each(['compact', 'standard', 'detailed', 'verbose'] as const)(
+    'restores %s completion-time presentation immediately when timing changes', (mode) => {
+      const h = makeCompletionHarness(mode, 'next-input')
+      const view = render(<h.ChatView {...h.props} />)
+      act(() => { h.complete() })
+      const root = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+      const control = view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!
+      expect(root.closest('[hidden]')).toBeNull()
+      act(() => { h.setCollapseTiming('completion') })
+      expect(view.container.querySelector('[data-chat-motion]')).toBeNull()
+      expect(view.container.querySelector('[data-chat-group-key][data-chat-turn="2"]')).toBe(root)
+      expect(root.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      expect(root.querySelector('[data-step-process-body]')?.hasAttribute('hidden')).toBe(mode !== 'verbose')
+      if (mode !== 'verbose') expect(control.getAttribute('aria-expanded')).toBe('false')
+      expect(view.getByText('current answer').closest('[hidden]')).toBeNull()
+    },
+  )
 
   it.each([
     { initialHeight: 200, closed: true },
@@ -934,7 +1129,8 @@ describe('ChatView', () => {
     }, key => snapshot.nodes.get(key))
     h.setGrouped(groupStore)
     const translate = vi.fn(h.props.t)
-    const view = render(<h.ChatView {...h.props} t={translate} />)
+    h.props.t = translate
+    const view = render(<h.ChatView {...h.props} />)
     const allHeaders = [...view.container.querySelectorAll('[data-process-activity]')]
     const headers = allHeaders.slice(0, 40)
     expect(headers).toHaveLength(40)
@@ -973,10 +1169,10 @@ describe('ChatView', () => {
       groups: { kind: 'replace', snapshots: [{ key, data: { turn: 1, closed: false, summary: { counts: [], running: undefined, runningDetail: '' } }, members: [{ kind: 'node', key: nodeKey, groupPart: 'reasoning' }] }] },
     }, id => snapshot.nodes.get(id))
     h.setGrouped(groupStore)
-    h.setNodeRenderer(((slot: string, owner: object) => {
+    h.setNodeRenderer((slot, owner) => {
       if (slot !== 'conversation.chat.node' || !('node' in owner)) return null
-      return <span>{(owner as RoutedChatNodeOwner).groupPart}</span>
-    }) as ChatViewSlotProps['renderSlot'])
+      return <span>{owner.groupPart}</span>
+    })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByText('reasoning').closest('[data-chat-group-key]')).not.toBeNull()
     expect(view.getByText('response').closest('[data-chat-group-key]')).toBeNull()
@@ -1673,6 +1869,32 @@ describe('ChatView', () => {
     expect(h.forkAt).toHaveBeenCalledWith(3)
   }))
 
+  it('keeps pending file mentions non-interactive until admission enables the reference injector', () => {
+    const pending: InboxState['next-step'][number] = {
+      id: MessageId('pending-file-mention'), role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: 'Read @src/review.ts' }],
+    }
+    const h = makeHarness({}, { testInbox: { 'next-turn': [], 'next-step': [pending] }, running: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const mention = view.getByText('review.ts')
+    expect(mention.closest('[data-pending-steering]')).not.toBeNull()
+    expect(view.queryByRole('button', { name: 'review.ts' })).toBeNull()
+    fireEvent.click(mention)
+    expect(h.openUserFile).not.toHaveBeenCalled()
+    expect(h.openFile).not.toHaveBeenCalled()
+    act(() => {
+      h.setSession({ testInbox: { 'next-turn': [], 'next-step': [] } })
+      h.setChat({ nodes: [{
+        kind: 'steering', messageId: pending.id, seq: 1, time: 1_000,
+        content: pending.content, source: pending.source,
+      }] })
+    })
+    expect(view.container.querySelector('[data-pending-steering]')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'review.ts' }))
+    expect(h.openUserFile).toHaveBeenCalledWith('src/review.ts')
+    expect(h.openFile).not.toHaveBeenCalled()
+  })
+
   it('keeps a later pending occurrence visible when it reuses a durable MessageId', () => {
     const pending = {
       id: 'steer-occurrence-later' as never,
@@ -1782,6 +2004,23 @@ describe('ChatView', () => {
     expect(view.getAllByText('same frame')).toHaveLength(1)
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
     expect(renderedFlowKinds(view.container)).toEqual(['user', 'turn-process'])
+  })
+
+  it('matches echoes past an input Node whose payload carries no message source', () => {
+    const base = chatSnapshotFixture({ nodes: [user(1, 'question')] })
+    const snapshot = new ChatSnapshotBuilder().replace({
+      nodes: [...base.nodes.values(), {
+        key: 'plugin-input', id: 'plugin-input', kind: 'plugin-input', target: 'chat', anchorSeq: 2,
+        location: { kind: 'session' }, visibility: 'visible', groupTree: 'input', data: null,
+      }],
+      timeline: base.timeline,
+    })
+    const h = makeHarness({}, { pendingSubmissions: [{
+      requestId: 'pending' as never, placement: 'transcript', time: 1_000, text: 'pending text', attachments: [],
+    }] }, snapshot)
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getByText('pending text')).toBeTruthy()
+    expect(view.container.querySelector('[data-submission-echo]')).not.toBeNull()
   })
 
   it.each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
@@ -2010,20 +2249,15 @@ describe('ChatView', () => {
         }],
       },
     )
-    const baseRenderSlot = h.props.renderSlot
-    const renderSlot = ((key: string, owner: object, opts?: { fallback?: React.ReactNode }) => {
-      if (key !== 'conversation.message.images') return baseRenderSlot(key as never, owner as never, opts as never)
-      const { images, compact } = owner as { images: readonly unknown[]; compact?: boolean }
-      return (
-        <div
-          data-testid="echo-image"
-          data-count={images.length}
-          data-compact={String(compact)}
-          data-first={JSON.stringify(images[0])}
-        />
-      )
-    }) as ChatViewSlotProps['renderSlot']
-    const view = render(<h.ChatView {...{ ...h.props, renderSlot }} />)
+    h.setImageRenderer(({ images, compact }) => (
+      <div
+        data-testid="echo-image"
+        data-count={images.length}
+        data-compact={String(compact)}
+        data-first={JSON.stringify(images[0])}
+      />
+    ))
+    const view = render(<h.ChatView {...h.props} />)
     const images = view.getAllByTestId('echo-image')
     expect(images).toHaveLength(2)
     expect(images.every(image => image.getAttribute('data-count') === '1')).toBe(true)
@@ -2054,21 +2288,17 @@ describe('ChatView', () => {
         }],
       },
     )
-    const baseRenderSlot = h.props.renderSlot
-    const renderSlot = ((key: string, owner: object, opts?: { fallback?: React.ReactNode }) => {
-      if (key !== 'conversation.message.images') return baseRenderSlot(key as never, owner as never, opts as never)
-      const { images, compact } = owner as {
-        images: ReadonlyArray<{ preview?: { name?: string } }>
-        compact?: boolean
-      }
+    h.setImageRenderer(({ images, compact }) => {
+      const first = images[0]
+      const name = first !== undefined && 'preview' in first ? first.preview.name : undefined
       return (
         <div
-          data-testid={`images-${images[0]?.preview?.name ?? 'unknown'}`}
+          data-testid={`images-${name ?? 'unknown'}`}
           data-compact={String(compact)}
         />
       )
-    }) as ChatViewSlotProps['renderSlot']
-    const view = render(<h.ChatView {...{ ...h.props, renderSlot }} />)
+    })
+    const view = render(<h.ChatView {...h.props} />)
     const first = view.getByTestId('images-first.png')
     const file = view.getByTitle('notes.txt')
     const last = view.getByTestId('images-last.png')
@@ -3147,6 +3377,17 @@ describe('ChatView', () => {
     expect(h.forkAt).not.toHaveBeenCalled()
   })
 
+  it('omits the Turn Tail branch action when the Session access snapshot excludes session/fork', () => {
+    const h = makeHarness({ nodes: [user(1, 'question'), assistant(2, 'answer')], turnEnds: new Map([[1, 3]]) })
+    const useAccess = vi.fn((endpoint: string) => endpoint !== 'session/fork')
+    // Chat Node renderers read the harness's standard props object, so the override goes there.
+    Object.assign(h.props, { useAccess })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByRole('button', { name: '复制' }).length).toBeGreaterThan(0)
+    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    expect(useAccess).toHaveBeenCalledWith('session/fork')
+  })
+
   it('renders assistant Markdown across history, streaming, final, and interrupted states while user text stays literal', () => {
     const markdown = '# Rendered\n\n- **one**\n- `two`'
     const h = makeHarness({ nodes: [user(1, markdown), assistant(2, markdown)] })
@@ -3210,12 +3451,12 @@ describe('ChatView', () => {
     // Count renderSlot invocations: the memo boundary holds when CallRow does
     // not re-render, so the row's renderSlot call count freezes during chunks.
     let rowRenders = 0
-    h.setNodeRenderer(((key: string, owner: object) => {
+    h.setNodeRenderer((key, owner) => {
       if (key !== 'conversation.chat.node'
-        || (owner as RoutedChatNodeOwner).node.kind !== 'tool-call') return null
+        || owner.node.kind !== 'tool-call') return null
       rowRenders += 1
       return <div data-testid="counting-row" />
-    }) as React.ComponentProps<typeof ChatNodeSeat>['renderSlot'])
+    })
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByTestId('counting-row')).toBeTruthy()
     const afterMount = rowRenders
@@ -3261,12 +3502,12 @@ describe('ChatView', () => {
       nodes: [user(1, 'q'), assistant(4, 'later')],
       runningCalls: [runningCall('r1')],
     }, { running: true })
-    h.props.renderSlot = ((key: string, owner: object, opts?: { fallback?: React.ReactNode }) => {
-      const routed = owner as RoutedChatNodeOwner
+    h.setNodeRenderer((key, owner, opts) => {
+      const routed = owner
       return key === 'conversation.chat.node' && routed.node.kind === 'tool-call'
         ? <StatefulToolNode node={routed.node} />
-        : opts?.fallback ?? null
-    }) as React.ComponentProps<typeof ChatNodeSeat>['renderSlot']
+        : opts.fallback ?? null
+    })
     const view = render(<h.ChatView {...h.props} />)
     const tool = view.getByTestId('stateful-tool')
     const row = view.container.querySelector('[data-chat-flow-key="fixture:tool:r1"]')
@@ -3359,10 +3600,10 @@ describe('ChatView', () => {
     const block = toolResult(3, 'a')
     const h = makeHarness({ nodes: [block] })
     const calls: { key: string; owner: object; entryKey?: string }[] = []
-    h.setNodeRenderer(((key: string, owner: object, opts?: { entryKey?: string; fallback?: React.ReactNode }) => {
-      calls.push({ key, owner, ...(opts?.entryKey !== undefined ? { entryKey: opts.entryKey } : {}) })
-      return opts?.fallback ?? null
-    }) as React.ComponentProps<typeof ChatNodeSeat>['renderSlot'])
+    h.setNodeRenderer((key, owner, opts) => {
+      calls.push({ key, owner, ...(opts.entryKey !== undefined ? { entryKey: opts.entryKey } : {}) })
+      return opts.fallback ?? null
+    })
     render(<h.ChatView {...h.props} />)
     expect(calls).toHaveLength(1)
     expect(calls[0]).toMatchObject({

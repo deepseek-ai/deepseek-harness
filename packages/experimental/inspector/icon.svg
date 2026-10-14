@@ -1,12 +1,23 @@
 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="15.5" cy="15.5" r="8.5" fill="url(#a)" />
-  <circle cx="15.5" cy="15.5" r="5" fill="#FFFFFF" />
-  <path d="M13.2 15.5L14.9 17.2L18.2 13.9" stroke="#145AF3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M22 22L29 29" stroke="#145AF3" stroke-width="3.2" stroke-linecap="round" />
+  <g mask="url(#data-lens-cutout)">
+    <rect x="11" y="7" width="16" height="16" rx="2" fill="#7FB7FC" fill-opacity="0.55" />
+    <rect x="7" y="11" width="17" height="15" rx="2" fill="url(#data-panel)" />
+    <path d="M10 15H18M10 18H15" stroke="#FFFFFF" stroke-width="1.5" />
+  </g>
+  <path d="M26 26L30 30" stroke="#658EFF" stroke-width="3" />
+  <circle cx="23" cy="23" r="4.5" stroke="url(#data-lens)" stroke-width="2.5" />
   <defs>
-    <linearGradient id="a" x1="7" y1="7" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7CB7FF" />
-      <stop offset="1" stop-color="#45D9E7" />
+    <mask id="data-lens-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36">
+      <rect width="36" height="36" fill="#FFFFFF" />
+      <circle cx="23" cy="23" r="3.25" fill="#000000" />
+    </mask>
+    <linearGradient id="data-panel" x1="9" y1="11" x2="23" y2="26" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6DB9FB" />
+      <stop offset="1" stop-color="#3650DE" />
+    </linearGradient>
+    <linearGradient id="data-lens" x1="19" y1="19" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#45D9E7" />
+      <stop offset="1" stop-color="#67C7FE" />
     </linearGradient>
   </defs>
 </svg>

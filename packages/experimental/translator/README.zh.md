@@ -64,7 +64,7 @@ Google 接收使用 `gtx` 客户端的表单 POST 请求；Bing 通过 Microsoft
 
 `TranslationError.code` 区分输入限制、HTTP 失败、响应限制、无效提供方响应、传输失败、缺少持久 Session、存储失败、不可用的原生路由以及服务自身的 `TRANSLATION_TIMEOUT` 超时。未激活 Session 缓存未命中时，在调用任何提供方之前以 `TRANSLATION_SESSION_INACTIVE` 拒绝。诊断不包含提交的文本或提供者错误正文。`translate()` 始终返回 Promise，准入或提供者失败都会使其拒绝。调用者取消和服务卸载保留原始中止原因，包括调用者自身的超时原因。排队期间取消会立即返回拒绝；卸载会取消已接纳的请求，并等待底层存储和网络工作结束。`resolve()` 和 `translate()` 都执行输入限制。
 
-`TRANSLATION_UNAVAILABLE` 拒绝缺失的活跃内置所有者或已注册路由、未配置的凭据、目录中不存在精确的 `deepseek-flash`、派发前所有者／模型列表／官方凭据引用变化、提供方卸载，以及准备后的调用推理强度不是 `off` 的情况。资格与思考检查在派发前执行，请求持久化之后会再次检查资格。原生 `finish` 的原因为 `error` 时映射为 `TRANSLATION_REQUEST_FAILED`；缺失 finish 或其他非 `stop` 原因映射为 `TRANSLATION_INVALID_RESPONSE`。
+`TRANSLATION_UNAVAILABLE` 拒绝缺失的活跃内置所有者或已注册路由、未配置的凭据、目录中不存在精确的 `deepseek-flash`、派发前所有者、模型配置（官方路由的 `models` 或账号路由的 `modelOverrides`）或官方凭据引用变化、提供方卸载，以及准备后的调用推理强度不是 `off` 的情况。资格与思考检查在派发前执行，请求持久化之后会再次检查资格。原生 `finish` 的原因为 `error` 时映射为 `TRANSLATION_REQUEST_FAILED`；缺失 finish 或其他非 `stop` 原因映射为 `TRANSLATION_INVALID_RESPONSE`。
 
 </details>
 

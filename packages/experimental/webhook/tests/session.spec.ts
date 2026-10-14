@@ -14,7 +14,7 @@ interface HarnessOptions {
   failAt?: 'permission-resolve' | 'preset-resolve' | 'standing' | 'workspace' | 'agent' | 'attach' | 'permission-set' | 'title' | 'followup'
   failDetach?: boolean
   failDispose?: boolean
-  abortAt?: 'workspace' | 'agent'
+  abortAt?: 'workspace' | 'agent' | 'attach' | 'permission-continuation'
 }
 
 interface SessionHarness {
@@ -66,6 +66,7 @@ function harness(options: HarnessOptions = {}): SessionHarness {
     path: '/workspace',
     async attachSession() {
       calls.push('attach')
+      if (options.abortAt === 'attach') controller.abort(new Error('abort after attach'))
       if (options.failAt === 'attach') throw new Error('attach failed')
     },
     async detachSession() {
@@ -83,6 +84,10 @@ function harness(options: HarnessOptions = {}): SessionHarness {
       },
       set(_session: unknown, name: string) {
         calls.push(`permission-set:${name}`)
+        if (options.abortAt === 'permission-continuation') queueMicrotask(() => {
+          calls.push('abort')
+          controller.abort(new Error('abort after permission setup'))
+        })
         if (options.failAt === 'permission-set') throw new Error('permission set failed')
       },
     },
@@ -312,10 +317,21 @@ describe('webhook Session creation', () => {
     expect((test.ctx.logger.warn as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['workspace', 'agent'] as const)('honors cancellation after %s settlement', async (abortAt) => {
+  it.each(['workspace', 'agent', 'attach'] as const)('honors cancellation after %s settlement', async (abortAt) => {
     const test = harness({ abortAt })
     await expect(create(test)).rejects.toThrow(/abort after/)
     expect(test.calls).not.toContain('followup')
-    if (abortAt === 'agent') expect(test.calls).toContain('dispose')
+    if (abortAt !== 'workspace') expect(test.calls).toContain('dispose')
+    if (abortAt === 'attach') expect(test.calls).toContain('detach')
   })
+
+  it('admits the prompt synchronously after permission setup before a queued cancellation', async () => {
+    const test = harness({ abortAt: 'permission-continuation' })
+    await create(test)
+    expect(test.calls.indexOf('followup')).toBeGreaterThan(test.calls.indexOf('permission-set:read-only'))
+    expect(test.calls.indexOf('abort')).toBeGreaterThan(test.calls.indexOf('followup'))
+    expect(test.calls).not.toContain('detach')
+    expect(test.calls).not.toContain('dispose')
+  })
+
 })

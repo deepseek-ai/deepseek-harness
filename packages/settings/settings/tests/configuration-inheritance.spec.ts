@@ -5,7 +5,6 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as appBoot from '@deepseek-ai/dsh-app-boot'
-import { parse } from 'yaml'
 import { configurationFixture } from './configuration-fixture.ts'
 
 it('shares composition for entries without config overrides while retaining group and insert inheritance', async () => {
@@ -64,34 +63,6 @@ it('recomposes unoverridden entries after bundle changes and returns empty confi
   patches[0]!.insert.push({ id: 'second', config: { ordinary: 'duplicate' } })
   writeFileSync(bundlePath, JSON.stringify(patches))
   expect(read().find(row => row.entry.options.id === 'second')!.inherited).toEqual({ ordinary: 'new bundle value' })
-})
-
-it.each([false, true])('preserves same-ID preset patches across Host config reads, edits and resets with a Host override: %s', async (hostOverride) => {
-  const { ctx, profile, start } = await configurationFixture({ hmr: false })
-  await ctx.fiber.dispose()
-  const declaration = { insert: [{ id: 'preset-standard', name: 'cordis:probe', disabled: true,
-    config: { ordinary: 'preset', plugins: [{ id: 'first', name: 'cordis:probe', config: { ordinary: 'child' } }] },
-  }] }
-  const preset = { preset: 'preset-standard', id: 'first', name: 'cordis:probe', disabled: true,
-    config: { ordinary: 'child override', count: 99 },
-  }
-  const host = { id: 'first', name: 'cordis:probe', config: { ordinary: 'fixed', token: 'private', count: 6 } }
-  writeFileSync(profile.patchPath, JSON.stringify([declaration, ...hostOverride ? [host] : [], preset]))
-  const restored = await start()
-  const configuration = () => restored.configEditor.configuration().find(row => row.entry.options.id === 'first')!
-  expect(configuration().inherited).toEqual({ ordinary: 'fixed', token: 'private' })
-  expect(configuration().override).toEqual(hostOverride ? host.config : {})
-  for (const count of [7, 8]) {
-    await restored.settings.update('first', { count })
-    const updated = { ...host, config: { ...host.config, count } }
-    expect(parse(readFileSync(profile.patchPath, 'utf8'))).toEqual(hostOverride ? [declaration, updated, preset] : [declaration, preset, updated])
-    expect(configuration().override).toEqual(updated.config)
-    expect(restored.settings.describe().find(row => row.ns === 'first')!.value).toMatchObject({ count })
-  }
-  await restored.settings.replace('first', {})
-  expect(parse(readFileSync(profile.patchPath, 'utf8'))).toEqual([declaration, preset])
-  expect(configuration().inherited).toEqual({ ordinary: 'fixed', token: 'private' })
-  expect(configuration().override).toEqual({})
 })
 
 it.each([0, 13, 190])('bounds composition work for 190 entries with %i config overrides', async (overrideCount) => {

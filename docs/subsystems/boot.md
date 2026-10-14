@@ -6,8 +6,6 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 ## Management records
 
-`ProfilePatch` adds an optional literal `preset` row id to native Include patch fields; `id` then targets a child in that preset. [App-boot](../../packages/boot/app-boot/README.md#profiles) owns compilation, ordering, validation, and path resolution.
-
 `PluginEntryId` identifies one Loader entry; callers obtain it from `listPlugins` rather than constructing a patch id.
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
@@ -19,6 +17,37 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 `PluginRegistries` carries the configured first registry, `null` for the one pnpm's own configuration names, the fallbacks asked after it, and `resolved`, the URL pnpm's own configuration names or `null` while unread. `InspectOptions.registry` names the registry a lookup asks first.
 
 `ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
+
+## Profile reconciliation
+
+<a id="profile-reconciliation"></a>
+
+```ts type-equiv
+/** Outcome of {@link Hmr.reconcileProfile}. */
+interface ProfileReconciliation {
+  /** Diagnostics for Loader entries left inactive. */
+  warnings: string[]
+  /** Loaded modules whose files changed on disk and whose previous code keeps running until a restart. */
+  pending: PendingModule[]
+  /**
+   * Why every change waits for a restart: `module-comparison` when module caches cannot be inspected or their files
+   * compared, even when no URLs are known; `package-moved` when the runtime resolution cannot publish a moved package.
+   */
+  restartReason?: 'module-comparison' | 'package-moved'
+}
+```
+
+```ts type-equiv
+/** A changed module that loads only after a restart. */
+interface PendingModule {
+  url: string
+  /**
+   * `host-module`: the process entry point's static graph imports it. `unmanaged-plugin`: it is imported by a plugin
+   * that runs outside a traversable Loader entry. `module-comparison`: loaded modules could not be compared with disk.
+   */
+  reason: 'host-module' | 'unmanaged-plugin' | 'module-comparison'
+}
+```
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -32,7 +61,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.configEditor` — `ConfigEditor`
 
-Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.
+Persist complete raw configs and apply them through the normal Loader path.
 
 ```ts cordis-catalog
 /** Addressable profile rows; nested Includes have independent configuration ownership.
@@ -80,6 +109,21 @@ async watchConfig(filename: string, refresh: () => Promise<void>): Promise<() =>
  * @returns Linked module URLs, or an empty list for an uncached module.
  */
 async getLinked(url: string): Promise<string[]>
+
+/**
+ * Recompose the profile from its manifest and patch files, replacing running plugins whose loaded files below the
+ * profile directory or its linked package targets changed on disk, and publishing its runtime resolution. Changed
+ * modules are evicted and the Loader entries running them stop; app-boot's {@link recomposeProfile} then publishes the
+ * resolution, applies the generation, starts the stopped entries with the current files and configuration,
+ * imports entries whose import failed again, and judges activation. Afterwards the modules below the mappings the
+ * recomposition dropped are evicted, so a removed or deselected package is imported afresh when it returns. Callers run
+ * inside {@link runExclusive}.
+ * @param requiredIds Entry ids whose inactive state is reported as a failure even when it predates this call.
+ * @returns Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.
+ * @throws The patch read, publication, preparation, apply, or activation failure of the recomposition, including a
+ * replacement plugin that fails to load or start, whose previous code no longer runs.
+ */
+async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation>
 ```
 
 Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
@@ -116,7 +160,7 @@ Manage profile files and apply their declared reload lifecycle.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
-@Remote async listBundles(): Promise<BundleInfo[]>
+@Remote listBundles(): Promise<BundleInfo[]>
 
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.

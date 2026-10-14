@@ -3,6 +3,7 @@
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent, SessionHeader, SessionId , SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
+import type { SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionRecord } from './types.ts'
 import { SessionQueryError } from './config.ts'
 import { readColdSessionLog, type ColdSessionLog } from './cold-read.ts'
@@ -64,8 +65,13 @@ export class SessionCorpus {
     const persisted = persistence === undefined ? [] : await listPersisted(persistence, signal)
     signal?.throwIfAborted()
     const records = new Map<SessionId, SessionRecord>()
-    for (const header of persisted) {
-      records.set(header.id, { header: structuredClone(header), live: false, persisted: true })
+    for (const { header, formatStatus } of persisted) {
+      records.set(header.id, {
+        header: structuredClone(header),
+        live: false,
+        persisted: true,
+        ...(formatStatus === undefined ? {} : { formatStatus }),
+      })
     }
     for (const session of this._ctx.sessions.list()) {
       const durable = records.get(session.id)
@@ -74,6 +80,7 @@ export class SessionCorpus {
         header: structuredClone(session.header),
         live: true,
         persisted: durable !== undefined,
+        formatStatus: 'current',
       })
     }
     return [...records.values()].sort(compareSessions)
@@ -98,7 +105,7 @@ export class SessionCorpus {
     }
     const persistence = this._persistence
     if (persistence === undefined) throw notFound(sessionId)
-    const listed = (await listPersisted(persistence, signal)).find(header => header.id === sessionId)
+    const listed = (await listPersisted(persistence, signal)).find(snapshot => snapshot.header.id === sessionId)
     signal?.throwIfAborted()
     if (listed === undefined) throw notFound(sessionId)
     const loaded = await inspectPersisted(persistence, sessionId, signal)
@@ -109,7 +116,7 @@ export class SessionCorpus {
       signal?.throwIfAborted()
       return snapshot
     }
-    assertSessionHeadersCompatible(loaded.header, listed)
+    assertSessionHeadersCompatible(loaded.header, listed.header)
     const snapshot = {
       header: structuredClone(loaded.header),
       inheritedEventCount: loaded.inheritedEventCount,
@@ -156,7 +163,7 @@ export class SessionCorpus {
       return orderedResults(ids, resolved)
     }
 
-    let persisted: SessionHeader[]
+    let persisted: readonly SessionPersistenceSnapshot[]
     try {
       persisted = await listPersisted(persistence, signal)
       signal?.throwIfAborted()
@@ -167,7 +174,7 @@ export class SessionCorpus {
       }
       return orderedResults(ids, resolved)
     }
-    const persistedById = new Map(persisted.map(header => [header.id, header]))
+    const persistedById = new Map(persisted.map(({ header }) => [header.id, header]))
     const resolvePersisted = async (sessionId: SessionId): Promise<void> => {
       const listed = persistedById.get(sessionId)
       if (listed === undefined) {
@@ -257,10 +264,9 @@ function orderedResults<Value>(
 async function listPersisted(
   persistence: SessionPersistence,
   signal?: AbortSignal,
-): Promise<SessionHeader[]> {
+): Promise<readonly SessionPersistenceSnapshot[]> {
   try {
-    const snapshots = await persistence.list(signal === undefined ? undefined : { signal })
-    return snapshots.map(snapshot => snapshot.header)
+    return await persistence.list(signal === undefined ? undefined : { signal })
   } catch (error: unknown) {
     if (signal?.aborted) signal.throwIfAborted()
     throw new SessionQueryError(

@@ -25,7 +25,7 @@ async function bench(namespaces: readonly string[]) {
   const ctx = new Context()
   new TestRemote(ctx, { settings: { describe: describeCall } })
   const mirror = new SettingsDescribeMirror({ remote: { settings: { describe: describeCall } } } as never)
-  await ctx.plugin(ConfigForms, { mirror, schema: new SettingsSchemaService(ctx), persistence: 'host' }).await()
+  await ctx.plugin(ConfigForms, { mirror, schema: new SettingsSchemaService(ctx) }).await()
   return { ctx, mirror, describeCall }
 }
 

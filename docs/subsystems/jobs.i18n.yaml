@@ -6,8 +6,11 @@
   en: dd515d8548864a91
   zh: 16a117d39989a373
 /background-job-runtime/ids-and-status:
-  en: 529f401da4757a98
-  zh: 041ff5e86b5dd8db
+  en: 4b286c70e4a83b99
+  zh: 7edbf090e9cb6487
+/background-job-runtime/session-lifecycle-records:
+  en: 5fb99886e0ab2718
+  zh: bdea51368c935895
 /background-job-runtime/producer-contract:
   en: af0be338a0ba5e60
   zh: fc0eefb8c31f3a98

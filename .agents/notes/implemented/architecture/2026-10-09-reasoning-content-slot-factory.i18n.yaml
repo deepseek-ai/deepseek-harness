@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-09-reasoning-content-slot-factory.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-reasoning-content-slot-factory.md
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory:
+  en: 55862b96f6731c81
+  zh: 425ab1ff7043a606
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/problem:
+  en: 91000d9dd4a47647
+  zh: 6146424ac5c3987b
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/decision:
+  en: 0a45affd1b125113
+  zh: 3af28a27b7721bc7
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/decision/registration-and-rendering:
+  en: 0af348d91eedc16e
+  zh: a06d6f59cc271e94
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/decision/data-state-and-lifecycle:
+  en: e220ebf28a113e0b
+  zh: dfedd85ac5d76ccb
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/decision/translation-plugin-integration:
+  en: 145a1ae617a49f43
+  zh: b2eb8443bb1515a7
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/alternatives-considered:
+  en: 89adfc6fbad716f3
+  zh: 098cca9e73c5eeaf
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/verification:
+  en: 23e6e98d176f08f4
+  zh: 2b89720b8914552b
+/agent-note-standard-reasoning-body-slot-and-reusable-content-factory/consequences:
+  en: 60a32f46ff947154
+  zh: 6498e791d4c2c166

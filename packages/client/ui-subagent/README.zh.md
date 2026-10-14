@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-会话页头把当前会话标题作为谱系面包屑；当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区的最前方，不带任何面包屑分隔符。目录缺席、空目录加载中或成功加载为空时，均隐藏数量触发器。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
+会话页头把当前会话标题作为谱系面包屑；当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区中预设标签之后，不带任何面包屑分隔符。目录缺席、空目录加载中或成功加载为空时，均隐藏数量触发器。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
 
 本包注册 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` 资源与 builtin Sidebar tab 类型。资源直接根据地址保留 child 的 `SessionReference`，不刷新 parent 目录，并在 tab 记录关闭时释放 reference。tab 通过 `sidebar.chat.conversation` 渲染共享 `conversation.content` Factory，把局部 View 固定为 Chat，并省略主 Conversation 的 Header 与宽度控制。
 
@@ -55,11 +55,11 @@ kind: "package-reference"
 
 ### 目录派生
 
-页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行会按需加载初始目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。本地行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。外部行始终为叶子，不加载子 Session。
+页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行读取目标投影，包括普通冷历史。列表行的 `formatStatus` 为 `migration-required` 时，行在展开前即显示“需要迁移”，保留打开历史的操作，但不能展开下级，也不改变子会话的 mode；投影读取需要迁移且缺少目录时，也显示同一提示。打开会话后，历史与 control 投影提供其目录。其他情况下，已有目录仍可使用，包括显式空目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。其他行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。外部行始终为叶子，不加载子 Session。
 
 打开目录下拉菜单不会请求其根目录。展开子节点目录或重试失败读取时调用 `refreshProjection`；共享投影值的变化会自动更新显示。
 
-面包屑地址从 Provider 所绑定的 Session 地址和已加载的 parent 目录推导，也包括从未选中过的祖先。
+面包屑地址从 Provider 所绑定的 Session 地址、已加载的 parent 目录或已列出的 subagent 谱系推导，也包括从未选中过的祖先。
 
 ### 耗时、完成状态与 token
 
@@ -70,6 +70,8 @@ kind: "package-reference"
 one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 parent 不可用且 child 未在运行时选用只读编辑器；否则普通编辑器的会话会经 `subagents/prompt` 路由提示词。本包绝不接收宿主上下文，也不调用面向模型的工具。
 
 模式未知的目录项仍可见、可点击，没有标签时显示子会话 id。读取子历史并确认受支持模式前，输入区保持只读；读取失败在该子会话中报告。
+
+会话树菜单高亮遵循[标准菜单边缘几何](../../../docs/ui-radius.zh.md#nested-hover)；树形展开控件保留独立的左侧空间。
 
 </details>
 

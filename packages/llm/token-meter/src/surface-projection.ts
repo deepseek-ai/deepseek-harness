@@ -2,7 +2,7 @@
  * The context-pressure projection's O(1) surface-token fold.
  *
  * Its checkpoint keeps scalar totals rather than the retained surface used
- * by context breakdown. Replacements ride the compact
+ * by measurement. Replacements ride the compact
  * seam's shadow-price protocol: the metering event immediately before a
  * surface `replace` (`compaction/summary` or `compaction/prune`) states the
  * heuristic price of the exact replaced range, so the fold keeps a running

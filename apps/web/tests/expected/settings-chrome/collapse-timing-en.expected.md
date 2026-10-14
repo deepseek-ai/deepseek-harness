@@ -1,0 +1,3 @@
+- menu:
+  - menuitem "On completion"
+  - menuitem "On next message"

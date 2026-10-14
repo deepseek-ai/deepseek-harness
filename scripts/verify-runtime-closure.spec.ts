@@ -39,6 +39,16 @@ afterEach(() => {
 })
 
 describe('verifyRuntimeClosure', () => {
+  it('checks a private worker closure without requiring application presets', async () => {
+    const manifestPath = 'packages/ssh/ssh-helper-runtime/package.json'
+    const root = fixture({ [manifestPath]: { name: 'helper', dependencies: { '@scope/worker': 'workspace:^' } } })
+    workspace(root, '@scope/worker', { peerDependencies: { '@scope/peer': 'workspace:^' } })
+    workspace(root, '@scope/peer', {})
+    expect((await verifyRuntimeClosure(root, manifestPath, false)).failures).toEqual(['helper -> @scope/worker -> @scope/peer'])
+    writeFileSync(join(root, manifestPath), JSON.stringify({ name: 'helper', dependencies: { '@scope/worker': 'workspace:^', '@scope/peer': 'workspace:^' } }))
+    expect(await verifyRuntimeClosure(root, manifestPath, false)).toMatchObject({ failures: [], presetCount: 0 })
+  })
+
   it('requires only plugins active for each published target', async () => {
     const root = fixture({
       'python/sdk-runtime/package.json': { name: 'runtime', dependencies: { '@scope/shared': 'workspace:^' } },

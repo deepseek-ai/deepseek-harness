@@ -1,0 +1,11 @@
+version: 1
+scenario: office-authoring-checker
+profile: headless
+composition: office-authoring-checker
+recording: authored
+header:
+  class: office-authoring-checker
+  pin: true
+  toolSchemasSource: office-progressive-native
+workspace:
+  setup: office-skills

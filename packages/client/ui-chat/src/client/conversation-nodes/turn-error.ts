@@ -91,7 +91,7 @@ export const turnErrorDefinition: ConversationNodeDefinition<TurnErrorState> = {
       message: failure.message,
       ...failure.code === undefined ? {} : { code: failure.code },
     }
-    return chatNode(context, 'turn-error', node.seq, node)
+    return chatNode(context, 'turn-error', node.seq, node, { groupTree: 'turn' })
   },
 }
 

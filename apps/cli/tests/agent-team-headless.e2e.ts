@@ -17,7 +17,7 @@ function records(content: string): Record<string, unknown>[] {
 }
 
 describe('dsh run with Agent Teams enabled', () => {
-  it('runs two teammates, durable peer mail, dependent tasks, waiting, and final aggregation', async () => {
+  it('runs two teammates, direct peer messages, dependent tasks, waiting, and final aggregation', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-agent-team-headless-'))
     try {
       const home = join(cwd, '.dsh')
@@ -103,8 +103,11 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(root).toBeDefined()
       const eventTypes = root!.map(record => record.type)
       expect(eventTypes.filter(type => type === 'team/member')).toHaveLength(4)
-      expect(eventTypes).toContain('team/message/queued')
-      expect(eventTypes).toContain('team/message/delivered')
+      expect(eventTypes).not.toContain('team/message/queued')
+      expect(eventTypes).not.toContain('team/message/delivered')
+      const peerMessages = parsed.flatMap(log => log.filter(record => record.type === 'user/message'
+        && (record.data as { source: { kind: string } }).source.kind === 'agent-message'))
+      expect(peerMessages).toHaveLength(2)
       const taskEvents = root!.filter(record => record.type === 'team/task')
       expect(taskEvents.filter((record) => {
         const data = record.data as { task?: { status?: string } } | undefined

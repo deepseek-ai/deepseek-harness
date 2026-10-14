@@ -11,13 +11,13 @@ import { readFileSync } from 'node:fs'
 import { inspect, parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
-import { Context, type FiberState } from '@deepseek-ai/cordis'
-import Loader, { type Entry, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
-import Include, { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { Context, type Fiber, type FiberState } from '@deepseek-ai/cordis'
+import Loader, { type Entry, type EntryGroup, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-export { readProfilePatches, resolveTelemetryPatch, type ProfileContext, type ProfilePnpmInvocation } from './profile-context.ts'
+export { readBundlePatches, readProfilePatches, resolveTelemetryPatch, type ProfileContext, type ProfilePnpmInvocation } from './profile-context.ts'
 export { sanitizeProfile } from './profile-sanitize.ts'
 export { getDshRuntimeVersion, evaluatePluginCompatibility, pluginCompatibilityWarning, type PluginCompatibility } from './plugin-compatibility.ts'
 export {
@@ -25,16 +25,14 @@ export {
   setProfileVersionExemption, type ProfileCompatibility,
 } from './profile-compatibility.ts'
 import { prepareProfilePatches } from './compatibility-preflight.ts'
-import { applyProfilePatches, compileProfilePatches, profilePatchPreset, prepareLoadedProfilePatches, type ProfilePatch } from './profile-patches.ts'
-export { applyProfilePatches, compileProfilePatches, profilePatchPreset, type ProfilePatch, type ProfilePatchWarning } from './profile-patches.ts'
+import { ProfileRuntimeResolution, type RuntimeResolution } from './profile.ts'
+import { ResolutionRestartRequired } from './profile-resolution/resolver.ts'
 export { prepareProfileEntries, prepareProfilePatches } from './compatibility-preflight.ts'
 export { readPluginMeta, resolvePluginResource } from './package-meta.ts'
 export { ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, type OfficialBundleCatalogEntry } from './official-bundles.ts'
-export { realModuleFile } from './profile-resolution/legacy-links.ts'
 export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
 export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
 export { isNativeConfigSchema } from './config-schema/native.ts'
-import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export {
   readProfilePlugins, reconcileProfilePlugins, writeProfileBundles,
@@ -92,6 +90,7 @@ export {
   type PluginPackage,
   type PluginPackagesConfig,
 } from './profile-resolution/service.ts'
+export { ResolutionRestartRequired } from './profile-resolution/resolver.ts'
 
 /**
  * Resolve the config to boot. Replay swaps a `cordis.yml` basename for
@@ -268,7 +267,52 @@ const bootstrapIncludes = new WeakMap<Context, Entry>()
 // reference `process.env`.
 const userPatchesSchema = entryListSchema
 
-/** Apply one complete patch generation and wait for Loader activation diagnostics.
+/** What a caller of {@link recomposeProfile} already did and requires. */
+export interface ProfileRecompositionOptions {
+  /** Explicit enablement targets whose existing failures also reject the recomposition. */
+  readonly requiredIds?: readonly string[]
+  /**
+   * Loader entries that ran before the caller stopped some of them. Each that no longer runs starts again, and each that
+   * failed afterwards counts as a new failure.
+   */
+  readonly running?: readonly Entry[]
+}
+
+/** The outcome of a {@link recomposeProfile} that applied or kept the composition. */
+export interface ProfileRecomposition {
+  /** Diagnostics for unchanged pre-existing inactive entries. */
+  warnings: string[]
+  /** Present when the runtime resolution could not publish a moved package or a changed installation mapping. */
+  restartReason?: 'package-moved'
+}
+
+/**
+ * Recompose the profile from its complete patch list, together with its runtime resolution. The rows the generation no
+ * longer lists are removed first and their disposal finishes while their packages are still mapped; the latest
+ * generation of an installed, recomputable resolution is published; the compatibility preflight reads the published
+ * packages; the generation is applied to the root Include; entries that ran, and enabled entries whose import failed,
+ * start afterwards when the update left them without a running fiber; and activation is judged. A failure before the generation applies,
+ * including a publication the resolution rejects, which reports `package-moved`, puts the removed rows back at their
+ * places, starting them again, and starts the entries that ran again. An entry waiting for a service is reported as a
+ * warning unless it is required. Patches are copied with `structuredClone`, so they hold no functions.
+ * @param ctx Booted root context.
+ * @param patches Complete ordered patch list.
+ * @param binName Diagnostic prefix.
+ * @param options What the caller already did and requires.
+ * @returns Diagnostics for unchanged pre-existing inactive entries, and the restart reason of a rejected publication.
+ * @throws When the root Include is missing; the latest resolution cannot be read or published; preparation or the
+ * Loader update rejects; or for a new or changed failure, an inactive required entry, a failed entry that ran, or a
+ * healthy fiber whose disposal rejected.
+ */
+export function recomposeProfile(
+  ctx: Context, patches: PatchOptions[], binName: string, options: ProfileRecompositionOptions = {},
+): Promise<ProfileRecomposition> {
+  return recompose(ctx, patches, binName, options, true)
+}
+
+/**
+ * Apply a complete patch list to the root Include and judge activation, leaving the runtime resolution and entries
+ * whose import failed as they are.
  * @param ctx Booted root context.
  * @param patches Complete ordered patch list.
  * @param binName Diagnostic prefix.
@@ -276,67 +320,196 @@ const userPatchesSchema = entryListSchema
  * @returns Diagnostics for unchanged pre-existing inactive entries; new or changed failures reject.
  */
 export async function reconcileProfilePatches(
-  ctx: Context, patches: ProfilePatch[], binName: string, requiredIds: readonly string[] = [],
+  ctx: Context, patches: PatchOptions[], binName: string, requiredIds: readonly string[] = [],
 ): Promise<string[]> {
-  const entry = bootstrapIncludes.get(ctx)
-  if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
-  const previousFailures = (await inactiveEntries(ctx)).map(failure => ({
-    ...failure, diagnostic: inactiveDiagnostic(failure), fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
-  }))
-  // Removed entries leave the Loader store before their async disposers finish.
-  const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
-    fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
-  }])
-  const { patches: _previous, ...includeConfig } = entry.options.config as Include.Config
-  // The recomposition judges the rows the launch judged, resolved from the file this Include read.
-  const parentURL = new URL('.', new URL(includeConfig.path, entry.parent.tree.ctx.baseUrl)).href
-  const initial = readRootEntries(includeConfig.path, parentURL, binName)
-  const prepared = prepareRootPatches(ctx, patches, includeConfig.path, parentURL, binName, initial)
-  await drainRetiringEntries(ctx, entry, initial, prepared)
-  await entry.update({ config: { ...includeConfig, patches: prepared } })
-  const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
-  await ctx.loader.await()
-  const failures = await inactiveEntries(ctx)
-  const introduced = failures.filter(failure => requiredIds.includes(failure.entry.options.id) || !previousFailures.some(previous =>
-    previous.entry === failure.entry && previous.fiber === failure.entry.fiber
-    && previous.options === JSON.stringify(failure.entry.options) && previous.diagnostic === inactiveDiagnostic(failure)))
-  if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced).trimEnd())
-  for (const [index, result] of results.entries()) {
-    if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
-  }
-  ctx.emit('app-boot/config-reload')
-  return failures.map(inactiveDiagnostic)
+  return (await recompose(ctx, patches, binName, { requiredIds }, false)).warnings
 }
 
-/** Disappearing and literal-disabled rows release singleton services before their replacements activate. */
-async function drainRetiringEntries(
-  ctx: Context, root: Entry, initial: EntryOptions[], patches: readonly ProfilePatch[],
-): Promise<void> {
-  const rows = applyProfilePatches(initial, patches)
-  const next = new Map<string, boolean>()
-  const visit = (rows: EntryOptions[], outerDisabled = false): void => {
-    for (const row of rows) {
-      const disabled = outerDisabled || row.disabled === true
-      next.set(row.id, !row.group && disabled)
-      if (row.group && Array.isArray(row.config)) visit(row.config as EntryOptions[], disabled)
+async function recompose(
+  ctx: Context, patches: PatchOptions[], binName: string, options: ProfileRecompositionOptions, withResolution: boolean,
+): Promise<ProfileRecomposition> {
+  const { requiredIds = [], running = [] } = options
+  let applying = false
+  // The rows stopped first, which a failure before the generation applies puts back.
+  let stopped: StoppedRow[] = []
+  try {
+    const entry = bootstrapIncludes.get(ctx)
+    if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
+    // Reading the prior state imports nothing, so plugin code does not run before the next resolution publishes.
+    const previousFailures = (await inactiveEntries(ctx, false)).map((failure): RecordedFailure => ({
+      entry: failure.entry, fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
+      // An entry without a running fiber has no import error yet; the judgment after the update reads it.
+      diagnostic: failure.entry.fiber?.uid ? reloadDiagnostic(failure) : undefined,
+    }))
+    // Removed entries leave the Loader store before their async disposers finish.
+    const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
+      fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
+    }])
+    const { patches: previous = [], ...includeConfig } = entry.options.config as Include.Config
+    const current = withResolution ? ctx.get('pluginPackages')?.resolution : undefined
+    // A plain-data resolution has no inputs to recompute from.
+    const successor = current instanceof ProfileRuntimeResolution ? await current.computeLatestResolution() : undefined
+    if (successor !== undefined) {
+      // Rows the generation no longer lists stop, and their disposal finishes, while their packages are still mapped.
+      const listed = rowIds(structuredClone(patches))
+      const composed = rowIds(structuredClone(previous))
+      // Only rows of the root Include's tree; a nested Include file has its own ids.
+      const tree = entry.subgroup?.tree
+      const dropped = [...ctx.loader.entries()]
+        .filter(row => row.parent.tree === tree && composed.has(row.options.id) && !listed.has(row.options.id))
+      // A dropped group takes its rows with it.
+      const ids = new Set(dropped.map(row => row.options.id))
+      const topmost = dropped.filter(row => !ids.has(row.parent.ctx.fiber.entry?.options.id as string))
+      // The Loader marks the options of a row it stops, so the copy taken before is the one restored.
+      stopped = topmost.map(row => ({
+        group: row.parent, options: structuredClone(row.options),
+        index: row.parent.data.indexOf(row.options),
+      }))
+      if (topmost.length > 0) {
+        const fibers = dropped.flatMap(row => row.fiber === undefined ? [] : [row.fiber])
+        for (const row of topmost) {
+          // A disabled row's disposal is the Loader's own, so it does not rewrite the profile's configuration file.
+          row.options.disabled = true
+          row.parent.remove(row.options.id)
+        }
+        await Promise.allSettled(fibers.map(fiber => fiber.await()))
+        await ctx.loader.await()
+      }
+      try {
+        publish(ctx, successor)
+      } catch (error) {
+        if (!(error instanceof ResolutionRestartRequired)) throw error
+        // The generation waits for the mappings the rejected publication would change.
+        return { warnings: [], restartReason: 'package-moved' }
+      }
+    }
+    // The recomposition judges the rows the launch judged, resolved from the file this Include read.
+    const parentURL = new URL('.', new URL(includeConfig.path, entry.parent.tree.ctx.baseUrl)).href
+    const prepared = prepareProfilePatches(ctx, patches, parentURL, binName)
+    applying = true
+    const retried = [...new Set([...running, ...withResolution ? [...ctx.loader.entries()].filter(importFailed) : []])]
+    try {
+      await entry.update({ config: { ...includeConfig, patches: prepared } })
+    } finally {
+      await resume(ctx, retried)
+    }
+    const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
+    await ctx.loader.await()
+    const failures = await inactiveEntries(ctx)
+    const introduced = failures.filter((failure) => {
+      if (requiredIds.includes(failure.entry.options.id)) return true
+      // An entry waiting for a service starts once a provider appears.
+      if (failure.outcome.kind === 'pending') return false
+      // An entry that ran before the caller stopped it is a new failure even when it failed the same way before.
+      if (running.includes(failure.entry)) return true
+      return !previousFailures.some(previous => sameFailure(previous, failure))
+    })
+    if (introduced.length > 0) throw new Error(activationDiagnostic(binName, introduced, false).trimEnd())
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
+    }
+    ctx.emit('app-boot/config-reload')
+    return { warnings: failures.map(reloadDiagnostic) }
+  } finally {
+    // Before the generation applies, the rows removed first and the entries the caller stopped run again.
+    if (!applying && (stopped.length > 0 || running.length > 0)) {
+      try {
+        // Ascending original positions put each row back where it was.
+        for (const { group, options, index } of stopped.toSorted((left, right) => left.index - right.index)) {
+          // `create` starts the entry but leaves the group's option list as it is; that list is what the next update
+          // compares against to remove the row and what the Include writes back.
+          group.data.splice(index, 0, options)
+          await group.create(options)
+        }
+        await resume(ctx, running)
+        // A restored row is a new Loader entry with the id of the one that ran.
+        const ran = new Set(running.map(row => row.options.id))
+        for (const failure of await inactiveEntries(ctx)) {
+          if (ran.has(failure.entry.options.id)) ctx.logger.warn(`${binName}: ${reloadDiagnostic(failure)}`)
+        }
+      } catch (error) {
+        // The recomposition's own failure is the outcome.
+        ctx.logger.warn(error)
+      }
     }
   }
-  visit(rows)
-  const retiring = [...ctx.loader.entries()].flatMap((entry) => {
-    const fiber = entry.fiber
-    return entry.parent.tree === root.subtree && fiber?.state === FIBER_ACTIVE
-      && (!next.has(entry.options.id) || next.get(entry.options.id)) ? [fiber] : []
-  })
-  await Promise.all(retiring.map(async (fiber) => {
-    await fiber.dispose()
-    await fiber.await()
-  }))
+}
+
+/** An inactive entry as a recomposition found it before changing anything. */
+interface RecordedFailure {
+  entry: Entry
+  fiber: Fiber | undefined
+  /** The entry's options as JSON. */
+  options: string
+  /** The reload diagnostic; `undefined` for an import failure, which matches any diagnostic. */
+  diagnostic: string | undefined
+}
+
+/** Whether an inactive entry is the failure recorded before: the same entry, fiber and options, and a matching diagnostic. */
+function sameFailure(previous: RecordedFailure, failure: InactiveEntry): boolean {
+  return previous.entry === failure.entry && previous.fiber === failure.entry.fiber
+    && previous.options === JSON.stringify(failure.entry.options)
+    && (previous.diagnostic === undefined || previous.diagnostic === reloadDiagnostic(failure))
+}
+
+/** A row a recomposition removed before publishing, with its place in its group. */
+interface StoppedRow {
+  group: EntryGroup
+  options: EntryOptions
+  index: number
+}
+
+/** The ids of the rows a patch list inserts, including the rows of groups. */
+function rowIds(patches: readonly PatchOptions[]): Set<string> {
+  const ids = new Set<string>()
+  const visit = (rows: readonly EntryOptions[]): void => {
+    for (const row of rows) {
+      ids.add(row.id)
+      // A group keeps its rows in its configuration.
+      if ((row.group === true || row.name === 'cordis:group') && Array.isArray(row.config)) visit(row.config as EntryOptions[])
+    }
+  }
+  // Patch warnings are logged when the generation itself is prepared.
+  visit(applyEntryPatches([], patches as PatchOptions[], () => {}))
+  return ids
+}
+
+/** Publish a generation unless it maps exactly what is published, which would only drop the package caches. */
+function publish(ctx: Context, next: RuntimeResolution): void {
+  const table = ({ localPackageNames, entries, linkedRoots }: RuntimeResolution): string =>
+    JSON.stringify([localPackageNames, entries, linkedRoots])
+  const packages = ctx.pluginPackages
+  if (table(packages.resolution as RuntimeResolution) !== table(next)) packages.replace(next)
+}
+
+/** Whether an enabled entry below a running parent has no fiber or keeps the disposed fiber of a failed import. */
+function importFailed(entry: Entry): boolean {
+  return enabledEntry(entry) && entry.parent.ctx.fiber.uid !== null
+    && (entry.fiber === undefined || entry.fiber.state === FIBER_DISPOSED)
+}
+
+/** Whether an entry is enabled now; a throwing `disabled` expression counts as disabled. */
+function enabledEntry(entry: Entry): boolean {
+  try {
+    return !entry.disabled
+  } catch (_error) {
+    // Judgment reports the expression failure.
+    return false
+  }
+}
+
+/** Start invalidated entries the Loader still holds without a running fiber, then wait until it settles. */
+async function resume(ctx: Context, invalidated: readonly Entry[]): Promise<void> {
+  const entries = new Set(ctx.loader.entries())
+  // A stopped entry starts again on update even with unchanged options; an unchanged Include does not update its rows.
+  for (const row of invalidated) if (entries.has(row) && !row.fiber?.uid) await row.update({}, false, true)
+  await ctx.loader.await()
 }
 
 /**
- * Load an optional patch-list file: a top-level YAML array of profile patch
- * entries: id-targeted overrides, `insert` lists, and preset-scoped operations,
- * with `!!js` expressions allowed. A missing
+ * Load an optional patch-list file: a top-level YAML array of loader patch
+ * entries (`@deepseek-ai/cordis-plugin-include`'s `PatchOptions`): id-targeted config
+ * overrides and `insert` lists, with `!!js` expressions allowed. A missing
  * file means "no layer"; an unreadable, unparsable, or non-array file throws —
  * a present patch file that cannot apply is a misconfiguration and must fail
  * loud at boot, never be silently skipped.
@@ -344,7 +517,7 @@ async function drainRetiringEntries(
  * @param file - absolute path of the patch file.
  * @returns the parsed patches, or `undefined` when the file does not exist.
  */
-export function loadOptionalPatches(binName: string, file: string): ProfilePatch[] | undefined {
+export function loadOptionalPatches(binName: string, file: string): PatchOptions[] | undefined {
   let content: string
   try {
     content = readFileSync(file, 'utf8')
@@ -364,7 +537,7 @@ export function loadOptionalPatches(binName: string, file: string): ProfilePatch
  * @param file - absolute path of the overlay file.
  * @returns the parsed patch list.
  */
-export function loadOverlayPatches(binName: string, file: string): ProfilePatch[] {
+export function loadOverlayPatches(binName: string, file: string): PatchOptions[] {
   let content: string
   try {
     content = readFileSync(file, 'utf8')
@@ -375,30 +548,24 @@ export function loadOverlayPatches(binName: string, file: string): ProfilePatch[
 }
 
 /** Convert inserted filesystem paths to file URLs, anchoring relative paths beside the patch; keep assertion names literal. */
-function anchorInsertedPluginNames(patches: ProfilePatch[], file: string): ProfilePatch[] {
+function anchorInsertedPluginNames(patches: PatchOptions[], file: string): PatchOptions[] {
   const base = dirname(resolve(file))
   const visit = (entry: EntryOptions): void => {
     if (typeof entry.name === 'string' && (isAbsolute(entry.name) || entry.name.startsWith('./') || entry.name.startsWith('../'))) {
       entry.name = pathToFileURL(resolve(base, entry.name)).href
     }
     if (entry.group && Array.isArray(entry.config)) entry.config.forEach(visit)
-    const config = entry.config as { plugins?: unknown } | undefined
-    if (entry.name === '@deepseek-ai/dsh-agent-preset' && Array.isArray(config?.plugins)) {
-      (config.plugins as EntryOptions[]).forEach(visit)
-    }
   }
-  for (const patch of patches) {
-    patch.insert?.forEach(visit)
-  }
+  for (const patch of patches) patch.insert?.forEach(visit)
   return patches
 }
 /**
  * Parse one loader patch list: a top-level YAML array of
- * profile patches (id-targeted overrides, `insert` lists, and preset-scoped
- * operations, with `!!js` expressions allowed). Invalid lists and malformed
- * preset targets throw because they cannot be applied. An ordinary or scoped
- * child patch whose target is absent stays a per-entry Loader warning; a
- * missing outer preset target fails composition.
+ * `@deepseek-ai/cordis-plugin-include` `PatchOptions` (id-targeted config overrides and
+ * `insert` lists, `!!js` expressions allowed). Every invalid field or value throws,
+ * because a patch file that cannot be applied at all is a misconfiguration; a
+ * single patch whose target row is absent stays a per-entry Loader warning, so
+ * one overlay shared across surfaces does not have to match every tree.
  * @param binName - the diagnostic prefix on the thrown error.
  * @param file - the source path, quoted in errors.
  * @param content - the file's text.
@@ -407,7 +574,7 @@ function anchorInsertedPluginNames(patches: ProfilePatch[], file: string): Profi
  */
 function parsePatchList(
   binName: string, file: string, content: string, label: string,
-): ProfilePatch[] {
+): PatchOptions[] {
   let parsed: unknown
   try {
     parsed = yaml.load(content, { schema: userPatchesSchema })
@@ -422,7 +589,7 @@ function parsePatchList(
       throw new Error(`${binName}: ${label} entry ${index + 1} in ${file} must be a mapping (a loader patch entry)`)
     }
   })
-  return anchorInsertedPluginNames(prepareLoadedProfilePatches(parsed as ProfilePatch[], file, binName), file)
+  return anchorInsertedPluginNames(parsed as PatchOptions[], file)
 }
 
 /** One overlay patch list with the source label printed in dump comments. */
@@ -430,13 +597,13 @@ export interface ConfigDumpLayer {
   /** Source name shown in dump comments (a file basename or path). */
   label: string
   /** The layer's patches, from {@link loadOverlayPatches} / {@link loadOptionalPatches}. */
-  patches: ProfilePatch[]
+  patches: PatchOptions[]
 }
 
 /**
  * Compose the configured entry list: parse the base config file with the
- * include's entry-list dialect, compile preset operations, then apply the
- * flattened native patch list through Include's `applyEntryPatches` — the
+ * include's entry-list dialect, apply every layer's patches as ONE flattened
+ * list through the include's own patch algorithm (`applyEntryPatches`) — the
  * same call `boot()` makes, so even patch-visibility corner cases (a later
  * layer targeting a group child a plain config replacement introduced, which
  * the single-pass id index never sees) compose identically — then render the
@@ -456,8 +623,8 @@ export interface ConfigDumpLayer {
  * A patch that matches no row is reported through `warn` with its layer
  * label, mirroring the Loader's boot-time warning. Earlier layers' patches
  * see an identical preceding state in every snapshot that includes them, so
- * additional warnings belong to the added layer. Warning multiplicity is
- * preserved when scoped and ordinary diagnostics have different ordering.
+ * each snapshot's warning list extends the previous one and the new tail
+ * belongs to the added layer.
  * @param binName - the diagnostic prefix on read/parse errors.
  * @param absoluteConfigPath - the base config file `boot()` would include.
  * @param layers - overlay layers in application order (later wins).
@@ -490,14 +657,16 @@ export function renderConfigDump(
   // YAML parsing yields untyped rows; the include validates each entry
   // at mount, and the dump prints whatever the file holds, so `EntryOptions`
   // here is structural trust in the same file `boot()` would include.
-  const base = parsed as EntryOptions[]
+  const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The compiler clones patch objects for each snapshot: native insertions retain
-  // references, so sharing them would let later snapshots mutate earlier results.
-  const snapshot = (count: number, warnings: string[]): EntryOptions[] => {
-    const flattened = layers.slice(0, count).flatMap(layer => layer.patches)
-    return applyProfilePatches(base, flattened, (message: string, ...args: unknown[]) => {
+  // The patches are cloned per call: applyEntryPatches detaches the entry
+  // list but pushes `insert` rows by reference from the patch list, so
+  // sharing patch objects across snapshot calls would leak a later
+  // snapshot's mutations into an earlier one's result.
+  const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
+    const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
+    return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
       // The include logs through cordis's printf-style logger (`%C` = code); a
       // dump has no logger, so substitute inline for a plain line.
       let index = 0
@@ -514,11 +683,8 @@ export function renderConfigDump(
     if (layer === undefined) continue
     const warnings: string[] = []
     composed = snapshot(count, warnings)
-    const remaining = [...previousWarnings]
-    for (const line of warnings) {
-      const previousIndex = remaining.indexOf(line)
-      if (previousIndex >= 0) remaining.splice(previousIndex, 1)
-      else warn(`${binName}: [${layer.label}] ${line}`)
+    for (const line of warnings.slice(previousWarnings.length)) {
+      warn(`${binName}: [${layer.label}] ${line}`)
     }
     const before = previous.map(entry => JSON.stringify(entry))
     for (let index = 0; index < composed.length; index += 1) {
@@ -562,22 +728,6 @@ function groupedDump(
   return lines.join('\n') + '\n'
 }
 
-/** Compile profile operations before passing an ordinary patch list to the root Include. */
-function readRootEntries(configPath: string, parentURL: string, binName: string): EntryOptions[] {
-  const parsed: unknown = yaml.load(readFileSync(new URL(configPath, parentURL), 'utf8'), { schema: entryListSchema })
-  if (!Array.isArray(parsed)) throw new Error(`${binName}: config ${configPath} must be a top-level array of entries`)
-  return parsed as EntryOptions[]
-}
-
-function prepareRootPatches(
-  ctx: Context, patches: ProfilePatch[], configPath: string, parentURL: string, binName: string, initial?: EntryOptions[],
-): ProfilePatch[] {
-  if (ctx.get('profileContext') !== undefined) return prepareProfilePatches(ctx, patches, parentURL, binName)
-  if (!patches.some(patch => profilePatchPreset(patch) !== undefined)) return patches
-  return compileProfilePatches(initial ?? readRootEntries(configPath, parentURL, binName), patches,
-    (message, ...args) => { ctx.logger.warn(message, ...args) })
-}
-
 /**
  * Mount and remember the exact root Include entry used by app boot and user patch-layer HMR.
  * @param ctx - context carrying an initialized Loader service.
@@ -593,7 +743,7 @@ function prepareRootPatches(
 export async function mountRootInclude(
   ctx: Context,
   absoluteConfigPath: string,
-  patches: readonly ProfilePatch[] = [],
+  patches: readonly PatchOptions[] = [],
   bareModuleBaseUrl?: string,
   binName = 'dsh',
 ): Promise<Entry | undefined> {
@@ -621,7 +771,7 @@ export async function mountRootInclude(
   // diagnostics unstable across runs (and snapshot fixtures).
   // The launcher's own copy is prepared here: compatibility decisions must be made before the root
   // Include imports anything, and they change no profile patch layer, manifest, or bundle list.
-  const prepared = prepareRootPatches(ctx, [...patches], pathToFileURL(absoluteConfigPath).href, pathToFileURL(dirname(absoluteConfigPath)).href + '/', binName)
+  const prepared = prepareProfilePatches(ctx, [...patches], pathToFileURL(dirname(absoluteConfigPath)).href + '/', binName)
   const includeConfig: Include.Config = {
     path: pathToFileURL(absoluteConfigPath).href,
     ...prepared.length > 0 ? { patches: prepared } : {},
@@ -801,6 +951,7 @@ const FIBER_DISPOSED = 4 as FiberState.DISPOSED
 const requiredStartupEntryIds = new Set<string>([
   'agent-loop',
   'webserver',
+  'web-runtime',
   'modules',
   'connection',
   'headless-runner',
@@ -809,7 +960,7 @@ const requiredStartupEntryIds = new Set<string>([
 ])
 
 /** Render plugin stacks, nested causes, and aggregate member failures once per error. */
-function formatActivationError(error: unknown): string {
+function formatActivationError(error: unknown, stacks = true): string {
   const details: string[] = []
   const seen = new Set<Error>()
   function visit(value: unknown): void {
@@ -819,7 +970,7 @@ function formatActivationError(error: unknown): string {
     }
     if (seen.has(value)) return
     seen.add(value)
-    details.push(value.stack ?? value.message)
+    details.push(stacks ? value.stack ?? value.message : String(value))
     if (value.cause !== undefined) visit(value.cause)
     if (value instanceof AggregateError) value.errors.forEach(visit)
   }
@@ -871,12 +1022,24 @@ export class StartupError extends Error {
   }
 }
 
+/** The error importing an entry's module raises now, which Node returns from its cache for a module that failed before. */
+async function importFailure(entry: Entry): Promise<unknown> {
+  try {
+    await entry.parent.tree.import(entry.options.name)
+    return undefined
+  } catch (error) {
+    return error
+  }
+}
+
 /**
  * Collect Loader activation failures and disabled-expression errors. Failed
  * fibers are awaited to recover their recorded rejection reason and coalesce
  * duplicate Loader notifications through the next process rejection checkpoint.
+ * An entry whose import failed reports the error importing it raises now; without
+ * `importNow` nothing is imported and the entry reports a failed import without the import error.
  */
-async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
+async function inactiveEntries(ctx: Context, importNow = true): Promise<InactiveEntry[]> {
   const failures: InactiveEntry[] = []
   const rejectionReasons: unknown[] = []
   for (const entry of ctx.loader.entries()) {
@@ -887,8 +1050,12 @@ async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
       continue
     }
     const fiber = entry.fiber
-    if (fiber === undefined) {
-      failures.push({ entry, outcome: { kind: 'failed', error: 'failed to import' } })
+    // An entry whose import failed has no fiber, or keeps the disposed fiber of its previous activation.
+    if (fiber === undefined || fiber.state === FIBER_DISPOSED) {
+      const error = importNow ? await importFailure(entry) : undefined
+      failures.push({ entry, outcome: error === undefined
+        ? { kind: 'failed', error: fiber === undefined ? 'failed to import' : `fiber state ${String(fiber.state)}` }
+        : { kind: 'failed', error, phase: 'failed to import' } })
       continue
     }
     const state = fiber.state
@@ -917,22 +1084,28 @@ async function inactiveEntries(ctx: Context): Promise<InactiveEntry[]> {
 }
 
 /** Render one failed plugin's original error and activation phase. */
-function failureDetail(outcome: Extract<InactiveEntry['outcome'], { kind: 'failed' }>): string {
-  return `${outcome.phase === undefined ? '' : `${outcome.phase}: `}${formatActivationError(outcome.error)}`
+function failureDetail(outcome: Extract<InactiveEntry['outcome'], { kind: 'failed' }>, stacks = true): string {
+  return `${outcome.phase === undefined ? '' : `${outcome.phase}: `}${formatActivationError(outcome.error, stacks)}`
 }
 
 /** Render optional-only warnings without changing startup policy. */
 function activationDiagnostic(
   binName: string,
   failures: readonly InactiveEntry[],
+  stacks = true,
 ): string {
   const noun = failures.length === 1 ? 'entry' : 'entries'
-  return `${binName}: warning: ${String(failures.length)} ${noun} did not activate\n${failures.map(inactiveDiagnostic).join('\n')}\n`
+  return `${binName}: warning: ${String(failures.length)} ${noun} did not activate\n${failures.map(failure => inactiveDiagnostic(failure, stacks)).join('\n')}\n`
+}
+
+/** Per-entry reload text, which people read through the Web UI and agents, so it carries error messages without stack frames. */
+function reloadDiagnostic(failure: InactiveEntry): string {
+  return inactiveDiagnostic(failure, false)
 }
 
 /** Stable per-entry text for reload comparisons and optional warnings. */
-function inactiveDiagnostic({ entry, outcome }: InactiveEntry): string {
-  const detail = outcome.kind === 'failed' ? failureDetail(outcome)
+function inactiveDiagnostic({ entry, outcome }: InactiveEntry, stacks = true): string {
+  const detail = outcome.kind === 'failed' ? failureDetail(outcome, stacks)
     : `pending (waiting for ${outcome.missing.length === 1 ? 'service' : 'services'}: ${outcome.missing.join(', ') || 'unknown'})`
   return `${entry.options.id} (${entry.options.name}): ${detail}`
 }
@@ -1027,7 +1200,7 @@ export async function auditStartupEntries(
 export async function boot(
   binName: string,
   absoluteConfigPath: string,
-  patches?: ProfilePatch[],
+  patches?: PatchOptions[],
   prepare?: (ctx: Context) => Promise<void> | void,
   bareModuleBaseUrl?: string,
 ): Promise<Context> {
@@ -1084,38 +1257,10 @@ export async function boot(
       deepest = deepest.cause
     }
     const stack = deepest instanceof AggregateError
-      ? `\n${deepest.stack ?? deepest.message}\n${deepest.errors.map(formatActivationError).join('\n')}`
+      ? `\n${deepest.stack ?? deepest.message}\n${deepest.errors.map(error => formatActivationError(error)).join('\n')}`
       : deepest instanceof Error && deepest !== cause ? `\n${deepest.stack ?? deepest.message}` : ''
     throw new Error(`${binName}: ${stage}: ${detail}${stack}`, { cause })
   } finally {
     await diagnostics.fiber.dispose()
   }
-}
-
-/** Prompt-section name for the harness-source location line an app bin adds after boot. */
-export const HARNESS_SOURCE_SECTION = 'harness:source'
-
-/**
- * Add a global prompt section naming the on-disk harness source checkout while
- * explicitly distinguishing it from the task workspace and current working
- * directory. The self-referential `dsh-tool-cordis` toolset reads and edits this
- * checkout. Call once on the settled boot context ({@link boot}); the section
- * uses the shared first-party placement after reusable instructions
- * and before the Web surface and persona suffix. A booted tree with no
- * `systemPrompt` service has no prompt to augment, so this is then a no-op
- * that returns `undefined`. The section is
- * registered against the `systemPrompt` service's fiber, so a dev HMR reload of
- * that plugin drops it until the next boot.
- * @param ctx - the settled boot context whose global system prompt to augment.
- * @param sourceRoot - the absolute path to the harness checkout root.
- * @returns the section disposer, or `undefined` when no `systemPrompt` service is mounted.
- */
-export function addHarnessSourceSection(ctx: Context, sourceRoot: string): (() => void) | undefined {
-  const systemPrompt = ctx.get('systemPrompt')
-  if (systemPrompt === undefined) return undefined
-  return systemPrompt.section({
-    name: HARNESS_SOURCE_SECTION,
-    order: systemPrompt.getSectionOrder('HARNESS_SOURCE'),
-    text: `The DeepSeek Harness implementation checkout is at ${sourceRoot}. The checkout location and current working directory are separate values and may differ; never infer the working directory from this path. Use pwd to determine the current working directory. Use this checkout only to inspect or extend DSH itself.`,
-  })
 }

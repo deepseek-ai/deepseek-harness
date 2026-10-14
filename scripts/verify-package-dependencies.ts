@@ -1,4 +1,7 @@
-/** Verify and repair npm dependency sections from published Client and Host faces. */
+/**
+ * Verify and repair npm dependency sections from published Client and Host faces, and keep root-provided type
+ * packages out of workspace manifests.
+ */
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
@@ -20,6 +23,11 @@ import {
 
 const GATE = 'verify-package-dependencies'
 const CORDIS = '@deepseek-ai/cordis'
+/**
+ * Type packages declared only in the root devDependencies. Each package-local pnpm link is one more
+ * location that TypeScript scans when it computes module specifiers for every JSX file.
+ */
+const ROOT_TYPE_PACKAGES: ReadonlySet<string> = new Set(['@types/react', '@types/react-dom'])
 function workspaceRange(name: string): 'workspace:*' | 'workspace:~' {
   return name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-') ? 'workspace:*' : 'workspace:~'
 }
@@ -434,7 +442,9 @@ function readAllSourceUses(root: string, pkg: WorkspacePackageManifest): Map<str
       const name = packageNameOf(specifier)
       if (name === undefined) continue
       const typesName = `@types/${name.replace(/^@/, '').replace('/', '__')}`
-      if (declaredSections(pkg.manifest, name).length === 0 && declaredSections(pkg.manifest, typesName).length > 0) {
+      if (!ROOT_TYPE_PACKAGES.has(typesName)
+        && declaredSections(pkg.manifest, name).length === 0
+        && declaredSections(pkg.manifest, typesName).length > 0) {
         runtimeUses ??= collectRuntimeSourcePackageUses(sourcePath, source)
         if (!runtimeUses.has(name)) {
           addUse(uses, typesName, displayPath)
@@ -750,6 +760,34 @@ export function collectPackageDependencyViolations(state: PackageDependencyState
   return [...new Set(violations)].sort()
 }
 
+/**
+ * Require each root-provided type package in the root devDependencies and in no workspace manifest.
+ * `--fix` does not remove these declarations.
+ * @param rootManifest - Repository root `package.json`.
+ * @param packages - Every workspace manifest from {@link readWorkspacePackageManifests}.
+ * @returns Violations in stable order.
+ */
+export function collectRootTypePackageViolations(
+  rootManifest: PackageDependencyManifest,
+  packages: readonly WorkspacePackageManifest[],
+): string[] {
+  const violations: string[] = []
+  for (const name of ROOT_TYPE_PACKAGES) {
+    if (rootManifest.devDependencies?.[name] === undefined) {
+      violations.push(`package.json: devDependencies must declare ${name} for every workspace package`)
+    }
+    for (const pkg of packages) {
+      for (const sectionName of declaredSections(pkg.manifest, name)) {
+        violations.push(
+          `${pkg.manifestPath}: remove ${sectionName}.${name}; the root package.json provides it because each `
+          + 'package-local link slows TypeScript JSX checking (packages/client/AGENTS.md#dependency-declaration)',
+        )
+      }
+    }
+  }
+  return violations.sort()
+}
+
 function deleteDependency(
   manifest: PackageDependencyManifest,
   sectionName: DependencySection,
@@ -881,7 +919,13 @@ function main(): void {
       state = readPackageDependencyState(root)
     }
   }
-  const violations = collectPackageDependencyViolations(state)
+  const violations = [
+    ...collectPackageDependencyViolations(state),
+    ...collectRootTypePackageViolations(
+      JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as PackageDependencyManifest,
+      readWorkspacePackageManifests(root).all,
+    ),
+  ].sort()
   if (violations.length > 0) {
     console.error(`${GATE}: ${String(violations.length)} violation(s):`)
     for (const violation of violations) console.error(`  ${violation}`)

@@ -29,9 +29,9 @@ describe('PR preview workflow', () => {
     expect(workflow.env.DSH_TELEMETRY_DISABLED).toBe('1')
     const commands = preview.steps.map(step => step.run)
     expect(commands).toContain('pnpm install --frozen-lockfile')
-    expect(commands).toContain('pnpm run build --artifacts-only')
+    expect(commands).toContain('pnpm run build:artifacts')
     expect(commands).toContain('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview')
-    expect(commands.indexOf('pnpm run build --artifacts-only')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
+    expect(commands.indexOf('pnpm run build:artifacts')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
     expect(preview.steps.filter(step => step.uses?.startsWith('actions/cache'))).toHaveLength(1)
     expect(preview.steps.find(step => step.uses === 'actions/cache/restore@v6.1.0')?.with).toMatchObject({
       key: "${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}",

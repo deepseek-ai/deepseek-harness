@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-12-headless-environment-auth.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-12-headless-environment-auth.md
+/agent-note-headless-jobs-omit-the-interactive-credential-store:
+  en: c768db5a7e821bf0
+  zh: 423b3e423d071ddc
+/agent-note-headless-jobs-omit-the-interactive-credential-store/problem:
+  en: 829df36d87975148
+  zh: 171d29ef2f2e5079
+/agent-note-headless-jobs-omit-the-interactive-credential-store/decision:
+  en: af275ffea713f76b
+  zh: 12a3bacfcb147df7
+/agent-note-headless-jobs-omit-the-interactive-credential-store/alternatives-considered:
+  en: f6f8dfde4789adc8
+  zh: ced62f3d1ec402e6
+/agent-note-headless-jobs-omit-the-interactive-credential-store/consequences:
+  en: 1c1a699dc9f5681f
+  zh: 4a72b09d24f9a005

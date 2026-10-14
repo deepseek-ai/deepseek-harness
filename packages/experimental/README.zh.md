@@ -37,9 +37,9 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |
-| [`session-search`](session-search/README.zh.md) | 完整 Web 预设的可选实验性会话搜索 | — |
+| [`session-search`](session-search/README.zh.md) | 可选实验性全局会话搜索工具 | — |
 | [`ralph-bundle`](ralph-bundle/README.zh.md) | 带隔离 workflow 引擎的可选重复委派 | — |
-| [`terminal-bundle`](terminal-bundle/README.zh.md) | 完整 Web 预设的可选持久终端工具 | — |
+| [`terminal-bundle`](terminal-bundle/README.zh.md) | 可选全局持久终端工具 | — |
 | [`badge-skill-bundle`](badge-skill-bundle/README.zh.md) | 可选 powered-by-dsh 徽章技能 | — |
 | [`session-titles-bundle`](session-titles-bundle/README.zh.md) | 随对话中人类提示更新的可选标题 | — |
 | [`hook-protocol`](hook-protocol/README.zh.md) | 钩子桥接的通信类型与持久事件 | — |
@@ -60,7 +60,7 @@ kind: "package-group"
 | [`client-ui-voice-input`](client-ui-voice-input/README.zh.md) | 麦克风录音与版本检查后的草稿插入 | — |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 协作、工具与 Web UI 组合包 | — |
-| [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间持久消息与共享任务板 | `ctx.agentTeams` |
+| [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间直接消息与持久共享任务板 | `ctx.agentTeams` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`claude-code-mods`](claude-code-mods/README.zh.md) | 把 Claude Code 模组作为插件运行：钩子链落在 harness 扩展点上，并在提示框上方绘制横幅 | `ctx.claudeCodeMods` |

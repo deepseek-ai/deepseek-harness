@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
@@ -116,8 +116,10 @@ describe('DeepSeek plugin package inventory', () => {
     ])
   })
 
-  it.each(['invalid JSON', 'null', 'deleted'])('retains readable packages when another manifest is %s', async (kind) => {
+  it.each(['invalid JSON', 'null', 'deleted'])('retains readable packages and warns at most once when another manifest is %s', async (kind) => {
     const { ctx, root } = await harness()
+    const warnings: unknown[][] = []
+    ctx.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
     const bad = await packagePlugin(root, 'bad', { name: 'bad', version: '1.0.0' })
     const good = await packagePlugin(root, 'good', { name: 'good', version: '2.0.0' })
     await ctx.loader.create({ name: bad })
@@ -125,8 +127,14 @@ describe('DeepSeek plugin package inventory', () => {
     const manifest = join(root, 'bad/package.json')
     if (kind === 'deleted') await rm(manifest)
     else await writeFile(manifest, kind === 'null' ? 'null' : '{')
-    const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })
-    expect(prepared.fields.dsh_plugin_packages?.packages).toEqual([{ name: 'good', version: '2.0.0' }])
+    for (let request = 0; request < 2; request++) {
+      const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })
+      expect(prepared.fields.dsh_plugin_packages?.packages).toEqual([{ name: 'good', version: '2.0.0' }])
+    }
+    // A deleted manifest leaves a loose module, which is omitted without a warning.
+    expect(warnings).toEqual(kind === 'deleted'
+      ? []
+      : [['plugin-package-inventory-deepseek: omitting unreadable package identity for %s: %o', bad, expect.any(Error)]])
   })
 
   it('omits a loose ESM module whose nearest manifest only marks the module type', async () => {

@@ -61,6 +61,8 @@ Slot 声明固定两个相互独立的维度。
 
 对于 `single`、`list` 和 `keyed` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list `id` 或 keyed `key`；复用已有 cell 表示有意替换其展示。
 
+<a id="component-inputs"></a>
+
 ## 组件输入
 
 注册组件会在 binding 位置收到组装后的输入。组件应从这些类型推导 props，不要重新抄写成员。
@@ -84,11 +86,12 @@ Slot 声明固定两个相互独立的维度。
 
 | 可用范围 | Props | Owner |
 |---|---|---|
-| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo` | `ui-session` |
-| 所有 scope | `useWorkspaces` | `ui-workspace` |
+| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
+| 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
-| `session` | `sessionId`、`useSession`、`useProjection` | `ui-session` |
-| `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection` | `ui-session` |
+| `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |
+| `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection`、`useAccess` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session-maybe` | 结果可选的 `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
@@ -106,95 +109,88 @@ Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 loca
 
 当每个 occupant 都需要同一种能力时，slot owner 可以在 child 声明里放置 `inject` face。普通成员会原样交给所有 occupant；其 `hooks` 对象中的函数成员是 hook factory，它会收到 slot 的标准 props 与可选的逐次渲染 `hookContext`，再返回提供给 occupant 的受限 hook。`conversation.chat.node` 正是通过这种机制，为当前渲染的 node 提供 `useTurnData(key)`。
 
-Session 作用域的 `conversation.chat.reasoning-body` 链为展开的思考正文提供未修改的 `text` 和 `running`。所有条目都拒绝认领时，owner 渲染原始紧凑 Markdown；显示贡献保留查看原始思考内容的能力。
-
 一次渲染时 owner 已知的值走 owner props；单个 entry 的 callback 与私有 observable 走注册项 `inject`；由 slot owner 控制、所有 occupant 共享的能力走 slot 级 `inject`；需要跨 entry 共享或跨重新挂载保留的可变视图状态走声明的 store。React node 通过 child slot 组合，不通过注入值传递。
 
-## 当前层级
+<a id="current-hierarchy"></a>
 
-下图是当前发布组合的声明树。只有具名 parent entry 已挂载时，其 child 才存在；因此可选功能 entry 可以作为一个生命周期单元让整棵子树出现或消失。
+## Conversation 层级
+
+下面的 Conversation 路径区分声明所有者与可复用 Factory 根，省略无关的外壳位置。条目拥有其声明的子 Slot；Factory 在其定义注册期间拥有子 Slot 声明。方括号标出默认 React 组件，普通 React 后代组件可以渲染其所有者的 Slot。Factory 调用指向独立的可复用定义，不是新的 Slot 声明。
 
 ```text
-root
-├─ sidebar
-│  ├─ sidebar.brand.mark
-│  ├─ sidebar.brand.name
-│  ├─ sidebar.panellist
-│  ├─ sidebar.footer.action
-│  ├─ sidebar.workspaces
-│  │  ├─ sidebar.workspaces.directoryFlow
-│  │  ├─ sidebar.workspaces.session.menu.item
-│  │  └─ sidebar.workspaces.session.row.action
-│  └─ sidebar.settings
-│     ├─ settings.trigger
-│     ├─ settings.header
-│     ├─ settings.action
-│     ├─ settings.close
-│     ├─ settings.onboarding
-│     └─ settings.section
-│        ├─ settings.general.item
-│        ├─ settings.models.provider-card
-│        ├─ settings.models.footer
-│        └─ settings.plugins.tab
-├─ main
-│  ├─ plugins.add.actions
-│  ├─ plugins.item
-│  ├─ plugins.bundle.config
-│  ├─ plugins.row.config
-│  ├─ plugins.detail.actions
-│  ├─ plugins.detail.badge
-│  ├─ plugins.detail.section
-│  └─ main.conversation
-│     ├─ conversation.session
-│     │  └─ conversation.view
-│     │     ├─ conversation.chat.node
-│     │     │  ├─ conversation.chat.assistant-actions
-│     │     │  ├─ conversation.chat.reasoning-body
-│     │     │  ├─ conversation.chat.commandview
-│     │     │  ├─ conversation.chat.turnTail
-│     │     │  └─ tool.call.toolview
-│     │     │     ├─ tool.call.images
-│     │     │     └─ tool.view.cordis
-│     │     ├─ conversation.message.images
-│     │     └─ conversation.trajectory.images
-│     ├─ conversation.header
-│     │  ├─ conversation.header.leading
-│     │  └─ conversation.session.header
-│     │     ├─ conversation.session.header.lineage
-│     │     ├─ conversation.session.header.actions
-│     │     ├─ conversation.session.header.utilities
-│     │     └─ conversation.session.header.corner
-│     ├─ conversation.composer
-│     │  ├─ conversation.approval.detail
-│     │  └─ conversation.plan-review.actions
-│     ├─ conversation.composer.bar
-│     │  ├─ conversation.input.attachments
-│     │  ├─ conversation.input.permission
-│     │  ├─ conversation.input.plan
-│     │  └─ conversation.input.model
-│     ├─ conversation.input.overlay
-│     ├─ conversation.input.dock
-│     ├─ conversation.composer.dock
-│     ├─ conversation.input.left
-│     ├─ conversation.input.right
-│     ├─ conversation.hero.brand.mark
-│     ├─ conversation.hero.workspace
-│     │  └─ conversation.hero.workspace.directoryFlow
-│     └─ conversation.hero.agentPreset
-├─ rightbar
-│  └─ rightbar.session
-│     ├─ sidebar.right.pane.tab
-│     │  ├─ sidebar.right.tab.guide
-│     │  └─ sidebar.right.tab.guide.entry
-│     ├─ sidebar.right.pane.tab.title
-│     └─ sidebar.right.tab.menu.item
-├─ shell.bottom
-├─ shell.leading
-└─ shell.overlay
-   └─ shell.quota-notice
+root [AppFrame]
+└─ main[key=conversation] [ConversationPanel]
+   └─ main.conversation [ConversationRoot / ConversationMainPanel]
+      ├─ conversation.header [ConversationHeader]
+      │  ├─ conversation.header.leading
+      │  └─ conversation.session.header [ConversationSessionHeader]
+      │     ├─ conversation.session.header.lineage
+      │     ├─ conversation.session.header.actions
+      │     ├─ conversation.session.header.utilities
+      │     └─ conversation.session.header.corner
+      └─ calls Factory: conversation.content
+
+Factory: conversation.content [ConversationContent]
+├─ conversation.session [ConversationSession / DefaultConversationViews]
+│  └─ conversation.view
+│     ├─ id=chat [ChatView]
+│     │  └─ conversation.chat.flow [ChatFlow]
+│     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
+│     │        ├─ key=user,steering [UserMessageNodeView]
+│     │        │  └─ calls Factory: conversation.chat.user.content
+│     │        ├─ key=assistant-step [AssistantNodeView / AssistantMarkdown]
+│     │        │  ├─ conversation.chat.message.images [MessageImages]
+│     │        │  └─ conversation.chat.reasoning.body [DefaultReasoningBody]
+│     │        │     └─ calls Factory: conversation.chat.reasoning.content
+│     │        ├─ key=tool-call [ToolCallTree]
+│     │        │  └─ tool.call.toolview
+│     │        │     └─ key=read_image [ReadImageRow / ToolRow]
+│     │        │        └─ tool.call.images [MessageImages]
+│     │        ├─ key=command-input [GoalCommandInputView]
+│     │        │  └─ calls Factory: conversation.user.text
+│     │        ├─ key=command [CommandNodeView]
+│     │        │  └─ conversation.chat.commandview
+│     │        └─ key=turn-tail [TurnTailNodeView]
+│     │           ├─ conversation.chat.turnTail
+│     │           └─ conversation.chat.assistant-actions
+│     └─ id=trajectory [TrajectoryView / TrajectoryTable]
+│        └─ conversation.trajectory.images [MessageImages]
+├─ conversation.composer
+│  ├─ conversation.approval.detail
+│  └─ conversation.plan-review.actions
+├─ conversation.composer.bar [InputBar]
+│  ├─ conversation.input.attachments
+│  ├─ conversation.input.permission
+│  ├─ conversation.input.plan
+│  ├─ conversation.input.model
+│  ├─ conversation.input.overlay
+│  ├─ conversation.composer.dock
+│  ├─ conversation.input.left
+│  └─ conversation.input.right
+├─ conversation.input.dock
+│  └─ id=queue [QueueDock]
+│     └─ calls Factory: conversation.user.text
+├─ conversation.hero.brand.mark
+├─ conversation.hero.workspace
+│  └─ conversation.hero.workspace.directoryFlow
+└─ conversation.hero.agentPreset
+
+Factory: conversation.chat.user.content [UserContent]
+├─ conversation.chat.user.images [MessageImages]
+└─ calls Factory: conversation.user.text
+
+Factory: conversation.user.text [UserText]
+└─ conversation.user.text.node [keyed, inline]
+
+Factory: conversation.images.content [MessageImagesContent / ImageGallery]
+Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 ```
 
-生成的 Client inspect catalog 是每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
+四个图片 Slot 默认均填入 `MessageImages`，由它携带调用者的图片引用和授权 loader 调用 `conversation.images.content`。用户与输出图片的替换互不影响。`conversation.user.text` Factory 由用户内容、Queue 和 Goal 共用；其 `inline: true` keyed Slot 使用 span 锚点及行内错误占位，而不是块级包装。
+
+生成的 [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) 是包含所有外壳分支及每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
+
+<a id="extension-rules"></a>
 
 ## 扩展规则
 

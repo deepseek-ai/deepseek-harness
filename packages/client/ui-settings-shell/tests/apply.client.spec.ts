@@ -63,7 +63,7 @@ describe('ui-settings-shell apply', () => {
 
     await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(1) })
     const entry = slots.entries('plugins.item')[0]!
-    expect(entry.options).toMatchObject({ id: 'shell', order: 10 })
+    expect(entry.options).toMatchObject({ id: 'shell', order: 40 })
     expect(resolveSlotLabel(entry.options.label)).toBe('终端')
     expect(entry.locale).toBe(NS)
     const face = (entry.inject as () => Pick<ShellCardFace, 'hooks'>)()

@@ -61,7 +61,7 @@ export interface SessionListSnapshot {
 /** Shared projection values and the lifecycle of their explicit baseline read. */
 export interface SessionProjectionSnapshot {
   readonly values: Readonly<Partial<SessionProjectionMap>>
-  readonly state: 'idle' | 'loading' | 'ready' | 'error'
+  readonly state: 'idle' | 'loading' | 'ready' | 'migration-required' | 'error'
   readonly error: RemoteFailure | null
 }
 
@@ -153,8 +153,9 @@ export class SessionManager {
 
   /**
    * Resolve an address for breadcrumb navigation without retaining transport authority.
-   * @param sessionId - possible child id in an already-loaded catalog.
-   * @returns A retained or catalog-derived direct-parent address.
+   * @param sessionId - possible child id in received Session metadata.
+   * @returns A retained address, then a catalog address, then an unknown-mode address
+   *   from a listed subagent header; undefined without that evidence.
    */
   subagentAddress(sessionId: SessionId): SubagentAddress | undefined {
     const retained = this.addresses.get(sessionId)
@@ -170,7 +171,13 @@ export class SessionManager {
         }
       }
     }
-    return undefined
+    const summary = this.summaries.find(summary => summary.sessionId === sessionId)
+    if (summary?.origin !== 'subagent' || summary.parentSessionId === undefined) return undefined
+    return {
+      parentSessionId: summary.parentSessionId,
+      childSessionId: sessionId,
+      mode: 'unknown',
+    }
   }
 
   // ---- Instance management ----
@@ -332,7 +339,7 @@ export class SessionManager {
   }
 
   /**
-   * Load a complete projection baseline once per connection; retry unsuccessful reads.
+   * Read projections without starting migration; retry failed or migration-deferred reads.
    * @param sessionId - Session to inspect without opening its conversation.
    * @returns completion of the current or newly started read.
    */
@@ -350,13 +357,26 @@ export class SessionManager {
         const result = await this.remote.session.projections({ sessionId }, controller.signal)
         if (controller.signal.aborted) return
         if (result.ok) {
-          if (result.value !== null) {
-            store.seed({ ...result.value, asOfSeq: sessionSeqCursor(result.value.asOfSeq) })
+          const value = result.value
+          if (value !== null) {
+            switch (value.kind) {
+              case 'sequenced':
+                store.seed({ values: value.values, asOfSeq: sessionSeqCursor(value.asOfSeq) })
+                break
+              case 'migration-required':
+                store.applyCached(value.values)
+                break
+              default:
+                assertNever(value, 'session projections result')
+            }
           } else if (store.values() === initialValues) {
             // A later frame proves existence independently of an earlier missing read.
             store.clear()
           }
-          this.projectionLoads.set(sessionId, { state: 'ready', error: null })
+          this.projectionLoads.set(sessionId, {
+            state: value?.kind === 'migration-required' ? 'migration-required' : 'ready',
+            error: null,
+          })
         } else {
           this.projectionLoads.set(sessionId, { state: 'error', error: result.error })
         }
@@ -482,17 +502,21 @@ export class SessionManager {
    * Contract session.create; on success merge into summaries immediately (no
    * wait for the next refresh). A created session is blank by definition
    * (entity birth precedes the first message).
-   * @param opts - target workspace or working directory, plus an optional caller-owned id.
-   * @returns the create result.
+   * @param opts - target workspace or working directory, an optional blank Session to reuse, and an optional Agent preset.
+   * @returns the create result, naming the Session the Host created or reused.
   */
   async create(
     opts: {
       workspaceId?: WorkspaceId
       cwd?: string
       sessionId?: SessionId
+      agentPreset?: string
     } = {},
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
-    const shared = opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }
+    const shared = {
+      ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
+      ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
+    }
     const payload = opts.workspaceId !== undefined
       ? { workspaceId: opts.workspaceId, ...shared }
       : { ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }), ...shared }
@@ -526,16 +550,17 @@ export class SessionManager {
    * preserve it or lower it after an exact cut before the first `turn/start`;
    * lineage rides parentSessionId. A child published before Workspace
    * attachment fails is also reconciled into the list.
-   * @param opts - source session and the optional exact inclusive boundary seq.
+   * @param opts - source session, optional exact inclusive boundary seq, and permission to start migration.
    * @returns the fork result (the child session id).
    */
   async fork(
-    opts: { sessionId: SessionId; atSeq?: SessionSeq },
+    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean },
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
     const source = this.summaries.find(s => s.sessionId === opts.sessionId)
     const result = await this.remote.session.fork({
       sessionId: opts.sessionId,
       ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
+      ...opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration },
     })
     const childId = result.ok
       ? result.value.sessionId
@@ -774,6 +799,7 @@ export class SessionManager {
         && prev.blank === entry.blank
         && prev.parentSessionId === entry.parentSessionId && prev.cwd === entry.cwd
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
+        && prev.formatStatus === entry.formatStatus
         && prev.projectionValues === entry.projectionValues
       ) return prev
       this.entryCache.set(entry.sessionId, entry)
@@ -813,6 +839,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
         ...(mutation.kind === 'upsert' ? {
           agentAvailable: mutation.summary.agentAvailable,
           running: mutation.summary.running,
+          ...(mutation.summary.formatStatus === undefined ? {} : { formatStatus: mutation.summary.formatStatus }),
         } : {}),
         ...(existing.cwd === undefined && mutation.summary.cwd !== undefined ? { cwd: mutation.summary.cwd } : {}),
         ...(existing.parentSessionId === undefined && mutation.summary.parentSessionId !== undefined
@@ -823,6 +850,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
       if (filled.cwd === existing.cwd && filled.parentSessionId === existing.parentSessionId
         && filled.origin === existing.origin && filled.blank === existing.blank
         && filled.agentAvailable === existing.agentAvailable && filled.running === existing.running
+        && filled.formatStatus === existing.formatStatus
       ) return [...summaries]
       return summaries.map(summary => summary.sessionId === mutation.summary.sessionId ? filled : summary)
     }

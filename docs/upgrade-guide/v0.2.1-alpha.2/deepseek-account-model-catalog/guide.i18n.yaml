@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/deepseek-account-model-catalog/guide.md
+/:
+  en: 60a8441ae7ea6841
+  zh: 3715b44e11c5131b
+/deepseek-account-models-come-from-the-account-listing:
+  en: 2208c82c24d75a53
+  zh: fa6c53c925aae6f2
+/deepseek-account-models-come-from-the-account-listing/change:
+  en: bf4c84372b8b1316
+  zh: af1623701d19b62e
+/deepseek-account-models-come-from-the-account-listing/migration:
+  en: 7ce26a5a1926b292
+  zh: 35dfc17997834e4d

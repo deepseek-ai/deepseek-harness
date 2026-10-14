@@ -66,4 +66,11 @@ export default defineConfig([
     clean: true,
     tsconfig: 'tsconfig.client.json',
   },
+  {
+    ...shared,
+    entry: { 'user-text.worker': 'user-text/user-text.worker.client.ts' },
+    outDir: '.dsh-build/user-text',
+    clean: true,
+    tsconfig: 'tsconfig.client.json',
+  },
 ])

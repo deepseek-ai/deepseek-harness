@@ -98,7 +98,7 @@ declare module '@deepseek-ai/cordis' {
  * Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate
  * failures resolve in {@link PtcRunResult}; only Service Definition contract misuse rejects. Implementations bridge
  * structured-cloneable bindings, materialize each declared namespace rejection
- * class, treat programs as hostile peers, isolate runs from one another, and
+ * class, treat programs as hostile peers, isolate distinct state owners, and
  * terminate and await in-flight runs during disposal.
  */
 export abstract class PtcRuntime extends Service {
@@ -120,6 +120,18 @@ export abstract class PtcRuntime extends Service {
    * `'process'`, `'container'`.
    */
   abstract readonly isolation: string
+
+  /** Source evaluation form, independent of whether the provider retains state for an owner. */
+  get programFormat(): 'function-body' | 'repl' { return 'function-body' }
+
+  /**
+   * Release an owner's retained environment and await its execution resources.
+   * Stateless providers have no retained resources to release.
+   * @param owner - The exact object supplied as the request's state owner.
+   * @returns Completion after all owned execution resources have been released.
+   * @throws When managed resource cleanup fails.
+   */
+  release(owner: object): Promise<void> { void owner; return Promise.resolve() }
 
   /** Provider-owned program usage guidance for consumers to present alongside the source language. */
   get executionInstructions(): string { return '' }

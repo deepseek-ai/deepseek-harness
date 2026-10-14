@@ -275,22 +275,23 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The image card's in-card label: the view's replacement title, else the
-   shortened path — the same role ReadBlock's own label plays, so the presentation
-   contract's replacement-title rule is honoured here too. */
-.imageLabel {
-  margin-bottom: 4px;
+/* The image card's full path and size lines under the gallery, in the small
+   code font of the expanded IN/OUT card. When the attachment slot renders
+   nothing, these lines are the only evidence an image was returned. pre-wrap
+   keeps repeated whitespace in a path. The enclosing .imageBody already carries
+   the row indent. */
+.imageMeta {
+  margin-top: 4px;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: var(--dsw-font-sm-13);
-  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-markdown-code-block-small);
+  color: var(--dsw-alias-label-tertiary);
 }
 
-/* The image card's own result text (media type, dimensions, byte size) under the
-   gallery, in the same muted tone the search recovery footer uses. Always
-   rendered: the attachment presentation slot is optional, so when nothing
-   occupies it the gallery is empty and this line is the only evidence an image
-   was returned. The enclosing .imageBody already carries the row indent. */
-.imageMeta {
+/* Text blocks other than the envelope (for example, appended by a post-execute
+   hook), in the muted tone the search recovery footer uses. */
+.imageExtra {
+  margin-top: 4px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: var(--dsw-font-xs-13);
@@ -304,6 +305,7 @@
   --dsl-terminal-font: var(--dsw-font-markdown-code-block-small);
   --dsl-terminal-line-height: 18px;
   --dsl-terminal-output-max-height: 224px;
+  --dsl-terminal-command-whitespace: pre-wrap;
   border: 0.5px solid var(--dsw-alias-border-l1);
 }
 

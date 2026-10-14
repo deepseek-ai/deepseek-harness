@@ -21,7 +21,7 @@ interface Recognizer {
 interface Detector {
   acceptWaveform(samples: Float32Array): void
   isEmpty(): boolean
-  front(externalBuffer: false): { samples: Float32Array }
+  front(externalBuffer: false): { start: number; samples: Float32Array }
   pop(): void
   reset(): void
   flush(): void
@@ -58,12 +58,27 @@ export function createTranscriber(config: InferenceConfig): (audio: Uint8Array, 
     recognizer.setConfig(nativeConfig)
     detector.reset()
     const started = performance.now(), texts: string[] = []
+    // Silero cannot back-date the first segment of a cold detector, so it reports a start index
+    // several frames after speech actually began; restore that dropped onset from the recording.
+    const onsetPadding = Math.round(config.vadOnsetPaddingSeconds * 16000)
+    let isFirstSegment = true
     const drain = (): void => {
       while (!detector.isEmpty()) {
         // Electron's V8 memory cage requires copied native buffers, including VAD output.
         const segment = detector.front(false)
+        let speech = segment.samples
+        if (isFirstSegment) {
+          isFirstSegment = false
+          const from = Math.max(0, segment.start - onsetPadding)
+          if (from < segment.start) {
+            const restored = new Float32Array(segment.start - from + speech.length)
+            restored.set(samples.subarray(from, segment.start))
+            restored.set(speech, segment.start - from)
+            speech = restored
+          }
+        }
         const stream = recognizer.createStream()
-        stream.acceptWaveform({ sampleRate: 16000, samples: segment.samples })
+        stream.acceptWaveform({ sampleRate: 16000, samples: speech })
         recognizer.decode(stream)
         texts.push(recognizer.getResult(stream).text.trim())
         detector.pop()

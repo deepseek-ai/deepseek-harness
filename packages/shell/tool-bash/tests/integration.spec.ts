@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
@@ -218,8 +218,7 @@ describe('bash tool through the agent loop', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-bg-'))
     dirs.push(dir)
     const sentinel = join(dir, 'release')
-    // The job id is deterministic (a fresh LocalJobRegistry counts per kind from 1),
-    // so the script can name `bash-1` without threading a generated id.
+    // The next model call reads the id from the prior tool result.
     const adapter = new MockAdapter([
       toolCallResponse('call-1', 'bash', {
         command: `while [ ! -f ${JSON.stringify(sentinel)} ]; do sleep 0.02; done; echo bg-ok`,
@@ -227,7 +226,11 @@ describe('bash tool through the agent loop', () => {
         run_in_background: true,
       }),
       textResponse('Started it in the background.'),
-      toolCallResponse('call-2', 'job_output', { job_id: 'bash-1' }),
+      (options) => {
+        const jobId = /started background job (bash-[0-9a-f]{16})/.exec(JSON.stringify(options.messages))?.[1]
+        if (jobId === undefined) throw new Error('model history lacks the started job id')
+        return toolCallResponse('call-2', 'job_output', { job_id: jobId })
+      },
       textResponse('Background job finished.'),
     ])
     const ctx = await harness(adapter)
@@ -238,7 +241,8 @@ describe('bash tool through the agent loop', () => {
 
     const firstResult = findEvent(events(agent), 'tool/result')
     expect(firstResult.data.message.isError).toBe(false)
-    expect(resultText(firstResult)).toBe('started background job bash-1')
+    const jobId = /^started background job (bash-[0-9a-f]{16})$/.exec(resultText(firstResult))?.[1]
+    if (jobId === undefined) throw new Error('first tool result lacks a job id')
     // The turn closed with the task still running, so the notice cannot exist yet.
     const isNotice = (e: SessionEvent): e is SessionEvent<'user/message'> =>
       e.type === 'user/message' && e.data.source.kind === 'tool-jobs'
@@ -261,7 +265,7 @@ describe('bash tool through the agent loop', () => {
     const notice = events(agent).find(isNotice)!
     const noticeText = notice.data.content
       .filter(block => block.type === 'text').map(block => block.text).join('')
-    expect(noticeText).toContain('background job bash-1 (bash: ')
+    expect(noticeText).toContain(`background job ${jobId} (bash: `)
     expect(noticeText).toContain('finished [status: completed, exit code: 0]')
     expect(notice.data.source).toMatchObject({
       kind: 'tool-jobs',

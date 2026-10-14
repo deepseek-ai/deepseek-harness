@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-以 [`dsh-base`](../base/README.zh.md) 为基础的 SDK stdio 应用 `dsh` profile 组合包。它继承 base 默认禁用模块 HMR（热模块替换）的策略；其 patch 设置 coding agent（编程智能体）persona、挂载应用自有的零选项命令提供方，并且只在该提供方接受调用后启动 [`dsh-sdk-jsonrpc-server`](../../sdk/server/README.zh.md)。因此，`dsh --profile sdk --help` 会写出 help 并退出，不会占用 stdin 或 stdout。独立的 [`sdk-minimal`](../sdk-minimal/README.zh.md) bundle 复用同一个启动提供方，并提供自己的 profile 名称。
+以 [`dsh-base`](../base/README.zh.md) 为基础的 SDK stdio 应用 `dsh` profile 组合包。它继承 base 默认禁用模块 HMR（热模块替换）的策略；其 patch 挂载应用自有的零选项命令提供方，并且只在该提供方接受调用后启动 [`dsh-sdk-jsonrpc-server`](../../sdk/server/README.zh.md)。因此，`dsh --profile sdk --help` 会写出 help 并退出，不会占用 stdin 或 stdout。独立的 [`sdk-minimal`](../sdk-minimal/README.zh.md) bundle 复用同一个启动提供方，并提供自己的 profile 名称。
 
 ## 目录
 
@@ -33,22 +33,22 @@ kind: "package-bundle"
 
 SDK 使用 base 默认提供的 `read`、`write` 和 `edit`。要添加 `str_replace_editor`，请使用 [base 配置指南](../base/README.zh.md#use-this-package)中的显式插入 patch。独立的 `sdk-minimal` profile 自行决定其工具选择。
 
-打包的 Python runtime 默认启用 [Office 运行时查询与 skills](../../skill/tool-workspace-dependencies/README.zh.md#use-this-package)。`DSH_PRIMARY_RUNTIME` 覆盖随包 payload；空值禁用两行。没有载体默认路径的源码启动仍需显式启用。工具原位读取 payload。profile patch 可独立于 `workspace-dependencies` 禁用 `skill-office` 或替换其 `assetRoot`；同名文件系统 skills 优先于随包 skills。打包与配置见 [runtime 包](../../../python/sdk-runtime/README.zh.md)。
+Python 运行时向本 profile 提供显式下载的创作资源和 Office sidecar。`DSH_PRIMARY_RUNTIME` 覆盖创作载荷；空值禁用其查询。Office skills 可独立使用任一种资源。Profile patch 可独立于 `workspace-dependencies` 禁用 `skill-office` 或替换其 `assetRoot`；同名文件系统 skills 优先。下载与配置见[运行时包](../../../python/sdk-runtime/README.zh.md)。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-### SDK coding agent persona
+### SDK 模型上下文
 
 #### 模型看到什么
 
-profile 在第一方指导之前提供 `You are a coding agent powered by the {{model}} model.`；SDK 初始化路由解析 `{{model}}`。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。
+profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，不额外添加特定任务的 persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。
 
 #### Token 影响
 
-一段简短稳定的 persona，加上随数据变化的 base 提示词段落与所选工具 schema。
+base 提示词段落与所选工具 schema 决定 token 用量；此 profile 不额外添加 persona 文本。
 
 #### KV Cache 影响
 

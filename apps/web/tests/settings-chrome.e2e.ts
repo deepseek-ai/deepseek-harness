@@ -8,12 +8,12 @@
 // Zero model calls: everything is pure client + persistence state on a blank
 // frame, so there is no fixture and a stray stream would fail loud on the
 // open llm seam.
-import { readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Locator, Page } from 'playwright'
+import type { Browser, Locator, Page, Request } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -29,8 +29,16 @@ const PLUGIN_INSTANCES_EXPECTED = join(SNAPSHOT_DIR, 'plugin-instances.expected.
 const DIALOG_EN_EXPECTED = join(SNAPSHOT_DIR, 'dialog-en.expected.md')
 const PLUGIN_ROW_SELECTOR = '[data-plugin-scope="preset"] [data-plugin-entry="tool-subagent"]'
 const MODE = webSnapshotMode()
+const SCREENSHOTS = 'screenshots/collapse-timing-settings'
+const SCREENSHOT_DIR = fileURLToPath(new URL(`../../../.artifacts/${SCREENSHOTS}`, import.meta.url))
 const { version } = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string }
 const versionCapture = { replacements: [[version, '{{version}}']] as const }
+
+async function saveSettingsFailureShot(page: Page, name: string): Promise<void> {
+  await mkdir(SCREENSHOT_DIR, { recursive: true })
+  const directory = await mkdtemp(join(SCREENSHOT_DIR, `${name}-`))
+  await saveFailureShot(page, `${SCREENSHOTS}/${basename(directory)}/failure`)
+}
 
 describe('web e2e: settings modal and General preferences', () => {
   let scaffold: WebScaffold
@@ -53,24 +61,29 @@ describe('web e2e: settings modal and General preferences', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+    } finally {
+      await scaffold?.close()
+    }
   })
 
   it('opens the settings dialog, switches sections, and closes by every path', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-shell'))
+    onTestFailed(() => saveSettingsFailureShot(page, 'settings-shell'))
     onTestFinished(async () => {
       const dialog = page.getByRole('dialog', { name: '设置' })
       if (await dialog.isVisible()) await page.keyboard.press('Escape')
       await dialog.waitFor({ state: 'hidden' })
     })
-    const trigger = page.getByRole('button', { name: '设置', exact: true })
-    expect(await trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    const trigger = page.getByRole('button', { name: '账号菜单', exact: true })
+    expect(await trigger.getAttribute('aria-haspopup')).toBe('menu')
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
     await trigger.click()
+    expect(await trigger.getAttribute('aria-expanded')).toBe('true')
+    await page.getByRole('menuitem', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
-    expect(await trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(await trigger.getAttribute('aria-expanded')).toBe('false')
     // General is active by default; Permission, Language and Appearance are functional.
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBe('true')
     await dialog.getByRole('button', { name: '工作区内修改' }).waitFor({ timeout: 10_000 })
@@ -100,10 +113,13 @@ describe('web e2e: settings modal and General preferences', () => {
         }),
       })
     })
-    await openDocument.click()
-    await expect.poll(() => openRequests, { timeout: 5_000 }).toBe(1)
-    await expect.poll(() => openDocument.isEnabled(), { timeout: 5_000 }).toBe(true)
-    await page.unroute('**/api/settings/openSettingsDocument')
+    try {
+      await openDocument.click()
+      await expect.poll(() => openRequests, { timeout: 5_000 }).toBe(1)
+      await expect.poll(() => openDocument.isEnabled(), { timeout: 5_000 }).toBe(true)
+    } finally {
+      await page.unrouteAll({ behavior: 'wait' })
+    }
     await dialog.getByText(`当前版本：${version}`, { exact: true }).waitFor()
     // Golden of the freshly opened dialog (default zh, General active).
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd, versionCapture)
@@ -149,8 +165,8 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(await enabledRows.count()).toBeGreaterThan(0)
     expect(await enabledRows.getByText('已启用', { exact: true }).count()).toBe(0)
     expect(await dialog.locator('[data-plugin-scope="global"] [role="img"][aria-label="运行中"]').count()).toBe(0)
-    expect(await dialog.locator('[data-plugin-count]').getAttribute('data-plugin-count'))
-      .toBe(String(expectedPluginCount))
+    expect(await dialog.getByText('由 Agent 预设按会话组成', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('系统与所有会话共用', { exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '内置插件', exact: true }).getAttribute('aria-current')).toBe('true')
     // One contribution shows as the page itself, without a tab row.
     expect(await dialog.getByRole('tab').count()).toBe(0)
@@ -168,17 +184,11 @@ describe('web e2e: settings modal and General preferences', () => {
     ] as const
     for (const [entryId, status] of instanceRows) {
       const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
-      // An id that repeats the title adds nothing, so its card shows no chip and its name omits it.
-      const repeatsTitle = entryId === 'tool-subagent'
-      const name = repeatsTitle ? `tool-subagent, ${status}` : `tool-subagent, ${entryId}, ${status}`
+      const name = `子智能体委派工具, ${entryId}, ${status}`
       const trigger = row.getByRole('button', { name, exact: true })
       await trigger.waitFor({ timeout: 10_000 })
       expect(await trigger.getAttribute('aria-expanded')).toBe('false')
       const identity = row.locator('code')
-      if (repeatsTitle) {
-        expect(await identity.count()).toBe(0)
-        continue
-      }
       expect(await identity.textContent()).toBe(entryId)
       expect(await identity.getAttribute('title')).toBe(entryId)
     }
@@ -190,7 +200,7 @@ describe('web e2e: settings modal and General preferences', () => {
     )
     await compareOrRefreshGolden(PLUGIN_INSTANCES_EXPECTED, instancesSnapshot, MODE)
     await dialog.getByRole('button', {
-      name: 'tool-subagent, tool-subagent-fork, 已启用',
+      name: '子智能体委派工具, tool-subagent-fork, 已启用',
       exact: true,
     }).click()
     expect(await dialog.locator('[data-plugin-entry="tool-subagent-fork"] button')
@@ -783,7 +793,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
-    const enTrigger = page.getByRole('button', { name: 'Settings' })
+    const enTrigger = page.getByRole('button', { name: 'Account menu' })
     await enTrigger.waitFor({ timeout: 10_000 })
 
     // A Chinese browser on another port still receives the explicit English
@@ -864,7 +874,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const fresh = await launchWebScaffold({ developerTools: false })
     const frPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'fr-FR' })
     const frTripwire = watchConsole(frPage)
-    onTestFailed(() => saveFailureShot(frPage, 'web-e2e-settings-unshipped-language'))
+    onTestFailed(() => saveSettingsFailureShot(frPage, 'settings-unshipped-language'))
     try {
       await frPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
       await frPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -901,6 +911,7 @@ describe('web e2e: settings modal and General preferences', () => {
     onTestFinished(() => fresh.close())
     const withoutBrowser = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'en-US' })
     onTestFinished(() => withoutBrowser.close())
+    onTestFailed(() => saveSettingsFailureShot(withoutBrowser, 'settings-no-browser'))
     const browserConsole = watchConsole(withoutBrowser)
     await withoutBrowser.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
     await openSettings(withoutBrowser, 'en')
@@ -920,8 +931,218 @@ describe('web e2e: settings modal and General preferences', () => {
       'dialog-en.expected.md',
       'dialog-no-browser.expected.md',
       'dialog.expected.md',
+      'collapse-timing-en.expected.md',
+      'collapse-timing-zh.expected.md',
       'plugin-instances.expected.md',
       'plugins.expected.md',
     ])
+  })
+})
+
+describe('web e2e: Host-backed collapse timing preference', () => {
+  let scaffold: WebScaffold
+  let browser: Browser
+  const uiWait = { timeout: 10_000 }
+
+  beforeAll(async () => {
+    scaffold = await launchWebScaffold({ developerTools: false })
+    browser = await chromium.launch({ headless: true })
+  })
+
+  afterAll(async () => {
+    try {
+      await browser?.close()
+    } finally {
+      await scaffold?.close()
+    }
+  })
+
+  it.each([
+    {
+      locale: 'zh', browserLocale: ZH_BROWSER_LOCALE, theme: 'dark',
+      settings: '设置', close: '关闭', details: '工作步骤展示', compact: '简洁', detailed: '详细',
+      title: '工作步骤收起时机', completion: '回答结束后', nextInput: '下次有新消息时',
+      description: '选择何时自动收起工作步骤',
+    },
+    {
+      locale: 'en', browserLocale: 'en-US', theme: 'light',
+      settings: 'Settings', close: 'Close', details: 'Work details', compact: 'Compact', detailed: 'Detailed',
+      title: 'When to Collapse Work Details', completion: 'On completion', nextInput: 'On next message',
+      description: 'Choose when to automatically collapse work details',
+    },
+  ] as const)('persists $locale collapse timing on $theme across Clients', async (copy) => {
+    const contextOptions = {
+      viewport: { width: 1680, height: 1000 }, locale: copy.browserLocale,
+      colorScheme: copy.theme, timezoneId: 'Asia/Shanghai',
+    }
+    await scaffold.ctx.settings.update('ui-chat', { collapseTiming: 'completion' })
+    const context = await browser.newContext(contextOptions)
+    onTestFinished(() => context.close())
+    const page = await context.newPage()
+    onTestFailed(() => saveSettingsFailureShot(page, `settings-${copy.locale}`))
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(page, copy.locale)
+    const dialog = page.getByRole('dialog', { name: copy.settings, exact: true })
+    const details = dialog.getByText(copy.details, { exact: true }).locator('../..')
+    await details.getByRole('button').click()
+    expect(await page.getByRole('menuitem').count()).toBe(4)
+    // The persistence checks require an explicit saved mode, not the client's default.
+    await page.getByRole('menuitem', { name: copy.compact, exact: true }).click()
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'compact' })
+    await details.getByRole('button', { name: copy.compact, exact: true }).click()
+    await page.getByRole('menuitem', { name: copy.detailed, exact: true }).click()
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'detailed' })
+    await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme')), uiWait)
+      .toBe(copy.theme === 'dark')
+    const timing = dialog.getByText(copy.title, { exact: true }).locator('../..')
+    expect(await timing.count()).toBe(1)
+    expect(await timing.evaluate(element => element.previousElementSibling?.textContent)).toContain(copy.details)
+    await timing.getByText(copy.description, { exact: true }).waitFor()
+    await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    let screenshotDir: string | undefined
+    if (MODE !== 'record') {
+      await mkdir(SCREENSHOT_DIR, { recursive: true })
+      screenshotDir = await mkdtemp(join(SCREENSHOT_DIR, `settings-${copy.locale}-${copy.theme}-`))
+      await page.screenshot({ path: join(screenshotDir, 'panel.png'), fullPage: true })
+    }
+
+    await page.evaluate(() => {
+      localStorage.setItem('collapse-timing-e2e-unrelated', 'retained')
+      sessionStorage.setItem('collapse-timing-e2e-unrelated', 'retained')
+    })
+    const readPersistence = async (target: Page = page) => ({
+      host: await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
+      settings: structuredClone(scaffold.ctx.settings.describe({ redactSecrets: true }).map(({ ns, value }) => ({ ns, value }))),
+      storage: await target.evaluate(() => ({
+        local: Object.fromEntries(Object.entries(localStorage)),
+        session: Object.fromEntries(Object.entries(sessionStorage)),
+      })),
+    })
+    const before = await readPersistence()
+    const settingsWrites: string[] = []
+    const recordSettingsWrite = (request: Request): void => {
+      const path = new URL(request.url()).pathname
+      if (request.method() === 'POST' && path === '/api/settings/mutate') settingsWrites.push(path)
+    }
+    context.on('request', recordSettingsWrite)
+    await timing.getByRole('button', { name: copy.completion, exact: true }).click()
+    await page.getByRole('menuitem', { name: copy.nextInput, exact: true }).waitFor()
+    expect(await page.getByRole('menuitem').allTextContents()).toEqual([copy.completion, copy.nextInput])
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, `collapse-timing-${copy.locale}.expected.md`),
+      await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    if (screenshotDir !== undefined) {
+      await page.screenshot({ path: join(screenshotDir, 'menu.png'), fullPage: true })
+    }
+    const menu = page.getByRole('menu')
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'hidden' })
+    expect(await dialog.isVisible()).toBe(true)
+    await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await timing.getByRole('button').click()
+    await menu.waitFor()
+    await timing.getByText(copy.title, { exact: true }).click()
+    await menu.waitFor({ state: 'hidden' })
+    expect(await dialog.isVisible()).toBe(true)
+    await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+
+    await page.setViewportSize({ width: 640, height: 480 })
+    await timing.getByRole('button').click()
+    await menu.waitFor()
+    await expect.poll(() => menu.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        fits: rect.width > 0 && rect.height > 0
+          && rect.left > 0 && rect.top > 0
+          && rect.right < window.innerWidth && rect.bottom < window.innerHeight,
+        uncovered: [...element.querySelectorAll('[role="menuitem"]')].every((item) => {
+          const bounds = item.getBoundingClientRect()
+          return item.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2))
+        }),
+      }
+    }), uiWait).toEqual({ fits: true, uncovered: true })
+    if (screenshotDir !== undefined) {
+      await page.screenshot({ path: join(screenshotDir, 'menu-compact.png'), fullPage: true })
+    }
+    await page.getByRole('menuitem', { name: copy.nextInput, exact: true }).click()
+    await menu.waitFor({ state: 'hidden' })
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'detailed', collapseTiming: 'next-input' })
+    const saved = await readPersistence()
+    expect(saved.host).not.toBe(before.host)
+    expect(saved.storage).toEqual(before.storage)
+    await dialog.getByRole('button', { name: copy.close, exact: true }).click()
+    await openSettings(page, copy.locale)
+    await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
+    expect(await readPersistence()).toEqual(saved)
+    await dialog.getByRole('button', { name: copy.close, exact: true }).click()
+
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await openSettings(page, copy.locale)
+    await timing.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    expect(await readPersistence()).toEqual(saved)
+    if (screenshotDir !== undefined) {
+      await page.screenshot({ path: join(screenshotDir, 'reloaded.png'), fullPage: true })
+    }
+
+    const sharedPage = await context.newPage()
+    onTestFailed(() => saveSettingsFailureShot(sharedPage, `settings-${copy.locale}-shared-tab`))
+    const sharedTripwire = watchConsole(sharedPage)
+    await sharedPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(sharedPage, copy.locale)
+    const sharedTiming = sharedPage.getByRole('dialog', { name: copy.settings, exact: true })
+      .getByText(copy.title, { exact: true }).locator('../..')
+    await sharedTiming.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
+    const sharedPersistence = await readPersistence(sharedPage)
+    expect(sharedPersistence.host).toBe(saved.host)
+    expect(sharedPersistence.settings).toEqual(saved.settings)
+    expect(sharedPersistence.storage.local).toEqual(before.storage.local)
+    if (screenshotDir !== undefined) {
+      await sharedPage.screenshot({ path: join(screenshotDir, 'shared-tab.png'), fullPage: true })
+    }
+
+    const isolatedContext = await browser.newContext(contextOptions)
+    onTestFinished(() => isolatedContext.close())
+    isolatedContext.on('request', recordSettingsWrite)
+    const isolatedPage = await isolatedContext.newPage()
+    onTestFailed(() => saveSettingsFailureShot(isolatedPage, `settings-${copy.locale}-isolated-context`))
+    const isolatedTripwire = watchConsole(isolatedPage)
+    await isolatedPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(isolatedPage, copy.locale)
+    const isolatedTiming = isolatedPage.getByRole('dialog', { name: copy.settings, exact: true })
+      .getByText(copy.title, { exact: true }).locator('../..')
+    await isolatedTiming.getByRole('button', { name: copy.nextInput, exact: true }).waitFor()
+    const isolatedPersistence = await readPersistence(isolatedPage)
+    expect(isolatedPersistence.host).toBe(saved.host)
+    expect(isolatedPersistence.settings).toEqual(saved.settings)
+    if (screenshotDir !== undefined) {
+      await isolatedPage.screenshot({ path: join(screenshotDir, 'isolated-context.png'), fullPage: true })
+    }
+
+    expect(await readPersistence()).toEqual(saved)
+    await timing.getByRole('button', { name: copy.nextInput, exact: true }).click()
+    await page.getByRole('menuitem', { name: copy.completion, exact: true }).click()
+    await timing.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await expect.poll(() => scaffold.ctx.settings.describe().find(row => row.ns === 'ui-chat')?.value, uiWait)
+      .toMatchObject({ transcriptView: 'detailed', collapseTiming: 'completion' })
+    expect((await readPersistence()).storage).toEqual(before.storage)
+    await sharedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    await isolatedTiming.getByRole('button', { name: copy.completion, exact: true }).waitFor()
+    expect(settingsWrites.length).toBeGreaterThan(0)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+    expect(sharedTripwire.pageErrors).toEqual([])
+    expect(sharedTripwire.warnings).toEqual([])
+    expect(isolatedTripwire.pageErrors).toEqual([])
+    expect(isolatedTripwire.warnings).toEqual([])
   })
 })

@@ -98,6 +98,9 @@ export function createWorkspaceStateStream(
 
 function acceptIncrement(accept: WorkspaceFollowSink, frame: WorkspaceFollowIncrement): void {
   switch (frame.type) {
+    case 'replace':
+      accept.replaceBaseline(frame.value)
+      return
     case 'upsert':
       accept.upsertView(frame.workspace)
       return

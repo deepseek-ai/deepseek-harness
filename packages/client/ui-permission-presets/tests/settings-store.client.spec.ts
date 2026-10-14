@@ -161,19 +161,6 @@ describe('permission settings store', () => {
     })
   })
 
-  it('hides the row in a remote browser instead of loading forever', async () => {
-    const describeCall = vi.fn()
-    const mutate = vi.fn()
-    const ctx = { remote: { settings: { describe: describeCall, mutate } } } as never
-    const mirror = new SettingsDescribeMirror(ctx, 'memory')
-    const controller = new PermissionPresetSettingsController(mirror, ctx, directory)
-    await controller.load()
-    expect(controller.store.getSnapshot().status).toBe('unavailable')
-    await controller.select('workspace-write')
-    expect(describeCall).not.toHaveBeenCalled()
-    expect(mutate).not.toHaveBeenCalled()
-  })
-
   it('follows a mirror refresh without an own read once loaded', async () => {
     const describe = vi.fn()
       .mockResolvedValueOnce(ok({ writable: true, hasDocument: false, namespaces: [view('read-only', 1)] }))

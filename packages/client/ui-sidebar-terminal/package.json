@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-terminal",
   "description": "Interactive shell tabs for the right Sidebar",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -23,7 +23,8 @@
       "default": "./lib/client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -59,8 +60,6 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@testing-library/react": "^16.3.3",
-    "@types/react": "~18.3.1",
-    "@types/react-dom": "~18.3.0",
     "react": "^18.2.0",
     "clsx": "^2.0.0",
     "react-dom": "^18.2.0",
@@ -73,6 +72,7 @@
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/client.*.js",

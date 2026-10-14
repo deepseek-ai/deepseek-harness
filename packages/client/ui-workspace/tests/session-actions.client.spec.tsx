@@ -1,22 +1,25 @@
 // @vitest-environment jsdom
 /**
  * The shipped Session row actions rendered directly with hand-built props:
- * the pin, rename, fork, and archive menu rows, the archive and pin hover
- * buttons, and the two `shell.overlay` surfaces they raise (rename dialog,
- * row notice). Every action reads its own injected hooks and calls its own
- * injected callbacks; what those callbacks do is apply.client.spec's
+ * the menu rows, hover buttons, dialogs, and global notices. Every action
+ * reads its own injected hooks and calls its own injected callbacks;
+ * what those callbacks do is apply.client.spec's
  * subject. The browser and the slot machinery stay out; the assembled
  * chain lives in rename-assembly.client.spec.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { GlobalStandardProps, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { registerToasts } from '../src/client/toast/register.ts'
+import { ArchiveToastEntry } from '../src/client/toast/Toast.tsx'
+import type { ArchiveToastEntryProps } from '../src/client/contract/toast.ts'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
@@ -30,6 +33,7 @@ import { ForkSessionMenuItem } from '../src/client/session-actions/ForkSession.t
 import { PinSessionMenuItem, PinSessionRowButton } from '../src/client/session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from '../src/client/session-actions/RenameSession.tsx'
 import { RowActionToast } from '../src/client/session-actions/RowActionToast.tsx'
+import { SessionIdMenuItem } from '../src/client/session-actions/SessionId.tsx'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
@@ -80,6 +84,7 @@ const standard: GlobalStandardProps = {
   usePanelInfo,
   useResource,
   useWorkspaces: hook(workspaces),
+  ...allowAllAccess,
 }
 
 type MenuRowProps = PropsRuntime<'sidebar.workspaces.session.menu.item'> & PropsLocale<'workspace'>
@@ -108,6 +113,19 @@ function openMenu() {
 function callOrder(fn: { mock: { invocationCallOrder: readonly number[] } }, nth = 0): number {
   return fn.mock.invocationCallOrder[nth] ?? Number.POSITIVE_INFINITY
 }
+
+describe('Session ID action', () => {
+  it.each([t, tEn])('dismisses the menu before copying the complete row ID', (translate) => {
+    const { state, setMenuOpen } = openMenu()
+    const sessionId = sid('session-c4421b66-252e-44c0-80ed-6e320abeba25')
+    const copySessionId = vi.fn(async () => {})
+    render(<SessionIdMenuItem {...menuRow(state)} sessionId={sessionId} t={translate} copySessionId={copySessionId} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: translate('menu.sessionId') }))
+    expect(setMenuOpen).toHaveBeenCalledWith(false)
+    expect(copySessionId).toHaveBeenCalledExactlyOnceWith(sessionId)
+    expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(copySessionId))
+  })
+})
 
 describe('pin action', () => {
   /** The pin share over fixed membership: the bound Set hooks and the two callbacks the entries call. */
@@ -218,6 +236,16 @@ describe('fork and rename rows', () => {
     expect(forkSession).toHaveBeenCalledWith(sid('one'))
     expect(setMenuOpen).toHaveBeenCalledWith(false)
     expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(forkSession))
+  })
+
+  it('omits the fork row when the access snapshot excludes session/fork for this Session', () => {
+    const { state } = openMenu()
+    const useSessionAccess = vi.fn(() => false)
+    const { container } = render(
+      <ForkSessionMenuItem {...menuRow(state)} useSessionAccess={useSessionAccess} forkSession={vi.fn()} />,
+    )
+    expect(container.innerHTML).toBe('')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'session/fork')
   })
 
   it('rename closes the menu, then asks for the dialog with the row title', () => {
@@ -488,9 +516,31 @@ declare module '@deepseek-ai/dsh-workspace/types' {
   }
 }
 
+function ToastFrame({ renderSlot }: PropsRenderSlots<'shell.overlay'>) {
+  return renderSlot('shell.overlay', {})
+}
+
 describe('RowActionToast', () => {
+  it('adds the archive filter action when the display mapping supplies no actions', () => {
+    const instance = createWorkspaceViewStore().create()
+    const dismissToast = vi.fn()
+    const showArchived = vi.fn()
+    const filter = { label: 'Show archived', onClick: showArchived }
+    const renderFactorySlot = vi.fn<ArchiveToastEntryProps['renderFactorySlot']>(() => null)
+    render(<ArchiveToastEntry {...standard} kind="archived" sessionId={ROW.sessionId} seq={1}
+      t={t} useStore={bindSnapshotSelector(instance.store)} actions={instance.actions}
+      dismissToast={dismissToast} renderFactorySlot={renderFactorySlot}
+      display={() => ({ text: 'Archived', tone: 'success' })} filterAction={() => filter} />)
+    expect(renderFactorySlot).toHaveBeenCalledWith('workspace.toast.content', {
+      text: 'Archived', tone: 'success', actions: [filter], seq: 1, onDone: dismissToast,
+    })
+  })
+
   /** The notice surface over a test-owned notice source; dismissal clears the notice the way apply does. */
-  function toastSurface(viewState: { archivedFilter?: 'default' | 'show' | 'only' } = { archivedFilter: 'default' }) {
+  async function toastSurface(
+    viewState: { archivedFilter?: 'default' | 'show' | 'only' } = { archivedFilter: 'default' },
+    translate = t,
+  ) {
     const toast = createSnapshotStore<RowToastState | null>(null)
     const instance = createWorkspaceViewStore().create()
     // A v5 snapshot hydrates without the filter key; mirror it by dropping the
@@ -502,40 +552,157 @@ describe('RowActionToast', () => {
     const dismissToast = vi.fn(() => { toast.set(null) })
     const undoArchive = vi.fn()
     const showArchived = vi.fn()
-    render(
-      <RowActionToast
-        {...overlay}
-        useToast={bindSnapshotSelector(toast)}
-        useStore={bindSnapshotSelector(view)}
-        actions={instance.actions}
-        dismissToast={dismissToast}
-        undoArchive={undoArchive}
-        showArchived={showArchived}
-      />,
-    )
+    const openForkSource = vi.fn()
+    const runtime = await SlotTestRuntime.create()
+    onTestFinished(() => runtime.dispose())
+    const locale = new LocaleRuntime(runtime.ctx)
+    locale.setLocale(translate === tEn ? 'en' : 'zh')
+    locale.register('workspace', { en, zh })
+    runtime.ctx.provide('locale', locale)
+    runtime.slots.installLocale(locale)
+    await runtime.root.declare({ 'shell.overlay': { kind: 'list', scope: 'root' } }, ToastFrame)
+    registerToasts(runtime.ctx, {
+      ...createWorkspaceViewStore(),
+      create: () => ({
+        ...instance, store: view,
+        getSnapshot: () => view.getSnapshot(),
+        subscribe: listener => view.subscribe(listener),
+      }),
+    }, {
+      undoArchive, showArchived, openForkSource,
+    })
+    runtime.slots.register({
+      name: 'shell.overlay', id: 'workspace.row-toast',
+      children: { 'workspace.toast': { kind: 'keyed', scope: 'root' } },
+      inject: () => ({ hooks: { toast }, dismissToast }),
+    }, RowActionToast)
+    runtime.renderRoot()
     let seq = 0
     const notify = (notice: RowToast): void => {
       act(() => { toast.set({ ...notice, seq: ++seq }) })
     }
-    return { dismissToast, undoArchive, showArchived, notify }
+    return { dismissToast, undoArchive, showArchived, openForkSource, notify, locale, view }
   }
 
-  it('renders nothing without a notice', () => {
-    toastSurface()
+  it('updates locale and archive actions without restarting the same notice', async () => {
+    const { notify, locale, view, dismissToast } = await toastSurface()
+    vi.useFakeTimers()
+    try {
+      notify({ kind: 'archived', sessionId: sid('one') })
+      const alert = screen.getByRole('alert')
+      act(() => { vi.advanceTimersByTime(3000) })
+      act(() => { locale.setLocale('en'); view.set({ ...view.getSnapshot(), archivedFilter: 'show' }) })
+      expect(screen.getByRole('alert')).toBe(alert)
+      expect(alert.textContent).toContain('Session archived')
+      expect(screen.queryByRole('button', { name: 'filter archived sessions' })).toBeNull()
+      act(() => { vi.advanceTimersByTime(3999) })
+      expect(dismissToast).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(dismissToast).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('renders nothing without a notice', async () => {
+    await toastSurface()
     expect(screen.queryByRole('alert')).toBeNull()
     expect(document.body.textContent).toBe('')
   })
 
-  it('the stopped-and-archived notice offers the same undo and filter actions under its own wording', () => {
-    const { undoArchive, notify } = toastSurface()
+  it.each([
+    ['zh', t, '请先打开原会话完成迁移，再创建分支', '打开原会话'],
+    ['en', tEn, 'Open the original session to complete migration before creating a branch.', 'Open original session'],
+  ] as const)('keeps the %s fork notice after menu unmount and opens only on its action', async (_locale, translate, message, action) => {
+    const { dismissToast, openForkSource, notify } = await toastSurface(undefined, translate)
+    const { state, setMenuOpen } = openMenu()
+    const forkSession = vi.fn((sessionId: SessionId) => { notify({ kind: 'forkRequiresOpen', sessionId }) })
+    const menu = render(<ForkSessionMenuItem {...menuRow(state)} t={translate} forkSession={forkSession} />)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: translate('menu.fork') }))
+    expect(setMenuOpen).toHaveBeenCalledWith(false)
+    expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(forkSession))
+    menu.unmount()
+
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    expect(screen.getByRole('alert').textContent).toContain(message)
+    expect(openForkSource).not.toHaveBeenCalled()
+    expect(forkSession).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: action }))
+    expect(dismissToast).toHaveBeenCalledOnce()
+    expect(openForkSource).toHaveBeenCalledExactlyOnceWith(sid('one'))
+    expect(callOrder(dismissToast)).toBeLessThan(callOrder(openForkSource))
+    expect(forkSession).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([t, tEn])('reports clipboard success and failure through the global toast', async (translate) => {
+    const { notify } = await toastSurface(undefined, translate)
+    notify({ kind: 'sessionIdCopied' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.sessionIdCopied'))
+    notify({ kind: 'sessionIdCopyFailed' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.sessionIdCopyFailed'))
+  })
+
+  it.each([t, tEn])('replaces other notices with plain shortcut fork failures and only keeps the latest', async (translate) => {
+    const { dismissToast, notify } = await toastSurface(undefined, translate)
+    vi.useFakeTimers()
+    try {
+      notify({ kind: 'archived', sessionId: sid('one') })
+      act(() => { vi.advanceTimersByTime(1000) })
+      notify({ kind: 'shortcutForkFailed', reason: 'unavailable' })
+      const first = screen.getByRole('alert')
+      expect(first.textContent).toBe(translate('shortcut.noCompletedTurn'))
+      expect(first.querySelector('svg')).toBeNull()
+      expect(first.querySelector('button')).toBeNull()
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(screen.getByRole('alert')).toBe(first)
+      notify({ kind: 'shortcutForkFailed', reason: 'failed' })
+      const retry = screen.getByRole('alert')
+      expect(retry).not.toBe(first)
+      expect(retry.textContent).toBe(translate('shortcut.forkFailed'))
+      expect(retry.querySelector('svg')).toBeNull()
+      act(() => { vi.advanceTimersByTime(3999) })
+      expect(screen.getAllByRole('alert')).toEqual([retry])
+      expect(dismissToast).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(dismissToast).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('alert')).toBeNull()
+
+      notify({ kind: 'shortcutForkFailed', reason: 'failed' })
+      act(() => { vi.advanceTimersByTime(1000) })
+      notify({ kind: 'sessionIdCopied' })
+      const latest = screen.getByRole('alert')
+      expect(latest.textContent).toBe(translate('toast.sessionIdCopied'))
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(screen.getAllByRole('alert')).toEqual([latest])
+      expect(dismissToast).toHaveBeenCalledOnce()
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the stopped-and-archived notice offers the same undo and filter actions under its own wording', async () => {
+    const { dismissToast, undoArchive, showArchived, notify } = await toastSurface()
     notify({ kind: 'stoppedAndArchived', sessionId: sid('one') })
     expect(screen.getByRole('alert').textContent).toBe('已停止并归档，可撤销或筛选已归档会话')
     fireEvent.click(screen.getByRole('button', { name: '撤销' }))
     expect(undoArchive).toHaveBeenCalledWith(sid('one'))
+    expect(callOrder(dismissToast)).toBeLessThan(callOrder(undoArchive))
+
+    notify({ kind: 'stoppedAndArchived', sessionId: sid('two') })
+    fireEvent.click(screen.getByRole('button', { name: '筛选已归档会话' }))
+    expect(dismissToast).toHaveBeenCalledTimes(2)
+    expect(showArchived).toHaveBeenCalledOnce()
+    expect(callOrder(dismissToast, 1)).toBeLessThan(callOrder(showArchived))
+    expect(undoArchive).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('the archived notice takes itself down, then undoes the archive or shows the archived rows', () => {
-    const { dismissToast, undoArchive, showArchived, notify } = toastSurface()
+  it('the archived notice takes itself down, then undoes the archive or shows the archived rows', async () => {
+    const { dismissToast, undoArchive, showArchived, notify } = await toastSurface()
     notify({ kind: 'archived', sessionId: sid('one') })
     expect(screen.getByRole('alert').textContent).toBe('会话已归档，可撤销或筛选已归档会话')
     fireEvent.click(screen.getByRole('button', { name: '撤销' }))
@@ -554,14 +721,14 @@ describe('RowActionToast', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('treats a view without a persisted filter as the hidden default and keeps the filter action', () => {
-    const { notify } = toastSurface({})
+  it('treats a view without a persisted filter as the hidden default and keeps the filter action', async () => {
+    const { notify } = await toastSurface({})
     notify({ kind: 'archived', sessionId: sid('one') })
     expect(screen.getByRole('alert').textContent).toBe('会话已归档，可撤销或筛选已归档会话')
   })
 
-  it.each(['show', 'only'] as const)('omits the filter action while the %s filter already shows archived rows', (archivedFilter) => {
-    const { notify } = toastSurface({ archivedFilter })
+  it.each(['show', 'only'] as const)('omits the filter action while the %s filter already shows archived rows', async (archivedFilter) => {
+    const { notify } = await toastSurface({ archivedFilter })
     notify({ kind: 'archived', sessionId: sid('one') })
     expect(screen.getByRole('alert').textContent).toBe('会话已归档，可撤销')
     expect(screen.queryByRole('button', { name: '筛选已归档会话' })).toBeNull()
@@ -573,10 +740,10 @@ describe('RowActionToast', () => {
     ['unpinFailed', '取消置顶失败，请稍后重试'],
     ['archivedNotOpenable', '已归档对话暂时无法查看，请取消归档后查看'],
     ['defaultWorkspaceFailed', '无法创建默认工作区，请通过“选择工作区”选择文件夹'],
-  ] as const)('shows the %s warning and takes it down when its hold ends', (kind, text) => {
+  ] as const)('shows the %s warning and takes it down when its hold ends', async (kind, text) => {
+    const { dismissToast, notify } = await toastSurface()
     vi.useFakeTimers()
     try {
-      const { dismissToast, notify } = toastSurface()
       notify({ kind })
       const alert = screen.getByRole('alert')
       expect(alert.textContent).toBe(text)
@@ -589,10 +756,10 @@ describe('RowActionToast', () => {
     }
   })
 
-  it('shows a refused creation with the Host reason and holds it as long as the archived notice', () => {
+  it('shows a refused creation with the Host reason and holds it as long as the archived notice', async () => {
+    const { dismissToast, notify } = await toastSurface()
     vi.useFakeTimers()
     try {
-      const { dismissToast, notify } = toastSurface()
       notify({ kind: 'createFailed', message: 'agent-preset/invalid: agent-presets: preset "broken" failed to mount' })
       const alert = screen.getByRole('alert')
       expect(alert.textContent).toBe('新建会话失败：agent-preset/invalid: agent-presets: preset "broken" failed to mount')
@@ -607,10 +774,10 @@ describe('RowActionToast', () => {
     }
   })
 
-  it('the archived notice holds longer than a plain notice, and a repeat restarts its hold', () => {
+  it('the archived notice holds longer than a plain notice, and a repeat restarts its hold', async () => {
+    const { dismissToast, notify } = await toastSurface()
     vi.useFakeTimers()
     try {
-      const { dismissToast, notify } = toastSurface()
       notify({ kind: 'archived', sessionId: sid('one') })
       act(() => { vi.advanceTimersByTime(4000) })
       expect(screen.getByRole('alert')).toBeTruthy()

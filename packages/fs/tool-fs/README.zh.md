@@ -54,16 +54,22 @@ kind: "package-reference"
 
 ### 配置
 
-所有键均为可选；默认值是随产品交付的读取上限。
+所有键均为可选。`read`、`readImage`、`write` 和 `edit` 开关默认为 `true`；将开关设为 `false` 可省略对应工具及其指导文本。允许关闭全部四个工具。启用 `readImage` 仍需要附件存储和支持图片输入的模型。关闭 `read` 时仍会校验读取上限。
 
 | 键 | 默认值 | 含义 |
 |---|---|---|
+| `read` | `true` | 注册 `read` 及其指导文本 |
+| `readImage` | `true` | 附件存储挂载时注册 `read_image` |
+| `write` | `true` | 注册 `write` 及其指导文本 |
+| `edit` | `true` | 注册 `edit` 及其指导文本 |
 | `readLimit` | `2000` | 一次 `read` 调用返回的默认和最大行数 |
 | `readMaxLineLength` | `2000` | 每行截断前保留的字符数 |
 | `readMaxBytes` | `51200` | 一次 `read` 调用所选行的字节上限；溢出时以「已达上限」footer 结束窗口 |
 | `readStreamMinSize` | `10485760` | 大于等于该大小或大小未知的文件采用流式读取，而不是整体加载到内存 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-fs)是每个受支持字段及其 JSDoc 的穷尽式真源。
+
+挂载 `fs-observation-policy` 且关闭 `read` 时，`write` 仍可创建文件，成功写入或编辑会记录本会话后续修改所需的版本。未观察过的已有文件仍受保护；关闭 `read` 不会放宽策略。其他文件系统读取方必须发出 `fs/observed`，已有文件才会成为已观察状态。
 
 ### 策略与沙箱行为
 
@@ -136,12 +142,12 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-组装时，每个指导段落通过 `ctx.tools.get(name, scope)` 检查对应工具，仅在该 agent 可见时输出。write 段落仅在 edit 可见时推荐 edit。三个工具都可用时，下方原文保持不变；限制的施加、解除和工具注册变化在下次组装时生效。同一检查适用于直接限制 agent 和 subagent 的 `toolFilter`，也适用于通过 `run_code` 暴露的 PTC 能力。 write/edit 中的先读后改句子描述观察策略，并非要求调用名为 `read` 的工具。隐藏 `read` 时仍保留这些句子：策略继续保护修改操作，其他产生观察记录的操作（例如 `str_replace_editor` 的 `command: view`）也能建立同一文件观察记录。工具可见性不会禁用该前置条件。
+组装时，每个指导段落通过 `ctx.tools.get(name, scope)` 检查对应工具，仅在该 agent 可见时输出。write 段落仅在 edit 可见时推荐 edit。三个工具都可用时，下方原文保持不变；限制的施加、解除和工具注册变化在下次组装时生效。同一检查适用于直接限制 agent 和从历史 descriptor 恢复的 subagent 过滤器，也适用于通过 `run_code` 暴露的 PTC 能力。 write/edit 中的先读后改句子描述观察策略，并非要求调用名为 `read` 的工具。隐藏 `read` 时仍保留这些句子：策略继续保护修改操作，其他产生观察记录的操作（例如 `str_replace_editor` 的 `command: view`）也能建立同一文件观察记录。工具可见性不会禁用该前置条件。
 
 ##### Read 指导
 
 ```markdown
-Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.
 ```
 
 ##### Write 指导

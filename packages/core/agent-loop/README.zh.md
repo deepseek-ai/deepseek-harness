@@ -109,9 +109,11 @@ const handle = await ctx.agents.create({
 
 创建是同一个受回滚保护的事务：构造私有会话、具象 agent 与带作用域上下文；等待可选 setup；进入两个注册表；宣告 `session/created`；等待串行 `agent/created` 监听器；随后释放已排队输入。创建运行时子 Agent 的调用方设置 `options.parentAgent`；调用方 Context 则单独拥有事务和存活句柄。Setup、commit、监听器失败或所有者 dispose 都会回滚已准备的资源。已送达的宣告仍可被观察，并有配对的销毁通知。Teardown 停止并排空驱动器、撤销作用域、关闭会话写路径、detach agent，再 detach 会话。每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
 
+工厂卸载时在整个作用域清理期间保留 inbox 投影与轮次边界投影，包括作用域内 abort 监听器发起取消的时刻，直到所有 Agent teardown 和启动任务结束。清理失败不会使这些投影提前释放。调用方卸载、工厂卸载和句柄释放等待同一次 teardown。
+
 ### 持久化集成
 
-循环是会话写句柄在生产环境中的获取点。挂载 `ctx.sessionPersistence` 后，`create`/`createAgent` 调用 `persistence.create(header)`——在发布之前存储持久身份并取得写所有权——并通过句柄追加构造 seed；`resume` 先调用 `persistence.open(id, 'write')`（排除同 id 的并发恢复），通过句柄读取物理上有效的日志，并为在轮次中途崩溃的日志把 `interruptedTurnClosers` 作为普通批次追加——语义崩溃修复是 agent 层的职责，而非存储入口。发布前的最后一刻，`appendUnstoredSuffix` 存储 setup 窗口期间追加的事件（seed 标记、委派策略记录），它们绝不会经由 `session/event` 重新发出。发布之后，挂载的后端按会话 id 把该会话的 `session/event` 批次、`session/flush` 屏障与 `session/disposed` 退役路由进活跃写句柄；循环只通过它拥有的句柄触碰存储。记忆化的 teardown 在循环提交会话的收尾事件之后关闭句柄——close 会排空任何已路由的缓冲——可证明地释放写所有权。没有后端时，会话只存在于内存中，其余一切不变。
+循环是会话写句柄在生产环境中的获取点。挂载 `ctx.sessionPersistence` 后，`create`/`createAgent` 调用 `persistence.create(header)`——在发布之前存储持久身份并取得写所有权——并通过句柄追加构造 seed；`resume` 先调用 `persistence.open(id, 'write')`（排除同 id 的并发恢复），通过句柄读取物理上有效的日志，并为在轮次中途崩溃的日志把 `interruptedTurnClosers` 作为普通批次追加——语义崩溃修复是 agent 层的职责，而非存储入口。发布前的最后一刻，`appendUnstoredSuffix` 存储 setup 窗口期间追加的事件（seed 标记、委派策略记录），它们绝不会经由 `session/event` 重新发出。发布之后，挂载的后端按会话 id 把该会话的 `session/event` 批次、`session/flush` 屏障与 `session/disposed` 退役路由进活跃写句柄；循环只通过它拥有的句柄触碰存储。在后端仍保持挂载时，teardown 会在驱动器提交收尾事件后关闭句柄；close 排空已路由的缓冲并释放写所有权。没有后端时，会话只存在于内存中，其余一切不变。
 
 ### 轮次与步骤流程
 
@@ -211,6 +213,7 @@ const handle = await ctx.agents.create({
 这些限制说明循环何时需要特别留意。它们是当前包约束，不是任务积压。
 
 - **分类是一元的**：安全性取决于比较同级调用或资源的调用必须保持独占（[原理](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.zh.md)）。
+- **根上下文关停的持久化**：存在活跃 Agent 时，关停根上下文可能使最终的 `turn/end` 仅留在内存中，未写入持久化日志。Agent teardown 完成不保证该事件已保存。
 - **此前已关闭的不一致历史**：失败步骤恢复不会改写已关闭历史轮次中尚无结果的调用。
 - **配置标签默认对应新会话**：省略 `sessionId` 时，每次启动都会创建新的 `${id}-session-<uuid>`；如需确切的恢复或创建行为，必须显式提供稳定的 `sessionId`，而 `resumeSessionId` 要求已有持久化历史。
 - **配置 agent 没有逐 agent persona 字段或 setup 钩子**：它们使用部署 persona；只有编程式 `ctx.agents.create()` / `resume()` 工厂选项支持带作用域的 persona 与工具组合。

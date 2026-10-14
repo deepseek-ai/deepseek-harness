@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-29-explicit-session-history-preparation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-29-explicit-session-history-preparation.md
+/agent-note-open-the-session-when-migration-is-required:
+  en: d409772933407317
+  zh: ac258a6d1743965f
+/agent-note-open-the-session-when-migration-is-required/problem:
+  en: ab63c8127d68d294
+  zh: d3f99489c96ff1d4
+/agent-note-open-the-session-when-migration-is-required/decision:
+  en: 32627d744a6e7410
+  zh: 2836a95ee5390111
+/agent-note-open-the-session-when-migration-is-required/alternatives-considered:
+  en: baea781018a49252
+  zh: bcc452029bf229fd
+/agent-note-open-the-session-when-migration-is-required/consequences:
+  en: 979eebb53a6bf711
+  zh: 013743b0b7a000ce

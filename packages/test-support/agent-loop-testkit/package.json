@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-agent-loop-testkit",
   "description": "Prerequisite mounting, production AgentLoop drivers, and Inbox stubs for tests",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },

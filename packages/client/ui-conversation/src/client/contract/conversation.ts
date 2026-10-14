@@ -8,6 +8,16 @@ import type {
 export interface ConversationMatchResult {
   readonly id: string
   readonly role: 'start' | 'update'
+  /**
+   * Claim this event on the Definition's target: no other Definition of the
+   * same target receives it, and that target's unmatched-event fallback does
+   * not run. Definitions of other targets and Definitions without a target
+   * still receive it. Two claims on one target, or a claim from a Definition
+   * without a target, throw during dispatch. A claim returned by the fallback
+   * itself has no effect, because the fallback runs only when no Definition of
+   * its target matched.
+   */
+  readonly exclusive?: true
 }
 
 /** Merge-extensible business values published against one Turn. */

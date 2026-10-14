@@ -1,0 +1,22 @@
+[
+  {
+    "stage": "first-workspace-after-dwell",
+    "exclusive": true
+  },
+  {
+    "stage": "workspace-to-workspace-immediate",
+    "exclusive": true
+  },
+  {
+    "stage": "workspace-to-session-immediate",
+    "exclusive": true
+  },
+  {
+    "stage": "session-to-workspace-immediate",
+    "exclusive": true
+  },
+  {
+    "stage": "list-reentered-after-dwell",
+    "exclusive": true
+  }
+]

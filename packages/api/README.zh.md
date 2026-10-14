@@ -28,6 +28,7 @@ kind: "package-group"
 |---|---|---|
 | [`remotes/`](remotes/README.zh.md) | 决定 Client 可以消费哪些 Host 能力与事件。 | — |
 | [`gateway/`](gateway/README.zh.md) | 承载类型化一元调用、带 Client 上行的多路复用流，以及转发的 Host 事件。 | `ctx.typertGateway` / `ctx.remote` |
+| [`remote-access/`](remote-access/README.zh.md) | 决定非 owner Peer 可以调用哪些 Remote 方法，过滤列表结果，并为每个 Peer 推送其访问快照。 | `ctx.remoteAccess` / `ctx.remote.remoteAccess` |
 | [`job-controller/`](job-controller/README.zh.md) | 把一个后台任务的观测 record 流式送到 Client。 | `ctx.jobController` / `ctx.remote.job` |
 | [`session-controller/`](session-controller/README.zh.md) | 拥有会话命令、历史记录流、实时控制状态与 Agent/Session 身份策略。 | `ctx.sessionController` / `ctx.remote.session` |
 | [`settings-controller/`](settings-controller/README.zh.md) | 拥有 settings 域各 seam 之上的配置界面读写。 | `ctx.settingsController`、`ctx.credentialsController` / `ctx.remote.settings`、`ctx.remote.credentials` |

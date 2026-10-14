@@ -1,4 +1,4 @@
-/** A standalone tool in a custom scoped patch reaches the PTC SDK and a persisted Session. */
+/** A standalone global tool from a custom Host patch reaches the PTC SDK and a persisted Session. */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,8 +32,7 @@ describe('web snapshot: standalone string editor through PTC', () => {
       compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
     })
-    expect((await scaffold.ctx.agentPresets.compositionInventory()).find(preset => preset.id === 'ptc')?.rows
-      .some(row => row.moduleName === '@deepseek-ai/dsh-tool-str-replace-editor')).toBe(true)
+    expect(scaffold.ctx.tools.schemas().some(tool => tool.name === 'str_replace_editor')).toBe(true)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)

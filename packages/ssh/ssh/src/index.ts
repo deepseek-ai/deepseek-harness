@@ -7,28 +7,40 @@ import { createConnection, type Socket } from 'node:net'
 import { Context, Service } from '@deepseek-ai/cordis'
 import schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { SshRpcPeer, SSH_PROTOCOL_VERSION } from './protocol.ts'
 import { helloSchema, type SshStreamEndpoint } from './schemas.ts'
 import { authenticateStream } from './stream-security.ts'
 
 type Hello = z.infer<typeof helloSchema>
 
+/** Installed helper invocation; script deployments may also install a PTC bootstrap. */
+export type HelperLaunch = {
+  /** Run the installed script with a separately installed Node executable. */
+  kind: 'node-script'
+  /** Absolute remote Node executable. */
+  node: string
+  /** Absolute remote PTC bootstrap; requires bootstrapHash. */
+  bootstrapPath?: string
+  /** Lowercase SHA-256 of bootstrapPath; requires that path. */
+  bootstrapHash?: string
+} | {
+  /** Run the helper executable with its embedded Node and PTC worker. */
+  kind: 'executable'
+}
+
 /** Deployment-owned SSH identity and installed helper; no model argument selects these values. */
 export interface Config {
   /** OpenSSH host alias, including its existing user, key and known-host configuration. */
   host: string
-  /** Absolute remote Node executable. */
-  node: string
+  /** Explicit script or self-contained executable invocation. */
+  launch: HelperLaunch
   /** Absolute path to the installed, bundled helper entry. */
   helper: string
   /** SHA-256 of that bundled helper; mismatches refuse the connection. */
   helperHash: string
   /** Absolute remote default workspace. */
   workspace: string
-  /** Optional preinstalled built PTC entry, paired with its expected digest. */
-  bootstrapPath?: string
-  /** SHA-256 of bootstrapPath; both fields must be supplied together. */
-  bootstrapHash?: string
   /** Connection and administrative-request deadline, at most 2,147,483,647 milliseconds. */
   requestTimeoutMs?: number
   /** Maximum JSON payload bytes per helper request or response. */
@@ -46,9 +58,12 @@ declare module '@deepseek-ai/cordis' {
 /** One non-reconnecting SSH session; loss invalidates all active operations. */
 export class SshConnection extends Service {
   static Config: schema<Config> = schema.object({
-    host: schema.string().required(), node: schema.string().required(), helper: schema.string().required(),
+    host: schema.string().required(), helper: schema.string().required(),
+    launch: schema.union([
+      schema.object({ kind: schema.const('node-script').required(), node: schema.string().required(), bootstrapPath: schema.string(), bootstrapHash: schema.string() }),
+      schema.object({ kind: schema.const('executable').required() }),
+    ]).required(),
     helperHash: schema.string().required(), workspace: schema.string().required(),
-    bootstrapPath: schema.string(), bootstrapHash: schema.string(),
     requestTimeoutMs: schema.number().default(30_000), maxFrameBytes: schema.number().default(64 * 1024 * 1024),
     maxPending: schema.number().default(128), leaseMs: schema.number().default(30_000),
   })
@@ -67,7 +82,7 @@ export class SshConnection extends Service {
   private failure: Error | undefined
   private sockets = new Set<Socket>()
   private nextSocket = 0
-  private readonly config: Required<Omit<Config, 'bootstrapPath' | 'bootstrapHash'>> & Pick<Config, 'bootstrapPath' | 'bootstrapHash'>
+  private readonly config: Required<Config>
   private remote: Hello | undefined
 
   constructor(ctx: Context, config: Config) {
@@ -75,13 +90,17 @@ export class SshConnection extends Service {
     if (process.platform !== 'linux' && process.platform !== 'darwin') throw new Error('SSH runtime requires a POSIX client')
     this.config = z.object({
       host: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.@-]*$/),
-      node: z.string().startsWith('/'), helper: z.string().startsWith('/'), helperHash: z.string().regex(/^[0-9a-f]{64}$/),
+      launch: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('node-script'), node: z.string().startsWith('/'),
+          bootstrapPath: z.string().startsWith('/').optional(), bootstrapHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+        }).strict().refine(value => (value.bootstrapPath === undefined) === (value.bootstrapHash === undefined), 'bootstrapPath and bootstrapHash must be paired'),
+        z.object({ kind: z.literal('executable') }).strict(),
+      ]),
+      helper: z.string().startsWith('/'), helperHash: z.string().regex(/^[0-9a-f]{64}$/),
       workspace: z.string().startsWith('/'), requestTimeoutMs: z.number().int().positive().max(2_147_483_647),
-      bootstrapPath: z.string().startsWith('/').optional(), bootstrapHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
       maxFrameBytes: z.number().int().positive().max(64 * 1024 * 1024), maxPending: z.number().int().positive().max(128),
       leaseMs: z.number().int().min(3000).max(600_000),
-    }).refine(value => (value.bootstrapPath === undefined) === (value.bootstrapHash === undefined), 'bootstrapPath and bootstrapHash must be paired')
-      .parse(config) as typeof this.config
+    }).strict().parse(config) as Required<Config>
     this.ready = this.start()
     // Startup uses Node I/O, local validation, and Error-valued RPC failures.
     void this.ready.catch((error: unknown) => { this.fail(error as Error) })
@@ -91,16 +110,18 @@ export class SshConnection extends Service {
   /** Hold plugin readiness until the remote identity and helper digest are verified. */
   async [Service.init](): Promise<void> { await this.ready }
 
-  /** Verified remote Node executable for the paired PTC runtime. */
-  get nodeExecutable(): string {
+  /** Verified remote PTC launch configuration; script deployments require a verified bootstrap. */
+  get ptcLaunch(): { kind: 'embedded'; executable: string } | { kind: 'node-script'; executable: string; bootstrapPath: string } {
     if (this.remote === undefined) throw new Error('SSH helper is not ready')
-    return this.remote.node
-  }
-
-  /** Verified preinstalled PTC entry; unconfigured runtimes fail before program execution. */
-  get bootstrapPath(): string {
-    if (this.remote === undefined || this.config.bootstrapPath === undefined) throw new Error('SSH PTC requires a verified bootstrapPath and bootstrapHash')
-    return this.config.bootstrapPath
+    const launch = this.config.launch
+    switch (launch.kind) {
+      case 'executable': return { kind: 'embedded', executable: this.remote.executable }
+      case 'node-script':
+        if (launch.bootstrapPath === undefined) throw new Error('SSH PTC requires a verified bootstrapPath and bootstrapHash')
+        return { kind: 'node-script', executable: this.remote.executable, bootstrapPath: launch.bootstrapPath }
+      /* v8 ignore next -- Config parsing admits only these two launch kinds. */
+      default: return assertNever(launch)
+    }
   }
 
   /**
@@ -259,7 +280,22 @@ export class SshConnection extends Service {
     this.directory = await mkdtemp('/tmp/dsh-ssh-')
     if (this.closed) throw new Error('SSH connection closed before startup')
     const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
-    const command = [this.config.node, '--disable-sigusr1', this.config.helper].map(quote).join(' ')
+    const launch = this.config.launch
+    let command: string
+    let bootstrapPath: string | undefined
+    let bootstrapHash: string | undefined
+    switch (launch.kind) {
+      case 'node-script':
+        command = [launch.node, '--disable-sigusr1', this.config.helper].map(quote).join(' ')
+        bootstrapPath = launch.bootstrapPath
+        bootstrapHash = launch.bootstrapHash
+        break
+      case 'executable':
+        command = `NODE_OPTIONS='--disable-sigusr1' ${quote(this.config.helper)}`
+        break
+      /* v8 ignore next -- Config parsing admits only these two launch kinds. */
+      default: return assertNever(launch)
+    }
     const child = spawn('ssh', [
       '-T', '-M', '-S', this.controlPath(), '-o', 'ControlPersist=no', '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
@@ -275,10 +311,11 @@ export class SshConnection extends Service {
     rpc.once('closed', (error) => { this.fail(error as Error) })
     const hello = await rpc.request('hello', {
       protocol: SSH_PROTOCOL_VERSION, workspace: this.config.workspace, leaseMs: this.config.leaseMs,
-      ...(this.config.bootstrapPath === undefined ? {} : { bootstrapPath: this.config.bootstrapPath }),
+      ...(bootstrapPath === undefined ? {} : { bootstrapPath }),
     }, helloSchema, AbortSignal.timeout(this.config.requestTimeoutMs))
     if (hello.hash !== this.config.helperHash) throw new Error('SSH helper digest differs from the configured artifact')
-    if (hello.bootstrapHash !== this.config.bootstrapHash) throw new Error('SSH PTC bootstrap digest differs from the configured artifact')
+    if (hello.kind !== launch.kind) throw new Error('SSH helper runtime differs from the configured launch kind')
+    if (hello.bootstrapHash !== bootstrapHash) throw new Error('SSH PTC bootstrap digest differs from the configured artifact')
     this.remote = hello
     let heartbeatPending: Promise<unknown> | undefined
     this.heartbeat = setInterval(() => {

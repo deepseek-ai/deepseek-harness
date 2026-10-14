@@ -243,14 +243,6 @@ describe('product package use', () => {
     expect(failures(root, declarations())).toContain(`${candidate} must declare dsh.bundle.patch`)
   })
 
-  it('rejects an on-demand contribution whose preset target is missing', () => {
-    const root = fixture()
-    pkg(root, candidateDir, candidate, { dsh: { bundle: { patch: './cordis.patch.yml' } } })
-    write(root, `${candidateDir}/cordis.patch.yml`, [{ preset: 'missing-preset', insert: [{ id: 'optional', name: core }] }])
-    profiles(root, [], [candidate])
-    expect(() => verifyProductUse(root, {})).toThrow(/missing-preset/)
-  })
-
   it('rejects a missing workspace source mapping instead of consulting built exports', () => {
     const root = fixture()
     pkg(root, candidateDir, candidate)

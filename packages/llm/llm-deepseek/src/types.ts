@@ -95,12 +95,22 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
   /** Report extension fields omitted from one request because the merged request failed to serialize. */
   onExtensionsOmitted?: (detail: { provider: string; model: string; fields: readonly string[]; error: unknown }) => void
+  /** Report an extension acceptance failure after HTTP 2xx; the request continues. */
+  onExtensionsUnaccepted?: (detail: { provider: string; model: string; error: unknown }) => void
   /** Provider label for selectors; omission uses the protocol family name. */
   providerName?: string
   /** Provider-owned catalog availability; omission exposes no discovery entries. */
   discoverModels?: (provider: string) => Promise<LlmModelInfo[]>
   /** Current validated connection facts; called once per operation. */
   options: () => Connection
+  /**
+   * Resolve the connection for one exact-model lookup or prepared call, for
+   * example after a provider-owned catalog load; must settle promptly after
+   * `signal` aborts. Omission uses {@link options}.
+   */
+  connect?: (signal?: AbortSignal) => Promise<Connection>
+  /** Refuse a model before any network I/O by throwing an `LlmError`; omission admits every model. */
+  admit?: (connection: Connection, model: string) => void
   /** Resolve authentication from this request's connection snapshot; never re-read the endpoint. */
   resolveAuth: (connection: Connection) => Promise<DeepSeekRequestAuth>
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */

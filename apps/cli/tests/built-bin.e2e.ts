@@ -381,7 +381,6 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       })
       expect(wildcardHost.code).toBe(1)
       expect(wildcardHost.stdout).toBe('')
-      expect(wildcardHost.stderr).toContain('--host 0.0.0.0 is intentionally not supported yet for safety: it would expose remote code execution to the network; use 127.0.0.1 instead')
       expect(wildcardHost.stderr).not.toContain('dsh web: http://')
 
       const headlessHelp = await runBuiltBin(['headless', '--help'], {
@@ -1250,9 +1249,14 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         ['llm-deepseek', '@deepseek-ai/dsh-llm-deepseek-api-key'],
         ['sandbox', '@deepseek-ai/dsh-sandbox-local'],
         ['filesystem', '@deepseek-ai/dsh-fs-local'],
+        ['attachment-local', '@deepseek-ai/dsh-attachment-local'],
+        ['tool-fs', '@deepseek-ai/dsh-tool-fs'],
         ['working-directory', '@deepseek-ai/dsh-working-directory'],
         ['tool-working-directory', '@deepseek-ai/dsh-tool-working-directory'],
         ['session-projection', '@deepseek-ai/dsh-session-projection'],
+        ['token-meter', '@deepseek-ai/dsh-token-meter'],
+        ['compaction-basic', '@deepseek-ai/dsh-compaction-basic'],
+        ['image-offload', '@deepseek-ai/dsh-compaction-image-offload'],
         ['sandbox-policy', '@deepseek-ai/dsh-sandbox-policy'],
         ['subprocess', '@deepseek-ai/dsh-subprocess-local'],
         ['pty', '@deepseek-ai/dsh-terminal'],

@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-session-persistence-jsonl
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import {
   createSessionFormatCatalogWithChildren,
@@ -19,6 +19,7 @@ import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { createHash, randomBytes } from 'node:crypto'
+import pLimit, { type LimitFunction } from 'p-limit'
 import {
   SessionPersistence, SessionPersistenceRevision, SessionFormatUnsupportedError,
   SessionPersistenceCorruptionError,
@@ -86,7 +87,10 @@ export const JsonlCompressionSchema: z<JsonlCompression> = z.union([
   z.const('none'),
 ]).default(DEFAULT_COMPRESSION)
 
-/** Plugin config for the JSONL backend's root and physical encoding. */
+/** Default maximum listing filesystem operations in flight per backend. */
+const DEFAULT_LIST_CONCURRENCY = 3
+
+/** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
   /**
    * Root directory for all session files. Required (no default): a default of
@@ -98,6 +102,18 @@ export interface Config {
   root: string
   /** Physical encoding; defaults to checksummed Zstandard frames. */
   compression?: JsonlCompression
+  /**
+   * Maximum directory, header, and stat reads in flight across all concurrent
+   * listings of this backend (`list()`, the root encoding check, and historical
+   * fingerprints). Defaults to 3.
+   */
+  listConcurrency?: number
+}
+
+/** Logical header paired with the catalog's selected physical-generation classification. */
+interface GenerationHeader {
+  readonly header: SessionHeader
+  readonly formatStatus: NonNullable<SessionPersistenceSnapshot['formatStatus']>
 }
 
 /** One stored event graph whose producer has established immutable sharing. */
@@ -196,6 +212,36 @@ function isENOENT(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
+/**
+ * Run `task` over `items` through the backend's shared listing limiter and
+ * settle every call. Callers consume the outcomes in input order, so the first
+ * failure they report matches a sequential loop whatever the completion order.
+ * A limited task must never wait on the same limiter.
+ * @param limit - the backend's shared listing limiter.
+ * @param items - inputs in their sequential order.
+ * @param task - per-item operation.
+ * @returns one outcome per item, in input order.
+ */
+function settleLimited<T, R>(
+  limit: LimitFunction,
+  items: readonly T[],
+  task: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  return Promise.allSettled(items.map(item => limit(() => task(item))))
+}
+
+/**
+ * Unwrap outcomes from {@link settleLimited}, rethrowing the first rejection in input order.
+ * @param outcomes - outcomes in input order.
+ * @returns the fulfilled values in input order.
+ */
+function settledValues<R>(outcomes: readonly PromiseSettledResult<R>[]): R[] {
+  return outcomes.map((outcome) => {
+    if (outcome.status === 'rejected') throw outcome.reason
+    return outcome.value
+  })
+}
+
 /** Whether a filesystem-owned failure should retain its original errno and path. */
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return typeof (error as NodeJS.ErrnoException | null)?.code === 'string'
@@ -237,24 +283,24 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 }
 
 /**
- * The JSONL persistence backend. Load as a plugin; it registers as
- * `ctx.sessionPersistence`. Sessions materialize lazily: a created session is
+ * The JSONL backend registered as `ctx.sessionPersistence` by the plugin.
+ * Sessions materialize lazily: a created session is
  * visible to this process immediately, reaches disk on its first append or
  * flush, and never existed if the process crashes before that.
  */
 class JsonlSessionPersistence extends SessionPersistence {
-  static Config: z<Config> = z.object({
-    root: z.string().required(),
-    compression: JsonlCompressionSchema,
-  })
-
   /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
 
   private root: string
   private compression: JsonlCompression
+  /**
+   * Bounds directory, header, and stat I/O across every concurrent listing of
+   * this backend (`list()`, the root encoding check, historical fingerprints).
+   * Queued tasks of a cancelled listing run and reject at their signal check.
+   */
+  private readonly listLimit: LimitFunction
   private rootEncodingCheck: Promise<void> | undefined
-  private readonly tracker = new JsonlBackendTracker(this.name)
   private readonly generationFormat: Omit<JsonlGenerationFormatAdapter, 'createRestore'>
   /**
    * Bounded LRU of parsed, validated stored logs keyed by session id and
@@ -267,7 +313,7 @@ class JsonlSessionPersistence extends SessionPersistence {
   /** One joinable decode/migration operation per selected historical Session file revision. */
   private readonly migrationPreparations = new Map<SessionId, MigrationPreparation>()
 
-  constructor(ctx: Context, public config: Config) {
+  constructor(ctx: Context, public config: Config, private readonly tracker: JsonlBackendTracker) {
     super(ctx)
     /* v8 ignore next 5 -- generated catalog and Session source share one build-time version owner. */
     if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
@@ -279,6 +325,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     // Resolve once so later process.cwd() changes cannot split one backend across roots.
     this.root = resolve(config.root)
     this.compression = config.compression ?? DEFAULT_COMPRESSION
+    this.listLimit = pLimit(config.listConcurrency ?? DEFAULT_LIST_CONCURRENCY)
     this.generationFormat = {
       currentVersion: sessionFormatCatalog.currentVersion,
       encodeHeader: (header, inheritedEventCount) =>
@@ -288,7 +335,6 @@ class JsonlSessionPersistence extends SessionPersistence {
         error instanceof SessionFormatUnsupportedMigrationError,
     }
     this.assertUsableRoot()
-    this.tracker.install(ctx)
   }
 
   /**
@@ -447,13 +493,13 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     const selected = await this.findLog(id, options?.signal)
     if (selected === undefined) return undefined
-    const header = await this.readGenerationHeader(selected, id, options?.signal)
-    if (header === undefined) return undefined
+    const metadata = await this.readGenerationHeader(selected, id, options?.signal)
+    if (metadata === undefined) return undefined
     try {
       const identity = await stat(selected.sourcePath, { bigint: true })
       options?.signal?.throwIfAborted()
       return {
-        header,
+        ...metadata,
         revision: selected.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${await this.historicalCorpusRevision(options?.signal)}`)
           : fileRevision(identity),
@@ -483,23 +529,30 @@ class JsonlSessionPersistence extends SessionPersistence {
     const artifacts = await this.listArtifacts(signal)
     const corpusRevision = artifacts.some(artifact => artifact.sourceVersion < SESSION_FORMAT_VERSION)
       ? await this.historicalCorpusRevision(signal) : undefined
-    for (const artifact of artifacts) {
+    const statted = settledValues(await settleLimited(this.listLimit, artifacts, async (artifact) => {
       signal?.throwIfAborted()
       try {
         const identity = await stat(artifact.path, { bigint: true })
         signal?.throwIfAborted()
-        listed.add(artifact.header.id)
-        snapshots.push({
-          header: artifact.header,
-          revision: artifact.sourceVersion < SESSION_FORMAT_VERSION
-            ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
-            : fileRevision(identity),
-          sizeBytes: Number(identity.size),
-        })
+        return { artifact, identity }
       } catch (error: unknown) {
         signal?.throwIfAborted()
         if (!isENOENT(error)) throw error
+        return undefined
       }
+    }))
+    for (const entry of statted) {
+      if (entry === undefined) continue
+      const { artifact, identity } = entry
+      listed.add(artifact.header.id)
+      snapshots.push({
+        header: artifact.header,
+        formatStatus: artifact.formatStatus,
+        revision: artifact.sourceVersion < SESSION_FORMAT_VERSION
+          ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
+          : fileRevision(identity),
+        sizeBytes: Number(identity.size),
+      })
     }
     for (const [id, entry] of pending) {
       if (!listed.has(id)) snapshots.push({ header: entry.header, revision: entry.revision })
@@ -1023,61 +1076,92 @@ class JsonlSessionPersistence extends SessionPersistence {
 
   /** Enumerate selected physical generations without interpreting their headers or bodies. */
   private async listGenerations(signal?: AbortSignal): Promise<ResolvedJsonlGeneration[]> {
-    const sources: ResolvedJsonlGeneration[] = []
-    for (const project of await this.listProjectDirs(signal)) {
-      for (const dir of await this.listSessionDirs(project, signal)) {
-        signal?.throwIfAborted()
-        const selected = await this.resolveGenerationInDirectory(dir, signal)
-        if (selected !== undefined) sources.push(selected)
+    const selected = await this.mapSessionDirectories((dir) => {
+      signal?.throwIfAborted()
+      return this.resolveGenerationInDirectory(dir, signal)
+    }, signal)
+    return selected.filter(source => source !== undefined)
+  }
+
+  /**
+   * Apply `task` to every Session directory through the shared listing
+   * limiter. Results and the first failure follow the sequential
+   * project-then-directory order; a project whose listing fails ends the
+   * traversal after the directories of the projects before it.
+   * @param task - per-directory operation; must not wait on the listing limiter.
+   * @param signal - optional cancellation for directory listings.
+   * @returns per-directory results in traversal order.
+   */
+  private async mapSessionDirectories<R>(
+    task: (dir: string) => Promise<R>,
+    signal?: AbortSignal,
+  ): Promise<R[]> {
+    const limit = this.listLimit
+    // The root read counts against the same bound as every other listing read.
+    const projectDirs = await limit(() => this.listProjectDirs(signal))
+    const projects = await settleLimited(limit, projectDirs, project => this.listSessionDirs(project, signal))
+    const dirs: string[] = []
+    let projectFailure: PromiseRejectedResult | undefined
+    for (const outcome of projects) {
+      if (outcome.status === 'rejected') {
+        projectFailure = outcome
+        break
       }
+      // Appended one by one: spreading a large project as call arguments exceeds the engine's argument limit.
+      for (const dir of outcome.value) dirs.push(dir)
     }
-    return sources
+    const results = settledValues(await settleLimited(limit, dirs, task))
+    if (projectFailure !== undefined) throw projectFailure.reason
+    return results
   }
 
   /** Historical logical events depend on the corpus, including members with unreadable headers. */
   private async historicalCorpusRevision(signal?: AbortSignal): Promise<string> {
     const paths = (await this.listGenerations(signal)).map(source => source.sourcePath).sort()
-    const hash = createHash('sha256')
-    for (const path of paths) {
+    const entries = settledValues(await settleLimited(this.listLimit, paths, async (path) => {
       signal?.throwIfAborted()
-      let revision: string
       try {
-        revision = fileRevision(await stat(path, { bigint: true }))
+        return { path, revision: fileRevision(await stat(path, { bigint: true })) }
       } catch (error: unknown) {
         if (!isENOENT(error)) throw error
-        revision = 'missing'
+        return { path, revision: 'missing' }
       }
-      hash.update(JSON.stringify([path, revision]))
-    }
+    }))
+    const hash = createHash('sha256')
+    for (const { path, revision } of entries) hash.update(JSON.stringify([path, revision]))
     signal?.throwIfAborted()
     return hash.digest('hex')
   }
 
   private async listArtifacts(
     signal?: AbortSignal,
-  ): Promise<Array<{ header: SessionHeader; path: string; sourceVersion: number }>> {
+  ): Promise<Array<GenerationHeader & { path: string; sourceVersion: number }>> {
     signal?.throwIfAborted()
     await this.ensureRootEncoding()
     signal?.throwIfAborted()
-    const artifacts: Array<{ header: SessionHeader; path: string; sourceVersion: number }> = []
-    const ids = new Set<SessionId>()
-    for (const selected of await this.listGenerations(signal)) {
+    const generations = await this.listGenerations(signal)
+    const headers = await settleLimited(this.listLimit, generations, async (selected) => {
       signal?.throwIfAborted()
-      let header: SessionHeader | undefined
       try {
-        header = await this.readGenerationHeader(selected, undefined, signal)
+        return { selected, metadata: await this.readGenerationHeader(selected, undefined, signal) }
       } catch (error: unknown) {
-        if (error instanceof SessionFormatUnsupportedError || error instanceof SessionPersistenceCorruptionError) continue
+        if (error instanceof SessionFormatUnsupportedError || error instanceof SessionPersistenceCorruptionError) {
+          return { selected, metadata: undefined }
+        }
         throw error
       }
-      if (header === undefined) {
-        continue
+    })
+    const artifacts: Array<GenerationHeader & { path: string; sourceVersion: number }> = []
+    const ids = new Set<SessionId>()
+    for (const outcome of headers) {
+      if (outcome.status === 'rejected') throw outcome.reason
+      const { selected, metadata } = outcome.value
+      if (metadata === undefined) continue
+      if (ids.has(metadata.header.id)) {
+        throw new Error(`duplicate JSONL session id "${metadata.header.id}" appears in multiple project directories`)
       }
-      if (ids.has(header.id)) {
-        throw new Error(`duplicate JSONL session id "${header.id}" appears in multiple project directories`)
-      }
-      ids.add(header.id)
-      artifacts.push({ header, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
+      ids.add(metadata.header.id)
+      artifacts.push({ ...metadata, path: selected.sourcePath, sourceVersion: selected.sourceVersion })
     }
     signal?.throwIfAborted()
     return artifacts
@@ -1088,7 +1172,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     selected: ResolvedJsonlGeneration,
     expectedId?: SessionId,
     signal?: AbortSignal,
-  ): Promise<SessionHeader | undefined> {
+  ): Promise<GenerationHeader | undefined> {
     let first: string | undefined
     try {
       first = this.compression === 'zstd'
@@ -1136,7 +1220,10 @@ class JsonlSessionPersistence extends SessionPersistence {
       expectedId,
       signal,
     )
-    return header
+    return {
+      header,
+      formatStatus: result.status,
+    }
   }
 
   /** Convert format-catalog string identities to current branded Session metadata. */
@@ -1610,12 +1697,10 @@ class JsonlSessionPersistence extends SessionPersistence {
   }
 
   private async checkRootEncoding(): Promise<void> {
-    for (const project of await this.listProjectDirs()) {
-      for (const dir of await this.listSessionDirs(project)) {
-        const incompatible = await this.findOppositeGenerationInDirectory(dir)
-        if (incompatible !== undefined) throw this.encodingMismatch(incompatible)
-      }
-    }
+    await this.mapSessionDirectories(async (dir) => {
+      const incompatible = await this.findOppositeGenerationInDirectory(dir)
+      if (incompatible !== undefined) throw this.encodingMismatch(incompatible)
+    })
   }
 
   private async rejectLegacyFlatArtifact(
@@ -1716,10 +1801,37 @@ class JsonlSessionPersistence extends SessionPersistence {
   /* v8 ignore stop */
 }
 
-/**
- * One open channel onto a JSONL-stored session: the shared storage-handle
- * scaffolding over this backend's file primitives. Reads re-scan the artifact
- * under the stable-read loop.
- */
+/** JSONL persistence plugin label. */
+export const name = 'session-persistence-jsonl'
 
-export default JsonlSessionPersistence
+/** Loader schema for the backend's root, physical encoding, and listing concurrency. */
+export const Config: z<Config> = z.object({
+  root: z.string().required(),
+  compression: JsonlCompressionSchema,
+  listConcurrency: z.natural().min(1).default(DEFAULT_LIST_CONCURRENCY),
+})
+
+/**
+ * Mount persistence with live routing and handles retained through the
+ * consumer unloads triggered by removing this provider. Consumers must own
+ * cleanup in their injecting scope; concurrent root disposal is not ordered.
+ * @param ctx - the owning plugin context.
+ * @param config - the storage root, physical encoding, and listing concurrency.
+ * @returns resolves when the service is ready.
+ */
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  let service!: Fiber
+  // Keep this generator synchronous so thenable disposers are registered as functions, not awaited.
+  ctx.effect(function* () {
+    const tracker = new JsonlBackendTracker(name)
+    yield tracker.install(ctx)
+    service = ctx.plugin({
+      name: 'session-persistence-jsonl-service',
+      apply(serviceCtx: Context) {
+        new JsonlSessionPersistence(serviceCtx, config, tracker)
+      },
+    })
+    yield service.dispose
+  }, 'session-persistence-jsonl resources')
+  await service.await()
+}

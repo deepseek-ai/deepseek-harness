@@ -43,7 +43,7 @@ Status: implemented
 
 Web 在追加的历史内节点自己的位置呈现它。`SystemPromptNode` 携带 `{ seq, time, turn, step, text, update }`，其中 `update` 对已加载窗口内跟在更早系统节点之后的追加 `system/message` 为真。Chat 把非空的更新渲染为一张折叠的 `system-prompt` 卡片，标题取自 locale 键 `message.systemPromptUpdate`，同一 turn 与 step 内的 `request/header` 不会重复提示词卡片；`inspectRequestPrompt` 对跟在更新之后的 header 不报告系统变更。Trajectory 把跟在已加载请求 header 之后的更新折叠为一条合成的请求 header 事实，`promptChange.kind = 'system'`，因此之后的请求无需真实的 header 变更就能显示有效提示词。已加载窗口缺少更早的系统节点时，更新按初始提示词呈现。转录投影像对待所有 `system/message` 一样跳过它。
 
-`dsh-token-meter` 把 surface 顺序中最后一个非空且存活的系统节点计入 `contextBreakdown.systemTokens`；其余可见节点（包括被取代的提示词）计入 `messageTokens`。休眠空节点被忽略。每次替换后，两者之和都等于固定启发式 surface 总量，无论是否存在影子价 claim。紧凑的保留条目复用测量服务的 surface 规划器：状态和转换成本为 O(当前保留 surface)，不是 O(1) 或 O(完整历史日志)。被替换条目和消息正文被丢弃，状态版本 4 拒绝标量检查点。后续 assistant 用量中的 `cacheReadTokens` 仍是可观察的提供方缓存效果。
+`dsh-token-meter` 把 surface 顺序中最后一个非空且存活的系统节点计入 `contextBreakdown.systemTokens`；其余可见节点（包括被取代的提示词）计入 `messageTokens`。休眠空节点被忽略。该单元只保留存活的系统提示词和一个 surface 运行总量，并依据紧邻的影子价事件为替换定价（[系统提示词状态](../architecture/2026-10-13-context-breakdown-system-prompt-state.zh.md)）。后续 assistant 用量中的 `cacheReadTokens` 仍是可观察的提供方缓存效果。
 
 Trajectory 选择前一条真实 header 与前一条合成系统 header 中较新的一个作为比较状态。真实 header 拥有配置与工具；追加的提示词可以在没有另一条真实 header 时推进该状态。只比较真实 header 会在 A → B → C 序列中把 A 而不是 B 报告为先前提示词。
 
@@ -73,7 +73,7 @@ Chat 与 Trajectory 通过纯操作 `uiConversation.inspectSystemPrompt` 解释�
 
 **仅清除最新系统节点。** 空节点不投影为消息，因此更早的提示词会重新生效。清除所有生效版本才能保留空渲染文本的含义，同时不删除对话历史。被否决。
 
-**只保留标量总量或提示词祖先链。** 标量影子价无法判断最新提示词从哪个分类消失，也无法恢复其前一个版本。仅有提示词条目无法定位任意非提示词替换端点；`sourceEventSeqs` 还可能引用存活提示词，改写后的事件序号顺序也不同于 surface 顺序。保留紧凑的当前 surface 条目可以复用现有规划器，无需完整日志访问、第二套验证器或消费方专用持久事件。把所有存活提示词之和归入系统数字会改变有效提示词的含义，而不是修复分类。
+**只保留标量总量。** 标量影子价无法判断最新提示词从哪个分类消失，也无法恢复其前一个版本。把所有存活提示词之和归入系统数字会改变有效提示词的含义，而不是修复分类。保留系统提示词并结合影子价事件的 `shadowedSeqs` 可以回答这两个问题；[系统提示词状态说明](../architecture/2026-10-13-context-breakdown-system-prompt-state.zh.md)记录了为何以这种方式取代位置条目。
 
 ## Consequences
 

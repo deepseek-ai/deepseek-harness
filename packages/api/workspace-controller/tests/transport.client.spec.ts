@@ -183,6 +183,38 @@ describe('Workspace state stream', () => {
     expect(streamStates(mock)).toEqual(['cancelled'])
   })
 
+  it('applies a replace increment in place, so a Workspace hidden and shown again never errors or reconnects', async ({ mock, start }) => {
+    const { remote } = await gatewayClient(mock, start)
+    mock.stream(FOLLOW, openStream([baseline('one', 'two')]))
+    const model = new ClientWorkspaceModel(remote.workspace)
+    const carrierFailed = vi.fn(() => { model.handleCarrierFailure() })
+    const failed = vi.fn((error: unknown) => { model.handleStreamFailure(error) })
+    const stream = createWorkspaceStateStream(remote, { accept: model, carrierFailed, failed })
+    const states = new Set<string>()
+    model.subscribe(() => { states.add(model.getSnapshot().state) })
+    const ids = (): string[] => model.getSnapshot().items.map(item => item.workspaceId).sort()
+    const replace = (...workspaceIds: string[]): WorkspaceFollowFrame => ({ type: 'replace', value: baseline(...workspaceIds).value })
+
+    stream.start()
+    await vi.waitFor(() => { expect(ids()).toEqual(['one', 'two']) })
+    // Access to `two` is revoked, restored through a replace, revoked again, and restored through an upsert.
+    mock.streams.push(FOLLOW, replace('one'))
+    await vi.waitFor(() => { expect(ids()).toEqual(['one']) })
+    mock.streams.push(FOLLOW, replace('one', 'two'))
+    await vi.waitFor(() => { expect(ids()).toEqual(['one', 'two']) })
+    mock.streams.push(FOLLOW, replace('one'))
+    await vi.waitFor(() => { expect(ids()).toEqual(['one']) })
+    mock.streams.push(FOLLOW, { type: 'upsert', workspace: workspace('two') })
+    await vi.waitFor(() => { expect(ids()).toEqual(['one', 'two']) })
+
+    expect(states).not.toContain('error')
+    expect(model.getSnapshot()).toMatchObject({ phase: 'ready', state: 'idle', error: null })
+    expect(carrierFailed).not.toHaveBeenCalled()
+    expect(failed).not.toHaveBeenCalled()
+    expect(streamStates(mock)).toEqual(['open'])
+    await stream.dispose()
+  })
+
   it('retains the old state across carrier loss and applies the replacement baseline', async ({ mock, start }) => {
     const { remote } = await gatewayClient(mock, start)
     const carrier = new RemoteStreamCarrierError('socket lost')

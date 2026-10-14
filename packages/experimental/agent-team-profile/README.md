@@ -73,7 +73,7 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 ## Further Exploration
 
 - [Experimental packages](../README.md) — incubation status and publication policy.
-- [Agent Teams service](../agent-team/README.md) — durable roster, messaging, and task-board behavior.
+- [Agent Teams service](../agent-team/README.md) — durable roster and task board, plus direct messaging.
 - [Agent Teams tools](../tool-agent-team/README.md) — the Team-scoped model tool surface.
 - [Agent Teams browser UI](../client-ui-agent-team/README.md) — roster, task board, and teammate session navigation.
 - [Base bundle](../../bundle/base/README.md) — the profile layer this patch extends.
@@ -95,7 +95,7 @@ The bundle adds the Team policy and tool schemas described by `@deepseek-ai/dsh-
 
 #### KV Cache effect
 
-The bundle's composition is prefix-stable while its patch, Team identity, and configured tool schemas remain unchanged.
+The shared system prompt and tool schemas remain prefix-stable while the bundle patch and configured tool schemas remain unchanged. Team identity is appended through runtime-context snapshots; [Team tools](../tool-agent-team/README.md#model-experience) define snapshot reuse.
 
 ## Known Limitations and Deferred Work
 

@@ -238,7 +238,7 @@ describe('ui-model-selection dual entry', () => {
     expect(options[0]?.active).toBe(true)
     expect(options[1]?.active).toBeUndefined()
     expect(b.popup().searchLabels?.()).toEqual(locale === 'zh'
-      ? { placeholder: '搜索模型…', empty: '没有可用的模型。', noResults: '没有匹配的模型。' }
+      ? { placeholder: '搜索模型…', empty: '暂无可用模型', noResults: '没有匹配的模型。' }
       : { placeholder: 'Search models…', empty: 'No models available.', noResults: 'No matching models.' })
   })
 

@@ -9,7 +9,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
-  CredentialInfo, LlmConfigurableProvider, LlmProviderInfo, SettingsNamespaceView,
+  CredentialInfo, LlmConfigurableProvider, LlmNativeAuth, LlmProviderInfo, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -30,6 +30,8 @@ export interface ProviderDirectoryEntry {
   readonly settingsPath: readonly string[]
   readonly active: boolean
   readonly declared?: boolean
+  readonly defaultBaseURL?: string
+  readonly nativeAuth?: LlmNativeAuth
   readonly error?: string
 }
 
@@ -52,6 +54,8 @@ export function joinProviderDirectory(
     settingsPath: [...entry.settingsPath],
     active: active.has(entry.provider),
     ...entry.declared === undefined ? {} : { declared: entry.declared },
+    ...entry.defaultBaseURL === undefined ? {} : { defaultBaseURL: entry.defaultBaseURL },
+    ...entry.nativeAuth === undefined ? {} : { nativeAuth: entry.nativeAuth },
     ...entry.error === undefined ? {} : { error: entry.error },
   }))
   for (const provider of registered) {
@@ -209,7 +213,9 @@ export class ModelsSettingsStore {
     if (!declared.ok) { this.failLoad(declared.error.message); return }
     const mirrored = this.describeFace.getSnapshot()
     if (mirrored.view === undefined) {
-      this.failLoad(mirrored.error ?? 'settings are unavailable in this browser')
+      /* v8 ignore next -- SettingsDescribeFace.ensure settles with a view or the read's error */
+      if (mirrored.error === null) throw new Error('settings describe settled with neither a view nor an error')
+      this.failLoad(mirrored.error)
       return
     }
     const providers = joinProviderDirectory(registered.value, declared.value)

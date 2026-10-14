@@ -80,18 +80,18 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-Detected 8 changed roots and 8 structural differences. The minimum below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
+Detected 8 changed roots and 8 structural differences. The review requirement below is calculated using current rules for comparison only; it does not assert historical compliance, migration correctness, or runtime compatibility.
 
-| Path | Change | Current minimum |
+| Path | Change | Review requirement |
 |---|---|---|
-| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `version-bump` |
-| `event:assistant/message.data.interrupted` | `optional-property-added` | `same-version` |
-| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `version-bump` |
-| `event:team/member` | `root-added` | `same-version` |
-| `event:team/message/delivered` | `root-added` | `same-version` |
-| `event:team/message/queued` | `root-added` | `same-version` |
-| `event:team/task` | `root-added` | `same-version` |
-| `event:user/message.data.source` | `union-variants-changed` | `version-bump` |
+| `event:agent/inbox/spliced.data.inserted[].source` | `union-variants-changed` | `review-required` |
+| `event:assistant/message.data.interrupted` | `optional-property-added` | `not-required` |
+| `event:session/title-llm-request.data.messages[].source` | `union-variants-changed` | `review-required` |
+| `event:team/member` | `root-added` | `not-required` |
+| `event:team/message/delivered` | `root-added` | `not-required` |
+| `event:team/message/queued` | `root-added` | `not-required` |
+| `event:team/task` | `root-added` | `not-required` |
+| `event:user/message.data.source` | `union-variants-changed` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

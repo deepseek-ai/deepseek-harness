@@ -407,7 +407,6 @@ function linkProfilePackage(source: string, cwd: string, profile: string, packag
 
 /**
  * Copy one authored patch into the launch cwd with relative plugin names made absolute.
- * Scoped insertions and inserted preset definitions retain package lookup and nested module paths.
  * @param source - authored profile patch path.
  * @param cwd - isolated process cwd whose profile receives package links.
  * @param profile - profile whose local package lookup receives the test links.
@@ -433,10 +432,6 @@ export function materializeProfilePatch(
     entry.name = resolveName(entry.name)
     if (entry.group === true && Array.isArray(entry.config)) {
       for (const child of entry.config as ProfilePatchEntry[]) visitEntry(child)
-    }
-    const config = entry.config as { plugins?: unknown } | undefined
-    if (entry.name === '@deepseek-ai/dsh-agent-preset' && Array.isArray(config?.plugins)) {
-      for (const child of config.plugins as ProfilePatchEntry[]) visitEntry(child)
     }
   }
   for (const patch of patches) {

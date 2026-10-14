@@ -6,7 +6,7 @@ Types shared by long-running producers, `ctx.jobs`, and job controls. The [seam 
 
 ## Ids and status
 
-`JobId` is a [branded id](core.md#branded-ids) generated as `<kind>-N`. Access control relies on owner authorization, not id secrecy. `JobKind` derives from a merge-extensible map; the registry treats kinds as opaque id namespaces.
+`JobId` is a [branded id](core.md#branded-ids) generated as `<kind>-<short-uuid>` with 16 lowercase UUID hex characters after the kind. Access control relies on owner authorization, not id secrecy. `JobKind` derives from a merge-extensible map; the registry treats kinds as opaque id namespaces.
 
 ```ts type-equiv
 /**
@@ -20,9 +20,63 @@ interface JobKindMap {
 
 `JobStatus` is `'running' | 'stopping' | 'completed' | 'killed' | 'failed'`; producer-specific facts belong in `JobView.progress` while the job runs and in `JobView.detail` once it settled.
 
+<a id="session-lifecycle-records"></a>
+
+## Session lifecycle records
+
+Owned jobs publish `job/registered` and `job/settled` in their original owner Session. The globally unique `jobId` pairs those records and controls the live job. The SDK forwards these log-only records through `session.event`, independently of output reads. Timestamps describe registry commits, not CPU time or exact OS process boundaries; a missing settlement remains incomplete. `producerReported` means the producer fulfilled `done` with a terminal outcome; it is false for forced teardown or rejection and does not independently certify resource release.
+
+`job/settled` may follow `turn/end`. An SDK run result covers only its own observation window; consumers needing later settlements retain a Session subscription or read persisted history. Turn completion does not imply that every owned job stopped.
+
+Application teardown can stop Session event routing or close its writer before an owned job's final settlement reaches storage. This includes normal one-shot completion and signal shutdown, as well as hard process loss. A missing `job/settled` remains incomplete even if the live registry reported termination; consumers must not invent a finish timestamp.
+
+```ts type-equiv
+/** Durable identity and registration time of one owned job execution. */
+interface JobRegisteredData {
+  /** Unique execution id accepted by job controls and retained in Session history. */
+  readonly jobId: JobId
+  /** Original owner; copied history does not transfer execution ownership. */
+  readonly owner: SessionId
+  /** Producer kind. */
+  readonly kind: string
+  /** Producer-supplied label. */
+  readonly label: string
+  /** Unix epoch milliseconds when registration committed. */
+  readonly startedAt: number
+  /** Creating tool invocation, when the producer was called through a tool. */
+  readonly toolCall?: JobToolCall
+}
+```
+
+```ts type-equiv
+/** Registry settlement, including whether the producer reported a terminal outcome. */
+interface JobSettledData extends JobRegisteredData {
+  /** Unix epoch milliseconds when the registry committed the terminal record. */
+  readonly finishedAt: number
+  /** Recorded terminal outcome. */
+  readonly status: JobOutcome['status']
+  /** Source of the termination request, or producer completion. */
+  readonly cause: JobSettleCause
+  /** True when done fulfilled; false for rejection or forced failure. Does not certify resource release. */
+  readonly producerReported: boolean
+  /** Terminal reason, including a recorded kill reason when applicable. */
+  readonly detail?: string
+}
+```
+
 ## Producer contract
 
 A `JobSpec` declares identity, the owning session, optional pull `output` sources, and a starter. The runtime finishes preflight before calling `run()` with the job's `JobHandle` and commits without a later failable step. Producers own execution resources; the runtime owns identity, access, lifecycle state, and the output ring.
+
+```ts type-equiv
+/** Tool dispatch that created a job; nested calls retain their root invocation. */
+interface JobToolCall {
+  /** Exact invocation, including a PTC sub-call when applicable. */
+  readonly callId: SessionEventMap['tool/call']['callId']
+  /** Root model-requested invocation owning this execution. */
+  readonly rootCallId: SessionEventMap['tool/call']['callId']
+}
+```
 
 ```ts type-equiv
 /**
@@ -43,6 +97,8 @@ interface JobSpec {
    * caller until service disposal.
    */
   owner?: SessionId
+  /** Creating tool invocation, retained in the durable lifecycle records. */
+  toolCall?: JobToolCall
   /**
    * Optional UTF-8 byte cap for each complete model-facing completion notice or
    * output read, including controller status metadata. Independent of ring
@@ -76,7 +132,7 @@ interface JobSpec {
  * throwing, so a producer's trailing flush cannot break its own teardown path.
  */
 interface JobHandle {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * Append one chunk to the output ring. Offsets advance by the chunk's UTF-8
@@ -219,7 +275,7 @@ interface JobOutputRead {
  * stream all consume this one shape.
  */
 interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered
@@ -405,7 +461,7 @@ Implementations must honor these semantics:
  * rejection leaves no job id or execution resource. A throwing starter
  * leaves nothing registered; after it returns, registration cannot fail.
  * @param spec - job identity, owner, output sources, and synchronous starter.
- * @returns the registry-issued `<kind>-N` id.
+ * @returns the registry-issued `<kind>-<short-uuid>` id.
  */
 abstract start(spec: JobSpec): JobId
 

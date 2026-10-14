@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-09-preset-owned-subagent-composition.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-09-preset-owned-subagent-composition.md
+/agent-note-preset-owned-subagent-composition:
+  en: 08d7745426af0373
+  zh: 26f9afb3cc941a9a
+/agent-note-preset-owned-subagent-composition/problem:
+  en: 97cd4f941fe8eaa5
+  zh: b3dabbd7020a8991
+/agent-note-preset-owned-subagent-composition/decision:
+  en: 7dfefd4689562847
+  zh: 0bbfd0a8ce41c9ac
+/agent-note-preset-owned-subagent-composition/alternatives-considered:
+  en: c87c4638a36cc45d
+  zh: ee2c8e044108f0eb
+/agent-note-preset-owned-subagent-composition/consequences:
+  en: a7404d17d0a62ad9
+  zh: 783a490d3aafc5ca

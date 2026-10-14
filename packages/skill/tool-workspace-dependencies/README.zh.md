@@ -44,6 +44,8 @@ kind: "package-reference"
 
 `runtime.json` 记录 `desktopVersion`、`platform`（`win32`、`darwin` 或 `linux`）、`arch`、可选的 `payloadDigest`、顶层 `python` 与可选的 `node`/`pnpm` 版本，以及完整的 `pythonPackages` 分发包版本表。声明 pnpm 时必须同时声明 Node.js。numpy、pandas 等 Python 库只出现在 `pythonPackages` 中。条目位于 `dependencies/`：`python/bin/python3`（Windows 为 `python/python.exe`）及其下的 `site-packages`；声明了才有的 `node/bin/node`、`node/node_modules` 与 `pnpm/bin/pnpm.mjs`。平台或架构与当前进程不符的清单被拒绝。
 
+在 macOS 和 Linux 上，构建器将 `python` 和 `python3` 保留为指向同目录版本化解释器（例如 `python3.12`）的相对链接。安装时保留这两个别名，其他链接展开为实际文件。别名校验要求目标名称与同目录解释器文件名完全一致，且目标为普通文件；Python wheel 等无法保留链接的载体使用普通命令文件，同样受支持。Windows 保留普通的 `python.exe` 文件。
+
 打包的 `sdk` profile 默认使用随包 Python 和 Office skills；`DSH_PRIMARY_RUNTIME` 覆盖资源位置，空值表示禁用。没有载体默认路径的源码启动仍需显式启用。独立选择 skills 的方式见[运行时配置](../../../python/sdk-runtime/README.zh.md)。缺少 skill 资源会产生启动警告；无效或不完整的外部运行时 payload 在首次工具调用时失败。profile 配置变更需要重启 SDK 进程。
 
 ### 构建载体 payload

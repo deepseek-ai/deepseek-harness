@@ -261,13 +261,6 @@ export class ConversationController extends Service implements IConversation {
         ? { type: 'image' as const, ...await this.encodeImage(attachment.file) }
         : { type: 'file' as const, receiptId: uploadFor(attachment).receiptId }),
     )
-    const snapshot = session.getSnapshot()
-    if (snapshot.subagent !== null) {
-      const uploaded = await serializeAttachments()
-      const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
-      const result = await session.prompt(content, mode, signal)
-      return result.ok ? { kind: 'success' } : { kind: 'error' }
-    }
     let finishRetirement: ((retirement: PendingSubmissionRetirement) => void) | undefined
     const retirement = attachments.length === 0
       ? undefined

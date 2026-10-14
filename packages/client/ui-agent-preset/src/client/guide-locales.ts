@@ -42,7 +42,7 @@ export const guideEn = {
   guideMinimalIntro: 'Choose Minimal mode for a new task. For a comparison, hold the model, permissions, input, and starting workspace state constant across runs.',
   guideMinimalExplanation: [
     '### What is included',
-    'One persistent shell tool and a fixed system prompt. The built-in preset does not load Skills, planning, context compaction, or the standard runtime context.',
+    'One persistent shell tool, read_image, and a fixed system prompt. Image reading requires an image-capable model. Older history is compacted automatically under context pressure; use /compact while the agent is idle to compact it manually. The built-in preset does not load Skills, planning, or the standard runtime context.',
     '### When to choose it',
     'Use it as a baseline for experiments and comparisons. It can still read files and execute scripts through shell commands, but offers fewer built-in ways to manage a long task. Fewer tools does not necessarily make it easier for a beginner.',
   ].join('\n\n'),
@@ -120,7 +120,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideMinimalIntro: '新建任务时选择「极简模式」。做对照测试时，保持模型、权限、任务输入和工作区起始状态一致。',
   guideMinimalExplanation: [
     '### 保留哪些能力',
-    '仅提供一个持久 Shell 工具，并使用固定系统提示词。内置预设不加载 Skills、计划、上下文压缩，也不注入标准运行时上下文。',
+    '提供持久 Shell 和 read_image 工具，并使用固定系统提示词。读取图片需要支持图片输入的模型。上下文压力达到阈值时自动压缩较早历史；Agent 空闲时可输入 /compact 手动压缩。内置预设不加载 Skills、计划，也不注入标准运行时上下文。',
     '### 什么时候选',
     '适合作为实验和对照测试的基线。Agent 仍能通过终端命令读写文件、运行脚本，但缺少管理长任务的内置辅助能力。工具少，不代表对新手更容易。',
   ].join('\n\n'),

@@ -2,16 +2,19 @@
 import assert from 'node:assert/strict'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { watchConfig as watchExactConfig } from './watch-config.ts'
-import { Context, Inject, Service, type Fiber, type Plugin } from '@deepseek-ai/cordis'
-import type { ModuleLoader, ModuleJob, ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
+import { Context, FiberState, Inject, Service, type Fiber, type Plugin } from '@deepseek-ai/cordis'
+import type { Entry, ModuleLoader, ModuleJob, ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
 import type { Include } from '@deepseek-ai/cordis-plugin-include'
 import { FSWatcher, watch, type ChokidarOptions } from 'chokidar'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
-import { readFileSync, realpathSync } from 'node:fs'
-import { readProfileManifest, readProfilePatches, reconcileProfilePatches, PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
+import {
+  readProfileManifest, readProfilePatches, recomposeProfile, PROFILE_PATCH_FILENAME, type RuntimeResolution,
+} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import { handleError } from './error.ts'
 import { PackageManifests } from './package-manifest.ts'
+import { ModuleFiles } from './module-files.ts'
 import type {} from '@deepseek-ai/cordis-plugin-timer'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -63,16 +66,16 @@ export interface HmrConfig extends ChokidarOptions {
 
 /**
  * Recursively collect all module dependencies from a ModuleJob.
- * Skips node: builtins and node_modules to focus on user code.
+ * Skips node: builtins, and node_modules unless `includeNodeModules` is set, to focus on user code.
  */
-async function loadDependencies(job: ModuleJob, ignored = new Set<string>()) {
+async function loadDependencies(job: ModuleJob, ignored = new Set<string>(), includeNodeModules = false) {
   const dependencies = new Set<string>()
   async function traverse(job: ModuleJob) {
     if (ignored.has(job.url) || dependencies.has(job.url)) return
-    if (job.url.startsWith('node:') || job.url.includes('/node_modules/')) return
+    if (job.url.startsWith('node:') || (!includeNodeModules && job.url.includes('/node_modules/'))) return
     dependencies.add(job.url)
-    const children = await job.linked
-    await Promise.all(Array.prototype.map.call(children, traverse))
+    const children = await linkedJobs(job)
+    await Promise.all(children.map(traverse))
   }
   await traverse(job)
   return dependencies
@@ -254,6 +257,9 @@ class Hmr extends Service {
   private closing = false
   private readonly configPaths = new Set<string>()
   private readonly manifests = new PackageManifests()
+  private readonly files = new ModuleFiles()
+  /** Every module statically reachable from the process entry point, including those under node_modules; collected on first use. */
+  private hostModules!: () => Promise<Set<string>>
 
   /** Serialize a caller-owned mutation with all automatic reload paths.
    * @param operation Work that must not overlap module or configuration replacement.
@@ -308,7 +314,48 @@ class Hmr extends Service {
     this.baseDir = fileURLToPath(new URL(config.base || '.', ctx.baseUrl))
   }
 
+  /**
+   * The cached ES module job for a URL. The packed worker loader exposes no Node module cache; native Node
+   * retains this cache even when asynchronous module hooks run in a separate thread.
+   */
+  private esmJob(url: string): ModuleJob | undefined {
+    return this.hasEsmCache() ? this.internal.loadCache.get(url) : undefined
+  }
+
+  /** Whether this thread keeps a Node ES module cache; the packed worker loader keeps none. */
+  private hasEsmCache(): boolean {
+    const cache: unknown = Reflect.get(this.internal, 'loadCache')
+    return cache !== undefined
+  }
+
+  /** Whether the ES module cache holds a job for a URL; `false` when this thread keeps no ES module cache. */
+  private esmHas(url: string, type?: string): boolean {
+    return this.hasEsmCache() && (type === undefined ? this.internal.loadCache.has(url) : this.internal.loadCache.has(url, type))
+  }
+
+  /** ES module cache keys, empty when this thread keeps no ES module cache. */
+  private esmUrls(): string[] {
+    return this.hasEsmCache() ? [...Map.prototype.keys.call(this.internal.loadCache) as Iterable<string>] : []
+  }
+
+  /** ES module cache keys and CommonJS cache filenames as URLs. */
+  private* loadedUrls(): Generator<string> {
+    yield* this.esmUrls()
+    for (const filename of Object.keys(commonJsCache())) yield pathToFileURL(filename).href
+  }
+
+  /** The module job of the process entry point, when the loader cached it under the entry's real path. */
+  private mainJob(): ModuleJob | undefined {
+    const entry = process.argv[1]
+    if (entry === undefined) return undefined
+    // A package bin starts through a link, and Node caches the module under its target.
+    return this.esmJob(pathToFileURL(canonicalPath(resolve(entry))).href)
+  }
+
   async* [Service.init](): AsyncGenerator<() => Promise<void>, void, unknown> {
+    const mainJob = this.mainJob()
+    let host: Promise<Set<string>> | undefined
+    this.hostModules = () => host ??= mainJob === undefined ? Promise.resolve(new Set()) : loadDependencies(mainJob, new Set(), true)
     yield async () => {
       this.closing = true
       await this.watcher?.close()
@@ -323,7 +370,16 @@ class Hmr extends Service {
       if (ready === undefined) throw new Error('Profile HMR requires application readiness')
       const started = Promise.withResolvers<boolean>()
       this.applicationReady = started.promise
-      const unsubscribe = ready.onReady(() => { started.resolve(true) })
+      const unsubscribe = ready.onReady(() => {
+        // Plugins started with the application are recorded; modules loaded later are compared by modification time.
+        try {
+          this.files.observe(this.profileModules(profileRoots(profile.dir)))
+        } catch (error) {
+          // Without a first record, modules are compared by modification time against this HMR instance’s creation time.
+          this.ctx.logger.warn(error)
+        }
+        started.resolve(true)
+      })
       yield () => { unsubscribe(); started.resolve(false); return Promise.resolve() }
       const manifestPath = join(profile.dir, 'package.json')
       const patchFiles = [profile.patchPath, join(profile.home, PROFILE_PATCH_FILENAME)]
@@ -340,8 +396,9 @@ class Hmr extends Service {
           }
         })])
         if (inputs === lastInputs) return
-        const patches = readProfilePatches('dsh', profile)
-        const warnings = await reconcileProfilePatches(this.ownerContext.root, patches, 'dsh')
+        const { warnings, pending, restartReason } = await this.reconcileProfile()
+        if (restartReason !== undefined) this.ctx.logger.warn('restart required: %s', restartReason)
+        if (pending.length > 0) this.ctx.logger.warn('changed modules keep running their previous code until a restart: %o', pending)
         lastInputs = inputs
         lastBundles = bundles
         for (const diagnostic of warnings) this.ctx.logger.warn(diagnostic)
@@ -363,8 +420,6 @@ class Hmr extends Service {
 
     // Collect externals before opening the watcher so every post-ready change
     // is observed by listeners that already have their classification state.
-    const mainJob = process.argv[1] === undefined ? undefined
-      : this.internal.loadCache.get(pathToFileURL(resolve(process.argv[1])).href)
     if (mainJob) {
       this.externals = await loadDependencies(mainJob)
     } else {
@@ -399,7 +454,7 @@ class Hmr extends Service {
             fullReload = true
             continue
           }
-          if (this.internal.loadCache.has(url) || this.internal.loadCache.has(url, 'json')) {
+          if (this.esmHas(url) || this.esmHas(url, 'json')) {
             this.stashed.add(url)
             continue
           }
@@ -454,7 +509,7 @@ class Hmr extends Service {
    * @returns Linked module URLs, or an empty list for an uncached module.
    */
   async getLinked(url: string): Promise<string[]> {
-    const job = this.internal.loadCache.get(url)
+    const job = this.esmJob(url)
     if (!job) return []
     const linked = await job.linked
     return Array.prototype.map.call(linked, (job: ModuleJob) => job.url) as string[]
@@ -546,7 +601,7 @@ class Hmr extends Service {
         try {
           const { url } = await names.resolve(name, baseUrl, moduleNamespace)
           if (this.declined.has(url)) continue
-          const job = this.internal.loadCache.get(url)
+          const job = this.esmJob(url)
           const plugin = this.ctx.loader.unwrapExports(job?.module?.getNamespace()) as Plugin | undefined
           if (!job || !plugin) continue
           pending.set(job, plugin)
@@ -584,49 +639,7 @@ class Hmr extends Service {
       if (ReloadModules.include(reloads, plugin, job, this.ctx.registry.get(plugin))) this.accepted.add(job.url)
     }
 
-    /**
-     * Clear module caches for all accepted files before re-importing.
-     *
-     * We need to clear both:
-     * 1. ESM loadCache — managed by Node's internal ModuleLoader
-     * 2. CJS Module._cache — for CJS modules that were imported via import()
-     *
-     * In Node 24, CJS modules loaded via import() appear in both caches.
-     * If we only clear loadCache, the CJS cache may serve stale modules.
-     *
-     * We use Map.prototype methods directly on loadCache because:
-     * - In Node 22/23, loadCache is a plain Map<url, ModuleJob>
-     * - In Node 24, loadCache is a LoadCache extends Map<url, { [type]: ModuleJob }>
-     *   where .delete() only sets the type slot to undefined (doesn't remove the entry)
-     * Using Map.prototype.delete ensures complete removal in both versions.
-     */
-    const esmBackup = new Map<string, unknown>()
-    const cjsBackup = new Map<string, NodeJS.Module>()
-    const require = createRequire(import.meta.url)
-    for (const filename of this.accepted) {
-      // Backup and clear ESM loadCache
-      const job: unknown = Map.prototype.get.call(this.internal.loadCache, filename)
-      esmBackup.set(filename, job)
-      Map.prototype.delete.call(this.internal.loadCache, filename)
-
-      // Backup and clear CJS Module._cache
-      try {
-        const filepath = fileURLToPath(filename)
-        if (require.cache[filepath]) {
-          cjsBackup.set(filepath, require.cache[filepath])
-          Reflect.deleteProperty(require.cache, filepath)
-        }
-      } catch {
-        // filename might not be a file: URL (e.g. node: protocol), ignore
-      }
-    }
-
-    const rollback = () => {
-      for (const [filename, job] of esmBackup) {
-        Map.prototype.set.call(this.internal.loadCache, filename, job)
-      }
-      for (const [filepath, module] of cjsBackup) require.cache[filepath] = module
-    }
+    const rollback = this.evict(this.accepted)
 
     // Attempt to re-import all plugin entry files
     const generations = [...reloads].map(([previous, info]) => ({
@@ -726,8 +739,386 @@ class Hmr extends Service {
       replacements.updateEntries(this.ctx.loader)
     }
     this.ctx.emit('hmr/reload', reloads)
+    this.files.refresh(this.accepted)
     this.stashed = new Set()
   }
+
+  /**
+   * Remove modules from the ES module and CommonJS caches so the next import evaluates their files again.
+   *
+   * CommonJS modules loaded through `import()` appear in both caches. Node's `LoadCache` maps each URL to per-type
+   * jobs, and its own `delete()` only clears one type slot, so whole entries are removed through `Map.prototype`.
+   * @returns Restores the removed cache entries.
+   */
+  private evict(urls: Iterable<string>): () => void {
+    const esmBackup = new Map<string, unknown>()
+    const cjsBackup = new Map<string, NodeJS.Module>()
+    const cache = commonJsCache()
+    const list = [...urls]
+    // CommonJS-only files have no loadCache entry to restore.
+    const cached = new Set(this.esmUrls())
+    for (const url of list) {
+      if (cached.has(url)) {
+        esmBackup.set(url, Map.prototype.get.call(this.internal.loadCache, url))
+        Map.prototype.delete.call(this.internal.loadCache, url)
+      }
+    }
+    for (const filepath of list.filter(url => url.startsWith('file:')).map(url => fileURLToPath(url))) {
+      const module = cache[filepath]
+      if (module !== undefined) {
+        cjsBackup.set(filepath, module)
+        Reflect.deleteProperty(cache, filepath)
+      }
+    }
+    return () => {
+      for (const [url, job] of esmBackup) Map.prototype.set.call(this.internal.loadCache, url, job)
+      for (const [filepath, module] of cjsBackup) cache[filepath] = module
+    }
+  }
+
+  /** Loaded `file:` modules below the given profile roots. */
+  private profileModules(roots: readonly string[]): string[] {
+    return [...this.loadedUrls()].filter((url) => {
+      if (!url.startsWith('file:')) return false
+      const filename = fileURLToPath(url)
+      return roots.some(root => filename.startsWith(root))
+    })
+  }
+
+  /** Static import edges between loaded modules, across ES module links and CommonJS `require` children. */
+  private async moduleGraph(): Promise<Map<string, Set<string>>> {
+    const importers = new Map<string, Set<string>>()
+    const add = (parent: string, child: string) => {
+      importers.set(child, (importers.get(child) ?? new Set()).add(parent))
+    }
+    await Promise.all([...moduleJobs(this.internal)].map(async (job) => {
+      for (const child of await linkedJobs(job)) add(job.url, child.url)
+    }))
+    for (const [filename, module] of Object.entries(commonJsCache())) {
+      // Code that writes `require.cache` directly can store objects that are not Node modules.
+      /* v8 ignore next -- Node stores no undefined values in require.cache; the index type admits them */
+      const children: unknown = module === undefined ? undefined : Reflect.get(module, 'children')
+      if (!Array.isArray(children)) continue
+      for (const child of children as NodeJS.Module[]) add(pathToFileURL(filename).href, pathToFileURL(child.filename).href)
+    }
+    return importers
+  }
+
+  /**
+   * Plan the replacement of changed modules without changing anything. A changed module whose importers reach the
+   * process entry point's static graph, or a plugin that no affected Loader entry starts, stays loaded with its
+   * importers and is pending. The other changed modules and every module importing them are evicted by
+   * {@link stopPlanned}, which also expires the manifests from each changed file up to its root and stops the Loader
+   * entries running affected plugins.
+   * @param stale Changed module URLs.
+   * @param roots Directories, with a trailing separator, that bound the expired manifests.
+   * @returns The pending modules and the replacement of the others.
+   */
+  private async planReplacement(stale: ReadonlySet<string>, roots: readonly string[]): Promise<ReplacementPlan> {
+    const importers = await this.moduleGraph()
+    const host = await this.hostModules()
+    const managed = new Set(this.ctx.loader.entries())
+    const plan: ReplacementPlan = {
+      pending: [], evicted: new Set(), manifests: new Set(), plugins: new Set(), fibers: new Set(),
+    }
+    for (const url of stale) {
+      const affected = new Set([url])
+      for (const module of affected) for (const importer of importers.get(module) ?? []) affected.add(importer)
+      const running = [...new Set([...affected].flatMap(module => this.pluginsOf(module)))]
+        .flatMap(plugin => [...this.ctx.registry.get(plugin)?.fibers ?? []].map(fiber => ({ plugin, fiber })))
+      const affectedFibers = new Set(running.map(({ fiber }) => fiber))
+      /** The Loader entry whose own fiber runs an affected plugin and starts this fiber directly or through its ancestors. */
+      const owner = (fiber: Fiber): Entry | undefined => {
+        for (let current = fiber; current.uid !== 0; current = current.parent.fiber) {
+          const entry = current.entry
+          if (entry?.fiber === current && managed.has(entry) && affectedFibers.has(current)) return entry
+        }
+        return undefined
+      }
+      const entries = running.flatMap(({ fiber }) => owner(fiber) ?? [])
+      // A plugin registered outside a Loader entry has no owner that can start its replacement.
+      const reason = [...affected].some(module => host.has(module)) ? 'host-module'
+        : entries.length < running.length ? 'unmanaged-plugin' : undefined
+      if (reason !== undefined) {
+        plan.pending.push({ url, reason })
+        continue
+      }
+      for (const manifest of packageManifests(url, roots)) plan.manifests.add(manifest)
+      for (const module of affected) plan.evicted.add(module)
+      for (const { plugin, fiber } of running) {
+        plan.plugins.add(plugin)
+        plan.fibers.add(fiber)
+      }
+    }
+    return plan
+  }
+
+  /**
+   * The plugins a loaded module exports, read from the ES module namespace and the CommonJS exports Node cached for it
+   * without evaluating anything.
+   * @param url Loaded module URL.
+   * @returns The exported plugins.
+   */
+  private pluginsOf(url: string): Plugin[] {
+    const namespace = namespaceOf(this.esmJob(url))
+    const required = url.startsWith('file:') ? commonJsCache()[fileURLToPath(url)] : undefined
+    const exports: unknown = required?.loaded === true ? required.exports : undefined
+    return [namespace, exports].filter(value => value !== undefined).map(value => this.ctx.loader.unwrapExports(value) as Plugin)
+  }
+
+  /**
+   * Carry out a planned replacement: expire its manifests, evict its modules without a backup, and stop its Loader
+   * entries, so applying the generation imports the current files when it starts them.
+   * @param plan The planned replacement.
+   */
+  private async stopPlanned(plan: ReplacementPlan): Promise<void> {
+    for (const manifest of plan.manifests) this.manifests.invalidate(manifest)
+    this.evict(plan.evicted)
+    // Deleting the runtime stops its fibers without the Loader recording the entries as disabled.
+    for (const plugin of plan.plugins) this.ctx.registry.delete(plugin)
+    // Cordis contains disposal failures in the fiber, which logs them.
+    await Promise.allSettled([...plan.fibers].map(fiber => fiber.await()))
+  }
+
+  /**
+   * Evict the loaded modules below the directories of mappings a recomposition dropped and expire their package
+   * configuration, so a disabled or removed package that is installed or enabled again is imported afresh. Modules of
+   * DSH's own static graph, and those below a directory that is still mapped, stay loaded.
+   * @param dropped Real directories, with a trailing separator, of the dropped mappings.
+   * @param kept Real directories, with a trailing separator, of the mappings that stay.
+   */
+  private async evictDropped(dropped: readonly string[], kept: ReadonlySet<string>): Promise<void> {
+    if (dropped.length === 0) return
+    const host = new Set(await this.hostModules())
+    const urls = this.profileModules(dropped).filter((url) => {
+      const filename = fileURLToPath(url)
+      return !host.has(url) && ![...kept].some(dir => filename.startsWith(dir))
+    })
+    for (const url of urls) for (const manifest of packageManifests(url, dropped)) this.manifests.invalidate(manifest)
+    this.evict(urls)
+  }
+
+  /** Report a failed replacement step and retain the caller’s fallback outcome. */
+  private async contained<T>(step: string, operation: () => T | Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await operation()
+    } catch (error) {
+      this.ctx.logger.warn('%s failed; module replacement was not completed', step)
+      this.ctx.logger.warn(error)
+      return fallback
+    }
+  }
+
+  /**
+   * Recompose the profile from its manifest and patch files, replacing running plugins whose loaded files below the
+   * profile directory or its linked package targets changed on disk, and publishing its runtime resolution. Changed
+   * modules are evicted and the Loader entries running them stop; app-boot's {@link recomposeProfile} then publishes the
+   * resolution, applies the generation, starts the stopped entries with the current files and configuration,
+   * imports entries whose import failed again, and judges activation. Afterwards the modules below the mappings the
+   * recomposition dropped are evicted, so a removed or deselected package is imported afresh when it returns. Callers run
+   * inside {@link runExclusive}.
+   * @param requiredIds Entry ids whose inactive state is reported as a failure even when it predates this call.
+   * @returns Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.
+   * @throws The patch read, publication, preparation, apply, or activation failure of the recomposition, including a
+   * replacement plugin that fails to load or start, whose previous code no longer runs.
+   */
+  async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation> {
+    if (this.executing.getStore() !== true) throw new Error('HMR profile reconciliation must run inside runExclusive')
+    const profile = this.ownerContext.get('profileContext')
+    if (profile === undefined) throw new Error('HMR profile reconciliation requires profileContext')
+    // Entries this recomposition stops start again, and fail it when they cannot.
+    const running = [...this.ctx.loader.entries()].filter(entry => entry.fiber?.state === FiberState.ACTIVE)
+    // Read while the packages are still on disk, so a removed link's target is known in its real spellings.
+    const mapped = mappedDirectories(this.ownerContext.get('pluginPackages')?.resolution)
+    let comparison: ProfileComparison | undefined
+    let comparedAt = 0
+    let pending: PendingModule[] = []
+    try {
+      const patches = readProfilePatches('dsh', profile)
+      comparedAt = this.files.now()
+      // A failed comparison keeps every record, so the next recomposition compares the same modules again.
+      comparison = await this.contained('comparing loaded modules with disk', () => {
+        const roots = profileRoots(profile.dir)
+        return Promise.resolve({ roots, ...this.files.compare(this.profileModules(roots)) })
+      }, undefined)
+      // Changed modules stay stale until replaced, including when the generation cannot be applied.
+      pending = [...comparison?.stale ?? []].map(url => ({ url, reason: 'module-comparison' }))
+      const compared = comparison
+      const unavailable = !this.hasEsmCache()
+      if (!unavailable && compared !== undefined && pending.length > 0) {
+        pending = await this.contained('planning module replacement', async () => {
+          const plan = await this.planReplacement(compared.stale, compared.roots)
+          await this.stopPlanned(plan)
+          return plan.pending
+        }, pending)
+      }
+      // Modules whose links or evaluation failed are evicted, so the recomposition retries failed imports against a
+      // corrected file or a dependency installed since.
+      await this.contained('expiring failed imports', () => {
+        // Without an ES module cache no failed module is known.
+        if (unavailable) return
+        const roots = compared?.roots ?? [realpathSync(profile.dir) + sep]
+        // A dependency installed since the failed import can sit in a directory Node recorded as having no manifest.
+        for (const root of roots) this.manifests.invalidate(join(root, 'package.json'))
+        // Node keeps a module whose links or evaluation failed.
+        this.evict(this.profileModules(roots).filter((url) => {
+          const job = this.esmJob(url)
+          return job !== undefined && namespaceOf(job) === undefined
+        }))
+      }, undefined)
+      const result = await recomposeProfile(this.ownerContext.root, patches, 'dsh', { requiredIds, running })
+      const restartReason = compared === undefined || unavailable ? 'module-comparison' : result.restartReason
+      return { warnings: result.warnings, pending, ...restartReason === undefined ? {} : { restartReason } }
+    } finally {
+      const recorded = comparison
+      await this.contained('evicting dropped packages', () => {
+        const kept = mappedDirectories(this.ownerContext.get('pluginPackages')?.resolution)
+        return this.evictDropped([...mapped].filter(dir => !kept.has(dir)), kept)
+      }, undefined)
+      await this.contained('recording loaded module files', () => {
+        if (recorded === undefined) return
+        // Identities read before replacement keep writes made since then detectable.
+        const urls = this.profileModules(recorded.roots)
+        this.files.observe(urls, { seen: recorded.seen, retained: new Set(pending.map(({ url }) => url)), at: comparedAt })
+      }, undefined)
+    }
+  }
+}
+
+/** Loaded profile modules compared with disk, with the roots that bound them. */
+interface ProfileComparison {
+  roots: string[]
+  stale: Set<string>
+  seen: Map<string, string | undefined>
+}
+
+/** The modules a replacement evicts, the manifests it expires, and the plugins it stops; pending modules stay loaded. */
+interface ReplacementPlan {
+  pending: PendingModule[]
+  evicted: Set<string>
+  manifests: Set<string>
+  plugins: Set<Plugin>
+  fibers: Set<Fiber>
+}
+
+/** Outcome of {@link Hmr.reconcileProfile}. */
+export interface ProfileReconciliation {
+  /** Diagnostics for Loader entries left inactive. */
+  warnings: string[]
+  /** Loaded modules whose files changed on disk and whose previous code keeps running until a restart. */
+  pending: PendingModule[]
+  /**
+   * Why every change waits for a restart: `module-comparison` when module caches cannot be inspected or their files
+   * compared, even when no URLs are known; `package-moved` when the runtime resolution cannot publish a moved package.
+   */
+  restartReason?: 'module-comparison' | 'package-moved'
+}
+
+/** A changed module that loads only after a restart. */
+export interface PendingModule {
+  url: string
+  /**
+   * `host-module`: the process entry point's static graph imports it. `unmanaged-plugin`: it is imported by a plugin
+   * that runs outside a traversable Loader entry. `module-comparison`: loaded modules could not be compared with disk.
+   */
+  reason: 'host-module' | 'unmanaged-plugin' | 'module-comparison'
+}
+
+/** Node's `kErrored` module status, the same in every supported Node version. */
+const MODULE_ERRORED = 5
+
+/** The namespace of a cached module job, or `undefined` when it has none or its evaluation threw. */
+function namespaceOf(job: ModuleJob | undefined): unknown {
+  if (job?.module === undefined) return undefined
+  // A module whose evaluation threw keeps a namespace whose bindings were never initialized. `getStatus()` exists on
+  // ModuleWrap in every supported Node version, like the other loader internals HMR reads.
+  const status: unknown = Reflect.apply(Reflect.get(job.module, 'getStatus') as () => number, job.module, [])
+  if (status === MODULE_ERRORED) return undefined
+  try {
+    return job.module.getNamespace()
+  /* v8 ignore start -- a cached module still linking in a concurrent import has no namespace yet; tests cannot hold an import there */
+  } catch (_error) {
+    // A module that has not been instantiated exports no running plugin.
+    return undefined
+  }
+  /* v8 ignore stop */
+}
+
+/**
+ * The jobs a module job links to. Node 24+ may expose them as an array; Node 22 keeps the job of a failed import
+ * whose links reject, and such a job contributes no links.
+ */
+async function linkedJobs(job: ModuleJob): Promise<ModuleJob[]> {
+  /* v8 ignore next -- CI coverage runs Node 24+, which drops failed jobs from the cache */
+  const linked = await Promise.resolve(job.linked).catch((_error: unknown) => [])
+  // Node 22 may return a null-prototype array without methods or an iterator.
+  return Array.from(linked)
+}
+
+/** The Node-compatible CommonJS cache; the packed worker implements require without exposing this cache. */
+function commonJsCache(): NodeJS.Dict<NodeJS.Module> {
+  // Node's type declares the cache present for every `require`.
+  const cache: unknown = Reflect.get(createRequire(import.meta.url), 'cache')
+  return (cache ?? {}) as NodeJS.Dict<NodeJS.Module>
+}
+
+/** Every module job in the loader cache; Node's `LoadCache` maps each URL to per-type jobs. */
+function* moduleJobs(internal: ModuleLoader): Generator<ModuleJob> {
+  for (const value of Map.prototype.values.call(internal.loadCache) as Iterable<Partial<Record<string, ModuleJob>>>) {
+    yield* Object.values(value).filter(job => job !== undefined)
+  }
+}
+
+/**
+ * The directories of a runtime resolution's profile mappings and linked roots, in every real spelling of those that
+ * exist, each with a trailing separator.
+ * @param resolution The published resolution, if any.
+ * @returns The directories; none without a resolution.
+ */
+function mappedDirectories(resolution: RuntimeResolution | undefined): Set<string> {
+  const directories = new Set<string>()
+  if (resolution === undefined) return directories
+  const dirs = [...resolution.entries.filter(entry => entry.scope === 'profile').map(entry => entry.packageDir),
+    ...resolution.linkedRoots.map(root => root.realPath)]
+  for (const dir of dirs) for (const spelling of existsSync(dir) ? realSpellings(dir) : [dir]) directories.add(spelling + sep)
+  return directories
+}
+
+/**
+ * The JavaScript and native real paths of an existing path. A packed worker's file system has no native realpath.
+ * @param path Existing path.
+ * @returns The distinct spellings.
+ */
+function realSpellings(path: string): string[] {
+  const native: unknown = Reflect.get(realpathSync, 'native')
+  return [realpathSync(path), ...typeof native === 'function' ? [String(Reflect.apply(native, realpathSync, [path]))] : []]
+}
+
+/**
+ * Real directories, with a trailing separator, of the profile and of the targets its linked packages point to. Each
+ * appears in both real-path spellings: Node's module caches use the JavaScript one, the runtime resolution the native
+ * one, and on Windows they differ for 8.3 short names.
+ */
+function profileRoots(dir: string): string[] {
+  const real = realpathSync(dir)
+  const modules = join(real, 'node_modules')
+  const names = existsSync(modules) ? readdirSync(modules) : []
+  const packages = names.flatMap(name => name.startsWith('@')
+    ? readdirSync(join(modules, name)).map(child => join(modules, name, child))
+    : [join(modules, name)])
+  const linked = packages.filter(path => lstatSync(path).isSymbolicLink() && existsSync(path))
+  return [...new Set([dir, ...linked].flatMap(path => realSpellings(path)).map(root => root + sep))]
+}
+
+/** Every `package.json` from a module file's directory up to the profile root or linked package target containing it. */
+function packageManifests(url: string, roots: readonly string[]): string[] {
+  const manifests: string[] = []
+  const contains = (directory: string) => roots.some(root => (directory + sep).startsWith(root))
+  for (let directory = dirname(fileURLToPath(url)); contains(directory); directory = dirname(directory)) {
+    const candidate = join(directory, 'package.json')
+    if (existsSync(candidate)) manifests.push(candidate)
+  }
+  return manifests
 }
 
 namespace Hmr {

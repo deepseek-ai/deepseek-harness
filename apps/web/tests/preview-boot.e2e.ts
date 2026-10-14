@@ -37,6 +37,8 @@ import {
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import {
   VFS_EXAMPLE_SESSION_IDS,
+  VFS_EXAMPLE_REASONING,
+  VFS_EXAMPLE_WRAPPED_COMMAND,
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
 import { captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './scaffold.ts'
@@ -316,6 +318,7 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     const continueButton = page.getByRole('button', { name: 'Continue' })
     await continueButton.waitFor({ timeout: HERO_TIMEOUT_MS })
     await continueButton.click()
+    await page.getByRole('button', { name: 'Add API Key', exact: true }).click()
     const configureLater = page.getByRole('button', { name: 'Configure later' })
     await configureLater.waitFor({ timeout: 30_000 })
     await configureLater.click()
@@ -455,6 +458,57 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
     await page.getByText('Update to-do list', { exact: true }).waitFor()
     await page.getByText('Error: ENOENT: no such file, open missing.txt', { exact: true }).waitFor()
 
+    const reasoning = page.locator('[data-variant="think"]')
+    await expect.poll(() => reasoning.count()).toBe(VFS_EXAMPLE_REASONING.length)
+    for (const [index, text] of VFS_EXAMPLE_REASONING.entries()) {
+      const row = reasoning.nth(index)
+      await row.getByRole('button').click()
+      await row.getByText(text.split('\n\n').at(-1)!, { exact: true }).waitFor({ state: 'visible' })
+    }
+
+    const wrappedCall = page.locator('[data-chat-call-id="preview-wrapped-bash"]')
+    await wrappedCall.locator('[data-sample="bash"]').click()
+    const terminal = wrappedCall.locator('[data-terminal]')
+    const originalWidth = await terminal.evaluate(element => element.style.width)
+    try {
+      await terminal.evaluate((element) => { element.style.width = '380px' })
+      const commands = terminal.locator('[data-command-text]')
+      expect(await commands.allTextContents()).toEqual(VFS_EXAMPLE_WRAPPED_COMMAND.slice(0, -1).split('\n'))
+      await commands.first().scrollIntoViewIfNeeded()
+      const geometry = await commands.first().evaluate((element) => {
+        const prompt = element.parentElement!
+        const header = element.closest('[class*="_header_"]')!
+        header.scrollTop = 0
+        const dot = prompt.querySelector('[data-state="done"]')
+        if (dot === null) throw new Error('wrapped preview command has no successful status dot')
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        const lines = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0)
+        const marker = dot.getBoundingClientRect()
+        const viewport = header.getBoundingClientRect()
+        return {
+          wrapped: new Set(lines.map(rect => Math.round(rect.top))).size > 1,
+          whitespace: getComputedStyle(element).whiteSpace,
+          alignmentError: Math.abs(marker.top + marker.height / 2
+            - (prompt.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(prompt).lineHeight) / 2)),
+          visible: marker.top >= viewport.top && marker.bottom <= viewport.bottom,
+        }
+      })
+      expect(geometry.wrapped).toBe(true)
+      expect(geometry.whitespace).toBe('pre-wrap')
+      expect(geometry.alignmentError).toBeLessThanOrEqual(1)
+      expect(geometry.visible).toBe(true)
+      expect(await terminal.locator('[data-state="done"]').count()).toBe(1)
+    } finally {
+      await terminal.evaluate((element, width) => { element.style.width = width }, originalWidth)
+    }
+
+    await page.getByRole('button', { name: 'Parent workspace guide:1–8', exact: true }).click()
+    const preview = page.locator('[data-rightbar-col]')
+    await expect.poll(() => preview.locator('[data-textpreview-path]').textContent()).toBe('/dsh/workspace/PREVIEW.md')
+    await preview.getByRole('heading', { name: 'Preview Workspace', exact: true }).waitFor({ state: 'visible' })
+    expect(await preview.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['PREVIEW.md'])
+
     const subagents = page.getByRole('button', { name: '2 subagents', exact: true })
     await subagents.waitFor({ timeout: 15_000 })
     await subagents.hover()
@@ -530,8 +584,9 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
     // has no host routes — the controller publishes an empty list and the
     // header renders no button, which is that surface's designed degradation.
     expect([...failedResponses].sort()).toEqual(['/open-in-app/apps', '/plugins/events'])
+    // The worker recomposes configuration but exposes no Node module caches for code replacement.
     expect(consoleErrors.filter(line => !line.includes('Failed to load resource: the server responded with a status of 404')))
-      .toEqual([])
+      .toEqual(['hmr: restart required: module-comparison'])
   } catch (error) {
     await saveFailureShot(page, 'preview-boot-empty')
     throw pageErrors.length === 0

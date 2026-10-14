@@ -1809,6 +1809,112 @@ describe('ConversationNodeAssembler', () => {
     expect(testSnapshot(assembler)?.order).toEqual([])
   })
 
+  describe('exclusive matches', () => {
+    const run = (seq: number, name: string) =>
+      input(at(SessionSeq(seq), 'command/run', { commandId: `c${String(seq)}`, name }))
+    const commandName = (event: SessionEventLike): string | undefined => (event.type as string) === 'command/run'
+      ? (event.data as { readonly name: string }).name
+      : undefined
+
+    function genericDefinition(start = vi.fn(() => 'generic'), target = 'test'): ConversationNodeDefinition<string> {
+      return {
+        kind: `generic-${target}`,
+        target,
+        match: event => commandName(event) === undefined ? null : { id: String(event.seq), role: 'start' },
+        start,
+        update: context => context.state,
+        buildViewNode: context => target === 'test' ? node(context, context.state) : null,
+      }
+    }
+
+    // `null` builds a Definition without a target; an omitted argument keeps the test target.
+    function claimingDefinition(kind = 'specific', target: string | null = 'test'): ConversationNodeDefinition<string> {
+      return {
+        kind,
+        ...target === null ? {} : { target },
+        match: event => commandName(event) === 'claimed'
+          ? { id: String(event.seq), role: 'start', exclusive: true }
+          : null,
+        start: () => kind,
+        update: context => context.state,
+        ...target === null ? {} : { buildViewNode: (context: ConversationNodeContext<string>) => node(context, context.state) },
+      }
+    }
+
+    function nodeData(assembler: ConversationNodeAssembler): unknown[] {
+      return [...testSnapshot(assembler)?.nodes.values() ?? []].map(value => value.data)
+    }
+
+    it.each(['claim first', 'claim last'] as const)(
+      'withholds the claimed event from other Definitions of the target when registered %s',
+      (order) => {
+        const genericStart = vi.fn(() => 'generic')
+        const definitions = [claimingDefinition(), genericDefinition(genericStart)]
+        const assembler = new ConversationNodeAssembler(
+          new TestEventDefinitions(order === 'claim first' ? definitions : [...definitions].reverse()),
+          new TestViewDefinitions([testView()]),
+        )
+
+        assembler.replaceWindow([run(1, 'claimed'), run(2, 'other')], false)
+        assembler.flush()
+        assembler.append(run(3, 'claimed'))
+        assembler.flush()
+
+        expect(genericStart).toHaveBeenCalledOnce()
+        expect(nodeData(assembler)).toEqual(['specific', 'generic', 'specific'])
+      },
+    )
+
+    it('keeps delivering the claimed event to other targets, target-less Definitions, and no fallback', () => {
+      const otherTargetStart = vi.fn(() => 'generic')
+      const stateOnlyStart = vi.fn(() => null)
+      const stateOnly: ConversationNodeDefinition<null> = {
+        kind: 'state-only',
+        match: event => commandName(event) === undefined ? null : { id: String(event.seq), role: 'start' },
+        start: stateOnlyStart,
+        update: context => context.state,
+      }
+      const fallbackStart = vi.fn(() => 'fallback')
+      const assembler = new ConversationNodeAssembler(
+        new TestEventDefinitions(
+          [claimingDefinition(), genericDefinition(otherTargetStart, 'trajectory'), stateOnly],
+          fallbackDefinition(fallbackStart),
+        ),
+        new TestViewDefinitions([testView()]),
+      )
+
+      assembler.replaceWindow([run(1, 'claimed')], false)
+      assembler.flush()
+
+      expect(otherTargetStart).toHaveBeenCalledOnce()
+      expect(stateOnlyStart).toHaveBeenCalledOnce()
+      expect(fallbackStart).not.toHaveBeenCalled()
+      expect(nodeData(assembler)).toEqual(['specific'])
+    })
+
+    it('rejects two claims on one target', () => {
+      const assembler = new ConversationNodeAssembler(
+        new TestEventDefinitions([claimingDefinition('first'), claimingDefinition('second')]),
+        new TestViewDefinitions([testView()]),
+      )
+
+      expect(() => assembler.replaceWindow([run(1, 'claimed')], false)).toThrow(
+        'conversation Definitions "first" and "second" both claim command/run at seq 1 on target "test"',
+      )
+    })
+
+    it('rejects a claim from a Definition without a target', () => {
+      const assembler = new ConversationNodeAssembler(
+        new TestEventDefinitions([claimingDefinition('untargeted', null)]),
+        new TestViewDefinitions([testView()]),
+      )
+
+      expect(() => assembler.replaceWindow([run(1, 'claimed')], false)).toThrow(
+        'conversation Definition "untargeted" claims command/run at seq 1 without a target',
+      )
+    })
+  })
+
   it('rejects withdrawing a previously materialized Node during an incremental update', () => {
     const definition: ConversationNodeDefinition<boolean> = {
       kind: 'toggle',

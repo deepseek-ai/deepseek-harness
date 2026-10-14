@@ -337,7 +337,10 @@ describe('profile reconciliation settlement', () => {
     const patches = [{ insert: [{ id: 'missing-plugin', name: './missing.mjs' }] }]
     const ctx = await boot(NAME, join(dir, 'cordis.yml'), patches)
     onTestFinished(() => ctx.fiber.dispose())
-    expect(await reconcileProfilePatches(ctx, patches, NAME)).toEqual(['missing-plugin (./missing.mjs): failed to import'])
+    // Reload diagnostics carry the import error's message without stack frames.
+    const prefix = 'missing-plugin \\(\\./missing\\.mjs\\): failed to import: Error \\[ERR_MODULE_NOT_FOUND\\]'
+    const diagnostic = new RegExp(`^${prefix}: Cannot find module '[^']*missing\\.mjs' imported from [^\\n]*$`, 'u')
+    expect(await reconcileProfilePatches(ctx, patches, NAME)).toEqual([expect.stringMatching(diagnostic)])
   })
 
   it('rejects a context without the launcher root Include', async () => {
@@ -414,13 +417,11 @@ describe('profile reconciliation settlement', () => {
     onTestFinished(async () => { release.resolve(undefined); await ctx.fiber.dispose() })
     let settled = false
     const operation = reconcileProfilePatches(ctx, [], NAME).then(() => { settled = true })
-    onTestFinished(async () => { release.resolve(undefined); await operation })
     await started.promise
-    expect([...ctx.loader.entries()].find(entry => entry.options.id === 'held')?.fiber?.uid).toBeNull()
+    expect([...ctx.loader.entries()].some(entry => entry.options.id === 'held')).toBe(false)
     expect(settled).toBe(false)
     release.resolve(undefined)
     await operation
-    expect([...ctx.loader.entries()].some(entry => entry.options.id === 'held')).toBe(false)
     expect(settled).toBe(true)
   })
 })

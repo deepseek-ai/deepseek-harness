@@ -54,7 +54,7 @@ function installClipboard(writeText: (text: string) => Promise<void>): () => voi
 }
 
 describe('HoverCard', () => {
-  it.each(['disabled', 'unmounted'] as const)('restores its preview after a nested tooltip is %s', (released) => {
+  it.each(['disabled', 'unmounted'] as const)('keeps its preview mounted while a nested tooltip shows and is then %s', (released) => {
     const markup = (state: 'active' | 'disabled' | 'unmounted') => (
       <HoverCard
         anchor={<div>row{state !== 'unmounted' && (
@@ -70,11 +70,12 @@ describe('HoverCard', () => {
     act(() => { vi.advanceTimersByTime(500) })
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'action' }))
     expect(screen.getByRole('tooltip').textContent).toBe('Create')
-    expect(screen.queryByText('card body')).toBeNull()
+    const card = screen.getByText('card body')
+    expect(card.isConnected).toBe(true)
 
     view.rerender(markup(released))
     expect(screen.queryByRole('tooltip')).toBeNull()
-    expect(screen.getByText('card body')).toBeTruthy()
+    expect(screen.getByText('card body')).toBe(card)
   })
 
   it('keeps card content mounted while its own tooltip is visible', () => {

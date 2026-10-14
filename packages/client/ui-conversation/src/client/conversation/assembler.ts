@@ -3,7 +3,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type {
-  ConversationContextReader, ConversationLocationData, ConversationMatch,
+  ConversationContextReader, ConversationLocationData, ConversationMatch, ConversationMatchResult,
   ConversationNodeContext, ConversationNodeDefinition, ConversationPreviousContext,
   ConversationLocationDataScope, ConversationPublication, ConversationViewBuilder,
   ConversationStartMatch,
@@ -186,6 +186,9 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   private readonly groups = new Map<string, GroupState>()
   private readonly pendingGroupStores = new Set<ConversationGroupStore<unknown>>()
   private readonly activeTargets = new Set<string>()
+  /** Matches of the event in dispatch, kept by index; dispatch is not reentrant and reuses both arrays. */
+  private readonly matchedDefinitions: ConversationNodeDefinition[] = []
+  private readonly matchedResults: ConversationMatchResult[] = []
   private hasMore = false
   private replacePending = true
   private timelineDirty = true
@@ -493,36 +496,57 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
         ? startMatch ??= conversationMatch(input, role, location)
         : updateMatch ??= conversationMatch(input, role, location)
     }
-    let firstTarget: string | undefined
-    let secondTarget: string | undefined
-    let otherTargets: Set<string> | undefined
-    let publication: ConversationPublication = 'none'
+    const definitions = this.matchedDefinitions
+    const results = this.matchedResults
+    definitions.length = 0
+    results.length = 0
     const routes = this.eventDefinitions.forEvent?.(event.type)
     if (routes === undefined) {
       for (const definition of this.eventDefinitions.entries()) {
         const result = definition.match(event)
         if (result === null) continue
-        // Inline target tracking avoids an additional closure allocation for each event.
-        /* jscpd:ignore-start */
-        if (definition.target !== undefined && definition.target !== firstTarget && definition.target !== secondTarget) {
-          if (firstTarget === undefined) firstTarget = definition.target
-          else if (secondTarget === undefined) secondTarget = definition.target
-          else (otherTargets ??= new Set()).add(definition.target)
-        }
-        publication = maximumPublication(publication, accept.call(this, definition, result.id, matchFor(result.role)))
-        /* jscpd:ignore-end */
+        definitions.push(definition)
+        results.push(result)
       }
     } else {
       for (const { definition, match } of routes) {
         const result = match(event)
         if (result === null) continue
-        if (definition.target !== undefined && definition.target !== firstTarget && definition.target !== secondTarget) {
-          if (firstTarget === undefined) firstTarget = definition.target
-          else if (secondTarget === undefined) secondTarget = definition.target
-          else (otherTargets ??= new Set()).add(definition.target)
-        }
-        publication = maximumPublication(publication, accept.call(this, definition, result.id, matchFor(result.role)))
+        definitions.push(definition)
+        results.push(result)
       }
+    }
+    // Claims are resolved before any acceptance, so the outcome does not depend on registration order.
+    let claims: Map<string, string> | undefined
+    for (let index = 0; index < results.length; index++) {
+      if ((results[index] as ConversationMatchResult).exclusive !== true) continue
+      const definition = definitions[index] as ConversationNodeDefinition
+      const target = definition.target
+      if (target === undefined) {
+        throw new Error(`conversation Definition "${definition.kind}" claims ${event.type} at seq ${String(event.seq)} without a target`)
+      }
+      const claimant = claims?.get(target)
+      if (claimant !== undefined) {
+        throw new Error(`conversation Definitions "${claimant}" and "${definition.kind}" both claim ${event.type} at seq ${String(event.seq)} on target "${target}"`)
+      }
+      (claims ??= new Map()).set(target, definition.kind)
+    }
+    let firstTarget: string | undefined
+    let secondTarget: string | undefined
+    let otherTargets: Set<string> | undefined
+    let publication: ConversationPublication = 'none'
+    for (let index = 0; index < results.length; index++) {
+      const definition = definitions[index] as ConversationNodeDefinition
+      const result = results[index] as ConversationMatchResult
+      const target = definition.target
+      if (target !== undefined && result.exclusive !== true && claims?.has(target) === true) continue
+      // Inline target tracking avoids an additional closure allocation for each event.
+      if (target !== undefined && target !== firstTarget && target !== secondTarget) {
+        if (firstTarget === undefined) firstTarget = target
+        else if (secondTarget === undefined) secondTarget = target
+        else (otherTargets ??= new Set()).add(target)
+      }
+      publication = maximumPublication(publication, accept.call(this, definition, result.id, matchFor(result.role)))
     }
     const fallback = this.eventDefinitions.fallbackEntry()
     const target = fallback?.target

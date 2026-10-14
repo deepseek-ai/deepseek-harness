@@ -7,12 +7,14 @@
 // Replay is deterministic: the plan content arrives from replayed chunks, the
 // review wait is real, and the approve click is the test's own gesture (the
 // turn cannot complete without it, in record and replay alike).
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, ConsoleMessage, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
@@ -390,8 +392,12 @@ describe.skipIf(MODE === 'record')('web e2e: pending plan review across Sidebar 
 
 describe('web e2e: dismissed plan history', () => {
   it.skipIf(MODE === 'record')('reopens the permanent plan card after dismissing its review', async () => {
-    // Replay supplies a finite continuation; the real question rejection and retained document are the assertions.
-    const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: false, paceMs: 15 })
+    // A dismissed review concludes the turn, so only the call presenting the plan replays.
+    const replayRoot = await mkdtemp(join(tmpdir(), 'dsh-plan-review-dismiss-replay-'))
+    const replayOverride = join(replayRoot, 'replay.override.json')
+    const script = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
+    await writeFile(replayOverride, JSON.stringify(script.slice(0, 1)))
+    const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, replayOverride, compareReplaySession: false, paceMs: 15 })
     let browser: Browser | undefined
     const events: SessionEvent[] = []
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { events.push(event) })
@@ -417,9 +423,10 @@ describe('web e2e: dismissed plan history', () => {
       expect(call).toBeDefined()
       const results = events.filter(event => event.type === 'tool/result')
       const result = results.find(event => event.data.message.source.callId === call?.data.callId)
-      expect(result?.data.message).toMatchObject({ role: 'tool', toolCallId: call?.data.callId, isError: true })
+      expect(result?.data.message).toMatchObject({ role: 'tool', toolCallId: call?.data.callId, isError: false })
       expect(JSON.stringify(result)).toContain('dismissed the plan review')
       expect(results.some(event => JSON.stringify(event).includes('Plan approved'))).toBe(false)
+      expect(events.filter(event => event.type === 'assistant/message')).toHaveLength(1)
       const modes = events.filter(event => event.type === 'plan/mode')
       expect(modes).toHaveLength(1)
       expect(modes[0]).toMatchObject({ data: { active: true } })
@@ -443,6 +450,7 @@ describe('web e2e: dismissed plan history', () => {
     } finally {
       await browser?.close()
       await scaffold.close()
+      await rm(replayRoot, { recursive: true, force: true })
     }
   })
 })

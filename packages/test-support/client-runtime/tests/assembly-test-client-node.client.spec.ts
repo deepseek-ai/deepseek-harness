@@ -48,10 +48,22 @@ describe('TestClient (node environment)', () => {
     expect(client.connection.state.getSnapshot()).toBe('connected')
   })
 
-  it('refuses a provide entry for the api-remotes row, whose services are the proxies', async () => {
-    const roster = webApp.closure(['@deepseek-ai/dsh-api-remotes'])
-    await expect(TestClient.start({ roster, provide: { '@deepseek-ai/dsh-api-remotes': { apply() {} } } }, RemoteMock.create()))
-      .rejects.toThrow('@deepseek-ai/dsh-api-remotes cannot be provided; its remote.<ns> services are the tier\'s proxies')
+  it.each(['@deepseek-ai/dsh-api-remotes', '@deepseek-ai/dsh-api-remote-access'])(
+    'refuses a provide entry for the %s row, whose generated Remote mount the tier replaces',
+    async (name) => {
+      const roster = webApp.closure([name])
+      await expect(TestClient.start({ roster, provide: { [name]: { apply() {} } } }, RemoteMock.create()))
+        .rejects.toThrow(`${name} cannot be provided; the tier replaces its generated Remote mount`)
+    },
+  )
+
+  it('drops the remote-access row and answers every access question with true', async () => {
+    const mock = RemoteMock.create().load(remoteDefaultResponses)
+    const client = await TestClient.start({ roster: webApp.closure(['@deepseek-ai/dsh-api-remote-access']) }, mock)
+    onTestFinished(() => client.dispose())
+    expect(client.ctx.get('remoteAccess')?.source('session', 's1', 'session/fork').getSnapshot()).toBe(true)
+    // The dropped row never mounts its namespace, so no access stream opens.
+    expect(mock.log.streams('remoteAccess/follow')).toEqual([])
   })
 
   it('reports unmatched requests alongside a failed teardown instead of hiding them', async () => {

@@ -18,6 +18,7 @@ import { getEnvironmentData } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   installRuntimeInterception,
+  ResolutionRestartRequired,
   registerWorkerResolution,
   type RuntimeInterception,
 } from '../src/profile-resolution/resolver.ts'
@@ -1642,12 +1643,126 @@ describe('runtime resolution', { concurrent: false }, () => {
     registration.replace({ ...withLocal, linkedRoots: [linked] })
     registration.replace({ ...withLocal, linkedRoots: [] })
     registration.replace({ ...withLocal, linkedRoots: [linked] })
-    expect(() => {
-      registration.replace({ ...withLocal, linkedRoots: [{ ...linked, realPath: join(f.root, 'work', 'b') }] })
-    }).toThrow(/relinking "linked-plugin" requires a process restart/u)
+    // A link name may point to another directory once its previous target's plugins stopped.
+    registration.replace({ ...withLocal, linkedRoots: [{ ...linked, realPath: join(f.root, 'work', 'b') }] })
     expect(registration.packageDir(
       '@deepseek-ai/dsh-core', pathToFileURL(join(f.profile.dir, 'entry.mjs')).href,
     )).toBe(f.installed)
+  })
+
+  it('selects the current target for a native lookup through a link Node resolved before it moved', async () => {
+    const f = fixture()
+    const first = join(f.root, 'work', 'first')
+    const second = join(f.root, 'work', 'second')
+    pkg(first, 'linked-lib', 1)
+    pkg(second, 'linked-lib', 2)
+    // An importer outside every interception layer resolves natively through the link.
+    const outside = join(f.root, 'outside')
+    const link = join(outside, 'node_modules', 'linked-lib')
+    mkdirSync(dirname(link), { recursive: true })
+    symlinkSync(first, link, process.platform === 'win32' ? 'junction' : 'dir')
+    const parentPath = join(outside, 'entry.mjs')
+    file(parentPath, '')
+    const parent = pathToFileURL(parentPath).href
+    const base = await resolutionOf(f)
+    const linked = { name: 'linked-lib', realPath: realpathSync.native(first) }
+    const registration = installRuntimeInterception({ ...base, linkedRoots: [linked] })
+    registrations.push(registration)
+    expect(fileURLToPath(resolveFrom('linked-lib', parent))).toBe(join(realpathSync(first), 'index.js'))
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync(first), 'index.cjs'))
+    unlinkSync(link)
+    symlinkSync(second, link, process.platform === 'win32' ? 'junction' : 'dir')
+    registration.replace({ ...base, linkedRoots: [{ ...linked, realPath: realpathSync.native(second) }] })
+    expect(fileURLToPath(resolveFrom('linked-lib', parent))).toBe(join(realpathSync.native(second), 'index.js'))
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync.native(second), 'index.cjs'))
+    // A file only the previous target has, or a builtin, stays as Node selected it.
+    file(join(first, 'only-first.cjs'), '')
+    expect(createRequire(parentPath).resolve(join(first, 'only-first.cjs'))).toBe(join(realpathSync(first), 'only-first.cjs'))
+    expect(resolveFrom('node:fs', parent)).toBe('node:fs')
+    // An entry point's lookup has no importer.
+    expect(fileURLToPath(resolveFrom(pathToFileURL(join(link, 'index.js')).href, undefined))).toBe(join(realpathSync.native(second), 'index.js'))
+    // A file system without a native realpath, as a packed worker has, records the JavaScript spelling alone.
+    const native: unknown = Reflect.get(realpathSync, 'native')
+    Reflect.deleteProperty(realpathSync, 'native')
+    try {
+      registration.replace({ ...base, linkedRoots: [{ ...linked, realPath: realpathSync(second) }] })
+    } finally { Reflect.set(realpathSync, 'native', native) }
+    registration.replace({ ...base, linkedRoots: [{ ...linked, realPath: realpathSync.native(second) }] })
+    // A second move takes files of the first target straight to the latest one.
+    const third = join(f.root, 'work', 'third')
+    pkg(third, 'linked-lib', 3)
+    unlinkSync(link)
+    symlinkSync(third, link, process.platform === 'win32' ? 'junction' : 'dir')
+    registration.replace({ ...base, linkedRoots: [{ ...linked, realPath: realpathSync.native(third) }] })
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync.native(third), 'index.cjs'))
+    // Another link's move leaves this link's relocation as it is, and the innermost previous directory decides.
+    const outer = { name: 'outer-lib', realPath: realpathSync.native(join(f.root, 'work')) }
+    const atThird = { ...linked, realPath: realpathSync.native(third) }
+    registration.replace({ ...base, linkedRoots: [atThird, outer] })
+    registration.replace({ ...base, linkedRoots: [atThird, { ...outer, realPath: realpathSync.native(f.root) }] })
+    expect(createRequire(parentPath).resolve(join(first, 'index.cjs'))).toBe(join(realpathSync.native(third), 'index.cjs'))
+    unlinkSync(link)
+    symlinkSync(second, link, process.platform === 'win32' ? 'junction' : 'dir')
+    registration.replace({ ...base, linkedRoots: [{ ...linked, realPath: realpathSync.native(second) }] })
+    // An importer below the previous target keeps resolving there, and pointing the link back ends the relocation.
+    expect(createRequire(join(first, 'index.cjs')).resolve('./index.js')).toBe(join(realpathSync(first), 'index.js'))
+    unlinkSync(link)
+    symlinkSync(first, link, process.platform === 'win32' ? 'junction' : 'dir')
+    registration.replace({ ...base, linkedRoots: [linked] })
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync(first), 'index.cjs'))
+    // A link installed again as a directory at the same path keeps Node's cached link real path, which is relocated too.
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync(first), 'index.cjs'))
+    unlinkSync(link)
+    pkg(link, 'linked-lib', 4)
+    registration.replace({ ...base, linkedRoots: [], entries: [...base.entries, {
+      name: 'linked-lib', packageDir: link, version: '4.0.0', declarer: join(link, 'package.json'), scope: 'profile',
+    }] })
+    expect(createRequire(parentPath).resolve('linked-lib')).toBe(join(realpathSync.native(link), 'index.cjs'))
+  })
+
+  it('rejects a retained profile package moved to another directory, and maps it there once it was removed', async () => {
+    const f = fixture()
+    const firstDir = join(f.root, 'bundle-a', 'node_modules', 'private-lib')
+    const secondDir = join(f.root, 'bundle-b', 'node_modules', 'private-lib')
+    pkg(firstDir, 'private-lib', 1)
+    pkg(secondDir, 'private-lib', 2)
+    const base = await resolutionOf(f)
+    const entry = {
+      name: 'private-lib', packageDir: firstDir, version: '1.0.0',
+      declarer: join(firstDir, 'package.json'), scope: 'profile' as const,
+    }
+    const first = { ...base, entries: [...base.entries, entry] }
+    const registration = installRuntimeInterception(first)
+    registrations.push(registration)
+    const parent = pathToFileURL(join(f.profile.dir, 'entry.mjs')).href
+    const moved = { ...first, entries: [...base.entries, {
+      ...entry, packageDir: secondDir, version: '2.0.0', declarer: join(secondDir, 'package.json'),
+    }] }
+    expect(() => { registration.replace(moved) }).toThrow(ResolutionRestartRequired)
+    registration.replace(base)
+    registration.replace(moved)
+    expect(registration.packageDir('private-lib', parent)).toBe(secondDir)
+  })
+
+  it('reports a package whose link keeps its path but points to another directory', async () => {
+    const f = fixture()
+    const firstDir = join(f.root, 'source-a')
+    const secondDir = join(f.root, 'source-b')
+    pkg(firstDir, 'linked-lib', 1)
+    pkg(secondDir, 'linked-lib', 2)
+    const link = join(f.root, 'links', 'linked-lib')
+    mkdirSync(dirname(link), { recursive: true })
+    symlinkSync(firstDir, link, process.platform === 'win32' ? 'junction' : 'dir')
+    const base = await resolutionOf(f)
+    const entry = { name: 'linked-lib', packageDir: link, version: '1.0.0', declarer: join(link, 'package.json'), scope: 'profile' as const }
+    const resolution = { ...base, entries: [...base.entries, entry], linkedRoots: [{ name: 'linked-lib', realPath: realpathSync(firstDir) }] }
+    const registration = installRuntimeInterception(resolution)
+    registrations.push(registration)
+    unlinkSync(link)
+    symlinkSync(secondDir, link, process.platform === 'win32' ? 'junction' : 'dir')
+    // The mapping and the linked root report the same package once.
+    const relinked = { ...resolution, linkedRoots: [{ name: 'linked-lib', realPath: realpathSync(secondDir) }] }
+    expect(() => { registration.replace(relinked) }).toThrow(/^profile resolution: replacing "linked-lib" requires a process restart$/u)
   })
 
   it('removes profile mappings and local names while retaining changed profile mappings as restarts', async () => {
@@ -1708,7 +1823,19 @@ describe('runtime resolution', { concurrent: false }, () => {
     }
   })
 
-  it.each(['directory', 'version', 'scope'] as const)('rejects a retained profile mapping with a different %s', async (change) => {
+  it('accepts a retained profile mapping upgraded in place', async () => {
+    const f = fixture()
+    const packageDir = join(f.root, 'bundle', 'node_modules', 'private-lib')
+    pkg(packageDir, 'private-lib', 1)
+    const base = await resolutionOf(f)
+    const entry = { name: 'private-lib', packageDir, declarer: join(packageDir, 'package.json'), version: '1.0.0', scope: 'profile' as const }
+    const registration = installRuntimeInterception({ ...base, entries: [...base.entries, entry] })
+    registrations.push(registration)
+    registration.replace({ ...base, entries: [...base.entries, { ...entry, version: '2.0.0' }] })
+    expect(registration.packageDir('private-lib', pathToFileURL(join(f.profile.dir, 'entry.mjs')).href)).toBe(packageDir)
+  })
+
+  it.each(['directory', 'scope'] as const)('rejects a retained profile mapping with a different %s', async (change) => {
     const f = fixture()
     const packageDir = join(f.root, 'bundle', 'node_modules', 'private-lib')
     pkg(packageDir, 'private-lib', 1)
@@ -1719,7 +1846,6 @@ describe('runtime resolution', { concurrent: false }, () => {
     const successor = {
       ...entry,
       packageDir: change === 'directory' ? join(f.root, 'different') : entry.packageDir,
-      version: change === 'version' ? '2.0.0' : entry.version,
       scope: change === 'scope' ? 'installation' as const : entry.scope,
     }
 
@@ -2205,7 +2331,7 @@ describe('runtime resolution', { concurrent: false }, () => {
     })
 
     it.each(['initial', 'added'] as const)(
-      'rejects a removed %s root retarget without reactivating either directory', async (generation) => {
+      'accepts a removed %s root retargeted to another directory', async (generation) => {
         const { f, linkedRoot } = unsavedFixture()
         const link = join(f.profile.dir, 'node_modules', 'my-plugin')
         const linkType = process.platform === 'win32' ? 'junction' : 'dir'
@@ -2237,11 +2363,10 @@ describe('runtime resolution', { concurrent: false }, () => {
           const successor = await resolutionOf(f)
           expect(successor.localPackageNames).toEqual([])
           expect(successor.linkedRoots).toEqual([{ name: 'my-plugin', realPath: target }])
-          expect(() => { registration.replace(successor) })
-            .toThrow(/^profile resolution: relinking "my-plugin" requires a process restart$/u)
+          registration.replace(successor)
           expectPeerLookup(registration, require, parent, join(linkedRoot, 'node_modules', peer))
           expectPeerLookup(registration, createRequire(join(target, 'entry.cjs')),
-            pathToFileURL(join(target, 'entry.mjs')).href, join(target, 'node_modules', peer))
+            pathToFileURL(join(target, 'entry.mjs')).href, f.installed)
         } finally {
           registration.dispose()
           registrations.pop()
@@ -2249,64 +2374,6 @@ describe('runtime resolution', { concurrent: false }, () => {
       },
     )
 
-    it('does not retain targets from a rejected successor', async () => {
-      const { f, linkedRoot } = unsavedFixture()
-      const modules = join(f.profile.dir, 'node_modules')
-      const originalLink = join(modules, 'my-plugin')
-      const newLink = join(modules, 'a-new-plugin')
-      const replacement = join(f.root, 'work', 'replacement')
-      const rejectedTarget = join(f.root, 'work', 'rejected-target')
-      const acceptedTarget = join(f.root, 'work', 'accepted-target')
-      for (const [dir, name, marker] of [
-        [replacement, 'my-plugin', 22],
-        [rejectedTarget, 'a-new-plugin', 31],
-        [acceptedTarget, 'a-new-plugin', 32],
-      ] as const) {
-        pkg(dir, name, 0, {}, { [peer]: '*' })
-        pkg(join(dir, 'node_modules', peer), peer, marker)
-      }
-      const require = createRequire(join(linkedRoot, 'entry.cjs'))
-      const parent = pathToFileURL(join(linkedRoot, 'entry.mjs')).href
-      const first = await resolutionOf(f)
-      expect(first.localPackageNames).toEqual([])
-      const registration = installRuntimeInterception(first)
-      registrations.push(registration)
-      try {
-        expectPeerLookup(registration, require, parent, f.installed)
-        unlinkSync(originalLink)
-        const removed = await resolutionOf(f)
-        expect(removed.linkedRoots).toEqual([])
-        registration.replace(removed)
-        expectPeerLookup(registration, require, parent, join(linkedRoot, 'node_modules', peer))
-
-        const linkType = process.platform === 'win32' ? 'junction' : 'dir'
-        symlinkSync(replacement, originalLink, linkType)
-        symlinkSync(rejectedTarget, newLink, linkType)
-        const rejected = await resolutionOf(f)
-        expect(rejected.linkedRoots).toEqual([
-          { name: 'a-new-plugin', realPath: rejectedTarget },
-          { name: 'my-plugin', realPath: replacement },
-        ])
-        expect(() => { registration.replace(rejected) })
-          .toThrow(/^profile resolution: relinking "my-plugin" requires a process restart$/u)
-        expectPeerLookup(registration, require, parent, join(linkedRoot, 'node_modules', peer))
-        expectPeerLookup(registration, createRequire(join(rejectedTarget, 'entry.cjs')),
-          pathToFileURL(join(rejectedTarget, 'entry.mjs')).href, join(rejectedTarget, 'node_modules', peer))
-
-        unlinkSync(originalLink)
-        unlinkSync(newLink)
-        symlinkSync(acceptedTarget, newLink, linkType)
-        const accepted = await resolutionOf(f)
-        expect(accepted.linkedRoots).toEqual([{ name: 'a-new-plugin', realPath: acceptedTarget }])
-        registration.replace(accepted)
-        expectPeerLookup(registration, createRequire(join(acceptedTarget, 'entry.cjs')),
-          pathToFileURL(join(acceptedTarget, 'entry.mjs')).href, f.installed)
-        expectPeerLookup(registration, require, parent, join(linkedRoot, 'node_modules', peer))
-      } finally {
-        registration.dispose()
-        registrations.pop()
-      }
-    })
   })
 
   it.each(['src', 'dist'] as const)(

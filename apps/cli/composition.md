@@ -30,6 +30,8 @@ flowchart LR
   cfg --> plugin_dsh_base_typert_loader
   plugin_dsh_base_typert_gateway["typert-gateway<br/>@deepseek-ai/dsh-api-gateway"]
   cfg --> plugin_dsh_base_typert_gateway
+  plugin_dsh_base_remote_access["remote-access<br/>@deepseek-ai/dsh-api-remote-access"]
+  cfg --> plugin_dsh_base_remote_access
   plugin_dsh_base_session_title["session-title<br/>@deepseek-ai/dsh-session-title"]
   cfg --> plugin_dsh_base_session_title
   plugin_dsh_base_session_title_llm["session-title-llm<br/>@deepseek-ai/dsh-session-title-first-prompt-llm"]
@@ -211,6 +213,7 @@ flowchart LR
 | `typert` | `@deepseek-ai/dsh-typert-registry` |
 | `typert-loader` | `@deepseek-ai/dsh-typert-loader` |
 | `typert-gateway` | `@deepseek-ai/dsh-api-gateway` |
+| `remote-access` | `@deepseek-ai/dsh-api-remote-access` |
 | `session-title` | `@deepseek-ai/dsh-session-title` |
 | `session-title-llm` | `@deepseek-ai/dsh-session-title-first-prompt-llm` |
 | `user-questions` | `@deepseek-ai/dsh-user-questions` |

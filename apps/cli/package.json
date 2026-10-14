@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
   "description": "dsh CLI: profile launch, plugin management, and configuration inspection",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -98,7 +98,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "commander": "^15.0.0",
     "js-yaml": "^4.3.2",
-    "node-addon-require-builtin": "^0.1.6",
+    "node-addon-require-builtin": "^0.1.9",
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",

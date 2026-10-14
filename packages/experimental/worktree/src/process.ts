@@ -56,7 +56,7 @@ export async function runCommand(
   const child = ctx.subprocess.spawn({
     argv: wrapped,
     cwd,
-    env: { ...GIT_ENV, GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', ...env },
+    env: { ...GIT_ENV, GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', GIT_NO_LAZY_FETCH: '1', ...env },
     signal: timeout.signal,
     graceMs: config.graceMs,
     stdio: {

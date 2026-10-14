@@ -289,7 +289,7 @@ export class Session implements SessionFace {
       // wire type is used; this array is not filtered or reordered.
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
       const routed = await this.remote.subagents.prompt({
-        requestId: randomUUID() as SessionRequestId,
+        requestId: requestId ?? randomUUID() as SessionRequestId,
         parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
         mode: 'continuable',

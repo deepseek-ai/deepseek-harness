@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-29-session-migration-follow-redirect.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-29-session-migration-follow-redirect.md
+/agent-note-present-single-session-migration-through-follow-redirection:
+  en: 294f1872bbef5f59
+  zh: c4bf2852374fbba4
+/agent-note-present-single-session-migration-through-follow-redirection/problem:
+  en: 8d019bda1e854df3
+  zh: 49cbd8b8d869e406
+/agent-note-present-single-session-migration-through-follow-redirection/proposal:
+  en: b5d43cb845d165ed
+  zh: c5b3aa8eb7799134
+/agent-note-present-single-session-migration-through-follow-redirection/proposal/completion-milestone-remains-open:
+  en: 2281727adab80d51
+  zh: 4795be5613b37ede
+/agent-note-present-single-session-migration-through-follow-redirection/alternatives-considered:
+  en: bfc5d2325e710601
+  zh: 4f285a9f317cd6af
+/agent-note-present-single-session-migration-through-follow-redirection/acceptance-criteria:
+  en: e5d810300cec5f99
+  zh: 7bcef7a5ef99501e
+/agent-note-present-single-session-migration-through-follow-redirection/risks:
+  en: 1704cb15dc3c0b5e
+  zh: cc4576d6e47c3b22

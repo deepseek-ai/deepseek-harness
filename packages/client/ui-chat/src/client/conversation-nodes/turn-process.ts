@@ -296,6 +296,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       'turn-process',
       data.controlAnchorSeq + CHAT_SYNTHETIC_SEQ_OFFSETS.processControl,
       data,
+      { groupTree: 'turn' },
     )
   },
 }

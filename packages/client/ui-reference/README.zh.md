@@ -59,6 +59,8 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 文件选择把共享 `@path` 语法所定义的自然文本保留为隐藏的序列化与剪贴板形式。会话选择使用规范的 `@[label](dsh-session:…)` mention；序列化永远不会根据可见标题重建身份。
 
+插件还向 [UserText](../ui-conversation/README.zh.md#sent-user-text) 注册文件和目录匹配器，并拥有它们的 `conversation.user.text.node` renderer。每次查询返回原文偏移之后的下一个完整引用，不执行文件发现；共享计算器按原文位置裁定重叠。可交互的文件节点通过 Injection 接收绑定 Session 的 `openFile`；导航失败时保留引用，提供局部重试／关闭对话框。目录节点仍为标签。
+
 </details>
 
 -----

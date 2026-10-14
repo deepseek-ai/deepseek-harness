@@ -21,7 +21,7 @@ const worker: UserConfig = {
 
 /** Build the Host plugin and Worker during the Host pass, and the dynamic Client plugin during the Client pass. */
 export default clientBundle(
-  '@deepseek-ai/dsh-experimental-inspector',
+  import.meta.dirname,
   ['lib/types/index.js'],
   {
     hostPhase: true,

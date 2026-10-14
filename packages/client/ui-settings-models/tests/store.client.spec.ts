@@ -4,7 +4,28 @@ import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
-import { joinProviderDirectory, ModelsSettingsStore, providerUsable } from '../src/client/store.ts'
+import { deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, providerUsable } from '../src/client/store.ts'
+
+it.each([
+  ['anthropic', 'ANTHROPIC_API_KEY'],
+  ['moonshotai', 'MOONSHOTAI_API_KEY'],
+  ['moonshotai-cn', 'MOONSHOTAI_CN_API_KEY'],
+  ['google-vertex', 'GOOGLE_VERTEX_API_KEY'],
+  ['constructor', 'CONSTRUCTOR_API_KEY'],
+])('stores a typed key for route %s under a reference derived from the route id', (provider, ref) => {
+  expect(deriveKeyRef(provider)).toBe(ref)
+})
+
+it('carries the endpoint and native authentication the adapter reports onto the row', () => {
+  const nativeAuth = { env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true }
+  expect(joinProviderDirectory([], [{
+    provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'],
+    defaultBaseURL: 'https://api.anthropic.com', nativeAuth,
+  }])).toEqual([{
+    provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'],
+    active: false, defaultBaseURL: 'https://api.anthropic.com', nativeAuth,
+  }])
+})
 
 it.each([false, true])('retains configuration diagnostics when the route is active: %s', (active) => {
   expect(joinProviderDirectory(active ? [{ id: 'openai', name: 'openai' }] : [], [{
@@ -439,24 +460,23 @@ describe('edge joins', () => {
     expect(state.rows[0]?.derivedCredential).toMatchObject({ configured: true })
   })
 
-  it('surfaces a settings describe failure', async () => {
-    const { ctx, mirror } = api({ describeSettings: () => Promise.resolve(remoteFail('settings down')) })
+  it('recovers the provider directory when an initial settings failure is retried', async () => {
+    let settingsCall = 0
+    const { ctx, mirror } = api({
+      describeSettings: () => Promise.resolve(++settingsCall === 1
+        ? remoteFail('settings down')
+        : remoteOk({ writable: true, hasDocument: false, namespaces: NAMESPACES })),
+    })
     const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
     await store.load()
     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'settings down' })
-  })
-
-  it('reports a terminally unavailable settings mirror precisely', async () => {
-    const { ctx } = api()
-    const store = new ModelsSettingsStore(
-      ctx,
-      settingsSchema,
-      new SettingsDescribeMirror(ctx, 'memory'),
-    )
     await store.load()
-    expect(store.store.getSnapshot()).toMatchObject({
-      status: 'error',
-      error: 'settings are unavailable in this browser',
+    const state = store.store.getSnapshot()
+    expect(state).toMatchObject({ status: 'ready', error: null, writable: true })
+    expect(state.rows.find(row => row.entry.provider === 'openai')).toMatchObject({
+      configured: true,
+      apiKeyEnv: 'OPENAI_API_KEY',
+      credential: { configured: true, writable: true },
     })
   })
 

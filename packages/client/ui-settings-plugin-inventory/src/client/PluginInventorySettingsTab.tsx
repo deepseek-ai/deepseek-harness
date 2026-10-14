@@ -413,18 +413,7 @@ export function PluginInventorySettingsTab(
           facts={providers !== undefined
             ? [
               [t('configuration'), t('presetProvidedDetail')],
-              [t('enabledIn'), (
-                <span className={css.enabledIn}>
-                  <span>{providers.map(preset => presetName(preset)).join(' · ')}</span>
-                  <button
-                    type="button"
-                    className={css.jumpLink}
-                    onClick={() => { setChosenPreset(providers[0].id) }}
-                  >
-                    {t('viewInPreset')}
-                  </button>
-                </span>
-              )],
+              [t('enabledIn'), providers.map(preset => presetName(preset)).join(' · ')],
             ]
             : [
               [t('configuration'), t(entry.enabled ? 'enabledTag' : 'disabledTag')],
@@ -527,12 +516,7 @@ export function PluginInventorySettingsTab(
                   />
                 </div>
               </div>
-              <p className={css.groupSub}>
-                <span>{t('presetSubtitle')}</span>
-                <span data-preset-plugin-count={selectedRows.length}>
-                  {`${String(selectedRows.length)} ${t('countUnit')}`}
-                </span>
-              </p>
+              <p className={css.groupSub}>{t('presetSubtitle')}</p>
               {presetEffectiveOpen ? (
                 <div id={`${sectionId}-preset`} className={css.groupBody}>
                   {selected.broken !== undefined ? (
@@ -577,13 +561,7 @@ export function PluginInventorySettingsTab(
                   <span className={css.groupTitle}>{t('globalTitle')}</span>
                 </button>
               </div>
-              <p className={css.groupSub}>
-                <span>{t('globalSubtitle')}</span>
-                <span data-plugin-count={globalCount}>{`${String(globalCount)} ${t('countUnit')}`}</span>
-                {filteredFailed.length > 0 ? (
-                  <span className={css.failedCount}>{filteredFailed.length} {t('failedCountLabel')}</span>
-                ) : null}
-              </p>
+              <p className={css.groupSub}>{t('globalSubtitle')}</p>
               {globalEffectiveOpen && globalCount > 0 ? (
                 <ul className={css.cards} id={`${sectionId}-global`}>
                   {filteredFailed.map(entry => globalRowCard(entry))}

@@ -1,0 +1,14 @@
+version: 1
+scenario: office-render-tools-ptc
+profile: headless
+# The retired PTC replay uses a POSIX Node wrapper.
+platform: posix
+composition: office-render-tools-ptc
+recording: authored
+sessionFormat:
+  version: 4
+  coverage: [retired-tools]
+header:
+  class: office-render-tools-ptc
+workspace:
+  setup: office-retired-ptc

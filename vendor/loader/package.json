@@ -31,7 +31,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "node-addon-require-builtin": "^0.1.6"
+    "node-addon-require-builtin": "^0.1.9"
   },
   "peerDependenciesMeta": {
     "node-addon-require-builtin": {

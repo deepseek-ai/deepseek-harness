@@ -51,3 +51,5 @@ Zod emitter 对支持的节点和各类 literal 逐类执行成功与失败 pars
 新增生成目标或静态检查可复用同一 TypeGraph，业务类目也可在 PackageModel 上扩展，而无需再次解析 AST。保留计算前类型和独立 face 的代价是模型比打平后的 schema 更复杂，emitter 必须显式声明支持范围并对缺失能力失败。
 
 包级显式 opt-in 使产物发布与 exports 由各包自行管理。仓库编排仍可为每个已 opt-in 的包运行全仓 Host 约定 pass；该 pass 仍由后续 Remote Gateway Agent Note 负责说明。静态 Cordis catalog 可从标准模型复现，同时不把 `tool-cordis` 与运行时注册表状态耦合。`ctx.typert` 只反映当前运行时中已挂载的产物；对于消费方物化后仍持有的 Zod 实例，卸载流程无法控制。
+
+普通 Host 与 Remote 产物复用此模型，为每个端点生成一份静态方法 spec。每个参数都有从同一 checker 解析后类型模型派生的普通 `codec` 和 `strictCodec` 变体；分析过程与模型均不携带逐方法输入策略。纯 factory 返回惰性 info 实例，其直接方法索引与描述符列表共享对象；既有 Registry 保留这些描述符，而 `TYPERT_REMOTE.methods` 提供精确静态类型。[统一 Typert/Remote 元数据 note](../../proposed/architecture/2026-09-20-unified-typert-remote-metadata.zh.md)记录该交付机制及尚未完成的下游适配。声明与编译面隔离规则保持不变；独立 Program 和进程不共享对象身份。

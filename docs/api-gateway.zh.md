@@ -4,6 +4,8 @@
 
 本文是 Typert API Gateway 的当前状态参考。它描述业务服务如何声明一元与流式 Remote 方法、构建如何生成 Host 与 Client 约定，以及调用如何复用 Connection 的 RPC 与 `/api` 路由。会话事件、增量数据和其他流协议不属于本文范围；它们可以使用同一个 Connection，但不使用 Remote 方法描述符。
 
+<a id="programming-model"></a>
+
 ## 编程模型
 
 业务服务通过 `@Remote` 或 `@RemoteScope` 选择对 Client 开放的方法。未标记的方法不会进入生成的 Client 类型或运行时贡献，也不能通过 `ctx.remote` 调用。
@@ -11,6 +13,8 @@
 `@Remote` 表示调用根 Host Context 中注册的 Cordis 服务。复杂的 Host 对象不能直接跨 wire 传输；业务包必须通过 `TypertLookupMap` 声明它与 wire identity 的关联，并在运行时向 `ctx.typert.lookups` 注册默认解析提供方。例如 `Agent` 参数在 Host 签名中名为 `agent`，生成的 wire 字段为 `agentId`，Gateway 在调用业务方法前将 id 解析为 Host 对象。Host 组合可以用 `ctx.typert.lookups.configure()` 覆盖某个 lookup key 的解析策略，而不改变业务包拥有的参数名、wire 字段或规范类型 symbol。
 
 `@RemoteScope(key)` 表示先通过 `ctx.typert.contexts` 把 identity 解析为一个作用域 Context，再从该 Context 取得服务并调用方法。它适用于方法本身依赖作用域组合、而不需要显式接收 `Agent` 等对象的情形。
+
+`@Remote` 接受导出名或 `{ name?, mode?, resources? }`；`@RemoteScope(key, option?)` 的第二个参数接受导出名（如下文的 `@RemoteScope('agent', 'current')`）或 `{ name?, resources? }`。`resources` 按资源种类给出读取函数，返回一次调用所访问资源的身份，供访问控制使用；每个读取函数以方法的 wire 参数作为自身参数，类型从被装饰方法推断。多数方法不声明读取函数，因为 Gateway 还会从声明了 `resource` 的 lookup 参数与作用域 Context 以及 `typert.resources` 中的默认字段读取身份；[Typert 子系统](subsystems/typert.zh.md)负责该顺序。
 
 服务通常继承 `TypertRemoteService`，让 Cordis 服务 key 与默认 Remote namespace 在构造器中显式绑定。已有其他基类的服务可以改为声明 `readonly typertRemote = bindTypertRemote(this, serviceKey)`；两种方式都会留下可检查的公开 binding，不依赖编译器向构造函数注入 symbol。
 
@@ -88,6 +92,7 @@ Client 应用只装配 `@deepseek-ai/dsh-api-remotes`。该包以运行时值导
 | Host | `@deepseek-ai/dsh-typert-registry` 与 Loader | 把生成的 Host 描述符、schema 及业务包注册项放入 `ctx.typert`，并持有 lookup 与 Context 提供方 |
 | Host | `@deepseek-ai/dsh-api-session-controller` | 负责应用的 Agent/Session 身份策略，并配置对应的 Typert lookup |
 | Host | `@deepseek-ai/dsh-api-gateway` | 提供 `ctx.typertGateway`，认领 Remote endpoint，校验请求值，解析对象或 Context，并调用实时 Cordis 服务 |
+| Host | `@deepseek-ai/dsh-api-remote-access` | 按业务方注册的基于 role 的 policy 判定非 owner Peer 可调用哪些 Remote 方法，过滤列表结果，并为每个 Peer 推送访问快照；Gateway 依赖它 |
 | Client | `@deepseek-ai/dsh-api-gateway/client` | 提供 `ctx.remote` 与 `remote.<namespace>` 子服务，把生成的描述符挂成具体方法，并通过 Connection 发起和取消调用 |
 | Client | `@deepseek-ai/dsh-api-remotes/client` | 显式选择并挂载本应用允许使用的 `/remote` 贡献，向业务代码带入对应的声明合并 |
 | 双侧 | `@deepseek-ai/dsh-client-connection` | 提供 RPC carrier、请求关联、信任边界、取消、响应 envelope 与 `/api` HTTP bridge |
@@ -96,7 +101,7 @@ API Gateway 包同时拥有 Host dispatcher 与 Client Remote endpoint 两个对
 
 ## 严格生成流水线
 
-根构建依次执行 `build:lib:host`、`build:lib:client` 与 `build:web`。Host lib 阶段先运行 `tsc -b tsconfig.host.json`，再运行 `tsdown --env.DSH_BUILD_FACE host`；Typert generator 由正常 Host Project Reference 图编译，并在这次 tsdown 中以 Host aggregate 为唯一 `ts.Program` 种子运行。Client lib 阶段随后运行 `tsc -b tsconfig.client.json` 与 `tsdown --env.DSH_BUILD_FACE client`，使用刚生成的 Remote Client 声明和运行时贡献，但不再次启动 Typert。
+根构建依次编译并打包 Host face、Client face，再构建 Web 壳层（[步骤顺序](development.zh.md#typescript-project-layout)）。Host 阶段先编译 Host 包 reference，再运行 `tsdown --env.DSH_BUILD_FACE host`；Typert generator 由正常 Host Project Reference 图编译，并在这次 tsdown 中以 Host aggregate 为唯一 `ts.Program` 种子运行。Client 阶段随后编译 Client 包 reference 并运行 `tsdown --env.DSH_BUILD_FACE client`，使用刚生成的 Remote Client 声明和运行时贡献，但不再次启动 Typert。
 
 两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`（[构建顺序](development.zh.md#typescript-project-layout)），且都只打包 `lib/types` 中由对应 tsc 阶段发射的 JavaScript。根配置不扫描 Client 产物、不按包名分类，也不向 tsdown 传维护式 filter；各包的本地配置根据 `DSH_BUILD_FACE` 返回当前阶段的入口。普通 Client 插件在 Client 阶段一起生成 Node loader 入口与 browser bundle。
 
@@ -124,7 +129,7 @@ Remote 调用使用 Connection 的 `/api` 路由。Client Remote 调用 `connect
 
 Connection 在 HTTP bridge 之前执行 `/api` 的统一信任检查，再在共享 FetchHandler 内分发。Typert Gateway 只认领存在严格描述符或活跃 SRC marker 的两段式 endpoint；它把二进制 Remote 字段投影为 JSON 兼容元数据及相对于结果的字节附件，再由 Connection 封装为 multipart 响应。功能自有的精确 Fetch 路由处理 RPC 信封之外的响应，其他请求返回 404。Connection 拥有传输、RPC id、响应 envelope 和请求取消，Gateway 拥有 Remote 数据协议和业务分发。替换 Connection carrier 不要求改变 Remote 描述符或 Client 编程接口。
 
-Gateway 每次调用都从当前注册表解析描述符和实时服务，不缓存业务对象。它要求 `args` 的字段集合与描述符完全一致，先用 codec 校验 wire 值，再通过注册的 lookup 或 Context 提供方解析对象或接收者，最后调用 binding 指向的服务方法。Client Gateway 使用生成的结果 codec 校验解码后的二进制结果；普通 JSON 结果保持原有处理方式。缺少提供方、identity 未命中、binding 不一致、参数缺失或多余、schema 失败和方法不存在都会在进入业务代码前或离开业务代码后失败。
+Gateway 每次调用都从当前注册表解析描述符和实时服务，不缓存业务对象。每次调用都给出其代表的 Peer，已 dispose 的 Peer 以 `gateway/peer-disposed` 被拒。Gateway 要求 `args` 的字段集合与描述符完全一致；对 Peer principal 不是 owner 的调用，随后解析调用访问的资源并询问 `ctx.remoteAccess.decide()`，被拒的调用不解析任何 lookup，也不激活 Agent。之后它先用 codec 校验 wire 值，再通过注册的 lookup 或 Context 提供方解析对象或接收者，最后调用 binding 指向的服务方法。Client Gateway 使用生成的结果 codec 校验解码后的二进制结果；普通 JSON 结果保持原有处理方式。缺少提供方、identity 未命中、binding 不一致、参数缺失或多余、schema 失败和方法不存在都会在进入业务代码前或离开业务代码后失败。
 
 lookup 提供方的 `register()` 同时提供稳定声明和默认 resolver；`configure()` 提供由 Host 组合拥有、可异步执行且受 effect 生命周期约束的 resolver。配置可以先于提供方挂载；没有提供方时调用仍以 `gateway/lookup-unavailable` 失败，配置卸载后则恢复提供方默认策略。Session Controller 负责 `agent` 与 `session` 的标准 resolver 语义：复用 live Agent，自动恢复普通冷会话，对并发恢复去重，并拒绝由 subagent routing 拥有的 identity；`session` lookup 返回该 Agent 的 Session。恢复失败与 ownership fence 抛出携带自有码的 `RemoteError`（`session/not-found` 或 `session/agent-busy`），Gateway 原样编码上 wire；只有未归类的 throw 才折成 `gateway/internal`。
 
@@ -154,7 +159,9 @@ pnpm run dev:web
 pnpm run build:lib
 ```
 
-运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 会执行 Host lib 阶段后再运行 Client tsc，CI 与发布构建也使用同一顺序。
+运行中的 Client watcher 会在重新打包时消费这些生成文件。若已单独运行 `pnpm run build:lib:host` 刷新 Host 约定，也可再运行 `pnpm run build:lib:client` 完成 Client 侧；干净工作树不能跳过 Host 阶段。仅重新编译前端源码不能从 Host decorator 推导新类型。`pnpm run typecheck` 先以不打包的 Typert 生成刷新 Host 约定，再运行 Client tsc；CI 的构建 lane 与发布构建则在 Client tsc 之前的 Host bundle 阶段生成它。
+
+<a id="boundaries"></a>
 
 ## 边界
 
@@ -163,3 +170,9 @@ Remote 处理单请求单结果的一元方法调用，以及项沿 Host → Cli
 API 各层按 `remotes → gateway → connection → webserver` 组织。BFF 与 Typert RPC 层位于 `packages/api`；Connection 与 WebServer 位于 `packages/client/connection` 和 `packages/host/webserver`。包含 `Uint8Array` 的一元结果（包括嵌套字段和数组条目）使用[二进制 Remote 传输](../.agents/notes/implemented/architecture/2026-09-17-workspace-file-binary-transfer.zh.md)。需要 RPC 信封之外响应的功能注册精确的 Connection Fetch 路由。
 
 lookup 策略按 key 配置，因此所有 `agent` 或 `session` 参数共享冷恢复行为。只接受 live 对象需要显式的逐参数或逐 endpoint 策略，而这种策略并不存在；不能通过业务方法内部猜测对象是否来自恢复。
+
+<a id="business-ownership"></a>
+
+### 业务所有权
+
+`packages/api` 负责传输、调用形态与会话生命周期；业务规则归独立的业务包，经注册面或投影数据接入本层。这里改动必须满足的要求——`@Remote` 的四条纪律、存量名只增不改、以及本层保留的边界——正家是[远程与 API 规则](defensive-patterns/remote-and-api.zh.md)，评审就在那里核对。

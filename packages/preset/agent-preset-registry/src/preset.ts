@@ -3,8 +3,6 @@ import type { Volatile } from '@deepseek-ai/cordis'
 /** One declared preset and its current activation failure, if any. */
 export interface AgentPreset {
   readonly id: string
-  /** Loader row that registered this current definition, when present. */
-  readonly definitionEntryId?: string
   readonly name?: string
   readonly description?: string
   readonly order?: number

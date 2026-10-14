@@ -1,0 +1,27 @@
+diff --git a/out/options/macOptions.d.ts b/out/options/macOptions.d.ts
+index e93987d973399b17f3970c858abb49f5e4b193d6..445a73c81e1d7eb61dc318373d2331487934d3f5 100644
+--- a/out/options/macOptions.d.ts
++++ b/out/options/macOptions.d.ts
+@@ -258,7 +258,7 @@ export interface DmgOptions extends TargetSpecificOptions {
+      * The disk image format. `ULFO` (lzfse-compressed image (OS X 10.11+ only)).
+      * @default UDZO
+      */
+-    format?: "UDRW" | "UDRO" | "UDCO" | "UDZO" | "UDBZ" | "ULFO";
++    format?: "UDRW" | "UDRO" | "UDCO" | "UDZO" | "UDBZ" | "ULFO" | "ULMO";
+     /**
+      * The filesystem for the DMG volume (e.g. `"APFS"` or `"HFS+"`)
+      * This will be changed to APFS in the next major release, so it is recommended to set it explicitly to HFS+ if you want to keep using HFS+ (e.g. for better compatibility with older macOS versions).
+diff --git a/scheme.json b/scheme.json
+index a637bab2668ef88e7382dd4aa5db62b74fdde898..ebcafac58971bdd7c69b78ceddcd401a75ffaa35 100644
+--- a/scheme.json
++++ b/scheme.json
+@@ -979,7 +979,8 @@
+             "UDRO",
+             "UDRW",
+             "UDZO",
+-            "ULFO"
++            "ULFO",
++            "ULMO"
+           ],
+           "type": "string"
+         },

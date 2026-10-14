@@ -6,8 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { gitIndexPaths, readGitIndexBlob } from './translation-pairing-git.ts'
+import { normalizeTranslationMarkdownLinkEdits } from './translation-links.ts'
 import {
   computeTranslationPairingRecord,
+  normalizedTopLevelBlocks,
   parseTranslationPairingRecord,
   renderTranslationPairingRecord,
   translationPairingRecordDiff,
@@ -274,6 +276,45 @@ describe('translation pairing records', () => {
     expect([...computeTranslationPairingRecord(paths, english, chinese, context, trees)]).toEqual([
       ['/guide', { en: '5e1bfa97a822af7a', zh: '3409c92bef7306bb' }],
     ])
+  })
+
+  it('places normalized nodes from the authored parse when every rewritten destination is parse-neutral', () => {
+    const english = [
+      '# Guide', '', 'See [bar](<bar.md>) and [baz][b], [q](./bar.md#x_y).', '', '[b]: baz.md', '',
+      '## Tail', '', '| [a](bar.md) | b |', '| --- | --- |', '',
+    ].join('\n')
+    const chinese = [
+      '# 指南', '', '参见[bar](<bar.zh.md>)和[baz][b]、[q](./bar.zh.md#x_y)。', '', '[b]: baz.zh.md', '',
+      '## 尾部', '', '| [a](bar.zh.md) | b |', '| --- | --- |', '',
+    ].join('\n')
+    const tree = parseTranslationMarkdown(english)
+    const normalized = normalizeTranslationMarkdownLinkEdits(english, { ...context, sourcePath: paths.source }, [], tree)
+    const reparsed = parseTranslationMarkdown(normalized.content)
+
+    expect(normalized.edits).toHaveLength(4)
+    expect(normalizedTopLevelBlocks(english, tree, normalized.edits)?.map(({ node, start, end, line }) => [node.type, start, end, line]))
+      .toEqual('children' in reparsed && reparsed.children.map(node => [
+        node.type, node.position?.start.offset, node.position?.end.offset, node.position?.start.line,
+      ]))
+    expect(computeTranslationPairingRecord(paths, english, chinese, context, { en: tree, zh: parseTranslationMarkdown(chinese) }))
+      .toEqual(record(english, chinese))
+  })
+
+  it.each([
+    ['a space that unlinks a heading', '# [Guide](a%20b.md)\n\nBody.\n', '# [指南](a%20b.zh.md)\n\n正文。\n', ['/guide-dsh-translation-target-docs-a-b-md']],
+    ['a pipe that turns a paragraph into a table', '# Guide\n\nSee [a](a%7Cb.md)\n| --- | --- |\n', '# 指南\n\n参见 [a](a%7Cb.zh.md)\n| --- | --- |\n', ['/guide']],
+    ['a title', '# Guide\n\nSee [bar](bar.md "Bar").\n', '# 指南\n\n参见[bar](bar.zh.md "Bar")。\n', ['/guide']],
+    ['a destination on the next line', '# Guide\n\nSee [bar](\nbar.md).\n', '# 指南\n\n参见[bar](\nbar.zh.md)。\n', ['/guide']],
+    ['an entity in the query', '# Guide\n\n[bar](bar.md?x=1&amp;y=2)\n', '# 指南\n\n[bar](bar.zh.md?x=1&amp;y=2)\n', ['/guide']],
+  ])('reparses normalized text for %s', (_case, english, chinese, keys) => {
+    const tree = parseTranslationMarkdown(english)
+    const normalized = normalizeTranslationMarkdownLinkEdits(english, { ...context, sourcePath: paths.source }, [], tree)
+    const computed = computeTranslationPairingRecord(paths, english, chinese, context, { en: tree, zh: parseTranslationMarkdown(chinese) })
+
+    expect(normalized.edits).toHaveLength(1)
+    expect(normalizedTopLevelBlocks(english, tree, normalized.edits)).toBeUndefined()
+    expect([...computed.keys()]).toEqual(keys)
+    expect(computed).toEqual(record(english, chinese))
   })
 
   it('refuses sides with different heading counts', () => {

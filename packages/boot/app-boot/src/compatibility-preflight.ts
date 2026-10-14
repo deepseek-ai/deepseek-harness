@@ -7,7 +7,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { load } from 'js-yaml'
-import { applyProfilePatches, type ProfilePatch } from './profile-patches.ts'
 import { resolvePluginResource } from './package-meta.ts'
 import { barePackageName } from './profile-resolution/resolver.ts'
 import type {} from './profile-resolution/service.ts'
@@ -179,10 +178,10 @@ function preflight(
  * @returns One prepared insertion patch for profiles, or the original patches for non-profile callers.
  */
 export function prepareProfilePatches(
-  ctx: Context, patches: ProfilePatch[], parentURL: string, binName = 'dsh',
+  ctx: Context, patches: PatchOptions[], parentURL: string, binName = 'dsh',
 ): PatchOptions[] {
   if (ctx.get('profileContext') === undefined) return patches
-  const entries = applyProfilePatches([], patches, patchWarning(ctx))
+  const entries = applyEntryPatches([], patches, patchWarning(ctx))
   const rows = prepareProfileEntries(ctx, entries, parentURL, binName)
   return rows.length === 0 ? [] : [{ insert: rows }]
 }

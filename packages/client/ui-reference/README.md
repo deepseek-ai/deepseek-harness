@@ -59,6 +59,8 @@ Candidate requests require an existing retained Client Session and share one tem
 
 File picks preserve the natural text defined by the shared `@path` grammar as the hidden serialized and clipboard form. Session picks use the canonical `@[label](dsh-session:…)` mention; serialization never reconstructs identity from the visible title.
 
+The plugin also registers file and folder matchers with [UserText](../ui-conversation/README.md#sent-user-text) and owns their `conversation.user.text.node` renderers. Each query returns the next complete reference at an original-text offset without file discovery; the shared evaluator resolves overlaps by source position. Interactive file nodes receive a Session-bound `openFile` injection; navigation failures keep the reference visible and offer a local retry/close dialog. Folder nodes remain labels.
+
 </details>
 
 -----

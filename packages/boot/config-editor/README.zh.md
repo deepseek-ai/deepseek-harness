@@ -42,8 +42,6 @@ kind: "package-reference"
 
 读取配置时，没有 profile config 覆盖项的条目共用一次组合结果。有覆盖项的条目分别组合，仅移除自身的覆盖项；profile 插入的条目和其他条目的覆盖项仍然生效。返回的配置为独立副本，组合结果不跨读取缓存。
 
-Host 配置读取、编辑和重置均忽略预设作用域操作，包括子项 ID 与 Host 条目 ID 相同的操作。
-
 </details>
 
 <a id="further-exploration"></a>

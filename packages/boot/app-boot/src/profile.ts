@@ -25,12 +25,12 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { DshBundleManifest, DshPackageManifest } from '@deepseek-ai/dsh-package-manifest'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileVersionExemptions } from './profile-compatibility.ts'
 import { loadOverlayPatches } from './index.ts'
-import { applyProfilePatches, type ProfilePatch } from './profile-patches.ts'
 import { realModuleDirectory } from './profile-resolution/legacy-links.ts'
 
 /** Directory under the Harness home holding every profile. */
@@ -83,7 +83,7 @@ export interface ProfileLayer {
   /** Absolute paths of the bundle's patch files, in application order. */
   patchPaths: readonly string[]
   /** The parsed patch lists of every file, concatenated in application order. */
-  patches: ProfilePatch[]
+  patches: PatchOptions[]
 }
 
 /** A loaded profile: resolved bundle layers plus the user's own patch layer. */
@@ -97,7 +97,7 @@ export interface Profile {
   /** Absolute path of the profile's own patch file. */
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */
-  patches: ProfilePatch[]
+  patches: PatchOptions[]
   /** Selected bundles that contributed no layer, in `dsh.profile.bundles` order, with why. */
   skippedBundles: SkippedBundle[]
 }
@@ -806,16 +806,16 @@ export function loadProfile(
 
 /**
  * Compose patch layers into the effective entry list over an empty root —
- * compile preset operations and apply the same native patch list as boot,
- * so flag derivation and config dumps see exactly what mounts.
+ * the same single `applyEntryPatches` call the boot include makes, so flag
+ * derivation and config dumps see exactly what mounts.
  * @param layers - patch lists in application order.
  * @param warn - sink for skipped-patch diagnostics; defaults to silent (boot repeats them).
  * @returns the composed entry list.
  */
 export function composeEntries(
-  layers: readonly ProfilePatch[][], warn: (message: string) => void = () => {},
+  layers: readonly PatchOptions[][], warn: (message: string) => void = () => {},
 ): EntryOptions[] {
-  return applyProfilePatches([], layers.flat(), (message: string, ...args: unknown[]) => {
+  return applyEntryPatches([], structuredClone(layers.flat()), (message: string, ...args: unknown[]) => {
     let index = 0
     warn(message.replace(/%C/g, () => JSON.stringify(args[index++])))
   })

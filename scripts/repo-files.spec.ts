@@ -1,8 +1,29 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { uniqueRepoFiles } from './repo-files.ts'
+
+const filesystem = vi.hoisted(() => ({ listed: [] as string[], canonicalized: [] as string[] }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    readdirSync: ((...args: Parameters<typeof actual.readdirSync>) => {
+      filesystem.listed.push(String(args[0]))
+      return actual.readdirSync(...args)
+    }) as typeof actual.readdirSync,
+    realpathSync: Object.assign((...args: Parameters<typeof actual.realpathSync>) => {
+      filesystem.canonicalized.push(String(args[0]))
+      return actual.realpathSync(...args)
+    }, { native: actual.realpathSync.native }),
+  }
+})
+
+afterEach(() => {
+  filesystem.listed.length = 0
+  filesystem.canonicalized.length = 0
+})
 
 interface Tree {
   root: string
@@ -106,6 +127,67 @@ describe('uniqueRepoFiles', () => {
     }
   })
 
+  it('lists each directory once per call when patterns and ** revisit it', () => {
+    const tree = makeTree()
+    try {
+      mkdirSync(join(tree.root, 'a', 'b'))
+      writeFileSync(join(tree.root, 'a', 'b', 'deep.md'), 'deep\n')
+      filesystem.listed.length = 0
+      const files = uniqueRepoFiles(tree.root, ['a/*.md', '**/*.md', 'a/b/*.md', '**/deep.md'])
+      expect(files.map(file => relative(tree.root, file.abs))).toEqual([join('a', 'snap.md'), join('a', 'b', 'deep.md')])
+      expect(filesystem.listed.length).toBeGreaterThan(0)
+      expect(new Set(filesystem.listed).size).toBe(filesystem.listed.length)
+      // A second call lists the tree again instead of reusing stale entries.
+      filesystem.listed.length = 0
+      uniqueRepoFiles(tree.root, ['a/*.md'])
+      expect(filesystem.listed).toEqual([tree.root, join(tree.root, 'a')])
+    } finally {
+      tree.clean()
+    }
+  })
+
+  it('canonicalizes symlinked matches through realpath and dedupes them onto regular files', () => {
+    const tree = makeTree()
+    try {
+      const rootReal = realpathSync(tree.root)
+      filesystem.canonicalized.length = 0
+      const linkFirst = uniqueRepoFiles(tree.root, ['d/*.md', 'a/*.md'])
+      expect(linkFirst).toEqual([{ abs: join(tree.root, 'd', 'snap.md'), real: join(rootReal, 'a', 'snap.md') }])
+      // The symlinked file and the root are canonicalized; the regular a/snap.md is not.
+      expect(filesystem.canonicalized).toEqual([join(tree.root, 'd', 'snap.md'), tree.root])
+      expect(uniqueRepoFiles(tree.root, ['a/*.md', 'd/*.md'])).toEqual([{ abs: join(tree.root, 'a', 'snap.md'), real: join(rootReal, 'a', 'snap.md') }])
+      // A regular file below a literal symlinked directory still resolves to its target.
+      const linked = uniqueRepoFiles(tree.root, ['linked-dir/*.md'])
+      expect(linked.map(file => file.real)).toEqual([realpathSync(join(tree.root, 'linked-dir', 'snap.md'))])
+      expect(linked[0]!.real).not.toBe(join(rootReal, 'linked-dir', 'snap.md'))
+      // A symlinked root canonicalizes through its target.
+      const rootLink = join(tree.root, '..', 'root-link')
+      symlinkSync(tree.root, rootLink)
+      expect(uniqueRepoFiles(rootLink, ['a/*.md']).map(file => file.real)).toEqual([join(rootReal, 'a', 'snap.md')])
+    } finally {
+      tree.clean()
+    }
+  })
+
+  it('never lists a directory the caller skips and returns the unskipped result', () => {
+    const tree = makeTree()
+    try {
+      mkdirSync(join(tree.root, 'p', 'lib', 'nested'), { recursive: true })
+      writeFileSync(join(tree.root, 'p', 'lib', 'nested', 'built.ts'), 'built\n')
+      writeFileSync(join(tree.root, 'p', 'source.ts'), 'source\n')
+      const isExcluded = (path: string): boolean => path.includes('/lib/')
+      const unskipped = uniqueRepoFiles(tree.root, ['**/*.ts'], isExcluded)
+      filesystem.listed.length = 0
+      const skipped = uniqueRepoFiles(tree.root, ['**/*.ts'], isExcluded, dir => dir.split('/').slice(1).includes('lib'))
+      expect(skipped).toEqual(unskipped)
+      expect(skipped.map(file => relative(tree.root, file.abs))).toEqual([join('p', 'source.ts')])
+      expect(filesystem.listed).not.toContain(join(tree.root, 'p', 'lib'))
+      expect(filesystem.listed).not.toContain(join(tree.root, 'p', 'lib', 'nested'))
+    } finally {
+      tree.clean()
+    }
+  })
+
   it('fails loudly on a broken symlink instead of shrinking the corpus', () => {
     const tree = makeTree()
     try {
@@ -125,6 +207,13 @@ describe('uniqueRepoFiles', () => {
       // under the node-glob implementation, instead of silently shrinking the
       // scanned corpus.
       expect(() => uniqueRepoFiles(root, ['*.md'])).toThrow()
+      // The same holds under `**` and for a cyclic symlink.
+      expect(() => uniqueRepoFiles(root, ['**/*.md'])).toThrow()
+      rmSync(join(root, 'broken-link.md'))
+      symlinkSync(join(root, 'loop-b.md'), join(root, 'loop-a.md'))
+      symlinkSync(join(root, 'loop-a.md'), join(root, 'loop-b.md'))
+      expect(() => uniqueRepoFiles(root, ['*.md'])).toThrow()
+      expect(() => uniqueRepoFiles(root, ['**/loop-a.md'])).toThrow()
       // A broken symlink under a literal non-final segment matches nothing,
       // again as node glob silently returns no match for it.
       symlinkSync(join(root, 'gone-dir'), join(root, 'broken-dir'))

@@ -59,6 +59,8 @@ interface AcceptanceFold {
 }
 
 const acceptanceFolds = new WeakMap<Session, AcceptanceFold>()
+/** Event each Session's upload was last reported blocked at; a block is logged once. */
+const blockedWarnings = new WeakMap<Session, SessionSeqType>()
 
 /** Translate logical Session metadata to raw external request fields. */
 function wireHeader(session: Session): DeepSeekSessionLogWireHeader {
@@ -215,7 +217,8 @@ export function apply(ctx: Context, config: Config): void {
       const last = events.length === 0 ? undefined : pending[events.length - 1]
       if (last === undefined) {
         const first = pending[0]
-        if (first !== undefined) {
+        if (first !== undefined && blockedWarnings.get(session) !== first.seq) {
+          blockedWarnings.set(session, first.seq)
           const seq = String(first.seq)
           ctx.logger.warn(Number.isFinite(candidateBytes)
             ? `session-log-deepseek: event ${seq} of session "${session.id}" needs a ${String(candidateBytes)}-byte`

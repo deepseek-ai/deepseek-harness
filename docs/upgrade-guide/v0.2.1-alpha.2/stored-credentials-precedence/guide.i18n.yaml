@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/stored-credentials-precedence/guide.md
+/:
+  en: 9fc8377bd2d6e38c
+  zh: b77fd76aeee0f592
+/a-stored-key-takes-precedence-over-an-exported-variable:
+  en: 0d002196a3f19850
+  zh: 7dcbbb6a44216f01
+/a-stored-key-takes-precedence-over-an-exported-variable/change:
+  en: 4ac6ffc5e782f765
+  zh: 51a69db953708bd3
+/a-stored-key-takes-precedence-over-an-exported-variable/migration:
+  en: d4f534f82476b5e9
+  zh: 5371eaaae96a3759

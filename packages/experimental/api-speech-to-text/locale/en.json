@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Speech transcription API",
+    "description": "Provide speech transcription for browser clients."
+  }
+}

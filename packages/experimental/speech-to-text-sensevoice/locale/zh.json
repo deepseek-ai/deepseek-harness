@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SenseVoice 本地识别",
+    "description": "使用本机 SenseVoice 将录音转写为文字。"
+  }
+}

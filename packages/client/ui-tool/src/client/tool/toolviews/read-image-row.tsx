@@ -28,9 +28,9 @@ import { CONVERSATION_NS as NS } from '../../locale.ts'
  * slot this entry declares.
  */
 export function ReadImageRow(props: ReadImageRowProps) {
-  const { block, cwd, home, renderSlot, loadImage } = props
+  const { block, renderSlot, loadImage } = props
   return readFamilyRow(props, {
-    image: imageCardModel(block, cwd, home),
+    image: imageCardModel(block),
     renderSlot,
     loadImage,
   })

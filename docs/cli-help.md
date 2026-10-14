@@ -173,22 +173,31 @@ Usage: dsh --profile web [options]
 Serve the DeepSeek Harness browser UI.
 
 Options:
-  --host <host>                  bind host
+  --host <host>                  bind address: one concrete IPv4 or IPv6 literal
+                                 of a local interface; wildcard addresses are
+                                 rejected
   --no-open                      do not open the Web UI in the default browser
   --port <port>                  listen port; pass 0 to let the OS pick a free
                                  one
   --public-url <url>             advertise this HTTP(S) root in the printed,
-                                 opened, web-surface, and DSH_WEB_URL forms;
+                                 opened, runtime-context, and DSH_WEB_URL forms;
                                  grants no trust
   --trusted-host <authority...>  extra authority the /api browser-trust fence
                                  accepts (host or host:port; repeatable)
+  --tls-cert <file>              PEM server certificate chain; requires
+                                 --tls-key
+  --tls-key <file>               unencrypted PEM private key; requires
+                                 --tls-cert
   -h, --help                     show this help
 
 Examples:
   dsh --profile web                          serve on the composed host and port
   dsh --profile web --no-open                serve without opening a browser
   dsh --profile web --port 8080              serve on another port
+  dsh --profile web --host 10.0.0.7          bind one local interface address
   dsh --profile web --public-url https://app.example/ui/ --trusted-host app.example
                                              advertise a prefix-stripping HTTPS proxy entry and admit its authority
+  dsh --profile web --tls-cert ./server-chain.pem --tls-key ./server-key.pem
+                                             serve HTTPS with an existing certificate and key
 
 ```

@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { Context, FiberState, Service, resolveConfig } from '@deepseek-ai/cordis'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import yaml from 'js-yaml'
 import type { Entry, EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-hmr'
-import { composeEntries, loadProfileDirectory, profilePatchPreset, readProfilePatches, reconcileProfilePatches, type ProfilePatch } from '@deepseek-ai/dsh-app-boot'
+import { composeEntries, loadProfileDirectory, readProfilePatches, reconcileProfilePatches } from '@deepseek-ai/dsh-app-boot'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { isMap, isSeq, parseDocument, Scalar, visit } from 'yaml'
 
@@ -22,7 +22,7 @@ function flatten(rows: EntryOptions[]): EntryOptions[] {
   return rows.flatMap(row => [row, ...row.group && Array.isArray(row.config) ? flatten(row.config as EntryOptions[]) : []])
 }
 
-/** Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader. */
+/** Persist complete raw configs and apply them through the normal Loader path. */
 export class ConfigEditor extends Service {
   static inject = ['loader', 'profileContext']
 
@@ -50,9 +50,8 @@ export class ConfigEditor extends Service {
     const profile = this.ownerContext.profileContext
     const loaded = loadProfileDirectory('dsh', profile.dir, profile.installAnchor)
     const entries = this.entries()
-    const hostPatches = loaded.patches.filter(patch => profilePatchPreset(patch) === undefined)
     // An own config key can replace inherited config even when its value is undefined.
-    const overridden = new Set(hostPatches.filter(patch => patch.insert === undefined && Object.hasOwn(patch, 'config')).map(patch => patch.id))
+    const overridden = new Set(loaded.patches.filter(patch => patch.insert === undefined && Object.hasOwn(patch, 'config')).map(patch => patch.id))
     const composed = new Map<string, EntryOptions>()
     if (entries.some(entry => !overridden.has(entry.options.id))) {
       for (const row of flatten(composeEntries([...loaded.layers.map(layer => layer.patches), loaded.patches]))) {
@@ -64,7 +63,7 @@ export class ConfigEditor extends Service {
       inherited: overridden.has(entry.options.id)
         ? this.inherited(entry, loaded)
         : structuredClone((composed.get(entry.options.id)?.config ?? {}) as Record<string, unknown>),
-      override: structuredClone((hostPatches.findLast(
+      override: structuredClone((loaded.patches.findLast(
         row => row.id === entry.options.id && row.config !== undefined,
       )?.config ?? {}) as Record<string, unknown>),
     }))
@@ -72,7 +71,7 @@ export class ConfigEditor extends Service {
 
   private inherited(entry: Entry, loaded: ReturnType<typeof loadProfileDirectory>): Record<string, unknown> {
     const patches = loaded.patches.map((patch) => {
-      if (patch.id !== entry.options.id || patch.insert !== undefined || profilePatchPreset(patch) !== undefined) return patch
+      if (patch.id !== entry.options.id || patch.insert !== undefined) return patch
       const rest = { ...patch }; Reflect.deleteProperty(rest, 'config')
       return rest
     })
@@ -116,12 +115,12 @@ export class ConfigEditor extends Service {
         if (!isSeq(document.contents)) throw new Error('Profile patch must be a YAML sequence')
         document.contents.flow = false
         const index = document.contents.items.findLastIndex((item, index) => isMap(item)
-          && document.getIn([index, 'id']) === entry.options.id && !item.has('insert') && !item.has('preset')
+          && document.getIn([index, 'id']) === entry.options.id && !item.has('insert')
           && (!item.has('name') || document.getIn([index, 'name']) === entry.options.name))
         if (isDeepStrictEqual(next, inherited)) {
           for (let index = document.contents.items.length - 1; index >= 0; index--) {
             const row = document.contents.items[index]
-            if (!isMap(row) || document.getIn([index, 'id']) !== entry.options.id || row.has('insert') || row.has('preset')) continue
+            if (!isMap(row) || document.getIn([index, 'id']) !== entry.options.id || row.has('insert')) continue
             row.delete('config')
             if (row.items.length === Number(row.has('id')) + Number(row.has('name'))) document.delete(index)
           }
@@ -135,7 +134,7 @@ export class ConfigEditor extends Service {
         } })
         const profile = this.ownerContext.profileContext
         const loaded = loadProfileDirectory('dsh', profile.dir, profile.installAnchor)
-        const patches = readProfilePatches('dsh', profile, { ...loaded, patches: yaml.load(String(document), { schema: entryListSchema }) as ProfilePatch[] })
+        const patches = readProfilePatches('dsh', profile, { ...loaded, patches: yaml.load(String(document), { schema: entryListSchema }) as PatchOptions[] })
         const effective = flatten(composeEntries([patches])).find(row => row.id === entry.options.id)
         if (!isDeepStrictEqual(effective?.config ?? {}, next)) {
           throw new Error(`Configuration for "${entry.options.id}" is overridden by a home patch or command-line overlay`)

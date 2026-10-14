@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.1/native-subagent-bundle-tools/guide.md
 /:
-  en: a77928d6130fe601
-  zh: da46d612268c3ced
-/native-subagent-bundles-include-preset-tools:
-  en: b5c79b41fc34574a
-  zh: d784adcf343b0817
-/native-subagent-bundles-include-preset-tools/change:
-  en: 7d4af3e4ab91ef72
-  zh: 837377c96d5eee12
-/native-subagent-bundles-include-preset-tools/migration:
-  en: 3257a5d18d07cada
-  zh: b663a7ae020bbfee
+  en: 4e1c7b1bfb2ba5ca
+  zh: c3f5ac60d10a215f
+/native-subagent-bundles-include-global-tools:
+  en: 8f785a4b502f1f78
+  zh: 527952686410adba
+/native-subagent-bundles-include-global-tools/change:
+  en: 3432d6ba2ccf6492
+  zh: 41cdf90f9d5b330d
+/native-subagent-bundles-include-global-tools/migration:
+  en: 304dc5243b2f8159
+  zh: 38cd9aa136dc8009

@@ -3,41 +3,38 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-office/README.md
 /:
-  en: cc4e875ac37d9354
-  zh: e121819cde2ce76c
+  en: b65118b967447a79
+  zh: 83afe7dbc1a82c44
 /deepseek-ai-dsh-skill-office:
   en: f855ac5e12b4e604
   zh: b2e875d31d56cb2e
 /deepseek-ai-dsh-skill-office/summary:
-  en: 4fe3cb4544ce7d9d
-  zh: 2749b1d0ffa468a1
+  en: 3f41e39809756048
+  zh: 5ec8623eeb617755
 /deepseek-ai-dsh-skill-office/table-of-contents:
-  en: d152484eb41ac6b4
-  zh: 43ad67236ccda19a
+  en: c361195a73cf5755
+  zh: 745b04e7be0be369
 /deepseek-ai-dsh-skill-office/use-this-package:
-  en: 6987594a0cf6e53d
-  zh: ecf4c4f52e7a50eb
-/deepseek-ai-dsh-skill-office/use-this-package/minimal-configuration:
-  en: 088f223318dff9d7
-  zh: ce944bf61fb1f821
-/deepseek-ai-dsh-skill-office/use-this-package/structural-checks:
-  en: 1bb872d63bdd78b7
-  zh: 355dee19bdfb3798
+  en: bc0460f837676d8a
+  zh: be1692483d7f5daf
+/deepseek-ai-dsh-skill-office/use-this-package/progressive-loading:
+  en: b20b58bfaab4d3f6
+  zh: 084528c543b8746e
 /deepseek-ai-dsh-skill-office/understand-the-implementation:
-  en: 9c45ee3de51adb4d
-  zh: 0f24d44dfa58df25
+  en: 6946e30f3663c72f
+  zh: 81dd5de9c7e61562
 /deepseek-ai-dsh-skill-office/further-exploration:
-  en: b08fc992559d8fda
-  zh: ad74e037ecd81c0b
+  en: 23830c100287ffb8
+  zh: 7a4100e87057bc20
 /deepseek-ai-dsh-skill-office/model-experience:
-  en: f9fe51841bd9de8d
-  zh: 773af8cc0e0335e4
+  en: bbd979fd20e7b308
+  zh: 7e6b6e04f2aedb02
 /deepseek-ai-dsh-skill-office/model-experience/kv-cache-effect:
-  en: c77beb1c0d28f221
-  zh: 99643101d2b915b9
+  en: dc9e9205d989f1d0
+  zh: 01bdbbfba743813a
 /deepseek-ai-dsh-skill-office/known-limitations-and-deferred-work:
-  en: 22d0a8196c2c48c3
-  zh: ef2e38a0a91476a8
+  en: 1f718fc3bb4352d9
+  zh: c1aa108ad2b05fdd
 /deepseek-ai-dsh-skill-office/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
-  zh: 3bb0c20c93f16f98
+  zh: 8ec3e73528ddb1a6

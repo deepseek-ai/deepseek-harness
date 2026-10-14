@@ -38,6 +38,6 @@ Projection key presence is not a per-session capability signal ([session project
 
 ## Consequences
 
-The context meter becomes a per-session fact instead of a function of mount history. A preset can no longer opt out of token accounting; no shipped preset did, and `minimal` now says it drops auto-compaction rather than the accounting.
+The context meter is a per-session fact independent of mount history. Presets resolve the host meter for token accounting while selecting their own compaction backend; `minimal` supports both automatic compaction and the human `/compact` command.
 
 Production entry points must compose Agents explicitly; installing the registry alone does not bind them. An unjoined Agent receives no tools, prompt sections, or skills and reports no error.

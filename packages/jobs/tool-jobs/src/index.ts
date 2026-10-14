@@ -137,9 +137,10 @@ function fitCompletionNotice(job: JobView): string {
   const compact = `${prefix}${action}`
   const compactBytes = encoder.encode(compact).byteLength
   if (compactBytes <= maxBytes) return compact
-  const actionBytes = encoder.encode(action).byteLength
-  if (actionBytes >= maxBytes) return retainTail(action, maxBytes)
-  return `${retainHead(prefix, maxBytes - actionBytes)}${action}`
+  // A partial UUID cannot identify the job. Point the model at the listing instead.
+  const recovery = 'background job ended; use job_list for id.'
+  if (encoder.encode(recovery).byteLength <= maxBytes) return recovery
+  return retainHead('job_list', maxBytes)
 }
 
 function rawSingleText(content: readonly ContentBlock[]): string | undefined {

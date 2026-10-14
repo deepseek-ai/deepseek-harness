@@ -55,6 +55,8 @@ kind: "package-reference"
 
 框架绑定的 `usePlans(turn)` 只提供该回合的已提交计划数据。Chat 随节点更新维护成员索引，并在读取时排列该集合；卡片渲染不扫描整段对话，也不订阅其他回合或节点类型。
 
+已提交计划卡片的圆角和图标底框材质遵循[文件卡片家族](../../../docs/ui-radius.zh.md#radius-scale)。
+
 </details>
 
 -----

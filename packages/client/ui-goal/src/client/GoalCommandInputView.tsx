@@ -1,12 +1,14 @@
 import { memo } from 'react'
-import { projectUserText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { GOAL_COMMAND, type GoalCommandInputData } from './goal-command-input.ts'
 import css from './GoalCommandInputView.module.css'
+
+const GOAL_COMMANDS = [{ start: 0, end: GOAL_COMMAND.length + 1, name: GOAL_COMMAND }] as const
 
 type GoalCommandInputViewProps =
   PropsRuntime<'conversation.chat.node', 'command-input'>
   & PropsLocale<'goal'>
+  & PropsRenderFactories
 
 /**
  * Right-aligned `/goal` input bubble without ordinary message actions. The
@@ -15,14 +17,9 @@ type GoalCommandInputViewProps =
  * the objective, `/goal` mentions included, as plain text.
  */
 export const GoalCommandInputView = memo(function GoalCommandInputView({
-  node, t,
+  node, t, renderFactorySlot,
 }: GoalCommandInputViewProps) {
   const data: GoalCommandInputData = node.data
-  // Only the leading token is the executed command; the rest of the line is
-  // the objective, where a further `/goal` is prose.
-  const split = data.text.search(/\s/u)
-  const head = split === -1 ? data.text : data.text.slice(0, split)
-  const rest = split === -1 ? '' : data.text.slice(split)
   return (
     <div
       className={css.row}
@@ -32,8 +29,11 @@ export const GoalCommandInputView = memo(function GoalCommandInputView({
     >
       <div className={css.stack}>
         <div className={css.bubble}>
-          {projectUserText(head, [], [GOAL_COMMAND], 'command')}
-          {rest !== '' && projectUserText(rest, [])}
+          {renderFactorySlot('conversation.user.text', {
+            text: data.text,
+            facts: { commands: GOAL_COMMANDS },
+            interactive: false,
+          })}
         </div>
       </div>
     </div>

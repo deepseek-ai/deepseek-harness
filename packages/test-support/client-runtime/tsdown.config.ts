@@ -1,6 +1,6 @@
 import { clientLibrary } from '../../client/tsdown.client.ts'
 
 export default clientLibrary(
-  '@deepseek-ai/dsh-client-test-runtime',
+  import.meta.dirname,
   ['lib/types/index.js'],
 )

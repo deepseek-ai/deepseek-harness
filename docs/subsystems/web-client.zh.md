@@ -57,7 +57,7 @@ Connection 拥有请求 URL 解析、request correlation、`/api` carrier、trus
 
 Web 和桌面端共享[代码工作工具偏好](../../packages/client/ui-settings/README.zh.md#use-this-package)。它控制诊断 View、[可用的预设选项](../../packages/client/ui-agent-preset/README.zh.md)、改动文件卡片和内置 HTML 预览策略，不改变 Session 记录。
 
-`ui-session` 安装 Session scope adapter，并提供 `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSession`、`sessionId` 和 `useProjection`。`SessionProvider` 可以继承外围 binding，也可以绑定显式 `SessionReference`，因此并存子树可以指向不同 Session。领域 adapter 可以继续添加标准 source，但不会把 React hook 放进 model object。
+`ui-session` 安装 Session scope adapter，并在 [remote-access](../../packages/api/remote-access/README.zh.md) Client 服务之上提供 `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess`、`useSession`、`sessionId`、`useProjection` 和会话作用域的 `useAccess`。`SessionProvider` 可以继承外围 binding，也可以绑定显式 `SessionReference`，因此并存子树可以指向不同 Session。领域 adapter 可以继续添加标准 source，但不会把 React hook 放进 model object。
 
 `ui-conversation` 对每个 `SessionBinding.eventSource` 只绑定一次。它的 event registry 把持久 Session event 与 Client-only `assistant/live-chunk` update 关联成稳定的业务 Context，view registry 则 materialize target snapshot。Chat Assistant、Trajectory Assistant 与 Turn Tail 同时解释 live chunk 和持久 settlement 中嵌入的紧凑 stream，因此重连与分页历史无需持久 token 行即可复现相同 Assistant 状态。`ui-chat` 与 `ui-trajectory` 分别注册自己的 Definition 和 builder：它们可以解释同一 event family，但不会导入或共享彼此的最终 display model。Shell 选择一个已注册 view，再通过标准 hook 与 Slot 交付其 snapshot。[Conversation](conversation.zh.md)定义 Context identity、replay、Location data、target builder 与 keyed renderer。
 

@@ -18,11 +18,18 @@ PTC 执行[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-
 interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
-   * runs as the body of an async function: top-level `await` and `return`
-   * are available, and the completion value becomes
+   * follows the provider's programFormat: an async function body supports
+   * top-level `await` and `return`; a REPL supports top-level declarations,
+   * `await`, and a final expression. The completion value becomes
    * {@link PtcRunResult.value}.
    */
   program: string
+  /**
+   * Object-identity owner for optional in-memory state. Omission requests a fresh
+   * environment. Consumers must await runtime.release(owner) when the owner ends.
+   * Stateless providers ignore this field; retained state is never durable.
+   */
+  stateOwner?: object
   /** Host functions exposed to the program, one global object per namespace. */
   bindings: PtcBindingNamespace[]
   /** Working directory in the mounted filesystem and subprocess execution world. */
@@ -77,7 +84,7 @@ interface PtcRunResult {
   /** Applied file policy and observed denial, when the provider enforces file policy. */
   sandbox?: PtcRunSandbox
   /**
-   * The program's completion value (its top-level `return`), when it ran to
+   * The program's completion value (a return or final REPL expression), when it ran to
    * completion and the value crossed the runtime's lossless-JSON boundary.
    * Invalid or over-limit completions fail the run instead of substituting a
    * rendered string; a failed or value-less run leaves this absent.
@@ -93,6 +100,8 @@ interface PtcRunResult {
   error?: PtcRunFailure
 }
 ```
+
+`programFormat` 区分异步函数体与 REPL 语句。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
 
 ## 绑定：宿主函数作为程序全局变量
 
@@ -168,12 +177,12 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 日志是纯字符串。每个来源通道保留自身的发出顺序；由于通道元数据不属于 seam，相互独立的通道如何交错由后端决定。运行时捕获程序的 console 与流输出，Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
 
-失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
+失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 
 ```ts type-equiv
 /**
  * Why a run failed. The kinds are orthogonal outcomes reported independently
- * (per docs/defensive-patterns.md): a budget expiry is not an exception, an
+ * (per docs/defensive-patterns/general.md): a budget expiry is not an exception, an
  * abort is not a timeout, and a substrate death is neither.
  *
  * - `'exception'` — the program threw or failed to parse/transform.
@@ -209,9 +218,18 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.ptcRuntime` — `PtcRuntime` (abstract seam)
 
-Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate runs from one another, and terminate and await in-flight runs during disposal.
+Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
 
 ```ts cordis-catalog
+/**
+ * Release an owner's retained environment and await its execution resources.
+ * Stateless providers have no retained resources to release.
+ * @param owner - The exact object supplied as the request's state owner.
+ * @returns Completion after all owned execution resources have been released.
+ * @throws When managed resource cleanup fails.
+ */
+release(owner: object): Promise<void>
+
 /**
  * Resolve supported options and provider defaults before execution.
  * @param request - Program, bindings, cancellation and optional execution choices.

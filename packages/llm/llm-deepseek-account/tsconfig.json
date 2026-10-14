@@ -25,6 +25,18 @@
     },
     {
       "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../util/timeout"
     }
   ]
 }

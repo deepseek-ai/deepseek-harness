@@ -56,7 +56,7 @@ describe('ui-settings-agent-loop apply', () => {
 
     await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(1) })
     const entry = slots.entries('plugins.item')[0]!
-    expect(entry.options).toMatchObject({ id: 'agent-loop', order: 20 })
+    expect(entry.options).toMatchObject({ id: 'agent-loop', order: 30 })
     expect(resolveSlotLabel(entry.options.label)).toBe('Agent 循环')
     expect(entry.locale).toBe(NS)
     const face = (entry.inject as () => Pick<AgentLoopCardFace, 'hooks'>)()

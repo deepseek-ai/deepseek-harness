@@ -1,6 +1,6 @@
-/** Deterministic tool and denial fixture for the packaged SDK snapshot. */
+/** Deterministic job-backed tool and denial fixture for the packaged SDK snapshot. */
 export const name = 'python-snapshot-tool'
-export const inject = ['tools']
+export const inject = ['tools', 'jobs']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx - Scenario-owned tool registration. */
 export function apply(ctx) {
@@ -25,8 +25,21 @@ export function apply(ctx) {
         return [{ type: 'text', text: String(value) }]
       }
     },
-    async execute(args) {
-      return args.value * 2
+    async execute(args, exec) {
+      const owner = exec.agent
+      if (owner === undefined) throw new Error('snapshot tool requires an owner')
+      const id = ctx.jobs.start({
+        kind: 'snapshot',
+        label: 'snapshot_double',
+        owner: owner.id,
+        toolCall: { callId: exec.callId, rootCallId: exec.rootCallId },
+        run: () => ({
+          cancel() {},
+          done: Promise.resolve({ status: 'completed', result: String(args.value * 2) }),
+        }),
+      })
+      await ctx.jobs.wait(id, 60_000, owner.id)
+      return Number(ctx.jobs.read(id, owner.id).result)
     }
   })
 }

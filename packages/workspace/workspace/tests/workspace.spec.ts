@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
@@ -21,6 +21,7 @@ import WorkspaceRegistry, {
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
+import * as workspacePaths from '../src/paths.ts'
 
 const DOMAIN_VERSION = 2
 
@@ -764,6 +765,150 @@ describe('Workspace session ordering', () => {
 })
 
 describe('header-validated membership projection', () => {
+  it('preserves owned sessions and manual order after directory removal and restart', async () => {
+    const dir = await makeDir('removed-owned')
+    const sessions = [header('first', dir), header('second', dir)]
+    const initial = await harness()
+    onTestFinished(() => initial.ctx.fiber.dispose())
+    initial.setSessions(sessions)
+    const workspace = await initial.registry.create(dir)
+    await workspace.attachSession(SessionId('first'))
+    await workspace.attachSession(SessionId('second'))
+    await initial.ctx.fiber.dispose()
+    await rm(dir, { recursive: true })
+
+    const restarted = await harness({ pool: initial.pool, sessions: [...sessions, header('unowned', dir)] })
+    onTestFinished(() => restarted.ctx.fiber.dispose())
+    const restored = restarted.registry.get(workspace.id)!
+    expect(restored.sessionIds).toEqual(['second', 'first'])
+    expect(await restored.status()).toBe('missing-dir')
+    await restored.setTitle('Still owned')
+    await restored.insertSessionBefore(SessionId('first'), SessionId('second'))
+    expect(storedRecord(initial.pool, workspace.id).sessionIds).toEqual(['first', 'second'])
+    await expect(restored.attachSession(SessionId('unowned'))).rejects.toThrow(/does not resolve/)
+    expect(restored.sessionIds).toEqual(['first', 'second'])
+    await restarted.ctx.fiber.dispose()
+
+    const again = await harness({ pool: initial.pool, sessions })
+    onTestFinished(() => again.ctx.fiber.dispose())
+    expect(again.registry.get(workspace.id)!.sessionIds).toEqual(['first', 'second'])
+  })
+
+  it('preserves an owned session when its symlink target disappears without bootstrapping missing paths', async () => {
+    const target = await makeDir('removed-symlink-target')
+    const alias = join(base, 'removed-symlink-alias')
+    await symlink(target, alias, 'junction')
+    const sessions = [header('linked', alias)]
+    const initial = await harness()
+    onTestFinished(() => initial.ctx.fiber.dispose())
+    initial.setSessions(sessions)
+    const workspace = await initial.registry.create(target)
+    await workspace.attachSession(SessionId('linked'))
+    await initial.ctx.fiber.dispose()
+    await rm(target, { recursive: true })
+
+    const restarted = await harness({ pool: initial.pool, sessions })
+    onTestFinished(() => restarted.ctx.fiber.dispose())
+    expect(restarted.registry.get(workspace.id)!.sessionIds).toEqual(['linked'])
+    const fresh = await harness({ sessions })
+    onTestFinished(() => fresh.ctx.fiber.dispose())
+    expect(fresh.registry.list()).toEqual([])
+  })
+
+  it('preserves an owned session when the directory disappears between realpath and stat', async () => {
+    const dir = await makeDir('stat-missing')
+    const id = WorkspaceId('stat-missing-workspace')
+    const pool = storedPool([[id, record(dir, ['kept'])]], { initialized: true, workspaceIds: [id] })
+    const normalize = workspacePaths.realpathNormalize
+    const spy = vi.spyOn(workspacePaths, 'realpathNormalize').mockImplementation(async (path) => {
+      const canonical = await normalize(path)
+      if (path === dir) await rm(dir, { recursive: true })
+      return canonical
+    })
+    onTestFinished(() => { spy.mockRestore() })
+    const result = await harness({ pool, sessions: [header('kept', dir)] })
+    onTestFinished(() => result.ctx.fiber.dispose())
+    expect(result.registry.get(id)!.sessionIds).toEqual(['kept'])
+  })
+
+  it.each(['EACCES', 'ELOOP', 'ENOTDIR'])('does not preserve candidates after a %s path failure', async (code) => {
+    const dir = await makeDir(`path-error-${code}`)
+    const id = WorkspaceId(`path-error-${code}`)
+    const pool = storedPool([[id, record(dir, ['invalid'])]], { initialized: true, workspaceIds: [id] })
+    const spy = vi.spyOn(workspacePaths, 'realpathNormalize').mockRejectedValue(Object.assign(new Error(code), { code }))
+    onTestFinished(() => { spy.mockRestore() })
+    const result = await harness({ pool, sessions: [header('invalid', dir)] })
+    onTestFinished(() => result.ctx.fiber.dispose())
+    const workspace = result.registry.get(id)!
+    expect(workspace.sessionIds).toEqual([])
+    await workspace.setTitle('Pruned')
+    expect(storedRecord(pool, id).sessionIds).toEqual([])
+  })
+
+  it('clears the missing-path exemption when a later header index resolves elsewhere or becomes invalid', async () => {
+    const dir = await makeDir('reindexed-missing')
+    const elsewhere = await makeDir('reindexed-elsewhere')
+    const id = WorkspaceId('reindexed-workspace')
+    const pool = storedPool([[id, record(dir, ['kept'])]], { initialized: true, workspaceIds: [id] })
+    await rm(dir, { recursive: true })
+    const result = await harness({ pool, sessions: [header('kept', dir)] })
+    onTestFinished(() => result.ctx.fiber.dispose())
+    const workspace = result.registry.get(id)!
+    expect(workspace.sessionIds).toEqual(['kept'])
+    result.setSessions([header('kept', elsewhere), header('trigger-one', elsewhere)])
+    await result.registry.pinSession(SessionId('trigger-one'))
+    expect(workspace.sessionIds).toEqual([])
+    result.setSessions([header('kept', dir), header('trigger-two', elsewhere)])
+    await result.registry.pinSession(SessionId('trigger-two'))
+    expect(workspace.sessionIds).toEqual(['kept'])
+    result.setSessions([header('kept'), header('trigger-three', elsewhere)])
+    await result.registry.pinSession(SessionId('trigger-three'))
+    expect(workspace.sessionIds).toEqual([])
+    await workspace.setTitle('Pruned')
+    expect(storedRecord(pool, id).sessionIds).toEqual([])
+  })
+
+  it('filters absent headers and invalid cwd facts while retaining only missing-directory candidates', async () => {
+    const dir = await makeDir('candidate-validation')
+    const elsewhere = await makeDir('candidate-elsewhere')
+    const missing = join(base, 'candidate-missing')
+    const file = join(base, 'candidate-file')
+    await writeFile(file, 'not a directory')
+    const id = WorkspaceId('candidate-validation')
+    const pool = storedPool(
+      [[id, record(dir, ['missing-dir', 'no-header', 'no-cwd', 'relative', 'file', 'elsewhere'])]],
+      { initialized: true, workspaceIds: [id] },
+    )
+    const result = await harness({
+      pool,
+      sessions: [
+        header('missing-dir', missing), header('no-cwd'), header('relative', 'relative-missing'),
+        header('file', file), header('elsewhere', elsewhere), header('unowned', missing),
+      ],
+    })
+    onTestFinished(() => result.ctx.fiber.dispose())
+    const workspace = result.registry.get(id)!
+    expect(workspace.sessionIds).toEqual(['missing-dir'])
+    await workspace.setTitle('Validated')
+    expect(storedRecord(pool, id).sessionIds).toEqual(['missing-dir'])
+  })
+
+  it('can detach and reattach a missing-directory candidate after the directory is restored', async () => {
+    const dir = await makeDir('reattach-restored')
+    const id = WorkspaceId('reattach-restored')
+    const pool = storedPool([[id, record(dir, ['restored'])]], { initialized: true, workspaceIds: [id] })
+    await rm(dir, { recursive: true })
+    const result = await harness({ pool, sessions: [header('restored', dir)] })
+    onTestFinished(() => result.ctx.fiber.dispose())
+    const workspace = result.registry.get(id)!
+    await workspace.detachSession(SessionId('restored'))
+    expect(workspace.sessionIds).toEqual([])
+    await mkdir(dir)
+    await workspace.attachSession(SessionId('restored'))
+    expect(workspace.sessionIds).toEqual(['restored'])
+    expect(await workspace.status()).toBe('ok')
+  })
+
   it('requires both candidate id and matching canonical cwd without re-reading on list()', async () => {
     const owned = await makeDir('owned')
     const elsewhere = await makeDir('projection-elsewhere')

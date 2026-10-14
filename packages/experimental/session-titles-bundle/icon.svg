@@ -1,1 +1,11 @@
-<svg width="36" height="36" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" stroke-width="1"><path d="M2.37091 11.2501C1.58745 9.89288 1.32067 8.29835 1.61969 6.76006C1.91872 5.22177 2.76342 3.8433 3.99826 2.87846C5.2331 1.91362 6.77494 1.42737 8.33988 1.50925C9.90482 1.59113 11.3875 2.23562 12.5149 3.32406C13.6425 4.41269 14.3387 5.87206 14.4754 7.4334C14.612 8.99474 14.18 10.5529 13.2587 11.8209C12.3375 13.0888 10.9891 13.9813 9.46194 14.3337C8.18691 14.628 6.85895 14.5294 5.64989 14.0605C5.1712 13.8748 4.76962 13.4932 4.26534 13.3967C3.67413 13.2835 2.95257 13.5598 2.03794 14.3337" stroke="#658EFF"></path><path d="M8 5V11" stroke="#658EFF"></path><path d="M5 8H11" stroke="#658EFF"></path></svg>
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="11.5" y="8" width="17" height="14" rx="2.5" fill="#7CB7FF" fill-opacity="0.55" />
+  <path d="M10 12H23C24.3807 12 25.5 13.1193 25.5 14.5V23.5C25.5 24.8807 24.3807 26 23 26H14.5L10.4 30.1Q10 30.5 10 29.93V26C8.61929 26 7.5 24.8807 7.5 23.5V14.5C7.5 13.1193 8.61929 12 10 12Z" fill="url(#session-title-bubble)" />
+  <path d="M13 16H20M16.5 16V22" stroke="#FFFFFF" stroke-width="1.6" />
+  <defs>
+    <linearGradient id="session-title-bubble" x1="9" y1="12" x2="24" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6FB2EE" />
+      <stop offset="1" stop-color="#3E58D6" />
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,17 +1,23 @@
 // @vitest-environment jsdom
 /** Trajectory ledger selection, details, status, and fold behavior. */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import type { ComponentProps } from 'react'
-import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { useState, type ComponentProps, type ReactNode } from 'react'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
-const renderImagesStub: RenderMessageImages = ({ images }) => (
+const loadImage: MessageImageLoader = async () => 'blob:trajectory'
+const renderNoImages: PropsRenderSlots<'conversation.trajectory.images'>['renderSlot'] = () => null
+
+const RecordImages = ({ images }: MessageImagesOwnerProps) => (
   <div data-testid="record-images" data-count={images.length}>
     {images.map((image, index) => (
       <span
@@ -22,9 +28,38 @@ const renderImagesStub: RenderMessageImages = ({ images }) => (
   </div>
 )
 
+async function imageSlotFixture() {
+  const runtime = await SlotTestRuntime.create()
+  onTestFinished(() => runtime.dispose())
+  await runtime.sessions.add({ id: 'trajectory-images' })
+  const session = runtime.sessions.retainFor(runtime.ctx, SessionId('trajectory-images'))
+  type Seats = PropsRenderSlots<'conversation.trajectory.images'>
+  const captured: { seats?: Seats; setContent?: (content: ReactNode) => void } = {}
+  await runtime.root.declare({ 'conversation.trajectory.images': { kind: 'single', scope: 'session' } }, function TestRoot(props) {
+    const [content, setContent] = useState<ReactNode>(null)
+    captured.seats = props
+    captured.setContent = setContent
+    const { SessionProvider } = props
+    return <SessionProvider session={session}>{content}</SessionProvider>
+  })
+  runtime.slots.register({ name: 'conversation.trajectory.images' }, RecordImages)
+  const view = runtime.renderRoot()
+  const { seats, setContent } = captured
+  if (seats === undefined || setContent === undefined) throw new Error('trajectory image fixture root did not render')
+  return {
+    renderSlot: seats.renderSlot,
+    render: (content: ReactNode) => {
+      act(() => { setContent(content) })
+      return view
+    },
+  }
+}
+
+type TableProps = ComponentProps<typeof LocalizedTrajectoryTable>
+
 function TrajectoryTable(
-  props: Omit<ComponentProps<typeof LocalizedTrajectoryTable>, 't' | 'renderImages'>
-    & { renderImages?: RenderMessageImages },
+  props: Omit<TableProps, 't' | 'renderSlot' | 'loadImage'>
+    & Partial<Pick<TableProps, 'renderSlot' | 'loadImage'>>,
 ) {
   const inferred: Array<NonNullable<typeof props.requestNumbers>[number] & { firstIndex: number }> = []
   for (const turn of props.turns) {
@@ -58,7 +93,7 @@ function TrajectoryTable(
     .map(({ firstIndex: _firstIndex, ...request }, index) => ({ ...request, number: index + 1 }))
   return (
     <LocalizedTrajectoryTable
-      renderImages={renderImagesStub}
+      renderSlot={renderNoImages} loadImage={loadImage}
       {...props}
       requestNumbers={requestNumbers}
       t={t}
@@ -166,7 +201,7 @@ describe('TrajectoryTable', () => {
     render(
       <LocalizedTrajectoryTable
         t={tZh}
-        renderImages={renderImagesStub}
+        renderSlot={renderNoImages} loadImage={loadImage}
         turns={TURNS}
         collapsedTurns={new Set<number>()}
         onToggleTurn={() => {}}
@@ -873,6 +908,25 @@ describe('TrajectoryTable', () => {
     expect(errorResult.closest('[class*="errorPayload"]')).toBeTruthy()
   })
 
+  it('does not expose a request placeholder as a completed assistant result', () => {
+    const turns = deriveTrajectoryLayout({
+      nodes: [], partial: null, runningCalls: [],
+      requests: [{
+        purpose: 'assistant', startSeq: 2, turn: 1, step: 1,
+        startedAt: 2_000, completedAt: null, status: 'running',
+      }],
+    }, t)
+    render(<TrajectoryTable turns={turns} requestNumbers={[{
+      turn: 1, step: 1, seq: 2, group: 'Step 1', number: 1,
+      status: 'running', startedAt: 2_000, completedAt: null,
+    }]} {...FOLD_PROPS} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request #1' }))
+    expect(screen.getByText('Pending')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Assistant Message' })).toBeNull()
+    expect(screen.queryByText('Completed')).toBeNull()
+  })
+
   it('marks failed requests and lays coincident request markers left to right', () => {
     const turns: readonly TrajectoryTurnModel[] = [
       {
@@ -928,6 +982,49 @@ describe('TrajectoryTable', () => {
     expect(retry.style.getPropertyValue('--request-boundary-offset')).toBe('8px')
     expect(recovered.getAttribute('data-request-run-index')).toBe('2')
     expect(recovered.style.getPropertyValue('--request-boundary-offset')).toBe('16px')
+  })
+
+  it.each([
+    ['English', t, 'Pending', 'Completed', 'Failed', 'Last attempt error', 'Error'],
+    ['Chinese', tZh, '等待中', '已完成', '失败', '上次尝试错误', '错误'],
+  ] as const)('distinguishes retry history from the current request status in %s', (
+    _locale, translate, pending, completed, failed, lastAttemptError, error,
+  ) => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 1,
+      groups: [{ title: 'Step 1', cells: [{
+        index: 1, kind: 'message', text: 'response', timeSeconds: null,
+      }] }],
+    }]
+    const table = (status: 'running' | 'complete' | 'error') => (
+      <LocalizedTrajectoryTable
+        turns={turns} {...FOLD_PROPS} t={translate} renderSlot={renderNoImages} loadImage={loadImage}
+        requestNumbers={[{
+          turn: 1, step: 1, group: 'Step 1', number: 1, status,
+          error: 'upstream 503', errorCode: 'SERVER', retry: 1, maxRetries: 2,
+        }]}
+      />
+    )
+    const view = render(table('running'))
+    fireEvent.click(screen.getByRole('button', { name: translate('request.label', { request: 1 }) }))
+    const panel = within(screen.getByRole('tabpanel'))
+    expect(panel.getByText(pending)).toBeTruthy()
+    expect(panel.getByText(lastAttemptError)).toBeTruthy()
+    expect(panel.queryByText(error, { exact: true })).toBeNull()
+    expect(panel.getByText('upstream 503').className).not.toContain('error')
+
+    view.rerender(table('complete'))
+    expect(panel.getByText(completed)).toBeTruthy()
+    expect(panel.getByText(lastAttemptError)).toBeTruthy()
+    expect(panel.queryByText(error, { exact: true })).toBeNull()
+    expect(panel.getByText(translate('request.retryProgress', { retry: 1, maximum: 2 }))).toBeTruthy()
+    expect(panel.getByText('upstream 503').className).not.toContain('error')
+
+    view.rerender(table('error'))
+    expect(panel.getByText(failed)).toBeTruthy()
+    expect(panel.getByText(error, { exact: true })).toBeTruthy()
+    expect(panel.queryByText(lastAttemptError)).toBeNull()
+    expect(panel.getByText('upstream 503').className).toContain('error')
   })
 
   it('localizes a sanitized AUTH request failure from its stable code', () => {
@@ -1044,7 +1141,7 @@ describe('TrajectoryTable', () => {
   it.each([['English', t, 'Attachments', 'Image 1', 'Summary', 'Preview', 'Raw'],
     ['Chinese', tZh, '附件', '图片 1', '概述', '预览', '原始内容']] as const)(
     'keeps mixed attachments ordered and raw fields complete in %s',
-    (_locale, translate, listLabel, imageLabel, summaryTab, previewTab, rawTab) => {
+    async (_locale, translate, listLabel, imageLabel, summaryTab, previewTab, rawTab) => {
       const attachment = {
         attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
         mediaType: 'image/png' as const,
@@ -1070,8 +1167,10 @@ describe('TrajectoryTable', () => {
         partial: null,
         runningCalls: [],
       }, translate)
-      const renderImages = vi.fn<RenderMessageImages>(renderImagesStub)
-      const view = render(<LocalizedTrajectoryTable turns={turns} {...FOLD_PROPS} t={translate} renderImages={renderImages} />)
+      const { render, renderSlot: slotRenderer } = await imageSlotFixture()
+      const renderSlot = vi.fn((name: 'conversation.trajectory.images', owner: object) => slotRenderer(name, owner as MessageImagesOwnerProps))
+      const view = render(<LocalizedTrajectoryTable turns={turns} {...FOLD_PROPS} t={translate}
+        renderSlot={renderSlot} loadImage={loadImage} />)
       fireEvent.click(view.container.querySelector('[data-trajectory-row-key]')!)
       for (const tab of [summaryTab, previewTab]) {
         fireEvent.click(screen.getByRole('tab', { name: tab }))
@@ -1080,7 +1179,9 @@ describe('TrajectoryTable', () => {
         expect(names).toEqual([imageLabel, file.name, imageLabel.replace('1', '2')])
         expect(within(list).getByText('TXT · 0B')).toBeTruthy()
         expect(within(list).getAllByText('image/png · 68B · 40 × 800')).toHaveLength(2)
-        expect(renderImages).toHaveBeenCalledWith({ images: [{ attachment, label: imageLabel }], align: 'start', thumbnail: true })
+        expect(renderSlot).toHaveBeenCalledWith('conversation.trajectory.images', {
+          images: [{ attachment, label: imageLabel }], align: 'start', thumbnail: true, loadImage,
+        })
       }
       fireEvent.click(screen.getByRole('tab', { name: rawTab }))
       expect(screen.queryByTestId('record-images')).toBeNull()
@@ -1096,15 +1197,16 @@ describe('TrajectoryTable', () => {
     },
   )
 
-  it('renders a tool-result image through the shared gallery in the Result tab', () => {
+  it('renders a tool-result image through the shared gallery in the Result tab', async () => {
+    const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
-      attachmentId: `sha256:${'b'.repeat(64)}`,
+      attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
       mediaType: 'image/png',
       bytes: 68,
       width: 320,
       height: 640,
       name: 'capture.png',
-    } as unknown as NonNullable<
+    } satisfies NonNullable<
       NonNullable<TrajectoryTurnModel['groups'][number]['cells'][number]['outputBlocks']>[number]['attachment']
     >
     const turns: readonly TrajectoryTurnModel[] = [{
@@ -1122,7 +1224,7 @@ describe('TrajectoryTable', () => {
       }],
     }]
 
-    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderSlot={renderSlot} />)
     fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
 
@@ -1132,15 +1234,16 @@ describe('TrajectoryTable', () => {
       .toBe(String(attachment.attachmentId))
   })
 
-  it('keeps the failure name beside an image-only error result', () => {
+  it('keeps the failure name beside an image-only error result', async () => {
+    const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
-      attachmentId: `sha256:${'c'.repeat(64)}`,
+      attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
       mediaType: 'image/png',
       bytes: 68,
       width: 320,
       height: 320,
       name: 'failed.png',
-    } as unknown as NonNullable<
+    } satisfies NonNullable<
       NonNullable<TrajectoryTurnModel['groups'][number]['cells'][number]['outputBlocks']>[number]['attachment']
     >
     const turns: readonly TrajectoryTurnModel[] = [{
@@ -1159,7 +1262,7 @@ describe('TrajectoryTable', () => {
       }],
     }]
 
-    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} renderSlot={renderSlot} />)
     fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
     fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
 

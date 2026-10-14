@@ -359,7 +359,7 @@ function expectedFailureDiagnostic(
 }
 
 describe('task admission and package contracts', () => {
-  it('ships the provider with scoped delegation tools for all full Web presets', () => {
+  it('ships the provider with a global delegation tool', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -406,15 +406,12 @@ describe('task admission and package contracts', () => {
     }
 
     const parsed = yaml.load(readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'))
-    expect(parsed).toEqual([
-      { insert: [{ id: 'subagent-codex', name: '@deepseek-ai/dsh-subagent-codex' }] },
-      ...['standard', 'cordis', 'ptc'].map(preset => ({
-        preset: `preset-${preset}`,
-        insert: [{ id: 'tool-subagent-codex', name: '@deepseek-ai/dsh-tool-subagent', config: {
-          provider: 'codex', toolName: 'subagent_codex', maxDepth: 'provider-managed',
-        } }],
-      })),
-    ])
+    expect(parsed).toEqual([{ insert: [
+      { id: 'subagent-codex', name: '@deepseek-ai/dsh-subagent-codex' },
+      { id: 'tool-subagent-codex', name: '@deepseek-ai/dsh-tool-subagent', config: {
+        provider: 'codex', toolName: 'subagent_codex', maxDepth: 'provider-managed',
+      } },
+    ] }])
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-tool-subagent', 'workspace:*')
   })
 
@@ -441,10 +438,9 @@ describe('task admission and package contracts', () => {
     expect(provider).toMatchObject({
       name: 'codex',
       capabilities: {
+        agentPreset: false,
         outputSchema: false,
         depthLimit: false,
-        toolFilter: false,
-        persona: false,
       },
       inheritsParentContext: false,
     })

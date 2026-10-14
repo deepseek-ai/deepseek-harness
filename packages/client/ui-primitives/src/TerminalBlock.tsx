@@ -64,6 +64,12 @@ export interface TerminalBlockProps {
    * line alone; with output it renders the live text under the running state.
    */
   running?: boolean | undefined
+  /**
+   * The call launches background work (default false). `running` describes the
+   * launch call only; after it returns, retain the command without job status
+   * or output. An explicit `copyText` override remains available.
+   */
+  background?: boolean | undefined
   /** Height cap in output lines before the middle collapses (default {@link DEFAULT_TERMINAL_MAX_LINES}); Infinity disables the cap. */
   maxLines?: number | undefined
   /**
@@ -172,6 +178,7 @@ export function TerminalBlock({
   exitCode,
   signal,
   running = false,
+  background = false,
   maxLines = DEFAULT_TERMINAL_MAX_LINES,
   copyText,
   runStateDot = true,
@@ -201,8 +208,9 @@ export function TerminalBlock({
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
 
-  const status = statusText(exitCode, signal, copy)
+  const status = background ? undefined : statusText(exitCode, signal, copy)
   const state = runState(running, exitCode, signal, copy)
+  const showState = runStateDot && (!background || running)
   // A multi-line command gets one prompt row per line, so a two-command shell
   // snippet reads as the two commands it is instead of collapsing into one
   // ellipsized row. A trailing newline is a terminator, not an empty command.
@@ -219,7 +227,7 @@ export function TerminalBlock({
   const { hidden, capped, headLines, tailLines } = headTailCap(lines.length, maxLines, expanded)
   // A running command with nothing printed yet is banner-only; once it has
   // printed, the output streams in under the banner as it would in a terminal.
-  const body = !running || !empty
+  const body = !background && (!running || !empty)
 
   return (
     <div
@@ -230,14 +238,14 @@ export function TerminalBlock({
     >
       <div className={css.header}>
         <div className={css.prompt}>
-          {runStateDot && <span className={css.runStateLabel}>{state.label}</span>}
+          {showState && <span className={css.runStateLabel}>{state.label}</span>}
           {commandLines.map((line, index) => (
             <div key={index} className={css.promptLine}>
               {/* One dot for the card, on the first row: the exit status the
                   view carries is the whole call's, and bash reports no
                   per-command status, so a dot per row would assert a
                   per-line outcome nothing here knows. */}
-              {index === 0 && runStateDot && <StateDot state={state.state} className={css.runState} />}
+              {index === 0 && showState && <StateDot state={state.state} className={css.runState} />}
               {/* The cwd labels the CALL, so only its first row carries it. The
                   view knows one working directory — where the call started —
                   and a later line may well run somewhere else (a `cd` in the
@@ -252,7 +260,7 @@ export function TerminalBlock({
           ))}
         </div>
         {status !== undefined && <Pill className={css.status}>{status}</Pill>}
-        {(copyText !== undefined || (!running && !empty)) && (
+        {(copyText !== undefined || (!background && !running && !empty)) && (
           <button type="button" className={css.copyButton} onClick={onCopy}>
             {copied ? copy.copied : copy.copy}
           </button>

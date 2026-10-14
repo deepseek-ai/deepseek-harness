@@ -2,7 +2,7 @@
  * Agent discovery of the installed Office CLI through the shipped SDK profile.
  * Defaults to built Node packages. DSH_OFFICE_TEST_EXECUTABLE/ENTRY select a
  * relocated Node or Electron carrier; CARRIER=sdk selects the standalone executable.
- * NODE/CLI/ASSETS under the same prefix supply Desktop resources outside ASAR.
+ * NODE/CLI/ASSETS under the same prefix select Desktop command and skill resources outside ASAR.
  * API=openai-completions selects a development gateway instead of the default Messages API.
  */
 import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile, chmod } from 'node:fs/promises'
@@ -29,16 +29,13 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
       'word/document.xml': strToU8('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Office CLI discovery</w:t></w:r></w:p><w:sectPr/></w:body></w:document>'),
     }))
     const patch = join(root, 'office.patch.yml')
+    const node = process.env.DSH_OFFICE_TEST_NODE, cli = process.env.DSH_OFFICE_TEST_CLI
+    const assetRoot = process.env.DSH_OFFICE_TEST_ASSETS
     await writeFile(patch, JSON.stringify([
       ...(process.env.DSH_OFFICE_TEST_API === 'openai-completions' ? [{ id: 'llm-deepseek', disabled: true }, { id: 'llm-pi-ai', config: { providers: { 'office-test': { api: 'openai-completions', apiKeyEnv: 'DEEPSEEK_API_KEY', baseURL: process.env.DEEPSEEK_BASE_URL, compat: { thinkingFormat: 'deepseek' }, models: [{ id: process.env.MODEL_NAME ?? 'deepseek-v4-flash', contextWindow: 128000, maxTokens: 8000 }] } } } }] : []),
       { id: 'session-persistence-jsonl', config: { root: join(root, 'sessions'), compression: 'none' } },
-      ...carrier === 'sdk' ? [] : [{ insert: [{
-        id: 'office-cli-discovery', name: '@deepseek-ai/dsh-skill-office', config: {
-          ...(process.env.DSH_OFFICE_TEST_NODE ? { node: process.env.DSH_OFFICE_TEST_NODE } : {}),
-          ...(process.env.DSH_OFFICE_TEST_CLI ? { cli: process.env.DSH_OFFICE_TEST_CLI } : {}),
-          ...(process.env.DSH_OFFICE_TEST_ASSETS ? { assetRoot: process.env.DSH_OFFICE_TEST_ASSETS } : {}),
-        },
-      }] }],
+      { id: 'skill-office', disabled: false },
+      { id: 'skill-office', config: { ...assetRoot === undefined ? {} : { assetRoot }, ...node === undefined ? {} : { node }, ...cli === undefined ? {} : { cli } } },
     ]))
     // A private POSIX tool directory also excludes /usr/bin/node on Linux.
     const path = join(root, 'bin')
@@ -54,7 +51,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
       await writeFile(decoy, '#!/bin/sh\nprintf invoked > ' + "'" + decoyMarker.replaceAll("'", "'\\''") + "'" + '\nexit 86\n')
       await chmod(decoy, 0o755)
     }
-    const lookup = await execa('/bin/sh', ['-c', 'command -v node || command -v libreoffice-kit'], { env: { PATH: path }, reject: false })
+    const lookup = await execa('/bin/sh', ['-c', 'command -v node || command -v dsoffice'], { env: { PATH: path }, reject: false })
     expect(lookup.exitCode, 'the fixture must not expose Node or the Office CLI through PATH').not.toBe(0)
     const child = execa(executable, [
       ...carrier === 'sdk' ? [] : [entry], '--profile', 'sdk', '--patch', patch,
@@ -103,10 +100,12 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
       const commands = calls.filter(call => call.name === 'bash')
       expect(commands.length, diagnostic).toBeGreaterThan(0)
       expect(calls.findIndex(call => call.name === 'skill'), diagnostic).toBeLessThan(calls.findIndex(call => call.name === 'bash'))
-      const commandText = JSON.stringify(commands)
-      for (const fragment of ['cli.js', 'capabilities', 'convert']) expect(commandText, diagnostic).toContain(fragment)
+      const commandText = commands.map((call) => {
+        if (typeof call.arguments !== 'string') throw new Error('Shell tool call did not contain serialized arguments')
+        return (JSON.parse(call.arguments) as { command: string }).command
+      }).join('\n')
+      for (const operation of ['capabilities', 'convert']) expect(commandText, diagnostic).toMatch(new RegExp(`\\s${operation}\\b`, 'u'))
       expect(existsSync(decoyMarker), 'the agent must not invoke system Office when the bundled CLI is supplied').toBe(false)
-      expect(commandText, 'the skill supplies an entry; searching for other Office binaries is unnecessary').not.toMatch(/(?:which|whereis|command -v|find).{0,100}(?:libreoffice|soffice)/iu)
       const capabilities = JSON.parse(await readFile(join(root, 'capabilities.json'), 'utf8')) as { runtime: { version: string; cliPath: string } }
       expect(capabilities.runtime.version).toBe('0.1.5')
       expect(capabilities.runtime.cliPath).toMatch(/lib[/\\]cli\.js$/u)

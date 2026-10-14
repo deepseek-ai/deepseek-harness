@@ -46,9 +46,10 @@ export function renderPersistencePair(root: string, source: string, en: string, 
     translationStructureSignature(zhTree, sourceTargets, { ...context, sourcePath: paths.zh, markdown: zh }),
   )
   if (errors.length > 0) throw new Error(`${source}: bilingual structure mismatch: ${errors.join('; ')}`)
+  const record = computeTranslationPairingRecord(paths, en, zh, context, { en: sourceTree, zh: zhTree })
   return [
     { path: paths.source, content: en },
     { path: paths.zh, content: zh },
-    { path: paths.meta, content: renderTranslationPairingRecord(paths, computeTranslationPairingRecord(paths, en, zh, context)) },
+    { path: paths.meta, content: renderTranslationPairingRecord(paths, record) },
   ]
 }

@@ -65,7 +65,7 @@ ctx.tools.register(defineTool({
 
 ### 配置呈现模式
 
-`mode` 配置决定模型看到什么：`native`（每个可见 schema）或 `ptc`（只有 `run_code` 加一份生成 SDK）。
+`mode` 配置决定模型看到什么：`native`（每个可见 schema）或 `ptc`（只有 `run_code` 加一份生成 SDK）。运行时通过 `executionInstructions` 提供求值语法、输出方式和状态保留指引；本包负责工具调用规则、SDK 声明和图片结果附加。
 
 ```yaml
 - name: '@deepseek-ai/dsh-tools'
@@ -133,7 +133,7 @@ ctx.tools.register(defineTool({
 
 成功且包含图片的子调用结果会成为延后的 user-message 上下文，其 `source.kind` 为 `ptc-mode`。其他 additional context 保留其生产工具的归属。
 
-当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限以及运行时使用说明。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。schema 提示模型使用当前用户的语言撰写理由。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。
+当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限以及运行时使用说明。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。schema 提示模型使用当前用户的语言撰写理由。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。 保留状态的 PTC 环境遵循会话文件策略。PTC 观察已提交的 Session 模式变化，并立即取消两种 Node 模式下受影响的调用。后续 PTC 调用等待这些调用的嵌套工具清理后，再解析最新策略。运行时负责进程失效和清理，权限设置保持同步。单次提权省略状态所有者，在临时环境中执行；普通调用仍可访问原环境的变量。
 
 <a id="extension-points"></a>
 ### 扩展点
@@ -235,7 +235,7 @@ Program-only SDK bindings:
 - **定义中的 `timeoutMs` 仅作声明之用**：注册表绝不会强制执行截止时间；要强制执行，必须使用 `@deepseek-ai/dsh-tool-call-timeout-policy` 包装层。
 - **PTC mode 的 SDK 语言由当前加载的运行时决定，且呈现方式按 agent 而非按工具**：`mode: ptc` 会拒绝组装提示词，除非 `ctx.ptcRuntime.language` 有已注册的 SDK 渲染器；同一个 agent 内不能让一个工具仅使用 Native，而另一个仅使用 PTC。
 - **PTC mode 中间值只存在于执行局部，且没有字节上限**：它们无法从会话回放重建，并可能耗尽进程或 worker 内存；只有外层 `run_code` 输出受 worker 可配置的硬上限约束。
-- **每次运行都会获得全新的 `run_code` 状态**：MVP 不采用持久 REPL 风格内核，因为跨调用状态不会出现在日志中。
+- **状态由运行时决定**：默认后端每次重新开始；REPL 后端按存活 Agent 保留内存。Agent 销毁时等待环境释放。重启与执行失败可能清除内存；模型说明会指导重新创建缺失变量。程序与结果仍写入 Session 日志，不序列化运行中的对象。
 
 `defineTool()`、注册表模式投影和系统提示组装会保留 `deferLoading: true`。该标记请求延迟加载工具定义，并不意味着存在 `tool-addition` 记录；提供方执行语义的限制见 [LLM 包](../../../packages/llm/llm/README.zh.md#known-limitations-and-deferred-work)。
 

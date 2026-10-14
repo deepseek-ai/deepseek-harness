@@ -37,9 +37,9 @@ Promotion requires a named product role, documented public behavior and limitati
 | Package | Role | ctx key |
 |---|---|---|
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
-| [`session-search`](session-search/README.md) | Optional experimental session search in full Web presets | — |
+| [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |
 | [`ralph-bundle`](ralph-bundle/README.md) | Optional repeated delegation with an isolated workflow engine | — |
-| [`terminal-bundle`](terminal-bundle/README.md) | Optional persistent terminal tools for full Web presets | — |
+| [`terminal-bundle`](terminal-bundle/README.md) | Optional global persistent terminal tools | — |
 | [`badge-skill-bundle`](badge-skill-bundle/README.md) | Optional powered-by-dsh badge skill | — |
 | [`session-titles-bundle`](session-titles-bundle/README.md) | Optional titles following human prompts in a conversation | — |
 | [`hook-protocol`](hook-protocol/README.md) | Hook bridge wire types and durable events | — |
@@ -60,7 +60,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`client-ui-voice-input`](client-ui-voice-input/README.md) | Microphone capture and guarded draft insertion | — |
 | [`voice-input-bundle`](voice-input-bundle/README.md) | Default-disabled optional voice input composition | — |
 | [`agent-team-profile`](agent-team-profile/README.md) | Agent Teams collaboration, tools, and Web UI bundle | — |
-| [`agent-team`](agent-team/README.md) | Named teammates with durable messages and a shared task board | `ctx.agentTeams` |
+| [`agent-team`](agent-team/README.md) | Named teammates with direct messages and a durable shared task board | `ctx.agentTeams` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.md) | Team roster, task board, and teammate navigation for Web | — |
 | [`auto-review`](auto-review/README.md) | Explicit Web layer for same-model review before each native or PTC inner tool call | — |
 | [`claude-code-mods`](claude-code-mods/README.md) | Run Claude Code mods as plugins: their hook chains on harness extension points and a band above the prompt | `ctx.claudeCodeMods` |

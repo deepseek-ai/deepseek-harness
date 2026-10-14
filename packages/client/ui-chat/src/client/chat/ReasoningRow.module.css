@@ -14,7 +14,7 @@
 
 /* The uncapped body scrolls with the conversation; keep its collapse toggle
    reachable. Compact Markdown code banners stay in flow below this header. */
-.root[data-expanded] [data-open] [data-disclosure-row] {
+.root[data-expanded] [data-open] [data-disclosure-header] {
   position: sticky;
   top: 0;
   z-index: 1;

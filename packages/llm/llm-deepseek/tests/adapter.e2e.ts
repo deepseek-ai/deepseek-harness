@@ -239,6 +239,24 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
     expect(third.assembler.finish.kind).toBe('stop')
   })
 
+  it('continues saved Responses tool history with an empty trailing text item', async () => {
+    const ctx = await boot()
+    const calls = [0, 1, 2].map(index => ({
+      type: 'tool-call' as const, id: ToolCallId(`call_${index}|item_${index}`), name: 'lookup_value', arguments: '{"key":"secret"}',
+    }))
+    const history = [
+      user('Look up the secret value.'),
+      createAssistantMessage({ source: { provider: 'foreign', model: 'claude' }, content: [...calls, { type: 'text', text: '' }] }),
+      ...calls.map(call => createToolResultMessage({ callId: call.id, content: [{ type: 'text', text: 'EMPTY_TEXT_RECOVERED_731' }], isError: false })),
+      user('Do not call tools. Reply with exactly EMPTY_TEXT_RECOVERED_731.'),
+    ]
+    const saved = JSON.stringify(history)
+    const response = await assemble(ctx.llm.stream(options({ model: 'deepseek-flash', messages: history, tools: [tool], reasoningEffort: ReasoningEffortId('off') })))
+    expect(response.assembler.finish.kind).toBe('stop')
+    expect(response.message.content.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('EMPTY_TEXT_RECOVERED_731')
+    expect(JSON.stringify(history)).toBe(saved)
+  })
+
   it('continues persisted foreign history containing malformed tool arguments', async () => {
     const ctx = await boot()
     const callId = ToolCallId('historical_lookup')

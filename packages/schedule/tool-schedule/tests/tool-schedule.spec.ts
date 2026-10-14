@@ -130,7 +130,7 @@ describe('Schedule model tools', () => {
     const schema = test.ctx.tools.schemas(test.agent).find(item => item.name === 'schedule_create')
     const parameters = schema?.parameters as { properties: Record<string, { type?: string; description?: string }>; required: string[] }
     expect(parameters.properties.title?.type).toBe('string')
-    expect(parameters.properties.title?.description).toContain('task card')
+    expect(parameters.properties.title?.description).toContain('Concise task name')
     expect(parameters.required).toEqual(expect.arrayContaining(['prompt', 'title']))
     const created = await execute(test, 'schedule_create', {
       prompt: 'Check the queue\nand the backlog', title: '  Queue check  ', every_seconds: 300,

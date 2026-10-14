@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenTelemetry 上报服务",
+    "description": "为产品事件和会话日志提供独立的数据上报通道。"
+  }
+}

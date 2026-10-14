@@ -8,41 +8,41 @@ English | [中文](2026-09-19-remote-duplex-stream.zh.md)
 
 ### Current state
 
-`dsh-api-gateway` multiplexes every Typert Remote stream over one WebSocket at the fixed path `/api/remote.mux` (`packages/api/gateway/src/stream-protocol.ts`). A Host method decorated with `@Remote({ mode: 'stream' })` that returns an `Iterable` or `AsyncIterable` becomes one Host-to-Client logical stream; the optional final `signal: AbortSignal` is the only reserved parameter, never enters the wire arguments, and is appended by the Gateway after the decoded business parameters (`packages/api/gateway/src/index.ts`). The generated method the Client receives returns a bare `AsyncIterable`.
+`dsh-api-gateway` multiplexes Typert Remote streams over one WebSocket at `/api/remote.mux`. A Host method declares both directions with `@Remote({ mode: 'stream' })` and `RemoteStream<Out, In>`; the generated Client method returns `RemoteStreamHandle<Out, In>`. Existing `Iterable` and `AsyncIterable` return types declare downlink-only methods. The optional final `signal: AbortSignal` is supplied by the Gateway and does not enter the wire arguments.
 
-There are only five wire frames:
+Both directions share one `streamId`:
 
 | Direction | Frame | Definition |
 | --- | --- | --- |
 | Client to Host | `{ type: 'open', streamId, endpoint, payload }` | `stream-protocol.ts` |
+| Client to Host | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
+| Client to Host | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 | Client to Host | `{ type: 'cancel', streamId }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'item', streamId, value? }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'error', streamId, error: { code, message, details } }` | `stream-protocol.ts` |
 | Host to Client | `{ type: 'end', streamId }` | `stream-protocol.ts` |
 
-The Client can send only open and cancel. The parser `parseRemoteStreamClientMessage` (`stream-protocol.ts`) throws on any other frame, and a Host connection that receives one closes the whole socket with 1008 (`stream-server.ts`). In short, the Gateway today supports only "a backend iterable sent to the frontend". Every feature that needs the frontend to send data to the backend continuously takes its own detour.
+The Client handle's `send()` supplies uplink items, `end()` half-closes the uplink, and `dispose()` cancels the logical stream. The Host reads decoded items through `this.ctx.invocation.uplink<In>()`; the invocation also carries the admitted Peer and cancellation signal.
 
-A Host method also has no notion of who initiated this call: `InvokeRemoteRequest = { namespace, method, args, signal }` (`packages/api/gateway/src/types.ts`) has no caller slot, `RemoteStreamOpener` has the signature `(endpoint, payload, signal)` (`stream-server.ts`), and the WebSocket checks the cookie once, at the handshake.
+The transport owns validation, cancellation, and its bounded inbox. Consumer protocols own input authority, acknowledgements, and recovery after disconnection.
 
-### Three unrelated uplink mechanisms
+### Uplink consumers
 
 | Feature | Uplink path | Location | Cost |
 | --- | --- | --- | --- |
-| Web terminal keystrokes | One unary RPC `terminal.write(agent, id, attachmentId, data)` per xterm `onData`; the Client serializes them through a promise chain and caps its own byte budget | `packages/api/terminal-controller/src/client/model.ts`; Host `src/index.ts` | One HTTP round trip and one authentication per keystroke; two carriers correlated by hand through `attachmentId`; `inputFull` when the budget is exhausted |
+| Web terminal input and resize | `terminal.attach` carries `TerminalInput` uplink items and `TerminalFrame` downlink items; the Client pipelines commands and releases its raw-input byte budget on `ack` | `packages/api/terminal-controller/src/client/model.ts`; Host `src/terminal.ts` | The current attachment owns input; `inputFull` when the Client budget is exhausted; input is never replayed after reconnection |
 | File upload | A `Blob` or `ReadableStream` goes to the native `POST /api/session/uploadFileBinary` outside the Remote layer, with `duplex: 'half'` | `packages/client/file-upload/src/client/runtime.ts`; route `src/index.ts` | Bypasses Typert descriptors; no type projection |
 | Answers to approvals and questions | The Host sends waterfall frames down the `$events` stream, the Client answers through a separate unary RPC `$events/result`, correlated by `clientId` plus `eventId` | `packages/api/gateway/src/client/remote-events.ts`; Host `index.ts` | A second correlation key; `index.ts` records the race this creates |
 
-These three mechanisms solve the same problem: the Client wants to write into a logical stream that is already open.
+These consumers need Client-to-Host data while a related operation remains active. Web terminals use the duplex stream; file upload and event answers retain their own transports.
 
-### Concrete costs
+### Consumer responsibilities
 
-- **Aligning two carriers.** The terminal uses `attachmentId` to correlate the `follow` stream with the `write` RPC and to decide who owns input. Approvals use `clientId` to correlate the `$events` stream with the `$events/result` RPC.
-- **No ordering guarantee.** A unary RPC travels over HTTP and is unordered relative to the WebSocket downlink; the terminal can preserve order only by serializing writes on the Client.
-- **Separate authentication and lookup per uplink.** Every `write(agent, id, attachmentId, data)` resolves `agent`, looks up the terminal, and validates the attachment.
-- **No EOF.** The Client cannot express "I am done writing"; a half-close needs yet another RPC.
-- **Cancellation does not cover both halves.** Cancelling the downlink stream does not cancel queued uplink writes, and vice versa.
-- **Backpressure implemented three times.** The downlink pulls the iterator at the pace of the socket write callback (`stream-server.ts`); the terminal uses a bounded follower that makes a slow consumer fail explicitly (`terminal-controller/src/stream.ts`); the uplink relies on the Client capping `maxInputBytes` itself.
-- **The documentation is already stale.** `docs/api-gateway.md:160` still says Remote handles one request and one result, a sentence that lags the stream mode the README records.
+- **Input authority.** A terminal retains its controlling attachment as a Host-local follower. Snapshot and state frames report each attachment's `writable` state; older attachments keep receiving output after control transfers.
+- **Ordering and acknowledgement.** Terminal writes and resizes share a consecutive command sequence and the terminal's operation queue. An `ack` reports provider acceptance or a control refusal; it never authorizes replay after disconnection.
+- **Independent lifetimes.** Cancelling `attach` stops its input and output delivery, drops unstarted commands, and joins an in-flight input operation. The PTY lifetime is owned separately by retention and explicit close.
+- **Coordinated byte limits.** The Gateway exposes its complete-frame inbox capacity and this stream's JSON envelope cost through `invocation.uplinkWindow`. The terminal publishes that window in its snapshot and uses provider acknowledgements to release in-flight capacity. Writes and resizes wait in a bounded Client queue when the window is full. `maxInputBytes` limits raw UTF-8 input; `maxBufferedBytes` separately limits the complete encoded input retained by the Client and output retained by each follower.
+- **Remaining separate carriers.** Approval answers still correlate `$events` with the `$events/result` RPC through `clientId` and `eventId`. Moving this protocol onto the duplex stream remains deferred.
 
 ### Relation to background jobs
 
@@ -66,7 +66,7 @@ Every Remote stream accepts a Client uplink. The method's return type `RemoteStr
                  Client                                             Host
    ─────────────────────────────────              ───────────────────────────────────────────
    const s = remote.job.attach(req, signal)
-        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control)
+        │  open { streamId, endpoint, payload } ───────▶  opener(endpoint, payload, uplink, peer, control, window)
         │                                                     │ prepareInvocation
         │  s.send(v1) → item { streamId, v1 }    ───────▶  inbox.push(v1)   │ invocation = { request, service, peer, signal, uplink() }
         │  s.send(v2) → item { streamId, v2 }    ───────▶  inbox.push(v2)   │ receiverContext.extend({ invocation }).get(service)
@@ -88,7 +88,7 @@ Every Remote stream accepts a Client uplink. The method's return type `RemoteStr
 | Half-close | One direction has ended while the other remains open |
 | Item | One business value in one direction; every item is validated by the codec independently |
 | inbox | The bounded uplink queue the Host keeps per logical stream |
-| Peer | The party the connection layer admitted, one `PeerScope`; this Host has exactly one Peer, the operator |
+| Peer | The party one connection speaks for, one `PeerScope` carrying its principal; every browser connection shares `connection.browserPeer`, and in-process code creates its own through `connection.createPeer()` ([Peer principals](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md)) |
 | Invocation context | `RemoteInvocation`: the request, receiving service, Peer, cancellation signal, and uplink entry of this call |
 
 ### Type signatures
@@ -135,10 +135,11 @@ export interface RemoteInvocation {
   }
   /** Cordis service key of the receiving service. */
   readonly service: string
-  /** The Peer that initiated the call. In-process carriers and unadmitted calls are the operator. */
+  /** The Peer that initiated the call; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The uplink items of this call. Can be taken once; the second call throws. With an uplink codec
    * in the descriptor each item is decoded to In; without one, items are delivered as unknown with
@@ -179,24 +180,28 @@ The mechanism relies on two existing Cordis behaviors:
 /** The opaque identity of one Peer. */
 export type PeerId = Branded<'PeerId'>
 
-/** One Peer's session on this Host: opened and released by the admitting side; ctx owns connection-lifetime registrations. */
+/** One Peer's session on this Host: opened and released by its creator; ctx owns connection-lifetime registrations. */
 export interface PeerScope {
   readonly id: PeerId
   readonly ctx: Context
+  /** Caller identity fixed at creation. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed. */
+  readonly signal: AbortSignal
   dispose(): Promise<void>
 }
 ```
 
-This Host has exactly one Peer: the operator. `@deepseek-ai/dsh-client-connection` creates it with `createScope(connectionCtx, peer)` when the service applies, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, and `dispose()` runs with the Connection's release and quiets the fiber. It is exposed as `connection.operator`.
+`@deepseek-ai/dsh-client-connection` implements the one Peer class, `Peer(owner, { principal })`, with `createScope(owner, peer)`, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, `peer.signal` aborts when the scope ends, and `dispose()` quiets the fiber. Connection creates `connection.browserPeer` with the owner principal when the service applies; [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) owns principals, `createPeer()`, and access checks.
 
 | Member | Semantics |
 | --- | --- |
-| `connection.operator: PeerScope` | The only Peer; lives and dies with the Connection |
-| `connection.admit(request): PeerAdmission` | Runs the existing `requestRejection`: returns `{ rejection: 401 \| 403 }` when refused, otherwise `{ peer: operator }`. Future admitters plug in here |
+| `connection.browserPeer: PeerScope` | The Peer every authenticated browser connection shares; owner principal; lives and dies with the Connection |
+| `connection.admit(request): PeerAdmission` | Runs the existing `requestRejection`: returns `{ rejection: 401 \| 403 }` when refused, otherwise `{ peer: browserPeer }`. Future admitters plug in here |
 
-The Gateway's `handleUpgrade(req, socket, head, peer)` binds an opener with a fixed Peer to that socket and registers socket closure in `peer.ctx.effect`; when the scope is already inactive, it closes the socket directly with 1001 instead. When `InvokeRemoteRequest.peer?` or the `peer` parameter of `RemoteStreamOpener` is absent, the answer is the operator, so existing in-process callers change nothing; in a composition without a Connection, the operator stand-in the Gateway builds for itself is likewise created through `createScope`, with the same `dispose()` contract. Looking up a Peer by id, associating a carrier with a second Peer, and Peer open and close events all wait until the first consumer that needs multiple Peers appears.
+The Gateway's `handleUpgrade(req, socket, head, peer)` binds an opener with a fixed Peer to that socket and registers socket closure in `peer.ctx.effect`; when the scope is already inactive, it closes the socket directly with 1001 instead. `InvokeRemoteRequest.peer` and the `peer` parameter of `RemoteStreamOpener` and `wireStream.open` are required, so every in-process caller names its Peer, and the Gateway creates none. Looking up a Peer by id and Peer open and close events wait until the first consumer that needs them appears.
 
-The Peer carries no access model: who the Peer is and what it may do are attached by business plugins on their own through `peer.ctx`.
+The Peer carries its principal; what that principal may call is decided by the roles, bindings, and policies that [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) defines.
 
 ### Client face
 
@@ -311,7 +316,7 @@ Credit frames wait until a consumer that needs sustained high-volume uplink appe
 | Worker tunnel (`packages/experimental/webworker-runtime`) | The page adds `stream-uplink-item` / `stream-uplink-end` frames; `serveStream` assembles them into an `uplink` handed to `seams.openStream`. Same-origin trusted boundary: no inbox limit, and items after `end` are dropped |
 | `remote-mock` (`packages/test-support/remote-mock`) | `StreamHandle.uplink: AsyncIterable<unknown>`; `rpc.open` passes it through |
 
-An in-process carrier with no `peer` means the operator.
+An in-process carrier passes its Peer explicitly; the in-page Host of the worker tunnel passes `connection.browserPeer`.
 
 ### Relation to `$events`
 
@@ -325,7 +330,7 @@ An in-process carrier with no `peer` means the operator.
 // types.ts
 export type RemoteStream<Out, In = never> = AsyncIterable<Out> & { readonly [STREAM_UPLINK]?: In }
 export type PeerId = Branded<'PeerId'>
-export interface PeerScope { readonly id: PeerId; readonly ctx: Context; dispose(): Promise<void> }
+export interface PeerScope { readonly id: PeerId; readonly ctx: Context; readonly principal: Principal; readonly signal: AbortSignal; dispose(): Promise<void> }
 export interface RemoteInvocation { … }              // see Host face
 declare module '@deepseek-ai/cordis' { interface Context { readonly invocation: RemoteInvocation | undefined } }
 
@@ -362,13 +367,13 @@ export interface InvokeRemoteRequest {
   readonly args: Readonly<Record<string, unknown>>
   /** Uplink items; absent is equivalent to an iterator that ends immediately. */
   readonly uplink?: AsyncIterable<unknown>
-  /** The Peer that initiated the call; absent means the operator. */
-  readonly peer?: PeerScope
+  /** The Peer that initiated the call; required on every path. */
+  readonly peer: PeerScope
   readonly signal?: AbortSignal
 }
 
 export interface TypertGatewayWireStream {
-  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope | undefined, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
+  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
   failure: (error: unknown) => RemoteStreamFailure
 }
 
@@ -379,6 +384,7 @@ export type RemoteStreamOpener = (
   uplink: AsyncIterable<unknown>,
   peer: PeerScope,
   control: AbortController,
+  window: RemoteUplinkWindow,
 ) => Promise<AsyncIterable<unknown>>
 
 // index.ts Config addition
@@ -394,7 +400,7 @@ const signal = request.signal ?? NEVER_ABORTED_SIGNAL
 const invocation = new GatewayInvocation(
   { namespace: request.namespace, method: request.method, args: request.args },
   descriptor.service,
-  request.peer ?? this.operatorPeer(),
+  request.peer,
   signal,
   new UplinkDecoder(request.uplink ?? EMPTY_ASYNC_ITERABLE, descriptor.uplink?.codec, endpoint, control),
 )
@@ -444,8 +450,8 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-protocol` (`types.ts`, `index.ts`) | `RemoteStream`, `RemoteStreamHandle`, `PeerId`, `PeerScope`, `RemoteInvocation`, the `ctx.invocation` declaration merge, `InvocationDescriptor.uplink`; the decorator recognizes only `mode: 'stream'`; `TypertRemoteService` registers the `invocation` accessor when constructed |
 | `dsh-typert-registry` | Load-time validation that `uplink.codec` is a valid strict codec |
 | `dsh-typert-generator` (`model.ts`, `analyzer.ts`, `emitter.ts`) | `remoteResultType` recognizes `RemoteStream<Out, In>` and generates the `uplink` boundary; the descriptor emits `uplink: { codec }`; the generated Client signature returns `RemoteStreamHandle<Out, In>`; the parameter loop accepts only business parameters and a final `signal` |
-| `dsh-client-connection` (`operator-peer.ts`, `rpc.ts`, `rpc-host.ts`, `index.ts`) | The operator `PeerScope`; `connection.operator` and `admit`; the `/api` and upgrade routes obtain the Peer through `admit`; the optional `uplink` of `rpc.open` |
-| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)`; `operatorPeer()` |
+| `dsh-client-connection` (`peer.ts`, `rpc.ts`, `rpc-host.ts`, `index.ts`) | The `Peer` class; `connection.browserPeer` and `admit`; the `/api` and upgrade routes obtain the Peer through `admit`; the optional `uplink` of `rpc.open` |
+| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client (`client/index.ts`, `client/stream-client.ts`) | `invokeStream` returns the handle; the uplink pump is driven by the handle's queue |
 | `dsh-webworker-runtime`, `dsh-remote-mock` | The worker tunnel's two uplink frames and the `serveStream` assembly; `StreamHandle.uplink`; the direct proxy returns the real handle |
 | Documentation | The READMEs of gateway, the api group, connection, protocol, and generator; `docs/api-gateway`; the type-equiv blocks of `docs/subsystems/typert`; the config and Cordis catalogs |
@@ -560,7 +566,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 **Putting the Client's `send` on the `AsyncIterable` the generated method returns.** Hanging methods on an `AsyncIterable` is unconventional; the handle type `RemoteStreamHandle` extends it explicitly.
 
-**Copying the Access mechanism.** Access control is business semantics, served by `vouch` and the `remote/invoke` waterfall; this Note only needs "whose stream is this", and `PeerScope` suffices.
+**Copying the Access mechanism.** Access control is business semantics, served by `vouch` and the `remote/invoke` waterfall; this Note only needs "whose stream is this", and `PeerScope` suffices. Method-level access control later moved to [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md), which supersedes this part.
 
 **Keeping unary RPC for the uplink.** One HTTP round trip, one authentication, and one lookup per uplink; two carriers with no ordering relation that only Client-side serialization can order; no EOF; cancellation that does not cover both halves; a hand-made correlation key per feature.
 
@@ -574,10 +580,11 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 - **Bought**: one stream with two directions, so interactive scenarios such as terminal keystrokes, approval answers, and background-job stdin no longer each build their own "one stream plus one unary"; a Host method knows its caller; the uplink and downlink types are declared in one place, the return type; uplink items come from the browser and are validated strictly per item at the Host, while downlink items are Host-produced typed values that pass straight through; the generated output and wire frames of existing `AsyncIterable<Out>` methods and unary methods are completely unchanged.
 - **`this.ctx.invocation` is `undefined` outside a Remote call**, so a method that reads it must handle the optional; a service method invoked only directly in process correctly reads `undefined`.
+- **Web terminals use `attach`** for screen output and input commands, with provider acknowledgements and per-attachment writable state; their Client retains the current generation's handle and never replays input.
 - **The inbox limit applies to every stream**: a method that does not read its uplink fails as a whole when it receives many uplink frames. This is a deliberate explicit failure, recorded in the README.
-- **The operator is the only Peer**, and `admit` is the only admission point; the first consumer that needs a second Peer must add opening, association, and events in `dsh-client-connection`.
+- **Every browser connection shares `browserPeer`**, and `admit` is the only network admission point; in-process code creates further Peers with `connection.createPeer()`.
 - **No cross-direction ordering guarantee between uplink and downlink**; a protocol that needs request-response pairing carries its own sequence numbers.
-- **Upper-layer protocols do not yet expose `send`**: consumers of `$stream`, snapshot, and journal use only the downlink today; the object they receive is already the handle.
+- **Upper-layer supervisors expose only the downlink**: `$stream`, snapshot and journal do not expose `send`; a domain that writes uplink retains its generated physical handle for that generation.
 - **The worker tunnel behaves differently from the WebSocket carrier**: no inbox limit, and items after `end` are dropped, because page to worker is a same-origin trusted boundary.
 
 ## Testing
@@ -588,17 +595,15 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 - Gateway Host: exact-key validation in frame parsing; `UplinkInbox` buffering during opening, `item` after `end`, overflow, ignored unknown `streamId`, and cleanup on socket closure; `UplinkDecoder` delivery with and without a codec and abort on decode failure; `uplink()` taken only once; the `extend({ invocation })` view and the origin of `peer`; `cancellableStream` closing the uplink before `return()`.
 - Gateway Client: the handle's `send` (JSON validation, queued before open, throws after termination), idempotent `end`, `dispose` driving the `cancel` frame and ending later reads; the pump's three exits; the pump stopping as soon as a terminal frame arrives.
 - typert: the analyzer's handling of `RemoteStream<Out, In>`, `RemoteStream<Out>`, `never`, and the existing `AsyncIterable<Out>`; decorator options; registry load-time validation.
-- connection: the three outcomes of `admit`, 401, 403, and the operator; the operator reaching handlers through the bridge and the shared handler; release with the Connection.
+- connection: the three outcomes of `admit`, 401, 403, and `browserPeer`; `browserPeer` reaching handlers through the bridge and the shared handler; release with the Connection.
 - remote-mock and the worker tunnel: uplink pass-through; the direct proxy returning the real handle.
 - Existing stream and unary method tests pass without changed expectations.
 
 ## Deferred
 
 - `$stream` / snapshot / journal expose the handle's `send` to upper-layer protocols.
-- Web terminal: one `attach` stream replaces `follow` plus `write` plus `resize`, and `attachmentId` retires.
 - Duplex `$events`: waterfall answers become uplink items on the same `streamId`, and `$events/result` and `clientId` retire.
 - Credit frames: wait for a consumer that needs sustained high-volume uplink; the inbox limit is the initial credit.
-- The `streamInboxBytes` default of 262144 is far more than keyboard and stdin need; if the first consumer is terminal paste, it may be aligned with the `maxInputBytes` of `terminal-controller`.
 - A Host-initiated half-close frame (the Host stops reading the uplink but keeps writing the downlink): no consumer; not added.
 - `uplink()` on unary methods: it can read items that arrive while the method runs, semantically valid but of doubtful use; allowed, noted in the README.
 
@@ -606,4 +611,4 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 
 - [Remote event delivery](../../../../packages/api/remotes/README.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
 - [Session history and event transport](2026-08-18-session-history-and-event-transport.md): the `$stream()` supervisor and the journal / snapshot protocols above it, which this note leaves unchanged.
-- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the unary terminal `write` and `attachmentId`; the `attach` stream under Deferred replaces it once it lands.
+- [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the `attach` stream carries input commands, provider acknowledgements and per-attachment writable state; reconnect never replays input.

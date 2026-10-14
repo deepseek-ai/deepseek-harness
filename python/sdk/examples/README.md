@@ -22,8 +22,10 @@ Set `DEEPSEEK_BASE_URL` for a compatible proxy, `DSH_MODEL` for the script's def
 The shipped [`@deepseek-ai/dsh-sdk-minimal` bundle](../../../packages/bundle/sdk-minimal/README.md) is the complete explicit Cordis tree for this mode. It exposes exactly:
 
 - owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows
+- `read_image` for PNG/JPEG/WebP/GIF files, with an image-capable model
+- `working_directory` to inspect or change the Session directory
 
-The bundle does not include `dsh-base`, so every additional row is an explicit profile change. Runtime context, filesystem tools, local instruction discovery, compaction, settings, managed credentials, telemetry, Web tools, subagents, and the full default tool roster are absent. The tree retains SDK startup and JSON-RPC serving, one environment-configured DeepSeek adapter, local execution, and JSONL persistence.
+The bundle does not include `dsh-base`, so every additional row is an explicit profile change. Runtime context, text file tools, local instruction discovery, settings, managed credentials, telemetry, Web tools, subagents, and the full default tool roster are absent. The tree retains SDK startup and JSON-RPC serving, one environment-configured DeepSeek adapter, local execution, and JSONL persistence. [Automatic context compaction](../../../packages/bundle/sdk-minimal/README.md#model-experience) summarizes older history through an additional model request while preserving the complete log. SDK prompt text does not execute slash commands.
 
 The persistent PTY can modify any path available to the runtime process, so use a disposable checkout or container.
 

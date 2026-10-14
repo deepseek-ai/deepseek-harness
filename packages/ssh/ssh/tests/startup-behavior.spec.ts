@@ -52,12 +52,12 @@ class Child extends EventEmitter {
 }
 
 const config: Config = {
-  host: 'test-alias', node: '/remote/node', helper: '/remote/helper.js', helperHash: 'a'.repeat(64), workspace: '/remote/workspace',
+  host: 'test-alias', launch: { kind: 'node-script', node: '/remote/node' }, helper: '/remote/helper.js', helperHash: 'a'.repeat(64), workspace: '/remote/workspace',
   requestTimeoutMs: 1000, maxFrameBytes: 4096, maxPending: 8, leaseMs: 30_000,
 }
 const hello = {
-  protocol: 1, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0',
-  node: '/canonical/node', root: '/tmp/remote-helper', workspace: '/canonical/workspace',
+  protocol: 2, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0',
+  kind: 'node-script', executable: '/canonical/node', root: '/tmp/remote-helper', workspace: '/canonical/workspace',
 }
 
 function setup(options: {
@@ -133,11 +133,11 @@ function setup(options: {
 
 describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
   it.each([
-    { host: '-option' }, { host: 'alias; command' }, { node: 'relative' }, { helperHash: 'bad' },
-    { bootstrapPath: '/remote/bootstrap.js' }, { bootstrapHash: 'b'.repeat(64) },
+    { host: '-option' }, { host: 'alias; command' }, { launch: { kind: 'node-script', node: 'relative' } }, { helperHash: 'bad' },
+    { launch: { kind: 'node-script', node: '/remote/node', bootstrapPath: '/remote/bootstrap.js' } }, { launch: { kind: 'node-script', node: '/remote/node', bootstrapHash: 'b'.repeat(64) } },
     { requestTimeoutMs: 0 }, { requestTimeoutMs: 2_147_483_648 },
     { maxFrameBytes: 64 * 1024 * 1024 + 1 }, { maxPending: 129 }, { leaseMs: 2999 },
-  ])('rejects invalid deployment configuration before SSH starts: %j', (invalid) => {
+  ] satisfies Partial<Config>[])('rejects invalid deployment configuration before SSH starts: %j', (invalid) => {
     expect(() => setup({ config: invalid })).toThrow()
     expect(transport.spawn).not.toHaveBeenCalled()
   })
@@ -150,37 +150,47 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
   })
 
   it('publishes only verified remote coordinates and quotes the configured executable paths', async () => {
-    const test = setup({ holdHello: true, config: { helper: "/remote/helper's file.js", bootstrapPath: '/remote/process.js', bootstrapHash: 'b'.repeat(64) }, hello: { bootstrapHash: 'b'.repeat(64) } })
-    expect(() => test.service.nodeExecutable).toThrow('not ready')
-    expect(() => test.service.bootstrapPath).toThrow('verified bootstrapPath')
+    const test = setup({ holdHello: true, config: { helper: "/remote/helper's file.js", launch: { kind: 'node-script', node: '/remote/node', bootstrapPath: '/remote/process.js', bootstrapHash: 'b'.repeat(64) } }, hello: { bootstrapHash: 'b'.repeat(64) } })
+    expect(() => test.service.ptcLaunch).toThrow('not ready')
     await test.helloEntered
     test.releaseHello()
     await test.service[Service.init]()
-    expect(test.service.nodeExecutable).toBe('/canonical/node')
-    expect(test.service.bootstrapPath).toBe('/remote/process.js')
+    expect(test.service.ptcLaunch).toEqual({ kind: 'node-script', executable: '/canonical/node', bootstrapPath: '/remote/process.js' })
     const argv = transport.spawn.mock.calls[0]?.[1] as string[]
     expect(argv).toContain('StrictHostKeyChecking=yes')
     expect(argv).toContain('ForwardAgent=no')
     expect(argv.at(-1)).toBe("'/remote/node' '--disable-sigusr1' '/remote/helper'\\''s file.js'")
-    expect(test.calls[0]?.params).toEqual({ protocol: 1, workspace: '/remote/workspace', leaseMs: 30_000, bootstrapPath: '/remote/process.js' })
+    expect(test.calls[0]?.params).toEqual({ protocol: 2, workspace: '/remote/workspace', leaseMs: 30_000, bootstrapPath: '/remote/process.js' })
   })
 
   it('permits filesystem-only deployments and refuses an unconfigured PTC bootstrap getter', async () => {
     const test = setup()
     await test.service.ready
-    expect(test.service.nodeExecutable).toBe('/canonical/node')
-    expect(() => test.service.bootstrapPath).toThrow('verified bootstrapPath')
+    expect(() => test.service.ptcLaunch).toThrow('verified bootstrapPath')
     expect(await test.service.request('echo', { value: 42 }, z.object({ value: z.number() }))).toEqual({ value: 42 })
+  })
+
+  it('launches an executable directly and publishes its embedded PTC worker', async () => {
+    const test = setup({
+      config: { launch: { kind: 'executable' }, helper: '/remote/helper with spaces' },
+      hello: { kind: 'executable', executable: '/canonical/dsh-ssh-helper' },
+    })
+    await test.service.ready
+    expect(test.service.ptcLaunch).toEqual({ kind: 'embedded', executable: '/canonical/dsh-ssh-helper' })
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    expect(argv.at(-1)).toBe("NODE_OPTIONS='--disable-sigusr1' '/remote/helper with spaces'")
+    expect(test.calls[0]?.params).toEqual({ protocol: 2, workspace: '/remote/workspace', leaseMs: 30_000 })
   })
 
   it.each([
     { hello: { hash: 'c'.repeat(64) }, error: 'helper digest' },
     { hello: { bootstrapHash: 'c'.repeat(64) }, error: 'bootstrap digest' },
-    { hello: { protocol: 2 }, error: 'Invalid' },
+    { hello: { protocol: 1 }, error: 'Invalid' },
+    { hello: { kind: 'executable' }, error: 'launch kind' },
   ])('refuses a mismatched helper identity before readiness: $error', async ({ hello, error }) => {
     const test = setup({ hello })
     await expect(test.service.ready).rejects.toThrow(error)
-    expect(() => test.service.nodeExecutable).toThrow('not ready')
+    expect(() => test.service.ptcLaunch).toThrow('not ready')
     await expect(test.service.request('echo', {}, z.unknown())).rejects.toThrow()
   })
 

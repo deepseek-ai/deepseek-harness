@@ -31,7 +31,7 @@ export const inject = ['terminals', 'tools', 'systemPrompt', 'workingDirectory']
 
 /** Default cap for one complete model-facing terminal result. */
 export const DEFAULT_MAX_RESULT_BYTES = 256 * 1024
-/** Smallest cap that preserves every counter-backed PTY and job id in its creation acknowledgement. */
+/** Smallest cap that preserves registry-issued PTY and job ids in creation acknowledgements. */
 export const MIN_MAX_RESULT_BYTES = 64
 
 /** Model-facing terminal tool configuration. */
@@ -261,6 +261,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         const jobId = jobs.start({
           kind: 'pty-send',
           label: `${id}: ${args.text || '(input)'}`,
+          toolCall: { callId: exec.callId, rootCallId: exec.rootCallId },
           owner: owner.id,
           outputLimitBytes: maxResultBytes,
           output: [sendSource(() => operation)],

@@ -73,7 +73,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const { runtime } = await setup()
     expect(runtime.language).toBe('python')
     expect(runtime.isolation).toBe('process')
-    expect(runtime.executionInstructions).toBe('Each call runs in a fresh Python process. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.')
+    expect(runtime.executionInstructions).toBe('The program is the body of an async Python function. Top-level await and return are supported. Emit output with print(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Python process; variables and imported modules do not persist across calls. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.')
   })
 
   it('resolves its configured deadline and cwd while refusing unsupported execution choices', async () => {

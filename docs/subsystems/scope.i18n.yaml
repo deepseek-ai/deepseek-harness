@@ -4,7 +4,7 @@
 #   pnpm run verify-translation-pairing --write docs/subsystems/scope.md
 /scoped-registration:
   en: b786b68190a93d3f
-  zh: 8ea0fb2fac9a1529
+  zh: d487dc4263d61a53
 /scoped-registration/identity-and-dispatch-carrier:
   en: f4e1bdd96c43a845
   zh: c74409f7f81bd0e0

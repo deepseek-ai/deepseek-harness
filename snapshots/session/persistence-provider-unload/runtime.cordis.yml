@@ -1,0 +1,3 @@
+- insert:
+    - id: persistence-provider-unload
+      name: './provider-unload.ts'

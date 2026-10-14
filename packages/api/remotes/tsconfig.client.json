@@ -34,6 +34,9 @@
       "path": "../../context/session-reference"
     },
     {
+      "path": "../../core/session"
+    },
+    {
       "path": "../../extensions/cordis-host-runner"
     },
     {

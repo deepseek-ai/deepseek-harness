@@ -24,14 +24,14 @@
   en: 3f53b0d5f4037171
   zh: e0f2ac931cfbef95
 /deepseek-ai-dsh-subagent-spawn-in-process/use-this-package/what-a-delegation-does:
-  en: eabf1d0e66fde8fa
-  zh: d6de66797060bac5
+  en: 0c90404ed53cf451
+  zh: 161e38b7d7c10182
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation:
   en: 7f34637751939818
   zh: 2937553168e1aee5
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/design-concept:
-  en: 67b871bbb7dcc803
-  zh: 79a8fec9117ef52a
+  en: a5b418fb260e2b9f
+  zh: 06dd949e350e9585
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/source-map:
   en: b7c55a4bff3ae1f0
   zh: 9d0f514f433250c6
@@ -39,8 +39,8 @@
   en: 5f07f1044bf7c370
   zh: d31a485a3e333500
 /deepseek-ai-dsh-subagent-spawn-in-process/understand-the-implementation/ownership-and-scope:
-  en: 8af949dc29cb4a5c
-  zh: f4e4f9f9f4a4b7c9
+  en: 1288272d1eabfdc1
+  zh: 6efde7517f434179
 /deepseek-ai-dsh-subagent-spawn-in-process/further-exploration:
   en: c247efa590d8b78a
   zh: 999f8281df521384
@@ -51,14 +51,14 @@
   en: 05e6180f1498fdf9
   zh: 2b05d2b97bfa67da
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/what-the-model-sees:
-  en: 2035bdd8640e5a8a
-  zh: 5afa645d7dbe31a5
+  en: c9dfab9a4d363fed
+  zh: 6cb3b0914ccb73e2
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/token-effect:
-  en: e74d21e38e4a53a9
-  zh: 6a5e3ef5fe0f4f14
+  en: eb373a4b35a4b548
+  zh: 9537d0e466e8bcd9
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/child-agent-request/kv-cache-effect:
-  en: 78d800b26fb3b0af
-  zh: 313169b62c29af1d
+  en: 6da85bad412c741e
+  zh: c9af9fd1b4e7eed2
 /deepseek-ai-dsh-subagent-spawn-in-process/model-experience/parent-tool-result-indirectly:
   en: 75d061c2151624a7
   zh: 71e58e020b60ff90
@@ -72,8 +72,8 @@
   en: f5d5f97a153f7c70
   zh: 3d6bc05b9eadfbc2
 /deepseek-ai-dsh-subagent-spawn-in-process/known-limitations-and-deferred-work:
-  en: 68720f2a663a4aad
-  zh: a472436c5cc2b801
+  en: 0c0b19dc1ccec027
+  zh: a7799c516dc3b034
 /deepseek-ai-dsh-subagent-spawn-in-process/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -9,6 +9,7 @@ import type { DirectoryPickerHostFacts } from '../src/resolve.ts'
 /** Baseline facts that resolve to `native`; each case overrides one signal (darwin never consults `linuxChooser`). */
 const attended: DirectoryPickerHostFacts = {
   bindHost: '127.0.0.1',
+  allowsRemoteAuthorities: false,
   platform: 'darwin',
   ssh: false,
   env: {},
@@ -19,10 +20,17 @@ describe('resolveDirectoryPickerBackend', () => {
   it('resolves native for a loopback bind on a display platform', () => {
     expect(resolveDirectoryPickerBackend(attended)).toBe('native')
     expect(resolveDirectoryPickerBackend({ ...attended, platform: 'win32' })).toBe('native')
+    expect(resolveDirectoryPickerBackend({ ...attended, bindHost: '::1' })).toBe('native')
   })
 
-  it('resolves browse for an all-interfaces bind regardless of other signals', () => {
-    expect(resolveDirectoryPickerBackend({ ...attended, bindHost: '0.0.0.0' })).toBe('browse')
+  it('resolves browse for a non-loopback bind regardless of other signals', () => {
+    expect(resolveDirectoryPickerBackend({ ...attended, bindHost: '10.1.2.3' })).toBe('browse')
+    expect(resolveDirectoryPickerBackend({ ...attended, bindHost: 'fd00::1' })).toBe('browse')
+  })
+
+
+  it('resolves browse when the trust policy admits a remote authority, even on an attended loopback host', () => {
+    expect(resolveDirectoryPickerBackend({ ...attended, allowsRemoteAuthorities: true })).toBe('browse')
   })
 
   it('resolves browse under an SSH launch', () => {

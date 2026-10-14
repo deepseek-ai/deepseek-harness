@@ -3,8 +3,10 @@
  *
  * The new-session screen has no session, so a pick is staged rather than
  * applied. It reaches a session when one becomes current and is still blank —
- * whether the workspace connect created it or reused an existing blank one,
- * which is why staging cannot simply ride along on `sessions.create`.
+ * whether the workspace connect created it or reused an existing blank one. A
+ * flow that knows its preset before it starts (the settings section's creator
+ * entry) passes it to session creation instead, and its stage only drives the
+ * chip's display.
  *
  * The stage is forgotten once applied. The next new session starts from the
  * Host-effective default again.

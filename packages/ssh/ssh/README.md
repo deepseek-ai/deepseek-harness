@@ -31,20 +31,21 @@ Compose this service with [`fs-ssh`](../fs-ssh/README.md), [`subprocess-ssh`](..
 
 Both endpoints require Linux or macOS. The local `ssh` command must support connection multiplexing and Unix-socket forwarding; the server must permit that forwarding. Configure the alias, credentials and known-host entry before startup: the service enables `BatchMode`, requires strict host-key checking, disables agent forwarding and adds no interactive authentication flow.
 
-Install the built helper and its matching runtime dependencies on the remote host. Keep Node, helper, bootstrap and their dependencies outside the workspace and writable temporary roots. They must also remain outside a backend’s replaced temporary tree, such as bwrap’s private `/tmp`; the workspace may still be under `/tmp`. Digest verification detects an unexpected installed artifact after helper startup; it does not make writable deployment files safe to execute or authenticate a malicious SSH host.
+Install an [SSH helper executable archive](../ssh-helper-runtime/README.md), or the built helper script with its matching Node dependencies. Keep the runtime outside the workspace and writable temporary roots. They must also remain outside a backend’s replaced temporary tree, such as bwrap’s private `/tmp`; the workspace may still be under `/tmp`. Digest verification detects an unexpected installed artifact after helper startup; it does not make writable deployment files safe to execute or authenticate a malicious SSH host.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `host` | required | Existing OpenSSH host alias |
-| `node`, `helper`, `workspace` | required | Absolute remote Node executable, bundled helper entry and default workspace |
+| `launch` | required | `{ kind: "executable" }`, or `{ kind: "node-script", node: "/absolute/node" }` |
+| `helper`, `workspace` | required | Absolute remote helper entry and default workspace |
 | `helperHash` | required | Lowercase SHA-256 of the installed helper entry |
-| `bootstrapPath`, `bootstrapHash` | omitted | Paired remote PTC entry and its lowercase SHA-256 |
+| `launch.bootstrapPath`, `launch.bootstrapHash` | omitted | Paired remote PTC script and digest; only for `node-script` |
 | `requestTimeoutMs` | `30000` | Connection and administrative-request deadline, from 1 through 2,147,483,647 ms |
 | `maxFrameBytes` | `67108864` | Per-message JSON payload ceiling, at most 64 MiB |
 | `maxPending` | `128` | Ordinary outstanding requests; heartbeat and bounded cleanup requests have reserved capacity |
 | `leaseMs` | `30000` | Helper heartbeat lease, from 3000 to 600000 ms |
 
-For PTC, configure both bootstrap fields and pass the verified `ctx.ssh.nodeExecutable` and `ctx.ssh.bootstrapPath` to [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.md). Basic filesystem and Bash use may omit the pair. The `bootstrapPath` getter refuses an unconfigured PTC deployment.
+Pass the verified `ctx.ssh.ptcLaunch` as the `launch` configuration of [`NodePtcRuntime`](../../ptc-runtime/ptc-runtime-node/README.md). Executable deployments include their worker. Script deployments require both bootstrap fields for PTC; filesystem and Bash use may omit them. The getter refuses an unconfigured script bootstrap. The client rejects mismatched protocol versions, runtime kinds and helper digests before readiness.
 
 -----
 
@@ -64,7 +65,7 @@ Failed startup and process results release their reservations after native quies
 
 For terminals opting into shell activity observation, root exit retains the reservation and its remaining work. Activity RPC continues to reach the provider; explicit termination awaits quiescence before releasing endpoints and recording the completed result. Helper connection disposal and lease expiry retain their existing termination authority.
 
-The helper starts with `--disable-sigusr1`, so a same-user process signal cannot open its Node debugger.
+The connection disables the helper’s SIGUSR1 debugger activation: the script invocation uses `--disable-sigusr1`, and the executable invocation supplies that flag through `NODE_OPTIONS`.
 
 </details>
 

@@ -1,0 +1,13 @@
+version: 1
+scenario: ptc-persistent
+profile: headless
+composition: ptc-persistent
+recording: authored
+header:
+  class: ptc-persistent
+  pin: true
+replay:
+  override: true
+permission: workspace-write
+workspace:
+  final: true

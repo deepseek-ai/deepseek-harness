@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runGate } from './run-gates.ts'
 import { PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 import { ForksPoolWorker } from 'vitest/node'
 import type { PoolOptions, PoolWorker, TestProject, WorkerRequest, WorkerResponse } from 'vitest/node'
 import { coverageForkPool } from './coverage-fork-diagnostics.ts'
@@ -53,6 +53,43 @@ function poolOptions(root: string) {
     execArgv: [], env: {},
   }
   return { options, error, outputStream, errorStream }
+}
+
+/** Observers a pool registers on its worker, once `stubPool` has started it. */
+interface WorkerObservers {
+  off: MockInstance
+  exit?: (code: number | null, signal?: NodeJS.Signals | null) => void
+  error?: () => void
+}
+
+/**
+ * Start a pool whose worker prototypes are stubs, and capture the observers it registers.
+ * The test's cleanups own the pool and its streams.
+ */
+async function stubPool(): Promise<{
+  pool: PoolWorker
+  error: MockInstance<(message: string) => void>
+  observers: WorkerObservers
+}> {
+  const observers: WorkerObservers = {
+    off: vi.spyOn(ForksPoolWorker.prototype, 'off').mockImplementation(() => undefined),
+  }
+  vi.spyOn(ForksPoolWorker.prototype, 'start').mockResolvedValue(undefined)
+  vi.spyOn(ForksPoolWorker.prototype, 'stop').mockResolvedValue(undefined)
+  vi.spyOn(ForksPoolWorker.prototype, 'send').mockImplementation(() => undefined)
+  vi.spyOn(ForksPoolWorker.prototype, 'on').mockImplementation((event, callback) => {
+    if (event === 'exit') observers.exit = callback
+    if (event === 'error') observers.error = callback as () => void
+  })
+  const { options, error, outputStream, errorStream } = poolOptions('/unused')
+  const pool = coverageForkPool.createPoolWorker(options)
+  cleanups.push(async () => {
+    await pool.stop()
+    outputStream.destroy()
+    errorStream.destroy()
+  })
+  await pool.start()
+  return { pool, error, observers }
 }
 
 async function start(root: string, diagnostic = true) {
@@ -113,21 +150,33 @@ async function configuredPool(pool: 'stock' | 'diagnostic', outcome: 'exit' | 'p
   }
 }
 
+/**
+ * Vitest reports one unexpected worker exit either as the clean exit path or, when
+ * the worker's channel closes under a send, as a runner-level worker error.
+ */
+function workerExitReport(output: string, pool: string): string | undefined {
+  return ['Worker exited unexpectedly', `Worker ${pool} emitted error`].find(message => output.includes(message))
+}
+
 describe('coverage fork configuration entry', () => {
   it('preserves the real Vitest failure and adds metadata before its error report', async ({ signal }) => {
     const [stock, diagnostic] = await Promise.all([
       configuredPool('stock', 'exit', signal),
       configuredPool('diagnostic', 'exit', signal),
     ])
-    for (const result of [stock, diagnostic]) {
+    const stockOutput = stock.output.map(chunk => chunk.text).join('')
+    const output = diagnostic.output.map(chunk => chunk.text).join('')
+    for (const [pool, result, text] of [
+      ['forks', stock, stockOutput],
+      ['coverage-forks', diagnostic, output],
+    ] as const) {
       expect(result.aborted).not.toBe(true)
       expect(result.error).toBeUndefined()
       expect(result.signalCode).toBeNull()
       expect(result.exitCode).toBe(1)
-      expect(result.output.map(chunk => chunk.text).join('')).toContain('Worker exited unexpectedly')
+      expect(workerExitReport(text, pool)).toBeDefined()
     }
-    const output = diagnostic.output.map(chunk => chunk.text).join('')
-    expect(stock.output.map(chunk => chunk.text).join('')).not.toContain('coverage-worker-exit:')
+    expect(stockOutput).not.toContain('coverage-worker-exit:')
     const encoded = /coverage-worker-exit: (\{[^\r\n]*\})/u.exec(output)?.[1]
     expect(encoded).toBeDefined()
     const record = JSON.parse(encoded!) as {
@@ -147,7 +196,8 @@ describe('coverage fork configuration entry', () => {
     })
     expect(record.files.map(file => file.replaceAll('\\', '/')))
       .toEqual([resolve('scripts/fixtures/coverage-fork.fixture.ts').replaceAll('\\', '/')])
-    expect(output.indexOf('coverage-worker-exit:')).toBeLessThan(output.indexOf('Worker exited unexpectedly'))
+    expect(output.indexOf('coverage-worker-exit:'))
+      .toBeLessThan(output.indexOf(workerExitReport(output, 'coverage-forks')!))
   })
 
   it('keeps a successful configured run silent and successful', async ({ signal }) => {
@@ -165,32 +215,35 @@ describe('coverage fork exit callback', () => {
     ['native receiver', { pid: 41 }, 41],
     ['unavailable receiver', undefined, null],
   ] as const)('retains a signal with %s and silences expected shutdown', async (_name, receiver, pid) => {
-    let exitListener: ((value: unknown) => void) | undefined
-    vi.spyOn(ForksPoolWorker.prototype, 'start').mockResolvedValue(undefined)
-    vi.spyOn(ForksPoolWorker.prototype, 'stop').mockResolvedValue(undefined)
-    vi.spyOn(ForksPoolWorker.prototype, 'send').mockImplementation(() => undefined)
-    vi.spyOn(ForksPoolWorker.prototype, 'off').mockImplementation(() => undefined)
-    vi.spyOn(ForksPoolWorker.prototype, 'on').mockImplementation((event, callback) => {
-      if (event === 'exit') exitListener = callback
-    })
-    const { options, error, outputStream, errorStream } = poolOptions('/unused')
-    const pool = coverageForkPool.createPoolWorker(options)
-    cleanups.push(async () => {
-      await pool.stop()
-      outputStream.destroy()
-      errorStream.destroy()
-    })
-    await pool.start()
+    const { pool, error, observers } = await stubPool()
     pool.send(request('/signal.spec.ts', 9))
-    if (exitListener === undefined) throw new Error('exit observer was not registered')
-    Reflect.apply(exitListener, receiver, [null, 'SIGTERM'])
+    const exit = observers.exit
+    if (exit === undefined) throw new Error('exit observer was not registered')
+    Reflect.apply(exit, receiver, [null, 'SIGTERM'])
     expect(error).toHaveBeenCalledWith(`coverage-worker-exit: ${JSON.stringify({
       pid, project: 'fixture', workerId: 9, files: ['/signal.spec.ts'], exitCode: null, signalCode: 'SIGTERM',
     })}`)
     error.mockClear()
     pool.send(stop)
-    expect(() => { Reflect.apply(exitListener!, undefined, [null, 'SIGTERM']) }).not.toThrow()
+    expect(() => { Reflect.apply(exit, undefined, [null, 'SIGTERM']) }).not.toThrow()
     expect(error).not.toHaveBeenCalled()
+  })
+
+  it('reports an exit whose worker errored even when a teardown raced it', async () => {
+    const { pool, error, observers } = await stubPool()
+    pool.send(request('/raced.spec.ts', 11))
+    const failed = observers.error
+    if (failed === undefined) throw new Error('error observer was not registered')
+    // Node reports the failed reply before it reports the exit of the same child.
+    failed()
+    await pool.stop()
+    expect(observers.off).not.toHaveBeenCalled()
+    const exit = observers.exit
+    if (exit === undefined) throw new Error('exit observer was not registered')
+    Reflect.apply(exit, { pid: 42 }, [23, null])
+    expect(error).toHaveBeenCalledWith(`coverage-worker-exit: ${JSON.stringify({
+      pid: 42, project: 'fixture', workerId: 11, files: ['/raced.spec.ts'], exitCode: 23, signalCode: null,
+    })}`)
   })
 })
 

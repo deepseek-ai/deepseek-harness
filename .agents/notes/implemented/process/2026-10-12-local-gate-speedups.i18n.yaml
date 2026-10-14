@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for 2026-10-12-local-gate-speedups.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-12-local-gate-speedups.md
+/agent-note-local-gate-hook-and-test-speed-ups:
+  en: d8edb2c26730e9af
+  zh: fb69bf2e7b602d4c
+/agent-note-local-gate-hook-and-test-speed-ups/problem:
+  en: 1e2163ec378c44ff
+  zh: d93cb5970896fccb
+/agent-note-local-gate-hook-and-test-speed-ups/decision:
+  en: 9984b4ad646bfaf2
+  zh: 753287ae67e29605
+/agent-note-local-gate-hook-and-test-speed-ups/decision/measurement-conditions:
+  en: 7430353afba96352
+  zh: 6d2a09619a67ecba
+/agent-note-local-gate-hook-and-test-speed-ups/decision/1-type-checks-generate-typert-declarations-without-bundling:
+  en: 4dc48e24a3323b7d
+  zh: 7c88325160a41d12
+/agent-note-local-gate-hook-and-test-speed-ups/decision/2-the-pre-commit-hook-does-not-regenerate-third-party-notices:
+  en: e2e344f184621172
+  zh: 97d8785aaf9105bf
+/agent-note-local-gate-hook-and-test-speed-ups/decision/3-local-default-worker-budget:
+  en: e9649c40d67e26e0
+  zh: c99f22a41c4fc4af
+/agent-note-local-gate-hook-and-test-speed-ups/decision/4-repository-reference-candidates-resolve-against-one-object-listing:
+  en: 2c945250337c88cf
+  zh: d4bfa34cc858782b
+/agent-note-local-gate-hook-and-test-speed-ups/decision/5-documentation-gates-parse-each-document-once:
+  en: c22d38399a2bb87f
+  zh: 9ae97e5a6e3fbf48
+/agent-note-local-gate-hook-and-test-speed-ups/decision/6-repository-file-walks-list-each-directory-once:
+  en: 2f0d35b0a688c938
+  zh: 7184fd260c066a01
+/agent-note-local-gate-hook-and-test-speed-ups/decision/7-cli-help-reads-run-concurrently-doc-graph-probes-are-memoized:
+  en: 965503ba8a31c039
+  zh: fe02a394a677d018
+/agent-note-local-gate-hook-and-test-speed-ups/decision/8-type-model-spec-ts-runs-against-an-in-memory-workspace:
+  en: d519ec362903aa2f
+  zh: f49ee6547cb954f6
+/agent-note-local-gate-hook-and-test-speed-ups/decision/repository-wide-comparison:
+  en: 7c9388dc859e0f93
+  zh: 5df1fc58eb7a46e8
+/agent-note-local-gate-hook-and-test-speed-ups/alternatives-considered:
+  en: 763d94734b8967cf
+  zh: abe980d486e1d7da
+/agent-note-local-gate-hook-and-test-speed-ups/consequences:
+  en: ca00b04567d09408
+  zh: 97011043c60f4bc9

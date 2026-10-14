@@ -6,8 +6,6 @@
 
 ## 管理记录
 
-`ProfilePatch` 在原生 Include patch 字段上增加可选的字面量 `preset` 条目 id；此时 `id` 指向该 preset 内的子条目。[App-boot](../../packages/boot/app-boot/README.zh.md#profiles) 定义编译、顺序、校验与路径解析规则。
-
 `PluginEntryId` 标识一个 Loader 条目；调用方从 `listPlugins` 获取，不自行拼接 patch id。
 
 `PluginInfo` 包含模块标识、实际启停状态、fiber 阶段和可选的展示 `meta`，以及唯一的 `patchId` 或 `readOnlyReason`。
@@ -19,6 +17,37 @@
 `PluginRegistries` 携带配置的第一个注册表（`null` 即 pnpm 自身配置指定的那个）、随后依次询问的备选注册表，以及 `resolved`——pnpm 自身配置指向的 URL，未读到时为 `null`。`InspectOptions.registry` 指定一次查询首先询问的注册表。
 
 `ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录 pnpm 退出码、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，还记录 `timedOut`。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`bundle` 与 `version` 给出完成的安装新增的包及其清单版本；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
+
+## Profile 重新组合
+
+<a id="profile-reconciliation"></a>
+
+```ts type-equiv
+/** Outcome of {@link Hmr.reconcileProfile}. */
+interface ProfileReconciliation {
+  /** Diagnostics for Loader entries left inactive. */
+  warnings: string[]
+  /** Loaded modules whose files changed on disk and whose previous code keeps running until a restart. */
+  pending: PendingModule[]
+  /**
+   * Why every change waits for a restart: `module-comparison` when module caches cannot be inspected or their files
+   * compared, even when no URLs are known; `package-moved` when the runtime resolution cannot publish a moved package.
+   */
+  restartReason?: 'module-comparison' | 'package-moved'
+}
+```
+
+```ts type-equiv
+/** A changed module that loads only after a restart. */
+interface PendingModule {
+  url: string
+  /**
+   * `host-module`: the process entry point's static graph imports it. `unmanaged-plugin`: it is imported by a plugin
+   * that runs outside a traversable Loader entry. `module-comparison`: loaded modules could not be compared with disk.
+   */
+  reason: 'host-module' | 'unmanaged-plugin' | 'module-comparison'
+}
+```
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -32,7 +61,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.configEditor` — `ConfigEditor`
 
-Persist Host entry configs without changing preset-scoped operations, then reconcile through Loader.
+Persist complete raw configs and apply them through the normal Loader path.
 
 ```ts cordis-catalog
 /** Addressable profile rows; nested Includes have independent configuration ownership.
@@ -80,6 +109,21 @@ async watchConfig(filename: string, refresh: () => Promise<void>): Promise<() =>
  * @returns Linked module URLs, or an empty list for an uncached module.
  */
 async getLinked(url: string): Promise<string[]>
+
+/**
+ * Recompose the profile from its manifest and patch files, replacing running plugins whose loaded files below the
+ * profile directory or its linked package targets changed on disk, and publishing its runtime resolution. Changed
+ * modules are evicted and the Loader entries running them stop; app-boot's {@link recomposeProfile} then publishes the
+ * resolution, applies the generation, starts the stopped entries with the current files and configuration,
+ * imports entries whose import failed again, and judges activation. Afterwards the modules below the mappings the
+ * recomposition dropped are evicted, so a removed or deselected package is imported afresh when it returns. Callers run
+ * inside {@link runExclusive}.
+ * @param requiredIds Entry ids whose inactive state is reported as a failure even when it predates this call.
+ * @returns Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.
+ * @throws The patch read, publication, preparation, apply, or activation failure of the recomposition, including a
+ * replacement plugin that fails to load or start, whose previous code no longer runs.
+ */
+async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation>
 ```
 
 Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
@@ -116,7 +160,7 @@ Manage profile files and apply their declared reload lifecycle.
  * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
  * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
  */
-@Remote async listBundles(): Promise<BundleInfo[]>
+@Remote listBundles(): Promise<BundleInfo[]>
 
 /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
  * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.

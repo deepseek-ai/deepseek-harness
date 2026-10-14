@@ -12,7 +12,13 @@
       "path": "../../api/session-controller/tsconfig.client.json"
     },
     {
+      "path": "../../preset/agent-preset-registry"
+    },
+    {
       "path": "../../api/workspace-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.client.json"
     },
     {
       "path": "../locale/tsconfig.client.json"

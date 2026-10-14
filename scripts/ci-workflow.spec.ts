@@ -88,11 +88,11 @@ describe('CI workflow', () => {
     const scripts = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
     expect(scripts.scripts['build:lib:host']).toContain('tsc -b tsconfig.host.json')
     expect(scripts.scripts['build:lib:client']).toContain('tsc -b tsconfig.client.json')
-    expect(scripts.scripts.typecheck).toBe('npm run build:lib:host && npm run typecheck:contracts-ready')
+    expect(scripts.scripts.typecheck).toBe('tsx scripts/build.ts --scope typecheck')
   })
 
   it('selects artifact builds only for PR release and API rehearsals', () => {
-    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build --artifacts-only --profile official' || 'pnpm run build:official' }}"
+    const official = "${{ github.event_name == 'pull_request' && 'pnpm run build:artifacts --profile official' || 'pnpm run build:official' }}"
     const vendor = "${{ github.event_name == 'pull_request' && 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries' || 'pnpm run build:lib:host' }}"
     for (const [file, jobName, expected] of [
       ['release.yml', 'pack', official],
@@ -102,7 +102,7 @@ describe('CI workflow', () => {
       const job = workflowJob(loadWorkflow('.github/workflows/' + file), jobName)
       if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
       const step = job.steps.filter(isRecord).find(candidate => typeof candidate.run === 'string'
-        && (candidate.run.includes('--artifacts-only') || candidate.run.includes('host-libraries')))
+        && (candidate.run.includes('build:artifacts') || candidate.run.includes('host-libraries')))
       expect(step?.run).toBe(expected)
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const expression = expected.slice('${{ '.length, -' }}'.length)
@@ -110,7 +110,7 @@ describe('CI workflow', () => {
         expect(selected).toBe(event === 'pull_request'
           ? file === 'release-vendor.yml'
             ? 'pnpm exec tsx scripts/compile-referenced-projects.ts host-libraries'
-            : 'pnpm run build --artifacts-only --profile official'
+            : 'pnpm run build:artifacts --profile official'
           : file === 'release-vendor.yml' ? 'pnpm run build:lib:host' : 'pnpm run build:official')
       }
     }
@@ -121,20 +121,20 @@ describe('CI workflow', () => {
     if (!Array.isArray(job.steps)) throw new TypeError('Python runtime builder must define steps')
     const steps = job.steps.filter(isRecord)
     const execute = steps.find(step => step.name === 'Build single-exe')
-    expect(steps.some(step => step.run === 'pnpm run build --artifacts-only')).toBe(false)
+    expect(steps.some(step => step.run === 'pnpm run build:artifacts')).toBe(false)
     expect(execute).toMatchObject({
       env: { DSH_BUILD_CLIENT_PROFILE: 'official' },
     })
     if (typeof execute?.run !== 'string') throw new TypeError('Python executable builder must define a command')
     const expression = [...execute.run.matchAll(/\$\{\{ ([^{}]+) \}\}/g)]
       .map(match => match[1]).find(value => value?.startsWith('inputs.ci'))
-    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--artifacts-only' || ''")
+    expect(expression).toBe("inputs.ci && github.event_name == 'pull_request' && '--build-artifacts' || ''")
     if (expression === undefined) throw new TypeError('Python executable builder must select its build mode')
     for (const ci of [false, true]) {
       for (const event of ['pull_request', 'push', 'workflow_dispatch']) {
         const context = { inputs: { ci }, github: { event_name: event } }
         const selected: unknown = runInNewContext(expression, context, { timeout: 1000 })
-        expect(selected).toBe(ci && event === 'pull_request' ? '--artifacts-only' : '')
+        expect(selected).toBe(ci && event === 'pull_request' ? '--build-artifacts' : '')
       }
     }
   })
@@ -715,6 +715,7 @@ describe('CI workflow', () => {
     const NOT_PUSH_REACHABLE = new Set([
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'larger-runner-benchmark'",
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'consolidated-runner-benchmark'",
+      "github.event_name == 'workflow_dispatch' && inputs.suite == 'ssh-helper'",
     ])
     const pushReachable = Object.entries(workflow.jobs)
       .filter(([, job]) => {
@@ -800,6 +801,104 @@ describe('CI workflow', () => {
     expect(aggregate.needs).toContain('python-runtime')
   })
 
+  it('builds SSH executables only for explicit manual or release requests', () => {
+    const ci = loadWorkflow('.github/workflows/ci.yml')
+    if (!isRecord(ci.jobs)) throw new Error('PR CI must define jobs')
+    expect(Object.values(ci.jobs)).not.toContainEqual(expect.objectContaining({ uses: './.github/workflows/build-exe-for-ssh-helper.yml' }))
+    expect(workflowJob(ci, 'all-checks-passed').needs).not.toContain('ssh-helper')
+    const master = workflowJob(loadWorkflow('.github/workflows/ci-master.yml'), 'ssh-helper')
+    if (typeof master.if !== 'string') throw new Error('SSH manual caller must define its trigger condition')
+    for (const [event, suite, expected] of [
+      ['push', 'ssh-helper', false], ['pull_request', 'ssh-helper', false],
+      ['workflow_dispatch', 'larger-runner-benchmark', false], ['workflow_dispatch', 'ssh-helper', true],
+    ] as const) {
+      expect(runInNewContext(master.if, { github: { event_name: event, ref: 'refs/heads/master' }, inputs: { suite } }, { timeout: 1000 })).toBe(expected)
+    }
+    expect(master.with).toEqual({ targets: 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64' })
+    const workflow = loadWorkflow('.github/workflows/build-exe-for-ssh-helper.yml')
+    if (!isRecord(workflow.on)) throw new Error('SSH builder must define triggers')
+    expect(Object.keys(workflow.on).sort()).toEqual(['workflow_call', 'workflow_dispatch'])
+  })
+
+  it('requires SSH helper acceptance before uploading artifacts or publishing', () => {
+    const workflow = loadWorkflow('.github/workflows/build-exe-for-ssh-helper.yml')
+    const build = workflowJob(workflow, 'build')
+    if (!Array.isArray(build.steps)) throw new Error('SSH build must define its verification steps')
+    const steps = build.steps.filter(isRecord)
+    const artifact = steps.findIndex(step => String(step.run).includes('scripts/verify-ssh-helper-artifact.ts'))
+    const transport = steps.findIndex(step => String(step.run).includes('scripts/verify-ssh-helper-ssh.ts'))
+    const landlock = steps.findIndex(step => String(step.run).includes('--backend=landlock-run'))
+    const upload = steps.findIndex(step => String(step.uses).startsWith('actions/upload-artifact@'))
+    expect(artifact).toBeGreaterThan(-1)
+    expect(landlock).toBeGreaterThan(artifact)
+    expect(transport).toBeGreaterThan(artifact)
+    expect(upload).toBeGreaterThan(transport)
+    for (const index of [artifact, transport, landlock, upload]) expect(steps[index]).not.toHaveProperty('continue-on-error', true)
+    const publish = loadWorkflow('.github/workflows/publish-ssh-helper.yml')
+    expect(publish.permissions).toEqual({ contents: 'read' })
+    expect(workflowJob(publish, 'build')).toMatchObject({ needs: 'validate', with: { release: true } })
+    const verify = workflowJob(publish, 'verify')
+    expect(verify.needs).toEqual(['validate', 'build'])
+    expect(verify).not.toHaveProperty('if')
+    expect(verify).not.toHaveProperty('permissions')
+    if (!Array.isArray(verify.steps)) throw new Error('Release verification must define steps')
+    const verification = verify.steps.findIndex(step => isRecord(step) && String(step.run).includes('scripts/ssh-helper/release.ts'))
+    const checksums = verify.steps.findIndex(step => isRecord(step) && String(step.uses).startsWith('actions/upload-artifact@'))
+    expect(verification).toBeGreaterThan(-1)
+    expect(checksums).toBeGreaterThan(verification)
+    expect(verify.steps[verification]).not.toHaveProperty('continue-on-error', true)
+    const publication = workflowJob(publish, 'publish')
+    expect(publication).toMatchObject({ if: 'inputs.publish', needs: ['validate', 'verify'], permissions: { contents: 'write' } })
+    for (const requested of [false, true]) {
+      expect(runInNewContext(String(publication.if), { inputs: { publish: requested } }, { timeout: 1000 })).toBe(requested)
+    }
+  })
+
+  it('validates any ref by default but refuses publication without the matching SSH release tag', () => {
+    const workflow = loadWorkflow('.github/workflows/publish-ssh-helper.yml')
+    if (!isRecord(workflow.on)) throw new Error('SSH release must define triggers')
+    expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+    expect(workflowEvent(workflow, 'workflow_dispatch').inputs).toMatchObject({ publish: { type: 'boolean', default: false } })
+    const validate = workflowJob(workflow, 'validate')
+    expect(validate.steps).toContainEqual(expect.objectContaining({ id: 'source', env: { PUBLISH: '${{ inputs.publish }}' } }))
+    const source = nodeStepSource(validate, 'source')
+    const evaluate = (publish: boolean, type: string, name: string): string => {
+      let output = ''
+      runInNewContext(source, {
+        process: { env: { PUBLISH: String(publish), GITHUB_REF_TYPE: type, GITHUB_REF_NAME: name, GITHUB_OUTPUT: 'output' } },
+        readFileSync: () => JSON.stringify({ version: '1.2.3' }),
+        execFileSync: () => `${'a'.repeat(40)}\n`,
+        appendFileSync: (_path: string, text: string) => { output += text },
+      }, { timeout: 1000 })
+      return output
+    }
+    const expected = `version=1.2.3\ncommit=${'a'.repeat(40)}\n`
+    expect(evaluate(false, 'branch', 'worktree/helper')).toBe(expected)
+    expect(evaluate(false, 'tag', 'arbitrary-tag')).toBe(expected)
+    expect(evaluate(true, 'tag', 'dsh-v1.2.3')).toBe(expected)
+    for (const [type, name] of [['branch', 'dsh-v1.2.3'], ['tag', 'dsh-v1.2.2'], ['tag', 'python-v1.2.3']] as const) {
+      expect(() => evaluate(true, type, name)).toThrow('Publication requires the matching dsh-v<version> tag')
+    }
+  })
+
+  it('validates the SSH native matrix before allocating runners', () => {
+    const plan = workflowJob(loadWorkflow('.github/workflows/build-exe-for-ssh-helper.yml'), 'plan')
+    const source = nodeStepSource(plan, 'targets')
+    const evaluate = (requested: string): unknown => {
+      let output = ''
+      runInNewContext(source, {
+        process: { env: { REQUESTED_TARGETS: requested, GITHUB_OUTPUT: 'output' } },
+        appendFileSync: (_path: string, text: string) => { output += text },
+      }, { timeout: 1000 })
+      return JSON.parse(output.slice('matrix='.length))
+    }
+    expect(evaluate('')).toHaveLength(4)
+    expect(evaluate('node24-linux-arm64')).toEqual([{ target: 'node24-linux-arm64', runner: 'ubuntu-24.04-arm' }])
+    for (const invalid of ['node24-linux-arm64,node24-linux-arm64', 'node24-win-x64', 'node24-linux-x64,', ' ']) {
+      expect(() => evaluate(invalid)).toThrow('Invalid or duplicate')
+    }
+  })
+
   it('keeps every Vitest project process-isolated on native Windows', () => {
     const config = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8')
 
@@ -830,19 +929,19 @@ describe('Runtime and LLM e2e Blacksmith routing', () => {
   it('keeps native release and dispatch builders hosted while routing x64 CI by platform', () => {
     const workflow = loadWorkflow('.github/workflows/build-exe-for-python-sdk.yml')
     const build = workflowJob(workflow, 'build')
-    for (const [target, runner, variable, blacksmith] of [
-      ['node24-linux-x64', 'ubuntu-latest', 'DSH_CI_FAILOVER_LINUX', 'blacksmith-2vcpu-ubuntu-2404'],
-      ['node24-win-x64', 'windows-2025', 'DSH_CI_FAILOVER_WINDOWS', 'blacksmith-2vcpu-windows-2025'],
-      ['node24-linux-arm64', 'ubuntu-24.04-arm', 'DSH_CI_FAILOVER_LINUX', 'ubuntu-24.04-arm'],
-      ['node24-macos-arm64', 'macos-latest', 'DSH_CI_FAILOVER_LINUX', 'macos-latest'],
-      ['node24-macos-x64', 'macos-15-intel', 'DSH_CI_FAILOVER_LINUX', 'macos-15-intel'],
+    for (const [target, runner, variable, blacksmith, releaseRunner] of [
+      ['node24-linux-x64', 'ubuntu-latest', 'DSH_CI_FAILOVER_LINUX', 'blacksmith-2vcpu-ubuntu-2404', 'ubuntu-latest'],
+      ['node24-win-x64', 'windows-2025', 'DSH_CI_FAILOVER_WINDOWS', 'blacksmith-2vcpu-windows-2025', 'windows-2025'],
+      ['node24-linux-arm64', 'ubuntu-24.04-arm', 'DSH_CI_FAILOVER_LINUX', 'ubuntu-24.04-arm', 'ubuntu-24.04-arm'],
+      ['node24-macos-arm64', 'macos-latest', 'DSH_CI_FAILOVER_LINUX', 'macos-latest', 'macos-15-xlarge'],
+      ['node24-macos-x64', 'macos-15-intel', 'DSH_CI_FAILOVER_LINUX', 'macos-15-intel', 'macos-15-large'],
     ] as const) {
       for (const ci of [false, true]) {
         for (const release of [false, true]) {
           for (const mode of ['', 'selfhosted', 'unexpected', 'blacksmith']) {
             const vars = { DSH_CI_FAILOVER_LINUX: 'blacksmith', DSH_CI_FAILOVER_WINDOWS: 'blacksmith', [variable]: mode }
             expect(evaluateRunsOn(build['runs-on'], { inputs: { ci, release }, vars, matrix: { target, runner } }), `${target} ci=${ci} release=${release} mode=${mode}`)
-              .toBe(ci && !release && mode === 'blacksmith' ? blacksmith : runner)
+              .toBe(release ? releaseRunner : ci && mode === 'blacksmith' ? blacksmith : runner)
           }
         }
       }
@@ -1436,6 +1535,15 @@ function loadWorkflow(path: string): Record<string, unknown> {
   const workflow: unknown = yaml.load(readFileSync(resolve(root, path), 'utf8'))
   if (!isRecord(workflow)) throw new TypeError(`${path} must define a workflow`)
   return workflow
+}
+
+function nodeStepSource(job: Record<string, unknown>, id: string): string {
+  if (!Array.isArray(job.steps)) throw new Error('Node workflow job must define steps')
+  const step: unknown = job.steps.find(value => isRecord(value) && value.id === id)
+  if (!isRecord(step) || typeof step.run !== 'string') throw new Error(`Missing Node workflow step: ${id}`)
+  const source = step.run.split("<<'JS'\n")[1]?.split('\nJS')[0]?.replace(/^import .*;\n/gm, '')
+  if (source === undefined) throw new Error(`Workflow step ${id} must contain an executable Node script`)
+  return source
 }
 
 function workflowEvent(workflow: Record<string, unknown>, event: string): Record<string, unknown> {

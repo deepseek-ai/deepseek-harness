@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -36,6 +37,11 @@ def _resource_sidecars(executable: Path, native_targets: tuple[str, ...] = ("dar
         f"@deepseek-ai/libreoffice-kit-{target}": "0.0.1" for target in (*native_targets, "wasm")
     }}), encoding="utf-8")
     resources = executable.with_name(tag)
+    resources.mkdir(parents=True, exist_ok=True)
+    (resources / "downloads.json").write_text(json.dumps({
+        "target": tag.replace("macos-", "mac-"), "identity": "a" * 64,
+        "office": [{"name": "fixture"}], "pnpm": {},
+    }))
     manifest = resources / "primary-runtime/runtime.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(json.dumps({"platform": native.rsplit("-", 1)[0], "arch": tag.rsplit("-", 1)[1],
@@ -50,7 +56,7 @@ def _resource_sidecars(executable: Path, native_targets: tuple[str, ...] = ("dar
     node.chmod(0o755)
     packages = python.parent if tag.startswith("win-") else python.parent.parent
     (packages / ("Lib/site-packages" if tag.startswith("win-") else "lib/python3.12/site-packages")).mkdir(parents=True)
-    for file in ["scripts/check_office.py", *(f"office-{kind}/SKILL.md" for kind in ("docx", "pptx", "xlsx"))]:
+    for file in (f"office-{kind}/SKILL.md" for kind in ("docx", "pptx", "xlsx")):
         path = resources / "office-skills" / file
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
@@ -195,19 +201,20 @@ def test_runtime_requires_complete_resource_sidecars(
     monkeypatch.setattr(runtime, "bundled_package_dir", lambda: tmp_path)
     monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "linux-x64")
 
-    with pytest.raises(FileNotFoundError, match="Office sidecar"):
+    with pytest.raises(FileNotFoundError, match="downloads.json"):
         runtime.bundled_runtime_path()
     office = _resource_sidecars(executable)
     assert runtime.bundled_runtime_path() == executable
     (office / "node_modules/@deepseek-ai/libreoffice-kit-wasm/prebuilds.json").unlink()
-    with pytest.raises(FileNotFoundError, match="Office sidecar"):
-        runtime.bundled_runtime_path()
+    assert runtime.bundled_runtime_path() == executable
+    shutil.rmtree(executable.with_name("linux-x64") / "primary-runtime")
+    assert runtime.bundled_runtime_path() == executable
 
 
 def test_node_mode_runs_the_deployed_dsh_cli(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    bin_js = tmp_path / "runtime" / "node" / "node_modules" / "@deepseek-ai" / "dsh" / "lib" / "bin.js"
+    bin_js = tmp_path / "runtime" / "node" / "runtime-bootstrap.mjs"
     bin_js.parent.mkdir(parents=True)
     bin_js.touch()
     monkeypatch.setattr(runtime, "bundled_package_dir", lambda: tmp_path)
@@ -303,7 +310,7 @@ def test_windows_console_branch_preserves_real_child_io_and_completion(tmp_path:
     ("macos-arm64", ("darwin-arm64",)), ("macos-x64", ("darwin-x64",)), ("win-x64", ("win32-x64",)),
     ("linux-x64", ("linux-x64",)), ("macos-arm64", ()),
 ])
-def test_runtime_requires_its_platform_office_engine(
+def test_runtime_starts_independently_of_office_engine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str, native_targets: tuple[str, ...],
 ) -> None:
     extension = ".exe" if target.startswith("win-") else ""
@@ -322,5 +329,102 @@ def test_runtime_requires_its_platform_office_engine(
     foreign = office / "node_modules/@deepseek-ai" / ("libreoffice-kit-darwin-arm64" if engine.parent.name == "libreoffice-kit-wasm" else "libreoffice-kit-wasm") / "prebuilds.json"
     foreign.parent.mkdir(parents=True, exist_ok=True)
     foreign.write_text("{}")
-    with pytest.raises(FileNotFoundError, match="Office sidecar"):
-        runtime.bundled_runtime_path()
+    assert runtime.bundled_runtime_path() == executable
+
+
+@pytest.mark.parametrize("function,resource", [
+    (runtime.download_office, "office"),
+    (runtime.download_primary_runtime, "primary"),
+])
+def test_explicit_download_uses_runtime_without_a_harness_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, function, resource: str,
+) -> None:
+    root = tmp_path / "中文缓存"
+    root.mkdir()
+    _resource_sidecars(root / "deepseek-harness-sdk-runtime-linux-x64")
+    monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "linux-x64")
+    script = tmp_path / "download.py"
+    destination = root / "linux-x64/primary-runtime" if resource == "primary" else root
+    script.write_text("import json,os,sys\n" + f"assert os.environ['DSH_RUNTIME_DOWNLOAD'] == {resource!r}\n"
+                      + f"sys.stdout.buffer.write(json.dumps({str(destination)!r}, ensure_ascii=False).encode('utf-8'))\n", encoding="utf-8")
+    monkeypatch.delenv("DSH_HOME", raising=False)
+    monkeypatch.setattr(runtime, "resolve_bundled_launch_args", lambda: (sys.executable, str(script)))
+    assert function() == destination
+    script.write_text("import sys\nsys.stderr.buffer.write('下载失败'.encode('utf-8'))\nsys.exit(2)\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="下载失败"):
+        function()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="LC_ALL=C is a POSIX locale fixture")
+def test_download_decodes_utf8_in_an_ascii_locale(tmp_path: Path) -> None:
+    script = tmp_path / "download.py"
+    destination = tmp_path / "中文缓存"
+    script.write_text("import sys\nsys.stdout.buffer.write(" + json.dumps(str(destination), ensure_ascii=False).encode('utf-8').__repr__() + ")\n", encoding="utf-8")
+    code = ("import sys,locale,deepseek_harness_runtime as r; "
+            "assert locale.getpreferredencoding(False).lower() not in ('utf-8','utf8'); "
+            f"r.resolve_bundled_launch_args=lambda:(sys.executable,{str(script)!a}); "
+            f"assert str(r.download_office())=={str(destination)!a}")
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, encoding="utf-8", env={
+        **os.environ, "LC_ALL": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0",
+        "PYTHONPATH": str(Path(runtime.__file__).resolve().parents[1]),
+    }, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("missing", ["primary-runtime/runtime.json", "primary-runtime/dependencies/python/bin/python3",
+                                     "primary-runtime/dependencies/node/bin/node", "office-skills/office-docx/SKILL.md"])
+def test_primary_download_rejects_an_incomplete_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str) -> None:
+    _resource_sidecars(tmp_path / "deepseek-harness-sdk-runtime-linux-x64")
+    root = tmp_path / "linux-x64"
+    (root / missing).unlink()
+    monkeypatch.setattr(runtime, "_download", lambda resource: root / "primary-runtime")
+    monkeypatch.setattr(runtime, "_current_platform_tag", lambda: "linux-x64")
+    with pytest.raises(FileNotFoundError):
+        runtime.download_primary_runtime()
+
+
+def test_office_resolution_requires_explicit_download(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from deepseek_harness_runtime._resources import office_launch_args
+
+    executable = tmp_path / "deepseek-harness-sdk-runtime-linux-x64"
+    _resource_sidecars(executable)
+    cache = tmp_path / "cache"
+    monkeypatch.setenv("DSH_RESOURCE_CACHE", str(cache))
+    monkeypatch.delenv("DSH_OFFICE_SIDECAR", raising=False)
+    with pytest.raises(FileNotFoundError, match=r"download_office\(\)"):
+        office_launch_args(tmp_path / "linux-x64", "linux-x64")
+    office = cache / ("a" * 64) / "office"
+    node = office / "node/bin/node"
+    cli = office / "node_modules/@deepseek-ai/libreoffice-kit/lib/cli.js"
+    for path in (node, cli):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    with pytest.raises(FileNotFoundError, match="incomplete"):
+        office_launch_args(tmp_path / "linux-x64", "linux-x64")
+    (office / "complete").write_text("wrong", encoding="utf-8")
+    with pytest.raises(ValueError, match="identity mismatch"):
+        office_launch_args(tmp_path / "linux-x64", "linux-x64")
+    (office / "complete").write_text("a" * 64, encoding="utf-8")
+    assert office_launch_args(tmp_path / "linux-x64", "linux-x64") == (str(node), str(cli))
+    (office / "complete").unlink()
+    monkeypatch.setenv("DSH_OFFICE_SIDECAR", str(office))
+    assert office_launch_args(tmp_path / "linux-x64", "linux-x64") == (str(node), str(cli))
+
+
+@pytest.mark.parametrize("invalid", ["target", "identity", "office", "pnpm", "skills"])
+def test_download_manifest_rejects_invalid_wheel_resources(tmp_path: Path, invalid: str) -> None:
+    from deepseek_harness_runtime._resources import validate_downloads
+
+    _resource_sidecars(tmp_path / "deepseek-harness-sdk-runtime-linux-x64")
+    root = tmp_path / "linux-x64"
+    path = root / "downloads.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if invalid == "skills":
+        (root / "office-skills/office-docx/SKILL.md").unlink()
+        with pytest.raises(FileNotFoundError, match="Office skill"):
+            validate_downloads(root, "linux-x64")
+    else:
+        manifest[invalid] = {"target": "win-x64", "identity": "z" * 64, "office": [], "pnpm": []}[invalid]
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        with pytest.raises(ValueError, match="invalid runtime download manifest"):
+            validate_downloads(root, "linux-x64")

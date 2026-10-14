@@ -43,9 +43,14 @@ export function registerClaimDecoration(editor: LexicalEditor, activeToken: () =
     }
     if (text.length > token.length) {
       // Typing at the token boundary lands in the styled node; split the
-      // overflow back out so only the token itself carries the color.
-      const [tokenNode] = node.splitText(token.length)
+      // overflow back out so only the token itself carries the color. The
+      // split copies the token style onto the overflow; it is cleared in this
+      // pass because Lexical's normalization merges same-style neighbours
+      // before the overflow's own transform runs, which would rejoin the two
+      // halves and loop until Lexical aborts the update.
+      const [tokenNode, overflow] = node.splitText(token.length)
       if (tokenNode !== undefined && tokenNode.getStyle() !== TOKEN_STYLE) tokenNode.setStyle(TOKEN_STYLE)
+      overflow?.setStyle('')
       return
     }
     if (node.getStyle() !== TOKEN_STYLE) node.setStyle(TOKEN_STYLE)

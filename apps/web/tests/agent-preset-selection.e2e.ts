@@ -323,7 +323,7 @@ describe('web e2e: agent-preset selection', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-preset-slash-catalog'))
     const composer = page.locator('[data-composer-input][contenteditable="true"]').last()
 
-    // `minimal` mounts neither the compaction group nor plan mode nor local
+    // `minimal` mounts compaction, but neither plan mode nor local
     // skill discovery, so the catalog the composer warmed under the
     // deployment default must not survive the switch.
     await writeComposerDraft(page, composer, '/')
@@ -331,7 +331,7 @@ describe('web e2e: agent-preset selection', () => {
       .not.toEqual(expect.arrayContaining([expect.stringContaining(SKILL_NAME)]))
     // Rows read as `Title Description`; the title is the capitalized command name.
     const onMinimal = (await menuOptions(page)).map(option => option.toLowerCase())
-    expect(onMinimal.some(option => option.startsWith('compact'))).toBe(false)
+    expect(onMinimal.some(option => option.startsWith('compact'))).toBe(true)
     expect(onMinimal.some(option => option.startsWith('plan'))).toBe(false)
     // Preset-scoped commands follow the switch; the client's own model command
     // remains outside every preset.
@@ -422,7 +422,7 @@ describe('web e2e: agent-preset selection', () => {
     await compareOrRefreshGolden(HEADER_EXPECTED, snapshot, MODE)
     expect(snapshot).toContain('Minimal mode')
     expect(snapshot).toContain('button "1 subagent"')
-    expect(snapshot.indexOf('button "1 subagent"')).toBeLessThan(snapshot.indexOf('Minimal mode'))
+    expect(snapshot.indexOf('Minimal mode')).toBeLessThan(snapshot.indexOf('button "1 subagent"'))
     expect(snapshot.indexOf('button "1 subagent"')).toBeLessThan(snapshot.indexOf('button "More actions"'))
     // Static chrome, not a control: the header can only report a composition
     // the host would refuse to change.
@@ -455,8 +455,9 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
 
     await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
     await page.getByRole('button', { name: 'Choose how to add a plugin', exact: true }).click()
+    // The Creator entry reuses the draft's blank Session and names its preset in the creation request.
     await Promise.all([
-      page.waitForResponse('**/api/agentPresets/select'),
+      page.waitForResponse('**/api/session/create'),
       page.getByRole('menuitem', { name: /^Let the agent create a plugin/ }).click(),
     ])
     const picker = page.getByTitle('Choose the agent preset for your new task', { exact: true }).filter({ hasText: 'Creator mode' })
@@ -469,8 +470,9 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
     expect(scaffold.ctx.agentPresets.composedPreset(creator.ctx)).toBe('cordis')
     expect(scaffold.ctx.tools.schemas(creator).map(tool => tool.name))
       .toEqual(expect.arrayContaining(['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']))
-    expect(creator.session.snapshotEvents().some(event => event.type === 'agent-preset/selected'
-      && event.data.agentPreset === 'cordis')).toBe(true)
+    // The chip may also select Creator once the list updates; the registry records the switch only once.
+    expect(creator.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected'
+      && event.data.agentPreset === 'cordis')).toHaveLength(1)
     expect(creator.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: developerTools })
     expect(scaffold.ctx.agentPresets.defaultId).toBe('standard')

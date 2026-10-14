@@ -65,10 +65,11 @@ it('persists the Git Worktrees switch and removes its capability while retaining
     await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
     await panel.getByRole('heading', { name: 'Plugins', exact: true }).waitFor()
+    await panel.getByRole('button', { name: 'More', exact: true }).click()
     return panel
   }
   let panel = await openPlugins()
-  let card = panel.locator(`[data-plugin-group="official"] [data-plugin-package="${BUNDLE}"]`)
+  let card = panel.locator(`[data-plugin-group="more"] [data-plugin-package="${BUNDLE}"]`)
   await card.getByRole('button', { name: 'View Git Worktrees', exact: true }).waitFor()
   expect(await card.getByText('Experimental', { exact: true }).count()).toBe(1)
   let toggle = card.getByRole('switch', { name: 'Enable Git Worktrees', exact: true })
@@ -90,7 +91,7 @@ it('persists the Git Worktrees switch and removes its capability while retaining
 
   await page.reload({ waitUntil: 'load' })
   panel = await openPlugins()
-  card = panel.locator(`[data-plugin-package="${BUNDLE}"]`)
+  card = panel.locator(`[data-plugin-group="more"] [data-plugin-package="${BUNDLE}"]`)
   toggle = card.getByRole('switch', { name: 'Enable Git Worktrees', exact: true })
   await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
   expect(tools()).toContain('create_worktree')

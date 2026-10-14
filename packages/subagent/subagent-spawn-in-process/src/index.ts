@@ -33,16 +33,14 @@ export const Config: z<Config> = z.object({
  * The spawn provider. Supports every start-time capability: `depthLimit` (it
  * constructs the child, so it can enforce a recursion cap), `outputSchema`
  * (the scoped structured runtime), `agentOptions` (merged over the parent
- * route), and `toolFilter`/`persona` (scoped `restrict()` and a scoped
- * shadowing persona section, applied in the child's creation window).
+ * route). The selected preset owns persona and tool composition.
  */
 class SpawnInProcessProvider implements SubagentProvider {
   readonly capabilities: SubagentCapabilities = {
     agentOptions: true,
+    agentPreset: true,
     outputSchema: true,
     depthLimit: true,
-    toolFilter: true,
-    persona: true,
   }
   // Context contract: a spawned child starts fresh — it never sees the parent conversation.
   readonly inheritsParentContext = false

@@ -1,0 +1,101 @@
+name: Release (SSH helper)
+
+# Validation accepts any ref; publication requires the matching dsh-v<version> tag.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified archives to GitHub Release. Must run from the matching dsh-v<version> tag.
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ssh-helper-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Resolve source and validate publication tag
+        id: source
+        env:
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const {version} = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (process.env.PUBLISH === 'true' && (process.env.GITHUB_REF_TYPE !== 'tag' || process.env.GITHUB_REF_NAME !== `dsh-v${version}`)) throw new Error('Publication requires the matching dsh-v<version> tag');
+          const commit = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\ncommit=${commit}\n`);
+          JS
+  build:
+    needs: validate
+    uses: ./.github/workflows/build-exe-for-ssh-helper.yml
+    with:
+      release: true
+  verify:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ssh-helper-node24-*
+          path: dist-exe/ssh-helper
+          merge-multiple: true
+      - name: Require complete evidence from the selected source commit
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: pnpm exec tsx scripts/ssh-helper/release.ts --directory=dist-exe/ssh-helper --version="$RELEASE_VERSION" --commit="$SOURCE_COMMIT"
+      - name: Upload verified release checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: ssh-helper-release-checksums
+          path: dist-exe/ssh-helper/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    if: inputs.publish
+    needs: [validate, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ssh-helper-*
+          path: dist-exe/ssh-helper
+          merge-multiple: true
+      - name: Attach the verified archives to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes 'SSH helper executables for Linux and macOS.'
+          fi
+          gh release upload "$RELEASE_TAG" dist-exe/ssh-helper/*.tar.gz dist-exe/ssh-helper/SHA256SUMS

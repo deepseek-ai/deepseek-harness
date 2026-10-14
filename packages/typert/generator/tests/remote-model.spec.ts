@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { WorkspaceAnalyzer } from '../src/analyzer.ts'
 import type { InvocationModel } from '../src/model.ts'
 import { WorkspaceTypertGenerator } from '../src/workspace.ts'
+import { executableRemoteModule } from './remote-module.ts'
 
 const fixtureRoot = resolve(import.meta.dirname, 'fixtures/remote-model')
 const temporaryRoots: string[] = []
@@ -32,6 +33,8 @@ interface RuntimeDescriptor {
   }
   readonly result: {
     readonly create: () => RuntimeSchema
+    readonly jsonSchema?: Record<string, unknown>
+    readonly jsonSchemaError?: string
     readonly decode?: (value: unknown) => unknown
     readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
   }
@@ -41,6 +44,7 @@ interface RuntimeRemoteModule {
   readonly TYPERT_REMOTE: {
     readonly package: string
     readonly descriptors: readonly RuntimeDescriptor[]
+    readonly methods: Readonly<Record<string, RuntimeDescriptor>>
   }
 }
 
@@ -55,7 +59,7 @@ afterEach(() => {
 })
 
 describe('Remote model generation', { timeout: 60_000 }, () => {
-  it('projects a generic binary result without copying or freezing its bytes', async () => {
+  it('projects ordinary unary binary results and metadata without copying or freezing bytes', async () => {
     const root = copyFixture()
     editFile(root, 'packages/remote/src/types.ts', source => `${source}\nexport type BinaryFile<Data extends Uint8Array = Uint8Array> = {\n  readonly data: Data\n} & { readonly size: number }\n`)
     editFile(root, 'packages/remote/src/index.ts', source => `import type { BinaryFile } from './types.ts'\n${source.replace(
@@ -65,12 +69,13 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     expect(artifact?.js).not.toContain('binaryResult')
     expect(artifact?.remote?.dts).toContain('Promise<RemoteResult<RemoteDecoded<BinaryFile>>>')
-    const generated = await import(`data:text/javascript,${encodeURIComponent(
-      (artifact?.remote?.js ?? '').replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`),
-    )}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(artifact?.remote?.js ?? '')
     const descriptor = generated.TYPERT_REMOTE.descriptors.find(invocation => invocation.id.endsWith('/bytes'))
     expect(descriptor?.result.decode).toBeTypeOf('function')
     if (descriptor === undefined) throw new Error('binary descriptor missing')
+    expect(generated.TYPERT_REMOTE.methods['goals/bytes']).toBe(descriptor)
+    expect(descriptor.result.jsonSchema).toBeUndefined()
+    expect(descriptor.result.jsonSchemaError).toContain('typert tool schema:')
     const schema = descriptor.result.create()
     for (const data of [new Uint8Array(), new Uint8Array([0, 128, 255]), new Uint8Array(new SharedArrayBuffer(3))]) {
       const parsed = schema.safeParse({ data, size: data.length })
@@ -163,9 +168,7 @@ export interface BinaryTree {
 }\n\nexport type {`,
     )}`)
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
-    const generated = await import(`data:text/javascript,${encodeURIComponent(
-      (artifact?.remote?.js ?? '').replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`),
-    )}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(artifact?.remote?.js ?? '')
     const codec = (method: string) => {
       const descriptor = generated.TYPERT_REMOTE.descriptors.find(item => item.id.endsWith(`/${method}`))
       if (descriptor === undefined) throw new Error(`descriptor missing: ${method}`)
@@ -364,7 +367,7 @@ void binaryTree
       result: { typeSymbol: '@fixture/remote/types#CreateGoalResult' },
     })
 
-    expect(artifact?.js).toContain('invocations: [')
+    expect(artifact?.js).toContain('get invocations() { return $remote.descriptors }')
     expect(artifact?.remote?.dts).toContain(
       "'goals/create': (agentId: AgentId, request: CreateGoalRequest, signal?: AbortSignal) => Promise<RemoteResult<CreateGoalResult>>",
     )
@@ -382,8 +385,7 @@ void binaryTree
 
     const remoteJs = artifact?.remote?.js
     if (remoteJs === undefined) throw new Error('Remote fixture emitted no Host-for-Client JavaScript')
-    const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
-    const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(remoteJs)
     expect(generated.TYPERT_REMOTE.package).toBe('@fixture/remote')
     const create = generated.TYPERT_REMOTE.descriptors[0]
     expect(create?.cancellation).toEqual({ parameter: 'signal' })
@@ -438,8 +440,7 @@ export type {`,
 
     const remoteJs = artifact?.remote?.js
     if (remoteJs === undefined) throw new Error('undefined Remote fixture emitted no Host-for-Client JavaScript')
-    const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
-    const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(remoteJs)
     const maybe = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/maybe'))
     const clear = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/clear'))
     expect(maybe?.parameters[0]?.acceptsUndefined).toBe(true)
@@ -504,7 +505,7 @@ export type {`,
 
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     expect(artifact?.remote?.dts).toContain(
-      "  RemoteStreamHandle,\n  TypertRemoteContribution,\n} from '@deepseek-ai/dsh-typert-protocol'",
+      "  RemoteStreamHandle,\n  TypertRemoteInfo,\n  TypertRemoteMethod,\n} from '@deepseek-ai/dsh-typert-protocol'",
     )
     expect(artifact?.remote?.dts).toContain("declare module '@deepseek-ai/dsh-typert-protocol' {")
     expect(artifact?.remote?.dts).toContain(
@@ -518,8 +519,7 @@ export type {`,
 
     const remoteJs = artifact?.remote?.js
     if (remoteJs === undefined) throw new Error('RemoteStream fixture emitted no Host-for-Client JavaScript')
-    const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
-    const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(remoteJs)
     const descriptor = generated.TYPERT_REMOTE.descriptors.find(candidate => candidate.id.endsWith('/attach'))
     expect(descriptor?.mode).toBe('stream')
     expect(descriptor?.uplink?.codec.create().safeParse({ title: 'ship' }).success).toBe(true)
@@ -540,7 +540,7 @@ export type {`,
       name: 'an unknown Remote mode',
       mode: 'duplex',
       method: 'async *attach(agent: Agent, signal: AbortSignal): AsyncIterable<CreateGoalResult>',
-      message: 'Remote\\(\\) options must contain exactly mode: "stream"',
+      message: 'Remote\\(\\) options require name, mode: "stream", or resources',
     },
   ])('rejects $name', ({ mode, method, message }) => {
     const root = copyFixture()
@@ -613,8 +613,7 @@ export type GenericResult = {
     )
     const remoteJs = artifact?.remote?.js
     if (remoteJs === undefined) throw new Error('generic Remote fixture emitted no Host-for-Client JavaScript')
-    const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
-    const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
+    const generated = await executableRemoteModule<RuntimeRemoteModule>(remoteJs)
     const dispatch = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/dispatch'))
     const schema = dispatch?.parameters[0]?.codec.create()
     expect(schema?.safeParse({ kind: 'ship', payload: { count: 2, meta: { nested: [true, null] } } }).success).toBe(true)
@@ -677,6 +676,67 @@ export interface BoxPayload {
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     expect(artifact?.remote?.dts).toContain("'create-goal': (request: CreateGoalRequest) => Promise<RemoteResult<CreateGoalResult>>")
     assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root)
+  })
+
+  it('reads export names from options whose resource readers stay runtime-only', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace(
+        '  @Remote\n  async create(',
+        "  @Remote({ name: 'createGoal', resources: { session: (agentId: string) => agentId } })\n  async create(",
+      )
+      .replace(
+        "  @RemoteScope('agent')\n",
+        "  @RemoteScope('agent', { name: 'renameGoal', resources: { session: (request: RenameGoalRequest) => request.title } })\n",
+      ))
+
+    const model = remotePackage(root)
+    expect(model.invocations.map(invocation => [invocation.method, invocation.implementation])).toEqual([
+      ['createGoal', 'create'],
+      ['renameGoal', 'rename'],
+      ['watch', undefined],
+    ])
+    expect(JSON.stringify(model.invocations)).not.toContain('resources')
+  })
+
+  it.each([
+    {
+      name: 'an unknown Remote option',
+      decorator: '@Remote({ resources: {}, audit: true })\n  async create(',
+      message: 'Remote\\(\\) options require name, mode: "stream", or resources',
+    },
+    {
+      name: 'a stream option on a Remote Scope',
+      decorator: "@RemoteScope('agent', { mode: 'stream' })\n  rename(",
+      message: 'RemoteScope\\(\\) options require name or resources',
+    },
+    {
+      name: 'empty Remote Scope options',
+      decorator: "@RemoteScope('agent', {})\n  rename(",
+      message: 'RemoteScope\\(\\) options require name or resources',
+    },
+    {
+      name: 'a computed Remote Scope name',
+      decorator: "@RemoteScope('agent', { name: `rename${'Goal'}` })\n  rename(",
+      message: 'RemoteScope\\(\\) name must be an endpoint segment',
+    },
+    {
+      name: 'shorthand Remote Scope options',
+      decorator: "@RemoteScope('agent', { resources })\n  rename(",
+      message: 'RemoteScope\\(\\) options must use named values',
+    },
+    {
+      name: 'an untransportable Remote Scope export name',
+      decorator: "@RemoteScope('agent', 'rename goal')\n  rename(",
+      message: 'RemoteScope\\(\\) name must be a string literal containing only RPC endpoint segment characters',
+    },
+  ])('rejects $name', ({ decorator, message }) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace(decorator.includes('create(') ? '@Remote\n  async create(' : "@RemoteScope('agent')\n  rename(", decorator)
+      .replace('export class GoalService', 'const resources = {}\n\nexport class GoalService'))
+
+    expect(() => analyzeRemote(root, false)).toThrow(new RegExp(message))
   })
 
   it.each(['create#v2', 'create goal', '.', '..'])('rejects untransportable Remote alias %s', (alias) => {
@@ -756,6 +816,14 @@ export interface ClientMarker {
         '  constructor(serviceKey: string) {\n    super(undefined, serviceKey)\n  }',
       ),
       message: 'Gateway service key must be a string literal',
+    },
+    {
+      name: 'an unsupported Gateway binding option',
+      edit: (source: string) => source.replace(
+        "    super(undefined, 'goals')",
+        "    super(undefined, 'goals', { extra: true })",
+      ),
+      message: 'only supports a namespace option',
     },
     {
       name: 'TypertRemoteService without a constructor',

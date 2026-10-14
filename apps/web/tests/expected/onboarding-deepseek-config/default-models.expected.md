@@ -15,12 +15,14 @@
       - img "API 密钥已配置"
       - button "编辑 DeepSeek (deepseek-official)": 编辑
       - text: DeepSeek deepseek-official API 密钥
+      - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 已配置——输入新值可替换
+        - /placeholder: 留空时保留现有认证（DEEPSEEK_API_KEY）
+      - text: API 密钥来源：已保存凭据
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":
-          - /placeholder: https://api.deepseek.com/anthropic
+          - /placeholder: https://api.deepseek.com/anthropic（默认使用环境 DEEPSEEK_BASE_URL）
         - text: 请填写兼容 Anthropic Messages 协议的 API 地址。
         - region "模型目录":
           - text: 模型目录 正在使用适配器默认模型
@@ -29,7 +31,7 @@
             - text: deepseek-flash
           - textbox "显示名称 1":
             - /placeholder: 显示名称
-            - text: DeepSeek-V41-Flash
+            - text: DeepSeek-V4.1-Flash
           - button "模型选项 1" [expanded]
           - button "删除模型 1"
           - text: 上下文窗口

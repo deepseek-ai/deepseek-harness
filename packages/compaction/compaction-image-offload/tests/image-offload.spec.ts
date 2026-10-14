@@ -223,6 +223,48 @@ describe('summary image offload', () => {
 })
 
 describe('compaction-image-offload', () => {
+  it('cancelling at failed-attempt settlement preserves images for later turns', async () => {
+    const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('continued')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('offload-cancel-before-record'), { provider: 'mock', model: 'mock' })
+    ctx.on('session/event', (session, event) => {
+      if (session === agent.session && event.type === 'assistant/attempt') agent.cancel({ kind: 'user' })
+    })
+    agent.followup(createUserMessage({ content: [image('original')], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end'))
+      .toMatchObject({ data: { reason: { kind: 'aborted' } } })
+    expect(adapter.requests).toHaveLength(1)
+    expect(decisions(agent.session)).toEqual([])
+
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(adapter.requests).toHaveLength(2)
+    expect(offloadedNames(adapter.requests[1]!)).toEqual([])
+    expect(agent.session.deriveMessages().flatMap(message => message.content)).toContainEqual(image('original'))
+  })
+
+  it('cancelling after an image omission stops retry and retains the committed selection', async () => {
+    const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('continued')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(SessionId('offload-cancel-after-record'), { provider: 'mock', model: 'mock' })
+    ctx.on('session/event', (session, event) => {
+      if (session === agent.session && event.type === 'image/offload') agent.cancel({ kind: 'user' })
+    })
+    agent.followup(createUserMessage({ content: [image('original')], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end'))
+      .toMatchObject({ data: { reason: { kind: 'aborted' } } })
+    expect(adapter.requests).toHaveLength(1)
+    expect(decisions(agent.session)).toHaveLength(1)
+
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    expect(adapter.requests).toHaveLength(2)
+    expect(offloadedNames(adapter.requests[1]!)).toEqual(['original'])
+    expect(decisions(agent.session)).toHaveLength(1)
+  })
+
   it('logs one exact image selection and retries without replacing the message', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(2), textResponse('sent')])
     const ctx = await harness(adapter)

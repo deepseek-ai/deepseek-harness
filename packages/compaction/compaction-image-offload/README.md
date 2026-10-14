@@ -39,7 +39,7 @@ Each decision appends one `image/offload` event identifying the selected occurre
 
 ### Failures and recovery
 
-The plugin acts only on `IMAGE_OFFLOAD_REQUIRED` failures that carry `offloadImages`. It walks the surface in model request order, skips assistant nodes and images already marked, and marks that many occurrences. When nothing remains to offload it delegates on the `agent/request-error` waterfall, so downstream recovery or the ordinary turn error applies. The retry spends no provider retry budget and logs no `llm/retry` event.
+The plugin acts only on `IMAGE_OFFLOAD_REQUIRED` failures that carry `offloadImages`. It walks the surface in model request order, skips assistant nodes and images already marked, and marks that many occurrences. When nothing remains to offload it delegates on the `agent/request-error` waterfall, so downstream recovery or the ordinary turn error applies. The retry spends no provider retry budget and logs no `llm/retry` event. Cancellation before recording a selection delegates without adding an `image/offload` event; cancellation after a committed selection stops retry but preserves the omission.
 
 -----
 

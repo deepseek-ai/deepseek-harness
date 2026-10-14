@@ -30,6 +30,7 @@ context 组提供不定义任何工具、为每次请求添加模型可见上下
 | [`file-reference-local/`](file-reference-local/README.zh.md) | `@file` 提及的本地工作区补全提供方 | — |
 | [`time-context/`](time-context/README.zh.md) | 每个步骤的当前时间、浏览器时区与经过时长 | — |
 | [`tmux-context/`](tmux-context/README.zh.md) | agent 所在的 tmux 会话、窗口与窗格位置 | — |
+| [`harness-dev-context/`](harness-dev-context/README.zh.md) | 以运行时上下文给出 harness checkout 与 Web GUI URL，使系统提示词跨进程保持稳定 | — |
 
 -----
 

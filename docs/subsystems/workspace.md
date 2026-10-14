@@ -25,9 +25,10 @@ Consumers see only the `Workspace` interface; the implementation stays package-p
 ```ts type-equiv
 /**
  * One workspace: a stable id over an existing directory, a display title, and
- * an ordered candidate account of sessions. Membership requires both an id in
- * that account and a session header whose canonical cwd equals the workspace
- * path. Consumers only see this interface; the implementation stays private.
+ * an ordered candidate account of sessions. Membership validates header cwd
+ * against the workspace path, but preserves an existing account when its
+ * fully qualified cwd is missing. Consumers only see this interface; the
+ * implementation stays private.
  */
 interface Workspace {
   /** Stable record id (generated uuid). */
@@ -54,8 +55,11 @@ interface Workspace {
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
    * account is filtered synchronously: missing headers, invalid cwd values,
-   * and canonical cwd mismatches are never returned. A subsequent workspace
-   * mutation prunes those filtered candidates durably.
+   * and canonical cwd mismatches are never returned. A fully qualified cwd
+   * whose realpath or directory stat fails with ENOENT preserves an existing
+   * candidate, including a dangling symlink; other filesystem failures do not.
+   * A subsequent mutation prunes filtered candidates, not missing-directory
+   * candidates. This does not admit new sessions or recreate directories.
    */
   readonly sessionIds: readonly SessionId[]
 
@@ -113,7 +117,7 @@ interface Workspace {
 }
 ```
 
-Ownership truth is the record's ordered `sessionIds`, never derived from session cwd — but membership requires both: an id on the account and a header whose canonical cwd equals the workspace path, so one session structurally belongs to at most one workspace. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
+Ownership truth is the record's ordered `sessionIds`, never derived from session cwd. Membership validates the recorded header cwd against the workspace path; an existing candidate remains owned when its fully qualified cwd fails resolution or directory stat with `ENOENT`. This preserves missing-directory and dangling-symlink accounts without admitting new sessions. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
 
 ## The registry: `ctx.workspaceRegistry`
 
@@ -273,35 +277,13 @@ Typed Remote control of transient Session-owned terminal processes.
 @Remote({ mode: 'stream' }) retain(sessionId: SessionId, id: WebTerminalId, signal: AbortSignal): AsyncIterable<TerminalRetentionFrame>
 
 /**
- * Attach to a terminal without binding its process lifetime to the transport.
+ * Attach terminal input and output to one physical Remote stream.
  * @param agent - Session owner supplied by the Gateway.
  * @param id - terminal identity.
- * @param attachmentId - new exclusive input attachment.
- * @param signal - physical stream cancellation.
- * @returns screen recovery followed by output and metadata changes.
+ * @param signal - attachment cancellation; the process remains alive and input is never replayed.
+ * @returns screen recovery, output, writable state and provider-acceptance acknowledgements.
  */
-@Remote({ mode: 'stream' }) follow(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, signal: AbortSignal): AsyncIterable<TerminalFrame>
-
-/**
- * Deliver raw input, including Tab completion and control characters.
- * @param agent - Session owner supplied by the Gateway.
- * @param id - terminal identity.
- * @param attachmentId - current writable attachment.
- * @param data - input bytes represented as UTF-8 text.
- * @returns after provider input acceptance.
- */
-@Remote async write(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, data: string): Promise<void>
-
-/**
- * Update the dimensions of the PTY and recovery screen.
- * @param agent - Session owner supplied by the Gateway.
- * @param id - terminal identity.
- * @param attachmentId - current writable attachment.
- * @param cols - column count.
- * @param rows - row count.
- * @returns after the resize completes.
- */
-@Remote async resize(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, cols: number, rows: number): Promise<void>
+@Remote({ mode: 'stream' }) attach(agent: Agent, id: WebTerminalId, signal: AbortSignal): RemoteStream<TerminalFrame, TerminalInput>
 
 /**
  * Rename a terminal without changing its shell.
@@ -320,7 +302,7 @@ Typed Remote control of transient Session-owned terminal processes.
 @Remote async close(agent: Agent, id: WebTerminalId): Promise<void>
 ```
 
-Types: [Agent](core.md) · [SessionId](core.md)
+Types: [Agent](core.md) · [RemoteStream](typert.md) · [SessionId](core.md)
 
 Source: [`packages/api/terminal-controller/src/index.ts`](../../packages/api/terminal-controller/src/index.ts)
 
@@ -405,11 +387,17 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 @Remote('unpinSession') unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>
 
 /**
- * Stream a complete Workspace baseline followed by ordered increments.
+ * Stream a complete Workspace baseline followed by ordered increments. A
+ * non-owner receives only the Workspaces and Sessions `allows()` admits.
+ * When a delivered Workspace is no longer admitted at its next change or
+ * the next order change, the stream sends a `replace` frame with the
+ * complete filtered state instead of a `remove`, because a Client never
+ * resurrects a removed Workspace; a `remove` frame reports a deletion and
+ * reaches only a Client that received that Workspace.
  * @param signal - generation cancellation.
  * @returns baseline followed by ordered Workspace increments.
  */
-@Remote({ mode: 'stream' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>
 ```
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)

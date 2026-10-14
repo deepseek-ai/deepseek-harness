@@ -1,18 +1,20 @@
 - list:
   - listitem:
-    - button "tool-subagent-control, 已启用":
-      - strong: tool-subagent-control
-      - text: Globally named send_message, interrupt_agent, and list_agents tools over ctx.subagents continuations
+    - button "子智能体控制工具, tool-subagent-control, 已启用":
+      - strong: 子智能体控制工具
+      - text: 让 AI 向子智能体发送消息或中断其运行。
+      - code: tool-subagent-control
   - listitem:
-    - button "tool-subagent-control/list-agents, tool-subagent-list-agents, 已启用":
-      - strong: tool-subagent-control/list-agents
+    - button "子智能体列表工具, tool-subagent-list-agents, 已启用":
+      - strong: 子智能体列表工具
       - code: tool-subagent-list-agents
   - listitem:
-    - button "tool-subagent, 已启用":
-      - strong: tool-subagent
-      - text: Model-facing subagent delegation tool over the ctx.subagents seam
+    - button "子智能体委派工具, tool-subagent, 已启用":
+      - strong: 子智能体委派工具
+      - text: 让 AI 将任务交给子智能体，并获取运行结果。
+      - code: tool-subagent
   - listitem:
-    - button "tool-subagent, tool-subagent-fork, 已启用":
-      - strong: tool-subagent
-      - text: Model-facing subagent delegation tool over the ctx.subagents seam
+    - button "子智能体委派工具, tool-subagent-fork, 已启用":
+      - strong: 子智能体委派工具
+      - text: 让 AI 将任务交给子智能体，并获取运行结果。
       - code: tool-subagent-fork

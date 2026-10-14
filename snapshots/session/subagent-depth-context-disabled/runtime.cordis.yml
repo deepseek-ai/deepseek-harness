@@ -1,0 +1,17 @@
+# Suppress optional hints at the root depth cap while retaining the tool and
+# the provider's runtime enforcement.
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    includeRuntimeContext: false
+    personaPrefix: |
+      You are a coding assistant powered by the {{model}} model. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    maxDepth: 0

@@ -21,7 +21,7 @@ function declarationsFrom(source: string, selector: string): string[] {
 describe('pinned collapsible headers', () => {
   it('pins an open Think header to the scrollport top and masks the prose under it', () => {
     expect(
-      declarationsFrom(read('ReasoningRow.module.css'), '.root[data-expanded] [data-open] [data-disclosure-row]'),
+      declarationsFrom(read('ReasoningRow.module.css'), '.root[data-expanded] [data-open] [data-disclosure-header]'),
     ).toEqual(expect.arrayContaining([
       'position: sticky',
       'top: 0',

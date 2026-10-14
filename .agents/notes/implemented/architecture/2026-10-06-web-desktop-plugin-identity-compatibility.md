@@ -12,9 +12,9 @@ Moving a capability into the experimental directory changes its ownership and su
 
 The moved packages retain the published names declared by the [experimental naming policy](../../../../scripts/experimental-package-policy.ts). That typed directory-to-name map is the sole maintained inventory of naming exceptions. Package manifests, consumers, installation checks, and bundler checks agree with it; a missing, moved, or duplicated exception is rejected. [Experimental status](../../../../packages/experimental/README.md#status) remains independent of spelling, Official discovery, and explicit selection.
 
-Existing badge, Ralph, and native delegation row IDs remain valid selectors inside their applicable Host or preset scope. New isolation groups and newly introduced capabilities retain their new IDs. Later user layers still replace configuration or disable rows, and a complete preset replacement remains authoritative. Selecting an optional bundle is still explicit: a patch targeting an absent row does not select its bundle.
+Existing badge, Ralph, and native delegation row IDs remain valid Host row selectors. New isolation groups and newly introduced capabilities retain their new IDs. Later user layers still replace configuration or disable rows. Selecting an optional bundle is still explicit: a patch targeting an absent row does not select its bundle.
 
-Compatibility protection covers Web and Desktop profiles, including existing native provider package identities, selections, configuration, and authentication. Headless, SDK, and ACP compositions may require changes. Native bundles use the ordinary shared patch operation and require the full preset targets; separate provider-only compatibility wrappers are unnecessary for the protected profiles. Public APIs remain pre-stable, and new output metadata stays required unless an actual consumer needs an accommodation.
+Compatibility protection covers Web and Desktop profiles, including existing native provider package identities, selections, configuration, and authentication. Native bundles insert ordinary Host rows, so Headless, SDK, and ACP compositions can select them too; separate provider-only compatibility wrappers are unnecessary. Public APIs remain pre-stable, and new output metadata stays required unless an actual consumer needs an accommodation.
 
 ## Deferred naming cleanup
 
@@ -31,10 +31,10 @@ These naming changes are deferred, not prerequisites for experimental classifica
 
 **Publish aliases or keep duplicate compatibility rows.** Parallel identities need continuing resolution and removal rules and can register the same capability twice. Retaining the established identity avoids that additional mechanism.
 
-**Keep provider-only bundles through additional wrapper packages.** Web and Desktop already provide the required presets. Extra delivery packages would preserve compositions outside the selected compatibility scope and increase catalog and release maintenance.
+**Keep provider-only bundles through additional wrapper packages.** Native bundles insert ordinary Host rows that compose into any profile. Extra delivery packages would preserve compositions outside the selected compatibility scope and increase catalog and release maintenance.
 
 ## Consequences
 
-The repository carries a bounded naming-exception map and tests that classify retained names through direct imports, aliases, transitive dependencies, and packed or bundled artifacts. An unprefixed name does not grant admission to the default product. Existing row identities have Web/Desktop composition coverage for user overrides, disabled state, and preset replacement. No general alias or automatic profile migration mechanism is introduced.
+The repository carries a bounded naming-exception map and tests that classify retained names through direct imports, aliases, transitive dependencies, and packed or bundled artifacts. An unprefixed name does not grant admission to the default product. Existing row identities have Web/Desktop composition coverage for user overrides and disabled state. No general alias or automatic profile migration mechanism is introduced.
 
 The [classification decision](../process/2026-10-05-product-package-classification.md), [optional-composition decision](2026-09-21-experimental-capabilities-as-optional-bundles.md), and [on-demand discovery decision](2026-10-05-official-on-demand-bundles.md) retain their separate responsibilities. Released Session generations and persisted hook event names remain protected independently of this profile compatibility scope.

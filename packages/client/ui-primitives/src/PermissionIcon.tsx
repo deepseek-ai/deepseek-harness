@@ -37,6 +37,15 @@ function FullAccessArtwork({ size = 16, className, strokeWidth }: PermissionIcon
   )
 }
 
+function AutoReviewArtwork({ size = 16, className, strokeWidth }: PermissionIconArtworkProps): ReactNode {
+  return (
+    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" strokeWidth={strokeWidth}>
+      <path d="M6.59624 2.14853C7.50155 1.80917 8.49914 1.80919 9.40444 2.14859L13.9245 3.84317V7.11961C13.9245 11.6089 10.5565 13.5975 8.00035 14.5779C5.44423 13.5975 2.07544 11.6089 2.07544 7.11961V3.84317L6.59624 2.14853Z" stroke="currentColor" strokeLinejoin="round" />
+      <path d="M5.75 10.15L8 4.95L10.25 10.15M6.43 8.59H9.57" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /**
  * Render the read-only permission icon with a one-pixel stroke.
  * @param props - Size and optional class.
@@ -89,4 +98,22 @@ export function PermissionIconFullAccessRegular(props: IconProps): ReactNode {
  */
 export function PermissionIconFullAccessMedium(props: IconProps): ReactNode {
   return <FullAccessArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+}
+
+/**
+ * Render the auto-review permission icon with a one-pixel stroke.
+ * @param props - Size and optional class.
+ * @returns The regular decorative permission glyph.
+ */
+export function PermissionIconAutoReviewRegular(props: IconProps): ReactNode {
+  return <AutoReviewArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+}
+
+/**
+ * Render the auto-review permission icon with a 1.3px stroke.
+ * @param props - Size and optional class.
+ * @returns The medium decorative permission glyph.
+ */
+export function PermissionIconAutoReviewMedium(props: IconProps): ReactNode {
+  return <AutoReviewArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 }

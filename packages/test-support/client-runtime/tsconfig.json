@@ -28,6 +28,9 @@
       "path": "../../api/workspace-controller/tsconfig.client.json"
     },
     {
+      "path": "../../api/remote-access/tsconfig.client.json"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {
@@ -56,6 +59,9 @@
     },
     {
       "path": "../../client/ui-renderer"
+    },
+    {
+      "path": "../../client/ui-workspace"
     },
     {
       "path": "../../client/ui-session"

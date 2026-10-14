@@ -1,19 +1,22 @@
 /**
  * Adaptive chooser of the directory-picker seam: resolves the host's
- * situation once at boot (bind host, SSH launch, display session, Linux
- * chooser binary) and mounts the matching interaction — `native` or `browse`
- * — as real Loader entries in the in-memory root tree. Each interaction is a
- * pair: the Host backend serving the seam capability and the client surface
- * occupying ui-workspace's directory-flow holes. Both arrive as ordinary
- * entries, so the surface is discovered exactly as a config-row's would be
- * and one resolved choice still swaps both faces; pinning an interaction
- * remains composing that pair directly instead of this row.
+ * situation once at boot (remote-authority trust, bind host, SSH launch,
+ * display session, chooser binary) and mounts the matching interaction —
+ * `native` or `browse` — as real Loader entries in the in-memory root tree.
+ * Each interaction is a pair: the Host backend serving the seam capability and
+ * the client surface occupying ui-workspace's directory-flow holes. Both
+ * arrive as ordinary entries, so the surface is discovered exactly as a
+ * config-row's would be and one resolved choice still swaps both faces;
+ * pinning an interaction remains composing that pair directly instead of this
+ * row.
  * @module @deepseek-ai/dsh-host-directory-picker-auto
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-// Empty type imports carry the `loader` and `webServer` Context merges for the reads below.
+// Empty type imports carry the `connection`, `loader`, and `webServer` Context
+// merges for the reads below.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { launchedThroughSsh, launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { canExecute, hasLinuxChooserBinary } from './probe.ts'
@@ -26,8 +29,12 @@ export { resolveDirectoryPickerBackend } from './resolve.ts'
 
 /** Cordis plugin name. */
 export const name = 'directory-picker-auto'
-/** Required services: the effective bind host (`webServer`) and the entry tree the backend mounts into (`loader`). */
-export const inject = ['webServer', 'loader']
+/**
+ * Required services: HTTP deployment settings (`webServer`), the Connection
+ * trust policy (`connection`), and the entry tree the backend mounts into
+ * (`loader`).
+ */
+export const inject = ['webServer', 'connection', 'loader']
 
 /**
  * Host backend package per resolved kind — fixed composition vocabulary, not a
@@ -57,11 +64,12 @@ export const SURFACE_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
  * surface as Loader entries; the effect's disposer removes both entries and
  * joins their fibers' teardown, so unloading this plugin returns only after
  * both faces of the mounted interaction (and their dependents) quiesced.
- * @param ctx - cordis context carrying the injected `webServer` and `loader`.
+ * @param ctx - cordis context carrying the injected services.
  */
 export async function apply(ctx: Context): Promise<void> {
   const backend = resolveDirectoryPickerBackend({
     bindHost: ctx.webServer.host,
+    allowsRemoteAuthorities: ctx.connection.allowsRemoteAuthorities,
     platform: process.platform,
     ssh: launchedThroughSsh(launchEnvironmentOf(ctx)),
     env: process.env,

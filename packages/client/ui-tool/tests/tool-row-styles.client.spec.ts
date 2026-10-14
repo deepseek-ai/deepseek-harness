@@ -1,9 +1,4 @@
-/**
- * The one-line contract of the ToolRow summary line as CSS text. jsdom has no
- * layout, so the rendering specs (chat-tool-row.spec.tsx) can pin which spans
- * exist but not whether a narrow row still fits on one line; these read the
- * declarations the layout depends on.
- */
+/** Consumer-local command wrapping and collapsed summary declarations; jsdom has no layout. */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -12,14 +7,30 @@ const css = readFileSync(fileURLToPath(new URL('../src/client/tool/components/To
 /** Declarations only: the sheet's prose names the properties it explains. */
 const declarationText = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
 
-function declarations(selector: string): string[] {
+function declarations(selector: string, sheet = declarationText): string[] {
   // Anchored at a rule boundary: an unanchored match would silently read a
   // compound rule that merely contains the selector (`.root:hover .summarySuffix`)
   // if one ever lands above the base rule.
-  const rule = new RegExp(`(?:^|\\})\\s*\\${selector}\\s*\\{([^{}]*)\\}`).exec(declarationText)
-  if (rule === null) throw new Error(`ToolRow.module.css has no \`${selector}\` rule`)
+  const rule = new RegExp(`(?:^|\\})\\s*\\${selector}\\s*\\{([^{}]*)\\}`).exec(sheet)
+  if (rule === null) throw new Error(`Stylesheet has no \`${selector}\` rule`)
   return (rule[1] ?? '').split(';').map(part => part.trim()).filter(Boolean)
 }
+
+describe('expanded command wrapping', () => {
+  it.each([
+    ['../src/client/tool/toolviews/bash-sample.module.css', '.terminal', '--dsl-terminal-command-whitespace'],
+    ['../src/client/tool/toolviews/bash-sample.module.css', '.commandInput', '--dsl-command-whitespace'],
+    ['../src/client/tool/components/ToolRow.module.css', '.terminalBody', '--dsl-terminal-command-whitespace'],
+  ] as const)('%s opts %s into command wrapping only', (path, selector, property) => {
+    const sheet = readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    expect(declarations(selector, sheet)).toContain(`${property}: pre-wrap`)
+    expect(sheet).not.toContain('--dsl-terminal-line-whitespace')
+    expect(declarations('.summary', sheet)).toEqual(expect.arrayContaining([
+      'white-space: nowrap', 'overflow: hidden', 'text-overflow: ellipsis',
+    ]))
+  })
+})
 
 describe('ToolRow.module.css summary line', () => {
   it.each([

@@ -29,8 +29,8 @@ it('keeps active module order without a base URL and excludes inactive, disabled
     { id: 'last', name: 'cordis:last' },
   ])
   expect(activeCompositionModules(ctx.loader.root.tree)).toEqual([
-    { moduleName: 'cordis:first', entryId: 'first', useHostBase: true },
-    { moduleName: 'cordis:last', entryId: 'last', useHostBase: true },
+    { moduleName: 'cordis:first', useHostBase: true },
+    { moduleName: 'cordis:last', useHostBase: true },
   ])
 })
 

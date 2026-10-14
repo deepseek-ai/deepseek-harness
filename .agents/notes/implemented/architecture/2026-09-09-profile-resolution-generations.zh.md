@@ -107,7 +107,7 @@ runtime resolution 列出它提供的包；Loader entries 组成活动插件列�
 
 添加包的调用方先完成 pnpm 事务，再构造下一代。替换操作会拒绝改变任何保留包的目录或版本。Plugin Manager 先发布后继 generation，再挂载新的 Loader 配置项。挂载失败可以留下已安装但未启用的包。
 
-保留包的规范化目录、版本和作用域必须不变；安装条目还必须保留声明锚点，且不能移除。违反这些限制需要重启，因为 Node 的 ESM Module Map、CommonJS cache、现存对象引用和运行中的 Worker 都可能保留旧模块 identity。profile 条目可以改变声明锚点：取消选入最先找到共享依赖的组合包后，另一个组合包仍可能选中同一物理包。profile 范围的映射和 profile 本地包名可以移除；调用方在删除包文件之前先停止相关插件。这些限制不禁止从拦截范围移除 linked root。generation 换代不声称卸载模块。
+保留包的规范化目录、版本和作用域必须不变；安装条目还必须保留声明锚点，且不能移除。违反这些限制需要重启，因为 Node 的 ESM Module Map、CommonJS cache、现存对象引用和运行中的 Worker 都可能保留旧模块 identity。profile 条目可以改变声明锚点：取消选入最先找到共享依赖的组合包后，另一个组合包仍可能选中同一物理包。profile 范围的映射和 profile 本地包名可以移除；调用方在删除包文件之前先停止相关插件。profile 映射只能通过卸载和重新安装移到其他目录；linked root 可以指向其他目标（[替换 Note](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)）。这些限制不禁止从拦截范围移除 linked root。generation 换代不声称卸载模块。
 
 ### 文件系统与运行时载体
 

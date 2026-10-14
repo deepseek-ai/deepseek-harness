@@ -96,7 +96,7 @@ export interface ClientTransportHooks {
   /**
    * The transport owner declares the page owns the Host outright: the Host
    * runs inside a worker this page spawned, so no other party can reach it and
-   * the loopback stand-in for "the operator's own machine" is vacuous.
+   * the loopback stand-in for "the owner's own machine" is vacuous.
    * `ctx.connection.isLoopback` then reports the privileged surface reachable
    * regardless of the page authority. Only a shell that assembles its own
    * transport can set this; served pages never carry the global at all.

@@ -1,0 +1,12 @@
+# The Web account login scenario points the shipped account provider at a loopback
+# Platform double. The scenario substitutes {{origin}} after the listener binds,
+# so no port is ever committed here.
+- id: deepseek-account
+  config:
+    platformOrigin: "{{origin}}"
+    allowLoopbackHttp: true
+# The scenario signs in from the account menu after initial setup.
+- id: ui-settings-account
+  config:
+    step: done
+    completion: completed

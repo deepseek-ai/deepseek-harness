@@ -44,6 +44,8 @@ describe('PtcRuntime service seam', () => {
     expect(runtime.language).toBe('typescript')
     expect(runtime.isolation).toBe('in-process-stub')
     expect(runtime.sandboxMode).toBeUndefined()
+    expect(runtime.programFormat).toBe('function-body')
+    await expect(runtime.release({})).resolves.toBeUndefined()
 
     const calls: unknown[] = []
     const result = await runtime.run(runtime.resolve({

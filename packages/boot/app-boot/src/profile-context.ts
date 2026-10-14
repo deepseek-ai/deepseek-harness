@@ -2,7 +2,7 @@
 import { join } from 'node:path'
 import { composeEntries, loadProfileDirectory, PROFILE_PATCH_FILENAME, type Profile } from './profile.ts'
 import { loadOptionalPatches } from './index.ts'
-import { cloneProfilePatches, type ProfilePatch } from './profile-patches.ts'
+import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 
 /** Application-owned package manager executable; environment applies only to package operations. */
 export interface ProfilePnpmInvocation {
@@ -24,7 +24,7 @@ export interface ProfileContext {
   /** Bundle packages used to start this process, before any persisted edits. */
   readonly startedBundles: readonly string[]
   /** Parsed command-line overlays, applied above profile and home patches. */
-  readonly overlays: readonly ProfilePatch[]
+  readonly overlays: readonly PatchOptions[]
   /** Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out. */
   readonly telemetryDisabledEnv: string | undefined
 }
@@ -49,9 +49,20 @@ const TELEMETRY_ROW_ID = 'session-telemetry-otel'
  * @param hasRow - whether the composition carries the telemetry row.
  * @returns the disable patch, or `undefined` when no hard-disable patch is required.
  */
-export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): ProfilePatch | undefined {
+export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: boolean): PatchOptions | undefined {
   if ((disabledEnv ?? '') === '' || !hasRow) return undefined
   return { id: TELEMETRY_ROW_ID, disabled: true }
+}
+
+/** Read the selected bundles' patches, which apply before the profile patch file.
+ * @param binName Diagnostic prefix for malformed or missing configuration.
+ * @param context Data supplied by the profile launcher.
+ * @param initialProfile Already loaded startup profile; omitted reads the current files.
+ * @returns Bundle patches in application order.
+ */
+export function readBundlePatches(binName: string, context: ProfileContext, initialProfile?: Profile): PatchOptions[] {
+  const profile = initialProfile ?? loadProfileDirectory(binName, context.dir, context.installAnchor, { userLayer: false })
+  return profile.layers.flatMap(layer => layer.patches)
 }
 
 /** Read current bundle and user layers with the launch-time overlays.
@@ -60,10 +71,9 @@ export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: b
  * @param initialProfile Already loaded startup profile; omitted reads the current files.
  * @returns Detached ordered patches; this function does not update the Loader.
  */
-export function readProfilePatches(binName: string, context: ProfileContext, initialProfile?: Profile): ProfilePatch[] {
-  const profile = initialProfile ?? loadProfileDirectory(binName, context.dir, context.installAnchor, { userLayer: false })
-  const patches = cloneProfilePatches([
-    ...profile.layers.flatMap(layer => layer.patches),
+export function readProfilePatches(binName: string, context: ProfileContext, initialProfile?: Profile): PatchOptions[] {
+  const patches = structuredClone([
+    ...readBundlePatches(binName, context, initialProfile),
     ...(initialProfile?.patches ?? loadOptionalPatches(binName, context.patchPath) ?? []),
     ...(loadOptionalPatches(binName, join(context.home, PROFILE_PATCH_FILENAME)) ?? []),
     ...context.overlays,

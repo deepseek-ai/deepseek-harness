@@ -8,7 +8,7 @@ import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-ses
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
-  bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot as sessionFixture,
+  allowAllAccess, bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot as sessionFixture,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -223,6 +223,7 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
@@ -252,6 +253,7 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
@@ -279,6 +281,7 @@ function mount(
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
+          {...allowAllAccess}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
@@ -337,6 +340,7 @@ function mount(
       useSessionStatus,
       useSessionRetainInfo: () => undefined,
       useWorkspaces: bindSnapshotSelector(workspaces),
+      ...allowAllAccess,
       useProjection: (() => undefined),
       useComposerBlock: select => select(options.composerBlock),
       useInput,
@@ -367,6 +371,7 @@ function mount(
     useSessionRetainInfo: () => undefined,
     useResource,
     useWorkspaces: bindSnapshotSelector(workspaces),
+    ...allowAllAccess,
     useProjection: (() => undefined),
     useInput,
     inputActions,

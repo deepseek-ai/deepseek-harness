@@ -59,6 +59,8 @@ Popup selection panels fill the composer overlay's width, matching the slash men
 
 Each command-directory fetch requires an existing retained Client Session and waits for its initial history open to succeed before sending `commands.list`. A temporary `commandCatalog` reference holds that Session until the fetch settles. An unretained Session or a failed open rejects without sending the RPC, so background catalog refreshes do not reopen closed Sessions.
 
+Popup selection uses the [standard menu inset and item radii](../../../docs/ui-radius.md#nested-hover).
+
 </details>
 
 -----

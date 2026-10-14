@@ -21,11 +21,11 @@
   en: 2fdfe02f2ed4a258
   zh: d748228ece579c4a
 /deepseek-ai-dsh-app-boot/use-this-package/starting-the-app:
-  en: 1099528bde0e2aee
-  zh: b68772bdb9bb7856
+  en: 4a424cd401556f20
+  zh: 0b34dd18e0db6cea
 /deepseek-ai-dsh-app-boot/use-this-package/profiles:
-  en: 1db121100677e45f
-  zh: c6a8c6316020eb1b
+  en: d50b0fdaf62353dd
+  zh: 0fccb6968602e5de
 /deepseek-ai-dsh-app-boot/use-this-package/previewing-the-effective-configuration:
   en: 646a0ccdd7881ad1
   zh: e3696acb1573dd7b
@@ -33,38 +33,35 @@
   en: c4a301652b851ce9
   zh: 784871e19cd9db0a
 /deepseek-ai-dsh-app-boot/use-this-package/reading-plugin-display-metadata:
-  en: ebf6cb3960a5b378
-  zh: 41ba129a0f86c168
+  en: a9afb263b03d112c
+  zh: 31f5e797cd953c15
 /deepseek-ai-dsh-app-boot/use-this-package/startup-and-reload-failures:
-  en: b2e5cfdf8847d214
-  zh: 8d65771a3bd8a7c9
-/deepseek-ai-dsh-app-boot/use-this-package/telling-the-agent-where-the-harness-lives:
-  en: 07c459f26f4f8517
-  zh: 210f1e4894731b1a
+  en: dc13dfa1f79292e4
+  zh: d51682ced7a18ac2
 /deepseek-ai-dsh-app-boot/understand-the-implementation:
   en: f4a2695cb4c8a570
   zh: 89837235d2f376cf
 /deepseek-ai-dsh-app-boot/understand-the-implementation/design-notes:
-  en: 25a0d1b46fd66d68
-  zh: 5cd8b4ac382dccdc
+  en: 9ecb744556705fd1
+  zh: d83aaf2ebb91d0fc
 /deepseek-ai-dsh-app-boot/understand-the-implementation/helper-behavior:
-  en: f7bc3a8dd4b00bdd
-  zh: 30098428aa769ad0
+  en: 6fa850d1bb000d0e
+  zh: aa83a40a9d3db295
 /deepseek-ai-dsh-app-boot/understand-the-implementation/source-map:
-  en: 3da01827e3354655
-  zh: 06ccfaed83f65a76
+  en: 541700d5c39e0ab4
+  zh: 7522dbd9cd68c930
 /deepseek-ai-dsh-app-boot/further-exploration:
   en: 401269cc5ea8593e
   zh: cd337c356b320565
 /deepseek-ai-dsh-app-boot/model-experience:
-  en: 769777f1cb1a9408
-  zh: f02b2834179df50d
+  en: d2d0a21502d88c50
+  zh: 82a60c7a490a6834
 /deepseek-ai-dsh-app-boot/model-experience/kv-cache-effect:
-  en: c4d49630b68ae896
-  zh: 6f450ec6ba39bb81
+  en: 5a1d9344c8fdc790
+  zh: 0b32579f658b2ca1
 /deepseek-ai-dsh-app-boot/known-limitations-and-deferred-work:
-  en: bf1a49013cad8e9c
-  zh: 41b2b010f8650ec3
+  en: 1400c4f22a79b59a
+  zh: 269f6c91584aec3e
 /deepseek-ai-dsh-app-boot/known-limitations-and-deferred-work/dev-note:
   en: d2f0d68fe29fb750
   zh: 323d21ee73a9e3f6

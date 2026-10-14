@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-08-04-configuration-source-ownership.md) | 中文
 
-下文的非秘密 settings 层已由 [profile 所属实时配置](2026-09-19-profile-owned-live-configuration.zh.md) 替代。凭据优先级与环境限制仍然适用。
+下文的非秘密 settings 层已由 [profile 所属实时配置](2026-09-19-profile-owned-live-configuration.zh.md) 替代，凭据优先级已由[存储凭据优先级](2026-10-09-stored-credential-precedence.zh.md)替代。环境限制仍然适用。
 
 ## Problem
 

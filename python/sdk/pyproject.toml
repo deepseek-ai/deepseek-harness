@@ -22,7 +22,7 @@ Issues = "https://github.com/deepseek-ai/deepseek-harness/issues"
 Source = "https://github.com/deepseek-ai/deepseek-harness"
 
 [dependency-groups]
-test = ["pytest>=8.0"]
+test = ["pytest>=8.0", "Pillow==12.3.0"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

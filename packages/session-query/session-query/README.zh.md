@@ -31,7 +31,7 @@ kind: "package-reference"
 
 | 操作 | 你得到什么 |
 |---|---|
-| `listSessions()` | 每个逻辑会话，最新的在前，带 `live` 与 `persisted` 可用性标志 |
+| `listSessions()` | 每个逻辑会话，最新的在前，带 `live` 与 `persisted` 可用性标志及可选 `formatStatus` |
 | `readSession(id)` | 经过回放校验的完整原始事件日志，且不会让该会话变为实时 |
 | `filterSessions(filters)` | 匹配 AND 连接的元数据与可用性谓词的会话 |
 | `filterEvents(id, filters)` | 匹配元数据与字面文本谓词的语义事件文档 |

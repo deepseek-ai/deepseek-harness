@@ -42,7 +42,7 @@ function restore(bytes: Uint8Array | undefined) {
 }
 
 describe('Node preparation of Preview Session data', () => {
-  it('packs strictly migrated current successors beside every unchanged example file', () => {
+  it('packs current Sessions and migrated children beside every unchanged example file', () => {
     const fixture = previewFixtures(repoRoot)[0]!
     const original = packVfsOverlay(fixture.trees)
     const projected = packPreviewFixture(fixture.trees)
@@ -50,15 +50,13 @@ describe('Node preparation of Preview Session data', () => {
     expect(currentFiles).toHaveLength(3)
     for (const [path, bytes] of Object.entries(original.files)) expect(projected.files[path], path).toEqual(bytes)
     for (const path of currentFiles) {
-      const sourcePath = path.replace(/\/session\.v\d+\.jsonl$/u, '/session.v3.jsonl')
-      const historical = restore(original.files[sourcePath])
       const current = restore(projected.files[path])
-      const appended = path.includes('/preview-showcase/') ? [
-        { version: 0, childId: 'preview-architecture-review', childCreatedAt: 1787472100000, mode: 'one-shot', label: 'Review preview architecture' },
-        { version: 0, childId: 'preview-follow-up-builder', childCreatedAt: 1787472200000, mode: 'continuable', label: 'Continue preview verification' },
-      ].map((data, index) => ({ type: 'subagent/catalog', seq: historical.events.length + index,
-        time: historical.events.at(-1)!.time, data })) : []
-      expect(current).toEqual({ ...historical, events: [...historical.events, ...appended] })
+      if (original.files[path] !== undefined) {
+        expect(projected.files[path]).toEqual(original.files[path])
+      } else {
+        const sourcePath = path.replace(/\/session\.v\d+\.jsonl$/u, '/session.v3.jsonl')
+        expect(current).toEqual(restore(original.files[sourcePath]))
+      }
       expect(JSON.parse(text(projected.files[path]).split('\n')[0]!)).toMatchObject({ version: currentVersion })
     }
     expect(packPreviewFixture(fixture.trees).image).toEqual(projected.image)

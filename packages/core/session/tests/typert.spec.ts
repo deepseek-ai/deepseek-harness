@@ -15,6 +15,7 @@ describe('Session Typert provider', () => {
     expect(lookup).toMatchObject({
       parameter: 'session',
       wire: 'sessionId',
+      resource: 'session',
       hostTypeSymbol: '@deepseek-ai/dsh-session#Session',
       wireTypeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
     })

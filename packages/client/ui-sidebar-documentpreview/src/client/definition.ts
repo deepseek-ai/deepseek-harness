@@ -46,7 +46,8 @@ export function textDefinition(): SidebarRightTabDefinition {
   return {
     id: TEXTPREVIEW_ID,
     kind: TEXTPREVIEW_KIND,
-    patterns: ['dsh-resource://file/**'],
+    // A character-class repetition includes literal dot segments that globstar excludes.
+    patterns: ['dsh-resource://file/[\\s\\S]+'],
     priority: 'fallback',
     canOpen: address => parseFileAddress(address)?.scope === 'session',
     title: basenameOf,

@@ -10,7 +10,7 @@ import {
   SlotOwnershipError, StaleAuthorizationError, standardHookPropName,
   type ChainRenderOpts, type HostObservable, type KeyedStandardSource, type LocaleFace, type RenderFactorySlot, type RenderOpts,
   type ScopedStandardSourceBinding, type SessionAreaProps, type SessionProviderComponent, type SlotRenderer,
-  type SlotRendererHost, type SlotScope, type SlotScopeAdapter, type StandardSourceBinding,
+  type SlotEntryDef, type SlotRendererHost, type SlotScope, type SlotScopeAdapter, type SlotSpec, type StandardSourceBinding,
   type StoredEntry, type StoredFactory, type Translate,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -21,6 +21,7 @@ import {
 import { SlotAssemblyError } from './errors.ts'
 
 type InjectedProps = Record<string, unknown>
+type SlotAnchorTag = 'div' | 'span'
 
 type SlotHookFactory = (standard: InjectedProps, hookContext: unknown) => unknown
 type SlotHookFactories = Readonly<Record<string, SlotHookFactory>>
@@ -79,7 +80,7 @@ function boundRenderSlot(host: SlotRendererHost, entry: StoredEntry): RenderSlot
       if (declared.kind === 'chain') {
         throw new SlotOwnershipError(`slot '${key}' is declared 'chain' — use renderSlotChain`)
       }
-      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} />
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
     }
     renderSlotCache.set(entry, binding)
   }
@@ -108,7 +109,7 @@ function boundRenderSlotChain(host: SlotRendererHost, entry: StoredEntry): Rende
       if (declared.kind !== 'chain') {
         throw new SlotOwnershipError(`slot '${key}' is declared '${declared.kind}', not 'chain' — use renderSlot`)
       }
-      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} />
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
     }
     renderSlotChainCache.set(entry, binding)
   }
@@ -128,7 +129,7 @@ function boundFactoryRenderSlot(host: SlotRendererHost, definition: StoredFactor
     const declared = definition.children?.[key]
     if (declared === undefined) throw new SlotOwnershipError(`slot '${key}' is not declared by this Factory`)
     if (declared.kind === 'chain') throw new SlotOwnershipError(`slot '${key}' is declared 'chain' — use renderSlotChain`)
-    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} />
+    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
   }
   factoryRenderSlotCache.set(definition, binding)
   return binding
@@ -146,7 +147,7 @@ function boundFactoryRenderSlotChain(host: SlotRendererHost, definition: StoredF
     if (declared.kind !== 'chain') {
       throw new SlotOwnershipError(`slot '${key}' is declared '${declared.kind}', not 'chain' — use renderSlot`)
     }
-    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} />
+    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
   }
   factoryRenderSlotChainCache.set(definition, binding)
   return binding
@@ -402,7 +403,7 @@ function sessionGenerationKeyOf(binding: ScopedStandardSourceBinding): number {
  * the outlet then owns the crash face).
  */
 class SlotErrorBoundary extends Component<
-  { slotKey: string; onEntryError: (error: unknown) => void; children: ReactNode }, { failed: boolean }
+  { slotKey: string; anchor?: SlotAnchorTag; onEntryError: (error: unknown) => void; children: ReactNode }, { failed: boolean }
 > {
   override state = { failed: false }
   static getDerivedStateFromError(error: unknown): { failed: boolean } {
@@ -414,7 +415,8 @@ class SlotErrorBoundary extends Component<
     this.props.onEntryError(error)
   }
   override render(): ReactNode {
-    if (this.state.failed) return <div data-slot-error={this.props.slotKey} />
+    const Anchor = this.props.anchor ?? 'div'
+    if (this.state.failed) return <Anchor data-slot-error={this.props.slotKey} />
     return this.props.children
   }
 }
@@ -1024,8 +1026,9 @@ function FactoryOutlet({ name, inputProps, slots: selected = EMPTY_FACTORY_SELEC
   )
 }
 
-function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookContext, hasHookContext, onEntryError }: {
+function StrictSessionEntry({ slotKey, anchor, entry, ownerProps, slotInjected, hookContext, hasHookContext, onEntryError }: {
   slotKey: string
+  anchor: SlotAnchorTag
   entry: StoredEntry
   ownerProps: object
   slotInjected: BoundSlotInject
@@ -1041,7 +1044,7 @@ function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookCont
   // Per-session remount rides this key; per-entry remount rides the outer
   // element's entry-identity key (the outlet's guarded() call).
   return (
-    <SlotErrorBoundary slotKey={slotKey} key={sessionGenerationKeyOf(scopedBinding)} onEntryError={onEntryError}>
+    <SlotErrorBoundary slotKey={slotKey} anchor={anchor} key={sessionGenerationKeyOf(scopedBinding)} onEntryError={onEntryError}>
       <SessionEntry
         entry={entry}
         ownerProps={ownerProps}
@@ -1063,10 +1066,11 @@ function StrictSessionEntry({ slotKey, entry, ownerProps, slotInjected, hookCont
  */
 const ANCHOR_STYLE = { display: 'contents' } as const
 
-function SlotOutlet({ slotKey, ownerProps, opts }: {
+function SlotOutlet({ slotKey, ownerProps, opts, declaredInline }: {
   slotKey: string
   ownerProps: object
   opts?: (RenderOpts & ChainRenderOpts) | undefined
+  declaredInline: boolean
 }) {
   const host = useHost()
   // Version tick drives entries() re-read; the host batches per microtask.
@@ -1078,6 +1082,10 @@ function SlotOutlet({ slotKey, ownerProps, opts }: {
   // bodies re-derive their `t` seat at the new revision (fresh identity).
   useLocaleRevision(host.locale)
   const scopeBinding = useScopeBinding()
+  const spec = host.specOf(slotKey)
+  // Retained elements keep their declaration's anchor after unload, but never
+  // use that declaration to dispatch entries while the live spec is absent.
+  const Anchor = (spec === undefined ? declaredInline : spec.inline === true) ? 'span' : 'div'
   // Anchor contract: every slot render site exposes a stable
   // `[data-slot="<key>"]` wrapper — the addressable seam dynamic styles
   // target — and `display:contents` keeps it layout-neutral. The wrapper
@@ -1085,9 +1093,9 @@ function SlotOutlet({ slotKey, ownerProps, opts }: {
   // undeclared-empty states all render inside it, so the anchor's presence
   // never flickers with registration churn.
   return (
-    <div data-slot={slotKey} style={ANCHOR_STYLE}>
-      {renderOutletContent(host, slotKey, ownerProps, opts, scopeBinding)}
-    </div>
+    <Anchor data-slot={slotKey} style={ANCHOR_STYLE}>
+      {spec === undefined ? null : renderOutletContent(host, slotKey, ownerProps, opts, scopeBinding, spec)}
+    </Anchor>
   )
 }
 
@@ -1098,14 +1106,11 @@ function renderOutletContent(
   ownerProps: object,
   opts: (RenderOpts & ChainRenderOpts) | undefined,
   scopeBinding: StandardSourceBinding,
+  spec: SlotSpec<SlotEntryDef>,
 ): ReactNode {
-  const spec = host.specOf(slotKey)
-  // Undeclared (or no-longer-declared) keys render empty: a declaring entry's
-  // unload returns the slot to the undeclared state while retained elements
-  // may still be mounted — natural empty, not an ownership failure.
-  if (!spec) return null
+  const Anchor = spec.inline === true ? 'span' : 'div'
   if (spec.kind === 'chain' && opts?.fallbackOnly === true) {
-    return renderChainResult(slotKey, null, opts)
+    return renderChainResult(slotKey, null, opts, Anchor)
   }
   if (spec.scope === 'session' && scopeBinding.key === undefined) {
     throw new SlotAssemblyError(`strict session slot '${slotKey}' rendered without a scope binding`)
@@ -1130,6 +1135,7 @@ function renderOutletContent(
       ? (
         <StrictSessionEntry
           slotKey={slotKey}
+          anchor={Anchor}
           entry={entry}
           ownerProps={owner}
           slotInjected={slotInjected}
@@ -1140,7 +1146,7 @@ function renderOutletContent(
         />
       )
       : (
-        <SlotErrorBoundary slotKey={slotKey} key={key} onEntryError={onEntryError}>
+        <SlotErrorBoundary slotKey={slotKey} anchor={Anchor} key={key} onEntryError={onEntryError}>
           {spec.scope === 'session-maybe'
             ? (
               <SessionMaybeEntry
@@ -1168,7 +1174,7 @@ function renderOutletContent(
   // A cell whose every registration abdicated keeps the crash face: the
   // shadowing collapse ran out of survivors, which is a failure state, not
   // the owner's natural-empty fallback.
-  const deadCell = () => <div data-slot-error={slotKey} />
+  const deadCell = () => <Anchor data-slot-error={slotKey} />
 
   if (spec.kind === 'single') {
     const entry = host.entriesOfSlot(slotKey)[0]
@@ -1211,7 +1217,7 @@ function renderOutletContent(
         break
       }
     }
-    return renderChainResult(slotKey, elected, opts)
+    return renderChainResult(slotKey, elected, opts, Anchor)
   }
   // list: one row per id cell — the cell's shadowing winner, or the crash
   // face once every entry of the cell abdicated (a dry cell must not
@@ -1239,7 +1245,7 @@ function renderOutletContent(
     <>
       {list.map((item, i) => item.entry !== undefined
         ? guarded(item.entry, `e${entryKeyOf(item.entry)}`)
-        : <div data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
+        : <Anchor data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
     </>
   )
 }
@@ -1249,16 +1255,17 @@ function renderChainResult(
   slotKey: string,
   elected: ReactNode,
   opts: (RenderOpts & ChainRenderOpts) | undefined,
+  Anchor: SlotAnchorTag,
 ): ReactNode {
   if (!opts?.overlay) return elected ?? <>{opts?.fallback ?? null}</>
   return (
     <>
-      <div
+      <Anchor
         data-chain-overlay-fallback={slotKey}
         style={{ display: elected === null ? 'contents' : 'none' }}
       >
         {opts.fallback ?? null}
-      </div>
+      </Anchor>
       {elected}
     </>
   )

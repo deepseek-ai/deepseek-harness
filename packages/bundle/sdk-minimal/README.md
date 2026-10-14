@@ -1,5 +1,5 @@
 ---
-description: "Standalone SDK profile with a persistent shell and Session working-directory tool for a minimal cross-platform coding agent without the shared base bundle."
+description: "Standalone SDK profile with a persistent shell, image reading, automatic context compaction, and a Session working-directory tool for a minimal cross-platform coding agent without the shared base bundle."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit coding-agent runtime. By default, the profile advertises a platform-selected persistent shell and `working_directory`, persists sessions as uncompressed JSONL, and selects the model from the SDK initialization request. It supplies a complete Cordis tree and excludes `dsh-base`, Web, settings, managed credentials, telemetry, compaction, filesystem tools, workspace instructions, skills, jobs, and subagents. Its danger-full-access policy lets the shell modify any path available to the process, so use it only with an isolated workspace.
+Use `dsh --profile sdk-minimal` when an SDK client needs a small, explicit coding-agent runtime. By default, the profile advertises a platform-selected persistent shell, `read_image`, and `working_directory`, persists sessions as uncompressed JSONL, and selects the model from the SDK initialization request. It supplies a complete Cordis tree and excludes `dsh-base`, Web, settings, managed credentials, telemetry, text file tools, workspace instructions, skills, jobs, and subagents. Its danger-full-access policy lets the shell modify any path available to the process, so use it only with an isolated workspace.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ Use `dsh plugin --profile sdk-minimal` to manage persistent external dependencie
 
 The profile mounts exactly one persistent shell stack: Bash on Linux and macOS, or PowerShell on Windows. Both stacks use a 300-second timeout and one owner-scoped terminal; the other platform's rows remain disabled.
 
-Like every shipped profile, it mounts [MCP resources](../../mcp/mcp-resources/README.md) once. Configure only [MCP client entries](../../mcp/mcp-client/README.md) to add servers. Clients mounted by another provider also count as configured. With no server configured in the caller's scope, MCP contributes no prompt text or tools and the default remains the shell and `working_directory` tools.
+Like every shipped profile, it mounts [MCP resources](../../mcp/mcp-resources/README.md) once. Configure only [MCP client entries](../../mcp/mcp-client/README.md) to add servers. Clients mounted by another provider also count as configured. With no server configured in the caller's scope, MCP contributes no prompt text or tools and the default remains the shell, `read_image`, and `working_directory` tools.
 
 -----
 
@@ -48,7 +48,7 @@ Like every shipped profile, it mounts [MCP resources](../../mcp/mcp-resources/RE
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The bundle's single insert is the complete application tree: SDK stdio startup and JSON-RPC serving, one environment-configured DeepSeek adapter, the explicit agent core, conditional MCP resource tools, local filesystem and subprocess services, Session working-directory state and its tool, a platform-selected persistent shell PTY, and uncompressed JSONL persistence under `$DSH_HOME/sessions`. It does not inherit another bundle, so every extra row is an explicit profile change.
+The bundle's single insert is the complete application tree: SDK stdio startup and JSON-RPC serving, one environment-configured DeepSeek adapter, the explicit agent core, conditional MCP resource tools, local filesystem, image attachments, automatic context compaction, and subprocess services, Session working-directory state and its tool, a platform-selected persistent shell PTY, and uncompressed JSONL persistence under `$DSH_HOME/sessions`. It does not inherit another bundle, so every extra row is an explicit profile change.
 
 ### Source map
 
@@ -78,21 +78,23 @@ The bundle's single insert is the complete application tree: SDK stdio startup a
 
 #### What the model sees
 
-The system prompt is `DSH_SYSTEM_PROMPT` or `You are a helpful software engineer assistant.`. With no MCP server configured, the advertised tools are `working_directory` and owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows. Required user context supplies the current directory. Optional runtime context, filesystem tools, workspace instructions, skills, jobs controls, compaction, and Harness identity are absent.
+The system prompt is `DSH_SYSTEM_PROMPT` or `You are a helpful software engineer assistant.`. With no MCP server configured, the advertised tools are `read_image`, `working_directory`, and owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows. Required user context supplies the current directory. Optional runtime context, text file tools, workspace instructions, skills, jobs controls, and Harness identity are absent.
 
 #### Token effect
 
-By default, one stable persona, two tool schemas, and user context for the initial directory and subsequent changes. Configured MCP servers add their tools, shared resource tools, and available server instructions. Tool results and ordinary conversation history grow with the session.
+By default, one stable persona, three tool schemas, and user context for the initial directory and subsequent changes. Configured MCP servers add their tools, shared resource tools, and available server instructions. Images consume model input tokens. When images exceed the route budget, [image offload](../../compaction/compaction-image-offload/README.md) permanently replaces older image occurrences with attachment/path placeholders and retries the request or compaction summary. Automatic compaction sends an additional summarization request when context pressure reaches the configured threshold and replaces older model-visible history with its summary; the durable JSONL log retains those events.
 
 #### KV Cache effect
 
-Stable for a fixed persona, platform, provider, model, and bundle patch stack. Profile changes take effect on the next process.
+Stable for a fixed persona, platform, provider, model, and bundle patch stack. Compaction replaces part of the request history and can reduce cache reuse. Image offload also ends cache reuse at the first changed image. Profile changes take effect on the next process.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **The composition intentionally omits shared product services** — select `dsh --profile sdk` when settings, managed credentials, policy presets, telemetry, Web tools, or the full default tool roster are required.
+- **Image reading requires an image-capable model** — select a route whose adapter declares image input; text-only routes return a tool error. Images are stored under `$DSH_HOME/attachments/v1`.
+- **Compaction is automatic** — configure [compaction-basic](../../compaction/compaction-basic/README.md) through profile patches. SDK prompt text does not execute `/compact` or other slash commands.
 - **User patches can expand the tree and corrupt stdout** — profile customization is trusted application composition; a plugin that writes ordinary text to stdout can break JSON-RPC framing.
 
 <a id="dev-note"></a>

@@ -83,12 +83,13 @@ describe('experimental Inspector through a real Loader composition', () => {
       .find(entry => entry.options.name === '@deepseek-ai/dsh-experimental-inspector')
     expect(inspectorEntry?.disabled).toBe(false)
     expect(open).toHaveBeenCalledTimes(flag ? 1 : 0)
-    const api = (context.connection as HostConnectionService).createSharedFetchHandler('/api')
+    const connection = context.connection as HostConnectionService
+    const api = connection.createSharedFetchHandler('/api')
     expect(inspectorEntry?.fiber).toBeDefined()
     await vi.waitFor(async () => {
       expect((await context!.inspector.cordis.getTree()).host?.source.kind).toBe('host')
     })
-    const bootstrap = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`))
+    const bootstrap = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)
     expect(await bootstrap.json()).toHaveProperty('endpoint', expect.stringContaining('/ingest'))
 
     await inspectorEntry!.fiber!.dispose()

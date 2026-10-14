@@ -31,3 +31,13 @@
 
 - id: hmr
   disabled: true
+
+# One-shot jobs use launch-time credentials instead of the interactive store.
+- id: credentials
+  disabled: true
+
+- id: authorization
+  disabled: true
+
+- id: deepseek-account
+  disabled: true

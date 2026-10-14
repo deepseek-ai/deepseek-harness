@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-为 standard、cordis 和 ptc 添加实验性 Ralph 工具，使用新的子智能体执行用户要求的循环工作。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
+为所有智能体添加实验性 Ralph 全局工具，使用新的子智能体执行用户要求的循环工作。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-bundle"
 
 在 Web 或 Desktop 中打开插件页，在官方分组启用 **Ralph 循环**。关闭后移除其配置层。
 
-新智能体和随后重新打开的会话使用所选组合；正在运行的智能体保留已有插件。minimal 预设和 Host 层工具目录保持不变。
+启用或关闭组合包会在运行中的 Host 注册或移除其全局工具，因此所有预设（包括 minimal）中的每个智能体都会在下一次请求时看到变化。
 
 -----
 
@@ -37,7 +37,7 @@ kind: "package-bundle"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 通过 `preset: preset-standard`、`preset: preset-cordis` 和 `preset: preset-ptc`，在隔离的 `optional-ralph` 组中贡献 `tool-ralph`。后续作用域补丁可以替换该工具的配置或禁用它；单独的覆盖不会选中组合包。[配置组合器](../../boot/app-boot/README.zh.md) 负责补丁顺序和错误处理。
+[`cordis.patch.yml`](cordis.patch.yml) 插入 Host 组 `optional-ralph`，该组隔离自己的 `workflowEngine`，并在全局工具层注册 `tool-ralph`。后续配置补丁可以按条目 id 替换该工具的配置或禁用它；单独的覆盖不会选中组合包。[配置组合器](../../boot/app-boot/README.zh.md) 负责补丁顺序和错误处理。
 
 </details>
 
@@ -57,7 +57,7 @@ kind: "package-bundle"
 
 #### KV Cache 影响
 
-此配置层不直接添加请求内容；能力实现负责工具目录、提示和结果的缓存影响。
+此配置层不直接添加请求内容；能力实现负责工具目录、提示和结果的缓存影响。切换组合包会改变运行中会话的工具列表，使其已缓存的请求前缀失效一次。
 
 ## 已知限制与暂缓工作
 

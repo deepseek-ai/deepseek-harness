@@ -95,9 +95,7 @@ export class PermissionPresetSettingsController {
       state.error = null
     })
     await this.describeFace.ensure()
-    if (this.describeFace.getSnapshot().status !== 'unavailable') {
-      try { await this.catalog.load() } catch (error) { this.fail(error); return }
-    }
+    try { await this.catalog.load() } catch (error) { this.fail(error); return }
     this.derive()
   }
 
@@ -153,17 +151,6 @@ export class PermissionPresetSettingsController {
   private derive(): void {
     if (this.disposed || this.saving) return
     const mirrored = this.describeFace.getSnapshot()
-    if (mirrored.status === 'unavailable') {
-      // The terminal non-loopback state: this client keeps Host persistence disabled, so
-      // the row hides itself exactly like an unserved namespace.
-      this.store.update((state) => {
-        state.status = 'unavailable'
-        state.writable = false
-        state.currentValue = ''
-        state.options = []
-      })
-      return
-    }
     if (mirrored.view === undefined) {
       // A held failure with no answer is a failed row; without one the read
       // is still in flight and the row keeps its loading state.

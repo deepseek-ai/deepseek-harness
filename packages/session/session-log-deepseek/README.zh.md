@@ -39,7 +39,7 @@ Web **设置 → 通用 → 在使用官方模型 API 时上传 Session Log** �
 
 对于携带存活 `sessionId` 的请求，插件会折叠该确切会话格式代的最大已接受水位，对 `Session.events` 取快照，并发送水位之后能放进 `maxBytes` 的最长连续事件段。进程内 fold 会让每条事件只被扫描一次并增量消费后续追加；重启与 HMR（热模块替换）会从持久日志重建它。版本 1 字段包含 `sessionFormatVersion`、原始会话 header（仅 seeded Session 携带 `seedLength`）、数值型 `afterSeq` 与 `throughSeq`，以及每个已转换为原始数值 envelope 字段的完整规范事件。只有记录的会话 id 与格式代均匹配请求来源时水位才生效，因此 fork 会话会忽略从父会话继承的水位。表层事件必须携带 `surfaceOp`，替换范围使用数值型 `startSeq` 与 `endSeq`；仅 system、user 与 tool 事件可以携带 `sourceEventSeqs`。assistant 的提供方元数据保留在内嵌流中，只出现在日志中的事件不携带这两个元数据字段。
 
-`maxBytes` 按 UTF-8 字节限制完整的序列化字段，包括 header 与数值型 envelope 字段。超过上限的积压会分多次已接受的请求补传，每次都从上一次的 `throughSeq` 之后继续。第一条待发事件本身就超过上限时，请求会省略 `dsh_session_log`，插件记录一条告警，水位停在该事件之前，直到 `maxBytes` 能容纳它。运行时根本无法序列化的超大事件也按同样方式处理，且任何 `maxBytes` 都无法容纳它。
+`maxBytes` 按 UTF-8 字节限制完整的序列化字段，包括 header 与数值型 envelope 字段。超过上限的积压会分多次已接受的请求补传，每次都从上一次的 `throughSeq` 之后继续。第一条待发事件本身就超过上限时，请求会省略 `dsh_session_log`，插件对每个阻塞事件只记录一次告警，水位停在该事件之前，直到 `maxBytes` 能容纳它。运行时根本无法序列化的超大事件也按同样方式处理，且任何 `maxBytes` 都无法容纳它。
 
 <a id="acceptance-and-retry"></a>
 ## 接受与重试

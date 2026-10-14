@@ -105,6 +105,9 @@
       "path": "../../typert/protocol"
     },
     {
+      "path": "../remote-access/tsconfig.host.json"
+    },
+    {
       "path": "../../typert/registry"
     },
     {

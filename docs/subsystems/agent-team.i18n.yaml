@@ -6,11 +6,11 @@
   en: f571e223220bb616
   zh: dd7e37fdf359eeae
 /agent-teams/identity-and-roster:
-  en: c6e6d2add95df5e8
-  zh: 36c0b25c3f4eb80b
-/agent-teams/durable-mailbox:
-  en: 75fb392a6ccfbdf9
-  zh: f80678b84bd1ea47
+  en: df72d9409b89714d
+  zh: 982934dd18864ca2
+/agent-teams/messages-and-historical-mailbox:
+  en: 2aed7dd369f47747
+  zh: 4f080e50c584ad37
 /agent-teams/shared-task-dag:
   en: 4515005d07e4d2a3
   zh: 26811b31f69009d6
@@ -18,5 +18,5 @@
   en: 6af99eff8036597a
   zh: f172f994e01f12c1
 /agent-teams/replay:
-  en: 4adfd7bad5c0e302
-  zh: 2d71ba065f44f2a1
+  en: fe32f71c6d799ebc
+  zh: aa2b6ccddba8cfd5

@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { getEnvironmentData, setEnvironmentData } from 'node:worker_threads'
 import type { ModuleLoaderV1, ModuleLoaderV2, ResolveResult } from '@deepseek-ai/cordis-plugin-loader'
@@ -100,8 +100,13 @@ interface ParentRoutes {
 
 type ResolutionRoutes = Map<string, ParentRoutes | false>
 
+/** A published entry with the real directory its modules load from. */
+interface CompiledEntry extends RuntimeResolutionEntry {
+  readonly realDir: string
+}
+
 interface CompiledResolution {
-  readonly entries: ReadonlyMap<string, RuntimeResolutionEntry>
+  readonly entries: ReadonlyMap<string, CompiledEntry>
   readonly profilesDir: string
   readonly profileDir: string | undefined
   readonly profilePaths: readonly string[]
@@ -111,6 +116,15 @@ interface CompiledResolution {
   readonly localPackageNames: ReadonlySet<string>
   readonly esmRoutes: ResolutionRoutes
   readonly cjsRoutes: ResolutionRoutes
+}
+
+/** A successor resolution the running process cannot adopt, such as a retained mapping in another directory; it waits for a restart. */
+export class ResolutionRestartRequired extends Error {
+  /** @param message Diagnostic naming the rejected changes. */
+  constructor(message: string) {
+    super(message)
+    this.name = 'ResolutionRestartRequired'
+  }
 }
 
 /** Active interception in one Node isolate. */
@@ -125,13 +139,16 @@ export interface RuntimeInterception {
   packageDir(specifier: string, parentURL: string): string | undefined
   /**
    * Atomically publish a complete successor and fresh caches. Profile-scoped mappings, local names, and linked
-   * roots may be removed; removed roots stop intercepting uncovered directories. Existing modules and Node caches
-   * remain intact, so callers remove a package only after its plugins stop.
-   * A retained profile mapping may change its declarer if its normalized directory, version, and scope stay unchanged.
+   * roots may be removed; removed roots stop intercepting uncovered directories. A retained profile mapping may
+   * change its version and declarer when its normalized directory and scope stay unchanged, as when a package is
+   * upgraded in place. Existing modules and Node caches remain intact: callers remove a package only after its
+   * plugins stop, and replace the loaded modules of a package upgraded in place separately.
+   * A previously published link name may point to another real directory; callers stop the plugins of its previous
+   * target first, as removing and installing the package again does.
    * @param successor - fully constructed generation retaining the installation mappings.
-   * @throws when the profile scope, a retained directory, version, scope, or installation declarer changes;
-   * an installation mapping is removed; a new local name overrides an existing mapping; or a previously published
-   * link name selects a different real directory.
+   * @throws when the profile scope changes; and `ResolutionRestartRequired` when a retained profile mapping's real
+   * directory or scope, or an installation version or declarer changes; an installation mapping is removed; or a new
+   * local name overrides an existing mapping.
    */
   replace(successor: RuntimeResolution): void
   /** Restore the native resolver methods. Interceptions dispose in reverse order. */
@@ -153,6 +170,18 @@ export function barePackageName(request: string): string | undefined {
   return second < 0 ? request : request.slice(0, second)
 }
 
+/** The JavaScript and native real paths of an existing directory; none for a directory that no longer exists. */
+function realSpellings(path: string): string[] {
+  try {
+    // A packed worker's file system has no native realpath.
+    const native: unknown = Reflect.get(realpathSync, 'native')
+    return [realpathSync(path), ...typeof native === 'function' ? [String(Reflect.apply(native, realpathSync, [path]))] : []]
+  } catch (_error) {
+    // A removed previous directory keeps only its recorded spelling.
+    return []
+  }
+}
+
 function canonicalPath(path: string): string {
   try {
     return realpathSync(path)
@@ -170,7 +199,7 @@ function prefixes(path: string): readonly string[] {
 
 function compileResolution(resolution: RuntimeResolution): CompiledResolution {
   return {
-    entries: new Map(resolution.entries.map(entry => [entry.name, entry])),
+    entries: new Map(resolution.entries.map(entry => [entry.name, { ...entry, realDir: canonicalPath(entry.packageDir) }])),
     profilesDir: resolution.profilesDir,
     profileDir: resolution.profileDir,
     profilePaths: prefixes(resolution.profilesDir),
@@ -363,10 +392,75 @@ function sameResolution(left: string, right: string): boolean {
   return canonicalPath(left) === canonicalPath(right)
 }
 
+/** A directory as given and in its JavaScript and native real paths, each with a trailing separator. */
+function spellings(dir: string): string[] {
+  const result = new Set([dir + sep])
+  for (const real of realSpellings(dir)) result.add(real + sep)
+  return [...result]
+}
+
+/**
+ * The previous real directories of packages that moved, each mapped to the current one. Node keeps the real path of
+ * every link it resolved through and never refreshes it, so a lookup through a link that now points elsewhere still
+ * selects a file below the target Node saw first; {@link MovedDirectories.relocate} selects the same file below the
+ * current target instead.
+ */
+class MovedDirectories {
+  /** Previous directory to current directory, both with a trailing separator. */
+  private readonly targets = new Map<string, string>()
+
+  /**
+   * Record that a package moved from one directory to another. Every spelling of the previous directory leads to the
+   * current one. A directory that an earlier move led to the previous one now leads to the current one as well, since
+   * Node still selects files below the earliest target.
+   * @param from Previous real directory.
+   * @param to Current real directory.
+   */
+  record(from: string, to: string): void {
+    const previous = spellings(from)
+    const current = to + sep
+    for (const [key, value] of this.targets) {
+      if (previous.includes(value)) this.targets.set(key, current)
+    }
+    for (const key of previous) this.targets.set(key, current)
+  }
+
+  /**
+   * Forget the previous directories that are current again, in any spelling, and records that lead to themselves.
+   * @param current The real directories the published resolution maps.
+   */
+  forget(current: readonly string[]): void {
+    const active = new Set<string>()
+    for (const dir of current) for (const spelling of spellings(dir)) active.add(spelling)
+    for (const [key, value] of [...this.targets]) {
+      if (active.has(key) || key === value) this.targets.delete(key)
+    }
+  }
+
+  /**
+   * The same file below the current directory when it exists, for a file below a previous directory that an importer
+   * outside that directory selected. An importer inside the previous directory keeps its own package's files. The
+   * innermost previous directory decides.
+   * @param filename Selected file.
+   * @param parent Importer path.
+   * @returns The file to load.
+   */
+  relocate(filename: string, parent: string | undefined): string {
+    let from = ''
+    for (const dir of this.targets.keys()) {
+      if (filename.startsWith(dir) && dir.length > from.length) from = dir
+    }
+    if (from === '' || parent?.startsWith(from) === true) return filename
+    const relocated = (this.targets.get(from) as string) + filename.slice(from.length)
+    return existsSync(relocated) ? relocated : filename
+  }
+}
+
 /** One mutable pointer to the immutable runtime resolution. */
 class ResolutionRouter {
   private current: CompiledResolution
-  private readonly linkedTargets: Map<string, string>
+  private linkedTargets: Map<string, string>
+  private readonly moved = new MovedDirectories()
 
   constructor(resolution: RuntimeResolution, private readonly nodeModulePaths: (directory: string) => string[]) {
     this.current = compileResolution(resolution)
@@ -379,35 +473,62 @@ class ResolutionRouter {
       || successor.profileDir !== this.current.profileDir) {
       throw new Error('profile resolution: a successor cannot change its profile scope')
     }
+    const rejected: string[] = []
+    const moves: [string, string][] = []
     for (const [name, current] of this.current.entries) {
       const next = entries.get(name)
       if (next === undefined && current.scope === 'profile') continue
+      if (next !== undefined && current.scope === 'profile' && next.scope === 'profile') {
+        // Real directories are compared: a link keeps its path when its target changes.
+        if (current.realDir === canonicalPath(next.packageDir)) continue
+        rejected.push(`profile resolution: replacing ${JSON.stringify(name)} requires a process restart`)
+        continue
+      }
       if (next === undefined
         || !sameResolution(current.packageDir, next.packageDir)
         || (current.scope === 'installation' && !sameResolution(current.declarer, next.declarer))
-        || current.version !== next.version
+        || (current.scope === 'installation' && current.version !== next.version)
         || current.scope !== next.scope) {
-        throw new Error(`profile resolution: replacing ${JSON.stringify(name)} requires a process restart`)
+        rejected.push(`profile resolution: replacing ${JSON.stringify(name)} requires a process restart`)
       }
     }
     const localPackageNames = new Set(successor.localPackageNames)
     for (const name of localPackageNames) {
       if (!this.current.localPackageNames.has(name) && this.current.entries.has(name)) {
-        throw new Error(`profile resolution: overriding ${JSON.stringify(name)} locally requires a process restart`)
+        rejected.push(`profile resolution: overriding ${JSON.stringify(name)} locally requires a process restart`)
       }
     }
-    // Node retains realpath caches after a root leaves the interception scope.
-    for (const root of successor.linkedRoots) {
-      const previous = this.linkedTargets.get(root.name)
-      if (previous !== undefined && !sameResolution(previous, root.realPath)) {
-        throw new Error(`profile resolution: relinking ${JSON.stringify(root.name)} requires a process restart`)
-      }
+    // A link name pointing elsewhere, or installed again as a directory, moves its package. Names whose link and mapping
+    // are gone stay recorded, so the package that returns under the name is compared with its last target.
+    const targets = new Map(this.linkedTargets)
+    for (const [name, previous] of this.linkedTargets) {
+      const root = successor.linkedRoots.find(candidate => candidate.name === name)
+      const entry = entries.get(name)
+      const target = root?.realPath ?? (entry?.scope === 'profile' ? canonicalPath(entry.packageDir) : undefined)
+      if (target === undefined || sameResolution(previous, target)) continue
+      moves.push([previous, target])
+      targets.set(name, target)
     }
+    if (rejected.length > 0) throw new ResolutionRestartRequired(rejected.join('; '))
     const next = compileResolution(successor)
-    for (const { name, realPath } of successor.linkedRoots) {
-      if (!this.linkedTargets.has(name)) this.linkedTargets.set(name, realPath)
-    }
+    for (const { name, realPath } of successor.linkedRoots) targets.set(name, realPath)
+    this.linkedTargets = targets
+    for (const [from, to] of moves) this.moved.record(from, to)
+    const current: string[] = []
+    for (const entry of next.entries.values()) current.push(entry.realDir)
+    for (const root of successor.linkedRoots) current.push(root.realPath)
+    this.moved.forget(current)
     this.current = next
+  }
+
+  /**
+   * The file to load instead of one Node selected through a link that has moved since; see {@link MovedDirectories}.
+   * @param filename Selected file.
+   * @param parent Importer path.
+   * @returns The file to load.
+   */
+  relocate(filename: string, parent: string | undefined): string {
+    return this.moved.relocate(filename, parent)
   }
 
   /** Whether a module path has an interception layer: it lies in the profiles tree, the active profile, or a linked root. */
@@ -764,7 +885,21 @@ export function installRuntimeInterception(
         delegatedEsm = previous
       }
     }
-    return adapted
+    // Node's last real-path step, for routed and native requests alike, may follow a link it resolved earlier.
+    const relocate = (result: ResolveResult, parent: string | undefined): ResolveResult => {
+      if (!result.url.startsWith('file:')) return result
+      const url = new URL(result.url)
+      const filename = fileURLToPath(url)
+      const relocated = router.relocate(filename, parent?.startsWith('file:') === true ? fileURLToPath(parent) : undefined)
+      if (relocated === filename) return result
+      url.pathname = pathToFileURL(relocated).pathname
+      return { ...result, url: url.href }
+    }
+    return (request, parent, attributes) => {
+      const result = adapted(request, parent, attributes)
+      /* v8 ignore next -- Node 24+ resolves synchronously; the Node 22 matrix covers its Promise result */
+      return result instanceof Promise ? result.then(resolved => relocate(resolved, parent)) : relocate(result, parent)
+    }
   }
 
   let restoreEsm: () => void
@@ -904,7 +1039,11 @@ export function installRuntimeInterception(
       delegatedCjs--
     }
   }
-  cjs._resolveFilename = wrappedFilename
+  const relocatedFilename: CommonJsModule['_resolveFilename'] = (request, parent, main, options) => {
+    const filename = wrappedFilename(request, parent, main, options)
+    return isAbsolute(filename) ? router.relocate(filename, parent?.filename ?? undefined) : filename
+  }
+  cjs._resolveFilename = relocatedFilename
 
   return {
     packageDir(specifier, parentURL) {
@@ -913,7 +1052,7 @@ export function installRuntimeInterception(
     replace(next) { router.replace(next) },
     dispose() {
       /* v8 ignore else -- interceptions are disposed in reverse installation order */
-      if (cjs._resolveFilename === wrappedFilename) cjs._resolveFilename = originalFilename
+      if (cjs._resolveFilename === relocatedFilename) cjs._resolveFilename = originalFilename
       restoreEsm()
     },
   }

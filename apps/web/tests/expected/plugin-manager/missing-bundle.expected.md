@@ -1,4 +1,4 @@
-- button "返回插件列表": 插件列表
+- button "返回插件": 插件
 - button "卸载 @fixture/missing-bundle": 卸载
 - switch "启用 @fixture/missing-bundle" [checked]
 - heading "@fixture/missing-bundle" [level=3]

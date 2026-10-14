@@ -15,6 +15,7 @@
 type CredentialRef = Branded<'CredentialRef'>
 ```
 
+<a id="resolution"></a>
 ## 解析
 
 `resolve(ref)` 返回值及提供该值的来源层（由提供方定义）；未配置期间返回 `undefined`。消费方在每个操作中重新解析，绝不跨操作缓存——这种按操作进行的读取正是热更新机制。
@@ -31,7 +32,7 @@ interface ResolvedCredential {
 
 ## 描述
 
-`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。本地提供方把由当前进程环境供值的引用报告为 `writable: false`——那样的写入会表面成功而解析持续返回遮蔽值，因此 seam 直接拒绝，界面也得以提前把该引用渲染为只读。
+`describe(ref)` 在绝不暴露值的前提下回应配置界面：引用当前是否可解析、来自哪一层、`set` 当前能否成功。本地提供方将其管理的文件排在启动环境之前，因此保存值总会成为生效且可写的那一层；移除后会重新使用启动环境或 `.env` 后备值。
 
 ```ts type-equiv
 /**
@@ -136,7 +137,7 @@ Source: [`packages/credentials/authorization/src/index.ts`](../../packages/crede
 
 Abstract credential service over two key spaces that answer two questions.
 
-A CredentialRef answers "what is behind this environment-variable name", layered over the process environment, the provider-managed store, and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
+A CredentialRef answers "what is behind this environment-variable name": the provider-managed store first, then ambient fallbacks such as the process environment and `.env` files. One seam-wide rule binds that half: an empty stored value is absent everywhere — `resolve` skips it, `describe` reports it unconfigured — so a blank never masquerades as a configured secret.
 
 A CredentialKey answers "what credential does this plugin hold for this id". Nothing can layer here — an authorization grant has no environment to be read from — so presence of the record is the whole fact, and modifyRecord is the only write path because a correct write depends on the current value (a token refresh is read-decide-replace under one lock).
 
@@ -160,10 +161,9 @@ abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 abstract describe(ref: CredentialRef): Promise<CredentialInfo>
 
 /**
- * Durably store one value in the provider-managed writable source. Rejects
- * while a read-only source shadows the reference — the write would appear
- * to succeed while resolution keeps returning the shadowing value — and
- * rejects an empty value (use {@link unset}).
+ * Durably store one value in the provider-managed writable source. The stored
+ * value takes precedence over ambient fallbacks, and empty values are
+ * rejected (use {@link unset}).
  * @param ref - the reference to store.
  * @param value - the non-empty secret value.
  */
@@ -171,8 +171,8 @@ abstract set(ref: CredentialRef, value: string): Promise<void>
 
 /**
  * Remove one reference from the provider-managed writable source; removing
- * an absent reference is a no-op. Rejects while a read-only source shadows
- * the reference, like {@link set}.
+ * an absent reference is a no-op. Ambient fallback layers may become
+ * effective again after removal.
  * @param ref - the reference to remove.
  */
 abstract unset(ref: CredentialRef): Promise<void>

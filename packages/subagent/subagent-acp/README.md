@@ -29,7 +29,7 @@ Mount this provider when a composition needs a fully isolated, out-of-process ch
 
 ### When to choose it
 
-Choose this backend when the child must run with its own runtime, model, and tools in a separate process — for example an ACP agent from another project — or when you want delegation that cannot touch the parent harness. Choose an in-process backend when the child must share the parent's composition or honor parent-enforced capabilities: this provider advertises no optional start-time capabilities, so the seam rejects requests for `agentOptions`, structured output, depth caps, tool filters, or personas rather than silently omitting them.
+Choose this backend when the child must run with its own runtime, model, and tools in a separate process — for example an ACP agent from another project — or when you want delegation that cannot touch the parent harness. Choose an in-process backend when the child must share the parent's composition or honor parent-enforced capabilities: this provider advertises no optional start-time capabilities, so the seam rejects requests for `agentPreset`, `agentOptions`, structured output, or depth caps rather than silently omitting them.
 
 ### Configuration
 
@@ -124,7 +124,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The remote child receives the standalone task content through ACP plus its own process's configured system prompt, tools, and fresh session. It receives no parent conversation. This provider advertises no optional start-time capabilities, so the local service rejects requests for `agentOptions`, persona, tool filtering, depth enforcement, or structured output instead of silently omitting them.
+The remote child receives the standalone task content through ACP plus its own process's configured system prompt, tools, and fresh session. It receives no parent conversation. This provider advertises no optional start-time capabilities, so the local service rejects requests for `agentPreset`, `agentOptions`, depth enforcement, or structured output instead of silently omitting them.
 
 #### Token effect
 
@@ -157,7 +157,7 @@ These limits define when this backend is a poor fit or needs special operational
 
 - **A fresh process per run** — there is no process pooling; each delegation pays the full spawn and ACP handshake cost.
 - **Local workspaces only** — the resolved working directory is a local path handed to a child on the same machine; remote workspace mapping is not designed.
-- **No optional start-time capabilities** — this provider cannot apply `agentOptions`, `outputSchema`, a depth cap, a tool filter, or a persona inside the remote process, so the seam rejects requests that require them.
+- **No optional start-time capabilities** — this provider cannot apply `agentPreset`, `agentOptions`, `outputSchema`, or a depth cap inside the remote process, so the seam rejects requests that require them.
 - **Only committed `agent_message_chunk` text is collected** — the automation server keeps reasoning, tool activity, plans, and other trace data in the child session log rather than emitting them on ACP.
 - **Permission prompts are auto-answered** (`permission: allow | reject`) — no human is surfaced a child's `session/request_permission`.
 

@@ -3,11 +3,11 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessOutcome, SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
 import { BrowserTerminal } from '../src/terminal.ts'
+import { inputChannel } from './input.ts'
 import { TerminalFollower } from '../src/stream.ts'
-import type { TerminalAttachmentId, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
+import type { TerminalInput, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
 const info: WebTerminalInfo = { id: 'terminal-test' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null }
-const attachment = (id: string): TerminalAttachmentId => id as TerminalAttachmentId
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(close => close())) })
 
@@ -26,12 +26,14 @@ function fixture() {
   return { terminal, output, outcome, handle }
 }
 
-async function attach(terminal: BrowserTerminal, id = 'first') {
+async function attach(terminal: BrowserTerminal) {
   const controller = new AbortController()
-  const iterator = terminal.follow(attachment(id), controller.signal)[Symbol.asyncIterator]()
+  const input = inputChannel<TerminalInput>()
+  const frames = terminal.attach(input.source, { maxInputBytes: 1000, maxCols: 200, maxRows: 100 }, controller.signal)
+  const iterator = frames[Symbol.asyncIterator]()
   const baseline = await readFrame(iterator)
   cleanups.push(async () => { controller.abort(); await iterator.return?.() })
-  return { controller, iterator, baseline }
+  return { controller, iterator, baseline, input }
 }
 
 describe('BrowserTerminal', () => {
@@ -46,33 +48,13 @@ describe('BrowserTerminal', () => {
     expect(handle.terminate).not.toHaveBeenCalled()
     output.write(Buffer.from('world'))
     await expect.poll(() => terminal.info.state).toBe('running')
-    const second = await attach(terminal, 'second')
+    const second = await attach(terminal)
     // The baseline and its output queue share the same ordered screen write queue.
     const frames = [second.baseline]
     if (second.baseline.type === 'snapshot' && !second.baseline.screen.includes('world')) frames.push(await readFrame(second.iterator))
     expect(JSON.stringify(frames)).toContain('world')
     expect(JSON.stringify(frames)).toContain('hello')
     expect(handle.terminate).not.toHaveBeenCalled()
-  })
-
-  it('preserves split UTF-8, gives the newest attachment input, and resizes both PTY and recovery screen', async () => {
-    const { terminal, output, handle } = fixture()
-    const first = await attach(terminal)
-    const encoded = Buffer.from('终端')
-    output.write(encoded.subarray(0, 2))
-    await expect.poll(() => output.readableLength).toBe(0)
-    output.write(encoded.subarray(2))
-    expect(await readFrame(first.iterator)).toMatchObject({ type: 'output', data: '终端' })
-    const second = await attach(terminal, 'second')
-    await expect(terminal.write(attachment('first'), 'ignored')).rejects.toMatchObject({ code: 'terminal/control-unavailable', details: { reason: 'read-only' } })
-    await terminal.write(attachment('second'), '\t')
-    expect(handle.write).toHaveBeenCalledWith('\t')
-    await terminal.resize(attachment('second'), 100, 30)
-    expect(handle.resize).toHaveBeenCalledWith(100, 30)
-    expect(terminal.info).toMatchObject({ cols: 100, rows: 30 })
-    second.controller.abort()
-    await second.iterator.return?.()
-    expect(terminal.info.controllerId).toBeUndefined()
   })
 
   it('keeps exit facts and screen until explicit cleanup and never starts a replacement process', async () => {
@@ -83,7 +65,7 @@ describe('BrowserTerminal', () => {
     expect(await readFrame(first.iterator)).toMatchObject({ type: 'output', data: 'done' })
     expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', info: { state: 'exited', exitCode: 7 } })
     expect(handle.terminate).not.toHaveBeenCalled()
-    const second = await attach(terminal, 'second')
+    const second = await attach(terminal)
     expect(second.baseline).toMatchObject({ type: 'snapshot', info: { state: 'exited', exitCode: 7 } })
     await terminal.close()
     expect(handle.terminate).toHaveBeenCalledOnce()
@@ -102,72 +84,6 @@ describe('BrowserTerminal', () => {
     expect((await first.iterator.next()).done).toBe(true)
   })
 
-  it('rejects input before attachment, during close and after process exit', async () => {
-    const { terminal, handle, output, outcome } = fixture()
-    await expect(terminal.write(attachment('first'), 'ignored')).rejects.toMatchObject({ code: 'terminal/control-unavailable', details: { reason: 'read-only' } })
-    const first = await attach(terminal)
-    output.end()
-    outcome.resolve({ exitCode: 0, signal: null })
-    expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', info: { state: 'exited' } })
-    await expect(terminal.write(attachment('first'), 'ignored')).rejects.toMatchObject({ code: 'terminal/control-unavailable', details: { reason: 'not-running' } })
-    await expect(terminal.resize(attachment('first'), 100, 30)).rejects.toMatchObject({ code: 'terminal/control-unavailable', details: { reason: 'not-running' } })
-    const closing = terminal.close()
-    await expect(terminal.write(attachment('first'), 'ignored')).rejects.toMatchObject({ code: 'terminal/control-unavailable', details: { reason: 'not-running' } })
-    await closing
-    expect(handle.write).not.toHaveBeenCalled()
-    expect(handle.resize).not.toHaveBeenCalled()
-  })
-
-  it('preserves the input controller when an older follower detaches', async () => {
-    const { terminal, handle } = fixture()
-    const first = await attach(terminal)
-    const second = await attach(terminal, 'second')
-    first.controller.abort()
-    await first.iterator.return?.()
-    expect(terminal.info.controllerId).toBe(attachment('second'))
-    terminal.rename('build output')
-    expect(await readFrame(second.iterator)).toMatchObject({ type: 'state', info: { title: 'build output', controllerId: 'second' } })
-    await terminal.write(attachment('second'), 'pwd\r')
-    expect(handle.write).toHaveBeenCalledWith('pwd\r')
-  })
-
-  it('does not grant input to attachments cancelled before their snapshot is ready', async () => {
-    const { terminal, handle } = fixture()
-    const aborted = new AbortController()
-    aborted.abort(new Error('already detached'))
-    await expect(terminal.follow(attachment('cancelled'), aborted.signal)[Symbol.asyncIterator]().next()).rejects.toThrow('already detached')
-    await attach(terminal)
-    const writing = Promise.withResolvers<undefined>()
-    const written = Promise.withResolvers<undefined>()
-    handle.write.mockImplementationOnce(async () => { writing.resolve(undefined); await written.promise })
-    const pendingWrite = terminal.write(attachment('first'), 'pwd\r')
-    try {
-      await writing.promise
-      const abort = new AbortController()
-      const pendingAttachment = terminal.follow(attachment('late'), abort.signal)[Symbol.asyncIterator]().next()
-      const rejected = expect(pendingAttachment).rejects.toThrow('detached while waiting')
-      abort.abort(new Error('detached while waiting'))
-      written.resolve(undefined)
-      await pendingWrite
-      await rejected
-      expect(terminal.info.controllerId).toBe(attachment('first'))
-    } finally { written.resolve(undefined) }
-  })
-
-  it('continues accepting operations after a provider write or resize fails', async () => {
-    const { terminal, handle } = fixture()
-    await attach(terminal)
-    handle.write.mockRejectedValueOnce(new Error('input transport failed'))
-    handle.resize.mockRejectedValueOnce(new Error('resize transport failed'))
-    await expect(terminal.write(attachment('first'), 'failed')).rejects.toThrow('input transport failed')
-    await expect(terminal.resize(attachment('first'), 100, 30)).rejects.toThrow('resize transport failed')
-    expect(terminal.info).toMatchObject({ cols: 80, rows: 24 })
-    await terminal.write(attachment('first'), 'accepted')
-    await terminal.resize(attachment('first'), 90, 25)
-    expect(handle.write).toHaveBeenLastCalledWith('accepted')
-    expect(terminal.info).toMatchObject({ cols: 90, rows: 25 })
-  })
-
   it.each([new Error('process wait failed'), 'remote process wait failed'])('publishes a failed process outcome and retains its recovery screen: %s', async (failure) => {
     const { terminal, output, outcome } = fixture()
     const first = await attach(terminal)
@@ -175,7 +91,7 @@ describe('BrowserTerminal', () => {
     outcome.reject(failure)
     expect(await readFrame(first.iterator)).toMatchObject({ type: 'output', data: 'last output' })
     expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', info: { state: 'failed', error: failure instanceof Error ? failure.message : failure } })
-    const second = await attach(terminal, 'second')
+    const second = await attach(terminal)
     expect(second.baseline).toMatchObject({ type: 'snapshot', screen: 'last output', info: { state: 'failed' } })
   })
 
@@ -205,12 +121,13 @@ describe('BrowserTerminal', () => {
 
   it('shares concurrent close attempts and permits retry after termination fails', async () => {
     const { terminal, handle } = fixture()
-    await attach(terminal)
+    const view = await attach(terminal)
     handle.terminate.mockRejectedValueOnce(new Error('process range remains alive'))
     const first = terminal.close()
     expect(terminal.close()).toBe(first)
     await expect(first).rejects.toThrow('remains alive')
-    await terminal.write(attachment('first'), 'retry cleanup next')
+    view.input.push({ type: 'write', sequence: 1, data: 'retry cleanup next' })
+    expect(await readFrame(view.iterator)).toMatchObject({ type: 'ack', sequence: 1 })
     await terminal.close()
     expect(handle.terminate).toHaveBeenCalledTimes(2)
   })
@@ -233,4 +150,182 @@ it('refuses retention before allocation commit and disposes an uncommitted scree
   expect(() => terminal.retain(new AbortController().signal)).toThrow('not been committed')
   await terminal.dispose()
   expect(handle.terminate).toHaveBeenCalledOnce()
+})
+
+it('preserves split UTF-8 and gives input control only to the newest attachment', async () => {
+  const { terminal, output, handle } = fixture()
+  const first = await attach(terminal)
+  const encoded = Buffer.from('终端')
+  output.write(encoded.subarray(0, 2))
+  await expect.poll(() => output.readableLength).toBe(0)
+  output.write(encoded.subarray(2))
+  expect(await readFrame(first.iterator)).toMatchObject({ type: 'output', data: '终端' })
+  const second = await attach(terminal)
+  expect(second.baseline).toMatchObject({ writable: true })
+  expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', writable: false })
+  first.input.push({ type: 'write', sequence: 1, data: 'refused' })
+  expect(await readFrame(first.iterator)).toEqual({ type: 'ack', sequence: 1, refusal: 'read-only' })
+  second.input.push({ type: 'write', sequence: 1, data: '\t' })
+  expect(await readFrame(second.iterator)).toEqual({ type: 'ack', sequence: 1 })
+  expect(handle.write).toHaveBeenCalledExactlyOnceWith('\t')
+  first.controller.abort()
+  await first.iterator.return?.()
+  second.input.push({ type: 'resize', sequence: 2, cols: 100, rows: 30 })
+  expect(await readFrame(second.iterator)).toMatchObject({ type: 'state', writable: true, info: { cols: 100, rows: 30 } })
+  expect(await readFrame(second.iterator)).toEqual({ type: 'ack', sequence: 2 })
+  expect(handle.resize).toHaveBeenCalledWith(100, 30)
+})
+
+it('acknowledges provider acceptance in order and joins in-flight input on detach', async () => {
+  const { terminal, handle } = fixture()
+  const view = await attach(terminal)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  handle.write.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  cleanups.push(async () => { release.resolve(undefined) })
+  view.input.push({ type: 'write', sequence: 1, data: 'accepted' })
+  view.input.push({ type: 'write', sequence: 2, data: 'cancelled' })
+  view.input.push({ type: 'resize', sequence: 3, cols: 100, rows: 30 })
+  await entered.promise
+  expect(handle.write).toHaveBeenCalledOnce()
+  expect(handle.resize).not.toHaveBeenCalled()
+  view.controller.abort()
+  let detached = false
+  const closing = view.iterator.return?.().then(() => { detached = true })
+  await Promise.resolve()
+  expect(detached).toBe(false)
+  release.resolve(undefined)
+  await closing
+  expect(handle.write).toHaveBeenCalledExactlyOnceWith('accepted')
+  expect(handle.resize).not.toHaveBeenCalled()
+  expect(handle.terminate).not.toHaveBeenCalled()
+})
+
+it('half-closes input while continuing to publish output and exit state', async () => {
+  const { terminal, output, outcome } = fixture()
+  const view = await attach(terminal)
+  view.input.push({ type: 'write', sequence: 1, data: 'exit\r' })
+  view.input.end()
+  expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 1 })
+  output.end('last output')
+  outcome.resolve({ exitCode: 3, signal: null })
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'output', data: 'last output' })
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', writable: false, info: { exitCode: 3 } })
+})
+
+it.each([
+  { type: 'write', sequence: 2, data: 'gap' },
+  { type: 'write', sequence: 1, data: '界'.repeat(334) },
+  { type: 'resize', sequence: 1, cols: 201, rows: 24 },
+  { type: 'resize', sequence: 1, cols: 80, rows: 0 },
+  { type: 'resize', sequence: 1, cols: 1.5, rows: 24 },
+] satisfies TerminalInput[])('rejects invalid input before executing it: %j', async (command) => {
+  const { terminal, handle } = fixture()
+  const view = await attach(terminal)
+  view.input.push(command)
+  await expect(view.iterator.next()).rejects.toThrow()
+  expect(handle.write).not.toHaveBeenCalled()
+  expect(handle.resize).not.toHaveBeenCalled()
+  expect(handle.terminate).not.toHaveBeenCalled()
+})
+
+it.each(['write', 'resize'] as const)('fails the attachment on a provider %s error and permits fresh attachment recovery', async (operation) => {
+  const { terminal, handle } = fixture()
+  const first = await attach(terminal)
+  handle[operation].mockRejectedValueOnce(new Error('provider failed'))
+  first.input.push(operation === 'write' ? { type: 'write', sequence: 1, data: 'failed' } : { type: 'resize', sequence: 1, cols: 90, rows: 25 })
+  await expect(first.iterator.next()).rejects.toThrow('provider failed')
+  expect(terminal.info).toMatchObject({ cols: 80, rows: 24 })
+  const second = await attach(terminal)
+  second.input.push({ type: 'write', sequence: 1, data: 'fresh' })
+  expect(await readFrame(second.iterator)).toEqual({ type: 'ack', sequence: 1 })
+  expect(handle.write).toHaveBeenLastCalledWith('fresh')
+})
+
+it.each(['write', 'resize'] as const)('preserves final output when an in-flight %s is refused during process exit', async (operation) => {
+  const { terminal, handle, output, outcome } = fixture()
+  const view = await attach(terminal)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  cleanups.push(async () => { release.resolve(undefined) })
+  handle[operation].mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  view.input.push(operation === 'write' ? { type: 'write', sequence: 1, data: 'late' } : { type: 'resize', sequence: 1, cols: 90, rows: 25 })
+  await entered.promise
+  outcome.resolve({ exitCode: 7, signal: null })
+  output.end('FINAL OUTPUT')
+  release.reject(new Error('terminal process has exited'))
+  const frames = [await readFrame(view.iterator), await readFrame(view.iterator), await readFrame(view.iterator)]
+  expect(frames).toEqual(expect.arrayContaining([
+    { type: 'ack', sequence: 1, refusal: 'not-running' },
+    expect.objectContaining({ type: 'output', data: 'FINAL OUTPUT' }),
+  ]))
+  expect(frames.find(frame => frame.type === 'state')).toMatchObject({ writable: false, info: { state: 'exited', exitCode: 7 } })
+})
+
+it('refuses queued input once the process completes while output is still draining', async () => {
+  const { terminal, handle, output, outcome } = fixture()
+  const view = await attach(terminal)
+  outcome.resolve({ exitCode: 0, signal: null })
+  await outcome.promise
+  expect(terminal.info.state).toBe('running')
+  view.input.push({ type: 'write', sequence: 1, data: 'late' })
+  expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 1, refusal: 'not-running' })
+  expect(handle.write).not.toHaveBeenCalled()
+  output.end('FINAL OUTPUT')
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'output', data: 'FINAL OUTPUT' })
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', writable: false, info: { state: 'exited' } })
+})
+
+it('refuses input after exit without ending the screen attachment', async () => {
+  const { terminal, output, outcome, handle } = fixture()
+  const view = await attach(terminal)
+  output.end()
+  outcome.resolve({ exitCode: 0, signal: null })
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', writable: false })
+  view.input.push({ type: 'write', sequence: 1, data: 'late' })
+  expect(await readFrame(view.iterator)).toEqual({ type: 'ack', sequence: 1, refusal: 'not-running' })
+  terminal.rename('finished')
+  expect(await readFrame(view.iterator)).toMatchObject({ type: 'state', info: { title: 'finished' } })
+  expect(handle.write).not.toHaveBeenCalled()
+})
+
+it('does not grant input to an attachment cancelled before its screen baseline', async () => {
+  const { terminal } = fixture()
+  const input = inputChannel<TerminalInput>()
+  const abort = new AbortController()
+  abort.abort(new Error('already detached'))
+  await expect(terminal.attach(input.source, { maxInputBytes: 1000, maxCols: 200, maxRows: 100 }, abort.signal)[Symbol.asyncIterator]().next()).rejects.toThrow('already detached')
+})
+
+it('reports a non-Error provider input rejection through the attachment', async () => {
+  const { terminal, handle } = fixture()
+  const view = await attach(terminal)
+  handle.write.mockRejectedValueOnce('remote input failed')
+  view.input.push({ type: 'write', sequence: 1, data: 'input' })
+  await expect(view.iterator.next()).rejects.toThrow('remote input failed')
+})
+
+it('preserves the current controller when a queued attachment is cancelled during an input write', async () => {
+  const { terminal, handle } = fixture()
+  const first = await attach(terminal)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  cleanups.push(async () => { release.resolve(undefined) })
+  handle.write.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  first.input.push({ type: 'write', sequence: 1, data: 'first' })
+  await entered.promise
+  const abort = new AbortController()
+  const input = inputChannel<TerminalInput>()
+  const iterator = terminal.attach(input.source, { maxInputBytes: 1000, maxCols: 200, maxRows: 100 }, abort.signal)[Symbol.asyncIterator]()
+  cleanups.push(async () => { abort.abort(); await iterator.return?.() })
+  const failed = expect(iterator.next()).rejects.toThrow('cancelled while queued')
+  abort.abort(new Error('cancelled while queued'))
+  release.resolve(undefined)
+  await failed
+  expect(await readFrame(first.iterator)).toEqual({ type: 'ack', sequence: 1 })
+  terminal.rename('retained control')
+  expect(await readFrame(first.iterator)).toMatchObject({ type: 'state', writable: true })
+  first.input.push({ type: 'write', sequence: 2, data: 'still writable' })
+  expect(await readFrame(first.iterator)).toEqual({ type: 'ack', sequence: 2 })
+  expect(handle.write).toHaveBeenLastCalledWith('still writable')
 })

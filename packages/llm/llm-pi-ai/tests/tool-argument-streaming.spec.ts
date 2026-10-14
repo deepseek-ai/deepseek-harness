@@ -3,6 +3,8 @@ import type { AssistantMessageEvent, Model } from '@earendil-works/pi-ai'
 import { stream as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages'
 import { stream as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions'
 import { stream as streamResponses } from '@earendil-works/pi-ai/api/openai-responses'
+import { BlockAssembler } from '@deepseek-ai/dsh-llm'
+import { toStreamChunks } from '../src/stream.ts'
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
 import { anthropicFrame as frame, anthropicMessageStart, closeMockServers, mockServer } from './mock-server.ts'
 
@@ -40,6 +42,35 @@ async function collect(events: AsyncIterable<AssistantMessageEvent>): Promise<{ 
 const context = normalizeContext({ messages: [{ role: 'user', content: 'hi', timestamp: 0 }] })
 
 describe('streamed tool-call arguments (patched pi-ai)', () => {
+  it('preserves an empty Responses message after parallel tool calls with its replay metadata', async () => {
+    const calls = [0, 1, 2].map(index => ({ type: 'function_call', call_id: `call_${index}`, id: `item_${index}`, name: 'read', arguments: '{}' }))
+    const empty = { type: 'message', id: 'message_empty', role: 'assistant', content: [{ type: 'output_text', text: '', annotations: [] }] }
+    const server = await mockServer([{ events: [
+      '{"type":"response.created","response":{"id":"response_empty_text"}}',
+      ...[...calls, empty].flatMap((item, output_index) => [
+        JSON.stringify({ type: 'response.output_item.added', output_index, item }),
+        JSON.stringify({ type: 'response.output_item.done', output_index, item }),
+      ]),
+      JSON.stringify({ type: 'response.completed', response: {
+        id: 'response_empty_text', status: 'completed', output: [...calls, empty], usage: { input_tokens: 3, output_tokens: 1, total_tokens: 4 },
+      } }),
+    ] }])
+    const assembler = new BlockAssembler()
+    for await (const chunk of toStreamChunks(streamResponses(model('openai-responses', server.url), context, { apiKey: 'test-key' }))) {
+      assembler.push(chunk)
+    }
+    expect(assembler.blocks()).toEqual([
+      ...calls.map(call => ({ type: 'tool-call', id: `${call.call_id}|${call.id}`, name: 'read', arguments: '{}' })),
+      { type: 'text', text: '' },
+    ])
+    expect(assembler.replayState?.blocks).toEqual([
+      ...calls.map(() => ({ type: 'tool-call' })),
+      { type: 'text', textSignature: JSON.stringify({ v: 1, id: 'message_empty' }) },
+    ])
+    expect(assembler.finish).toEqual({ kind: 'tool-calls' })
+    expect(server.requests).toHaveLength(1)
+  })
+
   it('openai-completions parses arguments once, at the end of the call', async () => {
     const server = await mockServer([{ events: [
       JSON.stringify({ choices: [{

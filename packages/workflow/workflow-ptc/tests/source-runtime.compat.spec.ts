@@ -9,14 +9,14 @@ import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent, mountPtcRuntime } from './setup.ts'
 
-async function setup(mode: SandboxMode) {
+async function setup(mode: SandboxMode, executionMode: 'per-call' | 'persistent-in-memory' = 'per-call') {
   const ctx = new Context()
-  const files = await mountPtcRuntime(ctx, mode)
+  const files = await mountPtcRuntime(ctx, mode, executionMode)
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   ctx.subagents.registerProvider({
     name: 'spawn',
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+    capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
     inheritsParentContext: false,
     start: () => Promise.reject(new Error('source runtime smoke must not start a child')),
   })
@@ -38,8 +38,9 @@ it('runs the default workflow config through the source PTC runtime', async () =
   } finally { await run.dispose() }
 })
 
-it.each(['read-only', 'workspace-write'] as const)('enforces the Session file policy %s for direct Node writes', async (mode) => {
-  const { ctx, parent, root, cwd } = await setup(mode)
+it.each(['per-call', 'persistent-in-memory'] as const)('enforces workspace writes in %s workflows', async (executionMode) => {
+  const mode = 'workspace-write'
+  const { ctx, parent, root, cwd } = await setup(mode, executionMode)
   const outside = join(root, 'outside.txt')
   const inside = join(cwd, 'inside.txt')
   await writeFile(outside, 'unchanged')

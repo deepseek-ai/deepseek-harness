@@ -1,0 +1,10 @@
+version: 1
+scenario: office-progressive-native
+profile: headless
+composition: office-render-tools
+recording: authored
+header:
+  class: office-render-tools
+  pin: true
+workspace:
+  setup: office-skills

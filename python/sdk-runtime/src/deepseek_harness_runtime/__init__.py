@@ -10,7 +10,7 @@ Two runtime carriers coexist under ``runtime/``, both injected by the repo's
   Node installation.
 - **node (dev-only)**: the full deploy closure under ``runtime/node/``
   (``package.json`` + ``node_modules/``), executed as ``node
-  runtime/node/node_modules/@deepseek-ai/dsh/lib/bin.js`` on a
+  runtime/node/runtime-bootstrap.mjs`` on a
   system Node >= 22.19. It is the current checkout's source build, never
   selected automatically, and excluded from wheel/sdist distributions.
 
@@ -28,7 +28,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from ._resources import validate_resources
+from ._resources import validate_downloads, validate_resources, office_launch_args
 
 PACKAGE_METADATA_FILENAME = "deepseek-harness-runtime.json"
 
@@ -59,10 +59,9 @@ def bundled_runtime_path() -> Path:
     """Absolute path of the bundled single-file runtime executable for the current platform.
 
     Raises FileNotFoundError when the platform is unsupported, the executable
-    has not been placed into this package, the ripgrep or Office sidecar is
-    missing, the authoring resources are incomplete, or the required macOS
-    spawn helper is missing. Invalid authoring metadata or Python permissions
-    raise ValueError. Missing executable/Office messages name
+    has not been placed into this package, the ripgrep sidecar or download
+    manifest is missing, or the required macOS spawn helper is missing.
+    Invalid download metadata raises ValueError. Missing executable messages name
     the acquisition routes (acquisition strategy is deliberately separate from
     this lookup interface, so an on-demand download can replace it without
     touching callers).
@@ -92,22 +91,7 @@ def bundled_runtime_path() -> Path:
                 f"deepseek-harness-runtime-bin is missing the node-pty spawn helper at {helper}. "
                 + _EXE_ACQUISITION_HINT
             )
-    office = path.with_name(f"{path.name.removesuffix('.exe')}-office")
-    adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
-    if not adapter.is_file():
-        raise FileNotFoundError(
-            f"deepseek-harness-runtime-bin is missing the Office sidecar at {office}. "
-            + _EXE_ACQUISITION_HINT
-        )
-    native = tag.replace("win-", "win32-").replace("macos-", "darwin-")
-    declared = json.loads(adapter.read_text(encoding="utf-8")).get("optionalDependencies", {})
-    engine = native if f"@deepseek-ai/libreoffice-kit-{native}" in declared else "wasm"
-    if not (office / "node_modules" / f"@deepseek-ai/libreoffice-kit-{engine}/prebuilds.json").is_file():
-        raise FileNotFoundError(
-            f"deepseek-harness-runtime-bin is missing the Office sidecar engine {engine} at {office}. "
-            + _EXE_ACQUISITION_HINT
-        )
-    validate_resources(path.with_name(tag), tag)
+    validate_downloads(path.with_name(tag), tag)
     return path
 
 
@@ -152,14 +136,7 @@ def _current_platform_tag() -> str:
 
 def _node_launch_args() -> tuple[str, str]:
     node_root = bundled_package_dir() / "runtime" / "node"
-    bin_js = (
-        node_root
-        / "node_modules"
-        / "@deepseek-ai"
-        / "dsh"
-        / "lib"
-        / "bin.js"
-    )
+    bin_js = node_root / "runtime-bootstrap.mjs"
     if not bin_js.is_file():
         raise FileNotFoundError(
             f"the dev-only node runtime closure is missing at {node_root} "
@@ -174,6 +151,46 @@ def _node_launch_args() -> tuple[str, str]:
             "install Node.js or use the exe mode"
         )
     return (node, str(bin_js))
+
+
+def _download(resource: str) -> Path:
+    result = subprocess.run(resolve_bundled_launch_args(), capture_output=True, encoding="utf-8",
+                            env={**os.environ, "DSH_RUNTIME_DOWNLOAD": resource})
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or f"resource download failed with exit code {result.returncode}")
+    path = json.loads(result.stdout)
+    if not isinstance(path, str) or not Path(path).is_absolute():
+        raise ValueError("runtime returned an invalid resource path")
+    return Path(path)
+
+
+def download_office() -> Path:
+    """Download the locked npm Office sidecar and standalone Node into the resource cache.
+
+    Return its absolute directory. Reuse completed downloads; failures leave no
+    published partial installation. DSH_RESOURCE_CACHE selects the cache root.
+    This explicit operation requires network access on a cache miss, not a
+    Harness home, agent, or model. Other SDK operations never trigger downloads.
+    """
+    return _download("office")
+
+
+def download_primary_runtime() -> Path:
+    """Download locked CPython, libraries, Node, pnpm and skills into the resource cache.
+
+    Return the absolute primary-runtime directory. This is independent of the
+    Office engine download and does not copy resources into a Harness home.
+    Completed downloads are reused; DSH_RESOURCE_CACHE selects the cache root.
+    """
+    path = _download("primary")
+    validate_resources(path.parent, _current_platform_tag())
+    return path
+
+
+def resolve_office_launch_args() -> tuple[str, str]:
+    """Locate the explicitly downloaded Office CLI and its standalone Node; never download."""
+    tag = _current_platform_tag()
+    return office_launch_args(bundled_runtime_path().with_name(tag), tag)
 
 
 def main() -> None:
@@ -197,6 +214,9 @@ __all__ = [
     "RUNTIME_MODE_ENV_VAR",
     "bundled_package_dir",
     "bundled_runtime_path",
+    "download_office",
+    "download_primary_runtime",
+    "resolve_office_launch_args",
     "main",
     "resolve_bundled_launch_args",
 ]

@@ -1,7 +1,7 @@
 /** Independent bottom-follow intent and native scrolling, without paging or DOM observers. */
 import { useState } from 'react'
 
-/** Scroll position, maximum top, and viewport height from one geometry read. */
+/** Scroll position, caller-supplied floor, and viewport height; raw measurements use the physical floor. */
 export interface ViewportMetrics {
   readonly top: number
   readonly floor: number
@@ -64,7 +64,7 @@ export class ScrollFollow {
    * @param metrics - current scroll geometry.
    * @returns whether the position is within the follow threshold.
    */
-  nearBottom(metrics: ViewportMetrics): boolean { return metrics.floor - metrics.top <= this.threshold }
+  nearBottom(metrics: ViewportMetrics): boolean { return Math.abs(metrics.floor - metrics.top) <= this.threshold }
 
   /**
    * Commit caller-owned follow decisions without moving the scrollport.
@@ -127,17 +127,26 @@ export class ScrollFollow {
 
   /**
    * Follow the measured floor, respecting reduced motion for smooth requests.
-   * An outstanding smooth target finishes before another is issued.
+   * Smooth requests preserve an outstanding target; immediate follow updates
+   * retarget active motion when content changes the floor.
    * Within-tolerance positioning is immediate while no animation is outstanding.
    * @param element - scrolling element.
    * @param metrics - current geometry.
-   * @param behavior - native animation for growth, or immediate positioning.
+   * @param behavior - native animation for growth, or immediate positioning unless motion is already active.
    * @returns current geometry; smooth requests retain their starting position until native scroll delivery.
    */
   toBottom(element: HTMLElement, metrics: ViewportMetrics, behavior: 'instant' | 'smooth'): ViewportMetrics {
     this.following = true
-    if (behavior === 'instant' || metrics.top >= metrics.floor
-      || (!this.animating && this.nearBottom(metrics))) return this.jump(element, metrics, metrics.floor)
+    if (metrics.top === metrics.floor) return this.jump(element, metrics, metrics.floor)
+    if (behavior === 'instant' && this.animating) {
+      // Content grew under an outstanding animation: retarget it instead of cutting to the floor.
+      if (this.target !== metrics.floor) {
+        this.target = metrics.floor
+        element.scrollTo({ top: metrics.floor, behavior: 'smooth' })
+      }
+      return metrics
+    }
+    if (behavior === 'instant' || (!this.animating && this.nearBottom(metrics))) return this.jump(element, metrics, metrics.floor)
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return this.jump(element, metrics, metrics.floor)
     }

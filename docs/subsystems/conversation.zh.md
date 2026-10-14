@@ -71,6 +71,8 @@ Group 存储在安装前校验完整提交结果：根 Group 引用与记录一�
 
 实时 Assistant delta 作为 Client-only `assistant/live-chunk` event 到达。重连 baseline 会把活跃的进程内紧凑 stream 展开为相同的瞬态 event，持久 `assistant/message` 与 `assistant/attempt` event 则嵌入完整紧凑 stream 供历史回放。瞬态 event 可以初始化 Context。每条工具 delta 和后续 `tool/call` 都可以按同一个 callId 匹配为 start，即使名称尚未到达；只有最早的 Match 调用 `start()`，后续 Match 调用 `update()`。准备态 Tool 节点只有在名称可用后才显示。历史分页不把已结束消息展开为实时 delta。消费 Assistant 输出的 Definition 通过同一组匹配和更新接口处理 live chunk 与持久 settlement，其他 Definition 直接返回 `null`，无需展开 stream。
 
+<a id="definition-and-typed-chat-payload"></a>
+
 ## Definition 与类型化 Chat payload
 
 为了完整展示关联关系，下面把生产方声明和 Client 贡献写在同一个代码块里。实际的包族中，branded id 与 `SessionEventMap` 声明留在事件生产方，Definition、Chat data 合并与 renderer 留在 Client 插件。
@@ -247,9 +249,23 @@ export function apply(ctx: ClientContext): void {
 
 `ConversationNodeDefinitionInput` 接受上述函数，或事件类型到匹配函数的只读表。函数形式的注册接收所有事件；表形式只接收列出的类型。Registry 在注册关系变化时复制表条目并预计算有序候选 Set，不在逐事件分发时构造候选集合。替换表时先注销，再重新注册。两种形式解析后的 `ConversationNodeDefinition` 都保留可调用的 `match(event)`。
 
+match 结果带 `exclusive: true` 时，即在该 Definition 的 target 上认领这个事件。Assembler 先求出该事件的全部 match，再逐个接收，因此结果与注册顺序无关：被认领 target 上的其他 Definition 不为该事件建立 Context，该 target 的未匹配事件 fallback 也不运行；其他 target 的 Definition 与没有 target 的 Definition 照常接收。同一 target 被认领两次，或没有 target 的 Definition 发起认领，都会在分发时抛错；fallback 自身返回的认领不起作用。业务 Definition 用认领来呈现某一类消息，而同一 target 上的通用 Definition 原本也会呈现它，例如迟到的问题回答。
+
 `buildLocationData(context, scope)` 可以把 Definition 拥有的数据发布到引擎拥有的 Turn 或 Step 上。通过 declaration merging 为每个 key 指定精确 value 类型。同一 Location 内的另一个 Node 可以使用受限 slot hook（例如 `useTurnData(key)`）读取该值，无须取得 Session，也无须扫描 `snapshot.chat.nodes`。
 
 `target` 与 `buildViewNode(context)` 必须同时声明一项由 target 拥有的渲染贡献。把 `context.key` 保留为 React 侧身份，根据持久排序证据选择 `anchorSeq`，并且只返回 renderer 可以直接使用的数据。某个 target Node 一旦发布，就要继续返回同一个 key；需要暂时离开可见流时使用 `visibility: 'hidden'`，不要改为返回 `null` 撤回它。
+
+Chat Node 还通过 `groupTree` 选择所在行的位置。位置由外到内排列，站在某个位置的 Node 同时具有所有内层位置的效果。Chat 的过程分组、整轮折叠和轮次输入判断只读取这个位置；完整契约见 [group-tree.ts](../../packages/client/ui-chat/src/client/contract/group-tree.ts)。
+
+| Node 是 | 声明 |
+|---|---|
+| Step 1 认领的人的输入，所在轮次开启一个交互段 | `exchange` |
+| 所在轮次的其他输入，如之后的人的输入或触发通知；位于过程之前时是开场输入，之后出现时整个轮次保持展开 | `input` |
+| 留在整轮折叠之外的轮次通知，如错误或已完成轮次页脚 | `turn` |
+| 整轮折叠仍会隐藏的独立行，如模型重试 | `process` |
+| 并入相邻步骤组的普通过程内容 | 不声明 `groupTree` |
+
+各内置 Node 声明的位置见 [Chat 业务规则](../../packages/client/ui-chat/src/client/conversation-nodes/README.zh.md#process-grouping)。如果同一 target 的通用 Definition 也会匹配你的 Node 所呈现的事件，按上文用 `exclusive: true` 认领该事件。
 
 ## Predecessor read
 

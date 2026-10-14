@@ -624,9 +624,11 @@ it('closes the failed Web authorization tab without redirecting and keeps the sh
 
 it('completes login through a local TCP forward using the browser port rather than the Host port', async () => {
   const f = await fixture()
+  const hostPort = f.ctx.webServer.port
+  if (hostPort === undefined) throw new Error('account test: the Host listener has not bound a port')
   const sockets = new Set<Socket>()
   const forward = createTcpServer((socket) => {
-    const upstream = connect(f.ctx.webServer.port, '127.0.0.1')
+    const upstream = connect(hostPort, '127.0.0.1')
     for (const connection of [socket, upstream]) {
       sockets.add(connection)
       connection.on('close', () => { sockets.delete(connection) })

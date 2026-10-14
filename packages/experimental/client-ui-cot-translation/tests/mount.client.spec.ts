@@ -42,7 +42,7 @@ async function fixture(failure = false, preferences: CotTranslationPreferences =
   ctx.provide('configForms', { get: (name: string) => { expect(name).toBe('cot-translation'); return scope.scope } } as never)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
-    'conversation.chat.reasoning-body': { kind: 'chain', scope: 'session' },
+    'conversation.chat.reasoning.body': { kind: 'single', scope: 'session' },
     'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
   } } as never, () => null)
   return { ctx, limits, translate, unmount, scope, listeners,
@@ -63,7 +63,7 @@ function formFace(value: Record<string, unknown>): asserts value is Record<strin
 /** Invoke the owned reasoning contribution with its declared Session parameters. */
 function injectReasoning(entry: StoredEntry, sessionId: SessionId): Record<string, unknown> {
   assert(typeof entry.inject === 'function')
-  const inject = entry.inject as (...args: InjectParams<'conversation.chat.reasoning-body', undefined>) => Record<string, unknown>
+  const inject = entry.inject as (...args: InjectParams<'conversation.chat.reasoning.body', undefined>) => Record<string, unknown>
   return inject(sessionId)
 }
 
@@ -71,7 +71,7 @@ it.each(['bing', 'google'] as const)('binds %s requests to each reasoning Sessio
   const b = await fixture(false, { provider, targetLanguage: 'ja' })
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const entry = b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!
+    const entry = b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!
     const first = injectReasoning(entry, sourceSessionId), otherSessionId = SessionId('other-reasoning-source')
     const second = injectReasoning(entry, otherSessionId)
     bodyFace(first); bodyFace(second)
@@ -92,9 +92,10 @@ it('registers translated reasoning and preferences, adopts accepted choices, and
   try {
     const fiber = b.ctx.plugin({ inject: [...inject], apply: ctx => mountTranslation(ctx, contribution) })
     await fiber
-    const entry = b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!
+    const entry = b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!
     expect(entry.locale).toBe('cotTranslation')
-    expect(entry.select?.({ text: 'original', running: false } as never)).toEqual({ text: 'original', running: false })
+    expect(entry.select).toBeUndefined()
+    expect(b.ctx.slots.spec('conversation.chat.reasoning.body')).toMatchObject({ kind: 'single', scope: 'session' })
     const body = injectReasoning(entry, sourceSessionId)
     bodyFace(body)
     expect(body.hooks.translationLimit.getSnapshot()).toBe(12)
@@ -109,7 +110,7 @@ it('registers translated reasoning and preferences, adopts accepted choices, and
     b.translate.mockResolvedValueOnce({ ok: false, error: new RemoteError('cotTranslation/failed', 'request failed', {}) } as never)
     await expect(body.translate(request, signal)).rejects.toThrow('request failed')
     await fiber.dispose()
-    expect(b.ctx.slots.entries('conversation.chat.reasoning-body')).toHaveLength(0)
+    expect(b.ctx.slots.entries('conversation.chat.reasoning.body')).toHaveLength(0)
     expect(b.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)
     expect(b.scope.listenerCount()).toBe(0)
     expect(b.listeners.size).toBe(0)
@@ -135,7 +136,7 @@ it('loads the browser entry through its generated optional Remote contribution',
     expect(browser.inject).toEqual(inject)
     const fiber = b.ctx.plugin({ inject: [...browser.inject], apply: browser.apply })
     await fiber
-    expect(b.ctx.slots.entries('conversation.chat.reasoning-body')).toHaveLength(1)
+    expect(b.ctx.slots.entries('conversation.chat.reasoning.body')).toHaveLength(1)
     await fiber.dispose()
     expect(b.unmount).toHaveBeenCalledOnce()
   } finally {
@@ -145,14 +146,13 @@ it('loads the browser entry through its generated optional Remote contribution',
 })
 
 
-it.each(['loading', 'memory'] as const)('uses Host Google preferences while the settings form is %s', async (mode) => {
+it('uses Host Google preferences while the settings form is loading', async () => {
   const preferences: CotTranslationPreferences = { provider: 'google', targetLanguage: 'ja' }
   const b = await fixture(false, preferences)
-  if (mode === 'memory') b.scope.publish({ status: 'unavailable', mode: 'memory', value: undefined })
   try {
     const fiber = b.ctx.plugin({ inject: [...inject], apply: ctx => mountTranslation(ctx, contribution) })
     await fiber
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     expect(body.hooks.preferences.getSnapshot()).toEqual(preferences)
     expect(b.scope.scope.getSnapshot().value).toBeUndefined()
@@ -167,13 +167,13 @@ it('does not install a reasoning renderer before authoritative metadata arrives,
   try {
     const task = mountTranslation(b.ctx, contribution)
     await vi.waitFor(() => { expect(b.limits).toHaveBeenCalledOnce() })
-    expect(b.ctx.slots.entries('conversation.chat.reasoning-body')).toHaveLength(0)
+    expect(b.ctx.slots.entries('conversation.chat.reasoning.body')).toHaveLength(0)
     expect(b.translate).not.toHaveBeenCalled()
     b.setCatalog({ maxTextChars: 4, availableProviders: ['bing', 'google'], preferences: { provider: 'google', targetLanguage: 'ja' } })
     b.invalidate()
     pending.resolve({ ok: true, value: { maxTextChars: 12, availableProviders: ['bing', 'google'], preferences: { provider: 'bing', targetLanguage: 'auto' } } })
     const dispose = await task
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     expect(body.hooks.preferences.getSnapshot()).toEqual({ provider: 'google', targetLanguage: 'ja' })
     expect(body.hooks.translationLimit.getSnapshot()).toBe(4)
@@ -186,7 +186,7 @@ it('refreshes accepted Host preferences and limits on invalidation and reconnect
   const b = await fixture(false, { provider: 'google', targetLanguage: 'ja' })
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     const form = b.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     formFace(form)
@@ -217,7 +217,7 @@ it.each(['resolve', 'reject'] as const)('cancels setup, joins the pending read, 
       value: { maxTextChars: 12, availableProviders: ['bing', 'google'], preferences: { provider: 'google', targetLanguage: 'ja' } } })
     else pending.reject(new Error('late metadata failure'))
     await disposing
-    expect(b.ctx.slots.entries('conversation.chat.reasoning-body')).toHaveLength(0)
+    expect(b.ctx.slots.entries('conversation.chat.reasoning.body')).toHaveLength(0)
     expect(b.scope.listenerCount()).toBe(0)
     expect(b.listeners.size).toBe(0)
     expect(b.unmount).toHaveBeenCalledOnce()
@@ -232,7 +232,7 @@ it('holds new fragments during metadata refresh and rejects stale routing or lim
   const b = await fixture(), pending = Promise.withResolvers<RemoteResult<CotTranslationSnapshot>>()
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     b.limits.mockImplementationOnce(() => pending.promise)
     b.invalidate()
@@ -257,7 +257,7 @@ it('rechecks the caller abort after a held metadata query completes', async () =
   const b = await fixture(), pending = Promise.withResolvers<RemoteResult<CotTranslationSnapshot>>()
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     b.limits.mockImplementationOnce(() => pending.promise)
     b.invalidate()
@@ -280,7 +280,7 @@ it('rolls back a failed initial metadata transport read', async () => {
   b.limits.mockRejectedValueOnce(new Error('metadata transport failed'))
   try {
     await expect(mountTranslation(b.ctx, contribution)).rejects.toThrow('metadata transport failed')
-    expect(b.ctx.slots.entries('conversation.chat.reasoning-body')).toHaveLength(0)
+    expect(b.ctx.slots.entries('conversation.chat.reasoning.body')).toHaveLength(0)
     expect(b.unmount).toHaveBeenCalledOnce()
   } finally { await b.ctx.fiber.dispose() }
 })
@@ -289,7 +289,7 @@ it.each(['throw', 'refuse'] as const)('does not submit after a %s metadata refre
   const b = await fixture()
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     if (outcome === 'throw') b.limits.mockRejectedValueOnce(new Error('metadata unavailable'))
     else b.limits.mockResolvedValueOnce({ ok: false, error: new RemoteError('cotTranslation/failed', 'metadata unavailable', {}) })
@@ -306,7 +306,7 @@ it.each(['resolve', 'reject'] as const)('joins an in-flight refresh and excludes
   const b = await fixture(), pending = Promise.withResolvers<RemoteResult<CotTranslationSnapshot>>()
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     b.limits.mockImplementationOnce(() => pending.promise)
     b.invalidate()
@@ -335,7 +335,7 @@ it('retains an invalidation raised synchronously while a refreshed snapshot is b
   let unsubscribe: (() => void) | undefined
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sourceSessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sourceSessionId)
     bodyFace(body)
     let invalidated = false
     unsubscribe = body.hooks.preferences.subscribe(() => {
@@ -363,7 +363,7 @@ it('advertises eligible paid routes without changing Bing selection or sending a
     const settings = b.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     assert(typeof settings.refreshProviders === 'function')
     expect(settings.hooks).toBeTruthy()
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, SessionId('reasoning-session'))
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, SessionId('reasoning-session'))
     bodyFace(body)
     expect(body.hooks.preferences.getSnapshot()).toEqual({ provider: 'bing', targetLanguage: 'auto' })
     expect(b.translate).not.toHaveBeenCalled()
@@ -379,7 +379,7 @@ it.each(['deepseek-account', 'deepseek-official'] as const)('binds selected paid
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
     const sessionId = SessionId('existing-viewed-session')
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning-body')[0]!, sessionId)
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sessionId)
     bodyFace(body)
     expect(b.translate).not.toHaveBeenCalled()
     await body.translate({ text: 'original', provider, targetLanguage: 'zh', sessionId: SessionId('other-session') },

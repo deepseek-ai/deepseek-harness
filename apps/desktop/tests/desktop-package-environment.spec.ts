@@ -229,3 +229,27 @@ it('owns macOS tuning in the local file and validates it before signing credenti
     expect(() =>{  validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_MACOS_NOTARIZATION_PROXY: 'socks5://localhost:8080' }, MACOS) }).toThrow('NOTARIZATION_PROXY')
   })
 })
+
+it('rejects an explicit invalid macOS cache before signing while leaving unsigned builds independent', () => {
+  const environment = { ...RELEASE, DSH_DESKTOP_MACOS_SIGNATURE_CACHE_DIR: '' }
+  for (const options of [{}, { prepareOnly: true }]) {
+    expect(() => { validateDesktopPackageEnvironment(environment, MACOS, options) }).toThrow('SIGNATURE_CACHE_DIR')
+  }
+  expect(() => { validateDesktopPackageEnvironment(environment, MACOS, { unsigned: true }) }).not.toThrow()
+})
+
+it('skips Apple credentials but still requires signing credentials for unnotarized packages', async () => {
+  await withDirectory(async (directory) => {
+    const certificate = join(directory, 'signing.p12')
+    await writeFile(certificate, 'fixture')
+    const environment = { ...RELEASE, ...MAC_IDENTITY, CSC_LINK: certificate, CSC_KEY_PASSWORD: '' }
+    expect(() => { validateDesktopPackageEnvironment(environment, MACOS, { skipNotarization: true }) }).not.toThrow()
+    expect(() => { validateDesktopPackageEnvironment(environment, MACOS) }).toThrow()
+    expect(() => {
+      validateDesktopPackageEnvironment({ ...environment, CSC_LINK: undefined }, MACOS, { skipNotarization: true })
+    }).toThrow(/CSC_LINK/u)
+    expect(() => {
+      validateDesktopPackageEnvironment({ ...environment, CSC_KEY_PASSWORD: undefined }, MACOS, { skipNotarization: true })
+    }).toThrow(/CSC_KEY_PASSWORD/u)
+  })
+})

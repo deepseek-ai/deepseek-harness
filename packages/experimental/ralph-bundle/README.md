@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add the experimental Ralph tool to standard, cordis, and ptc for human-requested repeated work with fresh child agents. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Add the experimental Ralph tool to every Agent as a global tool for human-requested repeated work with fresh child agents. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Add the experimental Ralph tool to standard, cordis, and ptc for human-requested
 
 In Web or Desktop, open Plugins and enable **Ralph loops** in Official. Switch it off to remove its profile layer.
 
-New Agents and subsequently reopened Sessions use the selected composition; live Agents retain their existing plugins. The minimal preset and host-level tool catalog remain unchanged.
+Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
 
 -----
 
@@ -37,7 +37,7 @@ New Agents and subsequently reopened Sessions use the selected composition; live
 <details>
 <summary>Implementation details — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) contributes `tool-ralph` through `preset: preset-standard`, `preset: preset-cordis`, and `preset: preset-ptc`, inside the isolated `optional-ralph` group. Later scoped patches can replace the tool's configuration or disable it; an override alone does not select the bundle. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the Host group `optional-ralph`, which isolates its own `workflowEngine` and registers `tool-ralph` in the global tool layer. Later profile patches can replace the tool's configuration or disable it by row id; an override alone does not select the bundle. The [profile composer](../../boot/app-boot/README.md) owns patch ordering and errors.
 
 </details>
 
@@ -57,7 +57,7 @@ Indirectly, through the [capability implementation](../tool-ralph/README.md), wh
 
 #### KV Cache effect
 
-The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results.
+The layer adds no request content directly; the capability implementation owns cache effects from tools, prompts, and results. Toggling the bundle changes the tool list of live Sessions, which invalidates their cached request prefix once.
 
 ## Known Limitations and Deferred Work
 

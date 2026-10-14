@@ -52,14 +52,10 @@ export interface AgentPresetComposition {
 export interface AgentPresetInspection {
   /** Preset identity; different retained revisions can share it. */
   readonly id: string
-  /** Configured Host Loader row that registered this revision, when present. */
-  readonly definitionEntryId?: string
   /** Active modules, with the bases needed to resolve their package identities. */
   readonly modules: readonly {
     /** Configured module specifier. */
     readonly moduleName: string
-    /** Row id within its declaring Loader tree, including Loader-assigned ids. */
-    readonly entryId: string
     /** Declaring configuration's URL, when available. */
     readonly baseUrl?: string
     /** Whether bare specifiers use the application's module base. */
@@ -81,7 +77,6 @@ export function activeCompositionModules(tree: EntryTree): AgentPresetInspection
     const baseUrl = ownerTree.ctx.baseUrl
     modules.push({
       moduleName: entry.options.name,
-      entryId: entry.options.id,
       ...baseUrl === undefined ? {} : { baseUrl },
       useHostBase: ownerTree === tree,
     })

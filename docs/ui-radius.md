@@ -38,9 +38,9 @@ H means designed outer height in CSS pixels, including borders. R means CSS `bor
 
 Prefer an existing shared size variant when a proposed control falls between these bands. A taller card remains a card: do not promote it to R28 merely because it exceeds a button's height. A multiline cell intentionally designed for multiple lines uses R16; an ordinary button whose label wraps retains its button variant.
 
-Concrete defaults: `Button` uses H28/R8 for `sm` and H36/R12 for `md`, including outline variants. Standard H32 inputs and H36 selectors use R12. The Workspace files and New terminal guide entries both use R20, including title-only and described variants. Reserve R28 for their enclosing panel or dialog, not those entries.
+Concrete defaults: `Button` uses H28/R8 for `sm` and H36/R12 for `md`, including outline variants. Standard H32 inputs and H36 selectors use R12. The Workspace files and New terminal guide entries both use R20, including title-only and described variants. Reserve R28 for their enclosing panel or dialog, not those entries. Composer statistics and the context-occupancy trigger use compact-control R8 with the theme curve, including hover, expanded, and focus states.
 
-Code blocks, diffs, and file previews share R16: changed-file entry cards, delivered-file cards, generic file attachment cards, and hover preview panels. The 40px file-icon tiles inside changed-file and delivery cards use R10 on all four corners as a component-specific exception. Their hover fills keep the same contour.
+Code blocks, diffs, and preview cards share R16: changed-file entry cards, delivered-file cards, submitted-plan cards, created-task cards, generic file attachment cards before and after sending, and hover preview panels. The 40px icon tiles inside changed-file, delivery, submitted-plan, and created-task cards use R10 on all four corners as a component-specific exception and share the same neutral tile fill and border in both themes. Their hover fills keep the same contour.
 
 <a id="shapes"></a>
 ## Reuse tokens and preserve deliberate shapes
@@ -64,11 +64,13 @@ Distinguish these three arrangements before changing a child radius:
 
 | Arrangement | Rule | Example |
 |---|---|---|
-| Concentric inset | Inner R = max(0, outer R − inset); use the same curve | Outer R16, inset 4, inner R12 |
+| Circular concentric inset | Inner R = max(0, outer R − inset); both arcs share a center and use `round` | Outer R16, inset 4, inner R12 |
 | Fill flush against an enclosing edge | The enclosure owns the visible corner; clip the fill or inherit the matching corner | A split-button card with two independent hover regions |
 | Separate card or form group inside another surface | Choose the child's semantic tier; do not subtract all parent padding mechanically | R16 editor within an R20 settings card |
 
-Standard menus use outer R16, 4px padding, and R12 items. Compact menus use outer R12, 4px padding, and R8 items. Shared `SegmentedControl` uses outer R12, 4px inset, and R8 segments/indicator; `SegmentedTabs` uses outer R16, 4px inset, and R12 segments/indicator. Keep indicator offsets, width calculations, submenu alignment, and pointer bridges consistent when changing padding.
+Standard menus use outer R16, 4px padding, and R12 items, including command selection, task menus, and the exposed highlights in subagent and background-job menus. Tree disclosure gutters retain their indentation; controls inside a filled job row keep their own compact geometry. Compact menus use outer R12, 4px padding, and R8 items. Shared `SegmentedControl` uses outer R12, 4px inset, and R8 segments/indicator; `SegmentedTabs` uses outer R16, 4px inset, and R12 segments/indicator. Keep indicator offsets, width calculations, submenu alignment, and pointer bridges consistent when changing padding.
+
+The radius subtraction is also the nominal sizing rule for nested superellipses. Equal exponents do not make them exact offset curves, so their diagonal gap may differ from the side inset. Keep the shared superellipse menu and segmented-control treatments; use circular arcs when strict equal radial spacing is required.
 
 A single clickable surface paints hover on itself. A flush pseudo-element or overlay uses the same radius and curve as the visible enclosure. Avoid a separately rounded fill that leaves a crescent between the background and the border.
 

@@ -659,6 +659,62 @@ describe('built-in conversation node Definitions', () => {
     }
   })
 
+  it('opens exchanges only for human input claimed for Step 1; every other input stays an input', () => {
+    const human = textMessage('block-human', 'first task')
+    const steer = textMessage('block-steer', 'adjust course')
+    const notice = { ...textMessage('block-notice', 'background work finished'), source: { kind: 'schedule' } }
+    const idle = textMessage('block-idle', 'next task')
+    const bottomTurns = (current: ChatSnapshot): number[] => [...new Set(current.order.flatMap((key) => {
+      const location = current.nodes.get(key)?.location
+      return current.nodes.bottomSource(key).getSnapshot() && (location?.kind === 'turn' || location?.kind === 'step')
+        ? [location.turn.turn]
+        : []
+    }))]
+    const inputs = (current: ChatSnapshot) => current.order
+      .map(key => current.nodes.get(key))
+      .filter(candidate => candidate?.kind === 'user' || candidate?.kind === 'steering' || candidate?.kind === 'turn-trigger')
+      .map(candidate => [candidate?.kind, candidate?.groupTree ?? null])
+    const value = assembler([
+      at(1, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [human] }),
+      at(2, 'turn/start', { turn: 1 }),
+      at(3, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
+      at(4, 'step/start', { turn: 1, step: 1 }),
+      at(5, 'user/message', human, { surfaceOp: 'append' }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [steer] }),
+      at(8, 'agent/inbox/spliced', { target: 'next-step', start: 0, removedCount: 1, inserted: [] }),
+      at(9, 'step/start', { turn: 1, step: 2 }),
+      at(10, 'user/message', steer, { surfaceOp: 'append' }),
+      at(11, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('block-answer-1', 'done') }, { surfaceOp: 'append' }),
+      at(12, 'step/end', { turn: 1, step: 2 }),
+      at(13, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      // The host assembles the system prompt between the waking claim and Step 1.
+      at(14, 'agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [notice] }),
+      at(15, 'turn/start', { turn: 2 }),
+      at(16, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] }),
+    ])
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input']])
+    expect(bottomTurns(snapshot(value))).toEqual([1, 2])
+
+    value.append(at(17, 'step/start', { turn: 2, step: 1 }))
+    value.append(at(18, 'user/message', notice, { surfaceOp: 'append' }))
+    value.append(at(19, 'assistant/message', { turn: 2, step: 1, message: assistantMessage('block-answer-2', 'noted') }, { surfaceOp: 'append' }))
+    value.append(at(20, 'step/end', { turn: 2, step: 1 }))
+    value.append(at(21, 'turn/end', { turn: 2, reason: { kind: 'completed' } }))
+    value.flush()
+    expect(inputs(snapshot(value))).toEqual([['user', 'exchange'], ['steering', 'input'], ['turn-trigger', 'input']])
+    expect(bottomTurns(snapshot(value))).toEqual([1, 2])
+
+    value.append(at(22, 'agent/inbox/spliced', { target: 'next-step', start: 0, inserted: [idle] }))
+    value.append(at(23, 'turn/start', { turn: 3 }))
+    value.append(at(24, 'agent/inbox/spliced', { target: 'next-step', start: 0, removedCount: 1, inserted: [] }))
+    value.append(at(25, 'step/start', { turn: 3, step: 1 }))
+    value.append(at(26, 'user/message', idle, { surfaceOp: 'append' }))
+    value.flush()
+    expect(inputs(snapshot(value)).at(-1)).toEqual(['steering', 'exchange'])
+    expect(bottomTurns(snapshot(value))).toEqual([3])
+  })
+
   it('replays pending splice chains and scopes steering to the current claim', () => {
     const first = textMessage('claim-first', 'first')
     const second = textMessage('claim-second', 'second')

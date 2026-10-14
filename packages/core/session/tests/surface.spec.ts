@@ -903,7 +903,13 @@ describe('SurfaceManager.replaceGeneration', () => {
 })
 
 describe('system/message surface node', () => {
-  function systemEvent(seq: number, text: string, op: TestSurfaceOp = 'append', sources?: number[]): SessionEvent {
+  // Narrow return types: spreading the full SessionEvent union makes every fixture an
+  // anonymous union, and the `as SessionEvent` casts the rejection cases need then
+  // compare union against union.
+  type SystemMessageEvent = SessionEvent<'system/message'>
+  type UserMessageEvent = SessionEvent<'user/message'>
+
+  function systemEvent(seq: number, text: string, op: TestSurfaceOp = 'append', sources?: number[]): SystemMessageEvent {
     return {
       type: 'system/message',
       seq: SessionSeq(seq),
@@ -913,7 +919,7 @@ describe('system/message surface node', () => {
       ...sources === undefined ? {} : { sourceEventSeqs: sourceSeqs(...sources) },
     }
   }
-  function userEvent(seq: number, op: TestSurfaceOp = 'append', sources?: number[]): SessionEvent {
+  function userEvent(seq: number, op: TestSurfaceOp = 'append', sources?: number[]): UserMessageEvent {
     return {
       type: 'user/message',
       seq: SessionSeq(seq),
@@ -972,9 +978,9 @@ describe('system/message surface node', () => {
 
   it('rejects a seeded system/message with a non-system role or non-system-prompt source', () => {
     const good = systemEvent(0, 'v1')
-    const badRole = { ...good, data: { ...good.data, message: { ...(good.data as { message: object }).message, role: 'user' } } }
+    const badRole = { ...good, data: { ...good.data, message: { ...good.data.message, role: 'user' } } }
     expect(() => Session.create(SessionId('bad-role'), [badRole as SessionEvent])).toThrow(/role "system"/)
-    const badSource = { ...good, data: { ...good.data, message: { ...(good.data as { message: object }).message, source: { kind: 'user' } } } }
+    const badSource = { ...good, data: { ...good.data, message: { ...good.data.message, source: { kind: 'user' } } } }
     expect(() => Session.create(SessionId('bad-source'), [badSource as SessionEvent])).toThrow(/system-prompt source/)
   })
 })

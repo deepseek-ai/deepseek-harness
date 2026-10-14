@@ -39,11 +39,11 @@
   en: 2a8b93869eb5a2f9
   zh: ddab8e738d188a61
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/creation-and-teardown:
-  en: 6bc52b8ef503eeda
-  zh: 3290052ebc47baf6
+  en: d079cf181ece9267
+  zh: 047f76fecfc5497c
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/persistence-integration:
-  en: da056b9f0dde4ab3
-  zh: ba9ce3b19c17ca22
+  en: 3c5721bc00a0bbf4
+  zh: 711f832343ffbb75
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/turn-and-step-flow:
   en: 28939261ccc7defe
   zh: 9d157a321307ebd4
@@ -105,8 +105,8 @@
   en: 83531f2a13cc1f0e
   zh: 81a780d637dd8c5d
 /deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work:
-  en: 7f93fa258b0e39ba
-  zh: 819075791542b01c
+  en: a57822fab5e6fdfd
+  zh: 39f97b0c5040f7c8
 /deepseek-ai-dsh-agent-loop/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

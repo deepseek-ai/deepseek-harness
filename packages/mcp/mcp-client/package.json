@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-mcp-client",
   "description": "MCP client bridge: connects to MCP servers and registers their tools on ctx.tools",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -59,7 +59,7 @@
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@modelcontextprotocol/server": "2.2.0",
     "@modelcontextprotocol/node": "2.0.0",
-    "zod": "^4.4.3",
+    "zod": "4.4.3",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*"
   },

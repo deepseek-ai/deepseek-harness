@@ -158,8 +158,8 @@ it.skipIf(!built)('installs the exported registry\'s local closure and switches 
       expect(step.install, JSON.stringify(step.install)).toMatchObject({ application: 'applied', enabled: true, version })
       expect(step.savedVersion).toBe(version)
       expect(step.installed).toMatchObject({ official: true, availability: 'profile', enabled: true, installed: true, version })
-      expect(step.installed.rows.filter(row => row.preset !== undefined).map(row => row.preset).sort())
-        .toEqual(['preset-cordis', 'preset-ptc', 'preset-standard'])
+      const product = step.name.replace('@deepseek-ai/dsh-subagent-', '')
+      expect(step.installed.rows.map(row => row.rowId)).toEqual([`subagent-${product}`, `tool-subagent-${product}`])
       expect(step.providerEnabled).toBe(true)
       expect(step.nativeArtifact).toBe(true)
       // A transitive repository package the closure needs can only have come from this run's artifacts.

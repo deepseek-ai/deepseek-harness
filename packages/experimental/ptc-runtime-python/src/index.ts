@@ -759,7 +759,7 @@ export class PythonPtcRuntime extends PtcRuntime {
   override get sandboxMode(): SandboxMode { return this.ctx.sandboxPolicy.defaultMode }
 
   override get executionInstructions(): string {
-    return 'Each call runs in a fresh Python process. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.'
+    return 'The program is the body of an async Python function. Top-level await and return are supported. Emit output with print(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Python process; variables and imported modules do not persist across calls. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution\'s sandbox policy.'
   }
 
   private readonly config: ResolvedConfig
@@ -1124,7 +1124,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       // child can dispatch. `namespace.functions` is caller-supplied, so it may
       // expose members through getters or a Proxy; reading one of them inside
       // the fd-3 `data` callback would throw OUTSIDE the dispatcher's try and
-      // terminate the host (defensive-patterns contain-callback-exceptions).
+      // terminate the host (docs/defensive-patterns/general.md contain-callback-exceptions).
       // Reading every member here, in run()'s synchronous validation segment,
       // turns that throw into the seam-misuse rejection run() reserves for
       // malformed bindings. The snapshot is also the single key set the boot

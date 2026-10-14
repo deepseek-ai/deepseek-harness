@@ -25,7 +25,7 @@ function run(env: NodeJS.ProcessEnv, ...args: string[]) {
 describe('Python runtime executable builder CLI', () => {
   it.each([
     { flags: [], command: 'run build' },
-    { flags: ['--artifacts-only'], command: 'run build --artifacts-only' },
+    { flags: ['--build-artifacts'], command: 'run build:artifacts' },
   ])('validates the closure before $command and deploys only after building', ({ flags, command }) => {
     const result = run(
       { npm_execpath: 'C:\\tools\\pnpm.cjs' },
@@ -57,14 +57,14 @@ describe('Python runtime executable builder CLI', () => {
     const result = run(
       { npm_execpath: entrypoint, DSH_PYTHON_BUILD_COMMANDS: commands },
       '--skip-build',
-      '--artifacts-only',
+      '--build-artifacts',
       '--targets=node24-macos-arm64',
     )
 
     expect(result.error).toBeUndefined()
     expect(result.signal).toBeNull()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('--skip-build and --artifacts-only cannot be combined')
+    expect(result.stderr).toContain('--skip-build and --build-artifacts cannot be combined')
     expect(result.stdout).toBe('')
     expect(existsSync(commands)).toBe(false)
   })
@@ -83,7 +83,7 @@ describe('Python runtime executable builder CLI', () => {
 
     const result = run(
       { npm_execpath: entrypoint, DSH_PYTHON_BUILD_COMMANDS: commands },
-      '--artifacts-only',
+      '--build-artifacts',
       '--targets=node24-macos-arm64',
     )
 
@@ -131,7 +131,7 @@ describe('Python runtime executable builder CLI', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain(`${process.execPath} C:\\tools\\pnpm.cjs run verify-runtime-closure`)
-    expect(result.stdout).not.toMatch(/\[dry-run\] .* run build(?: --artifacts-only)?$/m)
+    expect(result.stdout).not.toMatch(/\[dry-run\] .* run build(?::src)?$/m)
     expect(result.stdout).toContain(`${process.execPath} C:\\tools\\pnpm.cjs --filter dsh-python-runtime-closure deploy`)
     const deploy = result.stdout.split('\n').find(line => line.includes(' --filter dsh-python-runtime-closure deploy'))
     expect(deploy).toContain('--prod --config.allow-unused-patches=true')
@@ -175,7 +175,8 @@ describe('Python runtime executable builder CLI', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('exec pkg')
     expect(result.stdout).toContain('--sea --targets node24-macos-x64')
-    expect(result.stdout).toContain('prepare Python and Office skills for mac-x64')
+    expect(result.stdout).toContain('keep only node-pty prebuilds darwin-x64')
+    expect(result.stdout).toContain('lock optional resource downloads and copy Office skills')
     expect(result.stdout).toContain(join(root, 'dist-exe', 'macos-x64'))
   })
 

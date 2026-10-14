@@ -157,8 +157,13 @@ export interface WorkspaceBaseline {
   readonly pinnedSessionIds: readonly SessionId[]
 }
 
-/** One ordered Workspace change after a generation's baseline. */
+/**
+ * One ordered Workspace change after a generation's baseline. `replace`
+ * carries the complete state that supersedes everything delivered before it
+ * in the generation; it is a change, not a new generation's opening frame.
+ */
 export type WorkspaceFollowIncrement =
+  | { readonly type: 'replace'; readonly value: WorkspaceBaseline }
   | { readonly type: 'upsert'; readonly workspace: WorkspaceView }
   | { readonly type: 'remove'; readonly workspaceId: WorkspaceId }
   | { readonly type: 'order'; readonly workspaceIds: readonly WorkspaceId[] }

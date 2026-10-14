@@ -6,6 +6,8 @@
 
 源码：[`packages/core/scope/src/index.ts`](../../packages/core/scope/src/index.ts) 与 [`packages/core/scope/src/store.ts`](../../packages/core/scope/src/store.ts)。
 
+<a id="identity-and-dispatch-carrier"></a>
+
 ## 身份标识与分发载体
 
 `ScopeKey` 是一个不透明的对象身份标识。已交付的 agent loop（智能体循环）使用活跃的 `Agent` 对象作为自身的 key，但该原语从不检视该对象。

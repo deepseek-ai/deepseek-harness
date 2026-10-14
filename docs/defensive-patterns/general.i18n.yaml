@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for general.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/defensive-patterns/general.md
+/defensive-patterns:
+  en: 324de84cf5239e89
+  zh: b3bdfb17d01e5a6c
+/defensive-patterns/report-orthogonal-outcomes-independently:
+  en: c16f636f8f522db4
+  zh: 94c523b536df786d
+/defensive-patterns/honor-public-contracts-on-both-sides:
+  en: 656746d485640b3a
+  zh: f75cd0333dc5bc9b
+/defensive-patterns/async-state-is-not-synchronous-state:
+  en: f58b3f3fb047f434
+  zh: daea224503617808
+/defensive-patterns/timing-does-not-carry-correctness:
+  en: 5778664b676a0079
+  zh: e99aeabf0631f647
+/defensive-patterns/optional-inputs-state-both-behaviors:
+  en: 243e275fee74f54e
+  zh: a58e04b6e3ac0e7a
+/defensive-patterns/one-value-states-one-fact:
+  en: 598d9041ccfaba7c
+  zh: 2ac9f98c97015f66
+/defensive-patterns/a-new-active-current-singleton-is-refused:
+  en: 8bf36acf96fa4c33
+  zh: bb6db31a63bcf383
+/defensive-patterns/shared-state-has-one-owner:
+  en: 053e2c485eec2613
+  zh: 2817da00572c789f
+/defensive-patterns/a-business-capability-owns-itself:
+  en: 7588b8dba9279dac
+  zh: 2760468ede60220c
+/defensive-patterns/changes-carry-performance-evidence:
+  en: 0d6855d1ae0ef4ae
+  zh: 0f771999398ce052
+/defensive-patterns/migrations-preserve-behavior:
+  en: 6213e051f51437b8
+  zh: 853580b3a4fec100
+/defensive-patterns/dispose-must-reach-quiescence-not-just-request-it:
+  en: eeb9fe3158484618
+  zh: 97187d4dbe4d75ee
+/defensive-patterns/contain-callback-exceptions-in-the-dispatcher:
+  en: ae2332afa54cb253
+  zh: db51fedb070d9a83
+/defensive-patterns/never-hand-untrusted-output-the-ambient-environment-or-predictable-paths:
+  en: 6fb7938f5197f520
+  zh: 01eb670a852f24e6
+/defensive-patterns/unlink-link-shaped-paths:
+  en: 35944dc084b41ded
+  zh: 0e59beebd9fb6d22

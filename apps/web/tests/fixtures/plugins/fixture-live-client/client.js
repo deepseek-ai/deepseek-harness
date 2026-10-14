@@ -89,7 +89,7 @@ window.__ModuleLoader__.load({
           )
         })
         ctx.slots.inject('sidebar.workspaces.session.menu.item', function* () {
-          // The shipped rows end at archive (400); these follow as one group,
+          // The shipped rows end at Session ID (450); these follow as one group,
           // opened by the export row's hairline.
           yield registerSessionAction('fixture.export-session', 500, 'exportSession', true)
           yield registerSessionAction('fixture.copy-session-id', 600, 'copySessionId', false)

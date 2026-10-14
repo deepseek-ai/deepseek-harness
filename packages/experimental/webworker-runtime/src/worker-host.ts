@@ -98,8 +98,7 @@ export interface WorkerHostOptions {
   readonly configPath?: string
   /**
    * Inner arguments the tree parses. The default binds the web server to the
-   * loopback authority the tunnel synthesizes, which also keeps
-   * `networkInterfaces()` out of the trust snapshot.
+   * loopback authority the tunnel synthesizes.
    */
   readonly cmdlineArgs?: readonly string[]
   /** Port named on the default command line; defaults to {@link DEFAULT_PORT}. */
@@ -271,12 +270,13 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       const usage = loader.usage()
       console.info(`webworker host: tree active (modules=${String(usage.modules)}, data overlays=${String(overlays.length)}, direct lane=connection.createSharedFetchHandler, als causality=${options.alsCausality === undefined ? 'inert' : 'snapshot/restore'}, image lowering=${LOWERING_VERSION})`)
 
+      // The worker tree serves only the page that spawned it, so every call speaks for the browser Peer.
+      const peer = connection.browserPeer
       tunnel.serve({
-        directFetch: (request: Request) => handler.fetch(request),
+        directFetch: (request: Request) => handler.fetch(request, peer),
         bootPayload: () => readBootPayload(ctx),
-        // The worker tree serves its own page: every stream speaks for the operator.
         openStream: (endpoint, payload, uplink, signal) =>
-          typertGateway.wireStream.open(endpoint, payload, uplink, undefined, signal),
+          typertGateway.wireStream.open(endpoint, payload, uplink, peer, signal),
         streamFailure: typertGateway.wireStream.failure,
       })
       started.resolve()

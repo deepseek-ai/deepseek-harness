@@ -1,0 +1,46 @@
+[
+  {
+    "stage": "details",
+    "details": true,
+    "tooltips": []
+  },
+  {
+    "stage": "more-hover",
+    "details": true,
+    "tooltips": []
+  },
+  {
+    "stage": "archive-before-dwell",
+    "details": true,
+    "tooltips": []
+  },
+  {
+    "stage": "archive",
+    "details": true,
+    "tooltips": [
+      "Archive"
+    ]
+  },
+  {
+    "stage": "pin",
+    "details": true,
+    "tooltips": [
+      "Pin"
+    ]
+  },
+  {
+    "stage": "back-to-title",
+    "details": true,
+    "tooltips": []
+  },
+  {
+    "stage": "menu-closed",
+    "details": false,
+    "tooltips": []
+  },
+  {
+    "stage": "row-reentered",
+    "details": true,
+    "tooltips": []
+  }
+]

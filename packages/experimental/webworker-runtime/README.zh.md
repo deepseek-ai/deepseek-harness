@@ -32,7 +32,7 @@ kind: "package-library"
 - **`src/shell/`（worker 自己的进程层）**——浏览器 worker 无法 fork，所以 `node:child_process` 不是 stub 而是实现：`spawn` 把命令放进它自己的 Web Worker——就是这同一个束，由首帧告诉它「你是 shell 进程」——并以 subprocess 服务消费的 `ChildProcess` 面报告结果。命令不占宿主线程，`SIGKILL` 不管它在干什么都能终止它，而它只能靠消息触达 VFS（由宿主应答这些帧）。Worker 平台 executable 在不替换 JavaScript 包、也不把具体实现耦合进 `node:child_process` 的情况下保持 Landlock 等 native 包协议；`xdg-open` 把一个 VFS 文本文件交给页面的只读查看器，因此 **打开配置文件** 等桌面打开操作会在页面内显示该文件；普通命令使用本包的求值器与 coreutils 命令表。语法来自 `@yarnpkg/parsers` 的 `parseShell`，而 `execSync`/`fork` 依然拒绝，因为它们需要真进程。
 - **`lib/client.js`（页面半）**——启动分为相互独立的两段。`chooseWorkerHostSource({ image?, fixtureManifest? })` 可选地拥有 boot barrier 与 fixture manifest：没有 `preview-fixture` 时停在来源选择面板，合法 query 则直接选择；两条路径都返回按序排列的 overlays。`connectWorkerHost(worker, { image?, overlays? })` 仍是公开的基础运行态连接器；调用方跳过选择器时 overlay 列表为空。`apps/web` 调用这两段并提供静态打包的 Worker。开局 `init` 帧携带基础镜像与按序排列的 overlay URL，boot 载荷送达结构化 index 注入表，`applyIndexInjections` 在壳入口运行前逐行执行。脚本 preload 行只是提示，因此会被跳过：`/plugins` 资源只能经 tunnel 解析，`loadBundle` 会在首次需要时获取 combo、把仅 tunnel 可达的 sourcemap 内嵌为 Base64 data URL，再以 Blob 执行脚本。worker 主动发出的 `view-text` 帧会打开页面的模态文本查看器。Tunnel 还暴露 fetch 形式的传输、独立文件上传载体和 API 客户端。请求帧通过结构化克隆保留 Blob 请求体，并转移 `ReadableStream<Uint8Array>` 的所有权。Host Worker 将两种请求体都逐块送入路由，因此通用文件上传不会在任何浏览器线程创建完整字节数组。Remote 流的上行以 `stream-uplink-item` / `stream-uplink-end` 帧进入没有上限的 `TunnelUplink`，`end` 之后到达的项被丢弃：页面与其 worker 是同一个可信的同源边界，Host 的 inbox 上限在此不适用。
 
-验收在 `apps/web/tests/preview-boot.e2e.ts`：静态服务真实构建页面，在 headless Chromium 里驱动 pre-boot 选择面板与 Worker 激活。空白选择验证首次启动；`vfs-example` overlay 提供普通 workspace 文件与明文 persistence 产物，无需模型请求即可验证 Workspace/Session 冷发现、工具呈现、subagent 导航和历史分页。[打包器](../webworker-packer/README.zh.md)在 Node 中根据已提交的历史日志准备当前代后继文件；这些源日志在 overlay 中逐字节保持不变。fixture 生成器负责验收测试的当前投影缓存。选择面板为 WebFS 保留独立的用户授权来源；该 provider 不读取内置 fixture。
+验收在 `apps/web/tests/preview-boot.e2e.ts`：静态服务真实构建页面，在 headless Chromium 里驱动 pre-boot 选择面板与 Worker 激活。空白选择验证首次启动；`vfs-example` overlay 提供普通 workspace 文件与明文 persistence 产物，无需模型请求即可验证 Workspace/Session 冷发现、工具呈现、subagent 导航和历史分页。showcase 混排空字符串、纯空白与非空推理块，并包含多行长命令和父路径文件链接；这些是人工构造的 fixture，不是真实模型输出。[打包器](../webworker-packer/README.zh.md)在 Node 中根据已提交的历史日志准备当前代后继文件；这些源日志在 overlay 中逐字节保持不变。fixture 生成器负责验收测试的当前投影缓存。选择面板为 WebFS 保留独立的用户授权来源；该 provider 不读取内置 fixture。
 
 [已构建 bundle 导入检查](tests/compile/transform-corpus-check.ts)在库构建后检查裸 Node 导入。Dockkit 例外接受 Node 针对任意样式表报告的未知 `.css` 扩展名错误，而不限定某一固定路径；其他扩展名、错误码或消息，以及意外成功的豁免导入，仍然报错。
 
@@ -54,8 +54,10 @@ kind: "package-library"
 - **worker 组合写明文会话日志**（`compression: 'none'` boot patch）：不带 Zstandard 编解码器，导出日志是 `.jsonl`，不会是 `.jsonl.zstd`。
 - **`node:dns/promises`、`node:vm`、`node:net`、`node:sqlite`、`node:worker_threads` 是结构化 stub**：每次调用在 console 报告拒绝并抛出。需要原生 DNS、真进程或真 realm 隔离的行在此无法运行。
 - **`node:assert/strict` 仅支持真值断言**：对于假值，可调用的默认导出和 `ok` 使用传入的消息或通用文本抛出 `ERR_ASSERTION`，或原样抛出传入的 Error。其他断言 API 未提供。
+- **原生 TLS 监听器需要 Node Host**：worker 的 `node:https.createServer` 会拒绝激活，不会替换成明文。预览内部的 HTTP 隧道不绑定套接字；面向浏览器的 HTTPS 由部署服务器提供。
 - **桌面产品埋点不可用**：`got.post` 明确报告 worker host 不支持该调用。浏览器镜像不包含 Got 及其 Node HTTP 依赖；预览组合不启用桌面上报。
 - **宿主包管理命令不可用**：`execa` 明确报告 worker host 不支持该调用；预览无法运行 pnpm、安装插件或安装原生依赖。
+- **pi-ai 模型请求不可用**：替代实现暴露已安装提供方标识的固定子集，不包含模型，使适配器能够注册配置元数据。升级 pi-ai 时必须保持这些标识有效；推理入口明确报告 worker host 不支持该调用。
 - **PTC Node 程序不可用**：process shim 用 `/dsh/bin/node` 表示可执行文件身份，使 provider 能够激活，但 Worker 既没有 Node 可执行文件，也没有 `stripTypeScriptTypes`。程序执行会在启动子进程前失败。
 - **Office 转换需要 Node Host**：LibreOffice kit 的替代模块以 `unavailable` 拒绝创建转换器。浏览器镜像排除 kit 及其引擎依赖；Office 预览提示转换不可用。
 - **文件 watcher 只能观察已挂载的 VFS**：镜像 seed 不产生事件，VFS 也没有符号链接或外部写入方。`persistent`、`ref()` 和 `unref()` 保留 Node API，但浏览器没有引用计数事件循环，因此这些接口不能控制 dedicated Worker 的生存期。

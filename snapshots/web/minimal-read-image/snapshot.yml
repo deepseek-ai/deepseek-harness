@@ -1,0 +1,8 @@
+version: 1
+scenario: minimal-read-image
+profile: web
+composition: web-minimal-image
+recording: authored
+header:
+  class: web-minimal-image
+  pin: true

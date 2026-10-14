@@ -44,7 +44,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What gets registered
 
-Each qualifying Loader entry contributes its generated host-face reflection and schema factories to the runtime registry. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and an import that settles after either owner is gone is discarded.
+Each qualifying Loader entry contributes its generated host-face reflection, schema factories, and `TYPERT.invocations` to the runtime registry. The ordinary artifact's getter exposes descriptors from a private Remote info instance; generated direct descriptors also provide named input and invocation helpers. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and an import that settles after either owner is gone is discarded.
+
+Source compositions requiring strict Remote validation prebuild and load the ordinary `./typert` artifact. The loader registers its invocations in `ctx.typert.local`; it does not recover erased constraints, documentation, or schemas from live Services. Limited descriptor-free source fallback remains a Gateway concern, and `local.hasSeen()` prevents downgrading to it after a registered definition is withdrawn.
 
 ### Observable behavior and failures
 
@@ -66,7 +68,7 @@ The plugin is an incremental scanner mirroring the client-modules node half: eve
 
 ### Manifest validation
 
-`validateTypertManifest()` is the module/file boundary: the manifest crosses from a build artifact into the typed registry, so every field is checked. The manifest must name the package that exports it, carry face `host`, hold schema factories, and keep well-formed service, event, object, member, type, and documentation records; invocation descriptors must use strict codecs with factories. Every failure names the package and the defect.
+`validateTypertManifest()` checks artifacts before they enter the typed registry. A manifest must name its exporting package, carry face `host`, hold schema factories, and contain well-formed reflection records; invocation descriptors require strict codecs with factories. Validation checks parameter `codec` and any supplied `strictCodec` specs and requires generated direct-method `input` and `invoke` to be callable; `result` remains the sole output codec. Documentation and JSON Schema are optional. Registration never calls the input selector, parser factories, or projection getters; validation inspects only supplied static projection data. Every failure names the package and the defect.
 
 ### Caching and ownership
 
@@ -113,6 +115,7 @@ These limits define what the loader does not discover or register; they are curr
 - **Host face only** — discovery imports only the host `./typert` artifact; client runtimes need a separate composition owner before equivalent discovery is added.
 - **Explicit entries for nested plugins** — Loader entries are discovered automatically, but plugins nested behind another entry, or not loaded by the Loader at all, need an explicit `packages` entry or direct `ctx.typert.register()` ownership.
 - **Cached verdicts never expire** — a package that gains a `./typert` export mid-process needs a restart before the loader registers it.
+- **Host readiness remains composition-owned** — consumers requiring strict metadata must wait for registration before serving calls. The lazy info factory does not make asynchronous Loader registration ready; `local.hasSeen()` only protects definitions already observed.
 
 <a id="dev-note"></a>
 ### Dev Note

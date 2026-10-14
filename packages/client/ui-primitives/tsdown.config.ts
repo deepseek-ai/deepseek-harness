@@ -1,6 +1,6 @@
 import { staticLinked } from '../tsdown.client.ts'
 
 export default staticLinked(
-  '@deepseek-ai/dsh-client-ui-primitives',
+  import.meta.dirname,
   ['lib/types/index.js'],
 )

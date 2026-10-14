@@ -125,7 +125,7 @@ class CatalogWorkflowEngine extends WorkflowEngine {
 function registerCatalogSubagentProvider(ctx: Context, name: string): void {
   const provider: SubagentProvider = {
     name,
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true },
+    capabilities: { agentOptions: true, agentPreset: true, outputSchema: true, depthLimit: true },
     inheritsParentContext: false,
     start: () => Promise.reject(new Error('tool-catalog provider cannot start a child')),
     // Declared so consumers configured for continuable background mode mount.
@@ -563,7 +563,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-agent-team',
     source: 'packages/experimental/tool-agent-team/src/index.ts',
     requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'an exact live Team member Agent'],
-    writes: ['tool/call', 'team/member', 'team/message/queued', 'team/message/delivered', 'team/task', 'tool/result'],
+    writes: ['tool/call', 'team/member', 'team/task', 'agent/inbox/spliced', 'user/message on inbox claim', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)

@@ -1,8 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { bridge } from '../src/http-bridge.ts'
+import { Peer } from '../src/peer.ts'
+
+const PEER = new Peer(new Context(), { principal: { kind: 'owner' } })
 
 describe('HTTP bridge abort', () => {
   it('destroys a declared-oversize request instead of draining it', async () => {
@@ -26,7 +30,7 @@ describe('HTTP bridge abort', () => {
     await bridge(request, response, {
       requestBodyMode: () => 'buffered',
       fetch: () => { throw new Error('a rejected request must never reach the handler') },
-    }, 1000)
+    }, PEER, 1000)
     // The socket must not stay parked draining a body the client can trickle
     // at will after the rejection — same discipline as the chunked overrun.
     expect(status).toBe(413)
@@ -68,7 +72,7 @@ describe('HTTP bridge abort', () => {
         }
         return Response.json({ aborted: fetchRequest.signal.aborted })
       },
-    }, Number.MAX_SAFE_INTEGER)
+    }, PEER, Number.MAX_SAFE_INTEGER)
     await started
     response.emit('close')
     await pending
@@ -102,7 +106,7 @@ describe('HTTP bridge abort', () => {
     const pending = bridge(request, response, {
       requestBodyMode: () => 'buffered',
       fetch: async () => new Response(body),
-    }).then(() => { settled = true })
+    }, PEER).then(() => { settled = true })
     try {
       await expect.poll(() => settled).toBe(true)
       expect(writes).toBe(1)
@@ -134,7 +138,7 @@ describe('HTTP bridge abort', () => {
     const pending = bridge(request, response, {
       requestBodyMode: () => 'buffered',
       fetch: async () => new Response(body),
-    })
+    }, PEER)
     await started.promise
     response.emit('close')
     controller.enqueue(Uint8Array.of(1))
@@ -172,7 +176,7 @@ describe('HTTP bridge abort', () => {
         for await (const chunk of input.body) received.push(chunk)
         return new Response('stored')
       },
-    }, 1)
+    }, PEER, 1)
 
     await started
     expect(received).toEqual([])
@@ -206,7 +210,7 @@ describe('HTTP bridge abort', () => {
     await bridge(request, response, {
       requestBodyMode: () => 'streaming',
       fetch: () => Promise.resolve(new Response(null, { status: 415 })),
-    }, 1)
+    }, PEER, 1)
     expect(status).toBe(415)
     expect(headers).toMatchObject({ connection: 'close' })
     expect(destroyed).toEqual([true])

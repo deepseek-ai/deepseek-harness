@@ -13,6 +13,14 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
+/** Fail the account listing request fast, so the route serves its bundled catalog and each call gets a fresh Messages response. */
+function messagesOnly(response: () => Response) {
+  return (input: string | URL | Request): Promise<Response> => {
+    const url = new URL(input instanceof Request ? input.url : input)
+    return Promise.resolve(url.pathname === '/models' ? new Response(null, { status: 404 }) : response())
+  }
+}
+
 /** Drive one streamed request through the runtime and return its terminal failure. */
 async function finishOf(ctx: Context, provider: string) {
   const assembler = new BlockAssembler()
@@ -40,19 +48,19 @@ it.each([
 ] as const)('reports a 402 balance rejection on $provider with apiKey "$apiKey" as $code', async ({ provider, apiKey, code }) => {
   vi.stubEnv('DEEPSEEK_API_KEY', apiKey)
   const ctx = await routeFor('account-token', provider)
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+  vi.spyOn(globalThis, 'fetch').mockImplementation(messagesOnly(() => new Response(JSON.stringify({
     error: { code: 'insufficient_balance', message: 'Insufficient balance' },
-  }), { status: 402 }))
+  }), { status: 402 })))
   await expect(finishOf(ctx, provider)).resolves.toMatchObject({ kind: 'error', failure: { code } })
 })
 
 it('reports an in-band account balance stream error as ACCOUNT_QUOTA', async () => {
   vi.stubEnv('DEEPSEEK_API_KEY', 'fixture-api-key')
   const ctx = await routeFor('account-token', 'deepseek-account')
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+  vi.spyOn(globalThis, 'fetch').mockImplementation(messagesOnly(() => new Response(
     'event: error\ndata: {"type":"error","error":{"type":"invalid_request_error","code":"insufficient_balance","message":"Insufficient balance"}}\n\n',
     { status: 200 },
-  ))
+  )))
   await expect(finishOf(ctx, 'deepseek-account')).resolves.toMatchObject({
     kind: 'error', failure: { code: 'ACCOUNT_QUOTA' },
   })
@@ -68,7 +76,7 @@ it('still expires the stored credential on an account-route 401', async () => {
     rejectToken: (token: string): Promise<void> => rejectToken(token),
   } as DeepSeekAccount)
   await ctx.plugin(Account)
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('Unauthorized', { status: 401 }))
+  vi.spyOn(globalThis, 'fetch').mockImplementation(messagesOnly(() => new Response('Unauthorized', { status: 401 })))
   await expect(finishOf(ctx, 'deepseek-account')).resolves.toMatchObject({
     kind: 'error', failure: { code: 'ACCOUNT_TOKEN_INVALID' },
   })

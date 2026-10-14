@@ -5,12 +5,12 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService, type RemoteStream } from '@deepseek-ai/dsh-typert-protocol'
 import { discoverShells, resolveShell } from './shells.ts'
 import { BrowserTerminal } from './terminal.ts'
 import { TerminalRetention } from './retention.ts'
 import type {
-  TerminalShell, TerminalAttachmentId, TerminalCreateRequest, TerminalEnvironment, TerminalFrame, TerminalRetentionFrame,
+  TerminalShell, TerminalInput, TerminalCreateRequest, TerminalEnvironment, TerminalFrame, TerminalRetentionFrame,
   WebTerminalId, WebTerminalInfo,
 } from './types.ts'
 
@@ -44,9 +44,9 @@ export interface Config {
   readonly maxRows: number
   /** Screen history rows retained for reconnecting clients. */
   readonly scrollback: number
-  /** Maximum queued UTF-8 frame bytes per output follower before disconnection. */
+  /** Maximum queued UTF-8 frame bytes per output follower and in the Client input buffer. */
   readonly maxBufferedBytes: number
-  /** Maximum UTF-8 bytes in one input request. */
+  /** Maximum raw UTF-8 bytes per input command and across unacknowledged Client input. */
   readonly maxInputBytes: number
   /** Provider process-termination grace period in milliseconds. */
   readonly disposeGraceMs: number
@@ -120,7 +120,7 @@ export class TerminalController extends TypertRemoteService {
     signal.throwIfAborted()
     const { workingDirectory } = this.execution(agent)
     return { cwd: workingDirectory.get(agent.session),
-      maxInputBytes: this.config.maxInputBytes, maxCols: this.config.maxCols,
+      maxInputBytes: this.config.maxInputBytes, maxBufferedBytes: this.config.maxBufferedBytes, maxCols: this.config.maxCols,
       maxRows: this.config.maxRows, scrollback: this.config.scrollback }
   }
 
@@ -206,46 +206,17 @@ export class TerminalController extends TypertRemoteService {
   }
 
   /**
-   * Attach to a terminal without binding its process lifetime to the transport.
+   * Attach terminal input and output to one physical Remote stream.
    * @param agent - Session owner supplied by the Gateway.
    * @param id - terminal identity.
-   * @param attachmentId - new exclusive input attachment.
-   * @param signal - physical stream cancellation.
-   * @returns screen recovery followed by output and metadata changes.
+   * @param signal - attachment cancellation; the process remains alive and input is never replayed.
+   * @returns screen recovery, output, writable state and provider-acceptance acknowledgements.
    */
   @Remote({ mode: 'stream' })
-  follow(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, signal: AbortSignal): AsyncIterable<TerminalFrame> {
-    if (!/^[\w-]{1,128}$/u.test(attachmentId)) throw new Error('Invalid terminal attachment identity')
-    return this.terminal(agent, id).follow(attachmentId, signal)
-  }
-
-  /**
-   * Deliver raw input, including Tab completion and control characters.
-   * @param agent - Session owner supplied by the Gateway.
-   * @param id - terminal identity.
-   * @param attachmentId - current writable attachment.
-   * @param data - input bytes represented as UTF-8 text.
-   * @returns after provider input acceptance.
-   */
-  @Remote
-  async write(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, data: string): Promise<void> {
-    if (Buffer.byteLength(data, 'utf8') > this.config.maxInputBytes) throw new Error('Terminal input exceeds the configured limit')
-    await this.terminal(agent, id).write(attachmentId, data)
-  }
-
-  /**
-   * Update the dimensions of the PTY and recovery screen.
-   * @param agent - Session owner supplied by the Gateway.
-   * @param id - terminal identity.
-   * @param attachmentId - current writable attachment.
-   * @param cols - column count.
-   * @param rows - row count.
-   * @returns after the resize completes.
-   */
-  @Remote
-  async resize(agent: Agent, id: WebTerminalId, attachmentId: TerminalAttachmentId, cols: number, rows: number): Promise<void> {
-    this.dimensions(cols, rows)
-    await this.terminal(agent, id).resize(attachmentId, cols, rows)
+  attach(agent: Agent, id: WebTerminalId, signal: AbortSignal): RemoteStream<TerminalFrame, TerminalInput> {
+    const invocation = this.ctx.invocation
+    if (invocation === undefined) throw new Error('Terminal attachment requires a Remote invocation')
+    return this.terminal(agent, id).attach(invocation.uplink<TerminalInput>(), this.config, signal, invocation.uplinkWindow)
   }
 
   /**

@@ -55,8 +55,6 @@ export function resolveActiveMember(
 
 /** Owns Team identities and the lifecycle of rostered continuable children. */
 export class TeamRoster {
-  private readonly inFlightCreations = new Set<Promise<unknown>>()
-
   /**
    * @param ctx - Team service context with Agent, Session, persistence, and subagent services.
    * @param journal - authoritative Lead-log transaction owner.
@@ -166,21 +164,7 @@ export class TeamRoster {
    */
   async spawn(caller: Agent, request: SpawnTeammateRequest): Promise<SpawnTeammateResult> {
     if (this.lifecycle.disposed) throw new TeamError('Agent Teams service is disposing', 'TEAM_DISPOSED')
-    const operation = this.spawnAdmitted(caller, request)
-    this.inFlightCreations.add(operation)
-    try {
-      return await operation
-    } finally {
-      this.inFlightCreations.delete(operation)
-    }
-  }
-
-  /**
-   * Return admitted creation operations captured for ordered disposal.
-   * @returns detached snapshot ordered only by Set insertion.
-   */
-  pendingCreations(): readonly Promise<unknown>[] {
-    return [...this.inFlightCreations]
+    return await this.lifecycle.track(this.spawnAdmitted(caller, request))
   }
 
   /**

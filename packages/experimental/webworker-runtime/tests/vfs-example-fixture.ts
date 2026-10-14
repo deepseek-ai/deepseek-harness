@@ -17,6 +17,7 @@ import {
 import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
+import { SUBAGENT_CATALOG_VERSION } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
 
 /** Root copied by the preview image's repository adapter. */
 export const VFS_EXAMPLE_ROOT = fileURLToPath(new URL('./fixtures/vfs-example', import.meta.url))
@@ -36,6 +37,15 @@ export const VFS_EXAMPLE_OLDEST_MESSAGE = 'History checkpoint 01: verify determi
 
 /** Settled tail marker used by browser acceptance and the demonstration GIF. */
 export const VFS_EXAMPLE_TAIL_MESSAGE = 'Preview tour complete'
+
+/** Non-empty reasoning bodies surrounded by empty and whitespace-only fixture blocks. */
+export const VFS_EXAMPLE_REASONING = [
+  'I will inspect the deterministic workspace and collect each preview surface.',
+  'Check the Chat presentation\n\nI will inspect the wrapped command, its first-line status, and the parent-path file link.',
+] as const
+
+/** Authored long command and a second line for wrapping and status-dot acceptance. */
+export const VFS_EXAMPLE_WRAPPED_COMMAND = `printf 'preview command fixture\\n' # ${'wrapped-argument-'.repeat(28)}\nprintf 'wrap complete\\n'\n`
 
 /** Durable task ids for the Host Schedule rows seeded into the preview's `DSH_HOME`. */
 export const VFS_EXAMPLE_SCHEDULE_IDS = {
@@ -212,6 +222,12 @@ function galleryCalls(): GalleryCall[] {
       result: 'preview ready\n',
     },
     {
+      id: 'preview-wrapped-bash',
+      name: 'bash',
+      args: { command: VFS_EXAMPLE_WRAPPED_COMMAND, description: 'Show wrapped command and first-line status' },
+      result: 'preview command fixture\nwrap complete\n[exit code: 0]',
+    },
+    {
       id: 'preview-glob',
       name: 'glob',
       args: { pattern: '**/*', path: '.' },
@@ -327,7 +343,8 @@ function mainLog(): {
   log.add(userMessage('preview-gallery-user', 'Show the seeded workspace, tool cards, subagents, and pagination in one tour.'))
   log.add({ type: 'step/start', data: { turn, step: 1 } })
   log.add(assistantMessage('preview-gallery-tools', turn, 1, [
-    { type: 'reasoning', text: 'I will inspect the deterministic workspace and collect each preview surface.' },
+    ...['', ' \t\n', VFS_EXAMPLE_REASONING[0], '', VFS_EXAMPLE_REASONING[1], '\n  ']
+      .map(text => ({ type: 'reasoning', text })),
     ...calls.map(call => ({ type: 'tool-call', id: call.id, name: call.name, arguments: JSON.stringify(call.args) })),
   ]))
   for (const call of calls) {
@@ -355,11 +372,17 @@ function mainLog(): {
       surfaceOp: 'append',
     })
   }
+  for (const child of [
+    { childId: VFS_EXAMPLE_SESSION_IDS.oneShot, childCreatedAt: CREATED_AT + 100_000, mode: 'one-shot', label: 'Review preview architecture' },
+    { childId: VFS_EXAMPLE_SESSION_IDS.continuable, childCreatedAt: CREATED_AT + 200_000, mode: 'continuable', label: 'Continue preview verification' },
+  ] as const) {
+    log.add({ type: 'subagent/catalog', data: { version: SUBAGENT_CATALOG_VERSION, ...child } })
+  }
   log.add({ type: 'step/end', data: { turn, step: 1 } })
   log.add({ type: 'step/start', data: { turn, step: 2 } })
   log.add(assistantMessage('preview-gallery-final', turn, 2, [{
     type: 'text',
-    text: `## ${VFS_EXAMPLE_TAIL_MESSAGE}\n\nThe workspace, specialized tool cards, two subagent histories, and an earlier history page are ready to inspect.`,
+    text: `## ${VFS_EXAMPLE_TAIL_MESSAGE}\n\nThe workspace, specialized tool cards, two subagent histories, and an earlier history page are ready to inspect.\n\nThis is fixture-authored demonstration data, not a live model run. Open [Parent workspace guide:1–8](<../workspace/PREVIEW.md#L1-L8>) to inspect the same workspace file through a parent path.`,
   }]))
   log.add({ type: 'step/end', data: { turn, step: 2 } })
   log.add({ type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })

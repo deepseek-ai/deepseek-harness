@@ -498,8 +498,28 @@ interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /**
+   * Route endpoint the adapter uses when the profile sets no `baseURL`; the
+   * adapter may still send an individual model to that model's own endpoint.
+   * Absent when the route has no fixed endpoint.
+   */
+  defaultBaseURL?: string
+  /** Authentication the adapter performs when the profile names no credential reference; absent when it reports none. */
+  nativeAuth?: LlmNativeAuth
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
   error?: string
+}
+```
+
+A settings editor shows `defaultBaseURL` and `nativeAuth` for a profile that leaves the endpoint or the credential reference unset. `nativeAuth` lists environment variable names, never their values.
+
+```ts type-equiv
+/** Authentication a provider route performs without a credential reference in its profile. */
+interface LlmNativeAuth {
+  /** Environment variables the route's authentication reads, in lookup order; empty when it reads none. */
+  env: readonly string[]
+  /** Whether a stored OAuth sign-in can authenticate the route. */
+  oauth: boolean
 }
 ```
 
@@ -796,7 +816,7 @@ interface LlmCallConfigAdapterDefaults {
 
 ## Official DeepSeek request extensions
 
-`ctx.deepseekLlmApiExtensions` is the provider-specific registry for additive top-level fields on `deepseek-official` requests. Contributor plugins use `register(field, provider)` to claim one field; the adapter calls `prepare(request)` after serializing its base body and merges the returned fields before HTTP. The prepared `accept()` transaction runs after 2xx, so a contributor can commit delivery state without treating a transport or provider rejection as acceptance. Preparation, collision, and acceptance failures use `REQUEST_EXTENSION` and fail the model request. A merged body that fails to serialize is sent without extension fields; acceptance is skipped and the provider plugin logs the omitted field names.
+`ctx.deepseekLlmApiExtensions` is the provider-specific registry for additive top-level fields on `deepseek-official` requests. Contributor plugins use `register(field, provider)` to claim one field; the adapter calls `prepare(request)` after serializing its base body and merges the returned fields before HTTP. The prepared `accept()` transaction runs after 2xx, so a contributor can commit delivery state without treating a transport or provider rejection as acceptance. A contributor whose preparation throws is logged and omitted from that request, and an acceptance failure is logged without failing the request; a base-field collision uses `REQUEST_EXTENSION` and fails the model request. A merged body that fails to serialize is sent without extension fields; acceptance is skipped and the provider plugin logs the omitted field names.
 
 The [wire reference](../deepseek-llm-api-wire-extensions.md) defines the exact request headers, extension transaction, field versions, and receiver obligations. The shipped composition registers [`dsh_session_log`](../../packages/session/session-log-deepseek/README.md) as a lossless incremental canonical-log suffix and [`dsh_plugin_packages`](../../packages/llm/plugin-package-inventory-deepseek/README.md) as the complete active Loader-backed package set. These fields remain outside model messages and are absent from the pi-ai adapter path.
 
@@ -931,8 +951,9 @@ register<K extends keyof DeepSeekLlmApiExtensionMap>( field: K, provider: DeepSe
 
 /**
  * Prepare every currently registered field from one immutable base request.
- * Preparation failures reject before HTTP dispatch. Field values are cloned and frozen;
- * providers retain no mutable alias to the outgoing request.
+ * A provider whose preparation throws, or whose value cannot be cloned, is omitted
+ * from this request; the first such failure per field is logged. Only cancellation rejects. Field values are cloned
+ * and frozen; providers retain no mutable alias to the outgoing request.
  * @param request - exact serialized request facts before extension fields.
  * @returns detached fields and their idempotent joint acceptance transaction.
  */

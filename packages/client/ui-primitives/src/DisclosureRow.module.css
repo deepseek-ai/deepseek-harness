@@ -13,7 +13,22 @@
   min-width: 0;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.header[data-has-accessory] {
+  gap: 8px;
+}
+
+.header[data-has-accessory] .row {
+  flex: 0 1 auto;
+}
+
 .row {
+  flex: 1 1 auto;
   position: relative;
   overflow: hidden;
   display: flex;

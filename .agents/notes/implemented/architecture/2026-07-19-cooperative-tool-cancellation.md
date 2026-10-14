@@ -62,7 +62,7 @@ No registry test can prove that arbitrary third-party same-process code observes
 
 **Forbid around wrappers from replacing the signal.** Rejected because deadlines and nested operational scopes need lexical derivation. Capturing and fusing the caller signal preserves composition without allowing detachment.
 
-**Race the tool promise against cancellation.** Rejected because it reports completion while side effects may remain live, violating the [quiescent-disposal rule](../../../../docs/defensive-patterns.md#dispose-must-reach-quiescence-not-just-request-it).
+**Race the tool promise against cancellation.** Rejected because it reports completion while side effects may remain live, violating the [quiescent-disposal rule](../../../../docs/defensive-patterns/general.md#dispose-must-reach-quiescence-not-just-request-it).
 
 ## Consequences
 

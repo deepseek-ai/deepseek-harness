@@ -100,10 +100,10 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     })
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === BUNDLE))
       .toMatchObject({ official: true, availability: 'profile', enabled: false })
-    expect((await scaffold.ctx.agentPresets.compositionInventory()).find(preset => preset.id === 'ptc')?.rows
-      .some(row => row.entryId === 'tool-subagent-claude-code')).toBe(false)
+    expect(scaffold.ctx.tools.schemas().some(tool => tool.name === 'subagent_claude_code')).toBe(false)
     expect(await scaffold.ctx.pluginManager.setBundleEnabled(BUNDLE, true))
       .toMatchObject({ application: 'applied', changed: true })
+    expect(scaffold.ctx.tools.schemas().some(tool => tool.name === 'subagent_claude_code')).toBe(true)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)

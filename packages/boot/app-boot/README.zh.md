@@ -40,7 +40,7 @@ installFailLoud('dsh')
 const ctx = await boot('dsh', resolveConfigPath(argv[2], process.env.DSH_SNAPSHOT))
 ```
 
-`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`webserver`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
+`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`webserver`、`web-runtime`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
 
 <a id="profiles"></a>
 ### Profile
@@ -62,21 +62,7 @@ profile 导入插件前，DSH 会检查其 `peerDependencies` 中对 `@deepseek-
 
 启用的 `dsh-hmr` 插件会监视 profile manifest 与两份用户 patch 文件，重新读取按顺序排列的组合包层，并应用[重载失败策略](#startup-and-reload-failures)。[DSH HMR](../hmr/README.zh.md) 将这些重载与[插件管理器](../plugin-manager/README.zh.md)的配置写入串行化；包操作在其队列之外执行。启动器不安装 HMR 或监视器；HMR 被禁用或不存在时，更改需要重启。
 
-插入条目的插件名可以是绝对文件系统路径、文件 URL 或包标识符。patch 加载会把 `insert` 条目、其嵌套分组和插入的 preset 定义中的绝对路径，以及相对于 patch 文件的 `./` 或 `../` 路径转换为文件 URL；对已有条目名称的断言及替换用的 `config` 值保持原样。
-
-profile patch 可以将 `preset` 设为外层条目 id，把其余普通 patch 字段应用到该条目的字面量 `config.plugins` 列表中。任何 bundle 或用户层都可以提供这些操作。每个操作作用于当前子条目列表；较晚的用户操作优先，而较晚的整个 preset `config` 替换会覆盖此前所有子条目贡献。普通外层 patch 保留 Include 的单次索引查找语义：替换 group 的 `config` 所引入的子条目无法作为外层目标。外层 preset 目标缺失或格式错误、插入造成子条目 id 重复都会使组合失败。内层 `id` 不匹配时只警告并跳过，因此禁用 bundle 不会使用户保留的子条目覆盖失效。
-
-```yaml
-- preset: preset-standard
-  insert:
-    - id: optional-string-editor
-      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-- preset: preset-standard
-  id: optional-string-editor
-  disabled: true
-```
-
-`ProfilePatch` 在原生 patch 字段上增加 `preset`。`applyProfilePatches` 组合这些操作；`compileProfilePatches` 返回普通 Include patch。启动、profile 重载、有效配置 dump、schema 检查及兼容性预检共用此编译器。限定到 preset 的 `insert` 模块路径以声明它的 patch 所在目录为基准，包括嵌套分组；`!!js` 保持不求值，直至对应子条目激活。原生被 Include 引入文件的 patch 列表仍使用普通 Include 语法。 读取的作用域插入行若未声明 ID，会依据声明文件的规范路径及条目位置获得稳定的内部 ID，嵌套组内的行也如此；普通匿名根行保留 Loader 的既有行为。生成的 ID 用于在重载和保留代际之间识别贡献项，是实现细节，不是作者应在 patch 中引用的名称。编译失败会标明声明 patch 文件和操作序号，profile 层合并后也保留这些信息。
+插入条目的插件名可以是绝对文件系统路径、文件 URL 或包标识符。patch 加载会把 `insert` 条目及其嵌套分组中的绝对路径以及相对于 patch 文件的 `./` 或 `../` 路径转换为文件 URL；对已有条目名称的断言及替换用的 `config` 值保持原样。
 
 挂载 profile 条目前，`dsh` launcher 会从安装依赖图与有序 bundle 依赖图计算一份不可变的 runtime resolution。普通 Node、打包可执行文件与 Electron Host 等所有 profile 启动器都使用 runtime 解析，将 runtime resolution 安装到 Node 的 ESM 与 CommonJS 解析器中，不创建 fallback 链接。
 
@@ -98,8 +84,6 @@ profile patch 可以将 `preset` 设为外层条目 id，把其余普通 patch �
 
 `resolvePluginResource(specifier, parentURL)` 通过活动的 Node ESM 解析器将插件模块或导出资源解析为本地文件路径，不执行其代码。解析器不可用或资源无法解析为本地文件时会抛出错误。
 
-`realModuleFile(path)` 在 Node 和打包可执行程序中规范化已有模块资源的路径。它跟随物理文件符号链接，并通过规范化后的所在目录保留归档资源。资源不存在或无法访问时抛出错误。
-
 使用 `readPluginMeta(specifier, parentURL)` 或 `ctx.pluginPackages.metaOf(specifier, parentURL)` 读取已安装包的展示文本，无需导入或激活插件。查询使用完整包标识与调用方的解析基准，并遵循 Node exports。文件路径与文件 URL 不解析资源，直接返回无元信息。包根标识缺失的 locale 字段回退到可访问的 `package.json`；子路径标识从不读取 `package.json`。格式错误的元信息返回 `error` 诊断。结果保留翻译，由 Client 选择语言。即使 locale 文本完整，读取器也会加载图片 data URL：包根使用清单 `icon`，省略该字段时使用 `<包名>/icon`；子路径使用 `<标识>/icon`。图标出错时，保留有效文本并附上诊断。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。
 
 `ON_DEMAND_BUNDLES` 列出仅按需安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包拥有的本地化元信息和图标，支持离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与新鲜度；构建只读取已提交的目录，不导入提供者代码。目录不保存安装目标；[插件管理器](../plugin-manager/README.zh.md#use-this-package)根据当前版本和安装位置确定目标，并使用普通组合包安装器。[产品用途检查](../../../scripts/verify-product-use.ts)将随附和按需选择与 Web 组合，但不执行提供者。
@@ -107,7 +91,7 @@ profile patch 可以将 `preset` 设为外层条目 id，把其余普通 patch �
 <a id="startup-and-reload-failures"></a>
 ### 启动与重载失败
 
-profile 重载返回未变化的已有故障诊断，不让无关修改因此失败。新增未激活条目、配置或 fiber 变化、诊断变化都会使重载失败；被移除的 fiber 仍须完成释放。消失或被字面量禁用的活跃根条目先释放资源，再激活替代条目，因此单实例提供方可以先排空进行中的工作，再让后继者注册。每次重组时，编译与释放检查使用同一份已解析的根条目。显式启用的目标必须成功激活，即使它的故障早于本次操作。成功重载在生命周期结束及诊断检查通过后发出 `app-boot/config-reload`，包括未启用 HMR 时的程序化更新。事件不携带 diff 或解析后的配置。 成功重载在生命周期结束及诊断检查通过后返回；仅 volatile 的条目变化由 Loader 在更新过程中提交。
+profile 重载返回未变化的已有故障诊断，不让无关修改因此失败。新增未激活条目、配置或 fiber 变化、诊断变化都会使重载失败；被移除的 fiber 仍须完成释放。显式启用的目标必须成功激活，即使它的故障早于本次操作。`recomposeProfile(ctx, patches, binName, { requiredIds, running })` 与 runtime resolution 一起执行一次重新组合：它移除新一代组合不再列出的行，并在其包仍有映射时等待这些行释放完成，发布可重新计算的 resolution 的最新一代，使兼容性预检读取已发布的包，应用新一代组合，启动更新后没有运行中 fiber 的 `running` 条目和导入失败的条目，然后判定激活结果。`running` 列出调用方停止其中部分条目之前正在运行的条目；之后每个失败的条目都计为新的故障。新一代组合应用之前的失败会把移除的行放回原位置，从而重新启动它们，并重新启动 `running` 条目。等待服务的条目报告为警告（required 条目除外），因此出现提供方后它即启动；`reconcileProfilePatches()` 以同样方式判定它。resolution 拒绝的发布属于这种失败，并报告 `package-moved`。Config Editor 使用的 `reconcileProfilePatches()` 应用并判定 patch，不发布 resolution，也不重试失败的导入。导入失败的条目以 Loader 再次导入时返回的错误报告，因此若导入现在成功，判定该条目时会对模块求值；变更前记录的激活状态不执行任何导入，因此之前导入失败的条目无论现在的错误是什么，都计为同一个故障。成功重载在生命周期结束及诊断检查通过后发出 `app-boot/config-reload`，包括未启用 HMR 时的程序化更新。事件不携带 diff 或解析后的配置。成功重载在生命周期结束及诊断检查通过后返回；仅 volatile 的条目变化由 Loader 在更新过程中提交。
 
 Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如果已启用的 required 条目无法激活，`boot()` 会在释放资源后以 `StartupError` 拒绝。独立管理生命周期的 logger exporter 会保留异步资源释放期间的警告和错误记录，并在 `boot()` 结算前释放。其消息分组列出所有失败插件和等待的服务，标记 required 条目，并保留原始堆栈、嵌套原因和聚合错误成员。CLI 仅输出该消息一次，并在保存[完整启动诊断](../../../apps/cli/reference/README.zh.md#startup-diagnostics)后以退出码 1 结束；其他异常保留正常堆栈输出。表中的“终止启动”指释放已挂载插件并以非零码退出，不报告就绪；“继续”指保留成功运行的插件。后续配置 HMR 不会再次执行 required 启动审计，也不会回滚整个更新。
 
@@ -132,10 +116,6 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 
 如果你的应用持有终端，它可以在进程退出前把终端交还，你的 shell 绝不会残留在 raw 模式。交还过程有界：卡住的清理只会延迟致命退出，而不会取消它。
 
-### 告诉 agent（智能体）harness 所在位置
-
-当你的应用启动模型驱动的 agent 时，你可以告诉 agent DSH 实现代码 checkout 的位置：它得知该路径，也知道不得据此推断工作目录——它应使用 `pwd`。这条指示在系统提示词靠前位置出现一次。没有系统提示词服务的应用会跳过；开发环境中，重新加载系统提示词后它会消失，直至下次启动。
-
 -----
 
 <a id="understand-the-implementation"></a>
@@ -155,8 +135,8 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 - **包元数据。** `ctx.pluginPackages.packageOf` 定位所属包，不加载代码，也不要求导出 `package.json`；子路径选择其所属包，不校验该文件。安装 runtime resolution 后，即使查询未命中也以其选包规则为准。仅安装服务而不提供 runtime resolution 的底层嵌入方保留原生查询。展示元数据使用上文另述的入口感知读取器。
 - **两个 Loader builtin。** `mountRootInclude` 把 `cordis:include` 与 `cordis:group` 注册为 Loader builtin：group 行能把一个提供方与它的消费方放进同一个 `isolate` realm，而位于本工作区之外的 agent preset 无法按名称解析 `@deepseek-ai/cordis-plugin-group`。两者都通过宿主的模块管线加载，而非被包含树自身的说明符解析。
 - **由 consumer 持有严格语义。** 普通 Loader group 保留成功 sibling。App-boot 在首次结算后应用全局 required-entry policy；agent preset 与动态多 entry 组合在需要 all-or-nothing setup 时，持有并拆卸各自的独立 Loader 子树。App-boot 读取 failed fiber 来报告已记录的错误，并在一个进程检查点内合并 Loader 重复的 rejection 通知。
-- **唯一 runtime resolution。** 安装优先、有序 bundle 逐根 breadth-first 遍历生成运行时表。runtime 解析不创建链接；runtime resolution 条目占据 `$DSH_HOME/profiles/node_modules` 上各自的包名位置，其余包名把该目录当作普通祖先。profile 加载时删除 Link 后端发布版写进 profile 的 `.dsh-module-fallback` 投影；pnpm 安装的包保留。package `imports` 选中的外部 bare target 使用相同的选包顺序，映射、conditions 和精确 target 解析仍由 Node 负责。完整后继 runtime resolution 可以原子地增加 package name、移除 profile 范围的映射和 profile 本地包名、更新 linked root 集合；保留映射的规范化目录、版本和作用域不变。安装范围的锚点不变；profile 映射可以更换声明来源。[插件管理器](../plugin-manager/README.zh.md)在包操作之后发布后继代（[决策](../../../.agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.zh.md)）。
-- **移除链接拦截。** 后继 generation 可以移除 linked root，无需重启。目录不再被任何剩余 root 覆盖时，后续请求使用原生查询，可能找到开发副本，也可能报告缺包。已有模块引用和 Node 缓存保持不变。同名、同目标可以重新加入；曾发布的名称改指向不同目标时，即使中间移除过也会被拒绝（[generation 规则](../../../.agents/notes/implemented/architecture/2026-09-09-profile-resolution-generations.zh.md#immutable-generations)）。
+- **唯一 runtime resolution。** 安装优先、有序 bundle 逐根 breadth-first 遍历生成运行时表。runtime 解析不创建链接；runtime resolution 条目占据 `$DSH_HOME/profiles/node_modules` 上各自的包名位置，其余包名把该目录当作普通祖先。profile 加载时删除 Link 后端发布版写进 profile 的 `.dsh-module-fallback` 投影；pnpm 安装的包保留。package `imports` 选中的外部 bare target 使用相同的选包顺序，映射、conditions 和精确 target 解析仍由 Node 负责。完整后继 runtime resolution 可以原子地增加 package name、移除 profile 范围的映射和 profile 本地包名、更新 linked root 集合；保留映射的规范化目录和作用域不变。安装范围的映射保持版本和锚点不变；profile 映射可以更换声明来源，对原地升级的包还可以更改版本。[插件管理器](../plugin-manager/README.zh.md)在包操作之后发布后继代（[决策](../../../.agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.zh.md)）。
+- **移除链接拦截。** 后继 generation 可以移除 linked root，无需重启。目录不再被任何剩余 root 覆盖时，后续请求使用原生查询，可能找到开发副本，也可能报告缺包。已有模块引用和 Node 缓存保持不变。不属于 profile 映射的链接名称可以指向其他目标，移除之后也可以；其 profile 映射先被移除的链接名称同样可以；Node 缓存的原目标真实路径会被重新定位（[generation 规则](../../../.agents/notes/implemented/architecture/2026-09-09-profile-resolution-generations.zh.md#immutable-generations)）。
 - **应用自有 profile。** 应用自有 profile 使用相同的 runtime resolution。目标位于当前 profile 目录内的链接（包括 pnpm store 链接）不算外部 root，即使 profile 位于共享 profiles 树外。解析过程不修改其 `node_modules`；已安装包由 pnpm 管理。
 - **自有 Worker。** Worker 构建 banner 会在业务 bundle 前导入 `@deepseek-ai/dsh-app-boot/worker/profile-resolution-bootstrap`。每个 Worker 在自己的 isolate 中安装结构化克隆的 runtime resolution。bootstrap bundle 不静态导入任何包。源码 Worker 入口保留自包含依赖，第三方 Worker 不接受注入。
 - **更新完成。** App boot 通过 `internal/update` waterfall 观察重启失败。实时 patch 重载在检查激活状态前等待配置树中的 fiber；单独调用 `Fiber.update()` 或 `Entry.update()` 不能确定重启成功。
@@ -167,13 +147,13 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 
 ### Helper 行为
 
-每个导出各负责启动的一个阶段：配置解析与快照回放、分层环境加载、明确报错的保护机制、激活审计、patch 解析、根 include 挂载、配置 dump 渲染、profile 组合，以及 harness 源码段落。各导出的约定在代码中，不在本 README——见 [`src/index.ts`](src/index.ts) 与 [`src/profile.ts`](src/profile.ts)。
+每个导出各负责启动的一个阶段：配置解析与快照回放、分层环境加载、明确报错的保护机制、激活审计、patch 解析、根 include 挂载、配置 dump 渲染与 profile 组合。各导出的约定在代码中，不在本 README——见 [`src/index.ts`](src/index.ts) 与 [`src/profile.ts`](src/profile.ts)。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 启动 helper：配置解析、环境加载、会明确报错的保护机制、激活审计、patch 解析、配置 dump、harness 源码段落 |
+| [`src/index.ts`](src/index.ts) | 启动 helper：配置解析、环境加载、会明确报错的保护机制、激活审计、patch 解析、配置 dump |
 | [`src/profile.ts`](src/profile.ts) | profile 发现、初始化、组合包解析、runtime resolution 构造 |
 | [`src/profile-plugins.ts`](src/profile-plugins.ts) | 已安装依赖、bundle 启用策略与 manifest 更新 |
 | [`src/profile-sanitize.ts`](src/profile-sanitize.ts) | profile patch 备份与恢复 bundle 启用状态 |
@@ -203,11 +183,11 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 <a id="model-experience"></a>
 ## 模型体验
 
-模型通过此包加载的插件树间接受影响——只有该树贡献模型上下文；唯一贡献模型可见文本的导出 `addHarnessSourceSection`，也只有在消费方启动后调用它时才会产生影响。
+模型通过此包加载的插件树间接受影响——只有该树贡献模型上下文；没有导出会添加模型可见文本。
 
 #### KV Cache 影响
 
-启动本身不改变请求前缀。`addHarnessSourceSection` 将源码路径放在第一方可复用指令之后，因此工具与配置一致时，不同 checkout 不会改变前置字节。不保证提供方复用缓存。
+启动本身不改变请求前缀。
 
 ## 已知限制与延期工作
 
@@ -216,7 +196,7 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 这些限制说明此启动库在何时不合适，或何时需要特别注意。它们是当前包约束，不是任务积压。
 
 - **运行时解析依赖 Node 内部机制**——受支持的 Node 版本需要 native builtin access addon 和可执行兼容验证。只有构建后的 Harness 自有 Worker 接收 runtime resolution bootstrap；第三方 Worker 与自定义 `vm` linker 保持原生解析。
-- **重新链接 profile 包需要重启**——Node 缓存真实路径，因此改变 profile 链接或依赖链接的目标需要重启进程。
+- **移动 profile 包需要先卸载**——`replace()` 以 `ResolutionRestartRequired` 拒绝移动到其他目录或链接目标的保留 profile 映射；卸载该包后重新安装，即映射到新目录。linked root 的 profile 映射被移除后，它可以指向其他目录。Node 保留其解析过的每个链接的真实路径；链接指向别处后，或其名称作为目录重新安装后，原生查询为原目标之外的导入方选中原目标之下的文件时，若当前目标之下存在同一文件，会改为选中该文件，包括指向原目标的显式绝对路径。安装映射和本地覆盖仍需要重启。
 - **链接作用域以记录的真实目录为准**——提升后的依赖若在所有 linked root 之外，就使用原生 Node。每次读取 peer 都不会使 Node 缓存失效，也不会改变被监视的文件。
 - **源码启动只安装 ESM 钩子**——CommonJS 请求仍需要 package exports 选中的 JavaScript 文件，解析器不会补出缺失的构建产物。
 - **快照回放替换仅识别特定 basename**——只有以 `cordis.yml` 或 `cordis.yaml` 结尾的配置会映射到同级 `cordis.snapshot.yml`；自定义配置名称需要调用方自行选择。

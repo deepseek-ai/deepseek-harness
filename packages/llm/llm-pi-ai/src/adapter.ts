@@ -54,13 +54,24 @@ import type {
   ReasoningEffortId as ReasoningEffortIdType,
   ResolvedRetryPolicy,
   StreamChunk,
+  ToolSchema,
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
-import { createModels, getSupportedThinkingLevels } from './models.ts'
+import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
+
+/**
+ * Initially active declaration added to an Anthropic request whose projected
+ * tools are all deferred, because Anthropic rejects a tool list without one.
+ */
+const ANTHROPIC_TOOL_UPDATE_PLACEHOLDER: ToolSchema = {
+  name: 'DeferredToolPlaceholder',
+  description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.',
+  parameters: { type: 'object', properties: {} },
+}
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -76,7 +87,8 @@ export interface PiAiAdapterOptions {
   profiles: () => ReadonlyMap<string, ResolvedPiAiProviderProfile>
   /**
    * Resolve the credential for one already-resolved profile; called once per
-   * stream call and frozen for that call. `undefined` defers to the route's own
+   * stream call and frozen for that call, and by `listModels`, which offers no
+   * models while it throws `MISSING_CREDENTIAL`. `undefined` defers to the route's own
    * pi-ai auth, which for an installed catalog route is its provider-native
    * ambient discovery; the plugin allows that only for a profile naming no
    * credential at all, because a named reference that misses throws `LlmError`
@@ -274,9 +286,15 @@ export class PiAiAdapter extends LlmAdapter {
   }
 
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve().then(() => {
+    return Promise.resolve().then(async () => {
       const snapshot = this.current()
-      this.profileOf(snapshot, provider)
+      const profile = this.profileOf(snapshot, provider)
+      try { await this.config.resolveApiKey(provider, profile) }
+      catch (error) {
+        // A route whose named key does not resolve cannot serve a request, so it offers no models until the key is stored.
+        if (error instanceof LlmError && error.code === 'MISSING_CREDENTIAL') return []
+        throw error
+      }
       return snapshot.models.getModels(provider).map(model => ({
         provider,
         id: model.id,
@@ -312,6 +330,7 @@ export class PiAiAdapter extends LlmAdapter {
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
       ...reasoningInfo(resolvedModel, defaultLevel),
+      ...conversationUpdates(resolvedModel),
     }
   }
 
@@ -341,6 +360,16 @@ export class PiAiAdapter extends LlmAdapter {
     // the one it started with and the next call picks up the new one.
     const profile = this.profileOf(snapshot, options.provider)
     const model = this.modelOf(snapshot, options.provider, options.model)
+    const updates = conversationUpdates(model)
+    // pi-ai collapses Anthropic tool updates without an initially active declaration.
+    const tools = options.tools ?? []
+    const needsPlaceholder = model.api === 'anthropic-messages' && updates.toolUpdate === 'in-history'
+      && tools.every(tool => tool.deferLoading === true)
+      && options.messages.some(message => message.role === 'developer'
+        && message.content.some(block => block.type === 'tool-addition' || block.type === 'tool-removal'))
+    const request = needsPlaceholder
+      ? { ...options, tools: [ANTHROPIC_TOOL_UPDATE_PLACEHOLDER, ...tools] }
+      : options
     const reasoning = resolveReasoningLevel(
       model,
       options.reasoningEffort ?? profile.reasoning,
@@ -367,8 +396,8 @@ export class PiAiAdapter extends LlmAdapter {
         this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
       }
       const context = attachments === undefined
-        ? toPiContext(options, undefined, onReplayDegrade)
-        : await toPiContext({ ...options, signal: watchdog.signal }, {
+        ? toPiContext(request, undefined, onReplayDegrade)
+        : await toPiContext({ ...request, signal: watchdog.signal }, {
           attachments,
           resolveImageAccess: ref => this.config.resolveImageAccess?.(attachments, ref),
           maxRequestImageBytes: profile.maxRequestImageBytes,

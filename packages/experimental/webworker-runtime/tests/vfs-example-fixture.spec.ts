@@ -14,6 +14,8 @@ import {
   buildVfsExampleFiles,
   VFS_EXAMPLE_OLDEST_MESSAGE,
   VFS_EXAMPLE_ROOT,
+  VFS_EXAMPLE_REASONING,
+  VFS_EXAMPLE_WRAPPED_COMMAND,
   VFS_EXAMPLE_SCHEDULE_IDS,
   VFS_EXAMPLE_SESSION_IDS,
   VFS_EXAMPLE_TAIL_MESSAGE,
@@ -59,27 +61,29 @@ function textOf(event: SessionEvent): string {
 }
 
 describe('WebWorker preview VFS example', () => {
-  it('retains V3 inputs that strictly restore to the deterministic current output', () => {
+  it('keeps the current showcase and strictly restorable historical child inputs beside their predecessors', () => {
     const expected = buildVfsExampleFiles()
     const currentName = generationLogFilename(SESSION_FORMAT_VERSION, 'none')
-    const committedPath = (path: string): string => path.endsWith(`/${currentName}`)
+    const main = `home/sessions/--dsh-workspace--/${VFS_EXAMPLE_SESSION_IDS.main}/`
+    const committedPath = (path: string): string => path.endsWith(`/${currentName}`) && !path.startsWith(main)
       ? `${path.slice(0, -currentName.length)}session.v3.jsonl`
       : path
     const predecessors = Object.values(VFS_EXAMPLE_SESSION_IDS)
       .map(id => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
+    predecessors.push(`${main}session.v3.jsonl`)
     expect(filesUnder(VFS_EXAMPLE_ROOT)).toEqual([...expected.keys()].map(committedPath).concat(predecessors).sort())
     for (const [path, content] of expected) {
-      if (path === 'home/storages/session_projcache.json') continue
       const committed = readFileSync(join(VFS_EXAMPLE_ROOT, committedPath(path)), 'utf8')
-      if (path.endsWith(`/${currentName}`)) {
+      if (path.endsWith(`/${currentName}`) && !path.startsWith(main)) {
         expect(restoreSession(committed, 3), path).toEqual(restoreSession(content, SESSION_FORMAT_VERSION))
       } else {
         expect(committed, path).toBe(content)
+        if (path.startsWith(main)) restoreSession(committed, SESSION_FORMAT_VERSION)
       }
     }
   })
 
-  it('retains V3 cache identity while the generated cache uses the current writer', () => {
+  it('keeps the projection cache aligned with the current showcase writer and tail', () => {
     const committed = JSON.parse(readFileSync(
       join(VFS_EXAMPLE_ROOT, 'home/storages/session_projcache.json'),
       'utf8',
@@ -101,12 +105,10 @@ describe('WebWorker preview VFS example', () => {
     const generatedText = buildVfsExampleFiles().get('home/storages/session_projcache.json')
     if (generatedText === undefined) throw new Error('missing generated VFS example projection cache')
     const generated = JSON.parse(generatedText) as typeof committed
-    const expectedCurrent = structuredClone(committed)
-    for (const session of Object.values(expectedCurrent.tables.sessions)) {
-      expect(session.identity.formatVersion).toBe(3)
-      session.identity.formatVersion = SESSION_FORMAT_VERSION
-    }
-    expect(generated).toEqual(expectedCurrent)
+    expect(generated).toEqual(committed)
+    expect(generated.tables.sessions[VFS_EXAMPLE_SESSION_IDS.main]?.rows.title).toMatchObject({
+      seq: readSession(VFS_EXAMPLE_SESSION_IDS.main).events.at(-1)?.seq,
+    })
     expect(generated.unit).toEqual({
       name: projectionCacheDomainSpec.name,
       version: projectionCacheDomainSpec.version,
@@ -178,6 +180,46 @@ describe('WebWorker preview VFS example', () => {
     ]))
     expect(events.some(event => event.type === 'todo/write')).toBe(true)
     expect(events.some(event => event.type === 'tool/result' && event.data.message.isError === true)).toBe(true)
+  })
+
+  it('preserves the 28-turn history prefix and both child catalog identities', () => {
+    const main = readSession(VFS_EXAMPLE_SESSION_IDS.main)
+    const child = readSession(VFS_EXAMPLE_SESSION_IDS.oneShot)
+    const historical = restoreSession(readFileSync(join(VFS_EXAMPLE_ROOT,
+      `home/sessions/--dsh-workspace--/${VFS_EXAMPLE_SESSION_IDS.main}/session.v3.jsonl`), 'utf8'), 3)
+    const prefix = main.events.slice(0, child.inheritedEventCount)
+    expect(prefix.filter(event => event.type === 'turn/start')).toHaveLength(28)
+    expect(prefix).toEqual(historical.events.slice(0, child.inheritedEventCount))
+    expect(child.events.slice(0, child.inheritedEventCount)).toEqual(prefix)
+    expect(main.events.filter(event => event.type === 'subagent/catalog').map(event => event.data)).toEqual([
+      { version: 0, childId: VFS_EXAMPLE_SESSION_IDS.oneShot, childCreatedAt: 1_787_472_100_000,
+        mode: 'one-shot', label: 'Review preview architecture' },
+      { version: 0, childId: VFS_EXAMPLE_SESSION_IDS.continuable, childCreatedAt: 1_787_472_200_000,
+        mode: 'continuable', label: 'Continue preview verification' },
+    ])
+  })
+
+  it('carries mixed reasoning, a wrapped command, and an authored parent-path link in the existing tour', () => {
+    const { events } = readSession(VFS_EXAMPLE_SESSION_IDS.main)
+    const gallery = events.find(event => event.type === 'assistant/message' && event.data.message.id === 'preview-gallery-tools')
+    if (gallery?.type !== 'assistant/message') throw new Error('missing preview gallery message')
+    const reasoning = gallery.data.message.content.flatMap(block => block.type === 'reasoning' ? [block.text] : [])
+    expect(reasoning).toEqual(['', ' \t\n', VFS_EXAMPLE_REASONING[0], '', VFS_EXAMPLE_REASONING[1], '\n  '])
+    expect(reasoning.filter(text => text.trim() !== '')).toEqual(VFS_EXAMPLE_REASONING)
+    const call = events.find(event => event.type === 'tool/call' && event.data.callId === 'preview-wrapped-bash')
+    if (call?.type !== 'tool/call') throw new Error('missing wrapped command call')
+    expect(JSON.parse(call.data.arguments)).toEqual({
+      command: VFS_EXAMPLE_WRAPPED_COMMAND, description: 'Show wrapped command and first-line status',
+    })
+    expect(VFS_EXAMPLE_WRAPPED_COMMAND.split('\n')[0]?.length).toBeGreaterThan(400)
+    expect(VFS_EXAMPLE_WRAPPED_COMMAND.endsWith('\n')).toBe(true)
+    expect(events.find(event => event.type === 'tool/result' && event.data.message.source.callId === 'preview-wrapped-bash'))
+      .toMatchObject({ data: { message: { isError: false, content: [{ type: 'text', text: 'preview command fixture\nwrap complete\n[exit code: 0]' }] } } })
+    const tail = events.findLast(event => event.type === 'assistant/message')
+    if (tail === undefined) throw new Error('missing preview tour tail')
+    expect(textOf(tail)).toContain(`## ${VFS_EXAMPLE_TAIL_MESSAGE}`)
+    expect(textOf(tail)).toContain('[Parent workspace guide:1–8](<../workspace/PREVIEW.md#L1-L8>)')
+    expect(textOf(tail)).toContain('fixture-authored demonstration data, not a live model run')
   })
 
   it('restores one-shot and continuable child Sessions with durable descriptors', () => {

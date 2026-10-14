@@ -14,9 +14,9 @@ describe('ui-chat Host settings', () => {
     const configuration = await liveConfig(ctx, { Config, apply })
     const { fiber } = configuration
 
-    expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion' })
     await configuration.update({ transcriptView: 'normal' })
-    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar' })
+    expect(plainConfig(configuration.fiber.config)).toEqual({ transcriptView: 'normal', performanceUsage: 'detailed', linkOpening: 'sidebar', collapseTiming: 'completion' })
     for (const mode of ['expanded', 'compact', 'standard', 'detailed', 'verbose']) {
       await configuration.update({ transcriptView: mode })
       expect(plainConfig(configuration.fiber.config)).toMatchObject({ transcriptView: mode })
@@ -33,6 +33,21 @@ describe('ui-chat Host settings', () => {
     await expect(configuration.update({ linkOpening: 'popup' })).rejects.toThrow()
 
     await fiber.dispose()
+  })
+
+  it('validates collapse timing and restores its saved config independently of work details', async () => {
+    const ctx = new Context()
+    const configuration = await liveConfig(ctx, { Config, apply })
+    expect(plainConfig(configuration.fiber.config)).toMatchObject({ collapseTiming: 'completion' })
+    await configuration.update({ transcriptView: 'compact', collapseTiming: 'next-input' })
+    const saved = plainConfig(configuration.fiber.config)
+    if (typeof saved !== 'object' || saved === null) throw new Error('expected saved configuration object')
+    expect(saved).toMatchObject({ transcriptView: 'compact', collapseTiming: 'next-input' })
+    await expect(configuration.update({ collapseTiming: 'never' })).rejects.toThrow()
+    await configuration.fiber.dispose()
+    const restored = await liveConfig(ctx, { Config, apply }, saved)
+    expect(plainConfig(restored.fiber.config)).toMatchObject({ transcriptView: 'compact', collapseTiming: 'next-input' })
+    await restored.fiber.dispose()
   })
 
   it('loads without a settings provider', async () => {

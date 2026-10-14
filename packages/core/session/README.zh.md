@@ -200,7 +200,7 @@ session.deriveMessages()         // the derived model history
 这些限制说明会话存储何时需要特别留意。它们是当前包约束，不是任务积压。
 
 - **Store API 仅接受活跃源会话** — 已持久化但未加载的源会话通过 Host 观察路径处理。Fork 仅闭合开放尾部，不修复先前已闭合步骤中缺失的结果。
-- **`SESSION_FORMAT_VERSION` 命名[当前逻辑表示](../../../docs/session-format-status.zh.md)**——当前读取器拒绝已退役的 `header.system`，并校验 `system/message` 载荷与受保护头节点的重写。历史 header 与事件归相邻格式包所有；[相邻迁移链](../../session/session-format-catalog/README.zh.md)在构造 `Session` 前转换受支持的历史，写打开只发布当前格式的后继代际。同版本未知事件要求信封显式带有 `ignorable` 标记，但这不保证结构迁移的安全性（[机制](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。
+- **`SESSION_FORMAT_VERSION` 命名[当前逻辑表示](../../../docs/session-format-status.zh.md)**——当前读取器拒绝已退役的 `header.system`，并校验 `system/message` 载荷与受保护头节点的重写。历史 header 与事件归相邻格式包所有；[相邻迁移链](../../session/session-format-catalog/README.zh.md)在构造 `Session` 前转换受支持的历史，写打开只发布当前格式的后继代际。同版本未知事件要求信封显式带有 `ignorable` 标记，但这不保证结构迁移的安全性（[机制](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。[读取器兼容性](../../../.agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.zh.md)决定变更是否需要升版本。
 - **`TurnEndReasonMap` 不含 ACP（Agent Client Protocol）命名的 `refusal`／`max_turn_requests` 变体**：受生产方约束；只有当适配器或循环首次产生这些变体时才加入。
 - **fork 之外没有会话树**：基于分支会话的 pi 风格条目树被推迟，除非消费方需要超越基于边界的 forking 的能力。
 

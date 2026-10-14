@@ -1,3 +1,3 @@
-- button "译文" [pressed]
-- button "原文"
+- button "思考" [expanded]
+- button "查看原文"
 - paragraph: 用户要求只回复一个词，我会照做。

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent 预设定义",
+    "description": "声明一个 Agent 预设及其使用的插件组合。"
+  }
+}

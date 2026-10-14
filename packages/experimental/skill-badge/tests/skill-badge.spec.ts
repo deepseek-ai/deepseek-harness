@@ -29,6 +29,19 @@ describe('dsh-skill-badge', () => {
     expect(await ctx.skills.list()).toEqual([])
   })
 
+  it('presents the component as DSH with the bundle tag artwork in both locales', async () => {
+    expect(JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))).toMatchObject({
+      icon: './icon.svg',
+      exports: { './locale/*.json': './locale/*.json' },
+    })
+    for (const language of ['en', 'zh']) {
+      expect(JSON.parse(await readFile(new URL(`../locale/${language}.json`, import.meta.url), 'utf8')))
+        .toMatchObject({ meta: { title: 'DSH' } })
+    }
+    expect(await readFile(new URL('../icon.svg', import.meta.url), 'utf8'))
+      .toBe(await readFile(new URL('../../badge-skill-bundle/icon.svg', import.meta.url), 'utf8'))
+  })
+
   it('ships the official 726×120 PNG unchanged', async () => {
     const image = await readFile(new URL('../assets/dsh-badge.png', import.meta.url))
     expect(image.readUInt32BE(16)).toBe(726)

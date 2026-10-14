@@ -36,7 +36,7 @@ kind: "package-reference"
 运行时提供以下执行指引：
 
 ```text
-Each call runs in a fresh Python process. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution's sandbox policy.
+The program is the body of an async Python function. Top-level await and return are supported. Emit output with print(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Python process; variables and imported modules do not persist across calls. Relative paths use the supplied working directory; only TMPDIR is set in the environment. Direct filesystem access follows this execution's sandbox policy.
 ```
 
 ### 你得到什么
@@ -112,7 +112,7 @@ Each call runs in a fresh Python process. Relative paths use the supplied workin
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 `dsh-tools` 中的 PTC mode；当显式组合挂载本提供方时，它会把程序的完成值或失败渲染成保留的 `run_code` 结果，且已发布 profile 均不挂载这个实验包。
+间接地，通过显式组合中的 `dsh-tools` PTC mode：消费者将本提供方的异步函数、输出和新进程执行指引附加到 `run_code`，并将程序的完成值或失败渲染为工具结果。
 
 #### KV Cache 效应
 

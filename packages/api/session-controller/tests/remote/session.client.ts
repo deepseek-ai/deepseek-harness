@@ -145,7 +145,7 @@ export const sessionWorld: RemoteTable = {
       data: 'AA==',
     }),
     'session/page': pageRule(ok({ records: [], hasMore: false })),
-    'session/projections': ok({ asOfSeq: -1, values: { subagentCatalog: [] } }),
+    'session/projections': ok({ kind: 'sequenced', asOfSeq: -1, values: { subagentCatalog: [] } }),
     'subagents/prompt': ok({ messageId: 'fake-message' }),
     'subagents/interruptByParent': ok({ accepted: true }),
   },

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-08-session-reader-compatibility-review.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.md
+/agent-note-session-versions-follow-reader-compatibility:
+  en: b27e6ad9824a02e4
+  zh: 034a5dc50838db3d
+/agent-note-session-versions-follow-reader-compatibility/problem:
+  en: fa4f3e56f3b22e07
+  zh: a8010ab822474c2c
+/agent-note-session-versions-follow-reader-compatibility/decision:
+  en: ab45f42c587793e8
+  zh: b1c2eab9e8642824
+/agent-note-session-versions-follow-reader-compatibility/migration-obligations:
+  en: b218b28f19c41f33
+  zh: 7e99314983707984
+/agent-note-session-versions-follow-reader-compatibility/alternatives-considered:
+  en: be63c3e727b18cd3
+  zh: 91b4e2ffaa42bdb9
+/agent-note-session-versions-follow-reader-compatibility/consequences:
+  en: 0ee67db581e8e03d
+  zh: ece4f775c8008f8a

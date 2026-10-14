@@ -459,8 +459,44 @@
       }
     },
     {
-      "type": "tool/result",
+      "type": "job/registered",
       "seq": 23,
+      "time": 0,
+      "data": {
+        "jobId": "{{id:1}}",
+        "owner": "{{parent}}",
+        "kind": "snapshot",
+        "label": "snapshot_double",
+        "startedAt": 0,
+        "toolCall": {
+          "callId": "advanced-native",
+          "rootCallId": "advanced-native"
+        }
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 24,
+      "time": 0,
+      "data": {
+        "jobId": "{{id:1}}",
+        "owner": "{{parent}}",
+        "kind": "snapshot",
+        "label": "snapshot_double",
+        "startedAt": 0,
+        "toolCall": {
+          "callId": "advanced-native",
+          "rootCallId": "advanced-native"
+        },
+        "finishedAt": 0,
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 25,
       "time": 0,
       "data": {
         "turn": 1,
@@ -489,7 +525,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 26,
       "time": 0,
       "data": {
         "turn": 1,
@@ -498,7 +534,7 @@
     },
     {
       "type": "step/start",
-      "seq": 25,
+      "seq": 27,
       "time": 0,
       "data": {
         "turn": 1,
@@ -507,17 +543,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 26,
+      "seq": 28,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 25
+        "throughSeq": 27
       }
     },
     {
       "type": "assistant/message",
-      "seq": 27,
+      "seq": 29,
       "time": 0,
       "data": {
         "turn": 1,
@@ -641,7 +677,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 28,
+      "seq": 30,
       "time": 0,
       "data": {
         "turn": 1,
@@ -653,7 +689,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 29,
+      "seq": 31,
       "time": 0,
       "data": {
         "turn": 1,
@@ -681,13 +717,13 @@
         }
       },
       "sourceEventSeqs": [
-        28
+        30
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 30,
+      "seq": 32,
       "time": 0,
       "data": {
         "turn": 1,
@@ -696,7 +732,7 @@
     },
     {
       "type": "step/start",
-      "seq": 31,
+      "seq": 33,
       "time": 0,
       "data": {
         "turn": 1,
@@ -705,17 +741,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 32,
+      "seq": 34,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 31
+        "throughSeq": 33
       }
     },
     {
       "type": "assistant/message",
-      "seq": 33,
+      "seq": 35,
       "time": 0,
       "data": {
         "turn": 1,
@@ -839,7 +875,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 34,
+      "seq": 36,
       "time": 0,
       "data": {
         "turn": 1,
@@ -851,7 +887,7 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 35,
+      "seq": 37,
       "time": 0,
       "data": {
         "version": 0,
@@ -863,7 +899,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 36,
+      "seq": 38,
       "time": 0,
       "data": {
         "turn": 1,
@@ -886,13 +922,13 @@
         }
       },
       "sourceEventSeqs": [
-        34
+        36
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 37,
+      "seq": 39,
       "time": 0,
       "data": {
         "turn": 1,
@@ -901,7 +937,7 @@
     },
     {
       "type": "step/start",
-      "seq": 38,
+      "seq": 40,
       "time": 0,
       "data": {
         "turn": 1,
@@ -910,17 +946,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 39,
+      "seq": 41,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 38
+        "throughSeq": 40
       }
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 40,
+      "seq": 42,
       "time": 0,
       "data": {
         "target": "next-step",
@@ -955,7 +991,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 41,
+      "seq": 43,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1079,7 +1115,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 42,
+      "seq": 44,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1091,7 +1127,7 @@
     },
     {
       "type": "tool-workflow/run-start",
-      "seq": 43,
+      "seq": 45,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1100,7 +1136,7 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 44,
+      "seq": 46,
       "time": 0,
       "data": {
         "version": 0,
@@ -1112,7 +1148,7 @@
     },
     {
       "type": "tool-workflow/agent-start",
-      "seq": 45,
+      "seq": 47,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1124,7 +1160,7 @@
     },
     {
       "type": "tool-workflow/agent-end",
-      "seq": 46,
+      "seq": 48,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1134,7 +1170,7 @@
     },
     {
       "type": "tool-workflow/run-end",
-      "seq": 47,
+      "seq": 49,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1143,7 +1179,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 48,
+      "seq": 50,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1166,13 +1202,13 @@
         }
       },
       "sourceEventSeqs": [
-        42
+        44
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 49,
+      "seq": 51,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1181,7 +1217,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 50,
+      "seq": 52,
       "time": 0,
       "data": {
         "target": "next-step",
@@ -1192,7 +1228,7 @@
     },
     {
       "type": "step/start",
-      "seq": 51,
+      "seq": 53,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1201,7 +1237,7 @@
     },
     {
       "type": "user/message",
-      "seq": 52,
+      "seq": 54,
       "time": 0,
       "data": {
         "content": [
@@ -1231,17 +1267,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 53,
+      "seq": 55,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 52
+        "throughSeq": 54
       }
     },
     {
       "type": "assistant/message",
-      "seq": 54,
+      "seq": 56,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1349,7 +1385,7 @@
     },
     {
       "type": "step/end",
-      "seq": 55,
+      "seq": 57,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1358,7 +1394,7 @@
     },
     {
       "type": "command/run",
-      "seq": 56,
+      "seq": 58,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1370,7 +1406,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 57,
+      "seq": 59,
       "time": 0,
       "data": {
         "text": "The session needs a clearer explanation."
@@ -1378,7 +1414,7 @@
     },
     {
       "type": "command/done",
-      "seq": 58,
+      "seq": 60,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1388,7 +1424,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 59,
+      "seq": 61,
       "time": 0,
       "data": {
         "category": "other"
@@ -1396,7 +1432,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 60,
+      "seq": 62,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1413,7 +1449,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 61,
+      "seq": 63,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1429,7 +1465,7 @@
     },
     {
       "type": "feedback/message-delete",
-      "seq": 62,
+      "seq": 64,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1438,7 +1474,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 63,
+      "seq": 65,
       "time": 0,
       "data": {
         "turn": 1,
@@ -2031,8 +2067,56 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "tool/result",
+          "type": "job/registered",
           "seq": 23,
+          "time": 0,
+          "data": {
+            "jobId": "{{id:1}}",
+            "owner": "{{parent}}",
+            "kind": "snapshot",
+            "label": "snapshot_double",
+            "startedAt": 0,
+            "toolCall": {
+              "callId": "advanced-native",
+              "rootCallId": "advanced-native"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "job/settled",
+          "seq": 24,
+          "time": 0,
+          "data": {
+            "jobId": "{{id:1}}",
+            "owner": "{{parent}}",
+            "kind": "snapshot",
+            "label": "snapshot_double",
+            "startedAt": 0,
+            "toolCall": {
+              "callId": "advanced-native",
+              "rootCallId": "advanced-native"
+            },
+            "finishedAt": 0,
+            "status": "completed",
+            "cause": "producer",
+            "producerReported": true
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "tool/result",
+          "seq": 25,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2067,7 +2151,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 24,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2082,7 +2166,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 25,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2097,12 +2181,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 26,
+          "seq": 28,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 25
+            "throughSeq": 27
           }
         }
       }
@@ -2113,7 +2197,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 27,
+          "seq": 29,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2243,7 +2327,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 28,
+          "seq": 30,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2261,7 +2345,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 29,
+          "seq": 31,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2289,7 +2373,7 @@
             }
           },
           "sourceEventSeqs": [
-            28
+            30
           ],
           "surfaceOp": "append"
         }
@@ -2301,7 +2385,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 30,
+          "seq": 32,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2316,7 +2400,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 31,
+          "seq": 33,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2331,12 +2415,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 32,
+          "seq": 34,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 31
+            "throughSeq": 33
           }
         }
       }
@@ -2347,7 +2431,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 33,
+          "seq": 35,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2477,7 +2561,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 34,
+          "seq": 36,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2617,7 +2701,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 35,
+          "seq": 37,
           "time": 0,
           "data": {
             "version": 0,
@@ -2635,7 +2719,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 36,
+          "seq": 38,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2658,7 +2742,7 @@
             }
           },
           "sourceEventSeqs": [
-            34
+            36
           ],
           "surfaceOp": "append"
         }
@@ -2670,7 +2754,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 37,
+          "seq": 39,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2685,7 +2769,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 38,
+          "seq": 40,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2700,12 +2784,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 39,
+          "seq": 41,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 38
+            "throughSeq": 40
           }
         }
       }
@@ -2816,7 +2900,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
               }
             ],
             "source": {
@@ -2834,6 +2918,10 @@
                 {
                   "name": "approval:policy",
                   "text": "Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+                },
+                {
+                  "name": "tool:subagent:depth",
+                  "text": "Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly."
                 },
                 {
                   "name": "subagent:delegation",
@@ -3095,7 +3183,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 40,
+          "seq": 42,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3153,7 +3241,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 41,
+          "seq": 43,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3283,7 +3371,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 42,
+          "seq": 44,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3301,7 +3389,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-start",
-          "seq": 43,
+          "seq": 45,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3438,7 +3526,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 44,
+          "seq": 46,
           "time": 0,
           "data": {
             "version": 0,
@@ -3456,7 +3544,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-start",
-          "seq": 45,
+          "seq": 47,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3574,7 +3662,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
+                "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: \"{{cwd}}\".\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\nDelegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.\n\nYou are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it."
               }
             ],
             "source": {
@@ -3592,6 +3680,10 @@
                 {
                   "name": "approval:policy",
                   "text": "Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+                },
+                {
+                  "name": "tool:subagent:depth",
+                  "text": "Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly."
                 },
                 {
                   "name": "subagent:delegation",
@@ -3870,7 +3962,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-end",
-          "seq": 46,
+          "seq": 48,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3886,7 +3978,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-end",
-          "seq": 47,
+          "seq": 49,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3901,7 +3993,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 48,
+          "seq": 50,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3924,7 +4016,7 @@
             }
           },
           "sourceEventSeqs": [
-            42
+            44
           ],
           "surfaceOp": "append"
         }
@@ -3936,7 +4028,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 49,
+          "seq": 51,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3951,7 +4043,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 50,
+          "seq": 52,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3968,7 +4060,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 51,
+          "seq": 53,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3983,7 +4075,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "user/message",
-          "seq": 52,
+          "seq": 54,
           "time": 0,
           "data": {
             "content": [
@@ -4019,12 +4111,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 53,
+          "seq": 55,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 52
+            "throughSeq": 54
           }
         }
       }
@@ -4035,7 +4127,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 54,
+          "seq": 56,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4149,7 +4241,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 55,
+          "seq": 57,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4164,7 +4256,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/run",
-          "seq": 56,
+          "seq": 58,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4182,7 +4274,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 57,
+          "seq": 59,
           "time": 0,
           "data": {
             "text": "The session needs a clearer explanation."
@@ -4196,7 +4288,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/done",
-          "seq": 58,
+          "seq": 60,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4212,7 +4304,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 59,
+          "seq": 61,
           "time": 0,
           "data": {
             "category": "other"
@@ -4226,7 +4318,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 60,
+          "seq": 62,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4249,7 +4341,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 61,
+          "seq": 63,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4271,7 +4363,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-delete",
-          "seq": 62,
+          "seq": 64,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4286,7 +4378,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "turn/end",
-          "seq": 63,
+          "seq": 65,
           "time": 0,
           "data": {
             "turn": 1,

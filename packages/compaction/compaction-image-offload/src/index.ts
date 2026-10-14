@@ -24,8 +24,8 @@ export const inject = ['agents', 'sessions']
  */
 export function apply(ctx: Context): void {
   ctx.sessions.registerMessageProjection(imageOffloadProjection)
-  ctx.on('agent/request-error', ({ agent, failure }, next): Promise<RequestErrorAction> => {
-    if (failure.code !== IMAGE_OFFLOAD_REQUIRED_CODE || failure.offloadImages === undefined) return next()
+  ctx.on('agent/request-error', ({ agent, failure, signal }, next): Promise<RequestErrorAction> => {
+    if (failure.code !== IMAGE_OFFLOAD_REQUIRED_CODE || failure.offloadImages === undefined || signal.aborted) return next()
     // A durable surface repair, not a provider retry: it spends no retry budget and logs no retry event.
     if (!offloadOldestImages(agent.session, agent.session.surface.nodes, failure.offloadImages)) return next()
     return Promise.resolve<RequestErrorAction>({ kind: 'retry' })

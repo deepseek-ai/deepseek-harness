@@ -40,7 +40,7 @@ describe('desktop auto-update environment', () => {
       DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com/',
       DOWNLOAD_TEST_RELEASE_ID: RELEASE_ID,
     }, 'darwin', 'arm64')).toEqual({
-      environment: 'test',
+      environment: 'test', channel: 'nightly',
       target: 'mac-arm64',
       origin: 'https://desktop-updates.example.com',
       publicUrl: `https://desktop-updates.example.com/dsh-desk/${RELEASE_ID}/feeds/mac-arm64/`,

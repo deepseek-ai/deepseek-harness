@@ -1,7 +1,7 @@
 /** Generic unary RPC contracts shared by the Host and Client Connection halves. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import type { PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Correlation id minted by a caller and echoed by the Connection response. */
 export type RpcId = Branded<'rpc-id'>
@@ -115,14 +115,14 @@ export interface ConnectionIndexResponse {
   end(body?: string): unknown
 }
 
-/** Outcome of admitting one request: the operator Peer it speaks for, or the status refusing it. */
+/** Outcome of admitting one request: the Peer it speaks for, or the status refusing it. */
 export type PeerAdmission =
   | { readonly peer: PeerScope }
   | { readonly rejection: 401 | 403 }
 
 /**
  * Handler invoked after Connection has decoded the transport envelope.
- * `peer` is the Peer the request was admitted as: the operator.
+ * `peer` is the Peer the carrier admitted or the in-process caller supplied.
  */
 export type ConnectionRpcHandler = (
   endpoint: string,
@@ -148,7 +148,11 @@ export interface ConnectionFetchRoute {
   readonly methods: readonly ConnectionFetchMethod[]
   /** Buffered requests obey the configured JSON cap; streaming requests arrive with backpressure and no aggregate cap. */
   readonly requestBody: ConnectionRequestBodyMode
-  /** Handle one request after the physical carrier has applied its trust and authentication policy. */
+  /**
+   * Handle one request after the physical carrier has applied its trust and
+   * authentication policy. Only owner Peers reach an exact route; the shared
+   * handler answers 403 for every other principal.
+   */
   readonly fetch: (request: Request) => Promise<Response>
 }
 
@@ -195,8 +199,17 @@ export interface HostConnectionHandle {
   readonly rpc: HostConnectionRpc
   /** Exact Fetch routes for streaming or browser-native responses. */
   readonly fetch: HostConnectionFetch
-  /** The operator Peer every admitted request speaks for; its scope lives as long as Connection. */
-  readonly operator: PeerScope
+  /**
+   * The Peer every authenticated browser connection shares; its principal is
+   * the owner and its scope lives as long as Connection.
+   */
+  readonly browserPeer: PeerScope
+
+  /**
+   * Whether this deployment accepts authorities beyond loopback: true only
+   * when a validated `trustedHosts` entry names a non-loopback hostname.
+   */
+  readonly allowsRemoteAuthorities: boolean
 
   /**
    * Compose exact Fetch routes and the shared-channel RPC interceptor.
@@ -214,15 +227,27 @@ export interface HostConnectionHandle {
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
 
   /**
-   * Admit one request: it passes {@link requestRejection} and speaks for the
-   * operator, or it is refused with that status.
+   * Admit one network request: it passes {@link requestRejection} and speaks
+   * for {@link browserPeer}, or it is refused with that status.
    * @param request - request headers from the HTTP or upgrade request.
-   * @returns the operator Peer, or the rejection status.
+   * @returns the admitted Peer, or the rejection status.
    */
   admit(request: ConnectionTrustRequest): PeerAdmission
 
   /**
+   * Create an independent Peer. In-process only: no route, header, query, or
+   * cookie reaches it. Disposed with the Context that read `ctx.connection`,
+   * or earlier by its own `dispose()`.
+   * @param options - caller identity the Peer speaks for.
+   * @param options.principal - principal fixed for the Peer's lifetime.
+   * @returns a new Peer distinct from every other Peer.
+   */
+  createPeer(options: { readonly principal: Principal }): PeerScope
+
+  /**
    * Authenticate one frontend index request, owning a token redirect or 401.
+   * The cookie this mints is `Secure` when the mounted Web carrier serves TLS,
+   * which only that listener's protocol decides.
    * @param request - root or configured-index HTTP request.
    * @param response - response owned when the result is false.
    * @returns true only when the frontend may serve index.html.
@@ -249,9 +274,10 @@ export interface ConnectionFetchHandler {
   /**
    * Dispatch one already-authenticated request.
    * @param request - Fetch request below the shared channel.
-   * @returns the registered response or a 404 response.
+   * @param peer - Peer to dispatch as; required, never defaulted.
+   * @returns the registered response, a 403 response for an exact route and a non-owner Peer, or a 404 response.
    */
-  fetch(request: Request): Promise<Response>
+  fetch(request: Request, peer: PeerScope): Promise<Response>
 }
 
 /** Client caller for logical RPC channels carried by the current transport. */

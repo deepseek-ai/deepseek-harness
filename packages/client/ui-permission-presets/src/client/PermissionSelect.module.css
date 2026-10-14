@@ -52,7 +52,7 @@
 
 .optionLabel {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
   min-width: 0;
   max-width: 100%;
@@ -67,12 +67,10 @@
 
 .badge {
   flex: none;
-  align-self: flex-start;
-  margin-top: -1px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 8px;
   line-height: 10px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.2px;
 }
 
@@ -85,8 +83,8 @@
   transition: transform 120ms ease;
 }
 
-/* Narrow composer: the trigger collapses to icon + chevron so the row keeps
-   fitting. Only triggers that actually carry a mode glyph drop their label —
+/* Narrow composer: mode text collapses while icons stay visible.
+   Only triggers that actually carry a mode glyph drop their label —
    a host-configured mode without one keeps its text as the sole identifier.
    The 460px cut is the point where the row (attach + modes + model + send)
    starts squeezing labels; the container is the composer row (InputBar .row —

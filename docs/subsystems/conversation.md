@@ -247,9 +247,23 @@ export function apply(ctx: ClientContext): void {
 
 `ConversationNodeDefinitionInput` accepts either this function or a read-only table from event type to matching function. Function-form registrations receive every event; table registrations receive only their listed types. The Registry copies table entries and precomputes ordered candidate Sets when registrations change, keeping candidate construction out of per-event dispatch. Replace a table by unregistering and registering again. Resolved `ConversationNodeDefinition` values retain a callable `match(event)` in both cases.
 
+A match result with `exclusive: true` claims that event on the Definition's target. The assembler evaluates every match of the event before accepting any, so the outcome is independent of registration order: other Definitions of the claimed target build no Context for the event, and the target's unmatched-event fallback does not run. Definitions of other targets and Definitions without a target still receive it. Two claims on one target, or a claim from a Definition without a target, throw during dispatch; a claim returned by the fallback itself has no effect. A business Definition uses a claim to present one kind of message that a generic Definition of the same target would otherwise also present, such as a late question reply.
+
 `buildLocationData(context, scope)` optionally publishes Definition-owned data onto an engine-owned Turn or Step. Use declaration merging to give each key a precise value type. Another Node in the same Location can consume that value through its constrained slot hook, such as `useTurnData(key)`, without receiving the Session or scanning `snapshot.chat.nodes`.
 
 `target` and `buildViewNode(context)` declare one target-owned rendering contribution and must appear together. Preserve `context.key` as the React-facing identity, choose `anchorSeq` from the matched event ordering, and return only renderer-ready data. Once a target Node has been published, keep returning the same key; use `visibility: 'hidden'` when it must temporarily leave the visible flow rather than withdrawing it with `null`.
+
+A Chat Node also chooses where its row stands through `groupTree`. Positions are ordered from the outermost inward, and a Node at a position also has the effect of every inner one. Chat process grouping, whole-Turn folding, and Turn-input detection read only this position; [group-tree.ts](../../packages/client/ui-chat/src/client/contract/group-tree.ts) holds the complete contract.
+
+| The Node is | Declare |
+|---|---|
+| A person's input claimed in Step 1; its Turn opens an exchange | `exchange` |
+| Another input of its Turn, such as later human input or a trigger notice; before the process it is the opening input, after it the whole Turn stays open | `input` |
+| A Turn notice that stays outside whole-Turn folding, such as an error or the completed-turn footer | `turn` |
+| An independent row that whole-Turn folding still hides, such as a model retry | `process` |
+| Ordinary process content that joins the surrounding step run | omit `groupTree` |
+
+The [Chat business rules](../../packages/client/ui-chat/src/client/conversation-nodes/README.md#process-grouping) list the positions the built-in Nodes declare. When a generic Definition of the same target also matches the event your Node presents, claim the event with `exclusive: true` as described above.
 
 ## Predecessor reads
 

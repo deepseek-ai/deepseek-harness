@@ -1,0 +1,7 @@
+version: 1
+scenario: headless-credentials
+profile: headless
+composition: advanced
+recording: authored
+header:
+  class: advanced

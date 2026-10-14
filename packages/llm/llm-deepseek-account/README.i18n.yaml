@@ -3,26 +3,26 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/llm/llm-deepseek-account/README.md
 /:
-  en: 5bbc9f976d7dcfda
-  zh: 5de13a931c992603
+  en: fc1ff226d5dca691
+  zh: 770a99ef368c4767
 /deepseek-ai-dsh-llm-deepseek-account:
   en: 8fa1148e0ee9d351
   zh: 634ec9d79d5ffbf0
 /deepseek-ai-dsh-llm-deepseek-account/summary:
-  en: d859ec7a1db8a41b
-  zh: b05ff7d19cb94667
+  en: b80e34cdfb51009d
+  zh: eda44bcc181793d8
 /deepseek-ai-dsh-llm-deepseek-account/table-of-contents:
   en: 23386452a66b2fbd
   zh: 4cf93c4bf17b3da2
 /deepseek-ai-dsh-llm-deepseek-account/use-this-package:
-  en: 4fde33a269d60030
-  zh: 22e522f4a3e25e8c
+  en: f0ac16310ce5a5c4
+  zh: 6929f80d830c18df
 /deepseek-ai-dsh-llm-deepseek-account/understand-the-implementation:
-  en: c9ba244b5df11b97
-  zh: d8016c03bfcb3eef
+  en: 8e8d8e4f786e03c3
+  zh: 7b32d8cea29d2b1a
 /deepseek-ai-dsh-llm-deepseek-account/further-exploration:
-  en: e8bf99d78aa7035f
-  zh: e4a74d2d48b6d271
+  en: 30a69b9c66d89580
+  zh: fcc026a6373c1bee
 /deepseek-ai-dsh-llm-deepseek-account/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -33,14 +33,14 @@
   en: bd62360e6e6965ab
   zh: 519626fc34672187
 /deepseek-ai-dsh-llm-deepseek-account/model-experience/authenticated-model-requests/token-effect:
-  en: fecefb75b719c317
-  zh: f0c2322f657c5914
+  en: b0f531baf29daf52
+  zh: c89837e35981c318
 /deepseek-ai-dsh-llm-deepseek-account/model-experience/authenticated-model-requests/kv-cache-effect:
-  en: 2004df60d997da79
-  zh: a215a6586b44746b
+  en: db6aea22ebba25e1
+  zh: caf4817596204df4
 /deepseek-ai-dsh-llm-deepseek-account/known-limitations-and-deferred-work:
-  en: d5880c883b1b678f
-  zh: bf7a4da24ba75280
+  en: ee8b7ff23c806e18
+  zh: bd26832c8d455012
 /deepseek-ai-dsh-llm-deepseek-account/known-limitations-and-deferred-work/dev-note:
   en: 0525041e573e96b6
   zh: b05ed8d852498e6b

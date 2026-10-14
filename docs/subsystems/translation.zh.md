@@ -14,7 +14,7 @@
 
 `TranslationError` 的 `TranslationErrorCode` 区分文本超限、HTTP 失败、无效响应、响应超限、服务自身超时与请求失败。`TRANSLATION_SESSION_REQUIRED` 拒绝缺失的持久化后端或 Session，`TRANSLATION_SESSION_INACTIVE` 在调用 Provider 前拒绝未激活且缓存未命中的 Session，`TRANSLATION_STORAGE_ERROR` 拒绝无效保存记录或持久化失败。Provider 错误信息省略提交的文本与响应体。失败时不选择其他 Provider。响应作为外部 JSON 校验，重定向被拒绝。
 
-`TRANSLATION_UNAVAILABLE` 拒绝缺失的活跃内置所有者或已注册路由、未配置的凭据、目录中不存在精确的 `deepseek-flash`、派发前所有者／模型列表／官方凭据引用变化、提供方卸载，以及准备后的调用推理强度不是 `off` 的情况。原生 `finish` 的原因为 `error` 时映射为 `TRANSLATION_REQUEST_FAILED`；缺失 finish 或其他非 `stop` 原因映射为 `TRANSLATION_INVALID_RESPONSE`。
+`TRANSLATION_UNAVAILABLE` 拒绝缺失的活跃内置所有者或已注册路由、未配置的凭据、目录中不存在精确的 `deepseek-flash`、派发前所有者、模型配置（官方路由的 `models` 或账号路由的 `modelOverrides`）或官方凭据引用变化、提供方卸载，以及准备后的调用推理强度不是 `off` 的情况。原生 `finish` 的原因为 `error` 时映射为 `TRANSLATION_REQUEST_FAILED`；缺失 finish 或其他非 `stop` 原因映射为 `TRANSLATION_INVALID_RESPONSE`。
 
 Google 在 form POST 请求体中接收原文，Bing 在 JSON POST 请求体中接收原文。两者都是远端服务。免登录端点不保证开发者 API 的可用性或免费额度。区域连通性须在用户网络上验证。
 
@@ -30,7 +30,7 @@ Google 在 form POST 请求体中接收原文，Bing 在 JSON POST 请求体中�
 
 `CotTranslationPreferences` 包含已接受的翻译服务和目标语言。`CotTranslationSnapshot` 将这些偏好与 translator 当前的 `maxTextChars` 及可用服务 ID 一起返回。浏览器在注册翻译控件前读取此 Host 快照，本地设置存储不可用时也如此。接受的设置更新及重新连接会刷新这两项值；请求长度限制变化时，展开内容的请求被取消并重新分片。
 
-Session 作用域的 `conversation.chat.reasoning-body` chain 接收原始 `text` 和 `running` 标志。没有 contribution 接管时，Chat 渲染原始 Markdown。启用后，GUI 只在展开后翻译完整段落和流式长段落中达到请求长度的前缀，并从当前 Session 恢复已完成结果；本地缓存只优化当前展开区域。未完成的末尾片段保留原文。原文始终可访问。关闭展开内容、切换 Provider 或语言、卸载插件都会取消未完成调用并忽略迟到的结果。Provider 失败时保留原文，必须显式重试；译文从不替换原始 Session 事件或模型输入。
+GUI 向 Session 作用域的 `conversation.chat.reasoning.body` single Slot 注册，替换 Chat 的默认条目。两个条目均复用官方 `conversation.chat.reasoning.content` Factory；翻译包装选择显示文本，自行维护工具栏和视图状态，传入自己的本地化 labels，不重复实现 Markdown 渲染。启用后，GUI 只在展开后翻译完整段落和流式长段落中达到请求长度的前缀，并从当前 Session 恢复已完成结果；本地缓存只优化当前展开区域。未完成的末尾片段保留原文。原文始终可访问。关闭展开内容、切换 Provider 或语言、卸载插件都会取消未完成调用并忽略迟到的结果。Provider 失败时保留原文，必须显式重试；译文从不替换原始 Session 事件或模型输入。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

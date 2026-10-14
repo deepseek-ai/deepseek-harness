@@ -497,12 +497,12 @@ async register(definition: PresetDefinition): Promise<() => Promise<void>>
 
 /** Inspect retained revisions, or the exact revision an Agent joined.
  * @param ctx - optional Agent context; omission includes all retained revisions.
- * @returns detached definition and module row identities, resolution bases, and isolation diagnostics; no match returns an empty list.
+ * @returns detached module references and isolation diagnostics; no match returns an empty list.
  */
 inspectCompositions(ctx?: Context): AgentPresetInspection[]
 
 /** Read every declared preset, including activation failures.
- * @returns Display metadata, declaring Loader row identities, and loading diagnostics.
+ * @returns Display metadata and loading diagnostics.
  */
 async list(): Promise<AgentPreset[]>
 
@@ -557,7 +557,9 @@ serviceFor<K extends string & keyof Context>(agent: { ctx: Context }, name: K): 
  */
 async recompose(ctx: Context, id: string): Promise<AgentPreset>
 
-/** Select a preset before a session starts its first turn.
+/** Select a preset before a session starts its first turn. A Session whose
+ * log records the preset and whose Agent runs its current revision keeps its
+ * composition; nothing is logged or announced.
  * @param agent Target Agent.
  * @param agentPreset Requested identity.
  * @returns Committed preset identity.

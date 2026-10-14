@@ -8,7 +8,7 @@ import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
-import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
+import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 import {
@@ -116,6 +116,7 @@ export class ApiSessionList {
       sessionId: session.id,
       updatedAt: updatedAt(session.header, metadata),
       agentAvailable: this.ctx.agents.get(session.id)?.session === session,
+      formatStatus: 'current',
       running: this.ctx.agents.get(session.id)?.status === 'running',
       blank: metadata?.blank ?? session.seq === 0,
       ...listFields(session.header),
@@ -133,7 +134,7 @@ export class ApiSessionList {
     const records = await this.ctx.sessionQuery.listSessions(signal)
     signal?.throwIfAborted()
     const items: SessionSummary[] = []
-    const cold: SessionHeader[] = []
+    const cold: SessionRecord[] = []
     let yieldDeadline = performance.now() + this.workSliceMs
     for (const record of records) {
       signal?.throwIfAborted()
@@ -141,7 +142,7 @@ export class ApiSessionList {
       if (live !== undefined) {
         items.push(this.summaryFor(live))
       } else if (record.header.cwd !== undefined) {
-        cold.push(record.header)
+        cold.push(record)
       }
       if (performance.now() >= yieldDeadline) {
         await scheduler.yield()
@@ -149,9 +150,9 @@ export class ApiSessionList {
         yieldDeadline = performance.now() + this.workSliceMs
       }
     }
-    for (const header of cold) {
+    for (const record of cold) {
       signal?.throwIfAborted()
-      items.push(this.summarizeCold(header))
+      items.push(this.summarizeCold(record))
       if (performance.now() >= yieldDeadline) {
         await scheduler.yield()
         signal?.throwIfAborted()
@@ -163,13 +164,14 @@ export class ApiSessionList {
     return items
   }
 
-  private summarizeCold(header: SessionHeader): SessionSummary {
+  private summarizeCold({ header, formatStatus }: SessionRecord): SessionSummary {
     const projections = this.projectionsFor(header, undefined)
     const metadata = projections?.values.sessionListMetadata
     return {
       sessionId: header.id,
       updatedAt: updatedAt(header, metadata),
       agentAvailable: false,
+      ...(formatStatus === undefined ? {} : { formatStatus }),
       running: false,
       // A large, metadata-less, or inaccessible cache miss remains unknown and visible.
       blank: metadata?.blank ?? false,

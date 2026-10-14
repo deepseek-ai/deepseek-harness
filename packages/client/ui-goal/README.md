@@ -29,7 +29,7 @@ Mount this plugin alongside `ui-conversation` and the goal domain package; the s
 
 ### The command-input bubble
 
-Each durable `/goal` run projects as a right-aligned user-style bubble labeled `Command input` (or `指令输入`), rendered before the generic command result row; the leading `/goal` token renders as a command reference chip in the code face through ui-primitives `projectUserText`, and the objective stays plain body text. It carries no timestamp, copy, or branch actions, and reloading reconstructs it from the run.
+Each durable `/goal` run projects as a right-aligned user-style bubble labeled `Command input` (or `指令输入`), rendered before the generic command result row; the leading `/goal` token renders as a command reference chip in the code face through the shared `conversation.user.text` Factory and the Goal-owned `command` renderer, using the executed token range in `facts.commands`, and the objective stays plain body text. It carries no timestamp, copy, or branch actions, and reloading reconstructs it from the run.
 
 ### Failures
 

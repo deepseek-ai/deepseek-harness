@@ -41,7 +41,7 @@ const headerRecord = catalog.encodeCurrentHeader(current.header, current.inherit
 const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 ```
 
-`createSessionFormatCatalog()` 接收每个受支持版本的一个冻结 codec、当前格式的逐记录 encoder、每组相邻版本的一个迁移，以及当前产物与 header 还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。正文读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()` 获得当前产物。写入方逐条编码其 header 与事件。
+`createSessionFormatCatalog()` 为每个版本所支持的表示接收一个 codec、当前格式的逐记录 encoder、每组相邻版本的一个迁移，以及当前产物与 header 还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。正文读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()` 获得当前产物。写入方逐条编码其 header 与事件。已确立的记录含义保持稳定；[兼容性评审](../../../.agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.zh.md)约束同版本新增。
 
 `recovery` 选项决定严格拒绝故障行，还是执行可恢复后缀处理。`validation: 'current'` 会执行所有已安装的 current 格式校验。`validation: 'transformed'` 会在历史迁移后执行已发布的 current 格式校验；已经是 current 的输入则只接受其 codec 的物理校验。
 

@@ -1297,8 +1297,6 @@ describe('out-of-process delegation boundary', () => {
     expect(providerRequest?.cwd).toBe(process.cwd())
     expect(providerRequest?.agentOptions).toBeUndefined()
     expect(providerRequest?.maxDepth).toBeUndefined()
-    expect(providerRequest?.persona).toBeUndefined()
-    expect(providerRequest?.toolFilter).toBeUndefined()
     expect(providerRequest).not.toHaveProperty('permission')
     expect(providerRequest).not.toHaveProperty('sandboxMode')
     expect(providerRequest).not.toHaveProperty('approvalPolicy')

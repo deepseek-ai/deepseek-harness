@@ -84,7 +84,7 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
   callId?: string
   /** Recorded tool name; independent of the display summary. */
   toolName?: string
-  /** Tool-only result failure state. */
+  /** Failed operation or interrupted assistant output. */
   isError?: boolean
   /** Own duration in seconds, or `null` when no duration is known. */
   timeSeconds: number | null

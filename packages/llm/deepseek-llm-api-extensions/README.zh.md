@@ -24,7 +24,7 @@ kind: "package-reference"
 ## 服务
 
 - `register(field, provider)` 为调用 fiber 保留一个字段。重复或格式错误的名称会同步失败；dispose（资源释放）该注册后，后续提供方可以再次认领。
-- `prepare(request)` 对已注册提供方取快照，并发准备贡献，克隆并冻结返回的 JSON 值，然后返回 `{ fields, accept }`。准备失败会在 HTTP 分发前拒绝请求；请求取消后，即使某个提供方忽略信号，注册表也会停止等待。
+- `prepare(request)` 对已注册提供方取快照，并发准备贡献，克隆并冻结返回的 JSON 值，然后返回 `{ fields, accept }`。某个提供方准备时抛错，注册表会省略其字段，其余字段照常返回，且只记录该字段的首次失败；请求取消会使 `prepare` 拒绝，即使某个提供方忽略信号，注册表也会停止等待。
 - `accept()` 对每个捕获的 2xx 后回调只运行一次。并发调用会等待同一次结算，所有回调都在报告失败前完成，多个失败会合并为一个 `AggregateError`。
 
 每个提供方都会看到确切的已序列化 Messages 请求体、请求 `AbortSignal`，以及可选的 `sessionId` 与辅助调用 `purpose`。提供方必须在取消后迅速停止自身工作；字段不适用于当前请求时返回 `undefined`。即使 HMR（热模块替换）在 HTTP 接受前移除了注册，已准备的操作仍会保留其捕获的提供方。

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-host-directory-picker-auto` 为每次启动选出正确的目录选择交互：它在启动时一次性判定宿主处境，并把匹配的后端——[原生](../directory-picker-native/README.zh.md)或[浏览](../directory-picker-browse/README.zh.md)——连同其 browser 半侧一起，作为真实的 Loader 条目挂进内存根树。判定是一次纯函数的启动时采样：`native` 要求仅回环绑定、非 SSH 启动与可服务的显示会话；任何含糊情形都判定为处处可用的 `browse`。固定某种交互就是直接组合那个后端。挂载的能力在服务生命周期内保持稳定，符合 seam 的要求。
+`dsh-host-directory-picker-auto` 为每次启动选出正确的目录选择交互：它在启动时一次性判定宿主处境，并把匹配的后端——[原生](../directory-picker-native/README.zh.md)或[浏览](../directory-picker-browse/README.zh.md)——连同其 browser 半侧一起，作为真实的 Loader 条目挂进内存根树。判定是一次纯函数的启动时采样：`native` 要求无远程 authority 信任、仅回环绑定、非 SSH 启动与可服务的显示会话；任何含糊情形都判定为处处可用的 `browse`。固定某种交互就是直接组合那个后端。挂载的能力在服务生命周期内保持稳定，符合 seam 的要求。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 选择是如何作出的
 
-`native` 要求「操作者看得到宿主屏幕、且原生后端能服务它」的全部信号：仅回环的绑定（从注入的 `webServer` 读取；全网卡绑定会接入任何 OS 选择器都触及不到的远程浏览器）；非 SSH 启动（共用的 [launch-environment](../../util/launch-environment/README.zh.md) 判断忽略项目与用户 `.env` 中的值，只检查继承的非空 `SSH_CONNECTION`／`SSH_TTY`）；以及可服务的显示会话——darwin 与 win32 上视为存在；linux 上要求 `DISPLAY`／`WAYLAND_DISPLAY`，外加 `PATH` 上有 zenity 或 kdialog 二进制；其余任何平台上都不成立。任何含糊情形都判定为处处可用的 `browse`。
+`native` 要求「操作者看得到宿主屏幕、且原生后端能服务它」的全部信号：无远程 authority 信任（`allowsRemoteAuthorities` 为 false——每条通过校验的 `trustedHosts` 条目都只命名回环主机名）；仅回环的绑定（从注入的 `webServer` 读取；远程 authority 信任或非回环绑定都会接入任何 OS 选择器都触及不到的远程浏览器）；非 SSH 启动（共用的 [launch-environment](../../util/launch-environment/README.zh.md) 判断忽略项目与用户 `.env` 中的值，只检查继承的非空 `SSH_CONNECTION`／`SSH_TTY`）；以及可服务的显示会话——darwin 与 win32 上视为存在；linux 上要求 `DISPLAY`／`WAYLAND_DISPLAY`，外加 `PATH` 上有 zenity 或 kdialog 二进制；其余任何平台上都不成立。任何含糊情形都判定为处处可用的 `browse`。
 
 ### 你会得到什么
 
@@ -59,7 +59,8 @@ kind: "package-reference"
 
 | 条件 | 后端 |
 |---|---|
-| 绑定宿主不是 `127.0.0.1` | `browse` |
+| 某条 `trustedHosts` 条目信任非回环 authority | `browse` |
+| 绑定地址不是 loopback（`isLoopbackHost`） | `browse` |
 | 存在 `SSH_CONNECTION` 或 `SSH_TTY` | `browse` |
 | darwin 或 win32 | `native` |
 | linux 且带选择器二进制与显示 | `native` |
@@ -108,6 +109,7 @@ kind: "package-reference"
 - **探测是从启动上下文推断操作者位置，而任何启动侧信号都无法证明这一点**——从 SSH 启动中脱离的 tmux 会话会丢失 `SSH_*` 标记；Aqua 会话之外的 Darwin 进程仍被算作有显示；在工作站本地启动、之后经 `ssh -L` 访问时，请求会从 `127.0.0.1` 到达，系统会判定 `native`，并把选择器弹在无人值守的工作站上。错误的 `native` 选择会退化为后端既有的可重试失败对话框，而对这类部署，直接组合 `-browse` 即选择安全的交互。
 - **Linux 选择器探查只读 `PATH`**——以其他途径可用的 zenity／kdialog（shell 别名、未装在 PATH 上）仍判定为 `browse`；把任一二进制装到 `PATH` 上，下次启动即恢复 `native` 资格。
 - **仅在启动时判定**——一次判定服务本次启动的所有客户端；按连接自适应（同一台服务器，本地浏览器用 native、远程浏览器用 browse）需要按客户端的能力对象以及 seam 未携带的协议通告，等到出现同时服务两种形态的部署再做。
+- **以 loopback authority 呈现的代理会藏起远程浏览器**——反向代理把请求 `Host` 和 `Origin` 一并改写为 loopback authority（如 `127.0.0.1:3080`），且没有任何非 loopback 的 `trustedHosts` 条目时，请求才会通过浏览器信任栅栏：浏览器对 `/api` 的 POST 会附带 `Origin: https://app.example`，代理若不改写该头就会被 Origin 栅栏拒绝。也只有在两者都被改写时，远程浏览器才会仍判定为 `native`，选择器在宿主屏幕上打开。
 
 <a id="dev-note"></a>
 ### 开发备注

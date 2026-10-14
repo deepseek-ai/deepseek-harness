@@ -326,7 +326,7 @@
   min-height: 64px;
   padding: 8px 12px;
   border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
-  border-radius: var(--dsw-radius-xl);
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-input-major, transparent);
   box-sizing: border-box;
 }

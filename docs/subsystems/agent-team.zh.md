@@ -6,7 +6,7 @@
 
 ## 身份与 roster
 
-`TeamId` 是具有独立[品牌](core.zh.md#branded-ids)的 Root `SessionId`。`TeamTaskId` 在 Team 内按 `task-<n>` 单调分配；`TeamMessageId` 是全局随机值。teammate 的 Session id 始终是持久身份，而 `name` 是不可变的模型／UI 标签。
+`TeamId` 是使用独立[品牌类型](core.zh.md#branded-ids)的 root `SessionId`。`TeamTaskId` 按 `task-<n>` 分配。新发送返回目标 inbox 的 `MessageId`；`TeamMessageId` 仅供历史 mailbox 记录保留。teammate 名称是不可变标签。
 
 ```ts type-equiv
 /** Whole durable value written on every teammate lifecycle change. */
@@ -23,12 +23,12 @@ interface TeamMemberSnapshot {
 
 每个 member 都从 `provisioning` 开始，并且只到达一个终态 roster phase：`active` 或 `failed`。roster 的 `running`／`inactive` 状态单独派生，绝不会重写该记录。
 
-## 持久 mailbox
+## 消息与历史 mailbox
 
-Lead Session 首先存储完整 queued message。只有 target 的 pending inbox 条目或已记录用户消息完成持久化，才会写入独立 acknowledgement event，queued-minus-delivered 因而构成恢复 mailbox。
+新发送返回 inbox 接收结果或拒绝。目标保存现有 `agent-message` source，包含真实发送者 Session id 和发送者名称正文前缀。Team 不为新消息提供 outbox 或重发去重。[包约定](../../packages/experimental/agent-team/README.zh.md#understand-the-implementation)定义持久化。以下 mailbox 类型继续可读，以便历史 Lead 日志仍能回放；Team 不投递其中的 pending 记录。
 
 ```ts type-equiv
-/** One peer message retained until its target Session records it. */
+/** One peer message recorded by the historical Team mailbox. */
 interface TeamMessageSnapshot {
   readonly id: TeamMessageId
   readonly senderId: SessionId
@@ -40,10 +40,10 @@ interface TeamMessageSnapshot {
 
 每条消息都会尝试 Steer 投递。running target 在最近的步骤边界收到消息，inactive target 在已加载时启动一个轮次，否则冷恢复。调用方不能选择其他模式，因此持久记录不存储调度方式。
 
-target Session 会在 pending inbox 条目和最终用户消息上保留消息身份与发送者归因。跨 inbox 与历史折叠该 source 构成 target 侧去重键；模型可见的 framing 会重复 id 和发送者。
+历史 `team-message` source 保留旧消息 id 与发送者归属；客户端用它们展示消息标题和图标。
 
 ```ts type-equiv
-/** Source retained by the target Session for durable mailbox de-duplication. */
+/** Source recorded by a target Session for one historical Team mailbox delivery. */
 interface TeamMessageSource {
   readonly kind: 'team-message'
   readonly teamId: TeamId
@@ -122,7 +122,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` Session 投影把一个 Root Session 回放成每个 Team 操作所读取的 roster、任务板与 queued-minus-delivered mailbox。它按 `TeamId` 选取记录，因此普通 fork 继承的 event 保留 ancestor id，绝不会进入新 Root 的状态。Session event 的 `seq` 与 `time` 继续负责顺序和时间记录，Team snapshot 不再重复保存它们。roster 与 task 读取以 view 形式到达调用方，而 pending 邮件仅供投递与恢复内部使用。包 [README](../../packages/experimental/agent-team/README.zh.md)负责 operation、authorization、recovery 和限制行为。
+`agentTeam` Session 投影把一个 Root Session 回放成roster、任务板与历史 queued-minus-delivered mailbox。它按 `TeamId` 选取记录，因此普通 fork 继承的 event 保留 ancestor id，绝不会进入新 Root 的状态。Session event 的 `seq` 与 `time` 继续负责顺序和时间记录，Team snapshot 不再重复保存它们。roster 与 task 读取以 view 形式到达调用方，而 pending 邮件不对调用方公开。包 [README](../../packages/experimental/agent-team/README.zh.md)负责 operation、authorization、recovery 和限制行为。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -162,10 +162,10 @@ listMembers(agent: Agent): TeamMemberView[]
 async spawnTeammate(caller: Agent, request: SpawnTeammateRequest): Promise<SpawnTeammateResult>
 
 /**
- * Queue one durable peer message, then attempt immediate delivery.
+ * Steer one peer message into the target inbox or reject the attempt.
  * @param caller - exact live sending Team member.
- * @param request - target name, content, and pre-queue cancellation.
- * @returns durable message identity and immediate-delivery observation.
+ * @param request - target name, content, and cancellation before acceptance.
+ * @returns accepted inbox identity; acceptance follows normal Agent persistence and does not await model processing.
  */
 async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult>
 

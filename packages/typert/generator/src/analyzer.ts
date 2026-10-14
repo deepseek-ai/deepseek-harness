@@ -8,6 +8,8 @@
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
+import { findBuildOutputLoads, findUnresolvedWorkspaceImports } from './build-output-guard.ts'
+import type { BuildOutputLoad, UnresolvedWorkspaceImport } from './build-output-guard.ts'
 import type {
   CrossFaceLink,
   DocumentationModel,
@@ -79,6 +81,15 @@ export interface WorkspaceAnalyzerOptions {
   readonly mode?: AnalysisMode
   /** Shared workspace memo; supply one instance to reuse parses across analyzers. */
   readonly caches?: WorkspaceCaches
+  /**
+   * Fail analysis when a face program loads a file from a workspace
+   * package's `lib/` directory, or cannot resolve an import of a workspace
+   * package (default false). Enable it for faces that import no generated
+   * output, so that the result depends only on workspace source and never on
+   * whether package compilation ran; the failure names each importing
+   * specifier and the source a `paths` alias should map it to.
+   */
+  readonly rejectBuildOutputs?: boolean
 }
 
 /** One package face whose public export graph contains Typert business declarations. */
@@ -96,6 +107,16 @@ export interface ParsedConfig {
   readonly parsed: ts.ParsedCommandLine
 }
 
+/** The settings Typert reads from one face aggregate tsconfig. */
+export interface AggregateConfig {
+  /** Absolute config path. */
+  readonly path: string
+  /** The aggregate's effective compiler options. */
+  readonly options: ts.CompilerOptions
+  /** The package projects the aggregate references. */
+  readonly projectReferences: readonly ts.ProjectReference[]
+}
+
 /** One package face registration discovered from an aggregate tsconfig. */
 export interface PackageRegistration {
   /** The face whose aggregate references this package project. */
@@ -104,7 +125,11 @@ export interface PackageRegistration {
   readonly name: string
   /** Real package root directory. */
   readonly root: string
-  /** The package's own parsed tsconfig. */
+  /**
+   * The package's own tsconfig, parsed on first read. Typert parses only the
+   * tsconfigs of packages it analyzes; validating every referenced tsconfig
+   * belongs to the preceding `tsc -b`.
+   */
   readonly config: ParsedConfig
   /** The parsed package.json content. */
   readonly manifest: Record<string, unknown>
@@ -211,6 +236,7 @@ export class WorkspaceCaches {
   readonly configs = new Map<string, ParsedConfig>()
   /** Registration inventories keyed by root and aggregate config paths. */
   readonly registrations = new Map<string, PackageRegistration[]>()
+  private readonly aggregates = new Map<string, AggregateConfig>()
   private readonly hosts = new Map<TypertFace, FaceProgramHost>()
 
   /**
@@ -225,6 +251,23 @@ export class WorkspaceCaches {
       this.configs.set(path, parsed)
     }
     return parsed
+  }
+
+  /**
+   * Read one face aggregate tsconfig once per workspace snapshot. An aggregate
+   * that declares `references` is parsed without expanding its `include`
+   * patterns, which affect neither its options nor its references.
+   * @param path - absolute aggregate config path.
+   * @returns the memoized compiler options and project references.
+   */
+  aggregate(path: string): AggregateConfig {
+    let aggregate = this.aggregates.get(path)
+    if (aggregate === undefined) {
+      const { parsed } = parseConfig(path, true)
+      aggregate = { path, options: parsed.options, projectReferences: parsed.projectReferences ?? [] }
+      this.aggregates.set(path, aggregate)
+    }
+    return aggregate
   }
 
   /**
@@ -287,7 +330,7 @@ export class WorkspaceCaches {
 export class WorkspaceAnalyzer {
   private readonly options: Required<Pick<
     WorkspaceAnalyzerOptions,
-    'root' | 'hostConfig' | 'clientConfig' | 'faces' | 'checkDiagnostics' | 'mode'
+    'root' | 'hostConfig' | 'clientConfig' | 'faces' | 'checkDiagnostics' | 'mode' | 'rejectBuildOutputs'
   >> & Pick<WorkspaceAnalyzerOptions, 'packages'>
   private queuedEdit: SourceEdit | undefined
   private readonly crossFaceLinks = new Map<string, CrossFaceLink>()
@@ -303,6 +346,7 @@ export class WorkspaceAnalyzer {
       faces: options.faces ?? ['host', 'client'],
       checkDiagnostics: options.checkDiagnostics ?? true,
       mode: options.mode ?? 'check',
+      rejectBuildOutputs: options.rejectBuildOutputs ?? false,
       ...(options.packages === undefined ? {} : { packages: options.packages }),
     }
     this.caches = options.caches ?? new WorkspaceCaches()
@@ -328,16 +372,25 @@ export class WorkspaceAnalyzer {
           for (const registration of registrations) this.checkProject(registration)
         }
         const aggregatePath = resolve(this.options.root, face === 'host' ? this.options.hostConfig : this.options.clientConfig)
-        const aggregate = this.caches.config(aggregatePath)
+        const aggregate = this.caches.aggregate(aggregatePath)
         const rootNames = [...new Set(registrations.flatMap(registration => registration.config.parsed.fileNames))]
         const options: ts.CompilerOptions = {
-          ...aggregate.parsed.options,
+          ...aggregate.options,
           composite: false,
           incremental: false,
           noEmit: true,
         }
         const host = this.caches.programHost(face, options)
         const program = ts.createProgram({ rootNames, options, host })
+        if (this.options.rejectBuildOutputs) {
+          rejectBuildOutputLoads(
+            face,
+            this.options.root,
+            aggregatePath,
+            findBuildOutputLoads(program, this.options.root, host),
+            findUnresolvedWorkspaceImports(program, this.options.root, host),
+          )
+        }
         faces.push(new FaceAnalyzer({
           root: this.options.root,
           face,
@@ -397,11 +450,13 @@ export class WorkspaceAnalyzer {
   /**
    * Discover package faces from public-export-reachable Cordis augmentations
    * and explicit `@typert` roots without constructing a type-checker program.
+   * @param includeManifest - optional `package.json` predicate; a rejected package's sources and project config are not read.
    * @returns contributors grouped by package with deterministic face order.
    */
-  discoverPackages(): DiscoveredTypertPackage[] {
+  discoverPackages(includeManifest?: (manifest: Readonly<Record<string, unknown>>) => boolean): DiscoveredTypertPackage[] {
     const registrations = this.loadRegistrations()
-      .filter(registration => this.options.faces.includes(registration.face))
+      .filter(registration => this.options.faces.includes(registration.face)
+        && (includeManifest === undefined || includeManifest(registration.manifest)))
       .filter(registration => this.registrationHasSurface(registration))
     const packages = new Map<string, { root: string; faces: Set<TypertFace> }>()
     for (const registration of registrations) {
@@ -481,8 +536,8 @@ export class WorkspaceAnalyzer {
     for (const face of ['host', 'client'] as const) {
       const aggregatePath = resolve(this.options.root, face === 'host' ? this.options.hostConfig : this.options.clientConfig)
       if (!existsSync(aggregatePath)) continue
-      const aggregate = this.caches.config(aggregatePath)
-      for (const reference of aggregate.parsed.projectReferences ?? []) {
+      const aggregate = this.caches.aggregate(aggregatePath)
+      for (const reference of aggregate.projectReferences) {
         const configPath = projectConfigPath(reference.path)
         const packageRoot = dirname(configPath)
         if (!isWithin(realPath(packageRoot), join(this.options.root, 'packages'))
@@ -490,28 +545,31 @@ export class WorkspaceAnalyzer {
         const manifestPath = join(packageRoot, 'package.json')
         if (!existsSync(manifestPath)) continue
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
-        if (typeof manifest.name !== 'string') continue
-        const registration: PackageRegistration = {
-          face,
-          name: manifest.name,
-          root: realPath(packageRoot),
-          config: this.caches.config(configPath),
+        const name = manifest.name
+        if (typeof name !== 'string') continue
+        const root = realPath(packageRoot)
+        const caches = this.caches
+        // The project config is parsed on first use, so discovery and analysis
+        // read only the projects they select.
+        const register = (registrationFace: TypertFace, exportSubpaths?: readonly string[]): PackageRegistration => ({
+          face: registrationFace,
+          name,
+          root,
+          get config() { return caches.config(configPath) },
           manifest,
-        }
+          ...(exportSubpaths === undefined ? {} : { exportSubpaths }),
+        })
         if (!isDualFacePackage(manifest)) {
-          registrations.push(registration)
+          registrations.push(register(face))
         } else if (configPath === join(packageRoot, 'tsconfig.json')) {
           registrations.push(
-            { ...registration, face: 'host', exportSubpaths: hostExportSubpaths(manifest) },
-            { ...registration, face: 'client', exportSubpaths: clientExportSubpaths(manifest) },
+            register('host', hostExportSubpaths(manifest)),
+            register('client', clientExportSubpaths(manifest)),
           )
         } else {
-          registrations.push({
-            ...registration,
-            exportSubpaths: face === 'host'
-              ? hostExportSubpaths(manifest)
-              : clientExportSubpaths(manifest),
-          })
+          registrations.push(register(face, face === 'host'
+            ? hostExportSubpaths(manifest)
+            : clientExportSubpaths(manifest)))
         }
       }
     }
@@ -632,6 +690,9 @@ class FaceAnalyzer {
   private readonly nodes = new Map<TypeNodeId, TypeNodeModel>()
   private readonly exportsByPackage = new Map<string, ExportRecord[]>()
   private readonly nodeOrdinals = new Map<string, number>()
+  /** Registration and package lookups per source path; the registration set is fixed per analyzer. */
+  private readonly registrationByFile = new Map<string, PackageRegistration | undefined>()
+  private readonly packageNameByFile = new Map<string, string>()
   private staticLookups: readonly StaticLookupDeclaration[] | undefined
   private staticContexts: ReadonlyMap<string, StaticContextDeclaration> | undefined
 
@@ -1082,6 +1143,7 @@ class FaceAnalyzer {
     if ((method.typeParameters?.length ?? 0) > 0) {
       this.fail(method, 'generic Remote methods are not supported')
     }
+    const documentation = documentationOf(method)
     const methodName = method.name.text
     const exportedMethod = invocation.exportName ?? methodName
 
@@ -1151,7 +1213,8 @@ class FaceAnalyzer {
       }
       if (wires.has(modeled.wire)) this.fail(parameter, `duplicate Remote wire field ${modeled.wire}`)
       wires.add(modeled.wire)
-      parameters.push(modeled)
+      const description = documentation.tags.find(tag => tag.name === 'param' && tag.argument === modeled.name)?.comment?.replace(/^[-—–]\s*/, '')
+      parameters.push({ ...modeled, ...(description === undefined ? {} : { description }) })
     }
 
     let receiver: InvocationModel['invocation'] = { kind: 'direct' }
@@ -1210,6 +1273,7 @@ class FaceAnalyzer {
         ),
       }
     return {
+      ...documentation,
       id: `${registration.name}#${binding.namespace}/${exportedMethod}`,
       service: binding.service,
       namespace: binding.namespace,
@@ -1345,32 +1409,27 @@ class FaceAnalyzer {
           }
           marker = { kind: 'direct', exportName }
         } else {
-          if (!ts.isObjectLiteralExpression(argument) || argument.properties.length !== 1) {
-            this.fail(argument, 'Remote() options must contain exactly mode: "stream"')
-          }
-          const [property] = argument.properties
-          if (property === undefined) this.fail(argument, 'Remote() options must contain exactly mode: "stream"')
-          const mode = ts.isPropertyAssignment(property) && memberName(property.name) === 'mode'
-            ? stringLiteralValue(property.initializer)
-            : undefined
-          if (mode !== 'stream') this.fail(property, 'Remote() options must contain exactly mode: "stream"')
-          marker = { kind: 'direct', mode }
+          marker = { kind: 'direct', ...this.remoteOptions(argument, 'Remote') }
         }
       } else if (ts.isCallExpression(expression)
         && this.isTypeMetaSymbol(expression.expression, 'RemoteScope')) {
         if (expression.arguments.length < 1 || expression.arguments.length > 2) {
-          this.fail(expression, 'RemoteScope() requires a Context key and optional exported method name')
+          this.fail(expression, 'RemoteScope() requires a Context key and an optional exported method name or options object')
         }
         const context = stringLiteralValue(expression.arguments[0])
         if (context === undefined || !isRemoteSegment(context)) {
           this.fail(expression.arguments[0] ?? expression, 'RemoteScope() key must be a string literal containing only RPC endpoint segment characters')
         }
-        const exportArgument = expression.arguments[1]
-        const exportName = exportArgument === undefined ? undefined : stringLiteralValue(exportArgument)
-        if (exportArgument !== undefined && (exportName === undefined || !isRemoteSegment(exportName))) {
-          this.fail(exportArgument, 'RemoteScope() name must be a string literal containing only RPC endpoint segment characters')
+        const option = expression.arguments[1]
+        const exportName = option === undefined ? undefined : stringLiteralValue(option)
+        if (option === undefined || exportName !== undefined) {
+          if (exportName !== undefined && !isRemoteSegment(exportName)) {
+            this.fail(option ?? expression, 'RemoteScope() name must be a string literal containing only RPC endpoint segment characters')
+          }
+          marker = { kind: 'context', context, ...exportName === undefined ? {} : { exportName } }
+        } else {
+          marker = { kind: 'context', context, ...this.remoteOptions(option, 'RemoteScope') }
         }
-        marker = { kind: 'context', context, ...exportName === undefined ? {} : { exportName } }
       } else {
         continue
       }
@@ -1378,6 +1437,37 @@ class FaceAnalyzer {
       found = marker
     }
     return found
+  }
+
+  /**
+   * Read the options object of `@Remote` or `@RemoteScope`. `resources`
+   * accepts any expression: its readers run only at runtime, where the
+   * Gateway reads them from the prototype descriptor, so generation records
+   * nothing for them.
+   */
+  private remoteOptions(
+    argument: ts.Expression,
+    decorator: 'Remote' | 'RemoteScope',
+  ): { readonly exportName?: string; readonly mode?: 'stream' } {
+    const requirement = decorator === 'Remote'
+      ? 'Remote() options require name, mode: "stream", or resources'
+      : 'RemoteScope() options require name or resources'
+    if (!ts.isObjectLiteralExpression(argument) || argument.properties.length === 0) this.fail(argument, requirement)
+    let options: { readonly exportName?: string; readonly mode?: 'stream' } = {}
+    for (const property of argument.properties) {
+      if (!ts.isPropertyAssignment(property)) this.fail(property, `${decorator}() options must use named values`)
+      const name = memberName(property.name)
+      if (decorator === 'Remote' && name === 'mode' && stringLiteralValue(property.initializer) === 'stream') {
+        options = { ...options, mode: 'stream' }
+      } else if (name === 'name') {
+        const value = stringLiteralValue(property.initializer)
+        if (value === undefined || !isRemoteSegment(value)) this.fail(property, `${decorator}() name must be an endpoint segment`)
+        options = { ...options, exportName: value }
+      } else if (name !== 'resources') {
+        this.fail(property, requirement)
+      }
+    }
+    return options
   }
 
   /**
@@ -1621,6 +1711,12 @@ class FaceAnalyzer {
           completed.set(type, id)
           return id
         }
+        const alias = type.aliasSymbol
+        const aliasDeclaration = alias === undefined ? undefined : preferredDeclaration(this.resolveSymbol(alias))
+        if (alias?.name === 'JsonValue' && aliasDeclaration !== undefined
+          && this.registrationForFile(aliasDeclaration.getSourceFile().fileName)?.name === '@deepseek-ai/dsh-util-values') {
+          return add({ kind: 'keyword', name: 'unknown', json: true })
+        }
         const flags = type.flags
         if (this.isRemoteByteArray(type)) {
           return add({ kind: 'reference', name: 'Uint8Array', target: { kind: 'standard', name: 'Uint8Array' }, arguments: [] })
@@ -1653,9 +1749,22 @@ class FaceAnalyzer {
           const value = (type as ts.Type & { readonly intrinsicName?: string }).intrinsicName === 'true'
           return add({ kind: 'literal', value, text: String(value) })
         }
-        if (type.isUnionOrIntersection()) {
+        if (type.isIntersection()) {
+          const material = type.types.filter(member => !this.isRemotePhantomConstraint(member))
+          if (material.length === 1) {
+            const projected = convert(material[0] as ts.Type)
+            const { id: _projectedId, ...value } = this.nodes.get(projected) as TypeNodeModel
+            return add(value)
+          }
+          // Object intersections contribute one request object; closing each operand
+          // separately would reject fields declared by its sibling operands.
+          if (!material.every(member => (member.flags & ts.TypeFlags.Object) !== 0
+            && !this.checker.isArrayType(member) && !this.checker.isTupleType(member))) {
+            return add({ kind: 'intersection', types: material.map(convert) })
+          }
+        } else if (type.isUnion()) {
           return add({
-            kind: (flags & ts.TypeFlags.Union) !== 0 ? 'union' : 'intersection',
+            kind: 'union',
             types: type.types.map(convert),
           })
         }
@@ -1700,7 +1809,7 @@ class FaceAnalyzer {
           const propertyType = this.checker.getTypeOfSymbolAtLocation(property, declaration ?? authoredType)
           const symbolKey = property.getName()
           members.push({
-            ...EMPTY_DOCUMENTATION,
+            ...(declaration === undefined ? EMPTY_DOCUMENTATION : documentationOf(declaration)),
             id: `${id}#${symbolKey}`,
             name: symbolKey,
             ...(symbolKey.startsWith('__@') ? { computed: 'symbol' as const } : {}),
@@ -2659,14 +2768,22 @@ class FaceAnalyzer {
   }
 
   private registrationForFile(file: string): PackageRegistration | undefined {
+    if (this.registrationByFile.has(file)) return this.registrationByFile.get(file)
     const path = realPath(file)
-    return this.allRegistrations
+    const registration = this.allRegistrations
       .find(registration => registration.face === this.face && isWithin(path, registration.root))
+    this.registrationByFile.set(file, registration)
+    return registration
   }
 
   private packageNameForFile(file: string): string {
+    const cached = this.packageNameByFile.get(file)
+    if (cached !== undefined) return cached
     const path = realPath(file)
-    return this.allRegistrations.find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    const name = this.allRegistrations
+      .find(registration => isWithin(path, registration.root))?.name ?? '<external>'
+    this.packageNameByFile.set(file, name)
+    return name
   }
 
   private allocateNodeId(site: ts.Node): TypeNodeId {
@@ -2747,11 +2864,26 @@ function mergeWorkspaceModels(models: readonly WorkspaceModel[]): WorkspaceModel
   }
 }
 
-function parseConfig(path: string): ParsedConfig {
+/** {@link ts.sys} config reads without directory listing, so `include` patterns match no files. */
+const UNLISTED_CONFIG_HOST: ts.ParseConfigHost = {
+  useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+  readDirectory: () => [],
+  fileExists: file => ts.sys.fileExists(file),
+  readFile: file => ts.sys.readFile(file),
+}
+
+function parseConfig(path: string, aggregate = false): ParsedConfig {
   const compilerPath = path.split(sep).join('/')
   const read = ts.readConfigFile(compilerPath, file => ts.sys.readFile(file))
   if (read.error !== undefined) throw new TypertAnalysisError(formatDiagnostic(read.error))
-  const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(compilerPath), undefined, compilerPath)
+  // Include expansion only fills `fileNames`, and TypeScript reports missing
+  // inputs only for a config without `files` or `references`; skipping it for
+  // an aggregate with `references` keeps diagnostics, options, and references.
+  const raw: unknown = read.config
+  const host = aggregate && typeof raw === 'object' && raw !== null && Object.hasOwn(raw, 'references')
+    ? UNLISTED_CONFIG_HOST
+    : ts.sys
+  const parsed = ts.parseJsonConfigFileContent(read.config, host, dirname(compilerPath), undefined, compilerPath)
   if (parsed.errors.length > 0) throw new TypertAnalysisError(parsed.errors.map(formatDiagnostic).join('\n'))
   return { path, parsed }
 }
@@ -3247,9 +3379,15 @@ function formatProgramDiagnostic(root: string, face: TypertFace, diagnostic: ts.
 }
 
 const realPathCache = new Map<string, string>()
+/** Normalized form per requested path; `resolve` reads only the process working directory. */
+const absolutePathCache = new Map<string, string>()
 
 function realPath(path: string): string {
-  const absolute = resolve(path)
+  let absolute = absolutePathCache.get(path)
+  if (absolute === undefined) {
+    absolute = resolve(path)
+    absolutePathCache.set(path, absolute)
+  }
   const cached = realPathCache.get(absolute)
   if (cached !== undefined) return cached
   // Only existing paths are memoized: a path can come into existence later,
@@ -3269,6 +3407,49 @@ function isWithin(path: string, root: string): boolean {
 
 function slash(value: string): string {
   return value.replaceAll('\\', '/')
+}
+
+function rejectBuildOutputLoads(
+  face: TypertFace,
+  root: string,
+  aggregatePath: string,
+  loads: readonly BuildOutputLoad[],
+  unresolved: readonly UnresolvedWorkspaceImport[],
+): void {
+  if (loads.length === 0 && unresolved.length === 0) return
+  const path = (file: string): string => slash(relative(root, file))
+  const config = path(aggregatePath)
+  const lines: string[] = []
+  const addAlias = (specifier: string, source: string): void => {
+    lines.push(`    add ${JSON.stringify(specifier)}: [${JSON.stringify(`./${path(source)}`)}] to the compilerOptions.paths of ${config} or the config it extends`)
+  }
+  if (unresolved.length > 0) {
+    lines.push(`typert(${face}): the ${face} program cannot resolve workspace imports, which would analyze as unknown types; map each import below to source:`)
+    for (const entry of unresolved) {
+      lines.push(`  '${entry.specifier}' imported by ${path(entry.file)}`)
+      if (entry.source === undefined) lines.push(`    add a compilerOptions.paths alias for it to ${config} or the config it extends`)
+      else addAlias(entry.specifier, entry.source)
+    }
+  }
+  if (loads.length > 0) {
+    lines.push(`typert(${face}): the ${face} program loads workspace build outputs instead of source; resolve each import below to source so that generation does not depend on package compilation:`)
+  }
+  for (const load of loads) {
+    lines.push(`  ${path(load.file)}`)
+    if (load.importers.length === 0) {
+      lines.push('    no program source imports it directly; another build output or a reference directive loads it')
+    }
+    for (const importer of load.importers) {
+      lines.push(`    imported as '${importer.specifier}' by ${path(importer.file)}`)
+    }
+    const specifiers = [...new Set(load.importers.map(importer => importer.specifier))]
+    if (load.source === undefined) {
+      lines.push('    no workspace source compiles to it; import a source module instead')
+    } else {
+      for (const specifier of specifiers) addAlias(specifier, load.source)
+    }
+  }
+  throw new TypertAnalysisError(lines.join('\n'))
 }
 
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): T[] {

@@ -5,7 +5,7 @@
  */
 import { spawn } from 'node:child_process'
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { lstat, mkdir, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { TestUserConfig } from 'vitest/config'
 import { coverageExemptHeavySuites } from './coverage-exempt.ts'
@@ -165,19 +165,27 @@ export interface InstrumentedInventory {
 }
 
 /**
- * Parse `vitest list --filesOnly` output into the instrumented inventory:
- * one `[pool] path` line per file, deduplicated, minus the exempt heavy
- * suites that `vitest list` itself does not exclude.
+ * Parse Vitest's JSON file inventory, excluding uninstrumented heavy suites.
+ * @param output - JSON written by `vitest list --filesOnly --json=<file>`.
+ * @param root - repository root used to make file paths relative.
+ * @returns sorted test files and their owning Vitest projects.
+ * @throws when a record is malformed or a file has multiple project assignments.
  */
-export function parseListOutput(output: string, root: string): InstrumentedInventory {
+export function parseFileInventory(output: string, root: string): InstrumentedInventory {
+  const entries: unknown = JSON.parse(output)
+  if (!Array.isArray(entries)) throw new Error('coverage inventory must be a JSON array')
   const files = new Set<string>()
   const projectOf = new Map<string, string>()
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^\[([^\]]+)\]\s+(\S+\.spec\.(?:ts|tsx))$/.exec(line)
-    if (match !== null && match[1] !== undefined && match[2] !== undefined) {
-      files.add(match[2])
-      projectOf.set(match[2], match[1])
+  for (const value of entries) {
+    const entry: unknown = value
+    if (entry === null || typeof entry !== 'object' || !('file' in entry) || typeof entry.file !== 'string'
+      || !('projectName' in entry) || (entry.projectName !== 'thread-safe' && entry.projectName !== 'process-bound')) {
+      throw new Error('coverage inventory requires a file and its thread-safe or process-bound project')
     }
+    const file = relative(root, entry.file).split(sep).join('/')
+    if (files.has(file)) throw new Error(`coverage inventory lists ${file} more than once`)
+    files.add(file)
+    projectOf.set(file, entry.projectName)
   }
   for (const suite of coverageExemptHeavySuites) {
     for (const file of globSync(suite.exclude, { cwd: root })) {
@@ -201,26 +209,24 @@ export function parseListOutput(output: string, root: string): InstrumentedInven
 async function collectInstrumentedFiles(
   root: string,
   pnpmEntrypoint: string,
+  inventoryPath: string,
   filters: readonly string[] = [],
 ): Promise<InstrumentedInventory> {
-  const invocation = pnpmInvocation(['exec', 'vitest', 'list', '--filesOnly', ...filters], { npm_execpath: pnpmEntrypoint })
-  const output = await runListCommand(invocation.command, invocation.args, root)
-  return parseListOutput(output, root)
+  const invocation = pnpmInvocation(['exec', 'vitest', 'list', '--filesOnly', `--json=${inventoryPath}`, ...filters], { npm_execpath: pnpmEntrypoint })
+  await runListCommand(invocation.command, invocation.args, root)
+  return parseFileInventory(await readFile(inventoryPath, 'utf8'), root)
 }
 
-/** Run `vitest list` and return its stdout, or throw with exit code and stderr. */
-function runListCommand(command: string, args: string[], root: string): Promise<string> {
+/** Wait for `vitest list` to write its JSON file, or throw with exit code and stderr. */
+function runListCommand(command: string, args: string[], root: string): Promise<void> {
   return new Promise((resolveList, rejectList) => {
-    const child = spawn(command, args, { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
-    let output = ''
+    const child = spawn(command, args, { cwd: root, env: process.env, stdio: ['ignore', 'ignore', 'pipe'] })
     let errorOutput = ''
-    child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => { output += chunk })
     child.stderr.on('data', (chunk: string) => { errorOutput += chunk })
     child.once('error', (error: Error) => { rejectList(error) })
     child.once('close', (code) => {
-      if (code === 0) resolveList(output)
+      if (code === 0) resolveList()
       else rejectList(new Error(`vitest list exited with ${String(code ?? 'signal')}${errorOutput === '' ? '' : `: ${errorOutput.trim().slice(0, 300)}`}`))
     })
   })
@@ -301,7 +307,7 @@ export function writeFileDurations(
 
 /**
  * Extract per-file durations from compact timing reports, one per partition.
- * @param reportFiles - reports mapping repository-relative file paths to milliseconds.
+ * @param reportFiles - reports listing repository-relative file paths and milliseconds.
  * @returns finite, non-negative file costs from readable reports.
  */
 export function collectPartitionDurations(reportFiles: readonly string[]): Map<string, number> {
@@ -313,10 +319,13 @@ export function collectPartitionDurations(reportFiles: readonly string[]): Map<s
     } catch {
       continue
     }
-    if (report === null || typeof report !== 'object' || Array.isArray(report)) continue
-    for (const [path, duration] of Object.entries(report)) {
-      if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) continue
-      durations.set(path, duration)
+    if (!Array.isArray(report)) continue
+    for (const entry of report) {
+      const record: unknown = entry
+      if (record !== null && typeof record === 'object' && 'file' in record && typeof record.file === 'string'
+        && 'duration' in record && typeof record.duration === 'number' && Number.isFinite(record.duration) && record.duration >= 0) {
+        durations.set(record.file, record.duration)
+      }
     }
   }
   return durations
@@ -479,13 +488,15 @@ export class CoveragePartitionCoordinator {
   }
 
   /**
-   * Run every partition before one merged threshold check.
+   * Run every partition and verify its test-file inventory before one merged threshold check.
+   * Failed runs retain inventories, partition configs, and test reports in coverage/.partitioned.
    * @returns zero only when every partition and the merge command succeed.
    */
   public async run(): Promise<number> {
     await removeOwnedTree(join(this.root, 'coverage'))
     await mkdir(this.blobsRoot, { recursive: true })
 
+    let succeeded = false
     try {
       const assignments = await this.assignFiles()
       this.assertNonEmptyAssignments(assignments)
@@ -506,13 +517,16 @@ export class CoveragePartitionCoordinator {
       // run, but the completed partitions' timings are still worth keeping.
       this.persistDurations(this.partitions)
       await this.assertCompleteBlobSet(commands)
+      await this.assertCompleteTestFiles(assignments)
 
       const mergeCommand = this.mergeCommand()
       console.log(`coverage-partitions: start ${mergeCommand.label}`)
       const mergeResult = await this.runCommand(mergeCommand)
-      return results.some(commandFailed) || commandFailed(mergeResult) ? 1 : 0
+      succeeded = !results.some(commandFailed) && !commandFailed(mergeResult)
+      return succeeded ? 0 : 1
     } finally {
-      await removeOwnedTree(this.temporaryRoot)
+      if (succeeded) await removeOwnedTree(this.temporaryRoot)
+      else console.error(`coverage-partitions: diagnostics retained at ${this.relativePath(this.temporaryRoot)}`)
     }
   }
 
@@ -559,7 +573,7 @@ export class CoveragePartitionCoordinator {
       // values (`--testTimeout 5000`) must never be mistaken for filters.
       const separator = this.vitestArgs.indexOf('--')
       const filters = separator >= 0 ? this.vitestArgs.slice(separator + 1) : []
-      const inventory = await collectInstrumentedFiles(this.root, this.pnpmEntrypoint, filters)
+      const inventory = await collectInstrumentedFiles(this.root, this.pnpmEntrypoint, join(this.temporaryRoot, 'inventory.json'), filters)
       files = inventory.files
       this.projectOf = inventory.projectOf
       weights = readFileDurations(this.root)
@@ -650,6 +664,30 @@ export class CoveragePartitionCoordinator {
     if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
       throw new Error(`coverage partitions produced ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`)
     }
+  }
+
+  /** Require each compact timing report to account for every assigned file exactly once. */
+  private async assertCompleteTestFiles(assignments: readonly (readonly string[])[]): Promise<void> {
+    await Promise.all(assignments.map(async (expected, index) => {
+      const path = join(this.temporaryRoot, `partition-${index + 1}.times.json`)
+      const report: unknown = JSON.parse(await readFile(path, 'utf8'))
+      if (!Array.isArray(report)) {
+        throw new Error(`coverage partition report ${path} must contain file timing records`)
+      }
+      const actual = report.map((result: unknown) => {
+        if (result === null || typeof result !== 'object' || !('file' in result) || typeof result.file !== 'string') {
+          throw new Error(`coverage partition report ${path} contains a test result without a filename`)
+        }
+        return result.file
+      })
+      const observed = new Set(actual)
+      const assigned = new Set(expected)
+      const missing = expected.filter(file => !observed.has(file))
+      const unexpected = actual.filter(file => !assigned.has(file))
+      if (missing.length > 0 || unexpected.length > 0 || observed.size !== actual.length) {
+        throw new Error(`coverage partition ${index + 1}: missing files ${JSON.stringify(missing)}; unexpected files ${JSON.stringify(unexpected)}; duplicate results ${actual.length - observed.size}`)
+      }
+    }))
   }
 }
 

@@ -1,4 +1,4 @@
-/** Blank New Session folding through the shipped Web composition. */
+/** Blank New Session folding and the session watermark through the shipped Web composition. */
 
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
@@ -107,7 +107,42 @@ describe('web e2e: blank New Session folding quota', () => {
     await expect.poll(() => sidebar.getByRole('treeitem').count()).toBe(18)
     await sidebar.getByRole('button', { name: 'Show less' }).click()
     await expect.poll(() => sidebar.getByRole('treeitem').count()).toBe(7)
-    await assertFixtureInventory(EXPECTED_DIR, ['sidebar.expected.md', 'first-batch.expected.md'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('raises the watermark to the open session, keeps it after leaving, and resets it on fold', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-workspace-session-watermark'))
+    const sidebar = page.getByRole('tree', { name: 'Sessions' })
+    const workspaceTitle = basename(scaffold.workspaceCwd)
+    const sessions = () => sidebar.getByText('Untitled', { exact: true }).count()
+    await sidebar.getByRole('button', { name: 'Show 11 more sessions' }).click()
+    await expect.poll(sessions).toBe(10)
+    await sidebar.getByText('Untitled', { exact: true }).nth(8).click()
+    await sidebar.getByRole('button', { name: 'Show 6 more sessions' }).click()
+    await sidebar.getByRole('button', { name: 'Show 1 more sessions' }).click()
+    await expect.poll(sessions).toBe(16)
+    await sidebar.getByRole('button', { name: 'Show less' }).click()
+    await expect.poll(sessions).toBe(9)
+    await sidebar.getByRole('button', { name: 'Show 7 more sessions' }).waitFor()
+
+    const workspaceRow = sidebar.getByRole('treeitem').first()
+    await workspaceRow.hover()
+    await page.getByRole('button', { name: `New session in ${workspaceTitle}` }).click()
+    await sidebar.getByText('New Session', { exact: true }).waitFor()
+    expect(await sessions()).toBe(9)
+    await workspaceRow.hover()
+    await compareOrRefreshGolden(
+      join(EXPECTED_DIR, 'watermark-kept.expected.md'),
+      await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await workspaceRow.click()
+    await workspaceRow.click()
+    await expect.poll(sessions).toBe(5)
+    await sidebar.getByRole('button', { name: 'Show 11 more sessions' }).waitFor()
+    await assertFixtureInventory(EXPECTED_DIR, ['sidebar.expected.md', 'first-batch.expected.md', 'watermark-kept.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

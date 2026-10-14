@@ -40,7 +40,7 @@ import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-ll
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService, principalOf, type Principal } from '@deepseek-ai/dsh-typert-protocol'
 import {
   rejectPrompt, validateControlRequest,
 } from './control.ts'
@@ -178,6 +178,8 @@ interface BrowserPromptSource {
   readonly kind: 'user'
   readonly rpcId: SubagentPromptRequestId
   readonly clientTimeZone?: string
+  /** Caller that submitted this follow-up, written only when it is not the owner; absent means the owner. */
+  readonly principal?: Principal
 }
 
 /** Host configuration for continuable subagent capacity. */
@@ -464,10 +466,12 @@ export class SubagentRuntime extends TypertRemoteService {
         { parentSessionId },
       )
     }
+    const principal = principalOf(this.ctx.invocation)
     const source: BrowserPromptSource = {
       kind: 'user',
       rpcId: request.requestId,
       ...(canonicalTimeZone === undefined ? {} : { clientTimeZone: canonicalTimeZone }),
+      ...(principal === undefined ? {} : { principal }),
     }
     try {
       // Admission precedes delivery: image parts become durable references
@@ -625,12 +629,16 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /** Reject the first requested capability that the provider lacks. */
   private assertCapabilities(provider: SubagentProvider, request: SubagentStartRequest): void {
+    if (request.agentPreset !== undefined && (!provider.capabilities.agentPreset || provider.inheritsParentContext)) {
+      throw new SubagentError(
+        `subagent provider "${provider.name}" does not support independent agent preset selection`,
+        'UNSUPPORTED_CAPABILITY',
+      )
+    }
     const needs: { when: boolean; cap: keyof SubagentCapabilities }[] = [
       { when: request.agentOptions !== undefined, cap: 'agentOptions' },
       { when: request.outputSchema !== undefined, cap: 'outputSchema' },
       { when: request.maxDepth !== undefined, cap: 'depthLimit' },
-      { when: request.toolFilter !== undefined, cap: 'toolFilter' },
-      { when: request.persona !== undefined, cap: 'persona' },
     ]
     for (const { when, cap } of needs) {
       if (when && !provider.capabilities[cap]) {
@@ -641,6 +649,7 @@ export class SubagentRuntime extends TypertRemoteService {
       }
     }
   }
+
 }
 
 export default SubagentRuntime

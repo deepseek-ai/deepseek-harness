@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+`await harness.resumeSession(savedId)` restores a persisted session from the configured `dshHome` and returns a `HarnessSession` ready for `run()`. Save the original session id and reuse its home and workspace. Restoration preserves conversation history and its directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions reject without creating a replacement. `session(id)` remains a lazy handle for an in-process session; it does not request persisted restoration. Shell, browser, and other external processes are not restored by this API.
+
 `HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
 
 Use this client when TypeScript code must drive a complete Harness runtime from another process and you can name the runtime executable explicitly. The common path is minimal: construct a `DeepSeekHarness` with a launch spec, run prompts, and close it so the child process is always reaped.

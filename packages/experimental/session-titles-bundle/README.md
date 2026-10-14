@@ -27,7 +27,7 @@ Generate experimental session titles from the conversation's eligible human prom
 
 In Web or Desktop, open Plugins and enable **Conversation-following titles** in Official. Switch it off to remove its profile layer.
 
-The switch changes the title provider for existing and new Sessions. Titles update on eligible human prompts or explicit refresh; automatic updates preserve user-pinned titles. Agent tool catalogs remain unchanged.
+The switch changes the title provider for existing and new Sessions. Eligible human prompts or explicit refresh trigger title requests; the model is asked to keep an existing generated title exactly while it still describes the main topic or task. Automatic updates preserve user-pinned titles. Agent tool catalogs remain unchanged.
 
 -----
 
@@ -63,7 +63,7 @@ The layer adds no request content directly; the capability implementation owns c
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Automatic title failures retain the previous title. The 4096-byte title-input budget rejects oversized input instead of truncating conversation history.
+- Automatic title failures retain the previous title. The 4096-byte title-input budget includes the current generated title when supplied and rejects oversized input instead of truncating conversation history.
 
 -----
 

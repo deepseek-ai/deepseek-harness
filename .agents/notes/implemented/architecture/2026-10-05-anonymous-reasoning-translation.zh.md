@@ -14,7 +14,7 @@ Status: implemented
 
 配置的默认服务为 Bing。启用 Bundle 允许将展开的思考内容发送给所选服务，插件元数据与设置公开说明接收方。失败时不选择其他 Provider。原文始终可访问；译文不替换持久化 assistant 输出，也不进入模型输入。[可选 Bundle 准入规则](2026-09-21-experimental-capabilities-as-optional-bundles.zh.md) 保证功能在显式选择前保持关闭。
 
-reasoning-body chain 传递原始文本与流式状态。原生 Chat 负责原始 Markdown fallback；消费者不替换 assistant 渲染器，也不改变 Session projection。只有展开内容才开始翻译。折叠、切换设置或卸载都会中止未完成工作并忽略迟到结果。
+GUI 向标准 `conversation.chat.reasoning.body` Slot 注册翻译包装，并调用官方 `conversation.chat.reasoning.content` Factory 展示原文或译文。默认正文同样是普通注册项；宿主不提供内联 Markdown fallback 或插件操作状态。翻译包装自行维护工具栏，并将自己的本地化 labels 传入 Factory；Factory 在调用者省略 labels 时提供默认文案，并固定紧凑排版。[思考正文的 Slot 与 Factory 设计](2026-10-09-reasoning-content-slot-factory.zh.md)取代本记录的正文组合方式，外部请求与模型历史隔离的决策保持不变。消费者不替换 assistant 渲染器，也不改变 Session projection。只有展开内容才开始翻译。折叠、切换设置或卸载都会中止未完成工作并忽略迟到结果。
 
 ## 考虑过的替代方案
 

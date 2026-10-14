@@ -62,7 +62,7 @@ export interface JobChunk {
  * stream all consume this one shape.
  */
 export interface JobView {
-  /** The registry-issued id (`<kind>-N`). */
+  /** The registry-issued id (`<kind>-<short-uuid>`). */
   readonly id: JobId
   /**
    * The producer kind the job was registered with: a Host-registered

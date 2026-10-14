@@ -8,7 +8,7 @@
 
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
-import { markdownHeadingLines, markdownProseLines } from './markdown.ts'
+import { markdownHeadingLines, markdownProseLines, parseMarkdown } from './markdown.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -51,8 +51,9 @@ for (const pkg of scannedPackages) {
     continue
   }
   const source = readFileSync(resolve(root, readme), 'utf8')
-  const lines = markdownProseLines(source)
-  const headings = markdownHeadingLines(source)
+  const tree = parseMarkdown(source)
+  const lines = markdownProseLines(source, tree)
+  const headings = markdownHeadingLines(source, tree)
   const limitations = headings.filter(heading => isLimitationsLike(heading.text))
 
   if (Object.hasOwn(NO_LIMITATIONS, pkg)) {

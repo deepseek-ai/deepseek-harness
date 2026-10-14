@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-为 standard、cordis 和 ptc 添加六个实验性终端工具。每个预设修订拥有隔离的终端注册表和平台 shell 后端；终端仍由智能体拥有。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
+为所有智能体添加六个实验性全局终端工具。组合包拥有隔离的终端注册表和平台 shell 后端；终端仍由智能体拥有。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-bundle"
 
 在 Web 或 Desktop 中打开插件页，在官方分组启用 **持久终端**。关闭后移除其配置层。
 
-新智能体和随后重新打开的会话使用所选组合；正在运行的智能体保留已有插件。minimal 预设和 Host 层工具目录保持不变。
+启用或关闭组合包会在运行中的 Host 注册或移除其全局工具，因此所有预设（包括 minimal）中的每个智能体都会在下一次请求时看到变化。
 
 -----
 
@@ -37,7 +37,7 @@ kind: "package-bundle"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 通过 `preset: preset-standard`、`preset: preset-cordis` 和 `preset: preset-ptc` 贡献插件行。后续配置补丁可以覆盖这些设置。[配置组合器](../../boot/app-boot/README.zh.md) 负责补丁顺序和错误处理。
+[`cordis.patch.yml`](cordis.patch.yml) 插入 Host 组 `optional-persistent-terminals`，在全局工具层注册这些工具。后续配置补丁可以按 id 覆盖其条目。[配置组合器](../../boot/app-boot/README.zh.md) 负责补丁顺序和错误处理。
 
 </details>
 
@@ -57,13 +57,13 @@ kind: "package-bundle"
 
 #### KV Cache 影响
 
-此配置层不直接添加请求内容；能力实现负责工具目录、提示和结果的缓存影响。
+此配置层不直接添加请求内容；能力实现负责工具目录、提示和结果的缓存影响。切换组合包会改变运行中会话的工具列表，使其已缓存的请求前缀失效一次。
 
 ## 已知限制与暂缓工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 终端属于创建它们的智能体。POSIX 使用 Bash，Windows 使用 PowerShell；此 bundle 不共享 minimal 预设的终端注册表。
+- 终端属于创建它们的智能体。POSIX 使用 Bash，Windows 使用 PowerShell；此 bundle 不与其他终端注册表共享。
 
 -----
 

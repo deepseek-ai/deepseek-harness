@@ -4,7 +4,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { InboxState } from './inbox.ts'
-import { chatNode } from './common.ts'
+import { chatNode, contextLocation } from './common.ts'
 import { contextForm, contextProducer } from './event-projection.ts'
 
 interface ReferencedUserMessageNode extends UserMessageNode {
@@ -115,7 +115,18 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     const waking = context.state.kind === 'context'
       && context.start?.event.type === 'user/message'
       && context.state.waking === true
-    return chatNode(context, waking ? 'turn-trigger' : context.state.kind, context.state.seq, context.state)
+    // Human input claimed for Step 1 opens an exchange; Notice-woken Turns and
+    // later steering stay in the current exchange, so they never fold earlier Turns.
+    const location = contextLocation(context)
+    const human = context.state.kind === 'user' || context.state.kind === 'steering'
+    const opensExchange = human && location.kind === 'step' && location.step.step === 1
+    return chatNode(
+      context,
+      waking ? 'turn-trigger' : context.state.kind,
+      context.state.seq,
+      context.state,
+      { location, groupTree: opensExchange ? 'exchange' : (human || waking) ? 'input' : undefined },
+    )
   },
 }
 

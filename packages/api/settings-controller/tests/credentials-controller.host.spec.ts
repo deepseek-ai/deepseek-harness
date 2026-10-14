@@ -24,7 +24,7 @@ class LiteralRejectingCredentials extends MemoryCredentials {
 /** A store whose provider-owned policy rejects an otherwise valid write. */
 class RejectingCredentials extends MemoryCredentials {
   override set(): Promise<void> {
-    return Promise.reject(new Error('a read-only source shadows this reference'))
+    return Promise.reject(new Error('the stored document no longer parses'))
   }
 }
 
@@ -120,7 +120,7 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     const failure = await controller.set('DEEPSEEK_API_KEY', 'sk-live').catch((error: unknown) => error)
     const { code, message, details } = remoteErrorOf(failure) ?? {}
     expect(code).toBe('credential/rejected')
-    expect(message).toContain('read-only source')
+    expect(message).toContain('no longer parses')
     expect(details).toEqual({ ref: 'DEEPSEEK_API_KEY' })
   })
 

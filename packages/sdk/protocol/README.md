@@ -33,12 +33,13 @@ Wire one JSON-RPC 2.0 message per `\n`-terminated line over byte streams you own
 
 ### The SDK methods
 
-Both wire ends share one method set: six client-to-server requests and four server-to-client notifications.
+Both wire ends share one method set: seven client-to-server requests and four server-to-client notifications.
 
 | Direction | Method | Payload types |
 |---|---|---|
 | client→server | `initialize` | `InitializeParams` → `InitializeResult` |
 | client→server | `session/prompt` | `SessionPromptParams` → `SessionPromptResult` (durable enqueue receipt) |
+| client→server | `session/resume` | `SessionResumeParams` → `{}` |
 | client→server | `session/wait` | `SessionWaitParams` → `{}` |
 | client→server | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | client→server | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
@@ -51,6 +52,8 @@ Both wire ends share one method set: six client-to-server requests and four serv
 `HarnessSdkRequestMap` and `HarnessSdkNotificationMap` index these shapes by method name; the package root exports them together with the transport.
 
 `session/wait` accepts `{ sessionId }` for an existing SDK-owned session and returns `{}` after the root stays idle and progressing managed descendant work finishes. Idle descendants with parked input remain resident without blocking this wait. Unknown ids and live Agent failures without a newer committed terminal are rejected. Notifications committed during the wait precede its response on the same transport; raw `session.status` transitions retain their whole-agent meaning.
+
+`session/resume` accepts a non-empty persisted `{ sessionId }` and returns `{}` after restoring that exact session. It requires initialization and the original persistence store, sends no new input, and rejects missing, unreadable, incompatible, or occupied sessions without creating a replacement. Historical events remain in the stored log; notifications report newly committed events.
 
 ### Payload semantics
 

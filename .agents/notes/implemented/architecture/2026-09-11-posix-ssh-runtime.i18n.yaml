@@ -9,8 +9,11 @@
   en: f67f6add03a36e85
   zh: 656be288f8b2e1d2
 /agent-note-posix-ssh-execution-providers/decision:
-  en: b2d1e370d008f0f3
-  zh: 3e98919538d3fb78
+  en: bc22949098fc3028
+  zh: 76618180bc0bac56
+/agent-note-posix-ssh-execution-providers/decision/helper-deployment:
+  en: c479fdb58ed617f1
+  zh: 17cfefa778e3fd71
 /agent-note-posix-ssh-execution-providers/alternatives-considered:
   en: 4efffb3edba91689
   zh: 40100a70e5f55a42
@@ -18,8 +21,8 @@
   en: f29359ab89feb084
   zh: db7505b8d4a5351a
 /agent-note-posix-ssh-execution-providers/verification:
-  en: 822c7c029a77f3c0
-  zh: 4a2eaaf3372cba8b
+  en: ee72e88fd40d6769
+  zh: 56f0e0c8f3365973
 /agent-note-posix-ssh-execution-providers/deferred-work:
   en: f300f112c9a09f7e
   zh: b4708a0b7f596420

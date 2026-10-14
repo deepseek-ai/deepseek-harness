@@ -70,6 +70,22 @@ describe('shared config schema catalog', () => {
     expect(provider?.pastes?.[0]?.text).toBe('export type Config = BrowserConfig')
   })
 
+  it.each([false, true])('checks package-local schema imports and undeclared fields (invalid=%s)', (invalid) => {
+    const { root, write } = fixture()
+    write('packages/test/provider/src/config.ts', invalid
+      ? sharedSchema.replace('headless: Schema.boolean()', 'headless: Schema.boolean(), hidden: Schema.string()')
+      : sharedSchema)
+    write('packages/test/provider/src/index.ts', `
+import { Shared, type BrowserConfig } from './config.ts'
+export type Config = BrowserConfig
+export const Config = Shared
+export function apply(ctx: unknown, config: Config): void {}
+`)
+    if (invalid) expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden'")
+    else expect(new Set(collectConfigCatalog(root).find(entry => entry.pkg === '@test/provider')?.schemaKeys))
+      .toEqual(new Set(['mode', 'headless', 'endpoint']))
+  })
+
   it('rejects a schema field absent from the shared config type', () => {
     const { root } = fixture(sharedSchema.replace('headless: Schema.boolean()', 'headless: Schema.boolean(), hidden: Schema.string()'))
     expect(() => collectConfigCatalog(root)).toThrow("schema validates key 'hidden' but config type 'Config' declares no such member")

@@ -300,17 +300,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* A middle dot with equal space on both sides separates the subtitle's parts. */
-.groupSub > * + *::before {
-  content: '·';
-  padding: 0 6px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.failedCount {
-  color: var(--dsw-alias-state-error-primary);
-}
-
 /* The preset switcher trigger mirrors the General-settings selector pill. */
 .switcher {
   display: inline-flex;
@@ -413,13 +402,6 @@
 .skeletonBar + .skeletonBar {
   width: 80%;
   height: 12px;
-}
-
-.enabledIn {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
 }
 
 .card[data-failed='true'] {

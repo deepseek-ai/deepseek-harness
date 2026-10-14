@@ -9,27 +9,27 @@
   en: 1393fc0c2c6cf60c
   zh: 61e2f2c46463101b
 /deepseek-ai-dsh-sdk-app/summary:
-  en: f96841d96dc95a30
-  zh: 88aa3e92ae1deb9c
+  en: 5583f814d74d685f
+  zh: 7d52ecc2cdcd78d4
 /deepseek-ai-dsh-sdk-app/table-of-contents:
   en: 4e53164159b5ce41
   zh: 89582dc0294d0776
 /deepseek-ai-dsh-sdk-app/use-this-package:
-  en: 465be8e510a86913
-  zh: 07e2e1efba1d108b
+  en: 63573087d1db9aff
+  zh: 638612ac3f0da2c0
 /deepseek-ai-dsh-sdk-app/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-sdk-app/model-experience/sdk-coding-agent-persona:
-  en: af149b1e7ed0a5fc
-  zh: fe483822d03deddb
-/deepseek-ai-dsh-sdk-app/model-experience/sdk-coding-agent-persona/what-the-model-sees:
-  en: afe0af085d77833e
-  zh: f41ef2a2219f1248
-/deepseek-ai-dsh-sdk-app/model-experience/sdk-coding-agent-persona/token-effect:
-  en: 371d28831239e0a8
-  zh: 57595359ff30a259
-/deepseek-ai-dsh-sdk-app/model-experience/sdk-coding-agent-persona/kv-cache-effect:
+/deepseek-ai-dsh-sdk-app/model-experience/sdk-model-context:
+  en: 4f88e647c6df4f42
+  zh: 2bd3e4b0bdfe9412
+/deepseek-ai-dsh-sdk-app/model-experience/sdk-model-context/what-the-model-sees:
+  en: 40f68e7d3f181ed6
+  zh: 64b0d7c8bf63dfa1
+/deepseek-ai-dsh-sdk-app/model-experience/sdk-model-context/token-effect:
+  en: 92d8ecb761e3ca7b
+  zh: e14c71ee2c31e818
+/deepseek-ai-dsh-sdk-app/model-experience/sdk-model-context/kv-cache-effect:
   en: 5b0e33295fb90e19
   zh: 4d48ca75bb677202
 /deepseek-ai-dsh-sdk-app/known-limitations-and-deferred-work:

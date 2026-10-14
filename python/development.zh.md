@@ -27,6 +27,10 @@ uv run --project python/sdk pytest
 
 `python/sdk/tests/test_bundled_runtime.py` 会运行可用的内置载体；某个载体的产物尚未构建时，会跳过该载体。仓库级测试政策见 [测试](../docs/testing.zh.md)。
 
+匹配的 engine 包已发布时，LibreOffice Kit CI 负责在 macOS、Windows 和 Linux 上通过已安装的 Node API 与 CLI 检查可见的 Office 内容。Harness 则通过已安装 wheel 包的冒烟测试验证搬移后的 Office sidecar；Python 测试会拒绝全白、全透明、左右颠倒和缺少文字的输出。
+
+将 `DSH_OFFICE_TEST_ARTIFACTS` 设为一个新目录，即可保留已安装 wheel 包冒烟测试的 Office 输入、PNG、清单与失败诊断信息。CI 在成功与失败时都会上传这些文件，不包含临时运行时文件。
+
 该套件面向的是伪造的运行时对端。`scripts/smoke-python-runtime.py` 面向打包运行时。`python-runtime` CI 任务在拉取请求上构建 Linux x64 与 Windows x64，在 master 推送上构建 Linux arm64 与两种 macOS 架构。每个选定目标把匹配的 SDK wheel 包与运行时 wheel 包安装进新的 Python 3.10 虚拟环境，在 checkout 外清除 `PYTHONPATH` 与 `DSH_RUNTIME_MODE` 后运行，证明两个模块及可执行文件都来自这些 distribution，然后运行全部 keyless 场景。聚焦的本地源码 SDK 运行可以选择一个已构建可执行文件与场景：
 
 ```sh
@@ -34,13 +38,13 @@ uv run --project python/sdk python scripts/smoke-python-runtime.py \
   --scenario sdk-minimal --exe dist-exe/deepseek-harness-sdk-runtime-macos-arm64
 ```
 
-SDK 场景会比对 `scripts/snapshots/python-sdk-single-exe/` 下已提交的期望输出。`minimal/model-visible.json` 固定 Linux／macOS `sdk-minimal` profile 所组装的系统提示词、对外公布的工具 schema 与模型可见消息；`minimal/win-x64/model-visible.json` 固定对应的 PowerShell 版本。因此，插件一旦贡献出计划外的系统分段或 user 消息，该任务即失败，且该 profile 发出的每条消息都会参与比对。`advanced/` 固定直接工具调用、子 agent 和 workflow；`advanced-ptc/` 固定程序调用与嵌套拒绝。两者都跨所有目标比对 SDK 结果及会话日志。`restart/` 针对同一持久化根目录启动两个完整 SDK 运行时进程，并跨所有目标固定其彼此隔离的模型历史、高层结果与独立持久日志。`sdk-minimal-in-history` 复用持久 shell 与编辑器场景，并在首次 shell 调用成功后更改一个分段。`minimal-in-history/prompt-history.json` 固定两个提示词版本、后续请求中不变的首条提示词、追加的 SDK system-message 事件及 `request/context.systemPromptUpdate`；工具 schema 保持不变，并独立检查编辑器创建的文件。`sdk-dynamic-tools` 在 `dynamic-tools/tool-history.json` 中固定原生工具的新增与移除，包括历史 header 引用，以及 Python SDK 结果、通知与持久事件的一致性。重新运行对应场景时加上 `--update-snapshots`，并在提交前审阅该差异。
+SDK 场景会比对 `scripts/snapshots/python-sdk-single-exe/` 下已提交的期望输出。`minimal/model-visible.json` 固定 Linux／macOS `sdk-minimal` profile 所组装的系统提示词、对外公布的工具 schema 与模型可见消息；`minimal/win-x64/model-visible.json` 固定对应的 PowerShell 版本。`authoring/model-visible.json` 固定 Linux／macOS 的 Office 创作技能目录和依赖结果；`authoring/win-x64/model-visible.json` 固定 Windows 的技能目录，其中包含 ACL 诊断技能。因此，插件一旦贡献出计划外的系统分段或 user 消息，该任务即失败，且该 profile 发出的每条消息都会参与比对。`advanced/` 跨所有目标固定一个复杂进程的 SDK 结果及父／子会话日志。`restart/` 针对同一持久化根目录启动两个完整 SDK 运行时进程，并跨所有目标固定其彼此隔离的模型历史、高层结果与独立持久日志。`sdk-minimal-in-history` 复用持久 shell 与编辑器场景，并在首次 shell 调用成功后更改一个分段。`minimal-in-history/prompt-history.json` 固定两个提示词版本、后续请求中不变的首条提示词、追加的 SDK system-message 事件及 `request/context.systemPromptUpdate`；工具 schema 保持不变，并独立检查编辑器创建的文件。`sdk-dynamic-tools` 在 `dynamic-tools/tool-history.json` 中固定原生工具的新增与移除，包括历史 header 引用，以及 Python SDK 结果、通知与持久事件的一致性。重新运行对应场景时加上 `--update-snapshots`，并在提交前审阅该差异。
 
 `scheduler-recovery/` 记录一个失败的工具轮次及后续完成的轮次。它保留原始的 `UNKNOWN` 轮次错误、第一个工具已完成的结果，以及其余调用的 `TOOL_OUTCOME_UNKNOWN` / `TOOL_NOT_STARTED` 结果。`sdk-snapshot` 和 `all` 包含此场景；`--scenario sdk-recovery` 单独运行它。
 
-`advanced`、`advanced-ptc` 与 `restart` 的比较按每份输入自身的 Session 代际匹配原生 delivery 限定值，包括 SDK 事件与通知。捕获的代际及其他 delivery 代际保留数值。每一侧的 Session 角色必须使用同一个代际，新日志必须标识当前写入器。未使用 `--update-snapshots` 时，比较不会写入文件。刷新只写入当前 writer 的输出，并保留更早的 Session 代际。
+`advanced` 与 `restart` 的比较按每份输入自身的 Session 代际匹配原生 delivery 限定值，包括 SDK 事件与通知。捕获的代际及其他 delivery 代际保留数值。每一侧的 Session 角色必须使用同一个代际，新日志必须标识当前写入器。比较绝不重写已提交的记录。
 
-可信拉取请求与 master 推送还会在各自选定的原生目标上运行 `--scenario sdk-live --installed-wheel`。该场景面向 `https://api.deepseek.com` 执行两个使用工具的轮次：立即检查已创建文件，将其内容替换为仅宿主知道的随机挑战值，并要求第二轮将变更后的内容复制到全新的回执文件，且不修改源文件。两个轮次都必须完成、返回独占一行的哨兵确认并由模型请求调用工具；确认可以位于解释之前或之后，文件通过外部逐字节比较验证。仓库密钥缺失时失败，而不是自行 skip。Fork 与 Dependabot 拉取请求会运行完整的 keyless 安装后 wheel 路径，但不会获得密钥。
+可信拉取请求与 master 推送还会在各自选定的原生目标上运行 `--scenario sdk-live --installed-wheel`。该场景面向 `https://api.deepseek.com` 执行两个使用工具的轮次：立即检查已创建文件，将其内容替换为仅宿主知道的随机挑战值，并要求第二轮将变更后的内容复制到全新的回执文件，且不修改源文件。两个轮次都必须完成、返回精确的哨兵答案并由模型请求调用工具；文件通过外部逐字节比较验证。仓库密钥缺失时失败，而不是自行 skip。Fork 与 Dependabot 拉取请求会运行完整的 keyless 安装后 wheel 路径，但不会获得密钥。
 
 交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `DEEPSEEK_API_KEY`：
 

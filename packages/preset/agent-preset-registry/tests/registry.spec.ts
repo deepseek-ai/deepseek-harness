@@ -298,6 +298,49 @@ it('retains a newly acquired generation when a previous activation is replaced',
   expect(ctx.agentPresets.inspectCompositions()).toHaveLength(0)
 })
 
+it('keeps a blank Session that already runs the current revision of the selected preset without logging', async () => {
+  const ctx = await setup()
+  await declare(ctx, contribution('standard'))
+  await declare(ctx, contribution('minimal'))
+  const agent = await agentOn(ctx, 'repeated')
+  expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
+  let notified = 0
+  ctx.on('tools/change', () => { notified++ })
+
+  expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
+
+  expect(agent.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected')).toHaveLength(1)
+  expect(notified).toBe(0)
+})
+
+it('logs the default preset a blank Session runs once it is selected without a recorded preset', async () => {
+  const ctx = await setup()
+  await declare(ctx, contribution('standard'))
+  const agent = await agentOn(ctx, 'unrecorded')
+  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBeNull()
+
+  expect(await ctx.agentPresets.select(agent, 'standard')).toBe('standard')
+
+  expect(ctx.sessionProjections.stateOf(agent.session, 'agentPreset')).toBe('standard')
+})
+
+it('recomposes and logs a repeated selection once the preset definition was replaced', async () => {
+  const ctx = await setup()
+  await declare(ctx, contribution('standard'))
+  const replaced = await declare(ctx, contribution('minimal'))
+  const agent = await agentOn(ctx, 'redefined')
+  await ctx.agentPresets.select(agent, 'minimal')
+  await replaced.dispose()
+  await declare(ctx, contribution('minimal'))
+  let notified = 0
+  ctx.on('tools/change', () => { notified++ })
+
+  expect(await ctx.agentPresets.select(agent, 'minimal')).toBe('minimal')
+
+  expect(agent.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected')).toHaveLength(2)
+  expect(notified).toBeGreaterThan(0)
+})
+
 it('does not lose the durable selection when a tools observer rejects notification', async () => {
   const ctx = await setup()
   await declare(ctx, contribution('standard'))

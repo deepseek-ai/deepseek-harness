@@ -1,6 +1,6 @@
 /** Display labels and toast sentences for global plugin management. */
 
-import type { IncompatiblePlugin, ManagementError, Registry } from '@deepseek-ai/dsh-api-remotes/client'
+import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginManagerLocaleKey } from './locales.ts'
 import type { FailedAction, ManagerNotice, PackageRow, PackageView, PluginManagerFace } from './manager-store.ts'
@@ -48,9 +48,9 @@ function registryHost(registry: string): string {
 const CODE_KEYS = {
   'management-required': 'reasonManagementRequired',
   'unaddressable': 'reasonUnaddressable',
-  'preset-managed': 'reasonPresetManaged',
   'unknown-plugin': 'reasonUnknownPlugin',
   'invalid-spec': 'reasonInvalidSpec',
+  'already-installed': 'reasonAlreadyInstalled',
   'ambiguous-install': 'reasonAmbiguousInstall',
   'not-bundle': 'reasonNotBundle',
   'not-removable': 'reasonNotRemovable',
@@ -139,6 +139,27 @@ export function rowText(
   }
 }
 
+/** The sentence naming why a change waits for a restart. */
+const RESTART_REASON_KEYS = {
+  'no-hmr': 'restartReasonNoHmr',
+  'package-moved': 'restartReasonPackageMoved',
+  'host-module': 'restartReasonHostModule',
+  'unmanaged-plugin': 'restartReasonUnmanagedPlugin',
+  'module-comparison': 'restartReasonModuleComparison',
+} satisfies Record<RestartReason, PluginManagerLocaleKey>
+
+/**
+ * A restart prompt with its reason.
+ * @param key - the prompt's sentence, which takes the reason as `{reason}`.
+ * @param reason - why the change waits for a restart.
+ * @param t - the manager's translate seat.
+ * @returns the prompt.
+ */
+export function restartText(key: 'restartNotice' | 'installDoneRestart', reason: RestartReason | undefined, t: Translate): string {
+  // A Host that names no reason still asks for the restart.
+  return t(key, { reason: reason === undefined ? '' : t(RESTART_REASON_KEYS[reason]) }).trimEnd()
+}
+
 /**
  * The sentence one notice shows.
  * @param notice - the last action's outcome.
@@ -147,7 +168,7 @@ export function rowText(
  */
 export function noticeText(notice: ManagerNotice, t: Translate): string {
   switch (notice.kind) {
-    case 'restart': return t('restartNotice')
+    case 'restart': return restartText('restartNotice', notice.reason, t)
     case 'overridden': return t('overriddenNotice', { name: notice.packageName })
     case 'cancelled': return t('installCancelled')
     case 'refresh-failed': return t('refreshError')

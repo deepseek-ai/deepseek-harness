@@ -7,6 +7,13 @@ description: Design and review DeepSeek Harness client UI changes — visual tok
 
 This skill is guidance, not a complete checklist. It covers judgment calls that lint, typecheck, and the i18n gate cannot make: where feedback appears, what gets reused, and how surfaces behave at window edges and across platforms. Copy quality itself follows [dsh-prose-standard](../dsh-prose-standard/SKILL.md); locale ownership follows the [locale-owned copy decision](../../notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md); styling ownership and token rules live in [docs/web-styling.md](../../../docs/web-styling.md) and the [ui-primitives component catalog](../../../packages/client/ui-primitives/README.md#component-catalog) — this skill adds judgment on top of those rules, not a second copy of them.
 
+## Architecture prerequisites
+
+Component structure, state flow, and effect usage follow the architecture rules; read them before redesigning a component:
+
+- [packages/client/AGENTS.md](../../../packages/client/AGENTS.md) — Slot and props discipline, reactive read, export, ctx, and layering rules.
+- [Client component rules](../../../docs/defensive-patterns/client-components.md) — those requirements stated with the defects they prevent.
+
 ## Visual foundation
 
 - **Use existing tokens for color, radius, and spacing.** Before introducing a literal value, search the target page and its nearest established sibling (the Plugins page is the usual reference for full-page surfaces) for the token or value already in use, and adopt it. The same applies to whole treatments — toasts, menus, in-message artifact previews, sidebar tab layout, colors, clearance rules, page padding: reuse the established component or rule wherever one exists instead of inventing a parallel one.
@@ -24,7 +31,7 @@ This skill is guidance, not a complete checklist. It covers judgment calls that 
 
 ## Feedback surfaces
 
-Choose the surface by the lifetime of the message relative to the surface that produced it:
+Apply [dsh-error-handling](../dsh-error-handling/SKILL.md#localized-actionable-visible-reports) to failure reports. Choose the surface by the lifetime of the message relative to the surface that produced it:
 
 - **Transient operation outcomes use the app-wide Toast primitive**, not in-place notices, and the toast's state and rendering live in a host that outlives the reporting surface (a `shell.overlay` entry, as RowActionToast does) — a toast rendered by the panel itself unmounts with that panel. A deletion can close the panel or tab that requested it; only a toast held outside that surface survives the close. Report success and failure; do not report still-pending states.
 - **A failed operation keeps the data visible.** A failed deletion keeps its row; the toast announces the failure. Never blank content to show an error for a transient operation.
@@ -46,6 +53,10 @@ Every menu, popover, and tooltip must be verified for all three before merge:
 - **Unclipped**: it escapes `overflow` ancestors and containing blocks (portal to body where needed) and is never covered by neighbouring elements.
 
 Scrollbars stay inside their container: use the shared scrollbar styles rather than component-specific selectors, and verify the bar neither overflows the container nor gets clipped by its rounded corners or edges — keep a small inset instead of letting it sit flush against the container edge.
+
+## Responsive layouts
+
+Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, text truncation, title wrapping, icon-only controls, and focus during width changes.
 
 ## Platform window adaptation
 

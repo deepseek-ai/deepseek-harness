@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
   "description": "Extensible Sidebar previews for Office documents, spreadsheets, Markdown, code, images, PDF, HTML, and plain text",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -23,7 +23,8 @@
       "default": "./lib/client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -67,15 +68,12 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-office-to-pdf": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
-    "@deepseek-ai/dsh-office-to-pdf": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@fortune-sheet/core": "1.0.4",
     "@fortune-sheet/react": "1.0.4",
     "@testing-library/react": "^16.3.3",
     "@types/papaparse": "^5.3.16",
-    "@types/react": "~18.3.1",
-    "@types/react-dom": "~18.3.0",
     "clsx": "^2.0.0",
     "dompurify": "^3.4.16",
     "exceljs": "4.4.0",
@@ -89,6 +87,7 @@
     "yaml": "^2.9.0"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/client.*.js",

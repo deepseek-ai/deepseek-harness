@@ -137,3 +137,14 @@
   overflow: visible;
   scrollbar-gutter: auto;
 }
+
+/* Member spacing changes share the closing body's timing. */
+:global([data-chat-motion]) .content > :not([data-chat-motion]) {
+  transition: margin-top 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global([data-chat-motion]) .content > :not([data-chat-motion]) {
+    transition: none;
+  }
+}

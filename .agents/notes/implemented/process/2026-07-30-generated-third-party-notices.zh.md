@@ -14,9 +14,7 @@ Status: implemented
 
 [`THIRD_PARTY_NOTICES.md`](../../../../THIRD_PARTY_NOTICES.md) 由 [`scripts/gen-third-party-notices.ts`](../../../../scripts/gen-third-party-notices.ts) 依据各工作区 manifest、`vendor/README.md`、`pyproject.toml`、`pnpm-workspace.yaml` 与 [共享运行时锁文件](../../../../scripts/primary-runtime/lock.json)生成。根 README 双语两侧都从「许可证」一节链到该文件。
 
-**新鲜度会得到维护，而非仅靠校验。** 只要暂存了生成器的任一输入——任何 manifest、工作区声明、根锁文件或共享运行时锁文件、`vendor/README.md`、某个 `pyproject.toml`、生成器自身，或持有构建期 pin 的脚本——pre-commit 任务就会重新生成该文件并将其暂存，改依赖的人不必事后再折返跑一次生成器。已提交的字节随后由 [`scripts/gen-third-party-notices.spec.ts`](../../../../scripts/gen-third-party-notices.spec.ts) 断言，而测试 lane 本就会跑这个文件——这项校验不增加门禁进程、不占调度位、也不新增 CI 步骤。需要单独校验时，`pnpm run verify-third-party-notices` 仍然可用。
-
-有一处触发缺口是接受而非绕过的：lefthook 只检视磁盘上存在的文件，因此**删除** manifest 不会触发任何任务，移除一个包会落到测试 lane 的断言上。重构暂存文件列表以纳入删除的做法不成立——无论怎么给列表，lefthook 都会拿工作树过滤一遍。这个场景正由断言兜底。
+**新鲜度由测试 lane 保证。** 已提交的字节由 [`scripts/gen-third-party-notices.spec.ts`](../../../../scripts/gen-third-party-notices.spec.ts) 断言，而测试 lane 本就会跑这个文件，其中包括 PR 必过的 `node 24 / coverage` lane——这项校验不增加门禁进程、不占调度位、也不新增 CI 步骤。改动生成器任一输入——任何 manifest、工作区声明、根锁文件或共享运行时锁文件、`vendor/README.md`、某个 `pyproject.toml`、生成器自身，或持有构建期 pin 的脚本——的贡献者运行 `pnpm run gen-third-party-notices`；需要单独校验时，`pnpm run verify-third-party-notices` 仍然可用。没有 Git 钩子重新生成该文件：浏览器输入使每个包源码文件都成为生成器输入，钩子会让几乎每个提交都运行约 16 秒的生成器，而改变输出的提交很少。
 
 文件默认只披露**直接**依赖；完整的 npm 与 Python SDK 闭包保留在各自锁文件中。两组独立分发的载荷会明确列出：`@anthropic-ai/claude-agent-sdk` 声明的官方 Claude 可执行包，以及共享运行时锁文件 `pythonPackages` 中的每个分发包。内置条目包含归一化名称、精确版本和已记录的许可证元数据；元数据缺失、归一化后名称重复或版本冲突都会使生成失败。共享 wheel 集合独立于 `python/` 下的 manifest，仅扫描后者会遗漏已打包的 Office 库。内置分发包同样通过运行时许可证检查，其中包括 Pillow 与 typing-extensions 声明的宽松许可证标识 `MIT-CMU` 和 `PSF-2.0`。
 
@@ -38,7 +36,7 @@ Claude 分发测试证明：只有精确匹配的直接 SDK 身份会绕过通�
 
 **保留手写文件，发版时人工过一遍。** 用肉眼审阅上百行推导数据，恰恰是生成器能做对的活；而且在两次发版之间，文件自称「列出全部直接依赖」这句话无人验证。
 
-**用专门的 `doc-sync`（文档同步门禁）校验。** 仓库里其他生成产物都是这么把关的，本次改动最初也是这个形态。但它要在本已冗长的矩阵里再占一个门禁进程和一个调度位；更糟的是，它唯一的失败方式，就是在别人推完一个无关的依赖升级几分钟后，通知对方回去重跑一次生成器。改为提交时重新生成消除了这次打断，而把断言放进测试 lane 本就会跑的 spec 里，则以零额外 CI 成本保住了这项保证。
+**用专门的 `doc-sync`（文档同步门禁）校验。** 仓库里其他生成产物都是这么把关的，本次改动最初也是这个形态。但它要在本已冗长的矩阵里再占一个门禁进程和一个调度位，而测试 lane 本就会跑的 spec 里的断言能以零额外 CI 成本报告同样的过期。
 
 **列出完整传递闭包。** 闭包有数千个包，锁文件里已带精确版本，铺开只会淹没读者真正要评估的直接依赖。文件转而指向锁文件与 `pnpm licenses list`。
 
@@ -52,7 +50,7 @@ Claude 分发测试证明：只有精确匹配的直接 SDK 身份会绕过通�
 
 ## 后果
 
-此后改动依赖时，重新生成的披露文件会随同一个提交入库。触及 manifest 的提交多付一次生成器运行——约一秒；其余提交不受影响。若禁用钩子提交，代价推迟为一次测试 lane 失败，其报错会指明补救命令。
+提交不运行生成器。改动依赖或浏览器侧 import 却未更新披露文件时，测试 lane 会失败，其报错会指明重新生成的命令。
 
 生成器需要已安装的依赖树，因此比纯源码生成器更重；发布元数据不可用的新包需要补一条 `OVERRIDES`，而不是默默渲染出空白许可证。这两类失败都会明确报错并指出补救方式。
 

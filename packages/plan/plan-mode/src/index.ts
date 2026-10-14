@@ -30,7 +30,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
+import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -285,10 +285,15 @@ export class PlanModeController extends Service {
           type: 'object',
           additionalProperties: false,
           properties: {
-            approved: { type: 'boolean', const: true, required: true },
+            approved: { type: 'boolean', required: true },
           },
         },
-        render: () => [{ type: 'text', text: 'Plan approved — plan mode exited; carry out the plan starting with your next step.' }],
+        render: (_args, { approved }) => [{
+          type: 'text',
+          text: approved
+            ? 'Plan approved — plan mode exited; carry out the plan starting with your next step.'
+            : 'The user dismissed the plan review to reply in their own words; plan mode remains active.',
+        }],
       },
       execute: async (args, exec) => {
         const agent = exec.agent
@@ -303,35 +308,37 @@ export class PlanModeController extends Service {
         if (interaction === undefined) {
           throw new Error('no user-questions channel is available to review the plan; ask the user to switch the session mode instead')
         }
-        const answer = await interaction.ask({
-          questions: [{
-            id: REVIEW_ID,
-            header: 'Plan review',
-            question: 'Approve this plan and leave plan mode?',
-            detail: args.plan,
-            options: [
-              { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out from the next step.' },
-              { label: KEEP_PLANNING_LABEL, description: 'Stay in plan mode; feedback goes back to the model.' },
-            ],
-            // Presentation only: a capable UI renders the plan as a review
-            // decision instead of a generic question, and answers with one of
-            // the labels above either way.
-            intent: { kind: 'plan-review', approve: APPROVE_LABEL, callId: exec.callId },
-          }],
-          agent,
-          signal: exec.signal,
-        }).catch((cause: unknown) => {
+        let answer: AskUserQuestionAnswer
+        try {
+          answer = await interaction.ask({
+            questions: [{
+              id: REVIEW_ID,
+              header: 'Plan review',
+              question: 'Approve this plan and leave plan mode?',
+              detail: args.plan,
+              options: [
+                { label: APPROVE_LABEL, description: 'Leave plan mode; the plan is carried out from the next step.' },
+                { label: KEEP_PLANNING_LABEL, description: 'Stay in plan mode; feedback goes back to the model.' },
+              ],
+              // Presentation only: a capable UI renders the plan as a review
+              // decision instead of a generic question, and answers with one of
+              // the labels above either way.
+              intent: { kind: 'plan-review', approve: APPROVE_LABEL, callId: exec.callId },
+            }],
+            agent,
+            signal: exec.signal,
+          })
+        } catch (cause: unknown) {
           // A dismissed review is not a failed one: the user took the turn back
-          // to say something the two options do not cover. Say so, because the
-          // generic channel message names ask_user_question, which the model
-          // never called. An abort (turn cancel, provider teardown) keeps its
-          // own message — there is no user to wait for.
+          // to say something the two options do not cover, so the turn ends
+          // here instead of spending a model request on waiting. An abort (turn
+          // cancel, provider teardown) keeps its own failure.
           if (cause instanceof UserQuestionError && cause.code === 'ASK_CANCELLED') {
-            throw new Error('The user dismissed the plan review to speak instead; '
-              + 'stay in plan mode, stop here, and wait for their message.')
+            exec.concludeTurn()
+            return { approved: false }
           }
           throw cause
-        })
+        }
         // A review may outlive this plugin fiber. Without its pre-step listener,
         // an approved selection could never be appended, so fail and keep planning.
         if (disposed) {

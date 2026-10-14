@@ -11,8 +11,10 @@ import type {
   ChatLocationNodeIndex, ChatNodeProcessSource, ChatNodeSource, ChatNodeStore, ChatSnapshot,
   ChatTurnNavigationIndex, ChatTurnProcessPresentation, LegacyConversationSlice, TurnNavigationItem,
 } from '../contract/snapshot.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isAtOrOutside } from '../contract/group-tree.ts'
+import { locationCoordinates } from './common.ts'
 import { sessionRecallLabels, skillInvocationName } from './event-projection.ts'
+import { GroupTreeSegments } from './group-tree-segments.ts'
 import { sameTurnNavigationItem, turnNavigationItem } from './turn-navigation.ts'
 import { ChatTurnProcessProjector } from './turn-process-presentation.ts'
 
@@ -107,7 +109,11 @@ class MutableChatNodeStore implements ChatNodeStore {
   private readonly turnProcesses = new ChatTurnProcessProjector()
   private readonly sources = new Map<string, MutableChatSource<ChatConversationViewNode | undefined>>()
   private readonly processSources = new Map<string, MutableChatSource<ChatTurnProcessPresentation | undefined>>()
+  private readonly bottomSources = new Map<string, MutableChatSource<boolean>>()
+  /** Bottom membership: the latest loaded exchange. */
+  private readonly exchanges = new GroupTreeSegments('exchange')
   private readonly dirtyKeys = new Set<string>()
+  private readonly dirtyBottomKeys = new Set<string>()
   private readonly dirtyProcessKeys = new Set<string>()
   private readonly turnKinds = new Map<number, Map<string, TurnKindNodes>>()
   private readonly dirtyTurnKinds = new Set<TurnKindNodes>()
@@ -123,6 +129,26 @@ class MutableChatNodeStore implements ChatNodeStore {
       () => this.get(key),
       `[ui-chat] node source ${key}`,
     ))
+  }
+
+  bottomSource(key: string): ObservableSnapshot<boolean> {
+    return cachedSource(this.bottomSources, key, () => new MutableChatSource(() => {
+      const node = this.get(key) as ChatNode | undefined
+      return node !== undefined && isVisibleChatNode(node)
+        && this.exchanges.inLatest(locationCoordinates(node.location).turn)
+    }, `[ui-chat] node bottom source ${key}`))
+  }
+
+  /**
+   * Settle the latest exchange for the loaded Turns and mark the Nodes of
+   * Turns that entered or left it.
+   * @param turnOrder - loaded Turns in ascending timeline order.
+   * @param locations - current Chat Location index.
+   */
+  settleBottom(turnOrder: readonly number[], locations: ChatLocationNodeIndex): void {
+    for (const turn of this.exchanges.settle(turnOrder)) {
+      for (const key of locations.getTurn(turn)) this.dirtyBottomKeys.add(key)
+    }
   }
 
   turnDataSource<Kind extends ChatNodeKind>(turn: number, kind: Kind): ObservableSnapshot<readonly ChatNodeDataMap[Kind][]> {
@@ -175,6 +201,7 @@ class MutableChatNodeStore implements ChatNodeStore {
       this.byKey.set(node.key, node)
       if (previous.get(node.key) !== node) {
         this.updateTurnKind(previous.get(node.key), node)
+        this.exchanges.track(previous.get(node.key), node)
         this.dirtyKeys.add(node.key)
         this.dirtyProcessKeys.add(node.key)
       }
@@ -182,6 +209,7 @@ class MutableChatNodeStore implements ChatNodeStore {
     }
     for (const key of previous.keys()) {
       this.updateTurnKind(previous.get(key), undefined)
+      this.exchanges.track(previous.get(key), undefined)
       this.dirtyKeys.add(key)
       this.dirtyProcessKeys.add(key)
     }
@@ -194,6 +222,7 @@ class MutableChatNodeStore implements ChatNodeStore {
     for (const node of nodes) {
       if (this.byKey.get(node.key) === node) continue
       this.updateTurnKind(this.byKey.get(node.key), node)
+      this.exchanges.track(this.byKey.get(node.key), node)
       this.byKey.set(node.key, node)
       this.dirtyKeys.add(node.key)
       this.dirtyProcessKeys.add(node.key)
@@ -218,12 +247,15 @@ class MutableChatNodeStore implements ChatNodeStore {
 
   publish(): void {
     const dirty = [...this.dirtyKeys]
+    const dirtyBottom = new Set([...this.dirtyBottomKeys, ...dirty])
     const dirtyProcesses = [...this.dirtyProcessKeys]
     const dirtyTurnKinds = [...this.dirtyTurnKinds]
     this.dirtyKeys.clear()
+    this.dirtyBottomKeys.clear()
     this.dirtyProcessKeys.clear()
     this.dirtyTurnKinds.clear()
     for (const key of dirty) this.sources.get(key)?.publish()
+    for (const key of dirtyBottom) this.bottomSources.get(key)?.publish()
     for (const key of dirtyProcesses) this.processSources.get(key)?.publish()
     for (const collection of dirtyTurnKinds) collection.publish()
   }
@@ -384,12 +416,6 @@ function stepKey(turn: number, step: number): string {
   return `${turn}:${step}`
 }
 
-function locationCoordinates(location: ConversationLocation): { turn?: number; step?: number } {
-  if (location.kind === 'step') return { turn: location.turn.turn, step: location.step.step }
-  if (location.kind === 'turn') return { turn: location.turn.turn }
-  return {}
-}
-
 function locationTurnStatus(location: ConversationLocation): string | undefined {
   return location.kind === 'turn' || location.kind === 'step' ? location.turn.status : undefined
 }
@@ -431,7 +457,7 @@ function turnProcessPresentations(
     if (location.kind !== 'turn' && location.kind !== 'step') continue
     const current: TurnProcessPresentation = presentations.get(location.turn.turn) ?? {}
     const controlAnchor = current.control?.data.controlAnchorSeq
-    if ((node.kind === 'user' || node.kind === 'turn-trigger' || node.kind === 'steering')
+    if (isAtOrOutside(node, 'input')
       && controlAnchor !== undefined
       && (controlAnchor === location.turn.start?.seq || node.anchorSeq < controlAnchor)) {
       presentations.set(location.turn.turn, {
@@ -440,7 +466,7 @@ function turnProcessPresentations(
       })
       continue
     }
-    if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)) continue
+    if (isAtOrOutside(node, 'turn')) continue
     presentations.set(location.turn.turn, {
       ...current,
       earliestProcessAnchor: Math.min(current.earliestProcessAnchor ?? node.anchorSeq, node.anchorSeq),
@@ -471,7 +497,7 @@ function presentationPosition(
   const openingInputAnchor = presentation.openingInputAnchor
   if (openingInputAnchor !== undefined
     && node.anchorSeq < openingInputAnchor
-    && !TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)) {
+    && !isAtOrOutside(node, 'turn')) {
     return { anchor: openingInputAnchor, rank: 2, originalAnchor: node.anchorSeq }
   }
   if (presentation.control !== undefined && node.key === presentation.control.key) {
@@ -1090,6 +1116,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     this.order = orderedVisibleChatNodes(nodes).map(node => node.key)
     this.locations.rebuild(this.order, this.store)
     this.store.replaceProcesses(this.order, this.locations)
+    this.store.settleBottom(input.timeline.turnOrder, this.locations)
     this.navigation.rebuild(input.timeline, this.locations, this.store)
     this.timeline = input.timeline
     this.latestGroupInput = {
@@ -1121,6 +1148,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
         || previous.kind !== node.kind
         || previous.anchorSeq !== node.anchorSeq
         || previous.visibility !== node.visibility
+        || previous.groupTree !== node.groupTree
         || locationIdentity(previous.location) !== locationIdentity(node.location)
       structural ||= nodeStructural
       if (!nodeStructural) contentOnly.push(node)
@@ -1140,6 +1168,7 @@ export class ChatSnapshotBuilder implements ConversationViewBuilder<ChatConversa
     }
     this.locations.touch(contentOnly)
     this.store.updateProcesses(processTurns, this.locations)
+    this.store.settleBottom(input.timeline.turnOrder, this.locations)
     if (structural || input.timeline !== this.timeline) {
       this.navigation.rebuild(input.timeline, this.locations, this.store)
     } else {

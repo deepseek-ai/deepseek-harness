@@ -155,6 +155,7 @@ function collectActivePluginPackages(
   ctx: Context,
   resolver: PackageIdentityResolver,
   hostBaseUrl: string,
+  unreadable: Set<string>,
   sessionId?: string,
 ): DeepSeekPluginPackageIdentity[] {
   const entries = activeEntries(ctx.loader)
@@ -176,7 +177,10 @@ function collectActivePluginPackages(
     try {
       identity = resolver.resolve(activeEntry)
     } catch (error) {
-      ctx.logger.warn('plugin-package-inventory-deepseek: omitting unreadable package identity for %s: %o', activeEntry.moduleName, error)
+      if (!unreadable.has(activeEntry.moduleName)) {
+        unreadable.add(activeEntry.moduleName)
+        ctx.logger.warn('plugin-package-inventory-deepseek: omitting unreadable package identity for %s: %o', activeEntry.moduleName, error)
+      }
       continue
     }
     if (identity === undefined) continue
@@ -196,11 +200,13 @@ export function apply(ctx: Context, config: Config): void {
   if (config.enabled === false) return
   const hostBaseUrl = ctx.baseUrl ?? import.meta.url
   const resolver = new PackageIdentityResolver(hostBaseUrl, ctx.get('pluginPackages'))
+  // Unreadable identities are re-resolved on every request; log each module once.
+  const unreadable = new Set<string>()
   ctx.deepseekLlmApiExtensions.register('dsh_plugin_packages', {
     prepare: (request) => {
       const value: DeepSeekPluginPackageInventoryExtension = {
         version: 1,
-        packages: collectActivePluginPackages(ctx, resolver, hostBaseUrl, request.sessionId),
+        packages: collectActivePluginPackages(ctx, resolver, hostBaseUrl, unreadable, request.sessionId),
       }
       return { value }
     },

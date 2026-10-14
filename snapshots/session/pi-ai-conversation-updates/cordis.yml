@@ -1,0 +1,12 @@
+- id: llm-deepseek
+  disabled: true
+
+- id: llm-pi-ai
+  config:
+    providers:
+      moonshotai:
+        apiKeyEnv: MOONSHOT_API_KEY
+
+- insert:
+    - id: dynamic-tool-prompt-updates
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'

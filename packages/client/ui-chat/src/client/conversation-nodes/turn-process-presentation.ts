@@ -3,7 +3,7 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 import type {
   ChatLocationNodeIndex, ChatNodeStore, ChatTurnProcessPresentation,
 } from '../contract/snapshot.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import { isAtOrOutside } from '../contract/group-tree.ts'
 
 function nodeTurn(node: ChatNode | undefined): number | undefined {
   const location = node?.location
@@ -41,7 +41,7 @@ function derivePresentation(
   let openingHumanAnchor: number | undefined
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
-    if ((node?.kind === 'user' || node?.kind === 'steering' || node?.kind === 'turn-trigger')
+    if (node !== undefined && isAtOrOutside(node, 'input')
       && (spec.controlAnchorSeq === location.turn.start?.seq || node.anchorSeq < spec.controlAnchorSeq)) {
       openingHumanAnchor = Math.max(openingHumanAnchor ?? node.anchorSeq, node.anchorSeq)
     }
@@ -53,12 +53,12 @@ function derivePresentation(
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
     if (node === undefined || !isVisibleChatNode(node) || node.kind === 'turn-process') continue
-    if ((node.kind === 'user' || node.kind === 'steering' || node.kind === 'turn-trigger')
+    if (isAtOrOutside(node, 'input')
       && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)) {
       hasInterleavedInput = true
       if (spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq) compactAnswer = false
     }
-    if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
+    if (isAtOrOutside(node, 'turn')
       || node.anchorSeq < spec.processStartSeq
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
     if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {

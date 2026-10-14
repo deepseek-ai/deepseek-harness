@@ -10,6 +10,7 @@ import { useSyncExternalStore } from 'react'
 import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import { ExpandButton } from '../src/client/shell/ExpandButton.tsx'
 import type { ExpandButtonProps } from '../src/client/shell/ExpandButton.tsx'
 import { createSidebarRightStore } from '../src/client/stores.ts'
@@ -21,6 +22,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useInput: unused, useChat: unused, useTrajectory: unused,
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
+  ...allowAllAccess,
   inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }

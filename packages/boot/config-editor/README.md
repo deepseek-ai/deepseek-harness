@@ -42,8 +42,6 @@ The [editor](src/index.ts) reconciles external changes before deriving a candida
 
 Configuration reads share one composition for entries without profile config overrides. Overridden entries are composed separately with only their own override removed; profile inserts and other entries' overrides remain effective. Returned configs are detached, and compositions are not cached between reads.
 
-Host configuration reads, edits, and resets ignore preset-scoped operations, including those whose child IDs match Host entry IDs.
-
 </details>
 
 <a id="further-exploration"></a>

@@ -20,12 +20,13 @@
       - button "编辑 openai": 编辑
       - button "删除 openai": 删除
       - text: openai API 密钥
+      - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 输入 API 密钥，或留空使用环境认证
+        - /placeholder: 留空时保留现有认证（OPENAI_API_KEY）
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":
-          - /placeholder: 提供商默认
+          - /placeholder: https://api.openai.com/v1
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"

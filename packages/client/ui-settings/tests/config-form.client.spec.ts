@@ -63,14 +63,14 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-/** A host-mode mirror plus a controller derived from it, over one scripted context. */
+/** A mirror plus a controller derived from it, over one scripted context. */
 function derivedScope(
   api: { describe?: ReturnType<typeof vi.fn>; mutate?: ReturnType<typeof vi.fn> },
   spec: { namespace: string; decode?: (section: unknown) => UiTestSettings | undefined } = { namespace: 'ui-test' },
 ) {
   const ctx = ctxWith(api)
   const mirror = new SettingsDescribeMirror(ctx)
-  const scope = new ConfigFormController<UiTestSettings>(ctx, spec, mirror, 'host', settingsSchema)
+  const scope = new ConfigFormController<UiTestSettings>(ctx, spec, mirror, settingsSchema)
   return { mirror, scope }
 }
 
@@ -89,11 +89,11 @@ describe('ConfigFormController', () => {
     const describeCall = vi.fn().mockResolvedValueOnce(described({ preference: 'dark' }, 3))
     const { mirror, scope } = derivedScope({ describe: describeCall })
     expect(scope.getSnapshot()).toEqual({
-      status: 'loading', value: undefined, revision: undefined, writable: false, mode: 'host',
+      status: 'loading', value: undefined, revision: undefined, writable: false,
     })
     await mirror.load()
     expect(scope.getSnapshot()).toEqual({
-      status: 'ready', value: { preference: 'dark' }, revision: 3, writable: true, mode: 'host',
+      status: 'ready', value: { preference: 'dark' }, revision: 3, writable: true,
     })
   })
 
@@ -239,8 +239,8 @@ describe('ConfigFormController', () => {
     const mutate = vi.fn().mockResolvedValueOnce(ok(view({ preference: 'dark' }, 5)))
     const ctx = ctxWith({ describe: describeCall, mutate })
     const mirror = new SettingsDescribeMirror(ctx)
-    const writer = new ConfigFormController<UiTestSettings>(ctx, { namespace: 'ui-test' }, mirror, 'host', settingsSchema)
-    const sibling = new ConfigFormController<UiTestSettings>(ctx, { namespace: 'ui-test' }, mirror, 'host', settingsSchema)
+    const writer = new ConfigFormController<UiTestSettings>(ctx, { namespace: 'ui-test' }, mirror, settingsSchema)
+    const sibling = new ConfigFormController<UiTestSettings>(ctx, { namespace: 'ui-test' }, mirror, settingsSchema)
     await mirror.load()
     await writer.set('preference', 'dark')
     expect(describeCall).toHaveBeenCalledTimes(1)
@@ -424,7 +424,7 @@ describe('ConfigFormController', () => {
       },
     } as never
     const scope = new ConfigFormController<UiTestSettings>(
-      ctxWith({}), { namespace: 'ui-test' }, mirror, 'host', settingsSchema)
+      ctxWith({}), { namespace: 'ui-test' }, mirror, settingsSchema)
     expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'dark' }, revision: 1 })
 
     await scope.dispose()
@@ -435,23 +435,6 @@ describe('ConfigFormController', () => {
     notify()
 
     expect(scope.getSnapshot()).toMatchObject({ value: { preference: 'dark' }, revision: 1 })
-  })
-
-  it('keeps a remote browser in memory mode without Host calls', async () => {
-    const describeCall = vi.fn()
-    const mutate = vi.fn()
-    const ctx = ctxWith({ describe: describeCall, mutate })
-    const mirror = new SettingsDescribeMirror(ctx, 'memory')
-    const scope = new ConfigFormController<UiTestSettings>(
-      ctx, { namespace: 'ui-test' }, mirror, 'memory', settingsSchema)
-    expect(scope.getSnapshot()).toEqual({
-      status: 'unavailable', value: undefined, revision: undefined, writable: false, mode: 'memory',
-    })
-    await mirror.load()
-    await scope.set('preference', 'dark')
-    await scope.dispose()
-    expect(describeCall).not.toHaveBeenCalled()
-    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('carries the composition base and the user layer into the snapshot', async () => {
@@ -522,7 +505,7 @@ describe('ConfigForms.get', () => {
     let theme!: ConfigForm<UiTestSettings>
     let locale!: ConfigForm<UiTestSettings>
     new TestRemote(ctx, { settings: { describe: describeCall } })
-    await ctx.plugin(ConfigForms, { mirror, schema: settingsSchema, persistence: 'host' }).await()
+    await ctx.plugin(ConfigForms, { mirror, schema: settingsSchema }).await()
     expect(ctx.configForms.describe()).toBe(mirror)
     const fiber = ctx.plugin({
       inject: ['remote', 'configForms'],
@@ -543,22 +526,4 @@ describe('ConfigForms.get', () => {
     expect(theme.getSnapshot()).toMatchObject({ revision: 1 })
   })
 
-  it('binds a remote browser in memory mode without starting a settings read', async () => {
-    const describeCall = vi.fn()
-    const mirror = new SettingsDescribeMirror(ctxWith({ describe: describeCall }), 'memory')
-    const ctx = new Context()
-    let scope!: ConfigForm<UiTestSettings>
-    new TestRemote(ctx, { settings: { describe: describeCall } })
-    await ctx.plugin(ConfigForms, { mirror, schema: settingsSchema, persistence: 'memory' }).await()
-    const fiber = ctx.plugin({
-      inject: ['remote', 'configForms'],
-      apply: (plugin: Context) => {
-        scope = plugin.configForms.get<UiTestSettings>('ui-test')
-      },
-    })
-    await fiber.await()
-    expect(scope.getSnapshot()).toMatchObject({ status: 'unavailable', mode: 'memory', writable: false })
-    await fiber.dispose()
-    expect(describeCall).not.toHaveBeenCalled()
-  })
 })

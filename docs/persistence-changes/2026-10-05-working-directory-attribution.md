@@ -52,7 +52,7 @@ Existing records remain valid. The additive working-directory source kind is att
 <a id="verification"></a>
 ## Verification
 
-pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent-in-process-driver/tests/schedule-tools.spec.ts: 4 files and 203 tests passed.
+pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts: 5 files and 207 tests passed.
 
 <a id="dev-note"></a>
 ## Dev Note

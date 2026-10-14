@@ -87,11 +87,11 @@
 /* Out of flow inside the card's own gutter padding, so the reservation and the
    dot move together and no consumer margin can pull them apart; the dot neither
    indents its command nor depends on the command's text metrics to line up.
-   Centered against the row's line box, not the code font's baseline. */
+   Centered against the first visual line box, not the code font's baseline. */
 .runState {
   position: absolute;
   left: calc(-1 * var(--dsl-terminal-gutter) + 8px);
-  top: 50%;
+  top: calc(var(--dsl-terminal-line-height) / 2);
   transform: translateY(-50%);
 }
 

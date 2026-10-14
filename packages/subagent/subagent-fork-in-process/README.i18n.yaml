@@ -39,8 +39,8 @@
   en: f1f45255fd9f71c1
   zh: 9a3f016b8fe9754a
 /deepseek-ai-dsh-subagent-fork-in-process/understand-the-implementation/run-flow:
-  en: ef063b5c5542e129
-  zh: ba564c6b92453b44
+  en: cca92ec964b4314b
+  zh: edd8ecd4b59dbe8f
 /deepseek-ai-dsh-subagent-fork-in-process/understand-the-implementation/lifecycle-binding:
   en: 8dad0155ed1b32d2
   zh: f4d82d5ede03c4d7
@@ -54,14 +54,14 @@
   en: 91a5bd22001586e9
   zh: 456e5bf20881a70d
 /deepseek-ai-dsh-subagent-fork-in-process/model-experience/child-agent-history-and-envelope/what-the-model-sees:
-  en: fe88f3e65bb01009
-  zh: 64e05acfe80e81f3
+  en: d4d51c5937bab67c
+  zh: e7c07b5a38d68d8e
 /deepseek-ai-dsh-subagent-fork-in-process/model-experience/child-agent-history-and-envelope/token-effect:
-  en: db9ae2edb5ee28ce
-  zh: 5a342ffa3e7a7b40
+  en: 19b588baaa87126b
+  zh: 7010e93bbe7d71ba
 /deepseek-ai-dsh-subagent-fork-in-process/model-experience/child-agent-history-and-envelope/kv-cache-effect:
-  en: 63138e06a9c24fa0
-  zh: dca65fe91ff3534b
+  en: 1e8f8bbab3052b39
+  zh: 1efff4da78d60ef9
 /deepseek-ai-dsh-subagent-fork-in-process/model-experience/parent-tool-result-indirectly:
   en: 75d061c2151624a7
   zh: 71e58e020b60ff90
@@ -75,8 +75,8 @@
   en: f5d5f97a153f7c70
   zh: 3d6bc05b9eadfbc2
 /deepseek-ai-dsh-subagent-fork-in-process/known-limitations-and-deferred-work:
-  en: 6b8bc8825865e662
-  zh: 02e075e302d02fb6
+  en: 193d3fea02c7ec47
+  zh: 8a616bcfb97a99c1
 /deepseek-ai-dsh-subagent-fork-in-process/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

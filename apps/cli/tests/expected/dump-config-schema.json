@@ -446,13 +446,6 @@
                 }
               },
               {
-                "not": {
-                  "required": [
-                    "preset"
-                  ]
-                }
-              },
-              {
                 "anyOf": [
                   {
                     "not": {
@@ -498,13 +491,6 @@
                 "not": {
                   "required": [
                     "insert"
-                  ]
-                }
-              },
-              {
-                "not": {
-                  "required": [
-                    "preset"
                   ]
                 }
               },
@@ -558,13 +544,6 @@
                 }
               },
               {
-                "not": {
-                  "required": [
-                    "preset"
-                  ]
-                }
-              },
-              {
                 "anyOf": [
                   {
                     "not": {
@@ -599,11 +578,6 @@
       "properties": {
         "insert": {
           "$ref": "#/$defs/entryList"
-        },
-        "preset": {
-          "type": "string",
-          "pattern": "\\S",
-          "description": "Outer preset row id. The remaining patch fields apply to its current config.plugins list; a missing or unaddressable preset fails composition."
         }
       },
       "description": "An insert appends entries, optionally inside the group identified by id. Other patches replace supplied fields; config is replaced wholesale, not deep-merged. A truthy name asserts the existing plugin name rather than renaming it. Unknown targets and non-insert patches without a nonempty id are warned and skipped."

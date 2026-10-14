@@ -73,7 +73,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ## 进一步探索
 
 - [实验性包](../README.zh.md)——孵化状态与发布规则。
-- [Agent Teams service](../agent-team/README.zh.md)——持久 roster、消息与任务板行为。
+- [Agent Teams service](../agent-team/README.zh.md)——持久 roster 与任务板，以及直接消息行为。
 - [Agent Teams 工具](../tool-agent-team/README.zh.md)——Team-scoped 模型工具表层。
 - [Agent Teams 浏览器 UI](../client-ui-agent-team/README.zh.md)——成员列表、任务看板与成员会话导航。
 - [Base bundle](../../bundle/base/README.zh.md)——本 patch 扩展的 profile 层。
@@ -95,7 +95,7 @@ Team 策略与 schema 由 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../t
 
 #### KV Cache 影响
 
-只要 bundle patch、Team identity 与配置的工具 schema 不变，本 bundle 的 composition 就保持前缀稳定。
+只要 bundle patch 与配置的工具 schema 不变，共享 system prompt 和工具 schema 就保持前缀稳定。Team 身份通过 runtime-context 快照追加；[Team 工具](../tool-agent-team/README.zh.md#model-experience)定义快照复用方式。
 
 ## 已知限制与延期工作
 

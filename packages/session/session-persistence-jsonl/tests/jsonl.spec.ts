@@ -8,7 +8,7 @@ import { scheduler } from 'node:timers/promises'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   assertNoRetiredHeaderFields, encodeSegment, eventLines, generationLogFilename, generationLogPath,
   logPath, parseGenerationLogFilename, projectDir, projectKey, scanLog, sessionDir, SessionLogScanner,
@@ -18,7 +18,7 @@ import {
   runPersistenceContract, meta, oneTurnLog, releasedV1OneTurnLog,
 } from '../../session-persistence/tests/contract.ts'
 import { runLiveWritePathContract } from '../../session-persistence/tests/live-write-contract.ts'
-import { LIVE_WRITE_BATCH_MAX_DELAY_MS, type JsonlSessionHandle } from '../src/storage.ts'
+import { LIVE_WRITE_BATCH_MAX_DELAY_MS, type JsonlSessionHandle, type JsonlHandleStorage } from '../src/storage.ts'
 import { JsonlGenerationSourceChangedError } from '../src/generation.ts'
 import SessionStore from '@deepseek-ai/dsh-session'
 
@@ -37,6 +37,18 @@ const statFailure = vi.hoisted(() => ({
 const readdirFailure = vi.hoisted(() => ({
   path: undefined as string | undefined,
   error: undefined as Error | undefined,
+}))
+
+/**
+ * While active, every `readdir` and `stat` waits `delayMs`, records how many
+ * such calls overlap, and fails with the error registered for its path.
+ */
+const listingProbe = vi.hoisted(() => ({
+  active: false,
+  delayMs: 0,
+  inFlight: 0,
+  maxInFlight: 0,
+  failures: new Map<string, Error>(),
 }))
 
 const readTally = vi.hoisted(() => ({
@@ -62,9 +74,22 @@ const pausedRead = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const probeListingRead = async <T>(path: string, read: () => Promise<T>): Promise<T> => {
+    listingProbe.inFlight += 1
+    listingProbe.maxInFlight = Math.max(listingProbe.maxInFlight, listingProbe.inFlight)
+    try {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, listingProbe.delayMs))
+      const failure = listingProbe.failures.get(path)
+      if (failure !== undefined) throw failure
+      return await read()
+    } finally {
+      listingProbe.inFlight -= 1
+    }
+  }
   return {
     ...actual,
     stat: (async (...args: Parameters<typeof actual.stat>) => {
+      if (listingProbe.active) return probeListingRead(String(args[0]), () => actual.stat(...args))
       if (String(args[0]) === statFailure.path && statFailure.error !== undefined) throw statFailure.error
       const identity = await actual.stat(...args)
       if (String(args[0]) !== statRace.path || !('mtimeNs' in identity)) return identity
@@ -95,6 +120,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       }
     }) as typeof actual.readFile,
     readdir: (async (...args: Parameters<typeof actual.readdir>) => {
+      if (listingProbe.active) return probeListingRead(String(args[0]), () => actual.readdir(...args))
       if (String(args[0]) === readdirFailure.path && readdirFailure.error !== undefined) {
         throw readdirFailure.error
       }
@@ -753,11 +779,16 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     await mkdir(dirname(sourcePath), { recursive: true })
     await writeFile(sourcePath, source)
 
+    readTally.enabled = true
+    const formatStatus = 'migration-required'
     expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
       header: { id: header.id, version: SESSION_FORMAT_VERSION },
+      formatStatus,
     })
     const [listed] = await ctx.sessionPersistence.list()
     expect(listed?.header).toMatchObject({ id: header.id, version: SESSION_FORMAT_VERSION })
+    expect(listed?.formatStatus).toBe(formatStatus)
+    expect(readTally.bySuffix.get(sourcePath) ?? 0).toBe(0)
     expect(await readFile(sourcePath)).toEqual(source)
     await expect(stat(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -780,6 +811,9 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     const userMessage = restored.events.find(event => event.type === 'user/message')
     expect(userMessage).toBeDefined()
     expect(Object.isFrozen(userMessage?.data)).toBe(true)
+    const formatStatus = 'migration-required'
+    expect((await ctx.sessionPersistence.stat(header.id))?.formatStatus).toBe(formatStatus)
+    expect((await ctx.sessionPersistence.list()).find(item => item.header.id === header.id)?.formatStatus).toBe(formatStatus)
     expect(await readFile(sourcePath)).toEqual(source)
     await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await readdir(dirname(sourcePath))).filter(name => name.startsWith('session')).sort())
@@ -787,7 +821,7 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
   })
 
   it('resolves absent, current, and historical current-generation paths', async () => {
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence as SessionPersistence & JsonlHandleStorage
     expect(await persistence.resolveCurrentLog(SessionId('missing-generation'))).toBeUndefined()
 
     const current = meta('resolved-current', '/work')
@@ -989,6 +1023,9 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
       } else {
         await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
       }
+      const formatStatus = access === 'write' ? 'current' : 'migration-required'
+      expect((await ctx.sessionPersistence.stat(header.id))?.formatStatus).toBe(formatStatus)
+      expect((await ctx.sessionPersistence.list()).find(item => item.header.id === header.id)?.formatStatus).toBe(formatStatus)
       expect(await readFile(sourcePath)).toEqual(source)
     } finally {
       await handle.close()
@@ -1048,7 +1085,7 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     const currentPath = rawLogPath(root, header.cwd, header.id)
     await mkdir(dirname(sourcePath), { recursive: true })
     await writeFile(sourcePath, `${JSON.stringify(releasedV0Header(header))}\n`)
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence as SessionPersistence & JsonlHandleStorage
 
     await expect(persistence.resolveCurrentLog(header.id, new AbortController().signal)).resolves.toBeUndefined()
     expect(await readFile(sourcePath, 'utf8')).toBe(`${JSON.stringify(releasedV0Header(header))}\n`)
@@ -1176,6 +1213,24 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     })
   })
 
+  it('reports format metadata from the highest physical generation without body reads', async () => {
+    const header = meta('metadata-highest', '/work')
+    readTally.enabled = true
+    for (const version of [0, 3, SESSION_FORMAT_VERSION]) {
+      const path = generationLogPath(root, header.cwd, header.id, version, 'none')
+      await mkdir(dirname(path), { recursive: true })
+      const physical = version === 0 ? releasedV0Header(header) : { ...toHeaderLine(header), version }
+      await writeFile(path, `${JSON.stringify(physical)}\n`)
+      const formatStatus = version === SESSION_FORMAT_VERSION ? 'current' : 'migration-required'
+      expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
+        header: { version: SESSION_FORMAT_VERSION }, formatStatus,
+      })
+      const [listed] = await ctx.sessionPersistence.list()
+      expect(listed?.formatStatus).toBe(formatStatus)
+      expect(readTally.bySuffix.size).toBe(0)
+    }
+  })
+
   it('selects a retained future generation above readable historical bytes', async () => {
     const header = meta('future-wins', '/work')
     const sourcePath = historicalLogPath(root, header.cwd, header.id)
@@ -1187,6 +1242,8 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
     await expect(ctx.sessionPersistence.open(header.id, 'read')).rejects.toMatchObject({
       name: 'SessionFormatUnsupportedError',
     })
+    await expect(ctx.sessionPersistence.stat(header.id)).rejects.toMatchObject({ name: 'SessionFormatUnsupportedError' })
+    expect(await ctx.sessionPersistence.list()).toEqual([])
     expect(await readFile(sourcePath, 'utf8')).toBe(`${JSON.stringify(releasedV0Header(header))}\n`)
     await expect(stat(rawLogPath(root, header.cwd, header.id))).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -1359,13 +1416,18 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     // created session is already visible to this process.
     const dir = sessionDir(root, '/work', m.id)
     await expect(stat(rawLogPath(root, '/work', m.id))).rejects.toThrow()
-    expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
-    expect((await ctx.sessionPersistence.stat(m.id))?.sizeBytes).toBeUndefined()
+    const pending = await ctx.sessionPersistence.stat(m.id)
+    const pendingRows = await ctx.sessionPersistence.list()
+    expect(pendingRows.map(s => s.header.id)).toContain(m.id)
+    expect(pending?.sizeBytes).toBeUndefined()
+    expect(pending?.formatStatus).toBeUndefined()
+    expect(pendingRows.find(s => s.header.id === m.id)?.formatStatus).toBeUndefined()
 
     await handle.append(oneTurnLog())
     expect((await stat(dir)).isDirectory()).toBe(true)
     expect((await stat(rawLogPath(root, '/work', m.id))).isFile()).toBe(true)
     expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
+    expect((await ctx.sessionPersistence.stat(m.id))?.formatStatus).toBe('current')
     await handle.close()
   })
 
@@ -1849,7 +1911,7 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
   it('stat handles artifact removal and non-ENOENT failures after log discovery', async () => {
     const m = meta('stored-revision-race')
     await writeLog(ctx.sessionPersistence, m, oneTurnLog())
-    const persistence = ctx.sessionPersistence as JsonlSessionPersistence
+    const persistence = ctx.sessionPersistence
     const internals = persistence as unknown as {
       findLog(id: SessionId, signal?: AbortSignal): Promise<{
         sourcePath: string
@@ -2751,5 +2813,80 @@ describe('JsonlSessionPersistence: edge cases', () => {
     }, surfaceOp: 'append' }] as unknown as SessionEvent[]
     await writeLog(ctx.sessionPersistence, m, events)
     expect((await readAll(ctx.sessionPersistence, m.id)).events).toEqual(events)
+  })
+})
+
+describe('JsonlSessionPersistence listing concurrency', () => {
+  let listingRoot: string
+  let listingCtx: Context
+
+  beforeEach(async () => {
+    listingRoot = await mkdtemp(join(tmpdir(), 'dsh-jsonl-listing-'))
+    listingCtx = new Context()
+    await listingCtx.plugin(JsonlSessionPersistence, { root: listingRoot, compression: 'none', listConcurrency: 2 })
+  })
+
+  afterEach(async () => {
+    listingProbe.active = false
+    listingProbe.delayMs = 0
+    listingProbe.inFlight = 0
+    listingProbe.maxInFlight = 0
+    listingProbe.failures.clear()
+    await listingCtx.fiber.dispose()
+    await rm(listingRoot, { recursive: true, force: true })
+  })
+
+  /** Persist one-turn Sessions under one cwd. */
+  async function seed(cwd: string, ids: readonly string[]): Promise<void> {
+    for (const id of ids) await writeLog(listingCtx.sessionPersistence, meta(id, cwd), oneTurnLog())
+  }
+
+  /** Directory entries in the order the backend's listing reads them. */
+  async function directoriesOf(dir: string): Promise<string[]> {
+    return (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => join(dir, entry.name))
+  }
+
+  it('validates listConcurrency as a positive integer that defaults to 3', () => {
+    expect(JsonlSessionPersistence.Config({ root: listingRoot }).listConcurrency).toBe(3)
+    expect(JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 1 }).listConcurrency).toBe(1)
+    expect(() => JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 0 })).toThrow()
+    expect(() => JsonlSessionPersistence.Config({ root: listingRoot, listConcurrency: 1.5 })).toThrow()
+  })
+
+  it('bounds directory and stat reads across concurrent listings of one backend', async () => {
+    await seed('/work-a', ['bound-a1', 'bound-a2', 'bound-a3'])
+    await seed('/work-b', ['bound-b1', 'bound-b2', 'bound-b3'])
+    const expected = ['bound-a1', 'bound-a2', 'bound-a3', 'bound-b1', 'bound-b2', 'bound-b3']
+    expect((await listingCtx.sessionPersistence.list()).map(s => s.header.id).sort()).toEqual(expected)
+
+    listingProbe.delayMs = 5
+    listingProbe.active = true
+    const listings = await Promise.all([
+      listingCtx.sessionPersistence.list(),
+      listingCtx.sessionPersistence.list(),
+    ])
+    listingProbe.active = false
+
+    expect(listingProbe.maxInFlight).toBe(2)
+    for (const listing of listings) expect(listing.map(s => s.header.id).sort()).toEqual(expected)
+  })
+
+  it('reports the failure a sequential traversal would reach first', async () => {
+    await seed('/work-a', ['order-a1', 'order-a2'])
+    await seed('/work-b', ['order-b1', 'order-b2'])
+    await listingCtx.sessionPersistence.list()
+    const [earlierProject, laterProject] = await directoriesOf(listingRoot) as [string, string]
+    const [earlierSession, laterSession] = await directoriesOf(earlierProject) as [string, string]
+    const projectFailure = Object.assign(new Error('later project denied'), { code: 'EACCES' })
+    const laterSessionFailure = Object.assign(new Error('later session denied'), { code: 'EACCES' })
+    const earlierSessionFailure = Object.assign(new Error('earlier session denied'), { code: 'EACCES' })
+    listingProbe.active = true
+
+    listingProbe.failures.set(laterProject, projectFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(projectFailure)
+    listingProbe.failures.set(laterSession, laterSessionFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(laterSessionFailure)
+    listingProbe.failures.set(earlierSession, earlierSessionFailure)
+    await expect(listingCtx.sessionPersistence.list()).rejects.toBe(earlierSessionFailure)
   })
 })

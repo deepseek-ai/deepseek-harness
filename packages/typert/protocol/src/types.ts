@@ -6,11 +6,13 @@
 
 import type { Context, Events } from '@deepseek-ai/cordis'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ZodType } from 'zod'
 import type { TypertOwnedValue } from './owned-value.ts'
 
 declare const LOOKUP_HOST: unique symbol
 declare const LOOKUP_WIRE: unique symbol
 declare const CONTEXT_WIRE: unique symbol
+declare const RESOURCE_ID: unique symbol
 
 /** Type-level association between a Host object and its wire identity. */
 export interface TypertLookup<Host, Wire> {
@@ -37,6 +39,58 @@ export interface TypertLookupMap {}
 
 /** Merge-extensible scoped Context declarations. */
 export interface TypertContextMap {}
+
+/** Type-level association between a resource kind and its identity type. */
+export interface TypertResource<Id> {
+  readonly [RESOURCE_ID]: Id
+}
+
+/** Extract the identity type associated with one resource declaration. */
+export type TypertResourceId<Resource> = Resource extends TypertResource<infer Id> ? Id : never
+
+/**
+ * Merge-extensible resource kinds whose identities a Remote call or forwarded
+ * event may carry. The package that owns an identity type declares its kind;
+ * the value is that kind's identity type, a string type such as a branded id.
+ * `global` names the built-in identity-less resource and is never a kind here.
+ */
+export interface TypertResourceMap {}
+
+/** One declared resource kind. */
+export type TypertResourceKind = Extract<keyof TypertResourceMap, string>
+
+/**
+ * Per-kind resource readers called with one argument tuple spread
+ * positionally: plain reads returning one identity, several, or `undefined`
+ * for none.
+ * @template Args - the argument tuple the readers receive as parameters.
+ */
+export type TypertResourceReaders<Args extends readonly unknown[]> = {
+  readonly [Kind in TypertResourceKind]?: (...args: Args) =>
+    | TypertResourceId<TypertResourceMap[Kind]>
+    | readonly TypertResourceId<TypertResourceMap[Kind]>[]
+    | undefined
+}
+
+/**
+ * Type-erased resource reader as runtime carriers store it; callers spread
+ * the argument tuple into it and validate its result. Declared through a
+ * method so a reader typed by its own parameters is assignable without a cast.
+ */
+export type TypertResourceReader = { read(...args: readonly unknown[]): unknown }['read']
+
+type TypertLookupEntry = TypertLookupMap[keyof TypertLookupMap]
+type TypertWireForHost<Value, Entry> = Entry extends unknown
+  ? Value extends TypertLookupHost<Entry> ? TypertLookupWire<Entry> : never
+  : never
+
+/** A method parameter as it arrives on the wire: a lookup's Host object becomes its wire identity. */
+export type RemoteWireValue<Value> = Value extends TypertLookupHost<TypertLookupEntry>
+  ? TypertWireForHost<Value, TypertLookupEntry>
+  : Value
+
+/** A method's positional parameters as the wire carries them. */
+export type RemoteWireArgs<Args extends unknown[]> = { [Index in keyof Args]: RemoteWireValue<Args[Index]> }
 
 /** Merge-extensible direct Remote method signatures generated for consumers. */
 export interface TypertRemoteMap {}
@@ -169,12 +223,24 @@ export type TypertForwardableEvent = {
   [Event in keyof Events]: TypertForwardingMode<Event> extends never ? never : Event
 }[keyof Events]
 
-/** Event and dispatch mode accepted by the Remote Event source. */
+/**
+ * Event and dispatch mode accepted by the Remote Event source. An `emit` entry
+ * may declare readers of the resources its payload carries; an
+ * entry without `resources` touches the built-in `global` resource. A
+ * non-owner Peer receives an `emit` notification only after an access
+ * decision and never receives a `waterfall`.
+ */
 export type TypertForwardableEventEntry = {
   [Event in keyof Events]: TypertForwardingMode<Event> extends infer Mode
-    ? Mode extends 'emit' | 'waterfall'
-      ? { readonly event: Event; readonly mode: Mode }
-      : never
+    ? Mode extends 'emit'
+      ? {
+        readonly event: Event
+        readonly mode: Mode
+        readonly resources?: TypertResourceReaders<TypertEventParameters<Event>>
+      }
+      : Mode extends 'waterfall'
+        ? { readonly event: Event; readonly mode: Mode }
+        : never
     : never
 }[keyof Events]
 
@@ -266,26 +332,29 @@ export interface TypertSchema<Output = unknown> {
   parse(value: unknown): Output
 }
 
+/** Native byte views reconstructed by a Remote carrier have ordinary ArrayBuffer backing. */
+export type RemoteDecoded<Value> = Value extends Uint8Array ? Uint8Array<ArrayBuffer>
+  : Value extends string | number | boolean | bigint | symbol ? Value
+    : Value extends object ? { [Key in keyof Value]: RemoteDecoded<Value[Key]> } : Value
+
 /** Codec attached to one invocation parameter or result. */
-export type TypertCodec =
-  | {
+export type TypertCodec<Value = unknown> =
+  | TypertRemoteValue<Value> & {
     readonly mode: 'strict'
     readonly typeSymbol: string
-    /** Materialize and return the process-realm schema on first boundary use. */
-    readonly create: () => TypertSchema
     /**
      * Decode a unary result whose fields require type-specific handling.
      * @param value - result reconstructed by the RPC carrier.
      * @returns the validated result, retaining native byte views.
      */
-    readonly decode?: (value: unknown) => unknown
+    readonly decode?: ((value: unknown) => unknown) | undefined
     /**
      * Project typed binary fields into RPC result attachments.
      * @param value - native unary result.
      * @param writeBytes - records a byte view at its result-relative path and returns its JSON placeholder.
      * @returns JSON metadata with untouched JSON subtrees retained.
      */
-    readonly encode?: (value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown
+    readonly encode?: ((value: unknown, writeBytes: (bytes: Uint8Array, path: readonly (string | number)[]) => null) => unknown) | undefined
   }
   | {
     readonly mode: 'src-json'
@@ -295,6 +364,8 @@ export type TypertCodec =
 export interface InvocationParameterDescriptor {
   /** Source-level parameter name. */
   readonly name: string
+  /** Source parameter documentation, independent of JSON Schema support. */
+  readonly description?: string
   /** Required key in the wire `args` object. */
   readonly wire: string
   /** Whether the value is JSON or requires a registered Host lookup. */
@@ -363,6 +434,8 @@ export interface InvocationDescriptor {
   }
   /** Codec for the unary result or each yielded stream item. */
   readonly result: TypertCodec
+  /** Source-owned method documentation; ordinary methods need not have JSDoc. */
+  readonly description?: string
   /** Source declaration used only for diagnostics. */
   readonly sourceLocation?: InvocationSourceLocation
 }
@@ -375,18 +448,44 @@ export interface InvocationDescriptor {
 export type PeerId = Branded<'PeerId'>
 
 /**
- * One Peer's session on this Host. Connection owns it: `ctx` is the Cordis
+ * Merge-extensible caller identities. Each driver declares its own entry.
+ * Every entry is a JSON value with a unique literal `kind`, carries no
+ * credential, and is safe to persist in a Session log.
+ */
+export interface PrincipalMap {
+  /** The local user who owns this Host. */
+  owner: { readonly kind: 'owner' }
+}
+
+/** One caller identity; the authorization layer reads only this. */
+export type Principal = PrincipalMap[keyof PrincipalMap]
+
+/**
+ * One Peer's session on this Host. Its creator owns it: `ctx` is the Cordis
  * scope that owns connection-lifetime registrations and is disposed with the
- * Peer. Who the Peer is and what it may do are not recorded here.
+ * Peer, and `principal` is the caller identity fixed when the Peer was created.
  */
 export interface PeerScope {
   readonly id: PeerId
+  /** Connection-lifetime registrations; disposed with the Peer. */
   readonly ctx: Context
+  /** Caller identity fixed at creation by in-process Host code; no wire field can set it. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
+  readonly signal: AbortSignal
   /**
    * Tear down every registration made through `ctx`.
    * @returns settles once the scope has quiesced; racing calls share one completion.
    */
   dispose(): Promise<void>
+}
+
+/** Carrier capacity for buffered uplink frames of one logical stream. */
+export interface RemoteUplinkWindow {
+  /** Maximum complete encoded frame bytes waiting for the Host consumer. */
+  readonly maxBytes: number
+  /** UTF-8 envelope bytes added to a compact JSON item with a present value field. */
+  readonly frameOverheadBytes: number
 }
 
 /**
@@ -402,10 +501,12 @@ export interface RemoteInvocation {
   }
   /** Cordis service key of the receiving Service. */
   readonly service: string
-  /** Peer the call speaks for; an in-process carrier speaks for the operator. */
+  /** Peer the call speaks for; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
+  /** Carrier frame capacity; absent when the carrier imposes no encoded-frame inbox limit. */
+  readonly uplinkWindow?: RemoteUplinkWindow | undefined
   /**
    * The Client's uplink items for this call. Available once; a second call
    * throws. With an uplink codec on the descriptor every item is decoded to
@@ -426,6 +527,91 @@ export interface TypertRemoteContribution {
   readonly package: string
   /** Consumer-side invocation descriptors generated from that package. */
   readonly descriptors: readonly InvocationDescriptor[]
+}
+
+/** Generated parser and optional lossless tool-schema projection of one Remote value. */
+export interface TypertRemoteValue<Value = unknown> {
+  /** Materialize the generated parser without loading the owning Service. */
+  readonly create: () => TypertSchema<Value>
+  /** Source-owned value documentation, independent of tool projection support. */
+  readonly description?: string | undefined
+  /** Present when the value is representable in the tool-schema subset without losing constraints; may be derived lazily. */
+  readonly jsonSchema?: Readonly<Record<string, unknown>> | undefined
+  /** Projection failure for consumers that require JSON Schema; parsing remains available. */
+  readonly jsonSchemaError?: string | undefined
+}
+
+/** Consumer-owned input validation; never changes Host dispatch or the business method declaration. */
+export interface TypertRemoteInputOptions {
+  /** Reject undeclared fields in input objects; explicit dictionaries and JSON values remain open. */
+  readonly strict?: boolean
+}
+
+/** A direct descriptor; DecodedOutput differs from its parser output only for carrier-reconstructed unary bytes. */
+export type TypertRemoteMethod<Input extends object, Output, Mode extends 'unary' | 'stream' = 'unary', Uplink = never, DecodedOutput = Output> =
+  Omit<InvocationDescriptor, 'mode' | 'invocation' | 'result'>
+  & (Mode extends 'stream' ? { readonly mode: 'stream' } : { readonly mode?: never }) & {
+    /** Named invocation selects a direct Service method, not a Context receiver. */
+    readonly invocation: { readonly kind: 'direct' }
+    /**
+     * Select matching named-input parsing and tool-schema projection without changing dispatch.
+     * @param options - consumer-owned strictness; omission preserves ordinary Remote object handling.
+     * @returns the cached view for this policy; its parser and projection remain lazy.
+     */
+    input(options?: TypertRemoteInputOptions): TypertRemoteValue<Input>
+    /** The descriptor's result or stream-item parser; parsing alone does not normalize native byte backing. */
+    readonly result: Extract<TypertCodec<Output>, { readonly mode: 'strict' }>
+    /**
+     * Invoke the mounted namespace method with named wire arguments.
+     * @param remote - caller-owned, unscoped Client Remote service; its mount owns availability.
+     * @param input - decoded named wire arguments.
+     * @param signal - caller-owned invocation lifetime.
+     * @returns the carrier-decoded unary result or complete stream handle, including uplink and disposal.
+     */
+    invoke(remote: TypertClientRemote, input: Input, signal?: AbortSignal): Mode extends 'stream'
+      ? RemoteStreamHandle<Output, Uplink>
+      : Promise<RemoteResult<DecodedOutput>>
+  }
+
+/** Ordinary contribution whose method index references its direct invocation descriptors. */
+export interface TypertRemoteInfo<Methods extends Readonly<Record<string,
+  TypertRemoteMethod<object, unknown> | TypertRemoteMethod<object, unknown, 'stream', unknown>
+>> = Readonly<Record<string, TypertRemoteMethod<object, unknown> | TypertRemoteMethod<object, unknown, 'stream', unknown>>>>
+  extends TypertRemoteContribution {
+  /** Exact generated keys and types; Context-only receivers are available only through descriptors. */
+  readonly methods: Methods
+}
+
+/** Generated Zod factory and optional tool projection for one invocation value. */
+export interface TypertRemoteCodecSpec extends Omit<Extract<TypertCodec, { readonly mode: 'strict' }>, 'create'> {
+  /** Materialize the generated Zod schema only when a parser is requested. */
+  readonly create: () => ZodType
+}
+
+/** One ordered parameter; omitted wire names resolve to the source parameter name. */
+export interface TypertRemoteParameterSpec extends Omit<InvocationParameterDescriptor, 'wire' | 'codec'> {
+  /** Explicit wire alias, notably for a Host lookup identity. */
+  readonly wire?: string
+  /** Ordinary Remote parser and projection for this parameter. */
+  readonly codec: TypertRemoteCodecSpec
+  /** Consumer-selected counterpart rejecting undeclared fields in explicit input objects. */
+  readonly strictCodec: TypertRemoteCodecSpec
+}
+
+/** Static method facts; endpoint identity and named-call helpers are derived by the runtime factory. */
+export interface TypertRemoteMethodSpec extends Omit<InvocationDescriptor, 'id' | 'namespace' | 'method' | 'parameters' | 'result'> {
+  /** Ordered Host parameters, including their wire representations. */
+  readonly parameters: readonly TypertRemoteParameterSpec[]
+  /** Successful unary result or stream item, with optional native-byte handling. */
+  readonly result: TypertRemoteCodecSpec
+}
+
+/** Compiler-produced method definitions, independent of services, registration, and transport. */
+export interface TypertRemoteSpec {
+  /** Package owning these methods. */
+  readonly package: string
+  /** Public endpoints; each method's invocation facts occur only once. */
+  readonly methods: Readonly<Record<`${string}/${string}`, TypertRemoteMethodSpec>>
 }
 
 /** Client Remote capability implemented by the Gateway and consumed by Remote assemblies. */
@@ -457,12 +643,19 @@ export type TypertLookupResolver<Host = unknown, Wire = unknown> = (
   id: Wire,
 ) => Host | undefined | Promise<Host | undefined>
 
+/** Resource kinds whose identity type is a wire identity; every kind for a type-erased provider. */
+type TypertResourceKindFor<Wire> = unknown extends Wire
+  ? TypertResourceKind
+  : { [Kind in TypertResourceKind]: [Wire] extends [TypertResourceId<TypertResourceMap[Kind]>] ? Kind : never }[TypertResourceKind]
+
 /** Runtime provider for one declared Host object lookup. */
 export interface TypertLookupProvider<Host = unknown, Wire = unknown> {
   /** Source parameter name recognized by the SRC weak parser. */
   readonly parameter: string
   /** Wire field replacing the Host object parameter. */
   readonly wire: string
+  /** Resource kind the wire identity names; a parameter of this lookup carries that resource. */
+  readonly resource?: TypertResourceKindFor<Wire>
   /** Canonical Host type symbol used by strict generation. */
   readonly hostTypeSymbol: string
   /** Canonical wire type symbol used by strict generation. */
@@ -495,6 +688,8 @@ export interface TypertHostContextAdapter<Wire = unknown> {
   readonly wire: string
   /** Canonical wire type symbol used by strict generation. */
   readonly wireTypeSymbol: string
+  /** Resource kind the wire identity names; a call scoped to this Context carries that resource. */
+  readonly resource?: TypertResourceKindFor<Wire>
   /**
    * Resolve a validated wire identity to a live Host Context.
    * @param id - validated wire identity.
@@ -526,7 +721,7 @@ export interface TypertClientContextAdapter<Wire = unknown> {
 
 /** Notification emitted after a Typert runtime registry changes. */
 export interface TypertRegistryChange {
-  readonly kind: 'local' | 'remote' | 'lookup' | 'host-context' | 'client-context'
+  readonly kind: 'local' | 'remote' | 'lookup' | 'host-context' | 'client-context' | 'resource'
   readonly key: string
 }
 
@@ -662,7 +857,7 @@ export interface TypertContextRegistry {
     adapter: TypertClientContextAdapter<TypertContextWire<TypertContextMap[K]>>,
   ): TypertDisposer
   /**
-   * Look up a Host Context adapter.
+   * Look up a Host Context adapter; a configured resolver keeps the adapter's declaration and `resource`.
    * @param key - descriptor Context key.
    * @returns the adapter, or `undefined` when absent.
    */
@@ -681,12 +876,52 @@ export interface TypertContextRegistry {
   subscribe(listener: TypertRegistryListener): TypertDisposer
 }
 
+/** Default wire field of one resource kind. */
+export interface TypertResourceDeclaration {
+  /** Top-level or first-object wire field holding one identity of the kind. */
+  readonly field: string
+}
+
+/** One registered resource kind with its default wire field. */
+export interface TypertResourceEntry extends TypertResourceDeclaration {
+  /** Registered resource kind. */
+  readonly kind: string
+}
+
+/** Runtime registry of resource kinds' default wire fields. */
+export interface TypertResourceRegistry {
+  /**
+   * Register one kind's default wire field for the calling fiber. Only the
+   * domain that owns the kind registers it.
+   * @param kind - merge-declared resource kind.
+   * @param declaration - the kind's default wire field.
+   * @returns disposer withdrawing the exact registration.
+   * @throws Error when the kind is already registered or is `global`, the built-in resource kind.
+   */
+  register(kind: TypertResourceKind, declaration: TypertResourceDeclaration): TypertDisposer
+  /**
+   * Look up one kind's declaration.
+   * @param kind - resource kind.
+   * @returns the live declaration, or `undefined` when unregistered.
+   */
+  get(kind: string): TypertResourceDeclaration | undefined
+  /** @returns a registration-order snapshot of registered kinds with their fields. */
+  entries(): readonly TypertResourceEntry[]
+  /**
+   * Observe later resource-kind changes.
+   * @param listener - synchronous contained observer.
+   * @returns disposer for this subscription.
+   */
+  subscribe(listener: TypertRegistryListener): TypertDisposer
+}
+
 /** Minimal Typert runtime consumed through dependency inversion. */
 export interface TypertRegistryContract {
   readonly local: TypertLocalRegistry
   readonly remotes: TypertRemoteRegistry
   readonly lookups: TypertLookupRegistry
   readonly contexts: TypertContextRegistry
+  readonly resources: TypertResourceRegistry
 }
 
 declare module '@deepseek-ai/cordis' {

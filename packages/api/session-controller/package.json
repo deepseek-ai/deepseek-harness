@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-session-controller",
   "description": "Session Remote commands, cold reads, and live control transport",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -39,7 +39,8 @@
       "default": "./lib/typert.remote-client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -58,6 +59,7 @@
     "watch": "tsdown --watch"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.js",
@@ -77,7 +79,7 @@
     "@deepseek-ai/dsh-deque": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "mime-types": "^3.0.2",
-    "zod": "^4.4.3"
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -124,6 +126,7 @@
     }
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-default-model": "workspace:*",
@@ -148,6 +151,7 @@
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",

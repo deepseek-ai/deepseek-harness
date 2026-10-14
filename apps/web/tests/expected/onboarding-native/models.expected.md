@@ -12,8 +12,9 @@
   - list:
     - listitem:
       - text: DeepSeek deepseek-official API 密钥
+      - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 输入 API 密钥
+        - /placeholder: 留空时保留现有认证（DEEPSEEK_API_KEY）
       - group: 自定义设置
       - button "取消"
       - button "保存"

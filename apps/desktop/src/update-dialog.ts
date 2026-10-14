@@ -136,7 +136,11 @@ export class DesktopUpdateDialog {
     const window = this.window
     this.window = undefined
     this.parent = undefined
-    if (window !== undefined && !window.isDestroyed()) window.destroy()
+    if (window !== undefined && !window.isDestroyed()) {
+      // Release Windows modality before destruction so another application cannot become active.
+      if (process.platform === 'win32' && window.isVisible()) window.hide()
+      window.destroy()
+    }
   }
 
   private owned(event: IpcMainInvokeEvent): void {

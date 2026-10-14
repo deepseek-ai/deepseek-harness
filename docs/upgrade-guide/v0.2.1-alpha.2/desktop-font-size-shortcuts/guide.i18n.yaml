@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.2/desktop-font-size-shortcuts/guide.md
+/:
+  en: 0863e2ef201c6e98
+  zh: e7042cab4852e9c8
+/desktop-font-size-shortcuts-reserve-custom-key-combinations:
+  en: 7c82d9faadaec1e0
+  zh: 91d60eb7a660e1b3
+/desktop-font-size-shortcuts-reserve-custom-key-combinations/change:
+  en: cb025eb9ae5e18ae
+  zh: 094ec608c1ce4dad
+/desktop-font-size-shortcuts-reserve-custom-key-combinations/migration:
+  en: bc66077939ee3df3
+  zh: f8460bf5ec20ac58

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-persona` gives one agent its own persona: a preset mounts this composable row to register persona prefix and suffix sections, shadowing the deployment-wide defaults for that session. It can also make the prefix the session's complete system prompt, suppressing every other section, and can turn off dynamic runtime-context snapshots for the session. Mount it inside a preset composition — mounting it globally collides with the prompt registry's own persona registration and fails loud. Without this row, a preset could change an agent's tools but never its identity.
+`dsh-persona` gives one agent its own persona: a preset mounts this composable row to register persona prefix and suffix sections, shadowing the deployment-wide defaults for that session. It can also make the prefix the session's complete system prompt, suppressing every other section, and can turn off optional runtime context for the session. Mount it inside a preset composition — mounting it globally collides with the prompt registry's own persona registration and fails loud. Without this row, a preset could change an agent's tools but never its identity.
 
 ## Table of Contents
 
@@ -40,13 +40,13 @@ Mount this row inside a preset composition to give that preset's sessions their 
 | `prefix` | required | Persona prose rendered as the `deployment:persona-prefix` section |
 | `suffix` | `''` | Template for `deployment:persona-suffix`; omitted or empty text shadows the global suffix away |
 | `complete` | `false` | Use only the rendered prefix as the system prompt; ignore the suffix |
-| `includeRuntimeContext` | `true` | Include dynamic runtime-context snapshots for this agent scope; false suppresses every context contribution without disabling its owning services |
+| `includeRuntimeContext` | `true` | Include optional runtime context for this agent scope; false suppresses optional contributions without disabling their owning services; required contributions remain |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-persona) is the exhaustive source for every accepted field and its JSDoc.
 
 ### Persona behavior
 
-The persona `prefix` and `suffix` are templates: complete `{{…}}` groups resolve strictly against registered prompt variables when the prompt renders, not when it assembles. Each empty template still shadows its deployment-wide section, then disappears at render. Omitted `suffix` defaults to empty; it does not inherit the global suffix. With `complete: true`, assembly still resolves contexts, tools, variables, and cooperative listeners, but the prompt registry restores this exact prefix as the sole section; no identity, suffix, tool guidance, or listener can append prompt text. With `includeRuntimeContext: false`, context providers are not evaluated for this scope and contexts added by assembly listeners are discarded.
+The persona `prefix` and `suffix` are templates: complete `{{…}}` groups resolve strictly against registered prompt variables when the prompt renders, not when it assembles. Each empty template still shadows its deployment-wide section, then disappears at render. Omitted `suffix` defaults to empty; it does not inherit the global suffix. With `complete: true`, assembly still resolves contexts, tools, variables, and cooperative listeners, but the prompt registry restores this exact prefix as the sole section; no identity, suffix, tool guidance, or listener can append prompt text. With `includeRuntimeContext: false`, optional context providers are not evaluated for this scope, and assembly-listener contributions are discarded unless registered as required. Required providers remain active at assembly and request admission.
 
 ### When to use it
 
@@ -96,11 +96,11 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The `deployment:persona-prefix` section at order `0` carries this row's `prefix`; `deployment:persona-suffix` at order `10200` carries its `suffix`, after first-party guidance. Both replace their deployment defaults and resolve prompt variables. In complete mode, the model sees only the rendered prefix section as its system prompt. Runtime context remains enabled by default; when disabled, a fresh agent receives no runtime-context snapshot from sandbox policy, approval policy, delegation, or another system-prompt context provider.
+The `deployment:persona-prefix` section at order `0` carries this row's `prefix`; `deployment:persona-suffix` at order `10200` carries its `suffix`, after first-party guidance. Both replace their deployment defaults and resolve prompt variables. In complete mode, the model sees only the rendered prefix section as its system prompt. Runtime context remains enabled by default. With `includeRuntimeContext: false`, the model still receives required context, such as the current working directory; optional context is omitted.
 
 #### Token effect
 
-Fixed for a given preset: the persona prefix and suffix tokens on every request that agent makes, and none for any other agent. Empty text contributes nothing. Complete mode removes every other system-prompt token for that agent.
+Fixed for a given preset: the persona prefix and suffix tokens on every request that agent makes, and none for any other agent. Empty text contributes nothing. Complete mode removes every other system-prompt token for that agent. Required runtime context still contributes tokens when optional context is disabled.
 
 #### KV Cache effect
 
@@ -114,7 +114,7 @@ Prefix-stable while the rendered template variables and text are unchanged. Suff
 These limits define when the row is a poor fit. They are current package constraints, not a task backlog.
 
 - **No global mount** — the prompt registry owns the unscoped persona slot, so this row is usable only from a scoped composition. A deployment-wide persona change belongs in the `system-prompt` row's own config.
-- **Runtime-context suppression is all-or-nothing** — `includeRuntimeContext: false` turns off every context contribution for the scope, including sandbox policy, approval policy, and delegation; there is no per-provider filter.
+- **No per-provider runtime-context filter** — `includeRuntimeContext: false` suppresses all optional contributions for the scope; it cannot suppress required contributions.
 
 <a id="dev-note"></a>
 ### Dev Note

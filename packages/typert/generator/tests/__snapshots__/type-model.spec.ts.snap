@@ -6450,7 +6450,7 @@ exports[`WorkspaceAnalyzer > builds independent face models with an explicit cro
               ],
               "name": "ReexportedZodType",
               "subpath": ".",
-              "symbol": "<external>:../../../../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/schemas.d.cts#ZodType",
+              "symbol": "<external>:node_modules/zod/index.d.ts#ZodType",
             },
           ],
           "invocations": [],

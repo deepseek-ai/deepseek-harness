@@ -4,13 +4,18 @@ import { Config } from '../src/config.ts'
 import { createTranscriber } from '../src/inference.ts'
 
 const native = vi.hoisted(() => ({ speech: true, texts: ['第一句。', '第二句。'], configs: [] as object[],
-  front: vi.fn(), resets: vi.fn(), accepted: [] as number[], windows: [] as number[] }))
+  front: vi.fn(), resets: vi.fn(), accepted: [] as number[], windows: [] as number[],
+  starts: [] as number[], heads: [] as number[] }))
 vi.mock('node:module', () => {
   return { createRequire: () => () => ({
     OfflineRecognizer: class {
       constructor(config: object) { native.configs.push(structuredClone(config)) }
       setConfig(config: object) { native.configs.push(structuredClone(config)) }
-      createStream() { return { acceptWaveform: ({ samples }: { samples: Float32Array }) => { native.accepted.push(samples.length) } } }
+      createStream() {
+        return { acceptWaveform: ({ samples }: { samples: Float32Array }) => {
+          native.accepted.push(samples.length); native.heads.push(samples[0] ?? 0)
+        } }
+      }
       decode() {}
       getResult() { return { text: native.texts.shift() ?? '' } }
     },
@@ -19,18 +24,22 @@ vi.mock('node:module', () => {
       constructor(config: object) { native.configs.push(structuredClone(config)) }
       acceptWaveform(samples: Float32Array) { native.windows.push(samples.length); this.ready = native.speech }
       isEmpty() { return !this.ready }
-      front(externalBuffer: false) { native.front(externalBuffer); return { samples: new Float32Array(512) } }
+      front(externalBuffer: false) {
+        native.front(externalBuffer)
+        return { start: native.starts.shift() ?? 0, samples: new Float32Array(512).fill(0.5) }
+      }
       pop() { this.ready = false }
       reset() { native.resets(); this.ready = false }
       flush() {}
     },
   }) }
 })
-function wave(samples = 1024): Uint8Array {
+function wave(samples = 1024, first = 0): Uint8Array {
   const b = Buffer.alloc(44 + samples * 2)
   b.write('RIFF'); b.writeUInt32LE(b.length - 8, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16)
   b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(16000, 24); b.writeUInt32LE(32000, 28)
   b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(samples * 2, 40)
+  for (let i = 0; i < samples; i++) b.writeInt16LE(first + i, 44 + i * 2)
   return b
 }
 it('loads one model pair, carries language changes, and copies VAD buffers for Electron', () => {
@@ -52,4 +61,25 @@ it('rejects unsupported language, malformed audio and recordings above the worke
   expect(() => transcribe(wave(1), 'invalid')).toThrow('language')
   expect(() => transcribe(new Uint8Array(46), 'zh')).toThrow('WAV')
   expect(() => transcribe(wave(), 'zh')).toThrow('byte limit')
+})
+it('restores the onset a cold VAD reports late, for the first segment only and within the window', () => {
+  const transcribe = createTranscriber(Object.assign(Config({ dataRoot: '/cache' }), { model: '/model', tokens: '/tokens', vad: '/vad' }))
+  const run = (start: number, samples: number, first = 0): void => {
+    native.speech = true; native.accepted.length = 0; native.heads.length = 0
+    native.starts = [start]; native.texts = ['第一句。', '第二句。']
+    transcribe(wave(samples, first), 'zh')
+  }
+  run(900, 1024, 1000)
+  expect(native.accepted).toEqual([900 + 512, 512])
+  expect(native.heads[0]).toBeCloseTo(1000 / 32768, 6)
+  expect(native.heads[1]).toBeCloseTo(0.5, 6)
+  run(6000, 8192)
+  expect(native.accepted[0]).toBe(0.3 * 16000 + 512)
+  run(0, 1024)
+  expect(native.accepted).toEqual([512, 512])
+  const off = createTranscriber(Object.assign(Config({ dataRoot: '/cache', vadOnsetPaddingSeconds: 0 }), { model: '/model', tokens: '/tokens', vad: '/vad' }))
+  native.speech = true; native.accepted.length = 0
+  native.starts = [900]; native.texts = ['第一句。', '第二句。']
+  off(wave(1024, 1000), 'zh')
+  expect(native.accepted).toEqual([512, 512])
 })

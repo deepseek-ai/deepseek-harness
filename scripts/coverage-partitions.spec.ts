@@ -15,7 +15,7 @@ import {
   forwardedCoverageArgs,
   parseCoveragePartitionCount,
   parseCoverageTestTimeout,
-  parseListOutput,
+  parseFileInventory,
   readFileDurations,
   writeFileDurations,
   type CoverageCommand,
@@ -40,6 +40,11 @@ async function writeBlob(command: CoverageCommand): Promise<void> {
   if (command.blobPath === undefined) return
   await mkdir(dirname(command.blobPath), { recursive: true })
   await writeFile(command.blobPath, '{}')
+  const configArgument = command.args.find(argument => argument.startsWith('--config='))!
+  const source = await readFile(join(command.cwd, configArgument.slice('--config='.length)), 'utf8')
+  const files = [...source.matchAll(/"([^"\n]+\.spec\.tsx?)"/g)].map(match => match[1]!)
+  const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.fileTimes='))!
+  await writeFile(join(command.cwd, reportArgument.slice('--outputFile.fileTimes='.length)), JSON.stringify(files.map(file => ({ file, duration: 0 }))))
 }
 
 async function temporaryRoot(): Promise<string> {
@@ -196,24 +201,36 @@ describe('weighted partition assignment', () => {
 })
 
 describe('coverage file inventory', () => {
-  it('parses vitest list --filesOnly output, keeps project ownership, and drops exempt suites', async () => {
+  it('keeps JSON file paths and project ownership while dropping exempt suites', async () => {
     const root = await temporaryRoot()
     const exemptDir = join(root, 'packages/experimental/webworker-runtime/tests')
     await mkdir(exemptDir, { recursive: true })
     await writeFile(join(exemptDir, 'transform-corpus.spec.ts'), '')
-    const output = [
-      '[thread-safe] packages/a/tests/a.spec.ts',
-      '[process-bound] packages/b/tests/b.spec.ts',
-      '[thread-safe] packages/experimental/webworker-runtime/tests/transform-corpus.spec.ts',
-      'not a test line',
-    ].join('\n')
-    const inventory = parseListOutput(output, root)
+    const output = JSON.stringify([
+      { projectName: 'thread-safe', file: join(root, 'packages/a/tests/a.spec.ts') },
+      { projectName: 'process-bound', file: join(root, 'packages/b/tests/with spaces.spec.ts') },
+      { projectName: 'thread-safe', file: join(exemptDir, 'transform-corpus.spec.ts') },
+    ])
+    const inventory = parseFileInventory(output, root)
     expect(inventory.files).toEqual([
       'packages/a/tests/a.spec.ts',
-      'packages/b/tests/b.spec.ts',
+      'packages/b/tests/with spaces.spec.ts',
     ])
     expect(inventory.projectOf.get('packages/a/tests/a.spec.ts')).toBe('thread-safe')
-    expect(inventory.projectOf.get('packages/b/tests/b.spec.ts')).toBe('process-bound')
+    expect(inventory.projectOf.get('packages/b/tests/with spaces.spec.ts')).toBe('process-bound')
+  })
+
+  it.each(['[', '{}', '[null]', '[{}]', '[{"file":42}]', '[{"file":"a.spec.ts","projectName":"unknown"}]'])('rejects malformed inventories instead of dropping entries: %s', async (output) => {
+    const root = await temporaryRoot()
+    expect(() => parseFileInventory(output, root)).toThrow()
+  })
+
+  it('rejects duplicate file ownership', async () => {
+    const root = await temporaryRoot()
+    const file = join(root, 'a.spec.ts')
+    expect(() => parseFileInventory(JSON.stringify([
+      { file, projectName: 'thread-safe' }, { file, projectName: 'process-bound' },
+    ]), root)).toThrow('more than once')
   })
 
   it('removes every Typert package from instrumented files and project assignments', async () => {
@@ -230,8 +247,8 @@ describe('coverage file inventory', () => {
       await writeFile(join(root, file), '')
     }
     const retained = 'packages/api/gateway/tests/rpc.spec.ts'
-    const inventory = parseListOutput(
-      [...typertFiles, retained].map(file => `[thread-safe] ${file}`).join('\n'),
+    const inventory = parseFileInventory(
+      JSON.stringify([...typertFiles, retained].map(file => ({ projectName: 'thread-safe', file: join(root, file) }))),
       root,
     )
     expect(inventory.files).toEqual([retained])
@@ -272,19 +289,21 @@ describe('coverage file inventory', () => {
   it('extracts per-file durations from compact partition timing reports', async () => {
     const root = await temporaryRoot()
     const report = join(root, 'partition-1.times.json')
-    await writeFile(report, JSON.stringify({
-      'packages/a/tests/x.spec.ts': 500,
-      'packages/a/tests/y.spec.ts': 0,
-      'packages/a/tests/invalid.spec.ts': -1,
-      'packages/a/tests/malformed.spec.ts': 'unknown',
-    }))
+    await writeFile(report, JSON.stringify([
+      { file: 'packages/a/tests/x.spec.ts', duration: 500 },
+      { file: 'packages/a/tests/y.spec.ts', duration: 0 },
+      { file: 'packages/a/tests/invalid.spec.ts', duration: -1 },
+      { file: 'packages/a/tests/malformed.spec.ts', duration: 'unknown' },
+      null,
+      { duration: 10 },
+    ]))
     const durations = collectPartitionDurations([report])
     expect(durations.get('packages/a/tests/x.spec.ts')).toBe(500)
     expect(durations.get('packages/a/tests/y.spec.ts')).toBe(0)
     expect(durations.size).toBe(2)
   })
 
-  it.each(['null', '[]', '42', '"invalid"', '{'])('ignores corrupt timing metadata %s', async (contents) => {
+  it.each(['null', '{}', '42', '"invalid"', '{'])('ignores corrupt timing metadata %s', async (contents) => {
     const root = await temporaryRoot()
     const report = join(root, 'partition.times.json')
     await writeFile(report, contents)
@@ -442,6 +461,31 @@ describe('coverage location canonicalization', () => {
 })
 
 describe('coverage partition coordinator', () => {
+  it.each(['omitted', 'unexpected', 'duplicate', 'malformed', 'unnamed', 'missing-report'])('refuses %s test results even when every partition exits successfully', async (failure) => {
+    const root = await temporaryRoot()
+    const runCommand = vi.fn(async (command: CoverageCommand) => {
+      await writeBlob(command)
+      if (command.label === 'partition 1/2') {
+        const reportArgument = command.args.find(argument => argument.startsWith('--outputFile.fileTimes='))!
+        const reportPath = join(root, reportArgument.slice('--outputFile.fileTimes='.length))
+        let report = JSON.parse(await readFile(reportPath, 'utf8')) as Array<{ file: string; duration: number }>
+        if (failure === 'omitted') report = []
+        if (failure === 'unexpected') report.push({ file: 'unassigned.spec.ts', duration: 0 })
+        if (failure === 'duplicate') report.push(report[0]!)
+        await writeFile(reportPath, failure === 'malformed' ? '{}' : JSON.stringify(report))
+        if (failure === 'unnamed') await writeFile(reportPath, '[{}]')
+        if (failure === 'missing-report') await rm(reportPath)
+      }
+      return passed
+    })
+    const coordinator = new CoveragePartitionCoordinator({
+      root, partitions: 2, pnpmEntrypoint: '/pnpm.cjs', files: ['a.spec.ts', 'b.spec.ts'], runCommand,
+    })
+    await expect(coordinator.run()).rejects.toThrow()
+    expect(runCommand).toHaveBeenCalledTimes(2)
+    await expect(access(join(root, 'coverage/.partitioned/vitest-partition-1.config.ts'))).resolves.toBeUndefined()
+  })
+
   const weightedFiles = ['a.spec.ts', 'b.spec.ts', 'c.spec.ts']
   const weightedDurations = new Map([
     ['a.spec.ts', 100],
@@ -466,6 +510,7 @@ describe('coverage partition coordinator', () => {
     })
 
     await expect(coordinator.run()).resolves.toBe(0)
+    await expect(access(join(root, 'coverage/.partitioned'))).rejects.toMatchObject({ code: 'ENOENT' })
 
     // The coordinator passes a root-relative argument and runs every child with
     // the repository root as its working directory, so the argument must name

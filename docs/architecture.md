@@ -72,7 +72,7 @@ Events are the extension points, and picking the right domain is the first decis
 - **Agent events** (`agent/*`) carry a live `Agent`: inbox, step, status, request, validation, continuation. Use one to observe or intercept work in flight.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
-AgentLoop awaits serial `agent/created` initialization before starting queued work. Initialization failure rolls back creation; [agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) defines teardown ordering.
+AgentLoop awaits serial `agent/created` before queued work and rolls back failed initialization. Unload retains resources through Agent teardown; [agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) defines ordering.
 
 The [event map](event-producer-consumer.md) lists every event's producers and consumers.
 
@@ -133,7 +133,7 @@ A **seam** is a swappable capability with three roles: a **Service Definition** 
 
 Seams are why one provider swap changes the whole product. Filesystem and subprocess providers share one execution world, so pointing them at a remote sandbox moves Bash, PTY, and LSP with them, with no provider forks. [Subagent providers](subsystems/subagent.md) vary just as widely behind one interface, from a fresh child agent to a delegated turn in another product.
 
-[Experimental Agent Teams](subsystems/agent-team.md) is a published opt-in coordination seam on `ctx.agentTeams`, with a durable roster, task board, and mailbox layered over continuable subagents.
+[Experimental Agent Teams](subsystems/agent-team.md) exposes opt-in `ctx.agentTeams` coordination with durable roster and task state plus direct inbox messaging over continuable subagents.
 
 ## Where new behavior goes
 

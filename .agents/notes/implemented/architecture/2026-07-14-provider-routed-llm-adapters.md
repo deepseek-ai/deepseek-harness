@@ -36,6 +36,8 @@ The adapter calls pi-ai's `streamSimple()` so each catalog model chooses its reg
 
 pi-ai's common stream options do not expose stop sequences. `dsh-llm-pi-ai` rejects a defined Harness `stop` option with `UNSUPPORTED_OPTION` rather than silently ignoring it or growing a second provider-specific payload implementation. `dsh-llm-deepseek` continues to support `stop` through its native request serializer.
 
+pi-ai owns protocol-specific system-message placement and the concatenation fallback for models without in-history system support. Harness preserves later system messages in transcript order and reports catalog capabilities to prompt admission and shared tool-history projection. Duplicating pi-ai's fallback or applying Anthropic's placement rules to every protocol would create a second serialization policy that can drift when pi-ai changes. Capability reporting remains a Harness responsibility because the loop needs it before serialization.
+
 ### Recorded assistant route and replay state
 
 Assistant messages carry the request's `provider` and `model`, plus an optional JSON-serializable adapter replay state. A successful `assistant/message` session event records those fields and `deriveMessages()` returns them with the assistant message. User, system, context, and tool-result messages carry no assistant route fields. The provider/model fields are authoritative loop data; an adapter owns only its opaque replay-state payload.

@@ -2,9 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { resolveOxlintInvocation } from './run-oxlint.ts'
 
 describe('Oxlint invocation', () => {
-  it('preserves the ordinary default invocation', () => {
-    expect(resolveOxlintInvocation(['.'], { PATH: '/bin' })).toEqual({
-      args: ['.'],
+  it('keeps Oxlint\'s own worker default in CI', () => {
+    expect(resolveOxlintInvocation(['.'], { CI: 'true', PATH: '/bin' }, 256)).toEqual({
+      args: ['.', '--format=default'],
+      env: { CI: 'true', PATH: '/bin' },
+    })
+  })
+
+  it('bounds local invocations by the local worker budget', () => {
+    expect(resolveOxlintInvocation(['.'], { PATH: '/bin' }, 256)).toEqual({
+      args: ['.', '--threads=12'],
+      env: { PATH: '/bin', GOMAXPROCS: '12' },
+    })
+    expect(resolveOxlintInvocation(['.'], {}, 4).args).toEqual(['.', '--threads=4'])
+  })
+
+  it('passes a caller\'s own worker bound through without the environment setting', () => {
+    expect(resolveOxlintInvocation(['.', '--threads=2'], { PATH: '/bin' }, 256)).toEqual({
+      args: ['.', '--threads=2'],
       env: { PATH: '/bin' },
     })
   })

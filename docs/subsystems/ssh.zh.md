@@ -8,7 +8,7 @@
 
 文件系统身份、可执行文件查找、进程 cwd、沙箱工作区根目录及语言服务器文件 URL 都指向 SSH 主机。提供方在文件实际存在的位置规范化路径，保留文件系统对 `symlink/..` 的解释。策略解析器保留执行环境中的绝对路径写法，不尝试在 Harness 主机上解析远端路径。
 
-`processPath()` 提供配套子进程提供方可用的路径。SSH 的 `processPathFromHostPath()` 仍不可用；安装远端产物不意味着任意主机路径可移植。因此 [`NodePtcRuntime`](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md) 使用显式安装并经过摘要验证的远端引导程序。
+`processPath()` 提供配套子进程提供方可用的路径。SSH 的 `processPathFromHostPath()` 仍不可用；安装远端产物不意味着任意主机路径可移植。因此 [`NodePtcRuntime`](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md) 使用验证后的远端启动配置：已安装的脚本引导程序，或 [helper 可执行文件内嵌的 worker](../../packages/ssh/ssh-helper-runtime/README.zh.md)。
 
 ## 传输与信任
 
@@ -31,22 +31,35 @@ headless 通过已挂载的文件系统提供方记录和检查 Session cwd。�
 ## 连接 API
 
 ```ts type-equiv
+/** Installed helper invocation; script deployments may also install a PTC bootstrap. */
+type HelperLaunch = {
+  /** Run the installed script with a separately installed Node executable. */
+  kind: 'node-script'
+  /** Absolute remote Node executable. */
+  node: string
+  /** Absolute remote PTC bootstrap; requires bootstrapHash. */
+  bootstrapPath?: string
+  /** Lowercase SHA-256 of bootstrapPath; requires that path. */
+  bootstrapHash?: string
+} | {
+  /** Run the helper executable with its embedded Node and PTC worker. */
+  kind: 'executable'
+}
+```
+
+```ts type-equiv
 /** Deployment-owned SSH identity and installed helper; no model argument selects these values. */
 interface Config {
   /** OpenSSH host alias, including its existing user, key and known-host configuration. */
   host: string
-  /** Absolute remote Node executable. */
-  node: string
+  /** Explicit script or self-contained executable invocation. */
+  launch: HelperLaunch
   /** Absolute path to the installed, bundled helper entry. */
   helper: string
   /** SHA-256 of that bundled helper; mismatches refuse the connection. */
   helperHash: string
   /** Absolute remote default workspace. */
   workspace: string
-  /** Optional preinstalled built PTC entry, paired with its expected digest. */
-  bootstrapPath?: string
-  /** SHA-256 of bootstrapPath; both fields must be supplied together. */
-  bootstrapHash?: string
   /** Connection and administrative-request deadline, at most 2,147,483,647 milliseconds. */
   requestTimeoutMs?: number
   /** Maximum JSON payload bytes per helper request or response. */
@@ -67,10 +80,8 @@ declare class SshConnection extends Service {
   constructor(ctx: Context, config: Config);
   /** Hold plugin readiness until the remote identity and helper digest are verified. */
   async [Service.init](): Promise<void>;
-  /** Verified remote Node executable for the paired PTC runtime. */
-  get nodeExecutable(): string;
-  /** Verified preinstalled PTC entry; unconfigured runtimes fail before program execution. */
-  get bootstrapPath(): string;
+  /** Verified remote PTC launch configuration; script deployments require a verified bootstrap. */
+  get ptcLaunch(): { kind: 'embedded'; executable: string } | { kind: 'node-script'; executable: string; bootstrapPath: string };
   /**
      * Send a helper operation; cancellation never replays an ambiguous mutation.
      * @param method - the private helper operation.

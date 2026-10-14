@@ -1,0 +1,297 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:job/registered",
+      "kind": "event",
+      "event": "job/registered",
+      "surface": false,
+      "digest": "f5520c1d261ca86ea03735799c311a0a9ede8babb588cf0a65422576d2ee0ad1",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 5,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "jobId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "owner",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "startedAt",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "toolCall",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "rootCallId",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "job/registered"
+          }
+        ]
+      }
+    },
+    {
+      "key": "event:job/settled",
+      "kind": "event",
+      "event": "job/settled",
+      "surface": false,
+      "digest": "edd37b1e4974af648633014435572089b1e8fb71910468a0767a7e28fdd22abf",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 14,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 15,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "cause",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "detail",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "finishedAt",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "jobId",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "label",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "owner",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "producerReported",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "startedAt",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "status",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "toolCall",
+                "type": 13,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "producer"
+          },
+          {
+            "kind": "literal",
+            "value": "teardown"
+          },
+          {
+            "kind": "literal",
+            "value": "kill"
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "union",
+            "types": [
+              10,
+              11,
+              12
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "completed"
+          },
+          {
+            "kind": "literal",
+            "value": "failed"
+          },
+          {
+            "kind": "literal",
+            "value": "killed"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "callId",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "rootCallId",
+                "type": 6,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "job/settled"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

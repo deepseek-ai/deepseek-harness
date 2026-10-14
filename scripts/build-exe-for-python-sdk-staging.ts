@@ -1,4 +1,4 @@
-/** Prepare a symlink-free Python runtime payload with shared workspace module instances. */
+/** Prepare a symlink-free executable runtime payload with shared workspace module instances. */
 import { cp, lstat, readFile, readdir, realpath, rm, unlink } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { load } from 'js-yaml'
@@ -78,7 +78,9 @@ export async function materializeStagedLinks(staging: string): Promise<void> {
     const segments = remaining.slice(nodeModules.length + 1).split(sep)
     const binIndex = segments.lastIndexOf('.bin')
     if (binIndex >= 0) {
-      await rm(join(nodeModules, ...segments.slice(0, binIndex + 1)), { recursive: true, force: true })
+      const directory = join(nodeModules, ...segments.slice(0, binIndex + 1))
+      if ((await lstat(directory)).isSymbolicLink()) await unlink(directory)
+      else await rm(directory, { recursive: true, force: true })
       remaining = await findSymlink(nodeModules)
       continue
     }

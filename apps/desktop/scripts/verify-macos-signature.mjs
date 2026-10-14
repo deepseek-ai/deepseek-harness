@@ -172,9 +172,7 @@ export function verifyMacOSNotarizedApplication(appPath, expected) {
  * @returns {void}
  */
 export function verifyMacOSDiskImage(diskImagePath, expected) {
-  runCodeSign(['--verify', '--strict', '--verbose=2', diskImagePath])
-  const details = runCodeSign(['--display', '--verbose=4', diskImagePath])
-  assertMacOSSignatureDetails(details, expected)
+  verifyMacOSDiskImageSignature(diskImagePath, expected)
   runAppleCommand('/usr/bin/xcrun', ['stapler', 'validate', diskImagePath], 'stapler validate')
   runAppleCommand('/usr/sbin/spctl', ['--assess', '--type', 'install', '--verbose=4', diskImagePath], 'spctl')
 }
@@ -201,4 +199,16 @@ if (process.argv[1] !== undefined && import.meta.filename === resolve(process.ar
   const expected = resolveMacOSSigningEnvironment(loadDesktopPackageEnvironment('darwin'))
   verifyMacOSSignature(resolve(appPath), expected)
   process.stdout.write(`desktop macOS signing: verified Developer ID Application: ${expected.signingIdentity} (${expected.teamId})\n`)
+}
+
+/**
+ * Verify a disk image's code signature and Developer ID without requiring a notarization ticket.
+ * @param {string} diskImagePath Path to the packaged `.dmg` file.
+ * @param {{ signingIdentity: string, teamId: string }} expected Public signing identity.
+ * @returns {void}
+ */
+export function verifyMacOSDiskImageSignature(diskImagePath, expected) {
+  runCodeSign(['--verify', '--strict', '--verbose=2', diskImagePath])
+  const details = runCodeSign(['--display', '--verbose=4', diskImagePath])
+  assertMacOSSignatureDetails(details, expected)
 }

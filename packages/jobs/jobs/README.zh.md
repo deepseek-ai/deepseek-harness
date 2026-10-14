@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-jobs` 让工具可以在 agent（智能体）继续推进时保持长时间工作运行。每项任务都会获得稳定的 `<kind>-N` id，拥有它的 agent 可以读取输出、带超时等待或请求取消。归属范围限定在 agent 会话内，因此其他 agent 无法查看或停止任务；任务完成时会通过会话内通知送达，无需轮询。用户可以查看保留的实时输出，而不消耗 agent 可读取的内容。只有部署提供任务执行能力时，后台任务才能启动。
+`dsh-jobs` 让工具可以在 agent（智能体）继续推进时保持长时间工作运行。每项任务都会获得稳定的 `<kind>-<short-uuid>` id，拥有它的 agent 可以读取输出、带超时等待或请求取消。归属范围限定在 agent 会话内，因此其他 agent 无法查看或停止任务；任务完成时会通过会话内通知送达，无需轮询。用户可以查看保留的实时输出，而不消耗 agent 可读取的内容。只有部署提供任务执行能力时，后台任务才能启动。
 
 ## 目录
 
@@ -29,13 +29,15 @@ kind: "package-reference"
 
 ### 后台任务提供什么
 
-生产方以 kind 和一行标签注册工作；注册表返回 `<kind>-N` id，例如 `bash-1`。拥有任务的任何一方都可以读取输出、列出任务、带超时等待结算或请求取消——每次调用都返回任务状态的全新投影，从 `running`、`stopping` 到终止态的 `completed`、`killed` 或 `failed`。任务结算时，注册表的事件流宣布它，`dsh-tool-jobs` 把结算变成会话内通知，因此无需轮询。生产方可以附加一个可选的字节上限，让每次完整的模型侧读取或通知保持有界。
+生产方以 kind 和一行标签注册工作；注册表返回 `<kind>-<short-uuid>` id，例如 `bash-<short-uuid>`，其中后缀是 UUID 的 16 位小写十六进制字符。拥有任务的任何一方都可以读取输出、列出任务、带超时等待结算或请求取消——每次调用都返回任务状态的全新投影，从 `running`、`stopping` 到终止态的 `completed`、`killed` 或 `failed`。任务结算时，注册表的事件流宣布它，`dsh-tool-jobs` 把结算变成会话内通知，因此无需轮询。生产方可以附加一个可选的字节上限，让每次完整的模型侧读取或通知保持有界。
 
 生产方通过在 spec 上声明拉取源——由注册表按自己的节奏泵送的非消耗偏移读取器——或经 starter 收到的 `JobHandle` 推送块来流式输出；二者都落入该 job 的有界环，其中 `stdout` 与 `stderr` 块到达模型，`log` 块只到达观察者。观察者按绝对字节偏移读取保留块并在推进时收到信号；结束 job 的结算同时封流，在此之前 `updateProgress` 把实时进度行发布进每个投影。观测对模型不可见：`readAt` 不消耗任何东西，也从不触碰通知状态。
 
+随附提供方还会在 Session 中记录有所有者 job 的生命周期元数据。工具创建 job 时，生产方附加 `JobSpec.toolCall`，保留嵌套调用与根调用标识。时间与重启语义见[持久化事件字段](../../../docs/subsystems/jobs.zh.md#session-lifecycle-records)。
+
 ### 归属边界
 
-任务属于启动它的 agent 会话：其他 agent 无法读取或停止它。`bash-1` 这样的 id 可预测，因此这道隔离是授权，而非保密。没有所有者启动的任务对任何调用方开放，并持续到服务被释放为止。
+任务属于启动它的 agent 会话：其他 agent 无法读取或停止它。id 可能出现在工具输出中；注册表按所有者校验每次控制操作。没有所有者启动的任务对任何调用方开放，并持续到服务被释放为止。
 
 ### 启动后台工作需要一个控制器
 
@@ -79,7 +81,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `JobRegistry` 服务及其约定 |
 | [`src/types.ts`](src/types.ts) | 共享词汇：`JobSpec`、`JobHandle`、`JobHooks`、`JobOutcome`、`JobEvent` 与读取结果 |
 | [`src/view.ts`](src/view.ts) | 客户端安全叶子：`JobView`、`JobChunk`、`JobStatus` 与可合并扩展的 `JobKindMap` |
-| [`src/brand.ts`](src/brand.ts) | `JobId` 带类型标记的标识符，无需 agent 依赖即可导入 |
+| [`src/brand.ts`](src/brand.ts) | 带类型标记的 `JobId` 标识符，无需 agent 依赖即可导入 |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | Workspace 注册表归档准入中的 `job` 族，由接缝构造函数为每个实现安装 |
 
 ### 服务操作

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-persona` 让单个 agent（智能体）拥有自己的人设：preset 挂载这一可组装的行来注册人设前缀与后缀段落，为该会话遮蔽部署级默认值。它还可以把前缀变成该会话的完整系统提示词、抑制所有其他段落，并可为该会话关闭动态 runtime-context 快照。请把它挂在 preset 组装内部——全局挂载会与提示词注册表自身的人设注册相撞并明确报错。没有这一行，preset 能改变 agent 的工具，却永远改不了它的身份。
+`dsh-persona` 让单个 agent（智能体）拥有自己的人设：preset 挂载这一可组装的行来注册人设前缀与后缀段落，为该会话遮蔽部署级默认值。它还可以把前缀变成该会话的完整系统提示词、抑制所有其他段落，并可为该会话关闭可选运行时上下文。请把它挂在 preset 组装内部——全局挂载会与提示词注册表自身的人设注册相撞并明确报错。没有这一行，preset 能改变 agent 的工具，却永远改不了它的身份。
 
 ## 目录
 
@@ -40,13 +40,13 @@ kind: "package-reference"
 | `prefix` | 必填 | 作为 `deployment:persona-prefix` 段落渲染的人设文本 |
 | `suffix` | `''` | `deployment:persona-suffix` 模板；省略或空文本会遮蔽掉全局后缀 |
 | `complete` | `false` | 仅将渲染后的前缀用作系统提示词；忽略后缀 |
-| `includeRuntimeContext` | `true` | 是否为此 agent 作用域包含动态 runtime-context 快照；false 会抑制所有上下文贡献，但不禁用拥有它们的服务 |
+| `includeRuntimeContext` | `true` | 是否为此 agent 作用域包含可选运行时上下文；false 会抑制可选贡献，但不禁用拥有它们的服务；必需贡献仍会保留 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-persona)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
 ### 人设行为
 
-人设 `prefix` 与 `suffix` 都是模板：完整的 `{{…}}` 组在提示词**渲染**时（而非组装时）严格解析为已注册的提示词变量。每个空模板仍会遮蔽对应的部署级段落，然后在渲染时消失。省略 `suffix` 时默认为空，不继承全局后缀。启用 `complete: true` 时，组装仍会解析上下文、工具、变量与协作式监听器，但提示词注册表会把这确切前缀恢复为唯一段落；身份、后缀、工具引导或监听器都无法追加提示词文本。启用 `includeRuntimeContext: false` 时，此作用域的上下文提供方不会被求值，组装监听器添加的上下文也会被丢弃。
+人设 `prefix` 与 `suffix` 都是模板：完整的 `{{…}}` 组在提示词**渲染**时（而非组装时）严格解析为已注册的提示词变量。每个空模板仍会遮蔽对应的部署级段落，然后在渲染时消失。省略 `suffix` 时默认为空，不继承全局后缀。启用 `complete: true` 时，组装仍会解析上下文、工具、变量与协作式监听器，但提示词注册表会把这确切前缀恢复为唯一段落；身份、后缀、工具引导或监听器都无法追加提示词文本。启用 `includeRuntimeContext: false` 时，此作用域的可选上下文提供方不会被求值，组装监听器添加的贡献也会被丢弃，除非已注册为必需贡献。必需提供方在组装和请求接纳时仍然有效。
 
 ### 何时使用
 
@@ -96,11 +96,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-位于 order `0` 的 `deployment:persona-prefix` 段落携带本行的 `prefix`；位于 order `10200` 的 `deployment:persona-suffix` 在第一方指导之后携带其 `suffix`。两者分别替换对应的部署默认值，并解析提示词变量。在完整模式下，模型只会看到渲染后的前缀段落作为系统提示词。Runtime context 默认保持启用；禁用后，新建 agent 不会收到来自沙箱策略、批准策略、委派或其他 system-prompt 上下文提供方的 runtime-context 快照。
+位于 order `0` 的 `deployment:persona-prefix` 段落携带本行的 `prefix`；位于 order `10200` 的 `deployment:persona-suffix` 在第一方指导之后携带其 `suffix`。两者分别替换对应的部署默认值，并解析提示词变量。在完整模式下，模型只会看到渲染后的前缀段落作为系统提示词。运行时上下文默认保持启用。设置 `includeRuntimeContext: false` 后，模型仍会收到必需上下文，例如当前工作目录；可选上下文则会省略。
 
 #### Token 影响
 
-对给定 preset 而言是固定的：该 agent 的每次请求都携带人设前缀与后缀的 token，其他 agent 一个都不带。空文本不贡献任何 token。完整模式会移除该 agent 的其他所有系统提示词 token。
+对给定 preset 而言是固定的：该 agent 的每次请求都携带人设前缀与后缀的 token，其他 agent 一个都不带。空文本不贡献任何 token。完整模式会移除该 agent 的其他所有系统提示词 token。关闭可选上下文后，必需运行时上下文仍会贡献 token。
 
 #### KV Cache 影响
 
@@ -114,7 +114,7 @@ kind: "package-reference"
 这些限制说明本行何时不合适。它们是当前包约束，不是任务积压。
 
 - **不支持全局挂载**——提示词注册表拥有未加 scope 的人设槽位，因此本行只能从带 scope 的组装中使用。要改变部署级人设，应在 `system-prompt` 行自身的配置中修改。
-- **runtime-context 抑制是全有或全无**——`includeRuntimeContext: false` 会关闭该作用域的所有上下文贡献，包括沙箱策略、批准策略与委派；没有按提供方过滤的选项。
+- **没有按提供方过滤运行时上下文的选项**——`includeRuntimeContext: false` 会抑制该作用域的所有可选贡献，但无法抑制必需贡献。
 
 <a id="dev-note"></a>
 ### 开发备注

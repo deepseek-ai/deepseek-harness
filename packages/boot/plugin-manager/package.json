@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-manager",
   "description": "Current-profile plugin and bundle management shared by dsh CLI, Web and agent tools",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -43,9 +43,13 @@
     "./tools": {
       "types": "./lib/types/tools.d.ts",
       "default": "./lib/types/tools.js"
-    }
+    },
+    "./tools/locale/*.json": "./locale/tools/*.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
+    "locale/tools/*.json",
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
@@ -65,7 +69,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "execa": "^10.0.1",
     "yaml": "^2.9.0",
-    "zod": "^4.4.3",
+    "zod": "4.4.3",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "peerDependencies": {
@@ -79,17 +83,13 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-user-approval": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset-registry": "workspace:*"
+    "@deepseek-ai/dsh-user-approval": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-hmr": {
       "optional": true
     },
     "@deepseek-ai/dsh-user-approval": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-agent-preset-registry": {
       "optional": true
     }
   },
@@ -111,10 +111,6 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
-    "@deepseek-ai/dsh-user-approval": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
-    "@deepseek-ai/dsh-agent-preset": "workspace:*",
-    "@deepseek-ai/dsh-scope": "workspace:*",
-    "@deepseek-ai/dsh-session-title": "workspace:*"
+    "@deepseek-ai/dsh-user-approval": "workspace:*"
   }
 }

@@ -67,49 +67,26 @@ describe.each(['web', 'desktop'] as const)('%s optional bundle overrides', (surf
     const warnings: string[] = []
     const entries = composeEntries([...shipped, ...selectedNames.map(name => bundle(name).patches), [
       { id: 'skill-badge', disabled: true },
-      ...['preset-standard', 'preset-cordis', 'preset-ptc'].map(preset => ({ preset, id: 'tool-ralph', config, disabled: true })),
+      { id: 'tool-ralph', config, disabled: true },
     ]], warning => warnings.push(warning))
     expect(warnings).toEqual([])
     expect(entries.find(row => row.id === 'skill-badge')).toMatchObject({ name: '@deepseek-ai/dsh-skill-badge', disabled: true })
-    for (const preset of ['preset-standard', 'preset-cordis', 'preset-ptc']) {
-      const roots = presetRows(entries, preset)
-      expect(flattenRows(roots).find(row => row.id === 'tool-ralph'))
-        .toMatchObject({ name: '@deepseek-ai/dsh-tool-ralph', config, disabled: true })
-      expect(roots.find(row => row.id === 'optional-ralph')?.isolate).toEqual({ workflowEngine: true })
-    }
-  })
-
-  it('keeps a later complete preset replacement and its manually declared disabled tool', () => {
-    const shipped = profileLayers(surface)
-    const baseline = composeEntries(shipped)
-    const preset = baseline.find(row => row.id === 'preset-standard')!
-    const config = { ...preset.config as object, plugins: [...presetRows(baseline, 'preset-standard'), {
-      id: 'tool-ralph', name: '@deepseek-ai/dsh-tool-ralph', disabled: true,
-      config: { subagentProvider: 'spawn', maxRounds: 2 },
-    }] }
-    const warnings: string[] = []
-    const entries = composeEntries([...shipped, ...selectedNames.map(name => bundle(name).patches), [
-      { id: 'preset-standard', config },
-    ]], warning => warnings.push(warning))
-    expect(warnings).toEqual([])
-    expect(entries.find(row => row.id === 'preset-standard')?.config).toEqual(config)
-    expect(presetRows(entries, 'preset-standard').some(row => row.id === 'optional-ralph')).toBe(false)
-    const inherited = flattenRows(presetRows(entries, 'preset-cordis')).find(row => row.id === 'tool-ralph')
-    expect(inherited).toMatchObject({ name: '@deepseek-ai/dsh-tool-ralph' })
-    expect(inherited?.disabled).not.toBe(true)
+    expect(flattenRows(entries).find(row => row.id === 'tool-ralph'))
+      .toMatchObject({ name: '@deepseek-ai/dsh-tool-ralph', config, disabled: true })
+    expect(entries.find(row => row.id === 'optional-ralph')?.isolate).toEqual({ workflowEngine: true })
   })
 
   it('does not select absent bundles through enable-only row overrides', () => {
     const warnings: string[] = []
     const entries = composeEntries([...profileLayers(surface), [
       { id: 'skill-badge', disabled: false },
-      { preset: 'preset-standard', id: 'tool-ralph', disabled: false },
+      { id: 'tool-ralph', disabled: false },
     ]], warning => warnings.push(warning))
     expect(warnings).toHaveLength(2)
     expect(warnings.some(warning => warning.includes('skill-badge'))).toBe(true)
     expect(warnings.some(warning => warning.includes('tool-ralph'))).toBe(true)
     expect(entries.some(row => row.id === 'skill-badge')).toBe(false)
-    expect(flattenRows(presetRows(entries, 'preset-standard')).some(row => row.id === 'tool-ralph')).toBe(false)
+    expect(flattenRows(entries).some(row => row.id === 'tool-ralph')).toBe(false)
   })
 })
 
@@ -129,10 +106,9 @@ describe('optional bundles', () => {
     const warnings: string[] = []
     const composed = composeEntries([...shipped, patches], message => warnings.push(message))
     expect(warnings).toEqual([])
-    // Inserted ids remain addressable inside their selected profile or preset tree.
+    // Inserted ids remain addressable in the composed profile tree.
+    const ids = new Set(flattenRows(composed).map(entry => entry.id))
     for (const patch of patches) {
-      const rows = typeof patch.preset === 'string' ? presetRows(composed, patch.preset) : composed
-      const ids = new Set(flattenRows(rows).map(entry => entry.id))
       for (const row of patch.insert ?? []) {
         expect(typeof row.id).toBe('string')
         expect(ids.has(row.id)).toBe(true)
@@ -146,7 +122,7 @@ describe('optional bundles', () => {
     // row, and the override keeps the package the shipped layer declared on it.
     const shippedComposed = composeEntries([...shipped])
     for (const patch of patches) {
-      if (patch.insert !== undefined || typeof patch.id !== 'string' || patch.preset !== undefined) continue
+      if (patch.insert !== undefined || typeof patch.id !== 'string') continue
       const matches = composed.filter(entry => entry.id === patch.id)
       expect(matches).toHaveLength(1)
       expect(matches[0]?.name).toBe(shippedComposed.find(entry => entry.id === patch.id)?.name)
@@ -172,7 +148,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('composes every lightweight selection without changing minimal or adding host tools', () => {
+  it('composes every lightweight selection as Host rows without changing any preset', () => {
     const baseline = composeEntries(shipped)
     const layers = lightweight.map(name => bundle(name).patches)
     for (let mask = 0; mask < 2 ** lightweight.length; mask += 1) {
@@ -180,35 +156,29 @@ describe('optional bundles', () => {
       const warnings: string[] = []
       const composed = composeEntries([...shipped, ...selected], warning => warnings.push(warning))
       expect(warnings).toEqual([])
-      expect(presetRows(composed, 'preset-minimal')).toEqual(presetRows(baseline, 'preset-minimal'))
-      const addedHost = composed.filter(row => !baseline.some(existing => existing.id === row.id))
-      expect(addedHost.every(row => ['skill-badge', 'optional-session-title-all-prompts'].includes(row.id ?? ''))).toBe(true)
-      for (const id of ['preset-standard', 'preset-cordis', 'preset-ptc']) {
-        const rows = flattenRows(presetRows(composed, id))
-        const ids = rows.map(row => row.id)
-        expect(new Set(ids).size).toBe(ids.length)
+      for (const id of ['preset-standard', 'preset-cordis', 'preset-ptc', 'preset-minimal']) {
+        expect(presetRows(composed, id)).toEqual(presetRows(baseline, id))
       }
+      const ids = flattenRows(composed).map(row => row.id)
+      expect(new Set(ids).size).toBe(ids.length)
     }
   })
 
-  it('contributes tools inside all full presets with independently isolated services', () => {
+  it('contributes global tools from Host rows with independently isolated services', () => {
     const composed = composeEntries([...shipped, ...lightweight.map(name => bundle(name).patches)])
-    for (const id of ['preset-standard', 'preset-cordis', 'preset-ptc']) {
-      const roots = presetRows(composed, id)
-      const names = flattenRows(roots).map(row => row.name)
-      for (const name of [
-        '@deepseek-ai/dsh-tool-session-query',
-        '@deepseek-ai/dsh-tool-ralph', '@deepseek-ai/dsh-tool-terminal',
-      ]) expect(names).toContain(name)
-      expect(roots.find(row => row.id === 'optional-ralph')?.isolate).toEqual({ workflowEngine: true })
-      expect(roots.find(row => row.id === 'optional-persistent-terminals')?.isolate).toEqual({ terminals: true })
-      const search = roots.find(row => row.id === 'optional-session-search')
-      expect(search?.isolate).toEqual({ sessionQuery: true })
-      expect(search?.config).toEqual([
-        { id: 'optional-session-query-sqlite', name: '@deepseek-ai/dsh-session-query-sqlite', config: { path: ':memory:', openAt: 'first-search' } },
-        { id: 'optional-tool-session-query', name: '@deepseek-ai/dsh-tool-session-query' },
-      ])
-    }
+    const names = flattenRows(composed).map(row => row.name)
+    for (const name of [
+      '@deepseek-ai/dsh-tool-session-query',
+      '@deepseek-ai/dsh-tool-ralph', '@deepseek-ai/dsh-tool-terminal',
+    ]) expect(names).toContain(name)
+    expect(composed.find(row => row.id === 'optional-ralph')?.isolate).toEqual({ workflowEngine: true })
+    expect(composed.find(row => row.id === 'optional-persistent-terminals')?.isolate).toEqual({ terminals: true })
+    const search = composed.find(row => row.id === 'optional-session-search')
+    expect(search?.isolate).toEqual({ sessionQuery: true })
+    expect(search?.config).toEqual([
+      { id: 'optional-session-query-sqlite', name: '@deepseek-ai/dsh-session-query-sqlite', config: { path: ':memory:', openAt: 'first-search' } },
+      { id: 'optional-tool-session-query', name: '@deepseek-ai/dsh-tool-session-query' },
+    ])
     expect(composed.find(row => row.id === 'session-query-sqlite')?.config).toEqual({ path: ':memory:', openAt: 'never' })
     expect(composed.find(row => row.id === 'session-title-llm')?.disabled).toBe(true)
     expect(composed.find(row => row.id === 'optional-session-title-all-prompts')?.name)
@@ -257,13 +227,9 @@ describe('optional bundles', () => {
         expect(matches[0]?.disabled).not.toBe(true)
       }
     }
-    // A delegated child cannot arm reminders: both delegation rows deny the four
-    // tools, so a child's prompt never lists them.
     for (const id of ['preset-standard', 'preset-cordis', 'preset-ptc']) {
       for (const rowId of ['tool-subagent', 'tool-subagent-fork']) {
-        expect(presetPlugins(id).find(plugin => plugin.id === rowId)?.config).toMatchObject({
-          toolFilter: { deny: ['schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update'] },
-        })
+        expect(presetPlugins(id).find(plugin => plugin.id === rowId)?.config).not.toHaveProperty('toolFilter')
       }
     }
     // `minimal` declares neither, so it composes no clock reading and no reminder tool.

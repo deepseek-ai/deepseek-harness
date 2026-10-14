@@ -9,12 +9,12 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-In Web and Desktop, New Session creates a fresh Session and Agent using the current preset definition. It previously reused an existing empty Session in the workspace, which could retain tools from before an optional bundle changed.
+In Web and Desktop, New Session creates a fresh Session and Agent using the current preset definition. It previously reused an existing empty Session in the workspace, which could retain an earlier preset definition.
 
-Client calls to `uiWorkspace.startSession(workspaceId)` follow the same behavior. Workspace reconnection through `openWorkspace` or `connectWorkspace` still reuses an eligible blank. Calls with draft-preparation options preserve their existing reuse and content rules. Existing Agents retain their composition.
+Client calls to `uiWorkspace.startSession(workspaceId)` follow the same behavior. Workspace reconnection through `openWorkspace` or `connectWorkspace` still reuses an eligible blank. Calls with draft-preparation options preserve their existing reuse and content rules. Existing Agents retain their preset composition; global optional tools update on their next request when a bundle is switched.
 
 ## Migration
 
-1. After changing optional bundles, use New Session to obtain the current tool composition. Continue in an existing Session when its retained composition is intentional.
+1. After changing a preset definition, use New Session to create an Agent with the current definition. Continue in an existing Session when its retained preset composition is intentional.
 2. Client integrations that reconnect a workspace should use `openWorkspace` or `connectWorkspace`. Keep explicit draft-preparation options when preparing an existing draft.
-3. Confirm that the new Agent has the selected tools; no persisted Session files or profile patches need rewriting.
+3. Confirm that the new Agent uses the updated preset definition; no persisted Session files or profile patches need rewriting.

@@ -21,7 +21,7 @@ export interface Config {
   directory?: string
   /** Prefix for automatically generated branch and checkout names. */
   namePrefix?: string
-  /** Git 2.45 or newer executable name or absolute execution-world path. */
+  /** Executable name or absolute execution-world path of a Git release that honors `GIT_NO_LAZY_FETCH`. */
   gitCommand?: string
   /** Node executable used for sandboxed directory allocation. */
   nodeCommand?: string
@@ -129,7 +129,7 @@ export class WorktreeService extends Service {
     const policy = this.ctx.sandboxPolicy.resolve({ session: agent.session })
     const run = (directory: string, args: string[], allowedExitCodes?: number[], env?: NodeJS.ProcessEnv) => runCommand(
       this.ctx, this.config, policy, directory,
-      [this.config.gitCommand, '--no-lazy-fetch', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args],
+      [this.config.gitCommand, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args],
       signal, allowedExitCodes, env,
     )
     await run(cwd, ['check-ref-format', `refs/heads/${branch}`])

@@ -107,35 +107,35 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 17 个根类型变化、25 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 17 个根类型变化、25 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `JsonlHeaderLine.seedLength` | `property-removed` | `version-bump` |
-| `JsonlHeaderLine.isSeeded` | `required-property-added` | `version-bump` |
-| `SessionHeader.version` | `type-changed` | `version-bump` |
-| `event:agent/inbox/spliced.data.inserted[].content[]` | `union-variants-changed` | `version-bump` |
-| `event:agent/inbox/spliced.data.inserted[].source.references[].capturedFormatVersion` | `optional-property-added` | `same-version` |
-| `event:assistant/attempt` | `root-added` | `same-version` |
-| `event:assistant/chunk` | `root-removed` | `version-bump` |
-| `event:assistant/message.data.message.content[]` | `union-variants-changed` | `version-bump` |
-| `event:assistant/message.data.stream` | `required-property-added` | `version-bump` |
-| `event:compaction/summary.data` | `union-variants-changed` | `version-bump` |
-| `event:session-log-deepseek/delivery-accepted.data.sessionFormatVersion` | `optional-property-added` | `same-version` |
-| `event:session/end-seed.data.inherited` | `optional-property-added` | `same-version` |
-| `event:session/end-seed.data` | `index-signature-changed` | `version-bump` |
-| `event:session/title-llm-request.data.messages[].content[]` | `union-variants-changed` | `version-bump` |
-| `event:session/title-llm-request.data.messages[].source.references[].capturedFormatVersion` | `optional-property-added` | `same-version` |
-| `event:team/member.data.version` | `type-changed` | `version-bump` |
-| `event:team/message/delivered.data.version` | `type-changed` | `version-bump` |
-| `event:team/message/queued.data.message.content[]` | `union-variants-changed` | `version-bump` |
-| `event:team/message/queued.data.message.delivery` | `property-removed` | `version-bump` |
-| `event:team/message/queued.data.version` | `type-changed` | `version-bump` |
-| `event:team/task.data.version` | `type-changed` | `version-bump` |
-| `event:tool/code-dispatch.data.content[]` | `union-variants-changed` | `version-bump` |
-| `event:tool/result.data.message.content[0].content[]` | `union-variants-changed` | `version-bump` |
-| `event:user/message.data.content[]` | `union-variants-changed` | `version-bump` |
-| `event:user/message.data.source.references[].capturedFormatVersion` | `optional-property-added` | `same-version` |
+| `JsonlHeaderLine.seedLength` | `property-removed` | `review-required` |
+| `JsonlHeaderLine.isSeeded` | `required-property-added` | `review-required` |
+| `SessionHeader.version` | `type-changed` | `review-required` |
+| `event:agent/inbox/spliced.data.inserted[].content[]` | `union-variants-changed` | `review-required` |
+| `event:agent/inbox/spliced.data.inserted[].source.references[].capturedFormatVersion` | `optional-property-added` | `not-required` |
+| `event:assistant/attempt` | `root-added` | `not-required` |
+| `event:assistant/chunk` | `root-removed` | `review-required` |
+| `event:assistant/message.data.message.content[]` | `union-variants-changed` | `review-required` |
+| `event:assistant/message.data.stream` | `required-property-added` | `review-required` |
+| `event:compaction/summary.data` | `union-variants-changed` | `review-required` |
+| `event:session-log-deepseek/delivery-accepted.data.sessionFormatVersion` | `optional-property-added` | `not-required` |
+| `event:session/end-seed.data.inherited` | `optional-property-added` | `not-required` |
+| `event:session/end-seed.data` | `index-signature-changed` | `review-required` |
+| `event:session/title-llm-request.data.messages[].content[]` | `union-variants-changed` | `review-required` |
+| `event:session/title-llm-request.data.messages[].source.references[].capturedFormatVersion` | `optional-property-added` | `not-required` |
+| `event:team/member.data.version` | `type-changed` | `review-required` |
+| `event:team/message/delivered.data.version` | `type-changed` | `review-required` |
+| `event:team/message/queued.data.message.content[]` | `union-variants-changed` | `review-required` |
+| `event:team/message/queued.data.message.delivery` | `property-removed` | `review-required` |
+| `event:team/message/queued.data.version` | `type-changed` | `review-required` |
+| `event:team/task.data.version` | `type-changed` | `review-required` |
+| `event:tool/code-dispatch.data.content[]` | `union-variants-changed` | `review-required` |
+| `event:tool/result.data.message.content[0].content[]` | `union-variants-changed` | `review-required` |
+| `event:user/message.data.content[]` | `union-variants-changed` | `review-required` |
+| `event:user/message.data.source.references[].capturedFormatVersion` | `optional-property-added` | `not-required` |
 
 <!-- persistence-release-changes:end -->
 

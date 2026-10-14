@@ -2,7 +2,7 @@
 /** Guide shell discovery, direct launch and cancellation stay within the entry lifetime. */
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TerminalLaunchShells } from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -19,6 +19,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useInput: unused, useChat: unused, useTrajectory: unused,
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
+  ...allowAllAccess,
   inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }

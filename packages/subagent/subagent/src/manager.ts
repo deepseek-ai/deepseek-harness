@@ -18,12 +18,12 @@ import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
-import type { ToolRestriction, ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import {
   appendDelegatedPolicyOverrides, applyChildComposition, captureDelegatedPolicyOverrides,
   childSessionMeta, resolveChildAgentOptions, resolveChildDepth,
 } from './child-agent.ts'
-import type { DelegatedPolicyOverrides } from './child-agent.ts'
+import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
 import { createAgentMessage, withContinuableReturnGuidance, createSettlementMessage } from './continuation-messages.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
@@ -96,7 +96,7 @@ type MaterializeInputs = MaterializeBase & (
       descriptor: SubagentDescriptorData
     }
     agentOptions: AgentOptions
-    composition: { persona?: string | undefined; toolFilter?: ToolRestriction | undefined }
+    composition: ChildComposition
     outputSchema?: ObjectJsonSchema | undefined
   }
   | { kind: 'external'; start: (signal: AbortSignal) => Promise<SubagentRun> }
@@ -398,8 +398,6 @@ export class SubagentManager {
       ...agentProvider !== undefined ? { agentProvider } : {},
       ...agentModel !== undefined ? { agentModel } : {},
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
-      ...request.persona !== undefined ? { persona: request.persona } : {},
-      ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.
@@ -444,13 +442,13 @@ export class SubagentManager {
           create: {
             cwd,
             seed,
-            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined),
+            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined, request.agentPreset),
             inheritedEventCount,
             delegatedPolicies,
             descriptor,
           },
           agentOptions,
-          composition: { persona: request.persona, toolFilter: request.toolFilter },
+          composition: { agentPreset: request.agentPreset },
           signal: spec.signal,
           delivery: spec.delivery,
           outputSchema: spec.request.outputSchema,
@@ -882,14 +880,20 @@ export class SubagentManager {
       const setup = async (childCtx: Context, child: Agent): Promise<void> => {
         // Only fresh creation appends the descriptor and delegated policy after
         // the inherited marker; a cold resume replays those persisted events.
+        if (inputs.composition.agentPreset !== undefined) {
+          await applyChildComposition(childCtx, parent, inputs.composition)
+        }
         if (create !== undefined) {
+          if (inputs.composition.agentPreset !== undefined) {
+            child.session.append('agent-preset/selected', { agentPreset: inputs.composition.agentPreset })
+          }
           child.session.append('subagent/descriptor', create.descriptor)
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
           await workingDirectory.set(child, create.cwd, inputs.signal)
         }
-        applyChildComposition(childCtx, parent, inputs.composition)
+        if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, parent, inputs.composition)
         if (inputs.outputSchema !== undefined) {
           structured = attachStructuredRuntime(childCtx, inputs.outputSchema, () =>
             this.resident.get(childId)?.ownedChildren.size === 0
@@ -1341,9 +1345,8 @@ export class SubagentManager {
     using source = observation
     this.assertAdmitting(parent)
     this.authorizeLineage(parent, childId, source.header.parentSession)
-    const descriptor = foldSubagentDescriptor(
-      source.events.slice(source.inheritedEventCount),
-    )
+    const ownEvents = source.events.slice(source.inheritedEventCount)
+    const descriptor = foldSubagentDescriptor(ownEvents)
     if (descriptor === undefined || descriptor.mode !== 'continuable') {
       throw new SubagentError(
         `subagent "${childId}" has no supported continuation state and cannot be resumed; choose a different target`,
@@ -1352,6 +1355,11 @@ export class SubagentManager {
     }
     let activation: Activation
     try {
+      const independentlySelected = hasIndependentPresetSelection(ownEvents)
+      const agentPreset = independentlySelected ? source.projections?.values.agentPreset : undefined
+      if (independentlySelected && typeof agentPreset !== 'string') {
+        throw new SubagentError(`subagent "${childId}" has no agent preset projection for restoration`, 'NOT_RESUMABLE')
+      }
       activation = await this.materialize({
         kind: 'local',
         childId,
@@ -1364,7 +1372,7 @@ export class SubagentManager {
             ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
             : {},
         },
-        composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },
         signal: options.signal,
       })
     } catch (error: unknown) {
@@ -1473,3 +1481,13 @@ export class SubagentManager {
 }
 
 export default SubagentManager
+
+/** Creation-time selection precedes the own descriptor; historical forks can select after it. */
+function hasIndependentPresetSelection(events: readonly SessionEvent[]): boolean {
+  for (const event of events) {
+    if (event.type === 'subagent/descriptor') return false
+    if (event.type === 'agent-preset/selected') return true
+  }
+  /* v8 ignore next -- coldResume rejects logs without a supported own descriptor before this lookup. */
+  return false
+}

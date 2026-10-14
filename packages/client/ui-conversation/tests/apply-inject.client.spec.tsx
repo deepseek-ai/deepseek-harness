@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, cleanup } from '@testing-library/react'
 import { $getRoot, $isTextNode, PASTE_COMMAND } from 'lexical'
-import { projectUserText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { createUserTextFixture } from './user-text-component-fixture.client.tsx'
 import { registerComposerKeymap } from '../src/client/input/editor/keymap.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -467,7 +467,8 @@ describe('Conversation inject API', () => {
     } })
     editor.update(() => { editor.dispatchCommand(PASTE_COMMAND, event) }, { discrete: true })
     expect(state.getSnapshot().draft).toBe('读取 @a.txt @"my project/" @b.txt ')
-    const view = render(<div>{projectUserText(state.getSnapshot().draft, [])}</div>)
+    const renderText = createUserTextFixture()
+    const view = render(<div>{renderText({ text: state.getSnapshot().draft, facts: {} })}</div>)
     expect(view.container.querySelector('[data-ref-chip="folder"]')?.textContent).toBe('my project')
     expect(view.container.querySelector('[data-ref-chip="folder"]')?.getAttribute('title')).toBe('@"my project/"')
   })

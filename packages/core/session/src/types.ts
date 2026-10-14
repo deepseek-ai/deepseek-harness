@@ -14,6 +14,7 @@ import type {
   ToolSchema,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
+import type { TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Identifies one session in the store (and its persistence artifacts). */
@@ -71,20 +72,20 @@ export type OptionalSessionSeq = SessionSeq | null
  * event-body read composes the build-static adjacent chain and publishes only
  * this final generation before constructing a Session.
  *
- * The version is a single monotonic integer with no major/minor split. Whether
- * a bump is needed is decided by what the WRITER emits, never by what a newer
- * reader can accept: bump exactly when an older runtime could no longer handle
- * a new log with full semantic correctness ("parses without error" is not
- * correctness — silently skipping content that shapes reconstruction is a
- * wrong read). Only structural changes reach that bar: the header shape, the
- * {@link SessionEvent} envelope, core event semantics, or the surface
- * mechanism (the {@link SurfaceEventType} set and {@link SurfaceOp} variants).
- * Adding an ordinary event type does not bump — the per-event
- * {@link SessionEvent.ignorable} guard covers vocabulary growth instead. When
- * in doubt, bump: a near-identity upgrade step is almost free, a missed bump
- * makes older runtimes read new logs wrong silently. The released migration,
- * immutable prior-generation, and current fast-path rules are recorded in
- * `.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md`.
+ * The version is a single monotonic integer with no major/minor split. Retain
+ * it when older readers resume correctly, preserve safely ignorable records,
+ * or refuse required features before execution, mutation, or tail repair.
+ * New readers must preserve historical meanings, including logs mixing old
+ * and new record representations. Bump when an existing discriminator cannot
+ * prevent unsafe interpretation; a structural difference alone is insufficient.
+ * Unknown fields and values require evidence of the released reader's actual
+ * admission behavior. The per-event {@link SessionEvent.ignorable} marker
+ * governs unknown event types, not arbitrary nested payload changes.
+ * Same-version readers retain earlier representations: the adjacent migration
+ * chain does not run when stored and current versions match. A subsequent
+ * migration must account for all supported representations of its source.
+ * Compatibility review and the retained migration obligations are recorded in
+ * `.agents/notes/implemented/process/2026-10-08-session-reader-compatibility-review.md`.
  */
 export const SESSION_FORMAT_VERSION = 4
 
@@ -549,6 +550,11 @@ export interface PluginRecord {
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface TypertResourceMap {
+    /** One Session; the Session Controller registers its default `sessionId` wire field. */
+    session: TypertResource<SessionId>
+  }
+
   interface RemoteErrorDetailsMap {
     /** The named Session does not exist; produced by every layer that resolves a SessionId. */
     'session/not-found': { readonly sessionId: SessionId }

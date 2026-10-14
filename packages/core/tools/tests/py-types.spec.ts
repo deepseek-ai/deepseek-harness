@@ -151,7 +151,7 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('# tools["my-mcp.tool"](args: dict[str, Any]) -> str')
     expect(text).toContain('# tools["class"](args: dict[str, Any]) -> str')
     // Fixed instruction lines the model relies on.
-    expect(text).toContain('top-level `await`')
+    expect(text).toContain('and `code`, the program to execute')
     // The binding boundary: `tools`/`ToolCallError` are bound, the TypedDicts
     // are not. Both halves are pinned — dropping either one turns a correct
     // contract into a wrong one (a model that reads only "STATIC STUB" would

@@ -1,5 +1,5 @@
 ---
-description: "随包附带的 Word、PowerPoint 和 Excel 指令，供需要 Office 文件编写与结构检查能力的部署使用。"
+description: "为文档工作流提供渐进加载的 Office 创作与 CLI 操作技能。"
 kind: "package-reference"
 ---
 
@@ -9,15 +9,16 @@ kind: "package-reference"
 
 ## 概述
 
-Agent（智能体）可以加载 Word、PowerPoint 和 Excel 工作流，默认使用内置 Python 环境，并遵循用户或 AGENTS.md 明确指定的环境。这些 skill（技能）涵盖创建、局部编辑、结构检查和文件交付。环境提供 LibreOffice Kit CLI 时，可直接渲染选定页面或工作表区域、转换所需 PDF，并将重新计算后的工作簿保存为新文件。视觉检查要求模型支持图片输入，复用源文件未变时的预览，并在适用检查通过后结束；普通交付不要求安装渲染器。
+目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。创作技能使用选定的 Python 库；操作技能提供配置的 Node 与 LibreOffice Kit CLI 路径。SDK 和 Desktop 分别挂载技能提供者和依赖查询。
 
 ## 目录
 
 - [使用本包](#use-this-package)
-- [了解实现](#understand-the-implementation)
-- [延伸阅读](#further-exploration)
+  - [渐进加载](#progressive-loading)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
 - [模型体验](#model-experience)
-- [已知限制与暂缓事项](#known-limitations-and-deferred-work)
+- [已知限制与后续工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
 -----
@@ -25,80 +26,110 @@ Agent（智能体）可以加载 Word、PowerPoint 和 Excel 工作流，默认�
 <a id="use-this-package"></a>
 ## 使用本包
 
-将本提供方与 skill 注册表及 `dsh-tool-skill` 一同挂载，即可在会话目录中提供 `office-docx`、`office-pptx` 和 `office-xlsx`。提供方携带指令和脚本；部署提供解释器、编写库、执行工具与文件交付工具。
-
-### 最小配置
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；操作技能在加载时附加解释器和 CLI 的绝对路径。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
+
 ```
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `assetRoot` | 包内的 `assets/` | 包含三个 skill 文件夹和共享 `scripts/` 的绝对资源目录；部署可将其放在应用归档之外。 |
-| `node` | 当前独立 Node 进程 | Node 可执行文件的绝对路径；Electron 和独立 SDK 可执行文件必须显式提供。 |
-| `cli` | 已安装 kit 的 `lib/cli.js` | CLI 入口的绝对路径；`false` 显式禁用 CLI。 |
+| `assetRoot` | 载体资源或包内 `assets/` | 包含七个技能目录的绝对路径。 |
+| `node` | 宿主 Node.js | 操作技能使用的独立 Node 可执行程序；打包载体显式提供。 |
+| `cli` | 已安装 Kit CLI | CLI 入口的绝对路径；`false` 禁用操作执行。 |
 
-相对路径、资源缺失或 skill 文件的 YAML frontmatter 缺少描述都会导致激活失败。卸载插件会移除其候选项。项目和用户 skill 的优先级仍由 skill 注册表负责。
+无效技能资源会阻止注册。创作说明不解析渲染器路径；操作说明加载时校验现有解释器和 CLI 文件，不准备引擎。Bash 或 PowerShell 负责审批、沙箱、取消和输出管理。资源与执行工具必须位于同一主机。
 
-加载的技能在 `Installed LibreOffice Kit` 段落中提供 `libreofficeKit.node` 和 `libreofficeKit.cli` 的绝对路径。除非用户明确要求不用内置二进制，Agent 将内置 CLI 作为 Node 的第一个参数运行，无需依赖工作目录或搜索 PATH。内置 CLI 失败时报告错误，不替换为系统可执行文件。激活时检查两个路径是否为实际文件。npm 部署默认使用已安装的 kit；Desktop 提供独立 Node 和 ASAR 外的完整 Office 依赖；Python SDK 提供独立 Node 和可执行文件旁的 Office 目录。仅有 Python 的自定义部署必须配置 `cli: false`，或提供独立 Node。
+<a id="progressive-loading"></a>
+### 渐进加载
 
-### 结构检查
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。七个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。纯操作任务可以直接进入对应技能。
 
-共享 Python 检查器读取 DOCX、PPTX 或 XLSX，不修改源文件。它识别 Transitional 与 Strict OOXML 命名空间，验证 ZIP/XML 和包内引用关系，报告文档结构，并可检查必需文本或幻灯片／工作表数量。DOCX 文本断言覆盖正文、分节引用的页眉和页脚，以及正文引用的脚注和尾注；批注、词库文本与未引用的部件或脚注／尾注不能满足断言。它只使用 Python 标准库。无效包、损坏或加密的 ZIP 成员和报告文件写入失败都会在标准输出中产生 JSON 失败报告。检查通过不代表外观、特性保留或公式计算结果已得到验证。
+```mermaid
+flowchart TD
+    A["Initial catalog: seven Office summaries"]
+    A -->|Non-Office task| N["Continue without loading Office instructions"]
+    A -->|Office task| B["skill(office): task routing"]
 
-Excel 数据和公式任务跳过视觉检查；涉及格式、排版、图表外观、打印或已知显示问题时，检查相关区域。基础样式设置本身不触发视觉检查，公式重算和用户要求的导出仍是独立操作。 空白或透明预览不能通过视觉检查。预览失败时结束视觉检查，不创建诊断工作簿、不转换 PDF，也不擅自修改打印设置；交付可用工作簿并说明检查限制。
+    B -->|Create or edit| C["skill(office-docx / office-pptx / office-xlsx)"]
+    C --> D["Author and validate content, structure and data"]
+    D -->|No additional operation needed| F["Deliver"]
+
+    B -->|Images, visual inspection, or appearance changes| R["skill(office-render)"]
+    D -->|Images, visual inspection, or appearance changes| R
+    R --> RC["Shell: render into a private workspace temporary directory"]
+    RC -->|Usable preview| V["Inspect requested images"]
+    V --> F
+    RC -->|Failed or blank preview| L["Report content checks and unfinished visual inspection separately"]
+    L --> F
+
+    B -->|Formula recalculation| X["skill(office-recalculate)"]
+    D -->|Formula recalculation| X
+    X --> XC["Shell: CLI recalculate and verify values"]
+    XC --> F
+
+    B -->|PDF export| P["skill(office-export-pdf)"]
+    D -->|PDF export| P
+    P --> PC["Shell: CLI convert"]
+    PC --> F
+```
+
+新建文件以及内容、数据或公式修改，不会仅因附带基础格式调整而需要渲染。预览图片保存在工作区内随机命名的私有临时目录中，并在检查后删除。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
 
 -----
 
 <a id="understand-the-implementation"></a>
-## 了解实现
+## 理解实现
 
 <details>
-<summary>实现细节——点击展开</summary>
+<summary>实现细节 — 点击展开</summary>
 
-提供方注册三个内置候选项，并在激活时从随包 YAML frontmatter 读取描述。加载后的指令正文不包含这些元数据。加载后的每个 skill 暴露自己的文件系统目录，因此执行工具可以定位共享检查器，而不依赖任务工作目录。可配置的外部资源支持 Python 无法读取应用归档的分发方式。
+提供者在注册时读取摘要，按需读取正文。注册表优先级、作用域和调用权限适用于全部技能。加载结果包含用于解析相对引用的资源目录。卸载提供者会移除全部候选技能。
+
+提供者不注册工具或激活投影。通用技能加载器记录已加载技能的结果。PTC 程序需输出或返回完整的 `tools.skill(...)` 结果，使说明进入模型上下文。恢复和 fork 使用现有会话历史及工具声明更新机制。解释器和 CLI 路径仅在加载操作技能时解析。
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 提供方注册与配置资源路径。 |
-| [`assets/`](assets/) | 三种工作流和只读 OOXML 检查器。 |
+| [`src/index.ts`](src/index.ts) | 注册资源并返回原始技能正文。 |
+
+| [`assets/`](assets/) | 路由与六个子技能。 |
 
 </details>
 
 -----
 
 <a id="further-exploration"></a>
-## 延伸阅读
+## 进一步探索
 
-- [skill 注册表](../skill/README.zh.md)——发现与优先级。
-- [skill 工具](../tool-skill/README.zh.md)——模型可见目录与正文。
-- [文件交付](../../deliverables/tool-present/README.zh.md)——当前源路径交付。
+- [技能注册表](../skill/README.zh.md) — 发现和优先级。
+- [技能工具](../tool-skill/README.zh.md) — 模型目录和加载正文。
+- [文件交付](../../deliverables/tool-present/README.zh.md) — 当前源文件路径交付。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-通过 `dsh-tool-skill` 间接呈现，由其渲染目录项与选中的指令正文。
+间接影响：`dsh-tool-skill` 渲染初始 Office 摘要，并返回 `skill(name)` 选择的路由或子技能说明。
 
-#### KV 缓存影响
+#### KV Cache 影响
 
-挂载提供方会增加三个目录项；加载 skill 时，其正文进入既有 skill 工具的插入位置。提供方不另增提示词分区。
+技能结果追加到历史中且不改变工具声明，操作完成后已加载文本或图片仍保留在历史中。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；创作正文比合并后的创作与操作指南至少减少 35%。技能包装、通用目录、shell 声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
-## 已知限制与暂缓事项
+## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 提供方依赖 LibreOffice Kit，但不安装 Python 或编写库。检查器要求 Python 3.9 或更高版本。
-- 结构检查不判断分页、裁切、字体、图表外观或 Excel 重算。
-- 检查器只接受 DOCX、PPTX 和 XLSX；传统格式、加密文件和启用宏的格式需要合适的其他工作流。
+- 提供者不安装创作库。
+- LibreOffice 输出可能不同于原生 Office 应用。
+- 旧格式、加密和启用宏的文件需要适用的独立工作流。
 
 <a id="dev-note"></a>
 ### 开发备注
 
 <details>
-<summary>维护者的工作上下文——点击展开</summary>
+<summary>维护者工作上下文 — 点击展开</summary>
 
 无。
 

@@ -21,6 +21,7 @@
     { "path": "../../host/directory-picker" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../typert/protocol" },
+    { "path": "../remote-access/tsconfig.host.json" },
     { "path": "../../util/deque" },
     { "path": "../../util/native-command" },
     { "path": "../../workspace/workspace" }

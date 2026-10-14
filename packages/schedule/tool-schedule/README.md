@@ -84,7 +84,7 @@ The plugin registers four `defineTool` definitions through the context that load
 
 #### What the model sees
 
-The generated [`schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-schedule) whenever this package is visible in the calling Agent's scope.
+The generated [`schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-schedule) whenever this package is visible in the calling Agent's scope. Title guidance does not rewrite stored titles or add validation beyond the existing non-empty and length checks.
 
 #### Token effect
 
@@ -117,7 +117,6 @@ Append-only; newly visible content follows the reusable request prefix and does 
 - **Deletion does not retract a queued message** — a reminder the Host already delivered stays in the Session inbox after `schedule_delete`.
 - **Reminder timing belongs to the Host** — the tools expose no target-time correction, clock source, or delivery retry; those limits are the service's.
 - **Every tool refuses a delegated caller** — each of `schedule_create`, `schedule_list`, `schedule_update`, and `schedule_delete` reads the calling Agent's delegation depth before dispatch and returns `{ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' }` when that depth is above zero. The guard lives in this package and reads `delegationDepthOf` from `@deepseek-ai/dsh-subagent`, the same accounting the delegation cap enforces, so it holds under any preset that mounts the tools.
-- **A preset's delegation rows remove the four tools from a child's prompt** — the `standard`, `cordis`, and `ptc` presets declare `toolFilter.deny` for `schedule_create`, `schedule_delete`, `schedule_list`, and `schedule_update` on both the `tool-subagent` and `tool-subagent-fork` rows. The provider applies that filter through `ctx.tools.restrict()` in the child scope, so the four tools leave a delegated child's prompt; delegating further on that chain intersects the same restriction.
 - **A Session a delegated child owns cannot arm a reminder** — `ScheduleService.create` throws `ScheduleInputError` with code `subagent_session`, and `ScheduleService.update` returns the non-mutating `subagent_session` result, when the Session's Agent has a delegation depth above zero. The delegation depth is the accounting the delegation cap itself reads, and the persisted session header carries it across a cold resume. The rule sits in the service, not in these tools, so other in-process consumers reach it too: the Automation surface included. `schedule_list` and `schedule_delete` still serve that Session, so a reminder stored before this rule stays removable.
 
 <a id="dev-note"></a>

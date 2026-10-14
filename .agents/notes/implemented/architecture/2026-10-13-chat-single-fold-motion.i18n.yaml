@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-13-chat-single-fold-motion.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-13-chat-single-fold-motion.md
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message:
+  en: 45594545dabfaa78
+  zh: a1eac669647b2bac
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/problem:
+  en: 88faaf0c589e12cb
+  zh: dda7efc5eaed2788
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/decision:
+  en: 972bbe45fe8ac28e
+  zh: 593b851c142894e1
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/decision/batches:
+  en: f44b784545c6d9a2
+  zh: 3eb6fcb9f348dec4
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/decision/landings:
+  en: b8278678170f1507
+  zh: 113a51ba5cf27de1
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/decision/own-input:
+  en: ca6a5c372bb3cad1
+  zh: 1cd5028269b58c65
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/testing:
+  en: 0423a607ee0589b5
+  zh: 61df892a01c5aa43
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/alternatives-considered:
+  en: d8e1ea66e293cd93
+  zh: 0aaa9e693f441673
+/agent-note-one-fold-motion-for-collapsing-on-the-next-message/consequences:
+  en: 89148df30a9a1772
+  zh: d484cc7c9e0cc3f1

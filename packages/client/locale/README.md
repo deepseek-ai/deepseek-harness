@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; loopback pages persist them in `$DSH_HOME/cordis.patch.yml`, while non-loopback pages keep them only for the current process. New browsers use the first supported language requested by the browser until an allowed stored preference arrives. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
+Use `dsh-client-locale` to switch the web GUI between the shipped English and Chinese locales or languages added by client plugins. User selections take effect immediately; every authenticated browser persists them as `locale.preference` in `$DSH_HOME/cordis.patch.yml` through the Host settings service. New browsers use the first supported language requested by the browser until the Host read delivers a stored preference. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
 
 ## Table of Contents
 
@@ -67,7 +67,7 @@ An external id is a non-empty ASCII BCP 47-style tag. Its fallback must already 
 
 ### What the Host half does
 
-The Host persists the preference through the settings service on loopback pages. The Client deliberately withholds that settings scope on non-loopback pages, so their locale selection remains process-local even though Connection authenticates every API method.
+Every authenticated browser persists the preference through the Host settings service under the shared [settings scope policy](../ui-settings/README.md).
 
 -----
 
@@ -85,7 +85,7 @@ One `LocaleRuntime` owns the preference and the dictionary registry, and is itse
 
 ### Preference resolution
 
-The provisional locale comes from the browser (`navigator.languages` matched by full tag and then primary subtag, English as the fallback), standing in until the allowed Host-backed settings scope delivers its stored preference. The Host read runs after plugin activation so an unavailable or withheld settings scope cannot block the page, and the result replaces the provisional value live. A stored external locale waits for its definition to register. `setLocale` is the only write entry; it persists even when the id already matches the active locale, because the active value may be provisional and must survive a different browser sharing the same home.
+The provisional locale comes from the browser (`navigator.languages` matched by full tag and then primary subtag, English as the fallback), standing in until the Host settings scope delivers its stored preference. The Host read runs after plugin activation so an unavailable settings scope cannot block the page, and the result replaces the provisional value live. A stored external locale waits for its definition to register. `setLocale` is the only write entry; it persists even when the id already matches the active locale, because the active value may be provisional and must survive a different browser sharing the same home.
 
 ### Dictionary lookup
 

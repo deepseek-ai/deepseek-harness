@@ -9,8 +9,8 @@
   en: 4945ce54f66df55c
   zh: 9fbd833c1d8122a7
 /agent-note-deepseek-llm-api-request-extensions-for-session-logs-and-plugin-packages/decision:
-  en: 2388519a1afaac92
-  zh: 6bf758f0560e29a5
+  en: d2452e4a39db0b6b
+  zh: 87f7e0be1f613285
 /agent-note-deepseek-llm-api-request-extensions-for-session-logs-and-plugin-packages/incremental-session-log-field:
   en: 4e3138fbdd94259b
   zh: 8fda801522045b88
@@ -21,7 +21,7 @@
   en: eb69576e756f4aa1
   zh: 5c1923159da3f7a2
 /agent-note-deepseek-llm-api-request-extensions-for-session-logs-and-plugin-packages/verification:
-  en: 9935338a0970d09d
+  en: ed730f117365f007
   zh: a9a36702bc72a9f7
 /agent-note-deepseek-llm-api-request-extensions-for-session-logs-and-plugin-packages/alternatives-considered:
   en: 5faf7699272f99b4
@@ -33,5 +33,5 @@
   en: b6eff63f49220dcc
   zh: 8e4a6c785ed2256a
 /agent-note-deepseek-llm-api-request-extensions-for-session-logs-and-plugin-packages/consequences:
-  en: 853cd7b21db6208b
-  zh: bfaf459f006fe2db
+  en: fed545acefb91f2a
+  zh: c474a94bb956bbf6

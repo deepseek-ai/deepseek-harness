@@ -52,7 +52,7 @@ changes:
 <a id="verification"></a>
 ## 验证
 
-pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent-in-process-driver/tests/schedule-tools.spec.ts：4 个文件、203 个测试通过。
+pnpm exec vitest run packages/session/working-directory/tests packages/shell/tool-bash/tests/tools.spec.ts packages/shell/tool-pwsh/tests/tools.spec.ts packages/subagent/subagent/tests/schedule-tools.spec.ts：5 个文件、207 个测试通过。
 
 <a id="dev-note"></a>
 ## 开发备注

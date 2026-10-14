@@ -212,62 +212,62 @@ changes:
 
 <!-- persistence-release-changes:start -->
 
-检测到 52 个根类型变化、52 项结构差异。下表的最低要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
+检测到 52 个根类型变化、52 项结构差异。下表的审查要求按当前规则计算，只用于比较；不表示旧版本曾遵守这些规则，也不证明迁移或运行时兼容性。
 
-| 路径 | 变化 | 当前最低要求 |
+| 路径 | 变化 | 审查要求 |
 |---|---|---|
-| `SessionEventEnvelope` | `union-variants-changed` | `version-bump` |
-| `event:agent-preset/selected.ignorable` | `optional-property-added` | `version-bump` |
-| `event:agent/inbox/spliced.ignorable` | `optional-property-added` | `version-bump` |
-| `event:approval/asked.ignorable` | `optional-property-added` | `version-bump` |
-| `event:approval/decided.ignorable` | `optional-property-added` | `version-bump` |
-| `event:approval/policy.ignorable` | `optional-property-added` | `version-bump` |
-| `event:assistant/chunk.ignorable` | `optional-property-added` | `version-bump` |
-| `event:assistant/message.ignorable` | `optional-property-added` | `version-bump` |
-| `event:command/done.ignorable` | `optional-property-added` | `version-bump` |
-| `event:command/run.ignorable` | `optional-property-added` | `version-bump` |
-| `event:compaction/end.ignorable` | `optional-property-added` | `version-bump` |
-| `event:compaction/prune.ignorable` | `optional-property-added` | `version-bump` |
-| `event:compaction/start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:compaction/summary.ignorable` | `optional-property-added` | `version-bump` |
-| `event:feedback/record.ignorable` | `optional-property-added` | `version-bump` |
-| `event:goal/change.ignorable` | `optional-property-added` | `version-bump` |
-| `event:hook/invoked.ignorable` | `optional-property-added` | `version-bump` |
-| `event:hook/result.ignorable` | `optional-property-added` | `version-bump` |
-| `event:llm/retry.ignorable` | `optional-property-added` | `version-bump` |
-| `event:llm/retry-started.ignorable` | `optional-property-added` | `version-bump` |
-| `event:model/selection.ignorable` | `optional-property-added` | `version-bump` |
-| `event:permission/preset.ignorable` | `optional-property-added` | `version-bump` |
-| `event:plan/mode.ignorable` | `optional-property-added` | `version-bump` |
-| `event:request/context.ignorable` | `optional-property-added` | `version-bump` |
-| `event:request/header.ignorable` | `optional-property-added` | `version-bump` |
-| `event:sandbox/mode.ignorable` | `optional-property-added` | `version-bump` |
-| `event:schedule/change.ignorable` | `optional-property-added` | `version-bump` |
-| `event:session-log-deepseek/delivery-accepted.ignorable` | `optional-property-added` | `version-bump` |
-| `event:session/end-seed.ignorable` | `optional-property-added` | `version-bump` |
-| `event:session/title.ignorable` | `optional-property-added` | `version-bump` |
-| `event:session/title-llm-request.ignorable` | `optional-property-added` | `version-bump` |
-| `event:step/end.ignorable` | `optional-property-added` | `version-bump` |
-| `event:step/start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:subagent/descriptor.ignorable` | `optional-property-added` | `version-bump` |
-| `event:subagent/model-selection-policy.ignorable` | `optional-property-added` | `version-bump` |
-| `event:team/member.ignorable` | `optional-property-added` | `version-bump` |
-| `event:team/message/delivered.ignorable` | `optional-property-added` | `version-bump` |
-| `event:team/message/queued.ignorable` | `optional-property-added` | `version-bump` |
-| `event:team/task.ignorable` | `optional-property-added` | `version-bump` |
-| `event:todo/write.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool-workflow/agent-end.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool-workflow/agent-start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool-workflow/run-end.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool-workflow/run-start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool/call.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool/code-dispatch.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool/code-dispatch-start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:tool/result.ignorable` | `optional-property-added` | `version-bump` |
-| `event:turn/end.ignorable` | `optional-property-added` | `version-bump` |
-| `event:turn/start.ignorable` | `optional-property-added` | `version-bump` |
-| `event:user/message.ignorable` | `optional-property-added` | `version-bump` |
-| `event:web/deepseek-search-llm-request.ignorable` | `optional-property-added` | `version-bump` |
+| `SessionEventEnvelope` | `union-variants-changed` | `review-required` |
+| `event:agent-preset/selected.ignorable` | `optional-property-added` | `review-required` |
+| `event:agent/inbox/spliced.ignorable` | `optional-property-added` | `review-required` |
+| `event:approval/asked.ignorable` | `optional-property-added` | `review-required` |
+| `event:approval/decided.ignorable` | `optional-property-added` | `review-required` |
+| `event:approval/policy.ignorable` | `optional-property-added` | `review-required` |
+| `event:assistant/chunk.ignorable` | `optional-property-added` | `review-required` |
+| `event:assistant/message.ignorable` | `optional-property-added` | `review-required` |
+| `event:command/done.ignorable` | `optional-property-added` | `review-required` |
+| `event:command/run.ignorable` | `optional-property-added` | `review-required` |
+| `event:compaction/end.ignorable` | `optional-property-added` | `review-required` |
+| `event:compaction/prune.ignorable` | `optional-property-added` | `review-required` |
+| `event:compaction/start.ignorable` | `optional-property-added` | `review-required` |
+| `event:compaction/summary.ignorable` | `optional-property-added` | `review-required` |
+| `event:feedback/record.ignorable` | `optional-property-added` | `review-required` |
+| `event:goal/change.ignorable` | `optional-property-added` | `review-required` |
+| `event:hook/invoked.ignorable` | `optional-property-added` | `review-required` |
+| `event:hook/result.ignorable` | `optional-property-added` | `review-required` |
+| `event:llm/retry.ignorable` | `optional-property-added` | `review-required` |
+| `event:llm/retry-started.ignorable` | `optional-property-added` | `review-required` |
+| `event:model/selection.ignorable` | `optional-property-added` | `review-required` |
+| `event:permission/preset.ignorable` | `optional-property-added` | `review-required` |
+| `event:plan/mode.ignorable` | `optional-property-added` | `review-required` |
+| `event:request/context.ignorable` | `optional-property-added` | `review-required` |
+| `event:request/header.ignorable` | `optional-property-added` | `review-required` |
+| `event:sandbox/mode.ignorable` | `optional-property-added` | `review-required` |
+| `event:schedule/change.ignorable` | `optional-property-added` | `review-required` |
+| `event:session-log-deepseek/delivery-accepted.ignorable` | `optional-property-added` | `review-required` |
+| `event:session/end-seed.ignorable` | `optional-property-added` | `review-required` |
+| `event:session/title.ignorable` | `optional-property-added` | `review-required` |
+| `event:session/title-llm-request.ignorable` | `optional-property-added` | `review-required` |
+| `event:step/end.ignorable` | `optional-property-added` | `review-required` |
+| `event:step/start.ignorable` | `optional-property-added` | `review-required` |
+| `event:subagent/descriptor.ignorable` | `optional-property-added` | `review-required` |
+| `event:subagent/model-selection-policy.ignorable` | `optional-property-added` | `review-required` |
+| `event:team/member.ignorable` | `optional-property-added` | `review-required` |
+| `event:team/message/delivered.ignorable` | `optional-property-added` | `review-required` |
+| `event:team/message/queued.ignorable` | `optional-property-added` | `review-required` |
+| `event:team/task.ignorable` | `optional-property-added` | `review-required` |
+| `event:todo/write.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool-workflow/agent-end.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool-workflow/agent-start.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool-workflow/run-end.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool-workflow/run-start.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool/call.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool/code-dispatch.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool/code-dispatch-start.ignorable` | `optional-property-added` | `review-required` |
+| `event:tool/result.ignorable` | `optional-property-added` | `review-required` |
+| `event:turn/end.ignorable` | `optional-property-added` | `review-required` |
+| `event:turn/start.ignorable` | `optional-property-added` | `review-required` |
+| `event:user/message.ignorable` | `optional-property-added` | `review-required` |
+| `event:web/deepseek-search-llm-request.ignorable` | `optional-property-added` | `review-required` |
 
 <!-- persistence-release-changes:end -->
 

@@ -29,7 +29,7 @@ Foreground answers use the existing Remote Event waterfall. A timeout ends that 
 | `UserQuestionService` | Foreground waits and Client claims, unattended deadlines, late-answer validation and steering, and the durable question projection. |
 | Gateway and Remote runtime | Existing request delivery, settlement, cancellation, and Remote stream transport; no question-specific timer or event-name branch. |
 | `ui-user-questions` | One card per Session and call, answer-channel selection, local countdown and drafts, and the reply Definition and renderer. |
-| `ui-chat` | Message-id-based presentation aggregation and ordinary process/Turn folding. |
+| `ui-chat` | Ordinary process/Turn folding. |
 | Question-specific tool row | Pending/answered presentation and panel actions, composed in `QuestionToolRow` without adding `rowAction` to generic `ToolRow`. |
 
 The [question service](../../../../packages/interaction/user-questions/README.md), [tool](../../../../packages/interaction/tool-ask-user/README.md), and [questions UI](../../../../packages/client/ui-user-questions/README.md) own their package contracts.
@@ -72,11 +72,11 @@ Autofocus applies only when the answer channel is ready, no countdown is active,
 
 The questions UI identifies a late reply from `source.kind`, then parses its recorded JSON for question-and-answer presentation. Pasting identical JSON in an ordinary user message does not identify it as a reply. Unreadable recorded payloads retain their raw-text presentation.
 
-The ordinary message Definition and the question-reply Definition both match the appended message and retain separate Node Store projections with the same message id. Chat business grouping omits the `turn-trigger` presentation when a `question-reply` with that id is present. The duplicate trigger neither renders nor splits a group; the reply renders once. The same aggregation applies to unscoped historical input.
+The question-reply Definition claims the appended reply message on the Chat target through an [exclusive match](2026-10-12-exclusive-conversation-matches.md), so the ordinary message Definition builds no `turn-trigger` or context projection for it and the reply renders once, including for unscoped historical input.
 
 The reply participates in ordinary process grouping and whole-Turn folding. It is not independently visible: reading it can require expanding both its Turn and process group. Turn disclosure stays before the group it controls, including a reply that opens the Turn.
 
-This decision adds no process-role field, independent-layout flag, user-message structure change, or target-local fallback dispatch. The independent-kind rules stay in Chat's existing grouping logic. A node-data-owned declaration of grouping and overlap semantics is deferred infrastructure, not part of the question feature.
+This decision adds no independent-layout flag or user-message structure change. The reply declares no group-tree position, so it follows the default placement of process content.
 
 ## Alternatives considered
 
@@ -90,7 +90,7 @@ This decision adds no process-role field, independent-layout flag, user-message 
 
 **Reclassify JSON inside generic `MessageItem`, borrow the relay form, or use the default context row.** Parsing text to identify the business message confuses its source with its content; the relay form describes another agent's message, and a generic context row exposes JSON. A dedicated source, Definition, and renderer own the question presentation.
 
-**Independent reply layout through generic node metadata.** It broadens a question feature into a conversation-infrastructure change. Ordinary folding and Chat-owned aggregation are sufficient for this decision; independently declared node-data grouping semantics remain a separate design task.
+**Independent reply layout through generic node metadata.** It broadens a question feature into a conversation-infrastructure change. Ordinary folding is sufficient for this decision; placing the reply as user input through its group-tree position is separate work.
 
 **A log-only close event or a manufactured dismissal message on panel close.** A log-only close hides the user's decision from the model and adds another durable mechanism. Manufacturing a reply treats hiding the panel as an answer. Panel close therefore leaves a timed question answerable.
 
@@ -101,7 +101,7 @@ This decision adds no process-role field, independent-layout flag, user-message 
 - [Service tests](../../../../packages/interaction/user-questions/tests/user-questions.spec.ts) and [wait tests](../../../../packages/interaction/user-questions/tests/timed-wait.spec.ts) cover claimed and unclaimed waits, last-claim disconnect, cancellation, timeout error mapping, continued-only answers, and exact answer-id validation.
 - [Projection tests](../../../../packages/interaction/user-questions/tests/projection.spec.ts) distinguish legacy and timed schemas and cover native and PTC pending calls, other failures, resume repair, queued reply cancellation, and admitted settlement.
 - [Client listener tests](../../../../packages/client/ui-user-questions/tests/browser-plugin.client.spec.ts) and [composer tests](../../../../packages/client/ui-user-questions/tests/user-questions-composer.client.spec.tsx) cover claim retention through Host acceptance, focus before handshake, indefinite waits, draft retention, RPC resubmission, and panel actions.
-- [Grouping tests](../../../../packages/client/ui-chat/tests/process-groups.client.spec.ts) and [browser replay](../../../../apps/web/tests/question-composer.e2e.ts) cover one rendered reply with both projections retained, ordinary collapsed placement, disclosure ordering, and the original tool row's read-only late-answer panel.
+- [Grouping tests](../../../../packages/client/ui-chat/tests/process-groups.client.spec.ts) and [browser replay](../../../../apps/web/tests/question-composer.e2e.ts) cover ordinary collapsed placement, disclosure ordering, and the original tool row's read-only late-answer panel.
 - Legacy round-trip, cancellation, plan-review intent, and Session-remount regressions remain covered by their owning tests. Live multi-Client delivery races and real Host restart remain integration coverage gaps beyond isolated lifecycle and projection tests.
 
 ## Consequences
@@ -111,7 +111,6 @@ The model can continue independent work while the question remains answerable. B
 - Take time affects only one Client. Another Client can answer or expire the shared waterfall; local focus does not establish a global hold.
 - A terminal claim-stream failure can reject the foreground question rather than produce pending. No unattended-wait fallback is provided for that failure.
 - Host and Client clocks need not align, but Client system-clock changes can move expiry and transport latency can delay the local countdown's start.
-- The duplicate projections remain stored. Aggregation adds linear scans during structural grouping rebuilds; ordinary text-only streaming updates retain their incremental path. This is an algorithmic bound, not a measured latency claim.
 - Unanswered continued questions can remain after reopening a Session. Panel close records nothing, and visibility follows normal folding rather than an always-visible reply guarantee.
 - A queued late reply can be canceled before the agent admits it. The question stays answerable until an admitted `user/message` records the answer.
 - A PTC sub-call interrupted before its `tool/ptc-dispatch` result is recorded cannot be reconstructed from the parent `run_code` failure, so it cannot take a late answer after recovery.

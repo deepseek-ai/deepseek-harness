@@ -45,6 +45,6 @@ export function apply(ctx: ClientContext): void {
   const card = new AgentLoopCardController(ctx.configForms.get(AGENT_LOOP_NS))
   ctx.effect(() => () => { card.dispose() }, 'ui-settings-agent-loop: form subscription')
   ctx.effect(() => ctx.configForms.whileServed([AGENT_LOOP_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-    name: 'plugins.item', id: 'agent-loop', order: 20, label: () => t('title'), locale: NS, inject: () => card.inject(),
+    name: 'plugins.item', id: 'agent-loop', order: 30, label: () => t('title'), locale: NS, inject: () => card.inject(),
   }, AgentLoopCard))), 'ui-settings-agent-loop: page')
 }

@@ -1228,6 +1228,21 @@
     },
     {
       "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobRegisteredData",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobSettledData",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
+      "symbol": "JobToolCall",
+      "source": "packages/jobs/jobs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/jobs.md",
       "symbol": "JobSpec",
       "source": "packages/jobs/jobs/src/types.ts"
     },
@@ -1887,6 +1902,11 @@
       "source": "packages/llm/llm/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/llm-streaming.md",
+      "symbol": "LlmNativeAuth",
+      "source": "packages/llm/llm/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/permission-presets.md",
       "symbol": "Config",
       "source": "packages/interaction/permission-presets/src/index.ts"
@@ -1914,6 +1934,11 @@
     {
       "doc": "docs/subsystems/web-server.md",
       "symbol": "Config",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
+      "symbol": "TlsConfig",
       "source": "packages/host/webserver/src/index.ts"
     },
     {
@@ -2063,13 +2088,53 @@
     },
     {
       "doc": "docs/subsystems/typert.md",
+      "symbol": "PrincipalMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "Principal",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
       "symbol": "PeerScope",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteUplinkWindow",
       "source": "packages/typert/protocol/src/types.ts"
     },
     {
       "doc": "docs/subsystems/typert.md",
       "symbol": "RemoteInvocation",
       "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "TypertResourceMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResourceKind",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResource",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteScopeOptions",
+      "source": "packages/typert/protocol/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteMethodOptions",
+      "source": "packages/typert/protocol/src/index.ts"
     },
     {
       "doc": "docs/subsystems/typert.md",
@@ -2308,6 +2373,11 @@
     },
     {
       "doc": "docs/subsystems/ssh.md",
+      "symbol": "HelperLaunch",
+      "source": "packages/ssh/ssh/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
       "symbol": "Config",
       "source": "packages/ssh/ssh/src/index.ts"
     },
@@ -2396,6 +2466,16 @@
       "doc": "docs/subsystems/worktrees.md",
       "symbol": "CreatedWorktree",
       "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/boot.md",
+      "symbol": "ProfileReconciliation",
+      "source": "packages/boot/hmr/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/boot.md",
+      "symbol": "PendingModule",
+      "source": "packages/boot/hmr/src/index.ts"
     }
   ]
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "工作区指令加载",
+    "description": "读取 AGENTS.md、CLAUDE.md 等文件，为 AI 提供工作区规则。"
+  }
+}

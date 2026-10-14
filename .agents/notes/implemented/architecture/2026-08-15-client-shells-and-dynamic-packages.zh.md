@@ -32,7 +32,7 @@ Client npm 依赖区段描述安装和开发关系，但不能可靠描述 bundl
 
 ### 共享模块请求
 
-动态浏览器 bundle 会隐式 external 统一基座：`PLATFORM_MODULES` 命名由外壳播种的 React、Cordis 和静态 UI 身份，`PRELOADED_CLIENT_EXTERNALS` 则为必须先于 shell 启动到达的动态身份预留，当前为空。包只在精确请求基座外实体时使用 `dsh.client.external`。纯类型 import 会被擦除，不产生请求；允许的第三方实现库保留为 bundle 私有内容。
+动态浏览器 bundle 会隐式 external 统一基座：`PLATFORM_MODULES` 命名由外壳播种的 React、Cordis、选定的第三方库和静态 UI 身份，`PRELOADED_CLIENT_EXTERNALS` 则为必须先于 shell 启动到达的动态身份预留，当前为空。包只在精确请求基座外实体时使用 `dsh.client.external`。纯类型 import 会被擦除，不产生请求；基座外的第三方实现库保留为 bundle 私有内容。共享第三方库使用外壳声明的版本，不为单个插件协商版本；只有测量确认外壳与随包插件 bundle 的总体积减少，才将库纳入基座。
 
 请求只有两种提供方：
 

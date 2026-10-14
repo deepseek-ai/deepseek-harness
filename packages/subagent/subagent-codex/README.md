@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Install `@deepseek-ai/dsh-subagent-codex` into a Profile when delegated work should run in a genuine, unattended Codex session in the parent Session's workspace. Each delegation uses a fresh isolated Codex thread for one self-contained text task and returns only its final answer or a safe failure diagnostic. Native Codex configuration and authentication remain authoritative, while `permissionMode` selects the non-interactive approval and sandbox behavior. The Bundle supplies a compatible native Codex payload and grants its delegation tool to the full Web presets.
+Install `@deepseek-ai/dsh-subagent-codex` into a Profile when delegated work should run in a genuine, unattended Codex session in the parent Session's workspace. Each delegation uses a fresh isolated Codex thread for one self-contained text task and returns only its final answer or a safe failure diagnostic. Native Codex configuration and authentication remain authoritative, while `permissionMode` selects the non-interactive approval and sandbox behavior. The Bundle supplies a compatible native Codex payload and adds its delegation tool as a global tool.
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@ Enable **Codex subagent** in the Web or Desktop Plugins page when a task needs a
 
 ### Installing the Bundle
 
-The Official entry is visible offline. Enabling it installs the [target for the running DSH installation](../../boot/plugin-manager/README.md#use-this-package) through the ordinary bundle installer and selects its profile layer. The layer registers the provider and adds `subagent_codex` to `standard`, `cordis`, and `ptc`; it starts no native process until delegation. Restart when the installer reports that one is required.
+The Official entry is visible offline. Enabling it installs the [target for the running DSH installation](../../boot/plugin-manager/README.md#use-this-package) through the ordinary bundle installer and selects its profile layer. The layer registers the provider and adds `subagent_codex` to every Agent as a global tool; it starts no native process until delegation. Restart when the installer reports that one is required.
 
-Switching Off deselects the layer and leaves the package installed. Remove is a separate package operation. New Agents and subsequently reopened Sessions use the selected tool composition; live Agents retain their existing composition.
+Switching Off deselects the layer and leaves the package installed. Remove is a separate package operation. Enabling or switching Off registers or removes the global tool in the running Host, so live Agents see the change on their next request.
 
-Profiles without the full Web presets, including the shipped headless, SDK, and ACP profiles, must install this package as a profile dependency without selecting its bundle layer, then mount the provider and delegation tool explicitly. Existing provider-only consumers follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.1/native-subagent-bundle-tools/guide.md).
+The layer inserts Host rows only, so any profile can select it, including the shipped headless, SDK, and ACP profiles. Existing provider-only consumers follow the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.1/native-subagent-bundle-tools/guide.md).
 
 ### Configuration
 
@@ -56,7 +56,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 <a id="exposing-the-tool"></a>
 ### Exposing the tool
 
-The bundle adds `tool-subagent-codex` to each full preset through scoped profile patches. Later user patches can configure or disable that row; a complete preset replacement keeps its own child list. Avoid declaring the same model-facing tool twice. The minimal preset and host tool catalog remain unchanged. For a profile without these preset targets, keep the package installed without selecting its bundle layer, then mount the provider and tool explicitly in `cordis.patch.yml`:
+The bundle inserts `tool-subagent-codex` as a Host row, so `subagent_codex` is a global tool visible to every preset, including minimal. Later user patches can configure or disable that row by id. A preset that registers its own tool with the same name shadows the global tool for its Agents. To mount the provider and tool without selecting the bundle layer, insert the same rows in `cordis.patch.yml`:
 
 ```yaml
 - insert:
@@ -171,7 +171,7 @@ These limits define when this provider is a poor fit or needs special operationa
 - **Compatibility is pinned by development evidence** — upgrading from the verified 0.153.4 protocol baseline requires regenerating upstream schema evidence and rerunning handshake, answer-selection, approval, cancellation, keyless real-product, and credentialed DeepSeek nonce tests.
 - **No human approval path** — known unattended approval requests are denied and unknown server requests fail closed; the three Profile modes never create a DSH interaction channel or per-call allow policy.
 - **Assistant payload is final text only** — failed runs can also expose a separate safe diagnostic; reasoning, intermediate messages, tool traffic, usage, stderr, and workspace diffs remain outside the parent Session. Task identity and terminal results are retained in the parent log.
-- **No optional shared capabilities** — `agentOptions`, output schemas, child personas, tool filtering, and harness depth enforcement are rejected by the shared service for this provider.
+- **No optional shared capabilities** — `agentPreset`, `agentOptions`, output schemas, and harness depth enforcement are rejected by the shared service for this provider.
 - **No wall-clock timeout or side-effect rollback** — the caller cancels long work, and files or external systems changed before cancellation are not restored.
 
 <a id="dev-note"></a>

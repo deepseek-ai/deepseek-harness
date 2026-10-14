@@ -99,6 +99,12 @@ export interface SessionTitleProviderRequest {
   readonly messages: readonly SessionTitleUserMessage[]
   /** Exact current logged main-request route, when one has been recorded. */
   readonly route?: SessionTitleModelIdentity
+  /**
+   * Latest accepted title captured at invocation, including an accepted
+   * fallback whose event may follow the last eligible message. Absent before
+   * any title is accepted. The provider decides whether and how to use it.
+   */
+  readonly currentTitle?: SessionTitleSnapshot
   /** Cancellation for supersession, disposal, timeout composition, or the explicit caller. */
   readonly signal: AbortSignal
 }
@@ -121,7 +127,7 @@ export interface SessionTitleProvider {
   readonly automatic: SessionTitleAutomaticMode
   /**
    * Produce one title revision.
-   * @param request - message snapshot, current route, session, and cancellation.
+   * @param request - message snapshot, current title, current route, session, and cancellation.
    * @returns proposed title plus exact input seqs and the optional provider/model route used to generate it.
    */
   generate(request: SessionTitleProviderRequest): Promise<SessionTitleProviderResult>
@@ -464,13 +470,14 @@ export class SessionTitleService extends Service {
 
   /**
    * Register the sole optional title provider. Disposal aborts its pending and
-   * active work before another provider may register.
+   * active work; a replacement may register once disposal has started, and the
+   * closing provider's late results never commit.
    * @param provider - provider identity, cadence, and generation function.
    * @returns exact Cordis effect disposer, which settles after active calls quiesce.
    */
   register(provider: SessionTitleProvider): () => Promise<void> {
     this.validateProvider(provider)
-    if (this.registration !== undefined) {
+    if (this.registration !== undefined && !this.registration.closing) {
       throw new Error(`session-title provider "${this.registration.provider.id}" is already registered`)
     }
     const registration: ProviderRegistration = {
@@ -593,12 +600,17 @@ export class SessionTitleService extends Service {
       this.assertCurrent(session, work)
       await this.ensureFallback(session)
       this.assertCurrent(session, work)
+      // One snapshot supplies both inputs: messages stop at the scheduled
+      // watermark, while the current title is not bounded by that watermark.
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-      const messages = collectSessionTitleMessages(session.snapshotEvents(), work.throughSeq)
+      const events = session.snapshotEvents()
+      const messages = collectSessionTitleMessages(events, work.throughSeq)
+      const currentTitle = foldSessionTitle(events)
       const result = await work.registration.provider.generate({
         session,
         messages,
         ...route === undefined ? {} : { route },
+        ...currentTitle === undefined ? {} : { currentTitle },
         signal: work.signal,
       })
       this.assertCurrent(session, work)

@@ -17,11 +17,10 @@ describe('view-ring type negatives (compile-time; body never runs)', () => {
         { name: 'conversation.view', id: 'x', key: 'k' },
         (_p: ConvViewProps) => null)
       // 3. Component props must stay within the composed contract: an
-      //    undeclared member cannot be required.
+      //    undeclared member cannot be required. The call stays on one line so
+      //    both compilers anchor the overload failure inside the directive.
       // @ts-expect-error component demands a prop no share supplies
-      slots.register(
-        { name: 'conversation.view', id: 'y' },
-        (_p: ConvViewProps & { phantom: number }) => null)
+      slots.register({ name: 'conversation.view', id: 'y' }, (_p: ConvViewProps & { phantom: number }) => null)
       // 4. Views receive no renderSlot — the ring's entries declare no children.
       const renderless = (props: ConvViewProps): ReactNode => {
         // @ts-expect-error views receive no renderSlot — no sub-slot delegation

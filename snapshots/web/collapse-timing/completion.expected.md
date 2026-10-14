@@ -1,0 +1,10 @@
+- text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
+- button "Copy"
+- status: Completed
+- button "Completed in {{duration}}"
+- paragraph: DONE
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}}

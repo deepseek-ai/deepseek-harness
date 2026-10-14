@@ -1,6 +1,7 @@
 /** Paid selection, independent native requests, audit-before-I/O and cancellation. */
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import { ReasoningEffortId, createUserMessage, createAssistantMessage, type PreparedLlmCall } from '@deepseek-ai/dsh-llm'
+import { Config as AccountConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
 import { Config as OfficialConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
 import { TimeoutReason } from '@deepseek-ai/dsh-timeout'
@@ -276,6 +277,24 @@ describe('native Flash translation', () => {
       const config = owner.fiber!.config as ReturnType<typeof OfficialConfig>
       config.models = OfficialConfig({ models: [{ id: 'deepseek-v4-flash' }] }).models
     } else b.setConfigured(false)
+    release.resolve(undefined)
+    await rejected
+    expect(b.requests).toEqual([])
+    expect(b.session?.snapshotEvents()).toEqual([])
+  })
+
+  it('rejects an Account model-override change during async preparation before audit or dispatch', async () => {
+    const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
+    vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
+      const call = await original(config, signal)
+      entered.resolve(undefined); await release.promise; return call
+    })
+    const rejected = expect(b.translate('deepseek-account')).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
+    await entered.promise
+    const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'account-custom-id')!
+    const config = owner.fiber!.config as ReturnType<typeof AccountConfig>
+    config.modelOverrides = AccountConfig({ modelOverrides: { 'deepseek-flash': { maxTokens: 4096 } } }).modelOverrides
     release.resolve(undefined)
     await rejected
     expect(b.requests).toEqual([])

@@ -143,23 +143,13 @@ export async function buildConfigSchemaDocument(
         required: ['id'], properties: { id: { const: id } },
         allOf: [
           { not: { required: ['insert'] } },
-          { not: { required: ['preset'] } },
           { anyOf: [{ not: { required: ['name'] } }, { properties: { name: { enum: ['', target.name] } } }] },
         ],
       },
       then: { properties: { config: { $ref: configRef } } },
     })
   }
-  definitions.patch = {
-    ...patchStructure(), allOf: [ref('entryMetadata'), ...patchRules],
-    properties: {
-      insert: ref('entryList'),
-      preset: {
-        type: 'string', pattern: '\\S',
-        description: 'Outer preset row id. The remaining patch fields apply to its current config.plugins list; a missing or unaddressable preset fails composition.',
-      },
-    },
-  }
+  definitions.patch = { ...patchStructure(), allOf: [ref('entryMetadata'), ...patchRules] }
   const positions = new Map(entries.map((entry, index) => [entry.path, index]))
   diagnostics.sort((left, right) => (positions.get(left.path ?? '') ?? -1) - (positions.get(right.path ?? '') ?? -1))
   return {

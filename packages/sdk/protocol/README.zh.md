@@ -33,12 +33,13 @@ kind: "package-library"
 
 ### SDK 方法
 
-两个协议端共享同一套方法：六个客户端到服务端请求与四个服务端到客户端通知。
+两个协议端共享同一套方法：七个客户端到服务端请求与四个服务端到客户端通知。
 
 | 方向 | 方法 | 载荷类型 |
 |---|---|---|
 | client→server | `initialize` | `InitializeParams` → `InitializeResult` |
 | client→server | `session/prompt` | `SessionPromptParams` → `SessionPromptResult`（持久入队回执） |
+| client→server | `session/resume` | `SessionResumeParams` → `{}` |
 | client→server | `session/wait` | `SessionWaitParams` → `{}` |
 | 客户端→服务端 | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | 客户端→服务端 | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
@@ -51,6 +52,8 @@ kind: "package-library"
 `HarnessSdkRequestMap` 与 `HarnessSdkNotificationMap` 按方法名索引这些结构；包根与传输一起导出它们。
 
 `session/wait` 接受已有 SDK 会话的 `{ sessionId }`，在根 Agent 持续空闲且活跃的受管理后代工作结束后返回 `{}`。带有停放输入的空闲后代保持驻留，不阻塞这次等待。未知 id，以及没有后续终止事件记录的 Agent 运行时错误，都会使请求失败。等待期间提交的通知在同一传输上先于响应到达；原始 `session.status` 转换仍表示整个 Agent 的状态。
+
+`session/resume` 接受非空的持久化 `{ sessionId }`，恢复该会话后返回 `{}`。它要求先完成初始化并使用原持久化存储，不发送新输入；会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。历史事件保留在存储日志中，通知只报告新提交的事件。
 
 ### 载荷语义
 

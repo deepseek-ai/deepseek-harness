@@ -13,7 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
-  bindSnapshotSelector, conversationSnapshot, sessionSnapshot,
+  allowAllAccess, bindSnapshotSelector, conversationSnapshot, sessionSnapshot,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -66,6 +66,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
+    ...allowAllAccess,
     useProjection: (() => undefined),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),

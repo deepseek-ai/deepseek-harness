@@ -1,5 +1,5 @@
 /** Exact-path watching for live profile patch files outside Cordis module roots. */
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { watch, type ChokidarOptions } from 'chokidar'
 import type { Context } from '@deepseek-ai/cordis'
@@ -25,7 +25,8 @@ async function findWatchRoot(filename: string): Promise<{ filename: string; root
 }
 
 /**
- * Watch one patch path, including missing parents, and serialize refresh callbacks.
+ * Watch one patch path and its parent chain without subscribing to sibling files or directories.
+ * Missing parents are observed as they appear; refresh callbacks run serially.
  * @param ctx Context that owns watcher disposal and receives refresh failures.
  * @param filename Absolute patch-file path.
  * @param options Deployment watcher options; configuration watches enable write stabilization by default.
@@ -46,6 +47,10 @@ export async function watchConfig(
   const watcher = watch(target.root, {
     // Stabilized events bypass Chokidar's lossy 50 ms change-event throttle.
     awaitWriteFinish: true, ...watchOptions, depth: target.depth, ignoreInitial: false,
+    ignored: (path) => {
+      const remainder = relative(resolve(path), target.filename)
+      return remainder === '..' || remainder.startsWith(`..${sep}`)
+    },
   })
   paths.add(target.filename)
   const state = { dirty: false }

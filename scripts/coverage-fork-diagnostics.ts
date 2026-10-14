@@ -5,12 +5,17 @@ import type { PoolOptions, PoolRunnerInitializer, WorkerRequest, WorkerResponse 
 
 const FINISHED_RESPONSE_TYPE: WorkerResponse['type'] = 'testfileFinished'
 
-/** Attribute only outstanding requests; stop silences exits, while cancel does not. */
+/**
+ * Attribute only outstanding requests; stop silences exits, while cancel and a
+ * worker error observed before that stop do not.
+ */
 class DiagnosticForkWorker extends ForksPoolWorker {
   private expectedExit = false
   private observing = false
+  private workerErrored = false
   private request: Extract<WorkerRequest, { type: 'run' | 'collect' }> | undefined
   private readonly reportExit: (this: ChildProcess | undefined, code: number | null, signal?: NodeJS.Signals | null) => void
+  private readonly observeError: () => void
 
   constructor(options: PoolOptions) {
     super(options)
@@ -27,17 +32,24 @@ class DiagnosticForkWorker extends ForksPoolWorker {
     }
     // ForksPoolWorker.on forwards Node ChildProcess events and their receiver.
     this.reportExit = function (code, signal) { report(this, code, signal) }
+    this.observeError = () => {
+      // A channel that closed under a send means the worker is not shutting down
+      // orderly, so the exit that follows keeps its code and signal. A stop
+      // requested before this error still silences that exit.
+      if (!this.expectedExit) this.workerErrored = true
+    }
   }
 
   override async start(): Promise<void> {
     await super.start()
     this.on('exit', this.reportExit)
+    this.on('error', this.observeError)
     this.observing = true
   }
 
   override send(message: WorkerRequest): void {
     if (message.type === 'run' || message.type === 'collect') this.request = message
-    if (message.type === 'stop') this.expectedExit = true
+    if (message.type === 'stop' && !this.workerErrored) this.expectedExit = true
     super.send(message)
   }
 
@@ -53,10 +65,14 @@ class DiagnosticForkWorker extends ForksPoolWorker {
   }
 
   override async stop(): Promise<void> {
-    this.expectedExit = true
-    if (this.observing) {
-      this.off('exit', this.reportExit)
-      this.observing = false
+    // A worker that already errored is not shutting down orderly; keep the exit
+    // observer so its code and signal still reach the coverage log.
+    if (!this.workerErrored) {
+      this.expectedExit = true
+      if (this.observing) {
+        this.off('exit', this.reportExit)
+        this.observing = false
+      }
     }
     await super.stop()
   }

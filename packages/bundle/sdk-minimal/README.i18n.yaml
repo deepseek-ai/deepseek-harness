@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/sdk-minimal/README.md
 /:
-  en: 7cbc0e332890851f
-  zh: 07c71026d8e1bb15
+  en: b2fce08b0fa865da
+  zh: 97e214d87ded4b54
 /deepseek-ai-dsh-sdk-minimal:
   en: 807c43eedba7d53e
   zh: 9f1efe5d6ac393f7
 /deepseek-ai-dsh-sdk-minimal/summary:
-  en: c0a98b4bcbb3e719
-  zh: 92895dd5ce381cd1
+  en: 31b83af058b212f9
+  zh: 289678ac3738ee5e
 /deepseek-ai-dsh-sdk-minimal/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-sdk-minimal/use-this-package:
-  en: f920307c0cf12118
-  zh: edf9051846fecd5c
+  en: 39483eef4a61f212
+  zh: 62d82f46a04e07fe
 /deepseek-ai-dsh-sdk-minimal/understand-the-implementation:
-  en: 91f4a78ab7a688d3
-  zh: 7bb8bf33c0d8b429
+  en: 5db5d8f041867958
+  zh: bff5ef3a2e140712
 /deepseek-ai-dsh-sdk-minimal/understand-the-implementation/source-map:
   en: 3784c554e96ab004
   zh: 0a05d4fe1e26b3b1
@@ -33,17 +33,17 @@
   en: bd87e16b0c6e0506
   zh: c8ee5e3b4578754e
 /deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/what-the-model-sees:
-  en: 724e1f4075df9293
-  zh: 35955569ded10b56
+  en: df40d9529b566cfa
+  zh: 4678769b4f85120b
 /deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/token-effect:
-  en: 5df298b2c9f95d27
-  zh: def93cd59b5ca843
+  en: 9b7a23c7a447eb22
+  zh: e01bfd06d19b7d18
 /deepseek-ai-dsh-sdk-minimal/model-experience/minimal-coding-agent-composition/kv-cache-effect:
-  en: 904ae09b5fdb87c1
-  zh: de6fcaaa12bd9733
+  en: dd887b6519f40ab3
+  zh: a98e56411fdc79df
 /deepseek-ai-dsh-sdk-minimal/known-limitations-and-deferred-work:
-  en: 8f74b1b4f39eda83
-  zh: af96ec4cb42810c5
+  en: 00c4192d6af9f621
+  zh: 460451ab6dc07c3a
 /deepseek-ai-dsh-sdk-minimal/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

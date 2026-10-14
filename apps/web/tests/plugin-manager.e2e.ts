@@ -96,6 +96,141 @@ describe('web e2e: plugin manager', () => {
     return readFile(join(scaffold.harnessHome, ...segments), 'utf8').catch(() => '')
   }
 
+  it('keeps plugin header actions on one line as the available width changes', async () => {
+    const facts: string[] = []
+    // A dedicated scaffold keeps the measured header deterministic: an install
+    // task left by an earlier test swaps the toolbar's add control for the
+    // view-installation button, which moves the wrap threshold.
+    const headerScaffold = await launchWebScaffold()
+    try {
+      // Pin the extremes; at intermediate widths, the rendered font and locale
+      // determine whether the two intrinsic items fit beside each other.
+      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside', 390: 'below', 430: 'below' }
+      for (const language of ['en', 'zh'] as const) {
+        const context = await browser.newContext({
+          viewport: { width: 1680, height: 1000 }, locale: language === 'en' ? 'en-US' : ZH_BROWSER_LOCALE,
+          reducedMotion: 'reduce',
+        })
+        try {
+          const probe = await context.newPage()
+          const consoleWatch = watchConsole(probe)
+          await probe.goto(headerScaffold.authenticatedUrl, { waitUntil: 'load' })
+          const title = language === 'en' ? 'Plugins' : '插件'
+          await probe.getByRole('button', { name: title, exact: true }).click()
+          const panel = probe.locator('[data-plugin-panel]')
+          const header = panel.locator(':scope > header')
+          await header.getByRole('heading', { name: title, exact: true }).waitFor()
+          await probe.evaluate(() => document.fonts.ready)
+          const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
+          await expect.poll(() => add.isEnabled()).toBe(true)
+          await add.focus()
+          const measure = () => header.evaluate((element) => {
+            const heading = element.firstElementChild!
+            const actions = element.lastElementChild!
+            const headingRect = heading.getBoundingClientRect()
+            const actionRect = actions.getBoundingClientRect()
+            const headerRect = element.getBoundingClientRect()
+            const intrinsicHeading = heading.cloneNode(true) as HTMLElement
+            Object.assign(intrinsicHeading.style, {
+              position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
+            })
+            element.append(intrinsicHeading)
+            let intrinsicHeadingWidth: number
+            try {
+              intrinsicHeadingWidth = intrinsicHeading.getBoundingClientRect().width
+            } finally {
+              intrinsicHeading.remove()
+            }
+            const headerStyle = getComputedStyle(element)
+            const contentWidth = headerRect.width - Number.parseFloat(headerStyle.paddingLeft) - Number.parseFloat(headerStyle.paddingRight)
+            const fitsBeside = intrinsicHeadingWidth + actionRect.width + Number.parseFloat(headerStyle.columnGap) <= contentWidth + 1
+            const subtitle = heading.querySelector('h1 + div > span')!
+            const range = document.createRange()
+            range.selectNodeContents(subtitle)
+            const lastText = Array.from(range.getClientRects()).at(-1)!
+            const info = heading.querySelector('button')!.getBoundingClientRect()
+            const buttons = Array.from(actions.querySelectorAll('button'))
+            const singleLine = buttons.every((button) => {
+              const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
+              const tops: number[] = []
+              while (walker.nextNode()) {
+                if (!walker.currentNode.textContent?.trim()) continue
+                range.selectNodeContents(walker.currentNode)
+                for (const rect of range.getClientRects()) tops.push(rect.top)
+              }
+              return tops.length === 0 || Math.max(...tops) - Math.min(...tops) < 1
+            })
+            return {
+              singleLine, fitsBeside,
+              diagnostic: { flexWrap: headerStyle.flexWrap, headingMaxWidth: getComputedStyle(heading).maxWidth,
+                introDisplay: getComputedStyle(heading.querySelector('h1 + div')!).display,
+                intrinsicHeadingWidth, headingWidth: headingRect.width, actionsWidth: actionRect.width,
+                contentWidth, gap: Number.parseFloat(headerStyle.columnGap),
+                subtitleRight: lastText.right, infoLeft: info.left,
+              },
+              placement: actionRect.left >= headingRect.right - 1
+                ? 'beside' as const
+                : actionRect.top >= headingRect.bottom - 1 ? 'below' as const : 'overlapping' as const,
+              contained: actionRect.left >= headerRect.left - 1 && actionRect.right <= headerRect.right + 1,
+              infoFollowsText: info.left >= lastText.right && info.left - lastText.right <= 5
+                && info.top < lastText.bottom && info.bottom > lastText.top,
+              focused: buttons.includes(document.activeElement as HTMLButtonElement),
+            }
+          })
+          const validLayout = (layout: Awaited<ReturnType<typeof measure>>) =>
+            layout.singleLine && layout.contained && layout.infoFollowsText && layout.focused
+            && layout.placement === (layout.fitsBeside ? 'beside' : 'below')
+          for (const width of [1680, 768, 520, 440, 390, 430, 1024]) {
+            await probe.setViewportSize({ width, height: 1000 })
+            await expect.poll(async () => {
+              const layout = await measure()
+              return validLayout(layout) ? true : layout
+            }, { message: `${language} ${width}px plugin header geometry` }).toBe(true)
+            const { placement } = await measure()
+            const pinned = PINNED_PLACEMENT[width]
+            if (pinned !== undefined) expect(placement).toBe(pinned)
+            facts.push(`${language} ${width}px: actions ${pinned === undefined ? 'beside or below (according to intrinsic fit)' : placement} the heading, single-line; contained; information follows subtitle; focus retained`)
+          }
+          await probe.setViewportSize({ width: 390, height: 1000 })
+          const previousWrap = await header.evaluate((element) => {
+            const style = element.style
+            const previous = { value: style.getPropertyValue('flex-wrap'), priority: style.getPropertyPriority('flex-wrap') }
+            style.setProperty('flex-wrap', 'nowrap')
+            return previous
+          })
+          try {
+            const noWrap = await measure()
+            expect(noWrap.fitsBeside).toBe(false)
+            expect(noWrap.placement).not.toBe('below')
+            expect(validLayout(noWrap)).toBe(false)
+          } finally {
+            await header.evaluate((element, previous) => {
+              if (previous.value === '') element.style.removeProperty('flex-wrap')
+              else element.style.setProperty('flex-wrap', previous.value, previous.priority)
+            }, previousWrap)
+          }
+          await expect.poll(async () => validLayout(await measure())).toBe(true)
+          const menuTrigger = header.getByRole('button', { name: language === 'en' ? 'Choose how to add a plugin' : '选择添加插件方式' })
+          await menuTrigger.click()
+          await probe.getByRole('menu').waitFor()
+          await probe.keyboard.press('Escape')
+          await expect.poll(() => probe.getByRole('menu').count()).toBe(0)
+          expect(await menuTrigger.evaluate(element => element === document.activeElement)).toBe(true)
+          expect(consoleWatch.pageErrors).toEqual([])
+        } finally {
+          await context.close()
+        }
+      }
+      await compareOrRefreshGolden(
+        join(SNAPSHOT_DIR, 'header-responsive.expected.md'),
+        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 390px fails the same measured layout check in both locales; restoring wrap passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
+        MODE,
+      )
+    } finally {
+      await headerScaffold.close()
+    }
+  })
+
   it('aligns the first-read skeleton with the loaded plugin cards', async () => {
     const facts: string[] = []
     let aria = ''
@@ -148,7 +283,7 @@ describe('web e2e: plugin manager', () => {
               return {
                 row: rect(row), head: rect(head), icon: rect(head?.children[0]), main: rect(main),
                 titleRow: rect(main?.children[0]), title: rect(main?.children[0]?.firstElementChild),
-                description: rect(main?.children[1]), actions: rect(head?.children[2]),
+                description: rect(main?.children[1]),
               }
             }),
           }
@@ -184,13 +319,11 @@ describe('web e2e: plugin manager', () => {
         await skeleton.waitFor({ state: 'detached' })
         expect(await panel.getAttribute('aria-busy')).toBe('false')
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(false)
-        const official = panel.locator('[data-plugin-group="official"]')
-        await official.locator('[data-plugin-package]').first().waitFor()
-        // The Official group lists the shipped bundles and then the
-        // configuration-only items; an item card carries no action cell, so the
-        // placeholder rows model the first four bundle cards.
-        const loaded = await measure(official, ':scope > ul > li[data-plugin-package]')
-        expect(await official.locator(':scope > ul > li[data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+        const basic = panel.locator('[data-plugin-group="basic"]')
+        await basic.locator('[data-plugin-item]').first().waitFor()
+        // Configuration cards lead the list; their absent switches give the text column more width.
+        const loaded = await measure(basic)
+        expect(await basic.locator(':scope > ul > li[data-plugin-item]').count()).toBe(4)
         expect(loaded.rows).toHaveLength(loading.rows.length)
         const compare = (name: string, a: typeof loading.pageHeader, b: typeof loaded.pageHeader, axes: readonly (keyof typeof a)[] = ['x', 'y', 'width', 'height']) => {
           for (const axis of axes) {
@@ -202,11 +335,11 @@ describe('web e2e: plugin manager', () => {
         for (const [index, row] of loading.rows.entries()) {
           const real = loaded.rows[index]
           if (real === undefined) break
-          for (const part of ['row', 'head', 'icon', 'main', 'titleRow', 'actions'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part])
+          for (const part of ['row', 'head', 'icon'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part])
           // Painted text bars are deliberately shorter than real copy; their line origins and heights align.
-          for (const part of ['title', 'description'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part], ['x', 'y', 'height'])
+          for (const part of ['main', 'titleRow', 'title', 'description'] as const) compare(`row ${index + 1} ${part}`, row[part], real[part], ['x', 'y', 'height'])
         }
-        facts.push(`${width}px: ${loaded.rows.length} rows; page/group headers, rows, icons, text lines and blank action spaces align within 0.1px`)
+        facts.push(`${width}px: ${loaded.rows.length} rows; page/group headers, rows, icons and text line origins align within 0.1px`)
         expect(consoleWatch.pageErrors).toEqual([])
       } finally {
         release.resolve(undefined)
@@ -436,25 +569,29 @@ describe('web e2e: plugin manager', () => {
     expect(focusRing.radius).toBe(focusRing.cardRadius)
     expect(focusRing.outlineStyle).toBe('solid')
     expect(focusRing.outlineWidth).toBeGreaterThan(0)
-    // The profile's own group holds its fixture bundle and the scaffold's defaults bundle; the installation's
-    // optional bundles open the Official group, followed by the official plugins that registered their
-    // configuration, and its other bundles stay off the page.
+    // Profile bundles stay in Installed; configuration pages and offered bundles have their own groups.
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
-    expect(await panel.locator('[data-plugin-group="official"] [data-plugin-package]').count()).toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
-    expect(await panel.locator('[data-plugin-group="official"] [data-plugin-item]').count()).toBe(4)
-    expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+    expect(await panel.locator('[data-plugin-group="basic"] [data-plugin-item]').count()).toBe(4)
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
     expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).getAttribute('aria-checked')).toBe('false')
     expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
     expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
+    await panel.getByRole('button', { name: '更多', exact: true }).click()
+    await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+    expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
+      .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+    expect(await panel.getByText('实验性', { exact: true }).count())
+      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+    expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
+    await panel.getByRole('button', { name: '返回插件', exact: true }).click()
+    expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
     // A bundle that is off still shows the rows its patch declares, without switches.
     await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()
     await panel.locator('[data-plugin-row]', { hasText: 'fixture-row' }).waitFor({ timeout: 10_000 })
     expect(await panel.getByRole('switch', { name: '启用组件 @fixture/bundle' }).count()).toBe(0)
     await panel.getByRole('button', { name: '卸载 @fixture/bundle' }).waitFor({ timeout: 5_000 })
-    await panel.getByRole('button', { name: '返回插件列表' }).click()
+    await panel.getByRole('button', { name: '返回插件' }).click()
     await expect.poll(() => panel.getByRole('button', { name: '卸载 @fixture/bundle' }).count(), { timeout: 5_000 }).toBe(0)
 
     const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
@@ -538,7 +675,7 @@ describe('web e2e: plugin manager', () => {
     }
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
     await checkImage('[data-plugin-detail]', teamIcon, 'Agent Teams detail')
-    await panel.getByRole('button', { name: '返回插件列表' }).click()
+    await panel.getByRole('button', { name: '返回插件' }).click()
     await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).click()
     await checkImage('[data-plugin-detail]', fixtureIcon, 'Third-party bundle detail')
     await checkImage('[data-plugin-row="fixture-search"]', fallbackIcon, 'Independent search row')
@@ -546,7 +683,7 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.locator('[data-plugin-row="fixture-review"] svg').count()).toBeGreaterThan(0)
     images.push('Independent review row: generic artwork')
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'icons.expected.md'), images.join('\n'), MODE)
-    await panel.getByRole('button', { name: '返回插件列表' }).click()
+    await panel.getByRole('button', { name: '返回插件' }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -579,7 +716,7 @@ describe('web e2e: plugin manager', () => {
     } finally {
       await setLanguage('zh')
     }
-    await panel.getByRole('button', { name: '返回插件列表' }).click()
+    await panel.getByRole('button', { name: '返回插件' }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -662,9 +799,9 @@ describe('web e2e: plugin manager', () => {
         for (const id of ['agent-team', 'tool-agent-team', 'ui-agent-team']) {
           await panel.locator('[data-plugin-row]', { hasText: id }).first().waitFor()
         }
-        await panel.getByRole('button', { name: '返回插件列表' }).click()
+        await panel.getByRole('button', { name: '返回插件' }).click()
       } finally {
-        const back = panel.getByRole('button', { name: '返回插件列表' })
+        const back = panel.getByRole('button', { name: '返回插件' })
         if (await back.count() > 0) await back.click()
         if (await toggle.getAttribute('aria-checked') === 'true') await toggle.click()
         await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(0)
@@ -918,7 +1055,7 @@ describe('web e2e: plugin manager', () => {
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).not.toBe(2)
     await rowSwitch.click()
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).toBe(2)
-    await panel.getByRole('button', { name: '返回插件列表' }).click()
+    await panel.getByRole('button', { name: '返回插件' }).click()
 
     await toggle.click()
     await expect.poll(() => mounted()?.fiber?.state, { timeout: 20_000 }).not.toBe(2)
@@ -930,7 +1067,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md',
     ])
   })
 })
@@ -963,13 +1100,13 @@ describe('web e2e: startup-applied plugin management', () => {
       // The selection is saved and the switch turns on, but nothing mounts before the next start; a toast says so.
       await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
       await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
-      await page.getByText('更改将在下次启动生效', { exact: true }).waitFor({ timeout: 10_000 })
+      await page.getByText('请重启 DSH 使更改生效。这个 profile 只在启动时应用更改。', { exact: true }).waitFor({ timeout: 10_000 })
       expect(mounted()?.fiber?.state).toBeUndefined()
       // The pack's page lists its rows from their declarations, with no live entry to switch.
       await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()
       await panel.locator('[data-plugin-row]', { hasText: 'fixture-row' }).waitFor({ timeout: 10_000 })
       expect(await panel.getByRole('switch', { name: '启用组件 @fixture/bundle' }).isDisabled()).toBe(true)
-      await panel.getByRole('button', { name: '返回插件列表' }).click()
+      await panel.getByRole('button', { name: '返回插件' }).click()
 
       await toggle.click()
       await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual(SCAFFOLD_BUNDLES)

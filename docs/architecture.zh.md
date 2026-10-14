@@ -74,7 +74,7 @@ Electron 使用 Electron Node 模式启动私有 Desktop Host。Host 调用共�
 - **Agent 事件**（`agent/*`）携带活跃 `Agent`：inbox、步骤、状态、请求、验证、续跑。要观察或拦截进行中的工作时，使用它。
 - **能力事件**无需导入循环即可向某个 seam（`fs/*`、`tools/*`、`telemetry/*`）附加策略和适配器。
 
-AgentLoop 在启动已排队工作前等待串行 `agent/created` 初始化。初始化失败会回滚创建；[agent-loop](../packages/core/agent-loop/README.zh.md#understand-the-implementation)定义 teardown 顺序。
+AgentLoop 在启动已排队工作前等待串行 `agent/created`，初始化失败则回滚。卸载在 Agent teardown 期间保留所需资源；[agent-loop](../packages/core/agent-loop/README.zh.md#understand-the-implementation)定义顺序。
 
 [事件映射](event-producer-consumer.zh.md)列出每个事件的生产方与消费方。
 
@@ -137,7 +137,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 seam 正是替换一个提供方就能改变整个产品的原因。文件系统与进程提供方共享同一个执行世界，因此把它们指向远程沙箱，也就把 Bash、PTY 和 LSP 一并搬了过去，无需提供方专用 fork。[subagent 提供方](subsystems/subagent.zh.md)在同一个接口之后同样千差万别，从新建一个子 agent，到把一个轮次委派给另一个产品。
 
-[实验性 Agent Teams](subsystems/agent-team.zh.md) 是 `ctx.agentTeams` 上公开发布、显式启用的协作 seam，在可继续 subagent 之上提供持久 roster、任务板和 mailbox。
+[实验性 Agent Teams](subsystems/agent-team.zh.md) 通过显式启用的 `ctx.agentTeams`，在可继续 subagent 之上提供持久 roster、任务状态和直接 inbox 消息协作。
 
 ## 新行为的归属位置
 

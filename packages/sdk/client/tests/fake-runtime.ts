@@ -283,6 +283,13 @@ reader.on('line', (line) => {
       }
       respond({ serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } })
       return
+    case 'session/resume':
+      if (env.FAKE_RESUME_ERROR !== undefined) {
+        write({ jsonrpc: '2.0', id: frame.id, error: { code: -32603, message: 'session not found' } })
+      } else {
+        respond({})
+      }
+      return
     case 'session/working-directory/get':
     case 'session/working-directory/set': {
       if (env.FAKE_MALFORMED_DIRECTORY !== undefined) {

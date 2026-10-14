@@ -9,7 +9,7 @@ Turn a broad “make it faster” request into reproducible user-path measuremen
 
 ## Establish scope and current authority
 
-Read [AGENTS.md](../../../AGENTS.md), [architecture](../../../docs/architecture.md), [testing policy](../../../docs/testing.md), [defensive patterns](../../../docs/defensive-patterns.md), and the affected packages’ instructions and Agent Notes. Use [CI test reliability](../dsh-ci-test-reliability/SKILL.md) for processes, clocks, browser tests, and asynchronous cleanup.
+Read [AGENTS.md](../../../AGENTS.md), [architecture](../../../docs/architecture.md), [testing policy](../../../docs/testing.md), [defensive patterns](../../../docs/defensive-patterns/README.md), and the affected packages’ instructions and Agent Notes. Use [CI test reliability](../dsh-ci-test-reliability/SKILL.md) for processes, clocks, browser tests, and asynchronous cleanup.
 
 Agree on the user-visible endpoint, workload range, resource constraints, acceptable minor behavior differences, and stopping rule. Keep backend and browser end-to-end measurements separate: a fast history iterator or Client fold does not prove fast transport, paint, scrolling, or input response. Exclude model/network latency when measuring local overhead, and state that exclusion rather than calling the result complete product latency.
 

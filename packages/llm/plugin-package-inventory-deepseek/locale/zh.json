@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek 插件清单上报",
+    "description": "随官方模型 API 请求发送当前活跃插件包的清单。"
+  }
+}

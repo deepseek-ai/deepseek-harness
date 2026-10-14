@@ -7,7 +7,7 @@
 
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
-import { markdownHeadingLines, markdownProseLines, type MarkdownProseLine } from './markdown.ts'
+import { markdownHeadingLines, markdownProseLines, parseMarkdown, type MarkdownProseLine } from './markdown.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const HEADING = '## Model Experience'
@@ -57,6 +57,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },
   'packages/api/terminal-controller': { kind: 'indirect', reason: 'Working-directory recovery owns directory context; user terminal screens never enter model requests.' },
   'packages/client/ui-sidebar-terminal': { kind: 'none', reason: 'The browser renders user terminal screens without exposing them to the model.' },
+  'packages/ssh/ssh-helper-runtime': { kind: 'none', reason: 'The private executable carrier registers no model-facing content; its providers and consumers own operation results.' },
   'packages/experimental/worktree': { kind: 'indirect', reason: 'The worktree tool renders creation results; the working-directory service owns model-visible directory context.' },
   'packages/ssh/ssh': { kind: 'none', reason: 'The connection owner transports private provider operations; consumers own all model-facing content.' },
   'packages/ssh/fs-ssh': { kind: 'indirect', reason: 'The remote filesystem delegates model rendering to the existing filesystem consumers.' },
@@ -114,6 +115,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/connection': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/file-upload': { kind: 'none', reason: 'Browser-side request-body transport; registers nothing model-facing.' },
   'packages/api/remotes': { kind: 'none', reason: 'The Remote BFF selects business methods and forwarded events; selected services own any model-visible effect.' },
+  'packages/api/remote-access': { kind: 'none', reason: 'Remote access decisions for Client callers; registers nothing model-facing.' },
   'packages/experimental/client-ui-agent-team': { kind: 'none', reason: 'The browser projection and task controls register no model-facing input.' },
   'packages/experimental/client-ui-claude-code-mods': { kind: 'none', reason: 'The browser draws Host-held mod trees and relays clicks; the mods\' own hooks own any model-visible effect.' },
   'packages/client/shortcuts': { kind: 'none', reason: 'Browser keyboard routing; registers nothing model-facing.' },
@@ -175,6 +177,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/host/plugin-inventory': { kind: 'none', reason: 'Host-side read-only Loader projection; registers nothing model-facing.' },
   'packages/host/open-in-app': { kind: 'none', reason: 'Host routes opening desktop applications for a human; registers nothing model-facing.' },
   'packages/client/ui-open-in-app': { kind: 'none', reason: 'Browser-side split button opening the workspace directory for a human; registers nothing model-facing.' },
+  'packages/client/ui-secret-mask': { kind: 'none', reason: 'Browser-side display masking of sent user text; registers nothing model-facing.' },
   'packages/experimental/session-search': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
   'packages/experimental/ralph-bundle': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
   'packages/experimental/terminal-bundle': { kind: 'indirect', reason: 'The profile layer delegates model-visible behavior to its selected capability.' },
@@ -367,8 +370,9 @@ for (const packageJson of packageJsons) {
 
   const text = readFileSync(abs, 'utf8')
   const rawLines = text.split('\n')
-  const lines = markdownProseLines(text)
-  const headings = markdownHeadingLines(text)
+  const tree = parseMarkdown(text)
+  const lines = markdownProseLines(text, tree)
+  const headings = markdownHeadingLines(text, tree)
   const h2Headings = headings.filter(heading => heading.depth === 2)
   const modelExperienceHeadings = headings.filter(heading => heading.text
     .trim().replaceAll(/\s+/g, ' ').toLowerCase() === 'model experience')

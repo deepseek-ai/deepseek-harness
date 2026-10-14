@@ -10,7 +10,7 @@ import css from './SignInDialog.module.css'
 /** @param props - safe account state, localized copy, and user actions. @returns login dialog. */
 export function SignInDialog({ account, colorScheme, start, cancel, close, useApiKey, t }: {
   account: AccountSnapshot
-  /** Resolved scheme of the active Desktop theme; the copied link carries it. */
+  /** Resolved scheme of the active application theme; the copied link carries it. */
   colorScheme: 'light' | 'dark'
   start: () => Promise<void>
   cancel: (id: SignInAttemptId) => Promise<void>

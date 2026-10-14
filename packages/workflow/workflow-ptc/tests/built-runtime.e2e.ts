@@ -41,7 +41,7 @@ try {
   let selectedStarts = 0
   ctx.subagents.registerProvider({
     name: 'built-selected',
-    capabilities: { agentOptions: true, outputSchema: true, depthLimit: false, toolFilter: false, persona: false },
+    capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: false },
     inheritsParentContext: false,
     async start() {
       selectedStarts += 1

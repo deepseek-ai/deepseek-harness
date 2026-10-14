@@ -132,11 +132,12 @@ export class CredentialsController extends TypertRemoteService {
 
   /**
    * Run one remote write and report every refusal as `credential/rejected`
-   * carrying the seam's own message: a read-only source shadowing the reference
-   * is what a configuration surface must show verbatim. Callers brand the
-   * reference before entering, so a name outside the grammar never reaches this
-   * path and fails the same way it does on the read side. The details name only
-   * the reference, so no failure path can carry the value back out.
+   * carrying the seam's own message: a provider refusal, such as a stored
+   * document that no longer parses, is what a settings page must show
+   * verbatim. Callers brand the reference before entering, so a name outside
+   * the grammar never reaches this path and fails the same way it does on the
+   * read side. The details name only the reference, so no failure path can
+   * carry the value back out.
    */
   private async write(ref: string, write: () => Promise<void>): Promise<void> {
     try {

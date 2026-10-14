@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for 2026-10-02-plugin-market-index-format.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-10-02-plugin-market-index-format.md
+/agent-note-plugin-market-index-format:
+  en: 8da20a8601d7cb29
+  zh: 74368eed4d4b8e7c
+/agent-note-plugin-market-index-format/problem:
+  en: ce5e4a362f558af6
+  zh: 29d93e0655b99217
+/agent-note-plugin-market-index-format/proposal:
+  en: ed9148e95b2ad7c2
+  zh: 25a7add3c56fd681
+/agent-note-plugin-market-index-format/proposal/example:
+  en: 1b1c960c966cf912
+  zh: 97be87cb14893c26
+/agent-note-plugin-market-index-format/proposal/root-fields:
+  en: 4fac5a9b8261342d
+  zh: f9168a8a4209feab
+/agent-note-plugin-market-index-format/proposal/plugin-fields:
+  en: 19d743bd04dc65b3
+  zh: 810a7f98c4fe8301
+/agent-note-plugin-market-index-format/proposal/version-fields:
+  en: d6c0fa99e1cbb068
+  zh: 3d2a7b85299c679a
+/agent-note-plugin-market-index-format/proposal/install-arguments:
+  en: c748cdc4d8ce349a
+  zh: 5740fa0d6106e637
+/agent-note-plugin-market-index-format/proposal/dsh-compatibility:
+  en: 00fe507b9b5dfea7
+  zh: 55de6aaeb3865e84
+/agent-note-plugin-market-index-format/proposal/generator-obligations:
+  en: 8e848a102fe9d86e
+  zh: feff226ef8321e00
+/agent-note-plugin-market-index-format/proposal/reader-rules:
+  en: 92903cbe87d9c0ca
+  zh: 54af6cb33e9da252
+/agent-note-plugin-market-index-format/alternatives-considered:
+  en: 3d7cf519bc8e0593
+  zh: 328dc0747836eaa8
+/agent-note-plugin-market-index-format/acceptance-criteria:
+  en: 753abee6adf39812
+  zh: 1102bcfdd48f7e90
+/agent-note-plugin-market-index-format/risks:
+  en: 41170d483b17df80
+  zh: 1bfd8f44e0f09036

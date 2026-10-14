@@ -18,8 +18,6 @@ function renderView(data: QuestionReplyData) {
       location: { kind: 'session' }, visibility: 'visible', data,
     },
     openFile: vi.fn(),
-    openSkill: vi.fn(),
-    renderMessageImages: () => null,
     inspectCall: vi.fn(),
     forkAt: vi.fn(),
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),

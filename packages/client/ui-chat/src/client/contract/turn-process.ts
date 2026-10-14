@@ -17,22 +17,6 @@ export interface TurnProcessSpec {
   readonly subagentCount: number
 }
 
-const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
-  'system-prompt',
-  'user',
-  'steering',
-  'turn-trigger',
-  'turn-process',
-  'turn-error',
-  'turn-max-tokens',
-  'turn-tail',
-] as const satisfies readonly ChatNode['kind'][]
-
-/** Chat Node kinds that remain independent of a Turn's process disclosure. */
-export const TURN_PROCESS_INDEPENDENT_KINDS: ReadonlySet<string> = new Set(
-  TURN_PROCESS_INDEPENDENT_KIND_LIST,
-)
-
 /**
  * Compare immutable Turn-process specifications by their published fields.
  * @param left - previous specification.

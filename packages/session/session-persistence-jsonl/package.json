@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-persistence-jsonl",
   "description": "JSONL durable session persistence backend for the DeepSeek Harness",
-  "version": "0.2.1-alpha.1",
+  "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -19,9 +19,11 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/worker.cjs",
     "lib/types/**/*.d.ts",
@@ -42,7 +44,8 @@
     "@deepseek-ai/dsh-session-format-v3-to-v4": "workspace:*",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
-    "koffi": "3.1.1"
+    "koffi": "3.1.1",
+    "p-limit": "7.3.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-session": "workspace:*",

@@ -6,13 +6,14 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { useDetailedPresentation } from './presentation-fixture.client.ts'
+import { unusedImageLoader } from './reasoning-component-fixture.tsx'
 import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
+import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 import { ActivityPill, UsagePill, type StatPillProps } from '../src/client/chat/StatsPills.tsx'
 import { zh } from '../src/client/locale.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
-const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 afterEach(() => {
   cleanup()
@@ -23,12 +24,12 @@ afterEach(() => {
 describe('render branch tails', () => {
   it('AssistantMarkdown reasoning row is ok-state when not the streaming tail', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     // reasoning at index 0 with a later block: running is false → ok state.
@@ -66,12 +67,12 @@ describe('render branch tails', () => {
 
   it('AssistantMarkdown reasoning as the streaming tail renders the running ring', () => {
     const view = render(
-      <AssistantMarkdown useDisclosure={useDisclosure}
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
         usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'still thinking' }]}
         streaming
-        renderMessageImages={renderMessageImages}
+        loadImage={unusedImageLoader}
       />,
     )
     expect(view.container.querySelector('[data-state="running"]')).not.toBeNull()

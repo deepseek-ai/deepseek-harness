@@ -24,6 +24,6 @@ The rejected alternative is retaining settings as a second store behind a config
 
 ## Consequences
 
-This supersedes only the non-secret settings tier in [configuration source ownership](2026-08-04-configuration-source-ownership.md); its environment restrictions and credential ordering remain applicable. [Volatile references](2026-09-18-volatile-config-references.md) own reference lifetime and ordinary update behavior.
+This supersedes only the non-secret settings tier in [configuration source ownership](2026-08-04-configuration-source-ownership.md); its environment restrictions remain applicable, and [stored credential precedence](2026-10-09-stored-credential-precedence.md) supersedes its credential ordering. [Volatile references](2026-09-18-volatile-config-references.md) own reference lifetime and ordinary update behavior.
 
 Real profile tests cover multiple instances, persisted restart, invalid edits, stale revisions, higher-layer rejection, secret redaction, and configuration expressions. Browser tests exercise form writes and reset through the assembled application. Runtime reference identity is checked across live edits.

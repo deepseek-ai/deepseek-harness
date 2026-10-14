@@ -18,6 +18,9 @@
       "path": "../../../vendor/loader"
     },
     {
+      "path": "../../client/connection/tsconfig.host.json"
+    },
+    {
       "path": "../webserver"
     },
     {

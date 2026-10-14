@@ -11,8 +11,10 @@ import { SubprocessExecutableNotFoundError, type SubprocessRuntime, type Subproc
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalController, type Config } from '../src/index.ts'
+import { inputChannel } from './input.ts'
+import type { RemoteInvocation, PeerId } from '@deepseek-ai/dsh-typert-protocol'
 import { resolveShell } from '../src/shells.ts'
-import type { TerminalAttachmentId, WebTerminalId } from '../src/types.ts'
+import type { TerminalInput, WebTerminalId } from '../src/types.ts'
 
 const roots: Context[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose())) })
@@ -70,7 +72,7 @@ describe('TerminalController', () => {
   it('creates the environment default shell and keeps an existing identity when that default changes', async () => {
     const { controller, agent, subprocess } = fixture({ shell: undefined })
     subprocess.terminalEnvironment.mockResolvedValue({ platform: 'posix', defaultShell: '/usr/local/bin/zsh' })
-    expect(controller.environment(agent, signal())).toEqual({ cwd: '/workspace', maxCols: 200, maxRows: 100, maxInputBytes: 1000, scrollback: 100 })
+    expect(controller.environment(agent, signal())).toEqual({ cwd: '/workspace', maxCols: 200, maxRows: 100, maxInputBytes: 1000, maxBufferedBytes: 100_000, scrollback: 100 })
     expect(subprocess.terminalEnvironment).not.toHaveBeenCalled()
     const created = await controller.create(agent, request, signal())
     expect(created.shell.path).toBe('/usr/local/bin/zsh')
@@ -87,7 +89,7 @@ describe('TerminalController', () => {
     subprocess.resolveExecutable.mockRejectedValue(new SubprocessExecutableNotFoundError('default shell was removed'))
     expect(controller.environment(agent, signal())).toMatchObject({ cwd: '/workspace', maxInputBytes: 1000 })
     expect(controller.list(agent.id)).toMatchObject([{ id, state: 'running' }])
-    const stream = controller.follow(agent, id, 'restored' as TerminalAttachmentId, signal())[Symbol.asyncIterator]()
+    const stream = attachController(agent, id, signal())[Symbol.asyncIterator]()
     try {
       expect(await stream.next()).toMatchObject({ done: false, value: { type: 'snapshot', info: { id, state: 'running' } } })
       expect(subprocess.resolveExecutable).toHaveBeenCalledOnce()
@@ -181,9 +183,9 @@ describe('TerminalController', () => {
     expect(subprocess.spawnTerminal).toHaveBeenCalledOnce()
     expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ terminalType: 'xterm-256color', cwd: '/workspace' }))
     expect(controller.list('other' as SessionId)).toEqual([])
-    expect(() => controller.follow(owner(ctx, 'other'), id, 'writer' as TerminalAttachmentId, signal())).toThrow('no longer exists')
+    expect(() => attachController(owner(ctx, 'other'), id, signal())).toThrow('no longer exists')
     const abort = new AbortController()
-    const stream = controller.follow(agent, id, 'writer' as TerminalAttachmentId, abort.signal)[Symbol.asyncIterator]()
+    const stream = attachController(agent, id, abort.signal)[Symbol.asyncIterator]()
     const firstFrame = await stream.next()
     if (firstFrame.done === true) throw new Error('Terminal stream ended before its snapshot')
     expect(firstFrame.value.type).toBe('snapshot')
@@ -266,13 +268,13 @@ describe('TerminalController', () => {
     expect(controller.list(agent.id)).toHaveLength(0)
   })
 
-  it('rejects invalid dimensions, unavailable shells and oversized input before executing them', async () => {
+  it('rejects invalid dimensions and unavailable shells before allocating a process', async () => {
     const { controller, agent, subprocess } = fixture()
     await expect(controller.create(agent, { ...request, cols: 1 }, signal())).rejects.toThrow('dimensions')
     subprocess.resolveExecutable.mockRejectedValueOnce(new SubprocessExecutableNotFoundError('shell unavailable'))
     await expect(controller.create(agent, request, signal())).rejects.toThrow('unavailable')
     expect(subprocess.spawnTerminal).not.toHaveBeenCalled()
-    await expect(controller.write(agent, id, 'writer' as TerminalAttachmentId, 'x'.repeat(1001))).rejects.toThrow('input')
+
   })
 
   it('keeps the committed identity on repeated creation and counts pending reservations toward the Session limit', async () => {
@@ -319,27 +321,32 @@ describe('TerminalController', () => {
     expect(controller.list(agent.id)).toEqual([])
   })
 
-  it('routes input, resize and trimmed names through the active attachment', async () => {
+  it('routes ordered input and resize through the current Remote attachment', async () => {
     const { controller, agent, handle } = fixture({ maxInputBytes: 6 })
     await controller.create(agent, request, signal())
-    const attachmentId = 'writer' as TerminalAttachmentId
-    const stream = controller.follow(agent, id, attachmentId, signal())[Symbol.asyncIterator]()
+    const input = inputChannel<TerminalInput>()
+    const stream = attachController(agent, id, signal(), input.source)[Symbol.asyncIterator]()
     await stream.next()
     try {
-      await controller.write(agent, id, attachmentId, '终端')
+      input.push({ type: 'write', sequence: 1, data: '终端' })
+      expect((await stream.next()).value).toMatchObject({ type: 'ack', sequence: 1 })
       expect(handle.write).toHaveBeenCalledWith('终端')
-      await expect(controller.write(agent, id, attachmentId, '终端!')).rejects.toThrow('input exceeds')
-      await controller.resize(agent, id, attachmentId, 200, 100)
+      input.push({ type: 'resize', sequence: 2, cols: 200, rows: 100 })
+      expect((await stream.next()).value).toMatchObject({ type: 'state', info: { cols: 200, rows: 100 } })
+      expect((await stream.next()).value).toMatchObject({ type: 'ack', sequence: 2 })
       expect(handle.resize).toHaveBeenCalledWith(200, 100)
       controller.rename(agent, id, '  server logs  ')
       expect(controller.list(agent.id)).toMatchObject([{ title: 'server logs', cols: 200, rows: 100 }])
+      input.push({ type: 'write', sequence: 3, data: '终端!' })
+      await stream.next()
+      await expect(stream.next()).rejects.toThrow('input exceeds')
     } finally { await stream.return?.() }
   })
 
-  it.each([{ cols: 1.5, rows: 24 }, { cols: 201, rows: 24 }, { cols: 80, rows: 1.5 }, { cols: 80, rows: 0 }, { cols: 80, rows: 101 }])('rejects dimensions $cols × $rows before allocation or resize', async (dimensions) => {
+  it.each([{ cols: 1.5, rows: 24 }, { cols: 201, rows: 24 }, { cols: 80, rows: 1.5 }, { cols: 80, rows: 0 }, { cols: 80, rows: 101 }])('rejects dimensions $cols × $rows before allocation', async (dimensions) => {
     const { controller, agent, subprocess, handle } = fixture()
     await expect(controller.create(agent, { ...request, ...dimensions }, signal())).rejects.toThrow('dimensions')
-    await expect(controller.resize(agent, id, 'writer' as TerminalAttachmentId, dimensions.cols, dimensions.rows)).rejects.toThrow('dimensions')
+
     expect(subprocess.spawnTerminal).not.toHaveBeenCalled()
     expect(handle.resize).not.toHaveBeenCalled()
   })
@@ -347,7 +354,7 @@ describe('TerminalController', () => {
   it('rejects invalid wire identities and names without changing retained terminals', async () => {
     const { controller, agent } = fixture()
     await expect(controller.create(agent, { ...request, id: '../terminal' as WebTerminalId }, signal())).rejects.toThrow('Invalid terminal identity')
-    expect(() => controller.follow(agent, id, '' as TerminalAttachmentId, signal())).toThrow('attachment identity')
+    expect(() => controller.attach(agent, id, signal())).toThrow('Remote invocation')
     expect(() => { controller.rename(agent, id, '  ') }).toThrow('1–120')
     expect(() => { controller.rename(agent, id, 'x'.repeat(121)) }).toThrow('1–120')
     await controller.close(agent, id)
@@ -699,12 +706,40 @@ it.each(['allocation', 'committed'] as const)('retains failed %s cleanup, report
 
 it('classifies missing and closing terminal identities for localized recovery actions', async () => {
   const h = fixture()
-  expect(() => h.controller.follow(h.agent, id, 'view' as TerminalAttachmentId, signal()))
+  expect(() => attachController(h.agent, id, signal()))
     .toThrow(expect.objectContaining({ code: 'terminal/unavailable' }))
   await h.controller.create(h.agent, request, signal())
   h.handle.terminate.mockRejectedValueOnce(new Error('cleanup pending'))
   await expect(h.controller.close(h.agent, id)).rejects.toThrow('cleanup pending')
-  expect(() => h.controller.follow(h.agent, id, 'view' as TerminalAttachmentId, signal()))
+  expect(() => attachController(h.agent, id, signal()))
     .toThrow(expect.objectContaining({ code: 'terminal/unavailable' }))
   await expect(h.controller.create(h.agent, request, signal())).rejects.toMatchObject({ code: 'terminal/unavailable' })
 })
+
+it('publishes the carrier input window in the attachment snapshot', async () => {
+  const { controller, agent } = fixture()
+  await controller.create(agent, request, signal())
+  const abort = new AbortController()
+  const window = { maxBytes: 512, frameOverheadBytes: 76 }
+  const frames = attachController(agent, id, abort.signal, inputChannel<TerminalInput>().source, window)[Symbol.asyncIterator]()
+  try {
+    expect(await frames.next()).toMatchObject({ value: { type: 'snapshot', inputWindow: window } })
+  } finally {
+    abort.abort()
+    await frames.return?.()
+  }
+})
+
+function attachController(
+  agent: Agent, terminalId: WebTerminalId, signal: AbortSignal,
+  input: AsyncIterable<unknown> = inputChannel<TerminalInput>().source,
+  uplinkWindow?: RemoteInvocation['uplinkWindow'],
+) {
+  const invocation: RemoteInvocation = {
+    request: { namespace: 'terminal', method: 'attach', args: {} }, service: 'terminalController', signal,
+    peer: { id: 'test-peer' as PeerId, ctx: agent.ctx, principal: { kind: 'owner' }, signal, dispose: async () => {} },
+    uplink: <In>() => input as AsyncIterable<In>,
+    uplinkWindow,
+  }
+  return agent.ctx.extend({ invocation }).terminalController.attach(agent, terminalId, signal)
+}

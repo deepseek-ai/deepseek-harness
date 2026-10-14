@@ -1,6 +1,6 @@
 /** Profile schema generation: composition diagnostics, runtime resolution, and boot-free discovery. */
 
-import type { ProfilePatch } from '../profile-patches.ts'
+import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { composeEntries, createRuntimeResolution, type Profile } from '../profile.ts'
 import { collectConfigSchemas } from './collect.ts'
 import type { ConfigSchemaDiagnostic, ConfigSchemaDump } from './types.ts'
@@ -20,7 +20,7 @@ export type { ConfigSchemaDump, NativeConfigSchema } from './types.ts'
  */
 export async function generateConfigSchema(
   profile: Profile,
-  layers: readonly ProfilePatch[][],
+  layers: readonly PatchOptions[][],
   installAnchor: string,
 ): Promise<ConfigSchemaDump> {
   const diagnostics: ConfigSchemaDiagnostic[] = []

@@ -11,6 +11,9 @@ export class TerminalFollower {
   private finished = false
   private failure: Error | undefined
 
+  /** Whether this attachment still accepts input and output. */
+  get active(): boolean { return !this.closed && !this.finished }
+
   /** @param maxBytes - maximum queued UTF-8 bytes for this follower. */
   constructor(private readonly maxBytes: number) {}
 
@@ -22,13 +25,22 @@ export class TerminalFollower {
     if (this.closed || this.finished) return
     const bytes = Buffer.byteLength(JSON.stringify(frame), 'utf8')
     if (this.bytes + bytes > this.maxBytes) {
-      this.failure = new Error('Terminal output consumer exceeded its buffer; reconnect to recover the current screen')
-      this.close()
+      this.fail(new Error('Terminal output consumer exceeded its buffer; reconnect to recover the current screen'))
       return
     }
     this.queue.pushBack({ frame, bytes })
     this.bytes += bytes
     this.wake?.()
+  }
+
+  /**
+   * Fail this attachment without stopping its terminal; failures after finish or close are ignored.
+   * @param error - input or output failure reported to the attached consumer.
+   */
+  fail(error: Error): void {
+    if (!this.active) return
+    this.failure = error
+    this.close()
   }
 
   /** Finish after delivering every queued frame, including the final exit state. */

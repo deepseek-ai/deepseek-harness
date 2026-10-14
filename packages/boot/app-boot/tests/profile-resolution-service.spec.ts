@@ -102,7 +102,7 @@ describe('profile package metadata service', () => {
     expect(createRequire(parentURL).resolve('metadata-lib')).toBe(join(packageDir, 'index.cjs'))
   })
 
-  it('rejects refreshing a plain-data or absent resolution', async () => {
+  it('rejects refreshing a plain-data or absent resolution, and exposes the installed one', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-service-plain-'))
     roots.push(root)
     const packageDir = join(root, 'lib')
@@ -112,10 +112,13 @@ describe('profile package metadata service', () => {
       resolution: resolution(join(root, 'profiles'), join(root, 'profiles', 'test'), packageDir, pkg(packageDir, '1.0.0'), '1.0.0'),
     })
     await expect(ctx.pluginPackages.refresh()).rejects.toThrow('plugin-packages: the installed runtime resolution cannot be recomputed')
+    expect(ctx.pluginPackages.resolution?.profileDir).toBe(join(root, 'profiles', 'test'))
+    // Without an installed resolution Node resolves alone.
     const bare = new Context()
     contexts.push(bare)
     await bare.plugin(PluginPackages)
     await expect(bare.pluginPackages.refresh()).rejects.toThrow('plugin-packages: the installed runtime resolution cannot be recomputed')
+    expect(bare.pluginPackages.resolution).toBeUndefined()
   })
 
   it('reads translated metadata from the selected local package without importing its entry', async () => {
@@ -280,11 +283,11 @@ describe('profile package metadata service', () => {
     expectSelectedPackage(local, '2.0.0')
     const removedWorkerData = getEnvironmentData(key)
     expect(removedWorkerData).toEqual({ resolution: removed })
-    expect(() => { ctx.pluginPackages.replace(relinked) }).toThrow(
-      'profile resolution: relinking "linked-plugin" requires a process restart',
-    )
+    expect(removedWorkerData).toEqual({ resolution: removed })
+    // A link name may point to another directory once the plugins of its previous target stopped.
+    ctx.pluginPackages.replace(relinked)
     expectSelectedPackage(local, '2.0.0')
-    expect(getEnvironmentData(key)).toBe(removedWorkerData)
+    expect(getEnvironmentData(key)).toEqual({ resolution: relinked })
 
     await ctx.fiber.dispose()
     contexts.pop()

@@ -13,9 +13,11 @@ Web GUI 宿主以纯 loopback HTTP 提供 `/api`（默认 `127.0.0.1:3080`；CLI
 在载体层对整个 `/api` 前缀一次性执行浏览器信任检查——分为两部分：
 
 - **媒体类型栅栏（dsh-client-connection）**：每个 `/api` POST 必须声明 `application/json`，否则在解析前以 415 拒绝。跨站「简单请求」由此不复存在：任何跨站尝试都被逼进一次本服务器从不应答的 CORS 预检。
-- **权威栅栏（dsh-client-connection，`src/api-request-trust.ts`）**：每个请求的 `Host` 都必须是回环地址，或与某个 `trustedHosts` 条目匹配（带端口的 `host:port` 条目精确匹配，不带端口的条目匹配任意端口，均经 WHATWG 归一化；rebinding 防御）。刻意不为无标记请求开捷径：明文 HTTP 下浏览器的读取（EventSource、图片、导航——这些头只发给可信目标）既不带 `Origin` 也不带 Fetch-Metadata，因此无标记请求可能是被重绑页面发起且响应可被读走的读取，而 Host 是重绑唯一伪造不了的请求头；非浏览器客户端经由回环地址、推导的 LAN IP 字面量或已声明的权威通过。若带 `Origin` 则必须与 Host 权威完全一致；`sec-fetch-site: cross-site` 一律拒绝。不是单纯规范化 authority 的 `trustedHosts` 条目会导致插件加载失败——否则 WHATWG 解析会悄悄授权笔误里的 hostname，或放大精确端口授权。`host.pickDirectory` 失去专属守卫，与其他请求同栅而行。
+- **权威栅栏（dsh-client-connection，`src/api-request-trust.ts`）**：每个请求的 `Host` 都必须是回环地址，或与某个 `trustedHosts` 条目匹配（带端口的 `host:port` 条目精确匹配，不带端口的条目匹配任意端口，均经 WHATWG 归一化；rebinding 防御）。刻意不为无标记请求开捷径：明文 HTTP 下浏览器的读取（EventSource、图片、导航——这些头只发给可信目标）既不带 `Origin` 也不带 Fetch-Metadata，因此无标记请求可能是被重绑页面发起且响应可被读走的读取，而 Host 是重绑唯一伪造不了的请求头；非浏览器客户端经由回环地址、已声明的权威，或[绑定一个具体的 Web 地址](2026-09-19-concrete-web-bind-address.zh.md)所接纳的监听器自身绑定字面量通过。若带 `Origin` 则必须与 Host 权威完全一致；`sec-fetch-site: cross-site` 一律拒绝。不是单纯规范化 authority 的 `trustedHosts` 条目会导致插件加载失败——否则 WHATWG 解析会悄悄授权笔误里的 hostname，或放大精确端口授权。`host.pickDirectory` 失去专属守卫，与其他请求同栅而行。
 
-可达性由 webserver 的绑定配置（`host: 127.0.0.1 | 0.0.0.0`）控制，这道栅栏是混淆代理人防御，而不是身份。Connection 在栅栏之后应用独立的[浏览器令牌认证](2026-08-24-browser-token-authentication.zh.md)。栅栏不检查对端 socket 地址：绑定表达可达性，`trustedHosts` 点名接受的 authority，socket 地址提供不了 Host/Origin 校验需要的额外信息。
+可达性由 webserver 的绑定配置（`host`；[绑定一个具体的 Web 地址](2026-09-19-concrete-web-bind-address.zh.md)拥有它接受哪些字面量）控制，这道栅栏是混淆代理人防御，而不是身份。Connection 在栅栏之后应用独立的[浏览器令牌认证](2026-08-24-browser-token-authentication.zh.md)。栅栏不检查对端 socket 地址：绑定表达可达性，`trustedHosts` 点名接受的 authority，socket 地址提供不了 Host/Origin 校验需要的额外信息。
+
+`HostConnectionHandle.allowsRemoteAuthorities` 表示是否有通过校验的 `trustedHosts` 条目命名非回环主机名：代理后的回环监听器也能服务远程浏览器，因此目录选择器要求策略不接纳远程 authority，才会选择原生交互。
 
 ## 曾考虑的替代方案
 
@@ -26,6 +28,6 @@ Web GUI 宿主以纯 loopback HTTP 提供 `/api`（默认 `127.0.0.1:3080`；CLI
 ## 后果
 
 - 未来任何 `/api` 方法天然在覆盖范围内；不存在会被遗忘的按路由信任决定。
-- 自定义非 loopback 组合必须信任其服务 authority，否则请求会被拒绝；随后仍像每个 loopback 请求一样满足浏览器认证。随附 CLI 拒绝 `--host 0.0.0.0`；`--trusted-host` 只扩展 Host/Origin 栅栏，绝不授予身份。
+- 非回环监听器直接接受自己的绑定 IP（[绑定一个具体的 Web 地址](2026-09-19-concrete-web-bind-address.zh.md)）；其他远程 authority 需要配置的信任。每个被接受的 authority 仍须满足浏览器认证。`--trusted-host` 只扩展 Host/Origin 栅栏，绝不授予身份。
 - 客户端必须给 POST 体标注 `application/json`（我们自己的客户端一向如此；裸 fetch 测试补上了该头）。
 - Host 与 Origin 仍只是请求路由证据。进程令牌与签名 cookie 建立每个 Host 方法使用的浏览器身份。

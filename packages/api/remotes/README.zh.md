@@ -44,6 +44,8 @@ Client 组合挂载 Office 转换、Commands、凭据、settings、Goal、Schedu
 
 监听器签名不在此处重写。名单内每条事件的 Cordis `Events` 声明都住在其 owner 包 client-safe 的 `./types` 导出，本包两个 face 都把那些声明纳入编译面。Host face 还会把每个条目断言给 `TypertForwardableEventEntry`：`emit` 条目必须是已声明的单向事件，`waterfall` 条目则必须是已声明的 agent-scoped waterfall，且其最后一个参数是返回相同结果类型的 `next()` 回调。
 
+`emit` 条目可以声明 `resources`：以 `TypertResourceMap` 种类为键、类型由该事件自身参数决定的读取函数，例如 `api-session/added` 上的 `resources: { session: summary => summary.sessionId }`。Host entry 把它们原样附在每个转发帧上；只有访问控制在它们给出的资源上允许该事件时，Gateway 才把通知转发给非 owner Peer，未声明 `resources` 的通知触及内置的 `global` 资源。`api-session/activity`、`api-session/added`、`api-session/error`、`api-session/removed` 与 `api-session/status` 声明其 Session。一个通知只携带一个资源身份或不携带；集合类变化改走 follow 类流。
+
 Host entry 为每条 Client 流独立注册一组 allowlist listener 和一个队列，并在普通事件入队前拒绝非 JSON 参数。对于 waterfall，它只投影顶层 agent 身份与 JSON 请求字段；Client 结果也必须能无损表示为 JSON，而 `next()` 会委托给后续 Host listener。每个作用域 waterfall 请求都必须以 `request.agent` 直接携带路由所用的 agent；Host 会在转发前拒绝缺失或不匹配的身份。该 source 在 `ctx.typertGateway.registerRemoteEvents()` 暴露 Gateway 内部的 `$events` 逻辑流前同步挂好所有 listener，因此首个 `ready` 项既能证明增量投递已就绪，也会携带供 Client 显示路径的 Host home。撤回注册会中止活动流。
 
 无 payload 的 `schedule/changed` 事件使 Schedule 任务查询失效；Client 在收到通知及重连后重新读取。无 payload 的 `permission-presets/catalog-changed` 事件使进程目录失效。Client 在首次读取 `permissionPresets.catalog()` 前先订阅，并在通知后重新读取完整快照；该事件不携带目录状态，也不改变 Session 序号。

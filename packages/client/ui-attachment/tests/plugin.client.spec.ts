@@ -1,26 +1,42 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyHost } from '../src/index.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { ComposerAttachments } from '../src/client/ComposerAttachments.tsx'
-import { MessageImages } from '../src/client/MessageImages.tsx'
+import { MessageImages, MessageImagesContent } from '../src/client/MessageImages.tsx'
+
+const IMAGE_SLOTS = [
+  'conversation.chat.message.images', 'conversation.chat.user.images',
+  'conversation.trajectory.images', 'tool.call.images',
+] as const
 
 async function bench() {
   const ctx = new Context()
+  const sessions = new TestSessions(async (action) => { await action() }, ctx)
+  onTestFinished(async () => {
+    await sessions.disposeScopes()
+    await ctx.fiber.dispose()
+  })
+  ctx.provide('sessions', sessions)
+  ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry).await()
   ctx.slots.register({
     name: 'root',
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
-      'conversation.message.images': { kind: 'single', scope: 'session' },
+      'conversation.chat.message.images': { kind: 'single', scope: 'session' },
+      'conversation.chat.user.images': { kind: 'single', scope: 'session' },
       'conversation.trajectory.images': { kind: 'single', scope: 'session' },
       'tool.call.images': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
+  const registerFactory = vi.spyOn(ctx.slots, 'registerFactory')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber }
+  return { ctx, fiber, registerFactory }
 }
 
 describe('attachment plugin', () => {
@@ -29,30 +45,21 @@ describe('attachment plugin', () => {
   })
 
   it('registers all entries and removes them with the plugin fiber', async () => {
-    const { ctx, fiber } = await bench()
+    const { ctx, fiber, registerFactory } = await bench()
     expect(inject).toEqual(['slots'])
+    expect(registerFactory).toHaveBeenCalledWith({
+      name: 'conversation.images.content', scope: 'root', locale: 'conversation',
+    }, MessageImagesContent)
+    expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.input.attachments')).toMatchObject([{
-      locale: 'conversation',
-      component: ComposerAttachments,
+      locale: 'conversation', component: ComposerAttachments,
     }])
-    expect(ctx.slots.entries('conversation.message.images')).toMatchObject([{
-      locale: 'conversation',
-      component: MessageImages,
-    }])
-    expect(ctx.slots.entries('conversation.trajectory.images')).toMatchObject([{
-      locale: 'conversation',
-      component: MessageImages,
-    }])
-    expect(ctx.slots.entries('tool.call.images')).toMatchObject([{
-      locale: 'conversation',
-      component: MessageImages,
-    }])
-
+    for (const name of IMAGE_SLOTS) {
+      expect(ctx.slots.entries(name)).toMatchObject([{ component: MessageImages, options: { priority: 100 } }])
+    }
     await fiber.dispose()
-
     expect(ctx.slots.entries('conversation.input.attachments')).toHaveLength(0)
-    expect(ctx.slots.entries('conversation.message.images')).toHaveLength(0)
-    expect(ctx.slots.entries('conversation.trajectory.images')).toHaveLength(0)
-    expect(ctx.slots.entries('tool.call.images')).toHaveLength(0)
+    for (const name of IMAGE_SLOTS) expect(ctx.slots.entries(name)).toHaveLength(0)
+    expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(0)
   })
 })

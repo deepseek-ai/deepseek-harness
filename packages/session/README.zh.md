@@ -55,7 +55,7 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 | 包 | 职责 | ctx key |
 |---|---|---|
 | [`session-title/`](session-title/README.zh.md) | 基于日志的会话标题，带确定性回退与一个可选提供方 | `ctx.sessionTitle` |
-| [`session-title-llm/`](session-title-llm/README.zh.md) | 供提供方包共享的模型标题生成策略 | 库，不使用 ctx key |
+| [`session-title-llm/`](session-title-llm/README.zh.md) | 为提供方自有的标题策略提供的共享有界执行 | 库，不使用 ctx key |
 | [`session-title-first-prompt-llm/`](session-title-first-prompt-llm/README.zh.md) | 根据第一条合格的人类消息为会话生成标题 | 注册到 `ctx.sessionTitle` |
 
 ### 遥测

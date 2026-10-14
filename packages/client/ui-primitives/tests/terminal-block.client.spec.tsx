@@ -89,6 +89,42 @@ describe('TerminalBlock prompt label', () => {
 })
 
 describe('TerminalBlock states', () => {
+  it.each([
+    { output: undefined, running: false, exitCode: undefined },
+    { output: 'launch acknowledgement', running: false, exitCode: 7, signal: 'SIGTERM' },
+    { output: 'launch acknowledgement', running: false, exitCode: 0 },
+    { output: '', running: false, exitCode: 0 },
+  ])('background suppresses execution presentation for %j', (execution) => {
+    const view = render(<TerminalBlock command={'worker --watch\nprintf ready\n'} cwd="/workspace/app" background {...execution} />)
+    expect(promptRows(view.container)).toEqual(['appworker --watch', '$printf ready'])
+    expect(runStateOf(view.container)).toEqual({ state: null, label: undefined })
+    expect(outputLines(view.container)).toEqual([])
+    expect(view.queryByText('launch acknowledgement')).toBeNull()
+    expect(view.queryByText('无输出')).toBeNull()
+    expect(view.queryByText('信号 SIGTERM')).toBeNull()
+    expect(view.queryByRole('button')).toBeNull()
+    expect(view.container.firstElementChild?.hasAttribute('data-running')).toBe(false)
+    expect(view.container.firstElementChild?.hasAttribute('data-body')).toBe(false)
+  })
+
+  it('keeps command and prompt DOM when a background launch returns', () => {
+    const view = render(<TerminalBlock command="worker --watch" cwd="/workspace/app" background running />)
+    const command = view.container.querySelector('[data-command-text]')
+    expect(runStateOf(view.container).state).toBe('ongoing')
+    view.rerender(<TerminalBlock command="worker --watch" cwd="/workspace/app" background />)
+    expect(view.container.querySelector('[data-command-text]')).toBe(command)
+    expect(runStateOf(view.container)).toEqual({ state: null, label: undefined })
+    expect(view.queryByText('无输出')).toBeNull()
+    expect(view.queryByRole('button')).toBeNull()
+  })
+
+  it('keeps an explicit copyText override available in background mode', () => {
+    const view = render(<TerminalBlock command="worker" background copyText="explicit copy" />)
+    expect(view.getByRole('button', { name: '复制' })).toBeTruthy()
+    expect(view.queryByText('无输出')).toBeNull()
+    expect(runStateOf(view.container)).toEqual({ state: null, label: undefined })
+  })
+
   it('running with no output shows the command line only: no output box, no placeholder, no copy', () => {
     const view = render(<TerminalBlock command="sleep 5" running />)
     expect(view.getByText('sleep 5')).toBeTruthy()

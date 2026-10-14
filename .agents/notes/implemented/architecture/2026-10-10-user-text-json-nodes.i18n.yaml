@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for 2026-10-10-user-text-json-nodes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-10-user-text-json-nodes.md
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh:
+  en: 6185ac67a459beba
+  zh: 994bf90f05c0fd5a
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/problem:
+  en: 42e3752efebedde5
+  zh: 75e23c5762efbb1f
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision:
+  en: 71f5b33f58cd2066
+  zh: 8365506795c0b158
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/rule-roles-and-original-coordinates:
+  en: ed0fa9306f0605cb
+  zh: 7240e135f6d1b46b
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/one-reconciliation-loop:
+  en: acaeb2dccfac3f07
+  zh: 2170ec2b858627fc
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/query-cache-and-traversal:
+  en: 55dee64de32bef9a
+  zh: 69eb625451f55268
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/actual-facts-dependencies:
+  en: 11bc718324d22c03
+  zh: 371576c1b2a90d62
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/facts-text-and-registration-refresh:
+  en: 47bc3f32b9aa22de
+  zh: 59ffd06c800c00af
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/decision/output-ownership-and-publication:
+  en: e076cb57a1fdcfc1
+  zh: 988c02c6cf751f16
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/verification-requirements:
+  en: 78127c1f18eacf8a
+  zh: fcc2ad5db1279356
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/alternatives-considered:
+  en: 439e5ecff6701938
+  zh: 9861805f2a19439c
+/agent-note-user-text-candidate-scheduling-and-facts-driven-refresh/consequences:
+  en: 13bd26532d0353fa
+  zh: d6a4997b51af09d5

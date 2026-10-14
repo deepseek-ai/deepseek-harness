@@ -59,8 +59,13 @@ function fixture() {
     '  }, 20)',
     '  ctx.effect(() => () => { clearInterval(timer) })',
     '  ctx.inject(["webServer", "connection"], scope => {',
-    '    writeFileSync(config.url, scope.connection.authenticatedUrl(`http://127.0.0.1:${scope.webServer.port}`))',
-    '    scope.effect(() => () => { rmSync(config.url, { force: true }) })',
+    '    let disposed = false',
+    '    scope.effect(() => () => { disposed = true; rmSync(config.url, { force: true }) })',
+    // A recovery URL is a readiness signal; sibling HMR work must settle first.
+    '    void scope.get("loader").await().then(() => {',
+    '      if (disposed || !scope.get("webServer") || !scope.get("connection")) return',
+    '      writeFileSync(config.url, scope.connection.authenticatedUrl(`http://127.0.0.1:${scope.webServer.port}`))',
+    '    })',
     '  })',
     '}',
     '',
@@ -107,8 +112,8 @@ function fixture() {
   return { root, home, events, diagnostics, serverUrl, states, observer, stop, patch, watcher, render, url, config, witness, target }
 }
 
-function start(f: ReturnType<typeof fixture>, extra: string[] = []) {
-  const child = execa(process.execPath, [bin, '--profile', 'web', '--patch', f.watcher, ...extra, '--no-open', '--port', '0'], {
+function start(f: ReturnType<typeof fixture>, extra: string[] = [], nodeArgs: string[] = []) {
+  const child = execa(process.execPath, [...nodeArgs, bin, '--profile', 'web', '--patch', f.watcher, ...extra, '--no-open', '--port', '0'], {
     cwd: f.root,
     env: { ...process.env, DSH_HOME: f.home, DSH_AGENTS_HOME: join(f.root, '.agents'), DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_API_KEY: 'keyless-matrix-no-call', NODE_NO_WARNINGS: '1' },
     input: '', reject: false, timeout: 110_000, killSignal: 'SIGKILL',
@@ -167,6 +172,64 @@ function exit(result: { timedOut: boolean; signal?: string | undefined; exitCode
 }
 
 describe.skipIf(!built)('Web process failure matrix', () => {
+  it('exits on unreadable TLS material without opening a listener', async () => {
+    const f = fixture()
+    const missingCert = join(f.root, 'missing-cert.pem')
+    const listenerProbe = join(f.root, 'listen-probe.mjs')
+    const listening = join(f.root, 'listening')
+    writeFileSync(listenerProbe, [
+      "import { Server } from 'node:net'",
+      "import { appendFileSync } from 'node:fs'",
+      'const listen = Server.prototype.listen',
+      'Server.prototype.listen = function (...args) {',
+      `  this.once('listening', () => appendFileSync(${JSON.stringify(listening)}, 'listening\\n'))`,
+      '  return Reflect.apply(listen, this, args)',
+      '}',
+      '',
+    ].join('\n'))
+    const app = start(f, ['--tls-cert', missingCert, '--tls-key', missingCert], ['--import', pathToFileURL(listenerProbe).href])
+    try {
+      const result = await app.child
+      exit(result, 1)
+      expect(result.stderr).toContain(missingCert)
+      expect(existsSync(listening)).toBe(false)
+    } finally {
+      exit(await app.close(), 1)
+    }
+  })
+
+  it('rejects a non-loopback zone bind through the required Web runtime before readiness', async () => {
+    const f = fixture()
+    const host = 'fe80::1%dsh-test'
+    const network = join(f.root, 'zone-listen.mjs')
+    // Mock only the OS bind: the real WebServer retains its configured zone,
+    // and the shipped runtime row, Loader dependencies, and boot audit stay real.
+    writeFileSync(network, [
+      "import { Server } from 'node:net'",
+      'const listen = Server.prototype.listen',
+      'Server.prototype.listen = function (...args) {',
+      `  if (args[1] === ${JSON.stringify(host)}) {`,
+      '    args[1] = "127.0.0.1"',
+      '  }',
+      '  return Reflect.apply(listen, this, args)',
+      '}',
+      '',
+    ].join('\n'))
+    const app = start(f, ['--host', host], ['--import', pathToFileURL(network).href])
+    try {
+      const result = await app.child
+      exit(result, 1)
+      expect(result.stderr).toContain('dsh: startup failed: 1 required plugin did not activate')
+      expect(result.stderr).toContain('  web-runtime (required)\n    Package: @deepseek-ai/dsh-web-app')
+      expect(result.stderr).toContain(`bind address "${host}" carries an interface zone id`)
+      expect(result.stderr).toContain('pass --public-url')
+      expect(result.stdout).not.toContain('dsh web: http')
+      expect(app.events()).toBe('witness apply 0\nwitness dispose 0\n')
+    } finally {
+      exit(await app.close(), 1)
+    }
+  })
+
   for (const required of [false, true]) {
     const id = required ? 'acp' : 'matrix-optional'
     it.each(failures)(`${required ? 'required' : 'optional'} startup %s`, async (failure, diagnostic) => {
@@ -408,7 +471,7 @@ export function apply(ctx, config) {
       // Entry-level injection requirements are captured when the fiber is created.
       writeFileSync(f.patch, f.render('matrix-optional') + `- id: ${id}\n  disabled: true\n`)
       await app.wait(() => app.state(id) === FiberState.DISPOSED)
-      const inject = id === 'connection' ? ['webRuntime', 'matrixMissingWebDependency'] : ['matrixMissingWebDependency']
+      const inject = id === 'connection' ? ['webStartup', 'matrixMissingWebDependency'] : ['matrixMissingWebDependency']
       const pending = f.render('matrix-optional', undefined, 2) + `- id: ${id}\n  inject: ${JSON.stringify(inject)}\n`
       writeFileSync(f.patch, pending)
       await app.wait(() => app.state(id) === FiberState.PENDING && app.events().includes('witness apply 2\n'))

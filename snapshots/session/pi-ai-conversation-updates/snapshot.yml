@@ -1,0 +1,11 @@
+version: 1
+scenario: pi-ai-conversation-updates
+profile: headless
+composition: pi-ai-conversation-updates
+recording: authored
+header:
+  class: pi-ai-conversation-updates
+  pin: true
+  toolSchemasSource: dynamic-tool-updates
+  changes: 2
+  promptChanges: 1

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "持久 Shell 后端",
+    "description": "提供可跨多次调用保留状态的 Shell 终端。"
+  }
+}

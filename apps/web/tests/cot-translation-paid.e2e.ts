@@ -58,6 +58,13 @@ async function messageBody(request: IncomingMessage): Promise<Record<string, unk
   return body as Record<string, unknown>
 }
 
+/** Account model listing at the Messages origin; the version name is arbitrary because selection uses the id. */
+function listing(response: ServerResponse): void {
+  response.writeHead(200, { 'content-type': 'application/json' })
+  response.end(JSON.stringify({ object: 'list', data: [{ id: 'deepseek-flash', name: 'Native Flash arbitrary future version',
+    api_capabilities: { anthropic_messages: {} } }] }))
+}
+
 /** Complete external native Messages SSE; no Host method or adapter is replaced. */
 function reply(response: ServerResponse, text: string): void {
   response.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -81,6 +88,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   let holdNext = false
   async function respond(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const path = new URL(request.url ?? '/', 'http://native.test').pathname
+    if (path === '/models') { listing(response); return }
     if (path !== '/anthropic/v1/messages') throw new Error(`Unexpected external translation request: ${path}`)
     const auditSessionId = resources.sessionId
     if (auditSessionId === undefined || resources.scaffold === undefined) throw new Error('Paid I/O preceded the recorded Session')
@@ -123,8 +131,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   const origin = `http://127.0.0.1:${address.port}`
   const overlay = join(root, 'paid-translation.patch.yml')
   await writeFile(overlay, JSON.stringify([
-    { id: 'llm-deepseek-account', config: { baseURL: `${origin}/anthropic`, reasoningEffort: 'high',
-      models: [{ id: 'deepseek-flash', name: 'Native Flash arbitrary future version' }] } },
+    { id: 'llm-deepseek-account', config: { baseURL: `${origin}/anthropic`, reasoningEffort: 'high' } },
     { id: 'translator', config: { bingEndpoint: `${origin}/unexpected-free`, googleEndpoint: `${origin}/unexpected-free`,
       deepseekTimeoutMs: 120_000 } },
   ]))
@@ -168,6 +175,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   await settings.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   await settings.getByRole('button', { name: '插件', exact: true }).click()
   const panel = settings.locator('[data-plugin-panel]'), card = panel.locator(`[data-plugin-package="${BUNDLE_NAME}"]`)
+  await panel.getByRole('button', { name: '更多', exact: true }).click()
   const toggle = card.getByRole('switch'); await toggle.waitFor()
   expect(await toggle.getAttribute('aria-checked')).toBe('false')
   await toggle.click()
@@ -192,10 +200,10 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   await expect.poll(() => translated.getAttribute('data-translation-state')).toBe('ready')
   expect(calls).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'paid-result.expected.md'),
-    await captureStableAria(page, '[data-cot-translation]', scaffold.workspaceCwd), MODE)
-  await translated.getByRole('button', { name: '原文', exact: true }).click()
+    await captureStableAria(page, '[data-variant="think"]', scaffold.workspaceCwd), MODE)
+  await translated.getByRole('button', { name: '查看原文', exact: true }).click()
   await translated.getByText(ORIGINAL, { exact: true }).waitFor()
-  await translated.getByRole('button', { name: '译文', exact: true }).click()
+  await translated.getByRole('button', { name: '查看译文', exact: true }).click()
   expect(calls).toHaveLength(1)
   const saved = await readPersistedEvents(scaffold, auditSessionId)
   expect(saved.filter(event => !isTranslationRecord(event))).toEqual(events)

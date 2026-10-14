@@ -13,6 +13,7 @@ on:
         options:
           - larger-runner-benchmark
           - consolidated-runner-benchmark
+          - ssh-helper
 
 # New master pushes and manual runs replace obsolete checks in this workflow/ref.
 # Standby drills share cancellation; use completed runs as readiness evidence.
@@ -30,6 +31,13 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
+  ssh-helper:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'ssh-helper'
+    name: ssh helper / native artifacts
+    uses: ./.github/workflows/build-exe-for-ssh-helper.yml
+    with:
+      targets: node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64
+
   # These native runtime carriers are post-merge checks; release keeps all targets.
   python-runtime:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

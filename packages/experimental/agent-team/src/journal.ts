@@ -6,7 +6,7 @@ import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamEventType, TeamState } from './projection.ts'
 
 type AppendTeamEvent = <T extends TeamEventType>(type: T, data: SessionEventMap[T]) => void
-type MutableTeamEventType = 'team/member' | 'team/task' | 'team/message/queued' | 'team/message/delivered'
+type MutableTeamEventType = 'team/member' | 'team/task'
 
 /** Owns per-Lead transaction order and committed Team event publication. */
 export class TeamJournal {

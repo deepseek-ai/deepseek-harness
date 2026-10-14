@@ -55,6 +55,8 @@ Plan cards derive from native `tool/call` or PTC dispatch arguments through a Co
 
 The framework-bound `usePlans(turn)` exposes only submitted-plan data for that Turn. Chat indexes membership on Node updates and orders this collection when read; card rendering neither scans the transcript nor subscribes to other Turns or Node kinds.
 
+Submitted-plan cards follow the [file-card family](../../../docs/ui-radius.md#radius-scale) for their radius and icon-tile material.
+
 </details>
 
 -----

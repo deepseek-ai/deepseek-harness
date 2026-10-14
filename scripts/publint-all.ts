@@ -6,12 +6,12 @@ import {
   readFileSync,
   statSync,
 } from 'node:fs'
-import { availableParallelism } from 'node:os'
 import { dirname, posix, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { publint, type Message, type PackFile } from 'publint'
 import { formatMessage } from 'publint/utils'
 import ts from 'typescript'
+import { defaultParallelism } from './parallelism.ts'
 
 const CONCURRENCY_ENV = 'DSH_PUBLINT_CONCURRENCY'
 const repositoryRoot = resolve(import.meta.dirname, '..')
@@ -71,7 +71,7 @@ function publintConcurrency(total: number): number {
     return Math.min(total, parsed)
   }
 
-  return Math.min(total, availableParallelism())
+  return Math.min(total, defaultParallelism())
 }
 
 function publicationFiles(target: PackageTarget): PackFile[] {

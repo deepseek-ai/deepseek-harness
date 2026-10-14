@@ -39,6 +39,9 @@
       "path": "../../llm/llm-deepseek-api-key"
     },
     {
+      "path": "../../llm/llm-deepseek-account"
+    },
+    {
       "path": "../../credentials/credentials"
     },
     {

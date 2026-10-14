@@ -1,0 +1,13 @@
+version: 1
+scenario: ptc-policy-change
+profile: headless
+composition: ptc-policy-change
+recording: authored
+header:
+  class: ptc-policy-change
+  pin: true
+replay:
+  override: true
+permission: workspace-write
+workspace:
+  final: true
