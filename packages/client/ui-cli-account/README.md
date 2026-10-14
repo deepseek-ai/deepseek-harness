@@ -1,6 +1,6 @@
 ---
 description: "Give a CLI app plugin's Plugins page its account section, title tag, activation prompt, confirmations, and notices, mirrored from the plugin's Host account Remote with copy the plugin translates."
-kind: "package-reference"
+kind: "package-library"
 ---
 
 # @deepseek-ai/dsh-client-ui-cli-account
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-CLI app plugins such as Feishu and WeCom build their Plugins page from these shared pieces. `CliAccountConnection` follows the plugin's account stream, opens an authorization link once in the browser that started the operation, and reports outcomes. The section, tag, activation prompt, confirmation, and notice components render one of six display phases with copy the plugin translates. The web app mounts this row once, and plugins import it from the module table. Each plugin keeps its own presentation and dictionary.
+CLI app plugins such as Feishu and WeCom build their Plugins page from these shared pieces. `CliAccountConnection` follows the plugin's account stream, opens an authorization link once in the browser that started the operation, and reports outcomes. The section, tag, activation prompt, confirmation, and notice components render one of six display phases with copy the plugin translates. The Web shell links this library statically and shares one copy through its module table, so plugins import it like `ui-primitives`. Each plugin keeps its own presentation and dictionary.
 
 ## Table of Contents
 
@@ -25,28 +25,15 @@ CLI app plugins such as Feishu and WeCom build their Plugins page from these sha
 <a id="use-this-package"></a>
 ## Use this package
 
-A plugin page requests this module, creates one connection over its Remote, maps the Host view to a display phase, and renders the shared components.
+A plugin page imports this library, creates one connection over its Remote, maps the Host view to a display phase, and renders the shared components.
 
 ### When to choose it
 
 Choose it for the page half of a plugin built on [`@deepseek-ai/dsh-cli-account`](../../connector/cli-account/README.md), whose Remote streams a `CliAccountView`. A plugin that connects a hosted service over MCP uses the MCP account surfaces instead.
 
-### Minimal configuration
+### Import it
 
-The web app bundle mounts the row once; plugins never add it:
-
-```yaml
-- id: ui-cli-account
-  name: '@deepseek-ai/dsh-client-ui-cli-account'
-```
-
-A plugin page requests the module in its `package.json` and imports it from `@deepseek-ai/dsh-client-ui-cli-account/client`; the client bundle purity gate rejects a plugin bundle that inlines it instead:
-
-```json
-{ "dsh": { "client": { "platform": "web", "external": ["@deepseek-ai/dsh-client-ui-cli-account/client"] } } }
-```
-
-The row has no configuration fields.
+A plugin page imports `@deepseek-ai/dsh-client-ui-cli-account` and lists it in its `devDependencies`. The package is one of the Web shell's `PLATFORM_MODULES`, so a plugin bundle resolves the import against the shell's copy without `dsh.client.external`, and the client bundle purity gate rejects a bundle that inlines it instead. This package is a Web-shell build input: its static ESM keeps its CSS module for Vite, and it has no Loader row or configuration fields.
 
 ### Connection mirror
 
@@ -74,13 +61,13 @@ The components read these keys through the plugin's translator, so every plugin 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The row's client entry exports the mirror and the components; its `apply` does nothing, and its Host entry is an empty marker. Plugins request the client entry as a module-table row, so every plugin page shares one copy instead of inlining its own. The components receive translated text and display phases only; deriving the phase from a plugin's account states stays in the plugin.
+[`src/index.ts`](src/index.ts) exports the mirror and the components and has no plugin entry. The Web shell seeds the package into its module table, so every plugin page shares one copy instead of inlining its own. The components receive translated text and display phases only; deriving the phase from a plugin's account states stays in the plugin.
 
 | File | Role |
 |---|---|
-| [`src/client/connection.ts`](src/client/connection.ts) | The Host view mirror, link opening, notices, and pending-action guard |
-| [`src/client/components.tsx`](src/client/components.tsx) | The shared components, display phases, and dictionary keys |
-| [`src/client/index.ts`](src/client/index.ts) | The client entry the module table serves |
+| [`src/connection.ts`](src/connection.ts) | The Host view mirror, link opening, notices, and pending-action guard |
+| [`src/components.tsx`](src/components.tsx) | The shared components, display phases, and dictionary keys |
+| [`src/index.ts`](src/index.ts) | The library entry the shell's module table serves |
 
 </details>
 
@@ -90,7 +77,7 @@ The row's client entry exports the mirror and the components; its `apply` does n
 ## Further Exploration
 
 - [CLI account library](../../connector/cli-account/README.md) — the Host half that streams the view.
-- [Client modules](../../../docs/subsystems/client-modules.md) — module-table rows and `dsh.client.external` requests.
+- [Web shell](../web/README.md) — `PLATFORM_MODULES`, the shared module table that supplies this library.
 - [Plugin manager page](../ui-plugin-manager/README.md) — the Plugins page and its bundle slots.
 
 -----
@@ -110,7 +97,8 @@ None; this package neither assembles nor sends a provider request.
 
 - The six display phases are fixed; a plugin maps any further account state onto one of them.
 - The shared dictionary keys are the same for every plugin; a plugin cannot rename them.
-- The row registers no slots; each plugin registers its own section, tag, activation, and notice entries.
+- The library registers no slots; each plugin registers its own section, tag, activation, and notice entries.
+- The Web shell carries the library whether or not a CLI app plugin is installed.
 
 <a id="dev-note"></a>
 ### Dev Note

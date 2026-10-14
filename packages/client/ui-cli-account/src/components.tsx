@@ -1,8 +1,7 @@
 /** Plugins page components shared by CLI plugins: they render a plugin's display phase with the copy the plugin translates. */
 import { useEffect, type ReactNode } from 'react'
 import { Button, IconWarningOutlineRegular, Modal, StateDot, Tag, Toast, type StateDotState, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
 import type { CliAccountNotice } from './connection.ts'
 import css from './CliAccount.module.css'
@@ -114,10 +113,16 @@ export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
   )
 }
 
+/** The Plugins page detail the tag sits on: an item page, or a bundle page with its package. */
+export type CliAccountBadgeSubject =
+  | { readonly kind: 'item' }
+  | { readonly kind: 'bundle'; readonly pkg: { readonly name: string; readonly enabled: boolean } }
+
 /** The tag's subject and phase, with the plugin's translator. */
 export interface CliAccountBadgeProps {
   readonly t: Translate<CliAccountKey>
-  readonly subject: PropsRuntime<'plugins.detail.badge'>['subject']
+  /** The `subject` of the `plugins.detail.badge` slot props. */
+  readonly subject: CliAccountBadgeSubject
   readonly packageName: string
   readonly phase: CliAccountPhase
 }

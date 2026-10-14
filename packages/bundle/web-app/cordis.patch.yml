@@ -261,11 +261,6 @@
     - id: ui-renderer
       name: '@deepseek-ai/dsh-client-ui-renderer'
 
-    # Shared module that CLI app plugins request for their Plugins page account
-    # section, tag, activation prompt, and notices.
-    - id: ui-cli-account
-      name: '@deepseek-ai/dsh-client-ui-cli-account'
-
     - id: ui-session
       name: '@deepseek-ai/dsh-client-ui-session'
 

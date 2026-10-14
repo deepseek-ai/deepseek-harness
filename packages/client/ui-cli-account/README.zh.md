@@ -1,6 +1,6 @@
 ---
 description: "为 CLI 应用插件的插件页提供账号区块、标题旁标签、开启引导、确认和提示，内容镜像自插件的 Host 账号 Remote，文案由插件翻译。"
-kind: "package-reference"
+kind: "package-library"
 ---
 
 # @deepseek-ai/dsh-client-ui-cli-account
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-飞书、企业微信等 CLI 应用插件用这些共用组件搭建自己的插件页。`CliAccountConnection` 跟随插件的账号流，在发起操作的浏览器中把授权链接打开一次，并报告结果。区块、标签、开启引导、确认和提示组件按插件翻译的文案，渲染六种显示阶段之一。Web 应用只挂载这一行一次，插件从模块表中导入它。每个插件保留各自的展示推导和字典。
+飞书、企业微信等 CLI 应用插件用这些共用组件搭建自己的插件页。`CliAccountConnection` 跟随插件的账号流，在发起操作的浏览器中把授权链接打开一次，并报告结果。区块、标签、开启引导、确认和提示组件按插件翻译的文案，渲染六种显示阶段之一。Web 外壳静态链接这个库，并通过模块表共享同一份，插件像使用 `ui-primitives` 一样导入它。每个插件保留各自的展示推导和字典。
 
 ## 目录
 
@@ -25,28 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-插件页请求这个模块，基于自己的 Remote 创建一个连接，把 Host 视图映射为显示阶段，再渲染共用组件。
+插件页导入这个库，基于自己的 Remote 创建一个连接，把 Host 视图映射为显示阶段，再渲染共用组件。
 
 ### 何时选择
 
 用于基于 [`@deepseek-ai/dsh-cli-account`](../../connector/cli-account/README.zh.md) 的插件的页面一半，其 Remote 流式推送 `CliAccountView`。通过 MCP 接入托管服务的插件改用 MCP 账号界面。
 
-### 最小配置
+### 导入
 
-Web 应用 bundle 只挂载这一行一次，插件不需要添加：
-
-```yaml
-- id: ui-cli-account
-  name: '@deepseek-ai/dsh-client-ui-cli-account'
-```
-
-插件页在 `package.json` 中请求这个模块，并从 `@deepseek-ai/dsh-client-ui-cli-account/client` 导入；如果插件 bundle 把它内联进来，客户端 bundle 纯净性检查会拒绝：
-
-```json
-{ "dsh": { "client": { "platform": "web", "external": ["@deepseek-ai/dsh-client-ui-cli-account/client"] } } }
-```
-
-这一行没有配置字段。
+插件页导入 `@deepseek-ai/dsh-client-ui-cli-account`，并把它列入 `devDependencies`。本包是 Web 外壳的 `PLATFORM_MODULES` 之一，因此插件 bundle 无需 `dsh.client.external` 就会把导入解析到外壳的那一份；如果插件 bundle 把它内联进来，客户端 bundle 纯净性检查会拒绝。本包是 Web 外壳的构建输入：其静态 ESM 为 Vite 保留 CSS module，没有 Loader 行，也没有配置字段。
 
 ### 连接镜像
 
@@ -74,13 +61,13 @@ Web 应用 bundle 只挂载这一行一次，插件不需要添加：
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-这一行的客户端入口导出连接镜像和组件，其 `apply` 什么也不做，Host 入口是一个空标记。插件把客户端入口当作模块表中的一行来请求，因此每个插件页共用同一份代码，而不是各自内联一份。组件只接收翻译好的文案和显示阶段；从插件的账号状态推导显示阶段，仍由插件负责。
+[`src/index.ts`](src/index.ts) 导出连接镜像和组件，没有插件入口。Web 外壳把本包放进模块表，因此每个插件页共用同一份代码，而不是各自内联一份。组件只接收翻译好的文案和显示阶段；从插件的账号状态推导显示阶段，仍由插件负责。
 
 | 文件 | 职责 |
 |---|---|
-| [`src/client/connection.ts`](src/client/connection.ts) | Host 视图镜像、链接打开、提示与未完成操作保护 |
-| [`src/client/components.tsx`](src/client/components.tsx) | 共用组件、显示阶段与字典键 |
-| [`src/client/index.ts`](src/client/index.ts) | 模块表提供的客户端入口 |
+| [`src/connection.ts`](src/connection.ts) | Host 视图镜像、链接打开、提示与未完成操作保护 |
+| [`src/components.tsx`](src/components.tsx) | 共用组件、显示阶段与字典键 |
+| [`src/index.ts`](src/index.ts) | 外壳模块表提供的库入口 |
 
 </details>
 
@@ -90,7 +77,7 @@ Web 应用 bundle 只挂载这一行一次，插件不需要添加：
 ## 延伸阅读
 
 - [CLI 账号库](../../connector/cli-account/README.zh.md)——推送视图的 Host 一半。
-- [客户端模块](../../../docs/subsystems/client-modules.zh.md)——模块表中的行与 `dsh.client.external` 请求。
+- [Web 外壳](../web/README.zh.md)——`PLATFORM_MODULES`，提供本库的共享模块表。
 - [插件管理页面](../ui-plugin-manager/README.zh.md)——插件页及其插件包插槽。
 
 -----
@@ -110,7 +97,8 @@ Web 应用 bundle 只挂载这一行一次，插件不需要添加：
 
 - 六种显示阶段是固定的；插件要把其他账号状态映射到其中之一。
 - 共用字典键对所有插件都相同；插件不能改名。
-- 这一行不注册插槽；每个插件注册自己的区块、标签、开启引导和提示条目。
+- 本库不注册插槽；每个插件注册自己的区块、标签、开启引导和提示条目。
+- 无论是否安装了 CLI 应用插件，Web 外壳都带着本库。
 
 <a id="dev-note"></a>
 ### 开发备注

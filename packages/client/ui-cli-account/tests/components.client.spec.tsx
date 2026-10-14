@@ -2,14 +2,11 @@
 /** The section, tag, activation prompt, confirmation, and notice render a plugin's display phase with the copy it translates. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { PluginPackageRef, PluginsSubject } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   CliAccountActivation, CliAccountBadge, CliAccountConfirm, CliAccountSection, CliAccountToast,
-  type CliAccountKey, type CliAccountPhase, type CliAccountSectionProps,
-} from '../src/client/components.tsx'
-import { apply as applyClient } from '../src/client/index.ts'
-import { apply as applyHost } from '../src/index.ts'
+  type CliAccountBadgeSubject, type CliAccountKey, type CliAccountPhase, type CliAccountSectionProps,
+} from '../src/index.ts'
 
 afterEach(cleanup)
 
@@ -95,17 +92,17 @@ it.each<[string, CliAccountSectionProps['failure'], string]>([
 })
 
 it('tags only the enabled bundle with a settled phase', () => {
-  const pkg = (name: string, enabled = true): PluginPackageRef => ({ name, installed: true, availability: 'profile', official: false, enabled, rows: [] })
-  const badge = (subject: PluginsSubject, phase: CliAccountPhase = 'connected') =>
+  const pkg = (name: string, enabled = true) => ({ name, enabled })
+  const badge = (subject: CliAccountBadgeSubject, phase: CliAccountPhase = 'connected') =>
     <CliAccountBadge t={t} subject={subject} packageName={PACKAGE} phase={phase} />
   const { rerender } = render(badge({ kind: 'bundle', pkg: pkg(PACKAGE) }))
   expect(screen.getByText('Tag connected')).toBeTruthy()
   rerender(badge({ kind: 'bundle', pkg: pkg(PACKAGE) }, 'unavailable'))
   expect(screen.getByText('Tag unavailable')).toBeTruthy()
-  const hidden: PluginsSubject[] = [
+  const hidden: CliAccountBadgeSubject[] = [
     { kind: 'bundle', pkg: pkg(PACKAGE, false) },
     { kind: 'bundle', pkg: pkg('@acme/other') },
-    { kind: 'item', id: 'marketplace' },
+    { kind: 'item' },
   ]
   for (const subject of hidden) {
     rerender(badge(subject))
@@ -153,9 +150,4 @@ it('shows the latest notice with the success or failure tone', () => {
   expect(screen.getByText('Fixture connected')).toBeTruthy()
   rerender(<CliAccountToast<'connected'> t={t} notice={{ seq: 2, kind: 'action-failed' }} onDone={onDone} />)
   expect(screen.getByText('Try again')).toBeTruthy()
-})
-
-it('mounts as a module row with no Host or browser behavior of its own', () => {
-  expect(() => { applyHost() }).not.toThrow()
-  expect(() => { applyClient() }).not.toThrow()
 })

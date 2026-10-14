@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-cli-account",
-  "description": "Shared Plugins page pieces of CLI app plugins: the account connection mirror and the section, tag, activation, confirmation, and notice components",
+  "description": "Shared Plugins page pieces for CLI app plugins: the account connection mirror and components, linked into the Web shell",
   "version": "0.2.1-alpha.2",
   "publishConfig": {
     "access": "public"
@@ -18,21 +18,8 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./client": {
-      "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
-  },
-  "dsh": {
-    "client": {
-      "platform": "web"
-    }
-  },
-  "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
   },
   "license": "MIT",
   "peerDependencies": {
@@ -45,7 +32,6 @@
     "@deepseek-ai/dsh-cli-account": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
@@ -55,7 +41,7 @@
   },
   "files": [
     "lib/index.js",
-    "lib/client.js",
+    "lib/**/*.css",
     "lib/types/**/*.d.ts"
   ]
 }

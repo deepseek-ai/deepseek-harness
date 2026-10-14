@@ -5,7 +5,7 @@ import type { RemoteStreamOptions } from '@deepseek-ai/dsh-api-gateway/client'
 import type { CliAccountView, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { CliAccountConnection } from '../src/client/connection.ts'
+import { CliAccountConnection } from '../src/index.ts'
 
 type View = CliAccountView<{ readonly state: 'out' | 'in' }, 'check' | 'connect' | 'leave', 'authorizing' | 'leaving'>
 type Notice = 'connected' | 'left'

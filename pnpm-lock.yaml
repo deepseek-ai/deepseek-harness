@@ -977,6 +977,9 @@ importers:
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../packages/test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../../packages/client/ui-cli-account
       '@deepseek-ai/dsh-client-ui-deliverables':
         specifier: workspace:*
         version: link:../../packages/client/ui-deliverables
@@ -2999,9 +3002,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-chat':
         specifier: workspace:*
         version: link:../../client/ui-chat
-      '@deepseek-ai/dsh-client-ui-cli-account':
-        specifier: workspace:*
-        version: link:../../client/ui-cli-account
       '@deepseek-ai/dsh-client-ui-commands':
         specifier: workspace:*
         version: link:../../client/ui-commands
@@ -3988,9 +3988,6 @@ importers:
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:*
         version: link:../../test-support/client-runtime
-      '@deepseek-ai/dsh-client-ui-plugin-manager':
-        specifier: workspace:*
-        version: link:../ui-plugin-manager
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives
@@ -7037,6 +7034,9 @@ importers:
       '@deepseek-ai/dsh-client-store':
         specifier: workspace:*
         version: link:../store
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../ui-cli-account
       '@deepseek-ai/dsh-client-ui-dockkit':
         specifier: workspace:*
         version: link:../ui-dockkit
