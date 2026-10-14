@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// Offline wecom-cli stand-in reporting an authorized bot.
+const args = process.argv.slice(2).join(' ')
+if (args !== 'auth show --status') {
+  process.stderr.write(`unexpected wecom-cli arguments: ${args}\n`)
+  process.exit(1)
+}
+process.stdout.write('authorized\n')

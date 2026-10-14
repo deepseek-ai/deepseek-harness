@@ -239,6 +239,7 @@
     "tests/window-drag-coverage.e2e.ts",
     "tests/complex-history.perf.ts",
     "tests/pwsh-terminal.e2e.ts",
+    "tests/wecom-connection.e2e.ts",
     "tests/workflow-run.e2e.ts"
   ],
   "references": [
