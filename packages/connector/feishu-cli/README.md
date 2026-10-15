@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, puts its `lark-cli` executable on the private Shell PATH, and registers the skills embedded in that CLI. Its `feishu` Remote checks the CLI's default account, links an app and signs in through the CLI's browser flows, signs out, and cancels, for the [Feishu plugin page](../../client/ui-feishu/README.md). The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, puts its `lark-cli` executable on the private Shell PATH, and registers one `feishu` skill that indexes the guides embedded in that CLI. Its `feishu` Remote checks the CLI's default account, links an app and signs in through the CLI's browser flows, signs out, and cancels, for the [Feishu plugin page](../../client/ui-feishu/README.md). The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -31,9 +31,9 @@ Install the [Feishu plugin bundle](../feishu/README.md), which inserts this pack
 
 ### What you get
 
-After the plugin loads, the CLI's embedded skills, such as `lark-doc` and `lark-shared`, join the skill catalog. The agent loads one with the `skill` tool and runs `lark-cli` commands through the ordinary Shell tools under the current sandbox and approval policy. When a command reports a missing app configuration or sign-in, the agent asks the user to connect Feishu on the plugin page; it runs the CLI's own setup and sign-in flow only when the user asks to finish it in the conversation. Commands that save sign-in state ask for single-command approval because they write outside the workspace.
+After the plugin loads, one `feishu` skill joins the skill catalog. The agent loads it with the `skill` tool, opens the guide it needs, such as `lark-doc` or `lark-shared`, with `lark-cli skills read`, and runs `lark-cli` commands through the ordinary Shell tools under the current sandbox and approval policy. When a command reports a missing app configuration or sign-in, the agent asks the user to connect Feishu on the plugin page; it runs the CLI's own setup and sign-in flow only when the user asks to finish it in the conversation. Commands that save sign-in state ask for single-command approval because they write outside the workspace.
 
-Turning the row off in Plugin Manager withdraws the skills and the private PATH entry for later Shell calls. The CLI configuration and sign-in stay in place.
+Turning the row off in Plugin Manager withdraws the `feishu` skill and the private PATH entry for later Shell calls. The CLI configuration and sign-in stay in place.
 
 <a id="account-operations"></a>
 ### Account operations
@@ -70,9 +70,9 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It requires a Host subprocess runtime, checks that `binDir/lark-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `feishu` PATH contribution, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It requires a Host subprocess runtime, checks that `binDir/lark-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `feishu` PATH contribution that provides `lark-cli`, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
-[`src/skills.ts`](src/skills.ts) runs `lark-cli skills list --json` once per registration. A failed catalog is logged once and stays empty until the plugin reloads. Each load runs `skills read <name> --json`, removes the frontmatter, and places the DSH guidance before the vendor body and the CLI's reference-reading guidance after it. References are embedded in the binary, so the skill's resource base is opaque.
+[`src/skills.ts`](src/skills.ts) lists the `feishu` skill without running the CLI. Each load runs `lark-cli skills list --json` and places the DSH guidance, an index of each guide's name and description, and the instructions for opening a guide and the files it references; a failed catalog read fails that load, and the next load reads the catalog again. Guides are embedded in the binary, so the skill's resource base is opaque.
 
 </details>
 
@@ -94,47 +94,77 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <a id="model-experience"></a>
 ## Model Experience
 
-### Skill catalog entries
+### Skill catalog entry
 
 #### What the model sees
 
-Each skill that `lark-cli skills list --json` reports appears in the skill catalog with its vendor name and description; the catalog owner shortens long descriptions. `lark-cli` 1.0.97 reports 28 skills.
+One `feishu` entry appears in the skill catalog with the description below.
+
+##### Catalog description
+
+```markdown
+Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base, sheets, slides, Drive files, messages and group chats, calendar, video meetings and minutes, tasks, approvals, mail, contacts, OKR, attendance, events, and the CLI's app setup and sign-in. Load it before any Feishu or Lark task; it indexes the guides and how to open them.
+```
 
 #### Token effect
 
-The entries stay in context while the plugin is loaded. For `lark-cli` 1.0.97 they total about 6,000 characters.
+The entry stays in context while the plugin is loaded, at about 350 characters.
 
 #### KV Cache effect
 
-The catalog is fixed for one CLI version. Loading or unloading the plugin changes the catalog, which is republished as a new message and leaves earlier context in place.
+The entry is fixed. Loading or unloading the plugin changes the catalog, which is republished as a new message and leaves earlier context in place.
 
 ### Loaded skill body
 
 #### What the model sees
 
-A `skill` tool result contains the DSH guidance below, the vendor `SKILL.md` body without frontmatter, and the CLI's guidance for reading referenced files with `lark-cli skills read <name> <relative-path>`. Its resource description reads `Embedded lark-cli references; use the skills read command given in the loaded skill.`
+A `skill` tool result contains the DSH guidance below, a `## Guides` index with one `` `name`: description `` line for each guide that `lark-cli skills list --json` reports, and the opening instructions below. Its resource description reads `Embedded lark-cli guides; open them with the skills read command given in the loaded skill.`
 
 ##### DSH guidance
 
 ```markdown
 # Feishu in DSH
 
-Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` by name in the Host Shell; DSH installs and updates it. It uses the default lark-cli configuration and sign-in shared with the user's own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.
+Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` by name in the Host Shell; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user's own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.
 
-When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Load the lark-shared skill and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.
+When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Open the lark-shared guide and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.
 
-Commands that save sign-in state, such as `auth login --device-code` and `config init`, write outside the workspace and use up their one-time authorization even when the save is denied: run them with the Shell tool's single-command approval from the start. Run other commands in the existing sandbox and request that approval only when a credential, lock, log, or cache write is denied.
+Commands that save sign-in state, such as `auth login --device-code` and `config init`, write outside the workspace and use up their one-time authorization even when the save is denied: on the first attempt, set the Shell tool's `sandbox_permissions` to the narrowest mode that can write outside the workspace, with a `justification`. Run other commands in the existing sandbox and set `sandbox_permissions` only when a credential, lock, log, or cache write is denied.
 
 Do not install another lark-cli or run `lark-cli update`.
 ```
 
+##### Opening instructions
+
+```markdown
+## Opening a guide
+
+These guides belong to lark-cli and are not skills: open one with `lark-cli skills read <name>` in the Host Shell, not with the skill tool.
+
+Read a file that a guide references, such as `references/...`, with `lark-cli skills read <name> <relative-path>`. Read a reference to another guide, such as `../lark-foo/...`, with the same command without the leading `../`: `lark-cli skills read lark-foo/...`.
+```
+
 #### Token effect
 
-Each load adds the fixed guidance and one vendor body to the retained tool history. Reference files read through `lark-cli` arrive as ordinary Shell output.
+Each load adds the fixed guidance, the index, and the opening instructions to the retained tool history. For `lark-cli` 1.0.97 the index lists 28 guides, and the tool result has about 8,000 characters. Guides and the files they reference arrive as ordinary Shell output when the agent reads them through `lark-cli`.
 
 #### KV Cache effect
 
 Loading appends a tool result and does not rewrite earlier context.
+
+### Plugin CLIs entry
+
+#### What the model sees
+
+The row declares `lark-cli` with its private PATH entry, so the [Shell environment](../../shell/shell-env/README.md#model-experience) Plugin CLIs section of the system prompt lists `` `lark-cli` (feishu) `` while the row is loaded and the shell runs on this Host.
+
+#### Token effect
+
+The entry adds a few tokens to that section; the section's own text belongs to Shell environment.
+
+#### KV Cache effect
+
+Loading or unloading the row changes the section text, and provider cache reuse may end at the first changed token.
 
 ## Known Limitations and Deferred Work
 
@@ -145,7 +175,6 @@ Loading appends a tool result and does not rewrite earlier context.
 - The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal, and there is no DSH-private account or account picker. The plugin offers no unbind operation; turning it off keeps the configuration and sign-in.
 - Sign-in reads the device-authorization link and the completion from `lark-cli auth login --json` events; a CLI version that changes those events fails the connection with a retryable result.
 - Under a file sandbox, a token refresh during an ordinary command can be denied and then needs single-command approval.
-- A failed skill catalog stays empty until the plugin reloads.
 
 <a id="dev-note"></a>
 ### Dev Note

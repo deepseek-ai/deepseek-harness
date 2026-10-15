@@ -46,11 +46,11 @@ export default class Feishu extends TypertRemoteService {
     if (!ctx.subprocess.runsOnHost) {
       throw new Error('feishu: lark-cli and its default account are local to this Host; mount a Host subprocess runtime')
     }
-    ctx.shellEnv.registerPath({ name: 'feishu', directories: [resolveCliDirectory(config.binDir)] })
+    ctx.shellEnv.registerPath({ name: 'feishu', directories: [resolveCliDirectory(config.binDir)], programs: [PROGRAM] })
     const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
     this.account = new FeishuAccount(cli, ctx.logger)
     ctx.effect(() => () => this.account.dispose())
-    ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control, ctx.logger))
+    ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control))
   }
 
   /**

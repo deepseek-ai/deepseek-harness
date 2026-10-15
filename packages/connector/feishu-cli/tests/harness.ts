@@ -139,11 +139,3 @@ export const CATALOG = {
     { name: 'lark-shared', description: 'Setup and sign-in', version: '1.1.0' },
   ],
 }
-
-/** `skills read lark-doc --json` output with frontmatter, body, and vendor guidance. */
-export const DOC_SKILL = {
-  skill: 'lark-doc',
-  path: 'SKILL.md',
-  content: '---\nname: lark-doc\ndescription: Feishu documents\n---\n\n# docs\n\nRead documents.\n',
-  guidance: '> Tip: read this skill\'s own files with `lark-cli skills read lark-doc <relative-path>`.',
-}

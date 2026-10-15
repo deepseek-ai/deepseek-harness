@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-// Offline lark-cli stand-in serving one embedded skill, its JSON envelope, and one reference.
+// Offline lark-cli stand-in serving its guide catalog and one guide with the CLI's stderr reading tip.
 const replies = {
   'skills list --json': { ok: true, skills: [{ name: 'lark-doc', description: 'Read and edit Feishu documents.', version: '1.0.0' }] },
-  'skills read lark-doc --json': {
-    skill: 'lark-doc',
-    path: 'SKILL.md',
-    content: '---\nname: lark-doc\ndescription: Read and edit Feishu documents.\n---\n\n# docs\n\nRead references/lark-doc-fetch.md before fetching a document.\n',
-    guidance: "> Tip: read this skill's own files (e.g. `references/...`) with `lark-cli skills read lark-doc <relative-path>` to keep them in sync with this CLI version.",
-  },
-  'skills read lark-doc references/lark-doc-fetch.md': '# docs +fetch\n\nlark-cli docs +fetch --doc <url>',
+  'skills read lark-doc': '---\nname: lark-doc\ndescription: Read and edit Feishu documents.\n---\n\n# docs\n\nRead references/lark-doc-fetch.md before fetching a document.',
 }
-const reply = replies[process.argv.slice(2).join(' ')]
+const tips = {
+  'skills read lark-doc': "> Tip: read this skill's own files (e.g. `references/...`) with `lark-cli skills read lark-doc <relative-path>` to keep them in sync with this CLI version.",
+}
+const args = process.argv.slice(2).join(' ')
+const reply = replies[args]
 if (reply === undefined) {
-  process.stderr.write(`unexpected lark-cli arguments: ${process.argv.slice(2).join(' ')}\n`)
+  process.stderr.write(`unexpected lark-cli arguments: ${args}\n`)
   process.exit(1)
 }
 process.stdout.write(`${typeof reply === 'string' ? reply : JSON.stringify(reply)}\n`)
+if (tips[args] !== undefined) process.stderr.write(`${tips[args]}\n`)
