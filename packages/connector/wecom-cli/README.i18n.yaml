@@ -9,8 +9,8 @@
   en: 64ada5d1b3aac000
   zh: b18083c73eabe29a
 /deepseek-ai-dsh-wecom-cli/summary:
-  en: 3797939f599e30aa
-  zh: 7ba3897c2ae648eb
+  en: 9489a8025deee79d
+  zh: 1414740e045cd9a1
 /deepseek-ai-dsh-wecom-cli/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,8 +21,8 @@
   en: 4034b64f387ae470
   zh: 748eeb0414ceace4
 /deepseek-ai-dsh-wecom-cli/use-this-package/what-you-get:
-  en: 6fd2679febe1e32c
-  zh: 572186c1bd419625
+  en: 470efb04014aec86
+  zh: 3c06434a4cfb8b9c
 /deepseek-ai-dsh-wecom-cli/use-this-package/authorization-operations:
   en: 7d0ec689a89b609e
   zh: 86ce0058d42f38b1
@@ -30,8 +30,8 @@
   en: 9f62785a7999eef2
   zh: 2b345355d9515d13
 /deepseek-ai-dsh-wecom-cli/understand-the-implementation:
-  en: 899036f1b43e1570
-  zh: 50be7bf6d47cf185
+  en: 5733a8fee2c43400
+  zh: a0367f0fe8970ecf
 /deepseek-ai-dsh-wecom-cli/further-exploration:
   en: ab2a30827085cf94
   zh: 92eccac3d8db8ace
@@ -42,11 +42,11 @@
   en: 7265024b55daf9ef
   zh: 3447e587c56a25d6
 /deepseek-ai-dsh-wecom-cli/model-experience/skill-catalog-entries/what-the-model-sees:
-  en: ec32ffc442e9b899
-  zh: 426e4ca7ac40f147
+  en: 92eb47194f3c8cc3
+  zh: b9cfda74948e4b1a
 /deepseek-ai-dsh-wecom-cli/model-experience/skill-catalog-entries/token-effect:
-  en: 9378534bfff757a8
-  zh: efe6147c75aa247a
+  en: 5c0018a8ae3cd3d3
+  zh: 341e13c2f26125be
 /deepseek-ai-dsh-wecom-cli/model-experience/skill-catalog-entries/kv-cache-effect:
   en: ce9139edf3309f2b
   zh: bca06594b3e557e5
@@ -54,17 +54,17 @@
   en: 8955ac196848e69f
   zh: 54aa7db097eafd3c
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/what-the-model-sees:
-  en: 438a700e98072f1d
-  zh: 1bee43ade7789143
+  en: 2afd3b7a0b666202
+  zh: 7a1325e3dae2d9fa
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/token-effect:
-  en: 957d966dfe72a1bd
-  zh: 92b32dcae4c8e347
+  en: 1ed287a86abbc585
+  zh: 5d55a6fd61786866
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/kv-cache-effect:
   en: 1f6b842a95e14ce4
   zh: 0d57cdec5e828828
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work:
-  en: e502cb6227e1c1a9
-  zh: 0e34c683effc86b2
+  en: c1133f8d4a0b4400
+  zh: c4afa3136668fbb8
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work/dev-note:
-  en: 66bbbc6ce4221b09
-  zh: c41298add7a623d5
+  en: 9b6699137b57ded7
+  zh: 0ee77c64d5f93050

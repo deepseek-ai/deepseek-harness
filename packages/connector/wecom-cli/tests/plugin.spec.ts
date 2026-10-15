@@ -1,4 +1,4 @@
-import { readdir, rm } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
@@ -7,7 +7,6 @@ import Wecom from '../src/index.ts'
 import { createBinDir, ScriptedSubprocess } from './harness.ts'
 
 const CONFIG = { commandTimeoutMs: 5_000 }
-const SKILLS_DIR = new URL('../skills/', import.meta.url)
 
 describe('WeCom plugin', () => {
   let ctx: Context
@@ -29,15 +28,15 @@ describe('WeCom plugin', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
-  it('publishes the bundled skills under the wecom provider and loads the DSH-adapted shared skill', async () => {
+  it('publishes one wecom entry skill whose body carries the DSH guidance', async () => {
     await ctx.plugin(Wecom, { ...CONFIG, binDir })
 
     const catalog = await ctx.skills.list()
-    expect(catalog.map(skill => skill.name).sort()).toEqual((await readdir(SKILLS_DIR)).sort())
-    expect(new Set(catalog.map(skill => `${skill.provider}/${skill.source}`))).toEqual(new Set(['wecom/bundled']))
+    expect(catalog.map(skill => `${skill.provider}/${skill.source}/${skill.name}`)).toEqual(['wecom/bundled/wecom'])
 
-    const shared = await ctx.skills.get('wecomcli-shared')
-    expect(shared?.content).toContain('在 DSH 中，`wecom-cli` 由企业微信插件安装并加入 Host Shell 的 PATH')
+    const entry = await ctx.skills.get('wecom')
+    expect(entry?.content).toContain('`wecom-cli` 由企业微信插件安装并加入 Host Shell 的 PATH')
+    expect(await ctx.skills.get('wecomcli-shared')).toBeUndefined()
   })
 
   it('refuses to load without a Host subprocess runtime', () => {

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [WeCom plugin](../wecom/README.md). It installs a pinned `@wecom/cli`, puts its `wecom-cli` executable on the private Shell PATH, and registers the official WeCom skills it ships. Its `wecom` Remote checks the CLI's authorization, binds a bot through the CLI's QR-code page, and cancels, for the [WeCom plugin page](../../client/ui-wecom/README.md). The CLI keeps the bot credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [WeCom plugin](../wecom/README.md). It installs a pinned `@wecom/cli`, puts its `wecom-cli` executable on the private Shell PATH, and registers one `wecom` skill whose guides are the official WeCom skills. Its `wecom` Remote checks the CLI's authorization, binds a bot through the CLI's QR-code page, and cancels, for the [WeCom plugin page](../../client/ui-wecom/README.md). The CLI keeps the bot credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ Install the [WeCom plugin bundle](../wecom/README.md), which inserts this packag
 
 ### What you get
 
-After the plugin loads, the official skills, such as `wecomcli-doc`, `wecomcli-message`, and `wecomcli-shared`, join the skill catalog. The agent loads one with the `skill` tool and runs `wecom-cli` commands through the ordinary Shell tools under the current sandbox and approval policy. When `wecom-cli auth show --status` reports no authorization, the agent asks the user to connect WeCom on the plugin page; it runs the CLI's own `auth init` only when the user asks to finish it in the conversation, with single-command approval because it writes outside the workspace.
+After the plugin loads, one `wecom` skill joins the skill catalog. The agent loads it with the `skill` tool, opens the guide it needs, such as `wecomcli-doc` or `wecomcli-message`, with the file tools, and runs `wecom-cli` commands through the ordinary Shell tools under the current sandbox and approval policy. When `wecom-cli auth show --status` reports no authorization, the agent asks the user to connect WeCom on the plugin page; it runs the CLI's own `auth init` only when the user asks to finish it in the conversation, with single-command approval because it writes outside the workspace.
 
 Turning the row off in Plugin Manager withdraws the skills and the private PATH entry for later Shell calls. The CLI authorization stays in place.
 
@@ -70,7 +70,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 
 [`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It requires a Host subprocess runtime, checks that `binDir/wecom-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `wecom` PATH contribution, and mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `wecom` over this package's `skills/` directory, without the default roots or watching. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
-[`skills/`](skills) is a copy of `skills/` from `WecomTeam/wecom-cli` at commit `4c74ff2`, because upstream publishes the skills only in that repository and not in the npm package. Only `wecomcli-shared/SKILL.md` differs: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each skill's directory.
+[`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill: the DSH guidance, an index of the guides, and how to open them. [`skills/wecom/guides/`](skills/wecom/guides) is an unchanged copy of `skills/` from `WecomTeam/wecom-cli` at commit `4c74ff2`, because upstream publishes the skills only in that repository and not in the npm package. The filesystem provider discovers only `<root>/<name>/SKILL.md`, so the guides are not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
 
 </details>
 
@@ -95,11 +95,11 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 
 #### What the model sees
 
-Each of the 15 bundled skills appears in the skill catalog with its upstream name and Chinese description; the catalog owner shortens long descriptions. The `wecomcli-shared` description tells the agent to check authorization before the first `wecom-cli` command and to send the user to the WeCom plugin page when it is missing.
+The skill catalog lists one `wecom` skill. Its Chinese description names the WeCom features it covers and tells the agent to load it, then read the matching guide, whenever the user mentions WeCom or those features or gives a `doc.weixin.qq.com` or `drive.weixin.qq.com` link.
 
 #### Token effect
 
-The entries stay in context while the plugin is loaded. Their names and descriptions total about 3,700 characters.
+The entry stays in context while the plugin is loaded. Its name and description total about 160 characters.
 
 #### KV Cache effect
 
@@ -109,11 +109,11 @@ The catalog is fixed for one plugin version. Loading or unloading the plugin cha
 
 #### What the model sees
 
-A `skill` tool result contains the skill's `SKILL.md` body, and its resource base is the skill's directory, so referenced files are read with the ordinary file tools. The `wecomcli-shared` body tells the agent to run the plugin's `wecom-cli` by name, to ask the user to connect on the plugin page before running `auth init --noninteractive` itself, and to run that command with single-command approval.
+A `skill` tool result for `wecom` contains about 2,000 characters: the DSH guidance, an index that gives each of the 15 guides one sentence with the upstream routing rules, and how to open a guide. The DSH guidance tells the agent to run the plugin's `wecom-cli` by name, to ask the user to connect on the plugin page before running `auth init --noninteractive` itself, and to run that command with single-command approval; it takes precedence over `wecomcli-shared` where they disagree. Its resource base is `skills/wecom`, so the agent opens `guides/<name>/SKILL.md` with the file tools rather than the `skill` tool, treats a skill the guides name as that guide, and resolves a guide's relative paths against the guide's own directory.
 
 #### Token effect
 
-Each load adds one body to the retained tool history. Reference files arrive as ordinary file-read output.
+Each load adds the entry body to the retained tool history. Guides and their reference files arrive as ordinary file-read output.
 
 #### KV Cache effect
 
@@ -127,7 +127,7 @@ Loading appends a tool result and does not rewrite earlier context.
 - The plugin requires a subprocess runtime on this Host and fails to load when the composition's subprocess runtime runs elsewhere, such as over SSH.
 - The plugin uses the CLI's default configuration. Authorizing from DSH affects the user's own terminal, and there is no DSH-private bot or bot picker. `wecom-cli` cannot revoke the authorization, so neither the page nor turning the plugin off removes it.
 - Connection reads the QR-code link from the plain-text output of `auth init --noninteractive --no-browser`; a CLI version that changes that output fails the connection with a retryable result.
-- The bundled skills follow upstream commit `4c74ff2`; updating them is a manual copy that must keep the `wecomcli-shared` changes.
+- The guides follow upstream commit `4c74ff2`; updating them is a manual copy, after which the entry's index and DSH guidance must be checked against the new guides.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -135,6 +135,6 @@ Loading appends a tool result and does not rewrite earlier context.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-`.gitattributes` marks `skills/**` as vendored and exempts it from whitespace checks, so the copy keeps upstream whitespace. Specs and the `wecom-skills` session snapshot use stand-in executables through `binDir`.
+`.gitattributes` marks `skills/wecom/guides/**` as vendored and exempts it from whitespace checks, so the copy keeps upstream whitespace; the entry `SKILL.md` gets ordinary checks. Specs and the `wecom-skills` session snapshot use stand-in executables through `binDir`.
 
 </details>
