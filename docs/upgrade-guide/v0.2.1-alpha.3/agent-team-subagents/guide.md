@@ -12,6 +12,7 @@ English | [中文](guide.zh.md)
 The experimental Agent Teams plugins share agent creation, discovery, messaging, and interruption with subagents. Start a teammate with `subagent` or `subagent_fork`, describe its responsibility with `description`, and use its returned agent id for messages and task assignment. Descriptions may repeat and never identify a recipient.
 
 - `spawn_teammate` and the Team-scoped `send_message`, `list_agents`, and `interrupt_agent` are removed. The standard control tools use `agent_id`, not `target`. Continuable children of one live parent can message each other by id.
+- `list_agents` takes no arguments and always lists all reachable continuable descendants, plus a continuable caller’s live parent and siblings. Remove the `scope` argument from scripted calls. Listing deeper descendants does not grant messaging or task-assignment authority.
 - The Team profile no longer disables the subagent tools. Team adds only task tools, `wait_agent`, and collaboration guidance.
 - `agent-team` rejects `maxMembers`, `maxMessageBytes`, and `disposalTimeoutMs`; `tool-agent-team` rejects `interrupt`, `freshProvider`, and `forkProvider`.
 - `ctx.agentTeams` removes `spawnTeammate()`, `sendMessage()`, `interrupt()`, and `listMembers()`. Task views expose `ownerId` instead of `ownerName`; task ownership uses Session ids, including the Lead's id.

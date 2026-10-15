@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按 id 和描述列出代理。`children`（默认）从父级目录列出直接可继续子级；对于父级在线的可继续子代理，先列父级及可继续同级。`descendants` 只按稳定前序列出可达后代，附带直接父级 id 和深度。在线状态为 `running` 或 `inactive`。外部条目无需读取子 Session 即被省略；可读的一次性子级用于遍历，但不输出行。未知模式和无法读取的子级目录只在 `descendants` 范围产生诊断。普通 Session 分叉不是目录条目。
+按稳定前序列出全部可达的可继续后代，每行带直接父级 id 和深度。父级在线的可继续子代理先看到父级及可继续同级。在线状态为 `running` 或 `inactive`。外部条目无需读取子 Session 即被省略；可读的一次性子级用于遍历，但不输出行。未知模式和无法读取的子级目录产生诊断。普通 Session 分叉不是目录条目。
 
 -----
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 列表投影
 
-`list_agents` 无游标读取调用方目录，并通过在线 Agent 注册表细化状态。在 `children` 范围，可继续调用方的在线父级目录提供父级和同级行。后代遍历保留目录顺序；未知模式附带诊断并继续遍历，无法读取的目录则停止该分支。可达目录之外的后代无法被发现。
+`list_agents` 无游标遍历调用方目录，并通过在线 Agent 注册表细化状态。可继续调用方的在线父级目录提供父级和同级行。后代遍历保留目录顺序；未知模式附带诊断并继续遍历，无法读取的目录则停止该分支。可达目录之外的后代无法被发现。
 
 ### 源码地图
 
@@ -106,7 +106,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的[模式](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接收 `agent_id` 和 `message`；`interrupt_agent` 接收 `agent_id`；`list_agents` 接收可选 `scope`。地址统一为 Session id；描述用于展示，可以重复。
+生成的[模式](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接收 `agent_id` 和 `message`；`interrupt_agent` 接收 `agent_id`；`list_agents` 不接收参数。地址统一为 Session id；描述用于展示，可以重复。
 
 #### Token 影响
 
@@ -148,11 +148,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-每行按稳定顺序显示 `<id> [<status>] — <label>`。可继续子级的 `children` 列表先显示 `<id> [<status>] — your parent`，再显示 `<id> [<status>] — sibling: <label>`。`descendants` 不列父级或同级，并在破折号前添加 ` parent=<id> depth=<n>`；未知模式或无法读取的目录输出 `<id> [diagnostic: <reason>]`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
+每个后代按稳定顺序显示一行：`<id> [<status>] parent=<id> depth=<n> — <label>`。可继续子级的列表先显示 `<id> [<status>] — your parent`，再显示 `<id> [<status>] — sibling: <label>`。未知模式或无法读取的目录输出 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
 
 #### Token 影响
 
-随列表行数线性增长，包含 `children` 范围的父级和同级行。没有游标或上限。
+随列表行数线性增长，包含父级和同级行。没有游标或上限。
 
 #### KV Cache 影响
 

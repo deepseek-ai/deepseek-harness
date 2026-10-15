@@ -2153,21 +2153,12 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `list_agents`
 
-列出可联系的代理：你启动的子代理，以及你作为子代理时的父级和可继续同级。每行包含 id、描述和状态。running 表示正在工作，inactive 表示当前未工作。子代理完成时会通知你，无需反复检查；使用 send_message 继续对话。
+列出全部可达的可继续后代；如果调用方是可继续子代理，还列出父代理和可继续同级。行包含 id、描述和状态；后代行还包含父级 id 和深度。可以向父代理、可继续同级和直接子级发送消息，更深后代只接受 interrupt_agent。running 表示正在工作；inactive 表示当前没有工作。直属子代理结束时会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
   "type": "object",
-  "properties": {
-    "scope": {
-      "type": "string",
-      "description": "children (default) lists your parent, continuable siblings, and direct children; each accepts send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
-      "enum": [
-        "children",
-        "descendants"
-      ]
-    }
-  }
+  "properties": {}
 }
 ```
 

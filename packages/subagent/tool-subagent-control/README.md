@@ -53,7 +53,7 @@ Sends a message to the Session id in `agent_id`. Any exact live Agent may target
 
 ### list_agents
 
-Lists agents by id and description. `children` (default) lists direct continuable children from the parent catalog and, for a continuable subagent with a live parent, first lists that parent and its continuable siblings. `descendants` lists only reachable descendants in stable pre-order, with their direct parent id and depth. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children are traversal nodes but not output rows. Unknown modes and unreadable child catalogs produce diagnostics only in `descendants` scope. Ordinary Session forks are not catalog entries.
+Lists all reachable continuable descendants in stable pre-order, with each row’s direct parent id and depth. A continuable subagent with a live parent first sees that parent and its continuable siblings. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children are traversal nodes but not output rows. Unknown modes and unreadable child catalogs produce diagnostics. Ordinary Session forks are not catalog entries.
 
 -----
 
@@ -75,7 +75,7 @@ The tool forwards its execution signal, which owns admission only until inbox ac
 
 ### Listing projection
 
-`list_agents` reads the caller’s catalog without a cursor and refines status through the live Agent registry. In `children` scope, a continuable caller’s live parent catalog supplies the parent and sibling rows. Descendant traversal preserves catalog order; unknown modes remain traversable with diagnostics, while unreadable catalogs stop that branch. Descendants absent from reachable catalogs cannot be discovered.
+`list_agents` traverses the caller’s catalogs without a cursor and refines status through the live Agent registry. A continuable caller’s live parent catalog supplies the parent and sibling rows. Descendant traversal preserves catalog order; unknown modes remain traversable with diagnostics, while unreadable catalogs stop that branch. Descendants absent from reachable catalogs cannot be discovered.
 
 ### Source map
 
@@ -106,7 +106,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes an `agent_id` and `message`; `interrupt_agent` takes an `agent_id`; `list_agents` takes an optional `scope`. All addresses are Session ids; descriptions are display text and may repeat.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes an `agent_id` and `message`; `interrupt_agent` takes an `agent_id`; `list_agents` takes no arguments. All addresses are Session ids; descriptions are display text and may repeat.
 
 #### Token effect
 
@@ -148,11 +148,11 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-One line per row in stable order: `<id> [<status>] — <label>`. A continuable child’s `children` list starts with `<id> [<status>] — your parent`, then `<id> [<status>] — sibling: <label>` rows. `descendants` lists neither parent nor siblings and adds ` parent=<id> depth=<n>` before the dash; unknown modes or unreadable catalogs produce `<id> [diagnostic: <reason>]`. Status describes turn activity, not task completion. `(no subagents)` means no row survived the projection.
+One line per descendant in stable order: `<id> [<status>] parent=<id> depth=<n> — <label>`. A continuable child’s list starts with `<id> [<status>] — your parent`, then `<id> [<status>] — sibling: <label>` rows. Unknown modes or unreadable catalogs produce `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion. `(no subagents)` means no row survived the projection.
 
 #### Token effect
 
-Grows linearly with the listed rows, including parent and siblings in `children` scope. There is no cursor or cap.
+Grows linearly with the listed rows, including parent and siblings. There is no cursor or cap.
 
 #### KV Cache effect
 

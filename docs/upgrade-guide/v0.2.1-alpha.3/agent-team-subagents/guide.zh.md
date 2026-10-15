@@ -12,6 +12,7 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 实验性 Agent Teams 插件与 subagent 共用代理创建、发现、消息和中断能力。使用 `subagent` 或 `subagent_fork` 创建队友，以 `description` 描述职责，并用返回的 agent id 发送消息和分配任务。描述可以重复，不能作为收件人标识。
 
 - 移除 `spawn_teammate` 以及 Team 作用域的 `send_message`、`list_agents` 和 `interrupt_agent`。标准控制工具使用 `agent_id` 而非 `target`。同一个在线父代理的可继续子代理可以通过 id 互发消息。
+- `list_agents` 不接收参数，始终列出全部可达的可继续后代，以及可继续调用方的在线父级和同级。从脚本调用中移除 `scope` 参数。列出更深后代不会授予消息或任务指派权限。
 - Team profile 不再禁用 subagent 工具。Team 只增加任务工具、`wait_agent` 和协作提示。
 - `agent-team` 拒绝 `maxMembers`、`maxMessageBytes` 和 `disposalTimeoutMs`；`tool-agent-team` 拒绝 `interrupt`、`freshProvider` 和 `forkProvider`。
 - `ctx.agentTeams` 移除 `spawnTeammate()`、`sendMessage()`、`interrupt()` 和 `listMembers()`。任务视图以 `ownerId` 取代 `ownerName`；包括 Lead 在内，任务所有者均使用 Session id。
