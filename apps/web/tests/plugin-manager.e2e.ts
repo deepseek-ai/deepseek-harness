@@ -776,14 +776,14 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.getByText('启用团队协作、团队工具、成员列表和共享任务看板。').count()).toBe(1)
     const child = panel.locator('[data-plugin-row]', { hasText: 'tool-agent-team' })
     await child.getByText('团队工具', { exact: true }).waitFor()
-    expect(await child.getByText('为智能体提供成员协调、消息通信和共享任务管理工具。', { exact: true }).count()).toBe(1)
+    expect(await child.getByText('为团队成员提供共享任务管理和等待队友的工具。', { exact: true }).count()).toBe(1)
     try {
       await setLanguage('en')
       await panel.getByRole('heading', { name: 'Agent Teams', exact: true }).waitFor()
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
       expect(await panel.getByText('Enable team collaboration, team tools, the member roster, and the shared task board.').count()).toBe(1)
       await child.getByText('Team Tools', { exact: true }).waitFor()
-      expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
+      expect(await child.getByText('Give team members tools to manage shared tasks and wait for teammates.', { exact: true }).count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
       await panel.getByRole('button', { name: 'View Agent Teams', exact: true }).waitFor()
       expect(await panel.getByRole('switch', { name: 'Enable Agent Teams', exact: true }).count()).toBe(1)
@@ -836,7 +836,7 @@ describe('web e2e: plugin manager', () => {
         await teamPage.reload({ waitUntil: 'load' })
         await action.getByRole('button', { name: '智能体团队', exact: true }).click()
         await teamPanel.getByText('暂无共享任务，可以通过对话创建').waitFor()
-        await teamPanel.getByText('lead', { exact: true }).waitFor()
+        await teamPanel.getByText('队长', { exact: true }).waitFor()
         const manifest = JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
           dsh: { profile: { bundles: string[] } }
         }

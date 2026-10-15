@@ -17,7 +17,7 @@ function records(content: string): Record<string, unknown>[] {
 }
 
 describe('dsh run with Agent Teams enabled', () => {
-  it('runs two named teammates, sibling messages, dependent tasks, waiting, and final aggregation', async () => {
+  it('runs two teammates, sibling messages, dependent tasks, waiting, and final aggregation', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-agent-team-headless-'))
     try {
       const home = join(cwd, '.dsh')
@@ -103,9 +103,12 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(root).toBeDefined()
       const eventTypes = root!.map(record => record.type)
       expect(eventTypes).not.toContain('team/member')
-      expect(root!.filter(record => record.type === 'subagent/catalog')
-        .flatMap(record => (record.data as { name?: string }).name ?? []))
-        .toEqual(['implementer', 'researcher'])
+      const catalog = root!.filter(record => record.type === 'subagent/catalog').map(record => record.data)
+      expect(catalog).toEqual(expect.arrayContaining([
+        expect.objectContaining({ version: 0, label: 'Own deterministic implementation.' }),
+        expect.objectContaining({ version: 0, label: 'Own deterministic research.' }),
+      ]))
+      for (const entry of catalog) expect(entry).not.toHaveProperty('name')
       expect(eventTypes).not.toContain('team/message/queued')
       expect(eventTypes).not.toContain('team/message/delivered')
       const peerMessages = parsed.flatMap(log => log.filter(record => record.type === 'user/message'
