@@ -2432,7 +2432,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     },
     "owner": {
       "type": "string",
-      "description": "Agent id of the Lead or one of its direct continuable children for Lead-only reassign; omit to unassign."
+      "description": "Agent id of the Lead or a continuable descendant for Lead-only reassign; omit to unassign."
     }
   },
   "required": [

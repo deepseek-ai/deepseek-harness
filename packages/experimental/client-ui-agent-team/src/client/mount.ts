@@ -44,11 +44,9 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
         ctx.uiWorkspace.openSession(parentSessionId)
         return
       }
-      ctx.uiWorkspace.openSession({
-        parentSessionId,
-        childSessionId,
-        mode: 'continuable',
-      })
+      const address = sessions.subagentAddress(childSessionId)
+      if (address === undefined) throw new Error(ctx.locale.bind(NS)('unavailable'))
+      ctx.uiWorkspace.openSession(address)
     },
   }
 

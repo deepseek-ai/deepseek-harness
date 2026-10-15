@@ -31,6 +31,9 @@ async function bench(options: { addressed?: boolean; nested?: boolean; missingPa
         },
       }) } }
       : undefined,
+    subagentAddress: (id: SessionId) => id === CHILD || id === NESTED
+      ? { parentSessionId: id === NESTED ? CHILD : SESSION, childSessionId: id, mode: 'continuable' as const }
+      : undefined,
     refreshProjections: (id: SessionId) => {
       navigation.push(['refresh', id])
       return Promise.resolve()
@@ -132,6 +135,22 @@ describe('ui-team browser plugin', () => {
     const b = await bench({ addressed: true })
     b.actions().openTeammate(CHILD, SESSION)
     expect(b.navigation).toEqual([['open', SESSION]])
+  })
+
+  it('opens a deep member through its direct parent and returns to the Team Lead', async () => {
+    const b = await bench({ nested: true })
+    b.actions().openTeammate(NESTED, NESTED)
+    b.actions().openTeammate(NESTED, SESSION)
+    expect(b.navigation).toEqual([
+      ['open', { parentSessionId: CHILD, childSessionId: NESTED, mode: 'continuable' }],
+      ['open', SESSION],
+    ])
+  })
+
+  it('refuses to invent a parent address for an undiscovered member', async () => {
+    const b = await bench()
+    expect(() => { b.actions().openTeammate(SESSION, 'missing' as SessionId) }).toThrow()
+    expect(b.navigation).toEqual([])
   })
 
   it('does not open a teammate from a conversation outside the main view', async () => {

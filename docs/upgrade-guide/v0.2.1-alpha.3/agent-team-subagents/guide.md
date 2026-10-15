@@ -17,6 +17,8 @@ The experimental Agent Teams plugins share agent creation, discovery, messaging,
 - `ctx.agentTeams` removes `spawnTeammate()`, `sendMessage()`, `interrupt()`, and `listMembers()`. Task views expose `ownerId` instead of `ownerName`; task ownership uses Session ids, including the Lead's id.
 - Historical Team roster and mailbox records remain readable. Names in those records are historical data and do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
 
+- Custom Team compositions must provide `sessionQuery` so task assignment can verify inactive descendants from persisted Sessions. Profiles built on `@deepseek-ai/dsh-base` already provide it.
+
 ## Migration
 
 1. Remove the obsolete configuration keys and any patch rows that disable subagent tools solely for Team support.

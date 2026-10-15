@@ -840,7 +840,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-agent-team`
 
-- `inject`: `agents` · `sessions` · `sessionProjections`
+- `inject`: `agents` · `sessions` · `sessionProjections` · `sessionQuery`
 - `source`: [`packages/experimental/agent-team/src/types.ts:152`](../packages/experimental/agent-team/src/types.ts)
 
 ```ts config-catalog

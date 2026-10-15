@@ -174,6 +174,45 @@ describe('TeamAction', () => {
     expect(screen.getByRole('button', { name: /^worker.*运行中/u })).toBeTruthy()
   })
 
+  it('uses the member id when a historical row has no description', () => {
+    const { description: _description, ...withoutDescription } = worker
+    render(<TeamAction {...bench({ projections: {
+      [SESSION]: { state: 'ready', error: null, values: { agentTeam: { ...team, members: [lead, withoutDescription] } } },
+    } }).props} />)
+    openPanel()
+    expect(screen.getByRole('button', { name: /^worker-id/u })).toBeTruthy()
+  })
+
+  it('shares the root board and descendant roster from a grandchild conversation', () => {
+    const nestedId = 'nested-id' as SessionId
+    const nested = { ...worker, id: nestedId, description: 'nested review' }
+    const b = bench({ sessionId: nestedId, parentSessionId: WORKER })
+    b.sessions.set({ ...b.sessions.getSnapshot(),
+      byId: { ...b.sessions.getSnapshot().byId, [WORKER]: { ...summary(WORKER, false), parentId: SESSION, origin: 'subagent' } },
+      projectionsBySession: {
+        ...b.sessions.getSnapshot().projectionsBySession,
+        [WORKER]: { state: 'ready', error: null, values: {
+          agentTeam: { members: [{ ...worker, role: 'lead' }, nested], tasks: [] },
+        } },
+      } })
+    render(<TeamAction {...b.props} />)
+    openPanel()
+    expect(screen.getByText(task.subject)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '成员3' })).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /^nested review/u }).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${zh.lead}`, 'u') }))
+    expect(b.injected.openTeammate).toHaveBeenCalledWith(nestedId, SESSION)
+    act(() => {
+      b.sessions.set({ ...b.sessions.getSnapshot(), projectionsBySession: {
+        ...b.sessions.getSnapshot().projectionsBySession,
+        [SESSION]: { state: 'ready', error: null, values: {
+          agentTeam: { ...team, tasks: [{ ...task, subject: 'Updated root task' }] },
+        } },
+      } })
+    })
+    expect(screen.getByText('Updated root task')).toBeTruthy()
+  })
+
   it('reads the Lead projection from an addressed teammate conversation', () => {
     const b = bench({ sessionId: WORKER, parentSessionId: SESSION })
     render(<TeamAction {...b.props} />)

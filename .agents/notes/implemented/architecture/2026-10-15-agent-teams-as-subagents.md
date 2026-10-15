@@ -32,7 +32,7 @@ This supersedes the roster, provisioning, recovery, and messaging decisions in [
 
 Ordinary continuable siblings can discover and message one another. Team retains task ownership, dependencies, waits, policy, and role identity. Its member and message-size limits and Team-owned teardown disappear; subagent capacity and lifecycle apply. Failed starts leave no Team roster row. No new Session payload generation is required, and historical member names remain decode-only data.
 
-Deeper descendants share tasks and waits but are not roster rows; their message routes remain limited to their own parent, children, and continuable siblings. Separate working directories and cross-process coordination remain unsupported.
+The Web panel combines per-Session rosters to show discovered descendants at every depth. Lead task reassignment verifies live or persisted descendant ancestry; message routes remain limited to each member’s own parent, children, and continuable siblings. Separate working directories and cross-process coordination remain unsupported.
 
 ## Testing
 

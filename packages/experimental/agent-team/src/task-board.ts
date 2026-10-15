@@ -1,11 +1,10 @@
 /** Shared Team task DAG commands and runtime-enriched views. */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { TeamMembership } from './membership.ts'
+import type { TeamMembers, TeamMembership } from './membership.ts'
 import { TeamError } from './error.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
-import { resolveMember } from './membership.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
 import { TeamId, TeamTaskId } from './types.ts'
@@ -29,10 +28,12 @@ export class TeamTaskBoard {
   /**
    * @param journal - authoritative Lead-log transaction owner.
    * @param maxTasks - maximum non-deleted tasks retained by one Team.
+   * @param members - live membership and durable assignee resolution.
    */
   constructor(
     private readonly journal: TeamJournal,
     private readonly maxTasks: number,
+    private readonly members: TeamMembers,
   ) {}
 
   /**
@@ -182,7 +183,7 @@ export class TeamTaskBoard {
             break
           }
           if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
-          next = { ...current, status: 'in_progress', ownerId: resolveMember(root, state, request.owner) }
+          next = { ...current, status: 'in_progress', ownerId: await this.members.resolveMember(root, state, request.owner) }
           break
         }
         case 'delete': {

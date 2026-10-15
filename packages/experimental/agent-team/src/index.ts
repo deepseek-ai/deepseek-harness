@@ -45,7 +45,7 @@ function positiveLimit(name: string, value: number): number {
 
 /** Agent Teams service backed by the exact live Lead Session log. */
 export class TeamService extends Service {
-  static inject = ['agents', 'sessions', 'sessionProjections']
+  static inject = ['agents', 'sessions', 'sessionProjections', 'sessionQuery']
 
   static Config: z<Config> = z.object({
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
@@ -71,7 +71,7 @@ export class TeamService extends Service {
     this.activity = new TeamActivity()
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
     this.members = new TeamMembers(ctx)
-    this.tasks = new TeamTaskBoard(this.journal, maxTasks)
+    this.tasks = new TeamTaskBoard(this.journal, maxTasks, this.members)
 
     const notifyMember = ({ agent }: { agent: Agent }): void => {
       const membership = this.members.tryMembership(agent)

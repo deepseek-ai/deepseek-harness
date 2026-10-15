@@ -2426,7 +2426,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "owner": {
       "type": "string",
-      "description": "Agent id of the Lead or one of its direct continuable children for Lead-only reassign; omit to unassign."
+      "description": "Agent id of the Lead or a continuable descendant for Lead-only reassign; omit to unassign."
     }
   },
   "required": [

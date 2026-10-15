@@ -35,7 +35,7 @@ Choose it when delegated agents must divide and track shared work in one checkou
 
 <a id="smallest-working-setup"></a>
 
-Mount both Team packages in a composition that already provides continuable subagents, their messaging tools, and durable session storage, such as a profile built on `@deepseek-ai/dsh-base`:
+Mount both Team packages in a composition that already provides continuable subagents, their messaging tools, durable session storage, and `sessionQuery`, such as a profile built on `@deepseek-ai/dsh-base`:
 
 ```yaml
 # smallest Team addition over a composition with continuable subagents
@@ -55,7 +55,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions are display text and may repeat.
 
-Every root agent leads its own Team, and every live subagent below it, at any depth, receives Team tools. The roster lists the Lead, its direct continuable children, and historical `team/member` records. Deeper descendants work on the same board under their Session ids but have no roster row.
+Every root agent leads its own Team, and every live subagent below it, at any depth, receives Team tools. The roster lists the Lead, its direct continuable children, and historical `team/member` records. The Web panel combines these per-Session rosters to include discovered descendants at every depth.
 
 ### Messages between teammates
 
@@ -65,7 +65,7 @@ Members use standard `send_message` with Session ids: the Lead reaches direct ch
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by Session id to itself, a direct continuable child, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
+A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by Session id to itself, a continuable descendant at any depth, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
@@ -126,7 +126,7 @@ Team sends no messages. Routes, Steer delivery, cold resume, and sender framing 
 
 ### Shared task board
 
-Tasks are complete versioned snapshots; every mutation carries `expectedRevision`, and a stale caller receives `TEAM_TASK_STALE_REVISION` instead of overwriting a newer value. Numeric `task-<n>` ids require a safe-integer suffix, and id-space exhaustion reports `TEAM_TASK_LIMIT` instead of reusing the final id. Deleted tasks remain tombstones for replay and id stability but do not consume `maxTasks` or appear in `listTasks()`. `writeScopes` are normalized workspace-relative prefixes; views warn on overlap with in-progress tasks but never block claim or authorize writes. Lead reassignment resolves the root, a direct continuable child, or an active historical member by Session id, and reports `TEAM_MEMBER_NOT_FOUND` for anything else.
+Tasks are complete versioned snapshots; every mutation carries `expectedRevision`, and a stale caller receives `TEAM_TASK_STALE_REVISION` instead of overwriting a newer value. Numeric `task-<n>` ids require a safe-integer suffix, and id-space exhaustion reports `TEAM_TASK_LIMIT` instead of reusing the final id. Deleted tasks remain tombstones for replay and id stability but do not consume `maxTasks` or appear in `listTasks()`. `writeScopes` are normalized workspace-relative prefixes; views warn on overlap with in-progress tasks but never block claim or authorize writes. Lead reassignment accepts the root, continuable descendants at any depth, and active historical members by Session id. Deep assignment reads live or persisted observations and verifies each child’s own descriptor against its direct parent’s catalog. Ordinary forks, unrelated Teams, missing ancestry, and cycles report `TEAM_MEMBER_NOT_FOUND`; storage failures remain read errors.
 
 ### Waiting
 
@@ -194,7 +194,7 @@ These limits describe what a team cannot do yet or what needs special operationa
 - **Experimental prototype with no stability promise** — the package is public, but its contracts can change freely while it incubates.
 - **One process and one shared checkout** — members share cwd and observe edits immediately; this package provides no worktree, remote member, merge, or filesystem lock.
 - **Advisory write scopes** — Bash, formatters, code generators, and direct external writers can bypass filesystem version checks; Leads must coordinate ownership and review the final diff.
-- **Roster covers direct continuable children** — deeper descendants share tasks and waits but have no roster row; they can claim tasks under their own ids and message only their direct parent, children, and continuable siblings.
+- **Adjacent messaging** — members message only their direct parent, children, and continuable siblings, even though the task board includes all depths.
 - **Membership needs a live lineage** — a subagent whose parent Agent is not loaded is outside every Team, so its Team calls fail with `TEAM_NOT_MEMBER`.
 - **No automatic ownership release** — inactivity, interruption, process exit, and failed work do not release a task owner.
 - **Historical queued messages stay undelivered** — `team/message/queued` records without a matching delivery remain readable in the Lead log, but no member receives them.

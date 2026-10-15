@@ -35,7 +35,7 @@ kind: "package-reference"
 
 <a id="smallest-working-setup"></a>
 
-在已经提供 continuable subagent、其消息工具和持久会话存储的组合（例如基于 `@deepseek-ai/dsh-base` 的 profile）中挂载两个 Team 包：
+在已经提供 continuable subagent、其消息工具、持久会话存储和 `sessionQuery` 的组合（例如基于 `@deepseek-ai/dsh-base` 的 profile）中挂载两个 Team 包：
 
 ```yaml
 # smallest Team addition over a composition with continuable subagents
@@ -55,7 +55,7 @@ kind: "package-reference"
 
 让 Lead 使用 `description` 描述工作并启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的 Session id 用于寻址队友；描述用于展示，可以重复。
 
-每个根代理领导自己的 Team，其下任意深度的在线子代理都获得 Team 工具。成员列表包含 Lead、其直接可继续子级以及历史 `team/member` 记录。更深的后代按 Session id 使用同一任务板，但不显示为成员行。
+每个根代理领导自己的 Team，其下任意深度的每个在线子代理都收到 Team 工具。每个会话的成员列表包含 Lead、直接可继续子代理和历史 `team/member` 记录。Web 面板合并这些会话列表，显示所有已发现的后代。
 
 ### teammate 之间的消息
 
@@ -65,7 +65,7 @@ kind: "package-reference"
 
 任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有其全部依赖完成后，任务才可 claim。
 
-成员认领任务后开始工作，可以完成、释放或重新打开任务。Lead 可按 Session id 将任务重新分配给自身、直接可继续子级或活跃的历史成员。其他成员自行认领任务。每次变更都使用比较并设置，防止过期更新覆盖新工作。
+成员认领任务后开始工作，可以完成、释放或重新打开任务。Lead 可按 Session id 将任务重新分配给自身、任意深度的可继续后代或活跃的历史成员。其他成员自行认领任务。每次变更都使用比较并设置，防止过期更新覆盖新工作。
 
 当两个 in-progress 任务计划触及重叠路径时，文件提示会产生警告——它们绝不阻止任何操作。已删除任务保留在历史中，但从活动列表中消失。
 
@@ -126,7 +126,7 @@ Team 不发送消息。`send_message` 的路由、Steer 投递、冷恢复和发
 
 ### 共享任务板
 
-任务是完整版本化快照；每次变更都携带 `expectedRevision`，陈旧调用方会收到 `TEAM_TASK_STALE_REVISION`，而不会覆盖更新的值。数字 `task-<n>` id 的后缀必须是安全整数，id 空间耗尽时报告 `TEAM_TASK_LIMIT`，而不是复用最后一个 id。已删除任务作为 tombstone 保留以供回放与维持 id 稳定，但不占用 `maxTasks`，也不出现在 `listTasks()` 中。`writeScopes` 是规范化后的 workspace 相对前缀；视图会对与 in-progress 任务的重叠发出警告，但绝不阻止 claim 或授予写权限。Lead reassign 按 Session id 解析根、直接可继续子级或 active 历史成员，其他目标报告 `TEAM_MEMBER_NOT_FOUND`。
+任务是完整版本化快照；每次变更都携带 `expectedRevision`，陈旧调用方会收到 `TEAM_TASK_STALE_REVISION`，而不会覆盖更新的值。数字 `task-<n>` id 的后缀必须是安全整数，id 空间耗尽时报告 `TEAM_TASK_LIMIT`，而不是复用最后一个 id。已删除任务作为 tombstone 保留以供回放与维持 id 稳定，但不占用 `maxTasks`，也不出现在 `listTasks()` 中。`writeScopes` 是规范化后的 workspace 相对前缀；视图会对与 in-progress 任务的重叠发出警告，但绝不阻止 claim 或授予写权限。Lead 按 Session id 将任务分配给根、任意深度的 continuable 后代或活跃历史成员。深层指派读取实时或持久观察，并逐层核对孩子自己的 descriptor 与直接父代理的 catalog。普通 fork、其他 Team、缺失祖先和循环关系报告 `TEAM_MEMBER_NOT_FOUND`；存储读取失败原样报告。
 
 ### 等待
 
@@ -194,7 +194,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 - **实验原型，无稳定性承诺**——本包公开发布，但孵化期间约定仍可自由变更。
 - **单进程、共享 checkout**——成员共享 cwd，修改立即可见；本包不提供 worktree、远端成员、merge 或文件锁。
 - **write scope 仅作提示**——Bash、formatter、代码生成器与直接外部写入可以绕过文件版本检查；Lead 必须协调 owner 并检查最终 diff。
-- **成员列表覆盖直接可继续子级**——更深的后代共享任务和等待，但不显示成员行；它们可按自身 id 认领任务，并且只能联系直接父级、子级和可继续同级。
+- **相邻消息路由**——成员只能联系直接父级、子级和可继续同级，即使任务板覆盖所有深度。
 - **成员关系需要 live 谱系**——parent Agent 未加载的 subagent 不属于任何 Team，因此其 Team 调用以 `TEAM_NOT_MEMBER` 失败。
 - **不会自动释放 owner**——成员不活动、interrupt、进程退出与工作失败都不会释放任务 owner。
 - **历史排队消息保持未投递**——没有对应投递记录的 `team/message/queued` 记录仍可在 Lead 日志中读取，但不会有成员收到它们。

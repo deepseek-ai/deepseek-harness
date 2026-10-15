@@ -10,6 +10,7 @@ import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import type {} from '@deepseek-ai/dsh-experimental-agent-team'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { MockAdapter } from '../../../packages/core/agent-loop/tests/mock-adapter.ts'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
@@ -203,6 +204,49 @@ describe('web e2e: Agent Teams panel', () => {
       await page.setViewportSize(viewport)
     }
   })
+
+  it('shows nested teammates on the root board and opens their direct-parent conversation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-descendants'))
+    const root = scaffold.ctx.agents.roots()[0]!
+    const provider = 'team-descendant-fixture'
+    scaffold.ctx.effect(() => scaffold.ctx.llm.registerAdapter([provider], new MockAdapter(['hang', 'hang'])))
+    const branch = await scaffold.ctx.subagents.startActivation({
+      provider: 'spawn', label: 'Branch reviewer', delivery: 'caller', signal: new AbortController().signal,
+      request: {
+        parent: root, prompt: [{ type: 'text', text: 'Review the branch.' }],
+        agentOptions: { provider, model: 'fixture' },
+      },
+    })
+    onTestFinished(() => branch.dispose())
+    const parent = await vi.waitFor(() => {
+      const agent = scaffold.ctx.agents.get(branch.childId)
+      expect(agent?.status).toBe('running')
+      return agent!
+    })
+    const leaf = await scaffold.ctx.subagents.startActivation({
+      provider: 'spawn', label: 'Nested reviewer', delivery: 'caller', signal: new AbortController().signal,
+      request: { parent, prompt: [{ type: 'text', text: 'Review nested changes.' }] },
+    })
+    onTestFinished(() => leaf.dispose())
+    await vi.waitFor(() => { expect(scaffold.ctx.agents.get(leaf.childId)?.status).toBe('running') })
+    const task = await scaffold.ctx.agentTeams.createTask(root, { subject: 'Nested task', description: 'Review nested changes.' })
+    await scaffold.ctx.agentTeams.updateTask(root, {
+      taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: leaf.childId,
+    })
+    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Agent Team', exact: true })
+    const panel = page.getByRole('dialog', { name: 'Agent Team', exact: true })
+    await trigger.click()
+    await panel.getByText('Owner: Nested reviewer', { exact: true }).waitFor()
+    await panel.getByRole('button', { name: /Nested reviewer/u }).click()
+    await page.getByText('Review nested changes.', { exact: true }).first().waitFor()
+    await trigger.click()
+    await panel.getByText('Nested task', { exact: true }).waitFor()
+    expect(await panel.getByRole('button', { name: /Nested reviewer/u }).isDisabled()).toBe(true)
+    await panel.getByRole('button', { name: /Lead/u }).click()
+    await page.getByText('Ready.', { exact: true }).waitFor()
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['task.expected.md', 'resize.expected.md'])

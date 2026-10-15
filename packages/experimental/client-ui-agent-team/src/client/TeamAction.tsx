@@ -17,6 +17,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
 import css from './TeamAction.module.css'
 import { teamRootId } from './team-root.ts'
+import { sameTeamView, teamView } from './team-view.ts'
 
 /** Business actions injected by the browser plugin. */
 export interface TeamActionInjected {
@@ -193,8 +194,8 @@ export function TeamAction({
   const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
   const team = useSessions((state) => {
     const rootId = teamRootId(sessionId, parentId, state.byId)
-    return rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam
-  })
+    return teamView(state, rootId)
+  }, sameTeamView)
   const opening = useSession(snapshot => snapshot.openState === 'loading')
   const listing = useSessions(state => state.phase === 'pending')
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)

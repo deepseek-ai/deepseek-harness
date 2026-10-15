@@ -15,7 +15,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import TeamService, { TeamError, TeamId, TeamTaskId } from '../src/index.ts'
-import { resolveMember } from '../src/membership.ts'
+import { TeamMembers } from '../src/membership.ts'
 import { emptyTeamState, teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamProjectionState } from '../src/projection.ts'
 import { TestSessionQuery } from './test-session-query.ts'
@@ -176,7 +176,8 @@ describe('Team identity and membership', () => {
   })
 
   it('resolves task assignees only by id, including historical members', async () => {
-    const { lead } = await setup([])
+    const { ctx, lead } = await setup([])
+    const members = new TeamMembers(ctx)
     const state = {
       ...emptyTeamState(lead.id, SessionLogOffset(0)),
       children: [{ id: SessionId('named-child'), description: 'reviewer' }],
@@ -186,11 +187,73 @@ describe('Team identity and membership', () => {
       ],
     }
     for (const id of [lead.id, SessionId('named-child'), SessionId('old-child')]) {
-      expect(resolveMember(lead, state, id)).toBe(id)
+      await expect(members.resolveMember(lead, state, id)).resolves.toBe(id)
     }
     for (const alias of ['lead', 'reviewer', 'legacy', 'broken', 'failed-child']) {
-      expect(() => resolveMember(lead, state, SessionId(alias))).toThrow(expect.objectContaining({ code: 'TEAM_MEMBER_NOT_FOUND' }))
+      await expect(members.resolveMember(lead, state, SessionId(alias))).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
     }
+  })
+
+  it('assigns tasks to live and inactive deep descendants without admitting ordinary forks or another Team', async () => {
+    const { ctx, lead } = await setup(['hang', 'hang'])
+    const parent = await waitRunning(ctx, await spawn(ctx, lead, 'same description'))
+    const childId = (await ctx.subagents.startActivation({
+      provider: 'spawn', label: 'same description', delivery: 'caller', signal: SIGNAL,
+      request: { parent, prompt: content('nested work') },
+    })).childId
+    const child = await waitRunning(ctx, childId)
+    let task = await ctx.agentTeams.createTask(lead, { subject: 'nested work', description: 'shared board' })
+    const assign = (owner: SessionId) => ctx.agentTeams.updateTask(lead, {
+      taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner,
+    })
+    task = await assign(child.id)
+    expect(task.ownerId).toBe(child.id)
+    expect(ctx.agentTeams.getTask(child, task.id)).toEqual(task)
+
+    const fork = await ctx.agents.create({
+      sessionId: SessionId('ordinary-descendant-fork'), seed: child.session.snapshotEvents(),
+      inheritedEventCount: SessionLogOffset(child.session.seq),
+      meta: { parentSession: child.id, isSeeded: true },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    await expect(assign(fork.agent.id)).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
+    await fork.dispose()
+    const other = await ctx.agents.create({ sessionId: SessionId('other-team-root'), agentOptions: { provider: 'mock', model: 'mock' } })
+    const unrelated = await waitRunning(ctx, await spawn(ctx, other.agent, 'same description'))
+    await expect(assign(unrelated.id)).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
+
+    ctx.subagents.interrupt(child.id, { kind: 'ancestor', agent: lead })
+    await waitNoAgent(ctx, child.id)
+    task = await assign(child.id)
+    expect(task.ownerId).toBe(child.id)
+    ctx.subagents.interrupt(parent.id, { kind: 'ancestor', agent: lead })
+    await waitNoAgent(ctx, parent.id)
+    task = await assign(child.id)
+    expect(task.ownerId).toBe(child.id)
+    ctx.subagents.interrupt(unrelated.id, { kind: 'ancestor', agent: other.agent })
+    await waitNoAgent(ctx, unrelated.id)
+    await other.dispose()
+  })
+
+  it('rejects forged and cyclic persisted descendant chains and preserves read failures', async () => {
+    const { ctx, lead } = await setup([])
+    const members = new TeamMembers(ctx)
+    const state = durable(lead)
+    const aId = SessionId('cycle-a')
+    const bId = SessionId('cycle-b')
+    const a = ctx.sessions.create(aId, { meta: { parentSession: bId, origin: 'subagent' } })
+    const b = ctx.sessions.create(bId, { meta: { parentSession: aId, origin: 'subagent' } })
+    for (const child of [a, b]) {
+      child.append('subagent/descriptor', { version: 3, mode: 'continuable', provider: 'spawn', label: 'review' })
+    }
+    await expect(members.resolveMember(lead, state, aId)).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
+    a.append('subagent/catalog', { version: 0, childId: bId, childCreatedAt: 0, mode: 'continuable', label: 'review' })
+    b.append('subagent/catalog', { version: 0, childId: aId, childCreatedAt: 0, mode: 'continuable', label: 'review' })
+    await expect(members.resolveMember(lead, state, aId)).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
+    const readFailure = new Error('persistence unavailable')
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession').mockRejectedValueOnce(readFailure)
+    await expect(members.resolveMember(lead, state, aId)).rejects.toBe(readFailure)
+    observe.mockRestore()
   })
 
   it('constructs with the default task limit and serializes concurrent task commits', async () => {
@@ -574,6 +637,7 @@ describe('Team waiting', () => {
     const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-wait-'))
     roots.push(storageRoot)
     await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
+    await ctx.plugin(TestSessionQuery)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentService)
     const fiber = await ctx.plugin(TeamService)

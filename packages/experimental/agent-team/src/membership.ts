@@ -3,6 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import type { TeamState } from './projection.ts'
@@ -16,23 +17,6 @@ export interface TeamMembership {
   readonly role: 'lead' | 'teammate'
 }
 
-/**
- * Resolve one member Session id for task assignment.
- * @param root - exact live Team Lead.
- * @param state - current Team state.
- * @param target - member Session id.
- * @returns the member's durable id.
- */
-export function resolveMember(root: Agent, state: TeamState, target: SessionId): SessionId {
-  if (target === root.id) return root.id
-  const child = state.children.find(candidate => candidate.id === target)
-  if (child !== undefined) return child.id
-  const member = state.members.find(candidate => candidate.phase === 'active'
-    && candidate.id === target)
-  if (member === undefined) throw new TeamError(`teammate "${target}" not found`, 'TEAM_MEMBER_NOT_FOUND')
-  return member.id
-}
-
 /** Resolves Team membership from the live Agent registry. */
 export class TeamMembers {
   /**
@@ -41,6 +25,43 @@ export class TeamMembers {
   constructor(
     private readonly ctx: Context,
   ) {}
+
+  /**
+   * Resolve a task assignee from direct catalog facts or a durable descendant chain.
+   * Every descendant edge requires a continuable child descriptor and its parent's
+   * own catalog entry; ordinary forks and unrelated Teams are excluded.
+   * @param root - exact live Team Lead.
+   * @param state - current Lead-owned Team state.
+   * @param target - member Session id, including an inactive descendant.
+   * @returns the member's durable id.
+   */
+  async resolveMember(root: Agent, state: TeamState, target: SessionId): Promise<SessionId> {
+    if (target === root.id || state.children.some(child => child.id === target)
+      || state.members.some(member => member.phase === 'active' && member.id === target)) return target
+    const missing = (): TeamError => new TeamError(`teammate "${target}" not found`, 'TEAM_MEMBER_NOT_FOUND')
+    const observe = async (id: SessionId) => {
+      try {
+        return await this.ctx.sessionQuery.observeSession(id)
+      } catch (error) {
+        if (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') throw missing()
+        throw error
+      }
+    }
+    const seen = new Set<SessionId>()
+    let current = target
+    while (!seen.has(current)) {
+      seen.add(current)
+      using child = await observe(current)
+      const identity = child.projections?.values.subagent
+      const parentId = child.header.parentSession
+      if (identity?.mode !== 'continuable' || identity.seq < child.inheritedEventCount || parentId === undefined) throw missing()
+      using parent = await observe(parentId)
+      if (!parent.projections?.values.subagentCatalog?.some(entry => entry.id === current && entry.mode === 'continuable')) throw missing()
+      if (parentId === root.id) return target
+      current = parentId
+    }
+    throw missing()
+  }
 
   /**
    * Resolve one exact live Agent's Team role.

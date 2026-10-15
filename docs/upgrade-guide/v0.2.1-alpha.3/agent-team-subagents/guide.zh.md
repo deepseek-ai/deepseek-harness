@@ -17,6 +17,8 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 - `ctx.agentTeams` 移除 `spawnTeammate()`、`sendMessage()`、`interrupt()` 和 `listMembers()`。任务视图以 `ownerId` 取代 `ownerName`；包括 Lead 在内，任务所有者均使用 Session id。
 - 历史 Team 名册和邮箱记录仍可读取。其中的名字仅作为历史数据，不用于解析消息收件人或任务所有者。Subagent catalog 载荷不变。
 
+- 自定义 Team composition 必须提供 `sessionQuery`，以便任务指派通过持久 Session 验证不活动的后代。基于 `@deepseek-ai/dsh-base` 的 profile 已提供此服务。
+
 ## 迁移
 
 1. 删除废弃配置键，以及仅为支持 Team 而禁用 subagent 工具的 patch 行。
