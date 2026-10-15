@@ -63,6 +63,11 @@ function textChunks(text) {
 
 function researcher(messages) {
   const names = calls(messages)
+  if (!names.includes('list_agents')) return toolChunks([{ name: 'list_agents', args: {} }])
+  const sibling = messages.filter(message => message.role === 'tool')
+    .flatMap(message => message.content.filter(block => block.type === 'text').flatMap(block => block.text.split('\n')))
+    .find(line => line.endsWith('— sibling: Own deterministic implementation.'))?.split(' ')[0]
+  if (sibling === undefined) throw new Error('list_agents did not expose the implementation sibling')
   if (!names.includes('team_task_create')) {
     return toolChunks([{ name: 'team_task_create', args: {
       subject: 'Research', description: 'Collect the deterministic finding.', write_scopes: ['research'],
@@ -76,13 +81,13 @@ function researcher(messages) {
   if (!names.includes('send_message')) {
     return toolChunks([
       { name: 'team_task_update', args: { task_id: 'task-1', expected_revision: 2, action: 'complete' } },
-      { name: 'send_message', args: { target: 'implementer', message: 'Research complete: use the deterministic finding.' } },
+      { name: 'send_message', args: { agent_id: sibling, message: 'Research complete: use the deterministic finding.' } },
     ])
   }
   return textChunks('Research teammate complete.')
 }
 
-function implementer(messages) {
+function implementer(messages, parentId) {
   const names = calls(messages)
   const last = latestAssistantCalls(messages)
   const text = latestToolText(messages)
@@ -123,7 +128,7 @@ function implementer(messages) {
   if (!names.includes('send_message')) {
     return toolChunks([
       { name: 'team_task_update', args: { task_id: 'task-2', expected_revision: 2, action: 'complete' } },
-      { name: 'send_message', args: { target: 'lead', message: 'Implementation complete and verified.' } },
+      { name: 'send_message', args: { agent_id: parentId, message: 'Implementation complete and verified.' } },
     ])
   }
   return textChunks('Implementation teammate complete.')
@@ -138,26 +143,22 @@ function lead(messages) {
       script: 'return await agent("TEAM_WORKFLOW_CHILD");',
     } }])
   }
-  const spawned = names.filter(name => name === 'spawn_teammate').length
+  const spawned = names.filter(name => name === 'subagent').length
   if (spawned === 0) {
     return toolChunks([{
-      name: 'spawn_teammate',
+      name: 'subagent',
       args: {
-        name: 'implementer',
         description: 'Own deterministic implementation.',
         prompt: 'IMPLEMENTER_MARK: wait for research, complete dependent task 2, report to lead.',
-        context: 'fresh',
       },
     }])
   }
   if (spawned === 1) {
     return toolChunks([{
-      name: 'spawn_teammate',
+      name: 'subagent',
       args: {
-        name: 'researcher',
         description: 'Own deterministic research.',
         prompt: 'RESEARCHER_MARK: complete research task 1, message implementer, then finish.',
-        context: 'fresh',
       },
     }])
   }
@@ -168,7 +169,8 @@ function lead(messages) {
     return toolChunks([{ name: 'team_task_list', args: {} }])
   }
   if (last.includes('list_agents')) {
-    const inactive = result.match(/"status":"inactive"/gu)?.length ?? 0
+    const inactive = result.split('\n')
+      .filter(row => row.includes('— Own deterministic ') && row.includes('[inactive]')).length
     if (inactive >= 2) return textChunks('TEAM_WORKFLOW_OK: both teammates and dependent tasks completed.')
     return toolChunks([{ name: 'list_agents', args: {} }])
   }
@@ -179,21 +181,21 @@ function lead(messages) {
 class TeamFixtureAdapter extends LlmAdapter {
   async * stream(options) {
     const tools = options.tools.map(tool => tool.name)
-    if (tools.includes('subagent') || tools.includes('subagent_fork')) {
-      throw new Error('Team profile exposes a direct subagent tool')
-    }
     const initial = options.messages.findLast(message => message.role === 'user' && message.source.kind === 'user')
     const workflowChild = initial?.content[0]?.text === 'TEAM_WORKFLOW_CHILD'
     const context = options.messages.findLast(message => message.source?.kind === 'runtime-context')
-    const identity = context?.source.sections?.find(section => section.name === 'team:identity')?.text
-    if (!workflowChild && (!tools.includes('spawn_teammate') || !tools.includes('workflow'))) {
-      throw new Error('Team profile is missing teammate or workflow tools')
+    const section = name => context?.source.sections?.find(candidate => candidate.name === name)?.text
+    const role = section('team:identity')
+    const parentId = role?.match(/led by agent "([^"]+)"/u)?.[1]
+    const task = initial?.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+    if (!workflowChild && (!tools.includes('subagent') || !tools.includes('workflow') || !tools.includes('team_task_create'))) {
+      throw new Error('Team profile is missing delegation, workflow, or task tools')
     }
     let chunks
     if (workflowChild) chunks = textChunks('Fresh workflow child complete.')
-    else if (identity?.startsWith('You are teammate "researcher".')) chunks = researcher(options.messages)
-    else if (identity?.startsWith('You are teammate "implementer".')) chunks = implementer(options.messages)
-    else if (identity?.startsWith('You are the Team Lead named "lead".')) chunks = lead(options.messages)
+    else if (task?.startsWith('RESEARCHER_MARK:')) chunks = researcher(options.messages)
+    else if (task?.startsWith('IMPLEMENTER_MARK:')) chunks = implementer(options.messages, parentId)
+    else if (role?.startsWith('You are the Team Lead.')) chunks = lead(options.messages)
     else throw new Error('Team runtime context is missing a recognized identity')
     for (const chunk of chunks) {
       options.signal?.throwIfAborted()

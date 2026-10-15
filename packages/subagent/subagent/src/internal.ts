@@ -80,31 +80,3 @@ export function queueHostSubagentPrompt(
     'queue',
   )
 }
-
-/**
- * Steer one host-protocol message without exposing another Service operation.
- * @param runtime - subagent runtime owning continuation residency.
- * @param parent - exact live direct parent authorizing delivery.
- * @param childId - durable direct-child session id.
- * @param content - host-authored content to deliver.
- * @param source - durable host-protocol source descriptor.
- * @param signal - caller cancellation before inbox acceptance.
- * @returns the accepted message's inbox id.
- */
-export function steerHostSubagentPrompt(
-  runtime: SubagentRuntime,
-  parent: Agent,
-  childId: SessionId,
-  content: ContentBlock[],
-  source: MessageSource,
-  signal: AbortSignal,
-): Promise<MessageId> {
-  return (runtime as unknown as HostPromptDeliverer)[deliverSubagentPrompt](
-    parent,
-    childId,
-    content,
-    source,
-    signal,
-    'steer',
-  )
-}

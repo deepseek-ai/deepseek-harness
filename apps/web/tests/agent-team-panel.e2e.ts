@@ -88,7 +88,7 @@ describe('web e2e: Agent Teams panel', () => {
     await page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu }).click()
     const action = page.getByRole('dialog', { name: 'Agent Team', exact: true })
     await action.getByText('No shared tasks yet. Create them through the conversation.').waitFor()
-    await action.getByText('lead').waitFor()
+    await action.getByText('Lead').waitFor()
     expect(projectionReads).not.toHaveBeenCalled()
 
     expect(await action.getByRole('button', { name: 'New task' }).count()).toBe(0)
@@ -105,7 +105,7 @@ describe('web e2e: Agent Teams panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await action.getByText('In progress', { exact: true }).waitFor()
-    await action.getByText('Owner: lead', { exact: true }).waitFor()
+    await action.getByText('Owner: Lead', { exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 
@@ -123,7 +123,7 @@ describe('web e2e: Agent Teams panel', () => {
     const trigger = page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu })
     const viewport = page.viewportSize()!
     await trigger.click()
-    await panel.getByText('lead', { exact: true }).waitFor()
+    await panel.getByText('Lead', { exact: true }).waitFor()
     try {
       for (const size of [{ width: 760, height: 540 }, { width: 600, height: 420 }]) {
         await page.setViewportSize(size)

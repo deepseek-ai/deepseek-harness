@@ -10,11 +10,11 @@ Status: implemented
 
 ## Decision
 
-`tool-agent-team` 通过 Agent 作用域的 `systemPrompt.context()` 注册 `team:identity`，并设置 `required: true`。提供方读取现有 Team membership，渲染成员角色、名字与寻址说明。关闭可选 context 不能移除它。固定协作策略保留在 system prompt；roster 和 task 状态仍通过工具查询。初始任务只包含传入的正文。
+`tool-agent-team` 通过 Agent 作用域的 `systemPrompt.context()` 提供必需的 `team:identity`。它读取当前 Team 成员身份，声明角色，并为队友提供 Lead id。关闭可选上下文不能移除它。固定协作策略留在系统提示词，成员列表和任务状态通过工具查询。初始任务只包含传入正文。
 
 Loop 负责日志记录、保留快照比较和压缩后的重新接纳。角色变化会在继承历史之后追加当前完整 runtime-context 快照；保留的 context 未变化时不追加消息。不引入 Team 专属的保留状态、事件类型或日志迁移。已有身份提醒仍作为历史消息保留。
 
-本决策仅取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md#team-identity) 中的初始任务身份决策；其 roster、mailbox 和 task 决策仍然有效。
+本决策仅取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md#team-identity) 中的初始任务身份决策；其 task board 与共享检出决策仍然有效，而 teammate 的创建与消息由[subagent](2026-10-15-agent-teams-as-subagents.zh.md)负责。
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ Loop 负责日志记录、保留快照比较和压缩后的重新接纳。角色
 
 成员承担完整 runtime-context 快照中的身份 token 成本。其他 context 变化会重复身份，保留的 context 稳定时则不追加消息。Fork 保留继承历史并追加当前身份；提供方实际缓存命中仍为尽力而为。现有 Team 授权仍在工具执行时落实。
 
-验证覆盖 fresh 和 fork teammate、从 teammate 创建的独立 fork、关闭可选 context、压缩后恢复、冷恢复和注册释放。录制的 `team-targets` 场景固定 Lead context；无密钥 headless Team 工作流通过内置 profile 固定 teammate context。
+验证覆盖 fresh 和 fork teammate、从 teammate 创建的独立 fork、关闭可选 context、压缩后恢复、冷恢复和注册释放。录制的 `team-targets` 场景固定 Lead context；无密钥 headless Team 工作流通过内置 profile 固定 teammate 角色。

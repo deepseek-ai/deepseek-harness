@@ -173,7 +173,7 @@ interface ContinuableCreateSpec {
 
 ## 消息与中断
 
-sendMessage 根据确切的在线发送者实例授权，仅允许相邻本地代理通信。运行中的子代理接收引导输入；不在线的可继续子代理从持久化恢复。外部执行拒绝后续消息。本地与外部执行都会通过父级结束通知自动回传最终文本、结构化结果、诊断和状态。本地子代理也可以通过 send_message 发送消息。caller 回传会抑制结束通知。drainDescendants 与 drainChildren 对本地和外部 activation 都等待所属任务清理完成。
+sendMessage 要求确切在线发送方和目标 Session id。每个发送方可联系直接可继续子级；驻留的可继续子级还可联系直接父级和可继续同级。同级投递使用共同在线父级的权限，保留实际发送方 id。运行中目标接收 Steer；不在线的子级和同级冷恢复。外部执行拒绝后续输入。本地和外部执行通过父级结算通知报告最终文本、结构化输出、诊断和状态；caller 投递抑制通知。drainDescendants 和 drainChildren 等待所属资源释放。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -455,13 +455,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 async waitForChildren(parent: Agent): Promise<boolean>
 
 /**
- * Steer one model-authored message to the sender's direct parent or direct
- * continuable child. A running target admits it at the nearest step boundary;
+ * Steer one model-authored message to the sender's direct parent, direct
+ * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
  * an idle target starts a turn, and an absent direct child cold-resumes from
  * persistence. The service derives durable sender attribution from the exact
  * live sender. Caller cancellation stops only pre-acceptance work.
  * @param sender - exact live Agent authorizing and originating the message.
- * @param targetId - durable direct-parent or direct-child session id.
+ * @param targetId - durable direct-parent, direct-child, or sibling session id.
  * @param content - model-authored content to deliver.
  * @param options - caller cancellation before inbox acceptance.
  * @returns the accepted message's inbox id.

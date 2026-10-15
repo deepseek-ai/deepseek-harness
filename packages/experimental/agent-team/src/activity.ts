@@ -1,7 +1,13 @@
 /** One-shot Team change waiters independent of durable state projection. */
 
 import type { TeamId, TeamWaitResult } from './types.ts'
-import { errorMessage, TeamError } from './error.ts'
+import { inspect } from 'node:util'
+import { TeamError } from './error.ts'
+
+/** Render a non-Error abort reason in one bounded line. */
+function abortDescription(reason: unknown): string {
+  return typeof reason === 'string' ? reason : inspect(reason, { breakLength: Infinity, compact: true, depth: 4 })
+}
 
 interface Waiter {
   readonly resolve: () => void
@@ -10,7 +16,6 @@ interface Waiter {
 /** Owns current Team change waiters and releases each at most once. */
 export class TeamActivity {
   private readonly waiters = new Map<TeamId, Set<Waiter>>()
-  private closed = false
 
   /**
    * Wait for one later Team-domain or member-status change.
@@ -24,7 +29,6 @@ export class TeamActivity {
       throw new TeamError('timeoutMs must be an integer from 10000 through 3600000', 'TEAM_INVALID_TIMEOUT')
     }
     signal.throwIfAborted()
-    if (this.closed) return { timedOut: false }
     const changed = await new Promise<boolean>((resolve, reject) => {
       let waiters = this.waiters.get(id)
       if (waiters === undefined) {
@@ -47,7 +51,7 @@ export class TeamActivity {
           const reason: unknown = signal.reason
           reject(reason instanceof Error
             ? reason
-            : new TeamError(`wait_agent aborted: ${errorMessage(reason)}`, 'TEAM_WAIT_ABORTED'))
+            : new TeamError(`wait_agent aborted: ${abortDescription(reason)}`, 'TEAM_WAIT_ABORTED'))
         })
       }
       const waiter: Waiter = {
@@ -76,9 +80,8 @@ export class TeamActivity {
     for (const waiter of waiters) waiter.resolve()
   }
 
-  /** Close admission and wake every current waiter during runtime disposal. */
+  /** Wake every current waiter during runtime disposal; the disposed service admits no later wait. */
   close(): void {
-    this.closed = true
     for (const waiters of this.waiters.values()) {
       for (const waiter of waiters) waiter.resolve()
     }

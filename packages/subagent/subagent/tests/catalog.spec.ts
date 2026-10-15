@@ -12,6 +12,7 @@ import {
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import {
   establishExternalCatalogChild,
+  liveCatalogEntries,
   subagentCatalogProjectionDefinition,
 } from '../src/catalog.ts'
 import type { SubagentCatalogState } from '../src/catalog.ts'
@@ -52,6 +53,19 @@ function fact(
 }
 
 describe('subagent catalog projection', () => {
+  it('rejects live sibling discovery without its authoritative catalog projection', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      const parent = ctx.sessions.create(header.id)
+      expect(() => liveCatalogEntries(undefined, parent)).toThrow('requires the subagentCatalog projection')
+      await ctx.plugin(SessionProjectionRegistry)
+      expect(() => liveCatalogEntries(ctx.sessionProjections, parent)).toThrow('requires the subagentCatalog projection')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('records an external child once with its label and creation time', async () => {
     const ctx = new Context()
     try {

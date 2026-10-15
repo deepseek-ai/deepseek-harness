@@ -1,6 +1,7 @@
 # Agent Note: Team messages use the target inbox
 
 Status: implemented
+Archived: 2026-10-15
 
 English | [中文](2026-09-26-team-direct-inbox.zh.md)
 

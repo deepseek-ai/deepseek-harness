@@ -1,35 +1,26 @@
-/** Agent Teams service façade over roster, messaging, task, and runtime lifecycle owners. */
+/** Agent Teams service façade over membership, the shared task board, and change waits. */
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-persistence'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { steerHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
 import { TeamActivity } from './activity.ts'
-import { errorMessage, TeamError } from './error.ts'
+import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
-import { TeamRuntimeLifecycle } from './lifecycle.ts'
+import { TeamMembers } from './membership.ts'
+import type { TeamMembership } from './membership.ts'
 import { teamProjectionDefinition } from './projection.ts'
-import { resolveActiveMember, TeamRoster } from './roster.ts'
-import type { TeamMembership } from './roster.ts'
 import { TeamTaskBoard } from './task-board.ts'
 import { TeamId, TeamTaskId } from './types.ts'
 import type {
   Config,
   CreateTeamTaskRequest,
-  SendTeamMessageRequest,
-  SendTeamMessageResult,
-  SpawnTeammateRequest,
-  SpawnTeammateResult,
-  TeamMemberView,
   TeamTaskView,
   TeamWaitResult,
   UpdateTeamTaskRequest,
 } from './types.ts'
 
 export type * from './types.ts'
-export type { TeamMembership } from './roster.ts'
+export type { TeamMembership } from './membership.ts'
 export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
 export { TeamError } from './error.ts'
 
@@ -39,10 +30,10 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-const DEFAULT_MAX_MEMBERS = 16
 const DEFAULT_MAX_TASKS = 256
-const DEFAULT_MAX_MESSAGE_BYTES = 65_536
-const DEFAULT_DISPOSAL_TIMEOUT_MS = 5_000
+
+/** Configuration keys removed when Team reused subagent creation and messaging. */
+const REMOVED_CONFIG_KEYS = ['maxMembers', 'maxMessageBytes', 'disposalTimeoutMs'] as const
 
 /** Validate one positive safe-integer deployment limit. */
 function positiveLimit(name: string, value: number): number {
@@ -54,100 +45,74 @@ function positiveLimit(name: string, value: number): number {
 
 /** Agent Teams service backed by the exact live Lead Session log. */
 export class TeamService extends Service {
-  static inject = ['agents', 'sessions', 'sessionPersistence', 'sessionProjections', 'subagents']
+  static inject = ['agents', 'sessions', 'sessionProjections']
 
   static Config: z<Config> = z.object({
-    maxMembers: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBERS),
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
-    maxMessageBytes: z.number().step(1).min(1).default(DEFAULT_MAX_MESSAGE_BYTES),
-    disposalTimeoutMs: z.number().step(1).min(1).default(DEFAULT_DISPOSAL_TIMEOUT_MS),
   })
 
-  /** Validated deployment limits used by every Team operation. */
-  private readonly config: Required<Config>
-
   private readonly activity: TeamActivity
-  private readonly lifecycle: TeamRuntimeLifecycle
   private readonly journal: TeamJournal
-  private readonly roster: TeamRoster
+  private readonly members: TeamMembers
   private readonly tasks: TeamTaskBoard
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'agentTeams')
-    this.config = {
-      maxMembers: positiveLimit('maxMembers', config.maxMembers ?? DEFAULT_MAX_MEMBERS),
-      maxTasks: positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS),
-      maxMessageBytes: positiveLimit('maxMessageBytes', config.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES),
-      disposalTimeoutMs: positiveLimit(
-        'disposalTimeoutMs',
-        config.disposalTimeoutMs ?? DEFAULT_DISPOSAL_TIMEOUT_MS,
-      ),
+    for (const key of REMOVED_CONFIG_KEYS) {
+      if (Object.hasOwn(config, key)) {
+        throw new TeamError(
+          `agent-team: ${key} is no longer supported; teammates are subagents, so subagent limits and inbox delivery apply`,
+          'TEAM_INVALID_CONFIG',
+        )
+      }
     }
+    const maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
 
     this.activity = new TeamActivity()
-    this.lifecycle = new TeamRuntimeLifecycle(this.config.disposalTimeoutMs)
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
-    this.roster = new TeamRoster(ctx, this.journal, this.lifecycle, this.config.maxMembers)
-    this.tasks = new TeamTaskBoard(this.journal, this.config.maxTasks)
+    this.members = new TeamMembers(ctx)
+    this.tasks = new TeamTaskBoard(this.journal, maxTasks)
 
-    ctx.on('agent/created', ({ agent }) => { this.scheduleRecovery(agent) })
-    ctx.on('agent/status', ({ agent }) => {
-      const membership = this.roster.tryMembership(agent)
+    const notifyMember = ({ agent }: { agent: Agent }): void => {
+      const membership = this.members.tryMembership(agent)
       if (membership !== undefined) this.activity.notify(membership.id)
-    })
+    }
+    ctx.on('agent/status', notifyMember)
+    ctx.on('agent/inbox/inserted', notifyMember)
     ctx.effect(() => {
       const disposeProjection = ctx.root.sessionProjections.register(teamProjectionDefinition)
-      return async () => {
-        try {
-          await this.disposeRuntime()
-        } finally {
-          disposeProjection()
-        }
+      return () => {
+        this.activity.close()
+        disposeProjection()
       }
     }, 'agentTeams.runtimeLifecycle()')
-    for (const agent of ctx.agents.list()) this.scheduleRecovery(agent)
   }
 
   /**
    * Resolve one exact live Agent's Team role.
    * @param agent - exact live Agent used as the authority credential.
-   * @returns its root, Team identity, role, and model-facing name.
+   * @returns its Lead, Team identity, and role.
    */
   membership(agent: Agent): TeamMembership {
-    return this.roster.membership(agent)
+    return this.members.membership(agent)
   }
 
   /**
-   * List the runtime-enriched roster visible to one Team member.
-   * @param agent - exact live Team member.
-   * @returns Lead and teammate rows in creation order.
+   * Resolve a caller without throwing, used by scoped-tool installation and observers.
+   * @param agent - candidate exact live Agent.
+   * @returns Team membership, or undefined for stale identities and children whose parent left the registry.
    */
-  listMembers(agent: Agent): TeamMemberView[] {
-    return this.roster.list(this.roster.membership(agent))
+  tryMembership(agent: Agent): TeamMembership | undefined {
+    return this.members.tryMembership(agent)
   }
 
   /**
-   * Create one named, continuable direct child of the Team Lead.
-   * @param caller - exact live Lead Agent.
-   * @param request - immutable name, description, prompt, context mode, provider, and cancellation.
-   * @returns the active roster row.
+   * Whether another live member of the caller's Team is currently running a turn.
+   * @param caller - exact live Team member.
+   * @returns whether a peer can still produce a Team change.
    */
-  async spawnTeammate(caller: Agent, request: SpawnTeammateRequest): Promise<SpawnTeammateResult> {
-    return await this.roster.spawn(caller, request)
-  }
-
-  /**
-   * Steer one peer message into the target inbox or reject the attempt.
-   * @param caller - exact live sending Team member.
-   * @param request - target name, content, and cancellation before acceptance.
-   * @returns accepted inbox identity; acceptance follows normal Agent persistence and does not await model processing.
-   */
-  async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult> {
-    if (this.lifecycle.disposed) throw new TeamError('Agent Teams service is disposing', 'TEAM_DISPOSED')
-    return await this.lifecycle.track(this.sendAdmitted(caller, {
-      ...request,
-      signal: AbortSignal.any([request.signal, this.lifecycle.signal]),
-    }))
+  hasActivePeer(caller: Agent): boolean {
+    return this.members.hasActivePeer(caller)
   }
 
   /**
@@ -157,7 +122,7 @@ export class TeamService extends Service {
    * @returns the revision-one task view.
    */
   async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
-    return await this.tasks.create(this.roster.membership(caller), request)
+    return await this.tasks.create(this.members.membership(caller), request)
   }
 
   /**
@@ -167,7 +132,7 @@ export class TeamService extends Service {
    * @returns the latest task value and derived readiness diagnostics.
    */
   getTask(caller: Agent, id: TeamTaskId): TeamTaskView {
-    return this.tasks.get(this.roster.membership(caller), id)
+    return this.tasks.get(this.members.membership(caller), id)
   }
 
   /**
@@ -176,7 +141,7 @@ export class TeamService extends Service {
    * @returns detached current task views.
    */
   listTasks(caller: Agent): TeamTaskView[] {
-    return this.tasks.list(this.roster.membership(caller))
+    return this.tasks.list(this.members.membership(caller))
   }
 
   /**
@@ -186,93 +151,19 @@ export class TeamService extends Service {
    * @returns the committed next task revision.
    */
   async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView> {
-    return await this.tasks.update(caller, this.roster.membership(caller), request)
+    return await this.tasks.update(caller, this.members.membership(caller), request)
   }
 
   /**
-   * Wait for the next Team-domain or member-status change.
+   * Wait for the next task change, member status change, or message a member's inbox accepts.
    * @param caller - exact live Team member waiting for activity.
    * @param timeoutMs - bounded wait duration from ten seconds through one hour.
    * @param signal - caller cancellation for the wait only.
    * @returns one observed change or a timeout result.
    */
   async waitForChange(caller: Agent, timeoutMs: number, signal: AbortSignal): Promise<TeamWaitResult> {
-    const membership = this.roster.membership(caller)
+    const membership = this.members.membership(caller)
     return await this.activity.wait(membership.id, timeoutMs, signal)
-  }
-
-  /**
-   * Interrupt one live teammate turn without clearing its pending inbox.
-   * @param caller - exact live Lead Agent.
-   * @param targetName - durable teammate name.
-   * @returns the target status sampled before cancellation.
-   */
-  interrupt(caller: Agent, targetName: string): { previousStatus: 'running' | 'inactive' } {
-    return this.roster.interrupt(caller, targetName)
-  }
-
-  /**
-   * Resolve a caller without throwing, used by scoped-tool installation and observers.
-   * @param agent - candidate exact live Agent.
-   * @returns Team membership, or undefined for non-Team subagents and stale identities.
-   */
-  tryMembership(agent: Agent): TeamMembership | undefined {
-    return this.roster.tryMembership(agent)
-  }
-
-  /** Deliver an admitted send using the Lead's authority and the actual sender's identity. */
-  private async sendAdmitted(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult> {
-    const membership = this.roster.membership(caller)
-    request.signal.throwIfAborted()
-    const { root } = membership
-    const target = resolveActiveMember(root, this.journal.state(root), request.target)
-    if (target.id === caller.id) throw new TeamError('a Team member cannot message itself', 'TEAM_SELF_MESSAGE')
-    const content = [
-      { type: 'text' as const, text: `Team message from ${membership.name}:` },
-      ...structuredClone(request.content),
-    ]
-    if (Buffer.byteLength(JSON.stringify(content), 'utf8') > this.config.maxMessageBytes) {
-      throw new TeamError(`team message exceeds ${this.config.maxMessageBytes} bytes`, 'TEAM_MESSAGE_TOO_LARGE')
-    }
-    const source = { kind: 'agent-message' as const, form: 'relay' as const, senderSessionId: caller.id }
-    let messageId
-    if (target.id === root.id) {
-      const input = createUserMessage({ content, source })
-      root.steer(input)
-      messageId = input.id
-    } else {
-      messageId = await steerHostSubagentPrompt(this.ctx.subagents, root, target.id, content, source, request.signal)
-    }
-    this.activity.notify(membership.id)
-    return { messageId }
-  }
-
-  /** Queue one contained provisioning reconciliation after publication has unwound. */
-  private scheduleRecovery(agent: Agent): void {
-    queueMicrotask(() => {
-      if (this.lifecycle.disposed) return
-      void this.roster.recoverFor(agent, this.lifecycle.signal).catch((error: unknown) => {
-        if (this.lifecycle.disposed) return
-        this.ctx.logger.warn(`Agent Teams recovery for "${agent.id}" failed: ${errorMessage(error)}`)
-      })
-    })
-  }
-
-  /** Stop Team-owned live branches and release every waiter before service disposal completes. */
-  private async disposeRuntime(): Promise<void> {
-    this.lifecycle.close()
-    this.activity.close()
-
-    const failures: unknown[] = []
-    await this.lifecycle.settle(this.lifecycle.pending(), failures)
-    for (const [root, childIds] of this.roster.liveChildrenByRoot()) {
-      try {
-        await this.roster.stopTeammates(root, childIds)
-      } catch (error: unknown) {
-        failures.push(error)
-      }
-    }
-    if (failures.length > 0) throw new AggregateError(failures, 'Agent Teams runtime disposal failed')
   }
 }
 

@@ -1,5 +1,5 @@
 ---
-description: "Run named teammates with direct inbox messages and a durable shared task board in experimental Team compositions."
+description: "Coordinate subagents through a durable shared task board and change waits in experimental Team compositions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team` gives one session a Lead, named teammates, direct messages, and a durable shared task board. Sends use each target Agent’s inbox and can cold-resume stored teammates. Team retains roster and task state; message persistence follows the target Agent’s normal policy. Mount `dsh-experimental-tool-agent-team` for model tools. The package is experimental and requires durable session storage.
+`dsh-experimental-agent-team` turns an agent and its subagents into a Team with a durable shared task board. Standard subagent tools create and message teammates by id. Team adds compare-and-set task ownership, progress waits, and a roster for the Web panel. Mount `dsh-experimental-tool-agent-team` for model tools. The package is experimental, and members share one checkout.
 
 ## Table of Contents
 
@@ -25,67 +25,59 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this package when one agent needs named helpers in a shared working directory, direct peer messages, and durable roster and task state. Mount it with `@deepseek-ai/dsh-experimental-tool-agent-team` to expose the model tools.
+Add this package when subagents need a shared working directory, durable task board, and change waits. Mount it with `@deepseek-ai/dsh-experimental-tool-agent-team` for model tools.
 
 ### When to choose it
 
-Choose it for cooperation in one shared workspace with durable roster and task state. Separate working directories, coordination across processes, and automatic task-owner release are unsupported. Durable session storage is required.
+Choose it when delegated agents must divide and track shared work in one checkout. Plain subagents suffice when delegated work needs no shared board. Separate working directories, coordination across processes, and automatic task-owner release are unsupported.
 
 ### Smallest working setup
 
 <a id="smallest-working-setup"></a>
 
-The smallest addition to an existing composition is durable session storage plus both Team packages:
+Mount both Team packages in a composition that already provides continuable subagents, their messaging tools, and durable session storage, such as a profile built on `@deepseek-ai/dsh-base`:
 
 ```yaml
-# smallest team setup — durable storage plus both Team packages
-- name: '@deepseek-ai/dsh-session-persistence-jsonl'
+# smallest Team addition over a composition with continuable subagents
 - name: '@deepseek-ai/dsh-experimental-agent-team'
 - name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
-With the tools installed, the model does the rest on request — for example, "create a teammate named reviewer to check the diff", then "send reviewer the change summary". All limits are optional and validated at startup:
+For example, ask the model to start a subagent to review the diff and track its work on the task board. The one limit is optional and validated at startup:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxMembers` | `16` | Maximum teammates a team may ever create, including failed ones |
-| `maxTasks` | `256` | Maximum active tasks on the board |
-| `maxMessageBytes` | `65,536` | Maximum size of one sent message |
-| `disposalTimeoutMs` | `5,000` | Time allowed for shutdown cleanup |
+| `maxTasks` | `256` | Maximum non-deleted tasks on the board |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) lists the replacements.
 
 ### Teammates
 
-Ask the Lead to create a teammate: give it a unique lowercase name such as `reviewer` and describe its job. A teammate starts fresh with no memory of the Lead's conversation, or as a fork that inherits the Lead's completed turns; the creation request chooses which. Teammate names are permanent — even a teammate whose creation failed keeps its name, and no name is ever reused.
+Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions are display text and may repeat.
 
-The roster shows every member with its role (`lead` or `teammate`) and current status: `running`, `inactive` (no turn is executing, whether loaded or stored), `provisioning`, or `failed`. A member that is not loaded receives its messages when it wakes.
-
-Only the Lead can create teammates or interrupt them.
+Every root agent leads its own Team, and every live subagent below it, at any depth, receives Team tools. The roster lists the Lead, its direct continuable children, and historical `team/member` records. Deeper descendants work on the same board under their Session ids but have no roster row.
 
 ### Messages between teammates
 
-Any member can send to another member or the Lead. Each attempt either returns the target inbox `MessageId` or throws. Team does not retain unaccepted send intent, retry new messages after restart, or deduplicate explicit resends.
-
-Steer gives a running target the message at its nearest step boundary and starts or cold-resumes an inactive target. Success means inbox acceptance, not model processing or a separate synchronous storage flush. Accepted messages follow ordinary Agent persistence and inbox recovery.
+Members use standard `send_message` with Session ids: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
 
 ### Shared task board
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-Tasks have an owner: a member claims a task to start work, completes it when done, releases it back, or reopens it; the Lead can assign a task to any member. Every change is compare-and-set: an update based on an outdated copy is rejected, so two members cannot silently overwrite each other's work.
+A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by Session id to itself, a direct continuable child, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
 ### Waiting and interruption
 
-A member can wait for the next team change — a teammate's status, an incoming message, or a task update — instead of polling repeatedly; the wait reports only whether it timed out, and the caller re-reads the current state afterward.
+A member can wait for the next Team change — a task update, a member's status change, or a message a member's inbox accepts — instead of polling repeatedly; the wait reports only whether it timed out, and the caller re-reads the current state afterward.
 
-The Lead can stop a teammate's current turn without deleting its queued messages; task ownership is unchanged.
+An ancestor stops a teammate's current turn with the standard `interrupt_agent` tool, so only the Lead interrupts its direct teammates. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
 ### What success and failure look like
 
-Success returns a teammate roster row, an accepted inbox message id, or an updated task revision. Invalid member names, unready tasks, stale revisions, exhausted limits, and failed message admission report errors.
+Success returns an updated task revision or a wait result. Unknown member ids, unready tasks, stale revisions, unauthorized mutations, and an exhausted task limit report a `TeamError`, such as `TEAM_TASK_STALE_REVISION`. A caller outside a live Team receives `TEAM_NOT_MEMBER`.
 
 -----
 
@@ -99,57 +91,62 @@ This section explains the design decisions behind the service and points at the 
 
 ### Design philosophy
 
-The service is built on one separation and three commitments:
+The service is built on four commitments:
 
-- **Durable log, derived state.** The Lead log owns roster and tasks; each target Agent owns its accepted messages.
-- **Process-local ownership.** Continuation delivery owns target locking, cold recovery, and lifecycle authorization.
-- **Explicit authority.** Every service method takes the exact live calling `Agent`; only the Lead spawns, reassigns, or interrupts.
-- **Bounds that fail loud.** Every limit is a validated deployment value, and exhaustion reports a typed error instead of reusing an id or name.
+- **Membership from lineage.** The live Agent registry and the Lead's subagent catalog define the Team; Team stores no membership record of its own.
+- **Durable log, derived state.** The Lead log owns tasks and child catalog facts; each target Agent owns accepted messages.
+- **Explicit authority.** Every service method takes the exact live calling `Agent`; a task owner or the Lead mutates a task, and only the Lead reassigns one.
+- **Bounds that fail loud.** `maxTasks` is a validated deployment value, and exhaustion reports a typed error instead of reusing an id.
 
-The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns the roster, mailbox, task, and shared-checkout decisions. The [runtime-context identity decision](../../../.agents/notes/implemented/architecture/2026-10-13-team-identity-runtime-context.md) owns model-facing identity.
+The [subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) owns the membership, roster, and messaging decisions. The [runtime-context identity decision](../../../.agents/notes/implemented/architecture/2026-10-13-team-identity-runtime-context.md) owns model-facing identity.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, service registration, recovery scheduling |
-| [`src/roster.ts`](src/roster.ts) | Team identity, membership resolution, provisioning, and roster teardown |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, removed-key rejection, service registration, change notification |
+| [`src/membership.ts`](src/membership.ts) | Lead and teammate resolution through the live Agent registry, and task-assignee lookup |
 | [`src/task-board.ts`](src/task-board.ts) | Task CAS commands, DAG validation, and derived views |
 | [`src/journal.ts`](src/journal.ts) | Serialized Lead-log transactions and commit notification |
-| [`src/projection.ts`](src/projection.ts) | Strict replay projection that decodes and validates Team events and publishes the `agentTeam` client view |
-| [`src/task-view.ts`](src/task-view.ts) | Pure task readiness, owner-name, and write-overlap derivation shared by the task board and the client view |
+| [`src/projection.ts`](src/projection.ts) | Strict replay projection of the Lead’s continuable children and Team events, publishing the `agentTeam` client view |
+| [`src/task-view.ts`](src/task-view.ts) | Pure task readiness and write-overlap derivation shared by the task board and client view |
 | [`src/activity.ts`](src/activity.ts) | One-shot change waiters and disposal release |
-| [`src/lifecycle.ts`](src/lifecycle.ts) | Shared admission cutoff and bounded settlement |
 
-### Team identity and roster
+### Team identity and membership
 
-Every ordinary runtime root is the implicit Lead of a Team whose `TeamId` equals its `SessionId`; there is no creation event, and durable Team state begins with the first member or task record. `spawnTeammate()` first appends and flushes a `provisioning` member record, then asks the configured provider to create the reserved child; a provider failure appends a durable `failed` member. A fresh child starts with no Lead history; a fork child captures the Lead's completed-turn prefix once. Recovery reconciles an unterminated provisioning record against the child's independently persisted Session: a matching direct-parent and continuable descriptor plus a recorded initial user message produces `active`, and anything else produces `failed`. If recovery wins a same-process race, the creator accepts the terminal state or reports `TEAM_PROVISIONING_CONFLICT` and drains the child. Names are reserved by the first provisioning record and never reused.
+A root Agent whose own log carries no subagent descriptor leads the Team identified by its Session id. `tryMembership()` walks `parentSession` through the live registry; a missing parent leaves the subagent without membership. An ordinary fork carries at most an inherited descriptor, so it leads a new Team. Membership records only the root, Team id, and role.
 
-### Direct messages and historical compatibility
+### Roster
 
-`sendMessage()` checks exact caller membership, rejects self-messaging, and bounds the complete sender-framed UTF-8 content. It returns the existing inbox identity and emits Team activity only after acceptance. The target stores `agent-message` source with the actual `senderSessionId`; the first content block is `Team message from <name>:`. No new `team/message/queued` or `team/message/delivered` records are written for these sends. Team adds no per-target send ordering; delivery order belongs to the target inbox. The client presents these messages with the ordinary Agent title and icon; the message body retains the sender name.
+The projection folds the Lead’s own `subagent/catalog` facts into rows keyed by child id, using the catalog label as description. Continuable children are included; inherited facts and other modes are skipped. Descriptions need not be unique. Historical `team/member` records retain their phases and descriptions and add only ids absent from the catalog. Team writes no membership records.
 
-Lead delivery calls `Agent.steer()` directly. Teammate delivery uses the continuation owner's host-only Steer path, which preserves the Team sender source while authorizing the Lead-to-child edge and cold-resuming inactive targets. Sibling messages never impersonate the Lead through the public adjacent-Agent messaging operation.
+### Messages and historical mailbox
+
+Team sends no messages. Routes, Steer delivery, cold resume, and sender framing for `send_message` belong to the subagent runtime. Historical `team/message/queued` and `team/message/delivered` records and `team-message` sources remain decodable; Team never delivers or acknowledges them, so a historical message its target had not recorded stays undelivered.
 
 ### Shared task board
 
-Tasks are complete versioned snapshots; every mutation carries `expectedRevision`, and a stale caller receives `TEAM_TASK_STALE_REVISION` instead of overwriting a newer value. Numeric `task-<n>` ids require a safe-integer suffix, and id-space exhaustion reports `TEAM_TASK_LIMIT` instead of reusing the final id. Deleted tasks remain tombstones for replay and id stability but do not consume `maxTasks` or appear in `listTasks()`. `writeScopes` are normalized workspace-relative prefixes; views warn on overlap with in-progress tasks but never block claim or authorize writes.
+Tasks are complete versioned snapshots; every mutation carries `expectedRevision`, and a stale caller receives `TEAM_TASK_STALE_REVISION` instead of overwriting a newer value. Numeric `task-<n>` ids require a safe-integer suffix, and id-space exhaustion reports `TEAM_TASK_LIMIT` instead of reusing the final id. Deleted tasks remain tombstones for replay and id stability but do not consume `maxTasks` or appear in `listTasks()`. `writeScopes` are normalized workspace-relative prefixes; views warn on overlap with in-progress tasks but never block claim or authorize writes. Lead reassignment resolves the root, a direct continuable child, or an active historical member by Session id, and reports `TEAM_MEMBER_NOT_FOUND` for anything else.
 
-### Waiting and interruption
+### Waiting
 
-`waitForChange()` waits for one roster, task, message-acceptance, or live-status edge that occurs after registration, from ten seconds through one hour, and reports only whether it timed out; runtime disposal releases current waits. Cancellation preserves an Error reason or reports a non-Error reason through `TEAM_WAIT_ABORTED`. `interrupt()` is Lead-only and delegates to the continuable-subagent interrupt path, which cancels only a live teammate's current turn with `keepInbox`; it neither releases task ownership nor deletes durable mail.
+`waitForChange()` waits for one task commit, member `agent/status` change, or member `agent/inbox/inserted` edge that occurs after registration, from ten seconds through one hour, and reports only whether it timed out; unloading the service releases current waits. Cancellation preserves an Error reason or reports a non-Error reason through `TEAM_WAIT_ABORTED`. `hasActivePeer()` reports whether another live member is running a turn, which lets `wait_agent` skip a wait that no member can end.
 
 ### Durability model
 
-Roster and task mutations append `team/member` and `team/task` to the exact live Lead Session and flush before reporting success or waking waiters. Historical `team/message/queued` and `team/message/delivered` records remain readable; Team writes neither. All four event types are log-only: they never enter the conversation surface, so derived model history is untouched by coordination records. Session event `seq` and `time` own ordering and timing; snapshots do not duplicate them.
+Task mutations append `team/task` to the exact live Lead Session and flush before reporting success or waking waiters. Team events are log-only: they never enter the conversation surface, so derived model history is untouched by coordination records. Session event `seq` and `time` own ordering and timing; snapshots do not duplicate them. Teammate ids and descriptions live in the Lead's `subagent/catalog`, which the subagent runtime writes.
 
-Historical mailbox events and `team-message` sources remain readable, and the projection still reports queued-minus-delivered records. Team never delivers or acknowledges them: a historical message that its target had not recorded stays undelivered.
-
-Mailbox projection and checkpoint admission preserve every decoded JSON field of accepted content outside the locally declared validators, including an own `__proto__` key. Local field checks cover `text`, `reasoning`, `image`, and `tool-call`; accepted unknown tags remain opaque. Team projection cache version 4 rebuilds checkpoints from earlier cache versions from the Session log; the Session format version is unchanged.
+Mailbox projection and checkpoint admission preserve every decoded JSON field of accepted content outside the locally declared validators, including an own `__proto__` key. Local field checks cover `text`, `reasoning`, `image`, and `tool-call`; accepted unknown tags remain opaque. Team projection cache version 5 rebuilds checkpoints from earlier cache versions from the Session log; the Session format version is unchanged.
 
 ### Disposal
 
-The runtime lifecycle tracks sends and complete creation transactions in one operation set. Disposal closes admission, aborts and awaits those operations, then releases the roster’s live children and descendants. Non-Team children remain untouched. Admitted operations share one `disposalTimeoutMs` settlement deadline; each subsequent Team child drain has its own deadline. This value is not a whole-service shutdown bound. Cleanup failures are reported.
+Unloading the service releases current waits and unregisters the projection. Team owns no Agent: teammates keep running under the subagent runtime, which owns their capacity, settlement, and teardown.
+
+### Browser projection
+
+The `agentTeam` Session projection publishes the Lead Session's roster rows with their phases and errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+
+The [Web UI](../client-ui-agent-team/README.md) reads the shared Session projections and overlays activity from Session status. Task creation and updates belong to Team agents through the service and model tools. The `./client` export supplies browser-safe roster, task, and projection types.
 
 </details>
 
@@ -161,35 +158,30 @@ The runtime lifecycle tracks sends and complete creation transactions in one ope
 Read these pages when the package-level contract is not enough. They move from the shared subsystem types to the tool surface and the decisions behind the design.
 
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and the `ctx.agentTeams` service API.
-- [tool-agent-team package](../tool-agent-team/README.md) — the tools that let the model create, message, and coordinate teammates.
-- [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) — roster, mailbox, task, and shared-checkout decisions.
+- [tool-agent-team package](../tool-agent-team/README.md) — the task and wait tools, policy, and identity every member receives.
+- [Subagent runtime](../../subagent/subagent/README.md) — continuable children, messaging, interruption, and lifecycle that teammates use.
+- [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — why teammates are subagents and what Team keeps.
+- [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
 - [Experimental package reference](../AGENTS.md) — placement, publication, and dependency isolation.
 
 -----
 
 <a id="model-experience"></a>
-
-### Browser projection
-
-The `agentTeam` Session projection publishes the Lead Session's durable roster identities and phases, member errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
-
-The [Web UI](../client-ui-agent-team/README.md) reads the shared Session projections and overlays activity from Session status. Task creation and updates belong to Team agents through the service and model tools. The `./client` export supplies browser-safe roster, task, and projection types.
-
 ## Model Experience
 
-### Peer messages
+### Task views and errors
 
 #### What the model sees
 
-Each peer message is a user-role message prefixed with its sender name, followed by the original content blocks. Roster, task, and historical mailbox records remain log-only.
+The model sees Team state through task-tool results; coordination events never enter the conversation. Task views identify their owner through `ownerId`. Failures surface as tool errors with the `TeamError` message, including the current revision for stale updates.
 
 #### Token effect
 
-Each peer delivery adds the sender prefix plus message content to the target history. Task and roster mutations add no model tokens; their model-facing representation belongs to `@deepseek-ai/dsh-experimental-tool-agent-team` results.
+The domain adds no context of its own; each task-tool result costs one compact task view per returned task. Policy, identity, and tool schemas belong to `@deepseek-ai/dsh-experimental-tool-agent-team`.
 
 #### KV Cache effect
 
-Peer messages append after the target's reusable history prefix. Cold resume reuses the persisted conversation before appending the new message.
+Task commits append only log-only events to the Lead Session, so they never change any member's request prefix; task results append after it.
 
 ## Known Limitations and Deferred Work
 
@@ -202,9 +194,10 @@ These limits describe what a team cannot do yet or what needs special operationa
 - **Experimental prototype with no stability promise** — the package is public, but its contracts can change freely while it incubates.
 - **One process and one shared checkout** — members share cwd and observe edits immediately; this package provides no worktree, remote member, merge, or filesystem lock.
 - **Advisory write scopes** — Bash, formatters, code generators, and direct external writers can bypass filesystem version checks; Leads must coordinate ownership and review the final diff.
-- **Flat immutable roster** — only the Lead creates direct teammates; there is no nested Team, rename, deletion, or name reuse.
+- **Roster covers direct continuable children** — deeper descendants share tasks and waits but have no roster row; they can claim tasks under their own ids and message only their direct parent, children, and continuable siblings.
+- **Membership needs a live lineage** — a subagent whose parent Agent is not loaded is outside every Team, so its Team calls fail with `TEAM_NOT_MEMBER`.
 - **No automatic ownership release** — inactivity, interruption, process exit, and failed work do not release a task owner.
-- **No send retry guarantee** — Team does not retain or deduplicate new attempts; concurrent processes over one Team are unsupported. Historical queued messages that never reached their target are not delivered.
+- **Historical queued messages stay undelivered** — `team/message/queued` records without a matching delivery remain readable in the Lead log, but no member receives them.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -220,6 +213,6 @@ Promotion to a product-role group requires reviewing the public contract, limita
 
 #### Future directions
 
-Undecided directions include nested Teams, automatic ownership release policies, cross-process mailbox transactions, and filesystem isolation via worktrees; none of these are committed.
+Undecided directions include nested Teams, automatic ownership release policies, and filesystem isolation via worktrees; none of these are committed.
 
 </details>

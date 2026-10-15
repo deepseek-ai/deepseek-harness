@@ -15,7 +15,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -24,11 +24,14 @@ import {
   childSessionMeta, resolveChildAgentOptions, resolveChildDepth,
 } from './child-agent.ts'
 import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
-import { createAgentMessage, withContinuableReturnGuidance, createSettlementMessage } from './continuation-messages.ts'
+import {
+  createAgentMessage, createSettlementMessage, withContinuableReturnGuidance,
+} from './continuation-messages.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
-import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
+import { establishCatalogChild, establishExternalCatalogChild, liveCatalogEntries } from './catalog.ts'
+import type { SubagentCatalogEntry } from './projection-types.ts'
 import { SubagentError } from './error.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { ActivationObserver } from './lifecycle.ts'
@@ -476,6 +479,15 @@ export class SubagentManager {
   }
 
   /**
+   * Read one live Session's own catalog rows.
+   * @param session - live Session whose children are read.
+   * @returns catalog rows in event order.
+   */
+  private catalogOf(session: Session): SubagentCatalogEntry[] {
+    return liveCatalogEntries(this.ctx.get('sessionProjections'), session)
+  }
+
+  /**
    * Start an external backend under activation ownership.
    * @param spec - task, provider, cancellation, and delivery policy.
    * @returns the accepted activation and its result/disposal capabilities.
@@ -531,11 +543,11 @@ export class SubagentManager {
   }
 
   /**
-   * Deliver one model-authored message to a direct continuable child or to the
-   * sender's direct parent. A missing direct child cold-resumes through the
-   * ordinary continuation lifecycle.
+   * Deliver a message to the sender's direct parent, direct continuable child,
+   * or continuable sibling. Sibling delivery uses the shared live parent's
+   * authority and preserves the sender's identity; an absent child cold-resumes.
    * @param sender - exact live Agent authorizing and originating the message.
-   * @param targetId - durable direct-parent or direct-child session id.
+   * @param targetId - durable direct-parent, direct-child, or sibling Session id.
    * @param content - model-authored content to deliver.
    * @param options - caller cancellation before acceptance.
    * @returns the accepted message's inbox id.
@@ -546,26 +558,30 @@ export class SubagentManager {
     content: ContentBlock[],
     options: SubagentSendMessageOptions,
   ): Promise<MessageId> {
+    options.signal.throwIfAborted()
     if (this.ctx.agents.get(sender.id) !== sender) {
-      throw new SubagentError(
-        'message delivery requires the exact live sender agent',
-        'UNAUTHORIZED',
-      )
+      throw new SubagentError('message delivery requires the exact live sender agent', 'UNAUTHORIZED')
     }
     this.assertAdmitting(sender)
-    const senderActivation = this.resident.get(sender.id)
-    if (senderActivation !== undefined
-      && senderActivation.kind === 'local'
-      && senderActivation.handle.agent === sender
-      && senderActivation.parent.id === targetId) {
-      options.signal.throwIfAborted()
-      return this.sendToParent(senderActivation, sender, content)
+    const activation = this.resident.get(sender.id)
+    const resident = activation?.kind === 'local' && activation.handle.agent === sender ? activation : undefined
+    if (resident !== undefined && resident.parent.id === targetId) {
+      return this.sendToParent(resident, sender, content)
     }
     if (sender.session.header.parentSession === targetId) {
       throw new SubagentError(
         `agent "${sender.id}" is not a resident continuable child and cannot send to parent "${targetId}"`,
         'UNAUTHORIZED',
       )
+    }
+    if (resident !== undefined && targetId !== sender.id
+      && this.catalogOf(resident.parent.session).some(child => child.id === targetId && child.mode === 'continuable')) {
+      const message = createAgentMessage(sender, content)
+      return this.deliverToChild(resident.parent, targetId, [...message.content], {
+        signal: options.signal,
+        delivery: 'steer',
+        source: message.source,
+      })
     }
     return this.deliverToChild(sender, targetId, content, {
       signal: options.signal,
@@ -1372,7 +1388,11 @@ export class SubagentManager {
             ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
             : {},
         },
-        composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        composition: {
+          agentPreset: agentPreset ?? undefined,
+          persona: descriptor.persona,
+          toolFilter: descriptor.toolFilter,
+        },
         signal: options.signal,
       })
     } catch (error: unknown) {

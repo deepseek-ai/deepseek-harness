@@ -577,7 +577,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-agent-team',
     source: 'packages/experimental/tool-agent-team/src/index.ts',
     requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'an exact live Team member Agent'],
-    writes: ['tool/call', 'team/member', 'team/task', 'agent/inbox/spliced', 'user/message on inbox claim', 'tool/result'],
+    writes: ['tool/call', 'team/task', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
@@ -587,7 +587,6 @@ const TOOL_PACKAGES: ToolPackage[] = [
         get root() { return agent },
         id: session.id,
         role: 'lead' as const,
-        name: 'lead',
       }
       ctx.provide('agentTeams', {
         tryMembership: (candidate: Agent) => candidate === agent ? membership : undefined,
@@ -608,7 +607,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     scope: ctx => catalogChildScopes.get(ctx) as Agent,
     note:
-      'All nine tools are scoped to implicit Team Leads and durable teammates. The shipped dsh-base bundle keeps the package disabled; the documented Agent Teams profile patch enables it while disabling the legacy continuable-child control names.',
+      'Five task-board and wait tools are scoped to the Lead and its live subagents. The optional Agent Teams profile adds this package while retaining the standard subagent delegation and control tools.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-todo',

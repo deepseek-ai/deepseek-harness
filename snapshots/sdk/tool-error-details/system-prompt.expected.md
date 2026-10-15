@@ -168,9 +168,9 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List agents you can message: subagents you started and, when you are a subagent, your parent and your continuable siblings. Rows carry ids, descriptions, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: {
-    /** children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent. */
+    /** children (default) lists your parent, continuable siblings, and direct children; each accepts send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent. */
     scope?: "children" | "descendants";
   } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
@@ -189,7 +189,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer. */
   send_message: {
-    /** The agent id of your direct continuable child, or your direct parent when you are a resident continuable child. */
+    /** The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child. */
     agent_id: string;
     /** The message to deliver to the agent. */
     message: string;
@@ -427,7 +427,11 @@ interface ToolOutputMap {
     };
   };
   list_agents: ({
-    kind: "child";
+    kind: "parent";
+    id: string;
+    status: "running" | "inactive";
+  } | {
+    kind: "child" | "sibling";
     id: string;
     label: string;
     status: "running" | "inactive";

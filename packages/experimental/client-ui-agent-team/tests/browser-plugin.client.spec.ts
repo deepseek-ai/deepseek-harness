@@ -9,18 +9,23 @@ import { apply as nodeApply } from '../src/index.ts'
 
 const SESSION = 'team-session' as SessionId
 const CHILD = 'team-child' as SessionId
+const NESTED = 'team-nested' as SessionId
 
-async function bench(options: { addressed?: boolean } = {}) {
+async function bench(options: { addressed?: boolean; nested?: boolean; missingParent?: boolean } = {}) {
   const ctx = new Context()
   const navigation: unknown[] = []
-  let mainSessionId = options.addressed === true ? CHILD : SESSION
+  let mainSessionId = options.nested === true ? NESTED : options.addressed === true ? CHILD : SESSION
   ctx.provide('sessions', {
-    binding: (id: SessionId) => options.addressed === true && id === CHILD
+    list: { getSnapshot: () => ({ byId: {
+      [SESSION]: { id: SESSION },
+      ...(options.missingParent === true ? {} : { [CHILD]: { id: CHILD, origin: 'subagent', parentId: SESSION } }),
+    } }) },
+    binding: (id: SessionId) => (options.nested === true && id === NESTED) || (options.addressed === true && id === CHILD)
       ? { session: { getSnapshot: () => ({
         subagent: {
           address: {
-            parentSessionId: SESSION,
-            childSessionId: CHILD,
+            parentSessionId: options.nested === true ? CHILD : SESSION,
+            childSessionId: id,
             mode: 'continuable' as const,
           },
         },
@@ -105,6 +110,22 @@ describe('ui-team browser plugin', () => {
     expect(b.navigation).toEqual([
       ['open', { parentSessionId: SESSION, childSessionId: CHILD, mode: 'continuable' }],
     ])
+  })
+
+  it('routes a nested teammate back to the root board and its direct roster members', async () => {
+    const b = await bench({ nested: true })
+    b.actions().openTeammate(NESTED, SESSION)
+    b.actions().openTeammate(NESTED, CHILD)
+    expect(b.navigation).toEqual([
+      ['open', SESSION],
+      ['open', { parentSessionId: SESSION, childSessionId: CHILD, mode: 'continuable' }],
+    ])
+  })
+
+  it('withholds navigation until a nested teammate’s ancestry is available', async () => {
+    const b = await bench({ nested: true, missingParent: true })
+    b.actions().openTeammate(NESTED, SESSION)
+    expect(b.navigation).toEqual([])
   })
 
   it('opens the Lead from an addressed teammate conversation', async () => {

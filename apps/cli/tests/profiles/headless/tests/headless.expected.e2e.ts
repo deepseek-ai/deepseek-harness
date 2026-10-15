@@ -905,7 +905,7 @@ describe('headless stream-json snapshots', () => {
     }
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
-  it('runs a keyless Agent Team with peer mail, dependent tasks, waiting, and Lead aggregation', async () => {
+  it('runs a keyless Agent Team with described teammates, sibling messages, dependent tasks, waiting, and Lead aggregation', async () => {
     let projection: unknown
     const result = await runLoaderSmoke({
       label: 'Agent Teams headless snapshot',
@@ -937,8 +937,8 @@ describe('headless stream-json snapshots', () => {
         expect(workflowRows.filter(row => row.type === 'user/message'
           && ((row.data as JsonObject).source as JsonObject).kind === 'user').map(row => row.data))
           .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
-        const members = rows.filter(row => row.type === 'team/member')
-          .map(row => ((row.data as JsonObject).member as JsonObject))
+        const teammates = rows.filter(row => row.type === 'subagent/catalog')
+          .flatMap(row => typeof (row.data as JsonObject).label === 'string' && ((row.data as JsonObject).label as string).startsWith('Own deterministic ') ? [(row.data as JsonObject).label as string] : [])
         const tasks = rows.filter(row => row.type === 'team/task')
           .map(row => ((row.data as JsonObject).task as JsonObject))
         const latestTasks = Object.values(Object.fromEntries(tasks.map(task => [String(task.subject), task])))
@@ -991,21 +991,26 @@ describe('headless stream-json snapshots', () => {
             && ((row.data as JsonObject).source as JsonObject).kind === 'user')
           if (initial === undefined) throw new Error('Teammate Session has no initial task')
           const content = (initial.data as JsonObject).content as JsonObject[]
-          expect(content).toHaveLength(1)
+          // The task block is followed by the standard return guidance naming the Lead.
+          expect(content).toHaveLength(2)
           const context = parseJsonl(log.content).find(row => row.type === 'user/message'
             && ((row.data as JsonObject).source as JsonObject).kind === 'runtime-context')
           const source = (context?.data as JsonObject)?.source as JsonObject
           const sections = source?.sections as JsonObject[] | undefined
-          const identity = sections?.find(section => section.name === 'team:identity')?.text
-          if (typeof identity !== 'string') throw new Error('Teammate runtime context has no identity')
-          return [identity]
+          const leadId = parent.header.id as string
+          const text = (name: string) => {
+            const value = sections?.find(section => section.name === name)?.text
+            if (typeof value !== 'string') throw new Error(`Teammate runtime context has no ${name}`)
+            return value.replaceAll(leadId, '<lead>')
+          }
+          expect(sections?.some(section => section.name === 'subagent:identity')).toBe(false)
+          return [text('team:identity')]
         }).sort()
         projection = {
           sessions: logs.length,
           workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
-          memberEdges: members.length,
           identities,
-          activeMembers: members.filter(member => member.phase === 'active').map(member => member.name).sort(),
+          teammates: [...teammates].sort(),
           tasks: latestTasks.map(task => ({
             subject: task.subject,
             revision: task.revision,
@@ -1033,25 +1038,12 @@ describe('headless stream-json snapshots', () => {
     })
     expect(projection).toMatchInlineSnapshot(`
       {
-        "activeMembers": [
-          "implementer",
-          "researcher",
-        ],
         "checkedRoster": true,
         "deliveredMessages": 0,
         "identities": [
-          "You are teammate "implementer".
-      Your Team Lead is named "lead".
-      To message your Team Lead, use send_message({ target: "lead", message: "..." }).
-      Use list_agents({}) to find your teammates and their names.
-      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).",
-          "You are teammate "researcher".
-      Your Team Lead is named "lead".
-      To message your Team Lead, use send_message({ target: "lead", message: "..." }).
-      Use list_agents({}) to find your teammates and their names.
-      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).",
+          "You are a teammate in the Team led by agent "<lead>".",
+          "You are a teammate in the Team led by agent "<lead>".",
         ],
-        "memberEdges": 4,
         "queuedMessages": 0,
         "sessions": 4,
         "steerEvidence": {
@@ -1071,6 +1063,10 @@ describe('headless stream-json snapshots', () => {
             "status": "completed",
             "subject": "Research",
           },
+        ],
+        "teammates": [
+          "Own deterministic implementation.",
+          "Own deterministic research.",
         ],
         "waited": true,
         "workflowStopReason": "completed",

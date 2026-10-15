@@ -1,6 +1,7 @@
 # Agent Note: Team 消息使用目标 inbox
 
 Status: implemented
+Archived: 2026-10-15
 
 [English](2026-09-26-team-direct-inbox.md) | 中文
 

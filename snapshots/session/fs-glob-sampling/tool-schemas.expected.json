@@ -165,13 +165,13 @@
     },
     {
       "name": "list_agents",
-      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List agents you can message: subagents you started and, when you are a subagent, your parent and your continuable siblings. Rows carry ids, descriptions, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {
           "scope": {
             "type": "string",
-            "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
+            "description": "children (default) lists your parent, continuable siblings, and direct children; each accepts send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
             "enum": [
               "children",
               "descendants"
@@ -228,7 +228,7 @@
         "properties": {
           "agent_id": {
             "type": "string",
-            "description": "The agent id of your direct continuable child, or your direct parent when you are a resident continuable child."
+            "description": "The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
           },
           "message": {
             "type": "string",

@@ -3,9 +3,12 @@
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-subagent'
 import type {
+  TeamChild,
   TeamId,
   TeamMemberProjection,
   TeamMemberSnapshot,
@@ -116,6 +119,19 @@ const teamMessageQueuedEventSchema = z.object({
   message: teamMessageSnapshotSchema,
 }).strict() as z.ZodType<SessionEventMap['team/message/queued']>
 
+const teamChildSchema = z.object({
+  id: sessionIdSchema,
+  description: z.string(),
+}).strict() as z.ZodType<TeamChild>
+
+/** Catalog payloads that identify continuable children of the Lead. */
+const continuableCatalogEventSchema = z.object({
+  version: z.union([z.literal(0), z.literal(1)]),
+  childId: sessionIdSchema,
+  mode: z.literal('continuable'),
+  label: z.string(),
+}).loose()
+
 const teamMessageDeliveredEventSchema = z.object({
   version: z.literal(2),
   teamId: teamIdSchema,
@@ -130,6 +146,11 @@ const teamMessageDeliveredEventSchema = z.object({
  */
 export interface TeamState {
   readonly id: TeamId
+  /** Fork-inherited prefix length; catalog facts before it belong to another Lead. */
+  readonly inheritedEventCount: SessionLogOffset
+  /** Continuable direct children of the Lead, in catalog order. */
+  readonly children: readonly TeamChild[]
+  /** Historical roster records written by earlier Team builds. */
   readonly members: readonly TeamMemberSnapshot[]
   readonly tasks: readonly TeamTaskSnapshot[]
   readonly messages: readonly TeamMessageSnapshot[]
@@ -140,11 +161,14 @@ export interface TeamState {
 /**
  * Construct empty state for one Team identity.
  * @param rootId - root Session identity.
+ * @param inheritedEventCount - fork-inherited prefix length of the root Session.
  * @returns empty Team state.
  */
-export function emptyTeamState(rootId: SessionId): TeamProjectionState {
+export function emptyTeamState(rootId: SessionId, inheritedEventCount: SessionLogOffset): TeamProjectionState {
   return {
     id: toTeamId(rootId),
+    inheritedEventCount,
+    children: [],
     members: [],
     tasks: [],
     messages: [],
@@ -166,6 +190,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 const teamProjectionEntrySchema = z.object({
   id: teamIdSchema,
+  inheritedEventCount: nonNegativeSafeInteger.transform(value => SessionLogOffset(value)),
+  children: z.array(teamChildSchema),
   members: z.array(teamMemberSnapshotSchema),
   tasks: z.array(teamTaskSnapshotSchema),
   messages: z.array(teamMessageSnapshotSchema),
@@ -197,7 +223,7 @@ export function isTeamEvent(event: SessionEvent): event is TeamSessionEvent {
 }
 
 /** Decode one persisted Team value and retain the schema failure as its cause. */
-function parsePersisted<T>(type: TeamEventType, schema: z.ZodType<T>, value: unknown): T {
+function parsePersisted<T>(type: TeamEventType | 'subagent/catalog', schema: z.ZodType<T>, value: unknown): T {
   try {
     return schema.parse(value)
   } catch (error: unknown) {
@@ -222,8 +248,23 @@ function parseCurrentTeamEvent(event: TeamSessionEvent): TeamSessionEvent {
   }
 }
 
+/** Add one continuable catalog child of the projected Lead, excluding fork-inherited facts. */
+function applyCatalogEvent(state: TeamProjectionState, event: SessionEvent<'subagent/catalog'>): TeamProjectionState {
+  if (event.seq < state.inheritedEventCount || event.data.mode !== 'continuable') return state
+  const child = parsePersisted(event.type, continuableCatalogEventSchema, event.data)
+  return { ...state, children: [...state.children, { id: child.childId, description: child.label }] }
+}
+
 function applyProjectionEvent(state: TeamProjectionState, event: SessionEvent): TeamProjectionState {
   if (state.failure !== undefined) return state
+  if (event.type === 'subagent/catalog') {
+    try {
+      return applyCatalogEvent(state, event)
+    } catch (error: unknown) {
+      /* v8 ignore next -- the catalog transition throws Error instances. */
+      return { ...state, failure: error instanceof Error ? error.message : String(error) }
+    }
+  }
   if (!isTeamEvent(event)) return state
   try {
     const selector = parsePersisted(event.type, teamEventSelectorSchema, event.data)
@@ -311,7 +352,7 @@ function applyCurrentTeamEvent(state: TeamProjectionState, event: TeamSessionEve
 
 const teamMemberProjectionSchema = z.object({
   id: sessionIdSchema,
-  name: z.string(),
+  description: z.string().optional(),
   role: z.enum(['lead', 'teammate']),
   phase: z.enum(['provisioning', 'active', 'failed']),
   error: z.string().optional(),
@@ -325,7 +366,7 @@ const teamTaskViewSchema = z.object({
   status: z.enum(['pending', 'in_progress', 'completed', 'deleted']),
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
-  ownerName: z.string().optional(),
+  ownerId: sessionIdSchema.optional(),
   ready: z.boolean(),
   writeScopeWarnings: z.array(z.string()),
 }).strict() as z.ZodType<TeamTaskView>
@@ -336,16 +377,23 @@ const teamProjectionSchema = z.object({
   failure: z.string().optional(),
 }).strict() as z.ZodType<TeamProjection>
 
-/** Client views keyed by the member and task collections they were derived from. */
-const teamProjectionViews = new WeakMap<readonly TeamMemberSnapshot[], WeakMap<readonly TeamTaskSnapshot[], TeamProjection>>()
+/** Client views keyed by the child, member, and task collections they were derived from. */
+const teamProjectionViews = new WeakMap<
+  readonly TeamChild[],
+  WeakMap<readonly TeamMemberSnapshot[], WeakMap<readonly TeamTaskSnapshot[], TeamProjection>>
+>()
 
 function buildTeamProjection(state: TeamProjectionState): TeamProjection {
   const rootId = brandString<SessionId>(state.id)
-  const members: TeamMemberProjection[] = [{ id: rootId, name: 'lead', role: 'lead', phase: 'active' }]
+  const members: TeamMemberProjection[] = [{ id: rootId, role: 'lead', phase: 'active' }]
+  for (const child of state.children) {
+    members.push({ id: child.id, description: child.description, role: 'teammate', phase: 'active' })
+  }
   for (const member of state.members) {
+    if (state.children.some(child => child.id === member.id)) continue
     members.push({
       id: member.id,
-      name: member.name,
+      description: member.description,
       role: 'teammate',
       phase: member.phase,
       ...member.error === undefined ? {} : { error: member.error },
@@ -370,10 +418,15 @@ function buildTeamProjection(state: TeamProjectionState): TeamProjection {
  */
 export function teamProjectionView(state: TeamProjectionState): TeamProjection {
   if (state.failure !== undefined) return buildTeamProjection(state)
-  let byTasks = teamProjectionViews.get(state.members)
+  let byMembers = teamProjectionViews.get(state.children)
+  if (byMembers === undefined) {
+    byMembers = new WeakMap()
+    teamProjectionViews.set(state.children, byMembers)
+  }
+  let byTasks = byMembers.get(state.members)
   if (byTasks === undefined) {
     byTasks = new WeakMap()
-    teamProjectionViews.set(state.members, byTasks)
+    byMembers.set(state.members, byTasks)
   }
   let view = byTasks.get(state.tasks)
   if (view === undefined) {
@@ -383,12 +436,16 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
   return view
 }
 
-/** Team projection selected by the projected Session identity; the wire view carries durable roster and task state only. */
+/**
+ * Team projection selected by the projected Session identity; the wire view
+ * carries the roster and task board. Named children come from the Lead's own
+ * `subagent/catalog` facts, so the roster has no Team-written copy.
+ */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema: teamProjectionEntrySchema,
-  init: header => emptyTeamState(header.id),
+  init: (header, inheritedEventCount) => emptyTeamState(header.id, inheritedEventCount),
   apply: applyProjectionEvent,
   wire: { viewSchema: teamProjectionSchema, view: teamProjectionView },
 } satisfies ProjectionDefinition<'agentTeam', TeamProjectionState>

@@ -1,7 +1,5 @@
 /** Pure task-view derivation shared by the task board and the client projection. */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
-import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamState } from './projection.ts'
 import type { TeamTaskSnapshot, TeamTaskView } from './types.ts'
 
@@ -26,20 +24,15 @@ export function taskReady(state: TeamState, task: TeamTaskSnapshot): boolean {
 }
 
 /**
- * Derive one task view with owner name, readiness, and advisory write overlaps.
+ * Derive one task view with owner id, readiness, and advisory write overlaps.
  * A committing caller may pass its pre-append state because `task` supplies the
- * new value explicitly; owner names, blocker readiness, and other task scopes
+ * new value explicitly; blocker readiness, and other task scopes
  * do not change when that snapshot is appended.
- * @param state - Team state supplying members and sibling tasks.
+ * @param state - Team state supplying sibling tasks for readiness and overlap checks.
  * @param task - durable task snapshot to view.
  * @returns a detached task view.
  */
 export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamTaskView {
-  const ownerName = task.ownerId === undefined
-    ? undefined
-    : task.ownerId === brandString<SessionId>(state.id)
-      ? 'lead'
-      : state.members.find(member => member.id === task.ownerId)?.name
   const warnings = new Set<string>()
   for (const other of state.tasks) {
     if (other.id === task.id || other.status !== 'in_progress') continue
@@ -55,7 +48,7 @@ export function projectTaskView(state: TeamState, task: TeamTaskSnapshot): TeamT
     status: task.status,
     blockedBy: [...task.blockedBy],
     writeScopes: [...task.writeScopes],
-    ...ownerName === undefined ? {} : { ownerName },
+    ...task.ownerId === undefined ? {} : { ownerId: task.ownerId },
     ready: task.status === 'pending' && taskReady(state, task),
     writeScopeWarnings: [...warnings],
   }

@@ -151,7 +151,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     expect(Object.keys(parameters.properties ?? {})).toEqual(['scope'])
     expect(parameters.properties?.scope?.enum).toEqual(['children', 'descendants'])
     expect(parameters.required ?? []).toEqual([])
-    expect(parameters.properties?.scope?.description).toContain('accept send_message in any status')
+    expect(parameters.properties?.scope?.description).toContain('accepts send_message in any status')
     expect(parameters.properties?.scope?.description).toContain('accept only interrupt_agent')
   })
 
@@ -380,5 +380,61 @@ describe('dsh-tool-subagent-control/list-agents', () => {
 
     expect(result.isError).toBe(false)
     expect(listDescendants).toHaveBeenCalledWith(parent.id, signal)
+  })
+
+  it('shows each continuable child its parent and siblings by id with their descriptions', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const releaseDelta = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('alpha'), gate: release.promise },
+      { chunks: textResponse('beta') },
+      { chunks: textResponse('gamma') },
+      { chunks: textResponse('delta'), gate: releaseDelta.promise },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    const start = async (label: string) => (await ctx.subagents.startActivation({
+      delivery: 'caller', provider: 'spawn', label,
+      request: { prompt: [{ type: 'text', text: label }], parent }, signal: testToolSignal,
+    })).childId
+    const alpha = await start('alpha task')
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const beta = await start('beta task')
+    await waitNoActivation(ctx, beta)
+    const gamma = await start('gamma task')
+    await waitNoActivation(ctx, gamma)
+    const delta = await start('delta task')
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
+
+    const fromAlpha = await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha))
+    expect(fromAlpha.isError).toBe(false)
+    expect(text(fromAlpha)).toBe([
+      `${parent.id} [inactive] — your parent`,
+      `${beta} [inactive] — sibling: beta task`,
+      `${gamma} [inactive] — sibling: gamma task`,
+      `${delta} [running] — sibling: delta task`,
+    ].join('\n'))
+    const fromDelta = await callTool(ctx, 'list_agents', {}, ctx.agents.get(delta))
+    expect(text(fromDelta)).toBe([
+      `${parent.id} [inactive] — your parent`,
+      `${alpha} [running] — sibling: alpha task`,
+      `${beta} [inactive] — sibling: beta task`,
+      `${gamma} [inactive] — sibling: gamma task`,
+    ].join('\n'))
+    const fromParent = await callTool(ctx, 'list_agents', {}, parent)
+    expect(text(fromParent)).toBe([
+      `${alpha} [running] — alpha task`,
+      `${beta} [inactive] — beta task`,
+      `${gamma} [inactive] — gamma task`,
+      `${delta} [running] — delta task`,
+    ].join('\n'))
+
+    const catalog = vi.spyOn(ctx.subagents, 'listChildren').mockResolvedValue([])
+    expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha)))).toBe('(no subagents)')
+    catalog.mockRestore()
+
+    release.resolve(undefined)
+    releaseDelta.resolve(undefined)
+    await waitNoActivation(ctx, alpha)
+    await waitNoActivation(ctx, delta)
   })
 })

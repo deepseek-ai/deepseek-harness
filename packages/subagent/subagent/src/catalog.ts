@@ -14,8 +14,9 @@ import type {
   SessionId,
   SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection'
 import type { SubagentCatalogEntry } from './projection-types.ts'
+import { SubagentError } from './error.ts'
 
 /** Catalog payload version emitted by local child creation. */
 export const SUBAGENT_CATALOG_VERSION = 0
@@ -167,4 +168,22 @@ export function establishExternalCatalogChild(parent: Session, childId: SessionI
     mode: 'external',
     label,
   })
+}
+
+/**
+ * Read the current catalog rows of one live parent Session.
+ * @param projections - Session projection registry owning the catalog unit, when composed.
+ * @param parent - live parent Session whose own catalog facts are read.
+ * @returns direct-child rows in catalog event order.
+ * @throws {SubagentError} `CONTINUATION_UNAVAILABLE` when the catalog projection is not registered.
+ */
+export function liveCatalogEntries(
+  projections: SessionProjectionRegistry | undefined,
+  parent: Session,
+): SubagentCatalogEntry[] {
+  const state = projections?.stateOf(parent, 'subagentCatalog')
+  if (state === undefined) {
+    throw new SubagentError('subagent sibling messaging requires the subagentCatalog projection', 'CONTINUATION_UNAVAILABLE')
+  }
+  return subagentCatalogEntries(state)
 }

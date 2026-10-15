@@ -16,6 +16,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
 import css from './TeamAction.module.css'
+import { teamRootId } from './team-root.ts'
 
 /** Business actions injected by the browser plugin. */
 export interface TeamActionInjected {
@@ -109,7 +110,7 @@ function TeamMemberRow({
         </span>
         <span className={css.memberText}>
           <span className={css.memberName}>
-            <span className={css.memberNameText}>{member.name}</span>
+            <span className={css.memberNameText}>{member.description ?? (member.role === 'lead' ? t('lead') : member.id)}</span>
             {isCurrent && <Tag tone="info" className={css.currentTag}>{t('current')}</Tag>}
           </span>
           <small>
@@ -126,7 +127,7 @@ function TeamMemberRow({
 }
 
 /** Task card with a two-line description clamp expanded from a toggle in the meta row. */
-function TaskCard({ task, t }: { task: TeamTask; t: TranslateNS<typeof NS> }) {
+function TaskCard({ task, owner, t }: { task: TeamTask; owner: TeamMemberProjection | undefined; t: TranslateNS<typeof NS> }) {
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
@@ -165,7 +166,7 @@ function TaskCard({ task, t }: { task: TeamTask; t: TranslateNS<typeof NS> }) {
           </button>
         )}
         <span>{task.id}</span>
-        <span>{t('owner')}: {task.ownerName ?? t('unowned')}</span>
+        <span>{t('owner')}: {owner?.description ?? (owner?.role === 'lead' ? t('lead') : task.ownerId ?? t('unowned'))}</span>
         {task.status === 'pending' && <span>{task.ready ? t('ready') : t('blocked')}</span>}
         {task.blockedBy.length > 0 && <span>{t('blockedBy')}: {task.blockedBy.join(', ')}</span>}
         {task.writeScopes.length > 0 && <span>{t('writeScopes')}: {task.writeScopes.join(', ')}</span>}
@@ -189,8 +190,11 @@ export function TeamAction({
     open, anchorRef: triggerRef, panelRef, gap: 5, margin: 16,
   })
   const positioned = position !== null
-  const leadSessionId = useSession(snapshot => snapshot.subagent?.address.parentSessionId) ?? sessionId
-  const team = useSessions(state => state.projectionsBySession[leadSessionId]?.values.agentTeam)
+  const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
+  const team = useSessions((state) => {
+    const rootId = teamRootId(sessionId, parentId, state.byId)
+    return rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam
+  })
   const opening = useSession(snapshot => snapshot.openState === 'loading')
   const listing = useSessions(state => state.phase === 'pending')
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -342,7 +346,9 @@ export function TeamAction({
                       <>
                         <h3>{t('tasks')}<span className={css.count}>{team.tasks.length}</span></h3>
                         <div className={css.tasks}>
-                          {team.tasks.map(task => <TaskCard key={task.id} task={task} t={t} />)}
+                          {team.tasks.map(task => (
+                            <TaskCard key={task.id} task={task} owner={team.members.find(member => member.id === task.ownerId)} t={t} />
+                          ))}
                         </div>
                       </>
                     )}

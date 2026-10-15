@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { TeamAction, type TeamActionInjected } from './TeamAction.tsx'
 import { en, NS, zh, type TeamKey } from './locales.ts'
+import { teamRootId } from './team-root.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -29,14 +30,15 @@ export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale']
 export function registerAgentTeamUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-agent-team: dictionaries')
   const sessions = ctx.sessions
-  const leadSessionId = (sessionId: SessionId): SessionId => {
+  const leadSessionId = (sessionId: SessionId): SessionId | undefined => {
     const address = sessions.binding(sessionId)?.session.getSnapshot().subagent?.address
-    return address?.parentSessionId ?? sessionId
+    return teamRootId(sessionId, address?.parentSessionId, sessions.list.getSnapshot().byId)
   }
 
   const actions: TeamActionInjected = {
     openTeammate(sessionId: SessionId, childSessionId: SessionId): void {
       const parentSessionId = leadSessionId(sessionId)
+      if (parentSessionId === undefined) return
       if ((sessions.retainInfo(sessionId).getSnapshot().retainedBy.mainView ?? 0) === 0) return
       if (childSessionId === parentSessionId) {
         ctx.uiWorkspace.openSession(parentSessionId)

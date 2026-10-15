@@ -17,13 +17,14 @@ child 专属工具与系统提示词 section 还位于每个继承 fork 轮次�
 `SubagentRuntime.sendMessage(sender, targetId, content, { signal })` 是唯一公开的模型编写消息操作。继续执行管理器只接受确切在线 sender 与一条相邻边上的目标：
 
 - parent 到直接可继续 child，由 child 的持久化 `SessionHeader.parentSession` 授权；
-- 驻留的可继续 child 到其确切在线直接 parent，由 child 的 Activation 授权。
+- 驻留的可继续 child 到其确切在线直接 parent，由 child 的 Activation 授权；
+- 驻留的可继续子级向同一在线父级的可继续同级发消息，由该父级对子级的权限授权（[子代理队友](2026-10-15-agent-teams-as-subagents.zh.md)）。
 
-sibling、自身目标、超过一条边的 ancestor、陈旧 Agent 对象、未知目标与一次性 child 都不是替代路由。该操作没有调用方提供的 source、投递模式、离线 parent mailbox 或提供方分发。
+自身目标、跨越一层的祖先、过期 Agent 对象、未知目标和一次性子级不是替代路由。操作不接受调用方提供的 source、投递模式、离线父级邮箱或提供方分发。
 
 每条被接受的消息都使用 `Agent.steer()`。运行中目标在最近 step 边界接收消息；空闲目标启动轮次。缺失的直接 child 会先通过现有继续执行生命周期冷恢复，再接受同一 Steer 投递。管理器保留唤醒发送记账，因此受继续执行管理的目标不会在同步 inbox 插入与 driver 准入之间结算。
 
-两个方向使用同一种持久来源。服务从已授权 Agent 推导 `senderSessionId`，并把模型可见内容组装为 `Agent <sender-id> sent a message:`，因此来源信息不会偏离权限。
+所有方向使用同一种持久 source。服务从确切在线发送方推导 `senderSessionId`，并以 `Agent <sender-id> sent a message:` 包装内容，使用父级权限的同级投递也一样。
 
 ```ts
 import type { SessionId } from '@deepseek-ai/dsh-session'

@@ -1,6 +1,5 @@
 /** Public Agent Teams identities, durable records, and service request values. */
 
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -41,10 +40,13 @@ export function TeamMessageId(id: string): TeamMessageId {
   return id as TeamMessageId
 }
 
-/** Durable teammate lifecycle. */
+/**
+ * Teammate lifecycle. Continuable children of the Lead are always `active`;
+ * `provisioning` and `failed` appear only in historical roster records.
+ */
 export type TeamMemberPhase = 'provisioning' | 'active' | 'failed'
 
-/** Whole durable value written on every teammate lifecycle change. */
+/** Historical roster value written by earlier Team builds on every teammate lifecycle change. */
 export interface TeamMemberSnapshot {
   readonly id: SessionId
   readonly name: string
@@ -55,17 +57,10 @@ export interface TeamMemberSnapshot {
   readonly error?: string
 }
 
-/** Current runtime-enriched roster row. */
-export interface TeamMemberView {
+/** A continuable direct child of the Lead, read from the Lead's subagent catalog. */
+export interface TeamChild {
   readonly id: SessionId
-  readonly name: string
-  readonly role: 'lead' | 'teammate'
-  readonly status: 'running' | 'inactive' | 'provisioning' | 'failed'
-  readonly description?: string
-  readonly provider?: string
-  readonly context?: 'fresh' | 'fork'
-  readonly model?: string
-  readonly diagnostics: string[]
+  readonly description: string
 }
 
 /** Durable task lifecycle. */
@@ -92,17 +87,21 @@ export interface TeamTaskView {
   readonly status: TeamTaskStatus
   readonly blockedBy: TeamTaskId[]
   readonly writeScopes: string[]
-  readonly ownerName?: string
+  readonly ownerId?: SessionId
   readonly ready: boolean
   readonly writeScopeWarnings: string[]
 }
 
-/** One durable roster row published through the `agentTeam` Session projection. */
+/**
+ * One roster row published through the `agentTeam` Session projection: the
+ * Lead, each continuable direct child of the Lead, and each historical roster member.
+ */
 export interface TeamMemberProjection {
   readonly id: SessionId
-  readonly name: string
+  /** Delegated responsibility; absent for the Lead. Never used as an address. */
+  readonly description?: string
   readonly role: 'lead' | 'teammate'
-  /** Durable lifecycle; the Lead row is always `active`. Turn activity comes from Session status. */
+  /** The Lead and continuable children are always `active`. Turn activity comes from Session status. */
   readonly phase: TeamMemberPhase
   readonly error?: string
 }
@@ -151,41 +150,8 @@ declare module '@deepseek-ai/dsh-llm' {
 
 /** Team-service deployment limits. */
 export interface Config {
-  /** Maximum immutable teammate names retained by one Team. */
-  readonly maxMembers?: number
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
-  /** Maximum UTF-8 bytes in one complete sender-framed delivery. */
-  readonly maxMessageBytes?: number
-  /** Maximum milliseconds for shared operation settlement and for each Team child drain. */
-  readonly disposalTimeoutMs?: number
-}
-
-/** Input for creating one durable teammate. */
-export interface SpawnTeammateRequest {
-  readonly name: string
-  readonly description: string
-  readonly prompt: ContentBlock[]
-  readonly context: 'fresh' | 'fork'
-  readonly provider: string
-  readonly signal: AbortSignal
-}
-
-/** Result after one teammate reaches a durable active or failed edge. */
-export interface SpawnTeammateResult {
-  readonly member: TeamMemberView
-}
-
-/** Input for one direct peer-message attempt. */
-export interface SendTeamMessageRequest {
-  readonly target: string
-  readonly content: ContentBlock[]
-  readonly signal: AbortSignal
-}
-
-/** Target inbox acceptance under ordinary Agent persistence; no Team retry or deduplication. */
-export interface SendTeamMessageResult {
-  readonly messageId: MessageId
 }
 
 /** Input for creating one shared task. */
@@ -216,7 +182,7 @@ export interface UpdateTeamTaskRequest {
   readonly description?: string
   readonly blockedBy?: readonly TeamTaskId[]
   readonly writeScopes?: readonly string[]
-  readonly owner?: string
+  readonly owner?: SessionId
 }
 
 /** Result of waiting for Team activity. */
@@ -226,7 +192,7 @@ export interface TeamWaitResult {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** Whole teammate lifecycle value, stored only in the Team Lead Session. */
+    /** Historical teammate lifecycle value; new teammates are continuable entries in the Lead's subagent catalog. */
     'team/member': { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
     /** Whole shared-task value, stored only in the Team Lead Session. */
     'team/task': { version: 2; teamId: TeamId; task: TeamTaskSnapshot }

@@ -268,19 +268,24 @@ class JobOutputOutput(TypedDict):
     job: JobOutputOutputJob
 
 class ListAgentsArgs(TypedDict):
-    # children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.
+    # children (default) lists your parent, continuable siblings, and direct children; each accepts send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.
     scope: NotRequired[Literal["children", "descendants"]]
     # Additional keys beyond those declared are allowed.
 
 class ListAgentsOutput1(TypedDict):
-    kind: Literal["child"]
+    kind: Literal["parent"]
+    id: str
+    status: Literal["running", "inactive"]
+
+class ListAgentsOutput2(TypedDict):
+    kind: Literal["child", "sibling"]
     id: str
     label: str
     status: Literal["running", "inactive"]
     parent: NotRequired[str]
     depth: NotRequired[float]
 
-class ListAgentsOutput2(TypedDict):
+class ListAgentsOutput3(TypedDict):
     kind: Literal["diagnostic"]
     id: str
     reason: Literal["corrupt", "unsupported", "unavailable"]
@@ -331,7 +336,7 @@ class ReadImageOutput(TypedDict):
     image: ReadImageOutputImage
 
 class SendMessageArgs(TypedDict):
-    # The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.
+    # The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.
     agent_id: str
     # The message to deliver to the agent.
     message: str
@@ -533,8 +538,8 @@ class Tools(Protocol):
         """List your background jobs (running and finished) with their ids, kinds, and statuses."""
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
-    async def list_agents(self, args: ListAgentsArgs) -> list[ListAgentsOutput1 | ListAgentsOutput2]:
-        """List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+    async def list_agents(self, args: ListAgentsArgs) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
+        """List agents you can message: subagents you started and, when you are a subagent, your parent and your continuable siblings. Rows carry ids, descriptions, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:

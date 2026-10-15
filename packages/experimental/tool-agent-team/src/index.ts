@@ -1,10 +1,10 @@
-/** Scoped model-facing tools for the opt-in Agent Teams runtime. */
+/** Scoped model-facing task-board and wait tools for the opt-in Agent Teams runtime. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { TeamTaskId } from '@deepseek-ai/dsh-experimental-agent-team'
-import type { TeamMemberView } from '@deepseek-ai/dsh-experimental-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 
@@ -13,62 +13,25 @@ export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
 export const inject = ['agents', 'agentTeams', 'tools', 'systemPrompt']
 
-/** Tool routing configuration. */
-export interface Config {
-  /** Register `interrupt_agent` and its policy guidance. Defaults to true; false leaves the domain API available. */
-  readonly interrupt?: boolean
-  /** Continuable-subagent provider used for fresh teammates. */
-  readonly freshProvider?: string
-  /** Continuable-subagent provider used for completed-prefix fork teammates. */
-  readonly forkProvider?: string
-}
+/** The Team tool plugin takes no configuration. */
+export type Config = Record<never, never>
 
 /** Loader schema for the opt-in Team tool plugin. */
-export const Config: z<Config> = z.object({
-  interrupt: z.boolean().default(true),
-  freshProvider: z.string().default('spawn'),
-  forkProvider: z.string().default('fork'),
-})
+export const Config: z<Config> = z.object({})
+
+/** Configuration keys removed when Team reused subagent creation and messaging. */
+const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-function teamPolicy(interrupt: boolean): string {
-  return `Agent Teams is available in this session
+const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use agent ids with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use the target returned by spawn_teammate or list_agents for send_message${interrupt ? ' and interrupt_agent' : ''}, or as owner when assigning or filtering shared tasks. send_message steers a running target at its nearest step boundary and starts or resumes an inactive target. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. provisioning means member creation is in progress; failed means member creation failed. A peer message starts with its sender name. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
-}
+Use agent ids as task owners. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents shows direct contacts by default; descendants scope discovers deeper agents without granting message or assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
-const ACTIVE_WAIT_STATUSES: ReadonlySet<TeamMemberView['status']> = new Set(['running', 'provisioning'])
-const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake each required inactive teammate before waiting again.'
-
-/**
- * One model-facing roster row. The Lead pseudo-row omits the
- * teammate-only provisioning fields, so only identity, role, status, and
- * diagnostics are required.
- */
-const MEMBER_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    target: { type: 'string', required: true },
-    role: { type: 'string', required: true, enum: ['lead', 'teammate'] },
-    status: { type: 'string', required: true, enum: ['running', 'inactive', 'provisioning', 'failed'] },
-    description: { type: 'string' },
-    provider: { type: 'string' },
-    context: { type: 'string', enum: ['fresh', 'fork'] },
-    model: { type: 'string' },
-    diagnostics: { type: 'array', required: true, items: { type: 'string' } },
-  },
-} as const
-
-/** Expose the member name as its model-facing target. */
-function modelMember(member: TeamMemberView): InferValue<typeof MEMBER_VIEW_SCHEMA> {
-  const { id: _id, name, ...details } = member
-  return { target: name, ...details }
-}
+const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.'
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -80,29 +43,11 @@ const TASK_VIEW_SCHEMA = {
     subject: { type: 'string', required: true },
     description: { type: 'string', required: true },
     status: { type: 'string', required: true, enum: ['pending', 'in_progress', 'completed', 'deleted'] },
-    ownerName: { type: 'string' },
+    ownerId: { type: 'string' },
     blockedBy: { type: 'array', required: true, items: { type: 'string' } },
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
     writeScopeWarnings: { type: 'array', required: true, items: { type: 'string' } },
-  },
-} as const
-
-const SPAWN_VALUE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    member: { ...MEMBER_VIEW_SCHEMA, required: true },
-  },
-} as const
-
-const MEMBER_LIST_VALUE_SCHEMA = { type: 'array', items: MEMBER_VIEW_SCHEMA } as const
-
-const SEND_VALUE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    sent: { type: 'boolean', required: true, const: true },
   },
 } as const
 
@@ -120,14 +65,6 @@ const WAIT_VALUE_SCHEMA = {
         message: { type: 'string', required: true },
       },
     },
-  },
-} as const
-
-const INTERRUPT_VALUE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    previousStatus: { type: 'string', required: true, enum: ['running', 'inactive'] },
   },
 } as const
 
@@ -165,7 +102,7 @@ function callingAgent(agent: Agent | undefined, toolName: string): Agent {
 }
 
 /** Register the complete Team tool set in one exact Agent scope. */
-function install(agent: Agent, ctx: Context, config: Required<Config>): () => void {
+function install(agent: Agent, ctx: Context): () => void {
   const scoped = agent.ctx
   const disposers: Array<() => unknown> = []
   const register = (disposer: () => unknown): void => { disposers.push(disposer) }
@@ -173,82 +110,24 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
     register(scoped.systemPrompt.section({
       name: 'team:policy',
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
-      text: teamPolicy(config.interrupt),
+      text: TEAM_POLICY,
     }))
     register(scoped.systemPrompt.context({
       name: 'team:identity',
       order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
       required: true,
+      interpolate: false,
       text: () => {
-        const { role, name } = ctx.agentTeams.membership(agent)
-        return `${role === 'lead'
-          ? 'You are the Team Lead named "lead".'
-          : `You are teammate "${name}".\nYour Team Lead is named "lead".\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).`}
-Use list_agents({}) to find your teammates and their names.
-To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).`
+        const { role, root } = ctx.agentTeams.membership(agent)
+        return role === 'lead'
+          ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
+          : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
       },
     }))
 
     register(scoped.tools.register(defineTool({
-      name: 'spawn_teammate',
-      description: 'Create one named, durable teammate. Only the Team Lead may call this tool.',
-      parameters: {
-        name: { type: 'string', required: true, description: 'Unique lower-kebab-case teammate name.' },
-        description: { type: 'string', required: true, description: 'Short description of the delegated responsibility.' },
-        prompt: { type: 'string', required: true, description: 'Complete initial task for the teammate.' },
-        context: {
-          type: 'string',
-          enum: ['fresh', 'fork'],
-          description: 'fresh starts without Lead history; fork inherits completed Lead turns. Defaults to fresh.',
-        },
-      },
-      output: jsonOutput(SPAWN_VALUE_SCHEMA),
-      async execute(args, exec) {
-        const agent = callingAgent(exec.agent, 'spawn_teammate')
-        const context = args.context ?? 'fresh'
-        const result = await ctx.agentTeams.spawnTeammate(agent, {
-          name: args.name,
-          description: args.description,
-          prompt: [{ type: 'text', text: args.prompt }],
-          context,
-          provider: context === 'fork' ? config.forkProvider : config.freshProvider,
-          signal: exec.signal,
-        })
-        return { member: modelMember(result.member) }
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
-      name: 'send_message',
-      description: 'Send one message to another Team member. A running target receives it at the nearest step boundary; an inactive target starts or resumes a turn.',
-      parameters: {
-        target: { type: 'string', required: true, description: 'Member target returned by spawn_teammate or list_agents, including lead.' },
-        message: { type: 'string', required: true, description: 'Self-contained message for the target.' },
-      },
-      output: jsonOutput(SEND_VALUE_SCHEMA),
-      async execute(args, exec) {
-        await ctx.agentTeams.sendMessage(callingAgent(exec.agent, 'send_message'), {
-          target: args.target,
-          content: [{ type: 'text', text: args.message }],
-          signal: exec.signal,
-        })
-        return { sent: true }
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
-      name: 'list_agents',
-      description: 'List the Lead and every durable teammate with an addressable target and current availability. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.',
-      parameters: {},
-      output: jsonOutput(MEMBER_LIST_VALUE_SCHEMA),
-      execute(_args, exec) {
-        return Promise.resolve(ctx.agentTeams.listMembers(callingAgent(exec.agent, 'list_agents')).map(modelMember))
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
       name: 'wait_agent',
-      description: 'Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running or provisioning. Re-list after wakeup or timeout instead of polling.',
+      description: 'Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout instead of polling.',
       parameters: {
         timeout_ms: {
           type: 'integer',
@@ -266,9 +145,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
         }
         // The active-peer read and waiter registration must remain one synchronous
         // span; awaiting between them can lose the only peer-status edge.
-        const hasActivePeer = ctx.agentTeams.listMembers(caller).some(member =>
-          member.id !== caller.id && ACTIVE_WAIT_STATUSES.has(member.status))
-        if (!hasActivePeer) {
+        if (!ctx.agentTeams.hasActivePeer(caller)) {
           return {
             timedOut: false,
             noProgress: {
@@ -280,20 +157,6 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
         return await ctx.agentTeams.waitForChange(caller, timeoutMs, exec.signal)
       },
     })))
-
-    if (config.interrupt) {
-      register(scoped.tools.register(defineTool({
-        name: 'interrupt_agent',
-        description: 'Interrupt one teammate\'s current turn while preserving its pending inbox. Team Lead only.',
-        parameters: {
-          target: { type: 'string', required: true, description: 'Teammate target returned by spawn_teammate or list_agents.' },
-        },
-        output: jsonOutput(INTERRUPT_VALUE_SCHEMA),
-        execute(args, exec) {
-          return Promise.resolve(ctx.agentTeams.interrupt(callingAgent(exec.agent, 'interrupt_agent'), args.target))
-        },
-      })))
-    }
 
     register(scoped.tools.register(defineTool({
       name: 'team_task_create',
@@ -328,7 +191,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
           enum: ['pending', 'in_progress', 'completed'],
           description: 'Optional exact status filter.',
         },
-        owner: { type: 'string', description: 'Optional member target from spawn_teammate or list_agents, matching ownerName; use unowned for tasks without an owner.' },
+        owner: { type: 'string', description: 'Optional exact ownerId filter; use unowned for tasks without an owner.' },
         ready: { type: 'boolean', description: 'Optional readiness filter.' },
         cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
@@ -338,7 +201,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
         const status = args.status
         const filtered = ctx.agentTeams.listTasks(callingAgent(exec.agent, 'team_task_list')).filter(task =>
           (status === undefined || task.status === status)
-          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
+          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerId === undefined : task.ownerId === args.owner))
           && (args.ready === undefined || task.ready === args.ready))
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
@@ -382,7 +245,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Agent id of the Lead or one of its direct continuable children for Lead-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
@@ -394,7 +257,7 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
           ...args.description === undefined ? {} : { description: args.description },
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-          ...args.owner === undefined ? {} : { owner: args.owner },
+          ...args.owner === undefined ? {} : { owner: SessionId(args.owner) },
         })
       },
     })))
@@ -407,17 +270,21 @@ To message another teammate, use send_message({ target: "<teammate name>", messa
   }
 }
 
-/** Install Team tools in every live or subsequently published Team member scope. */
+/**
+ * Install Team tools in every live or subsequently published Team member scope.
+ * @param ctx - context carrying the Agent registry, Team service, tools, and system prompt.
+ * @param config - the empty plugin configuration; removed keys fail at load.
+ */
 export function apply(ctx: Context, config: Config = {}): void {
-  const resolved: Required<Config> = {
-    interrupt: config.interrupt ?? true,
-    freshProvider: config.freshProvider ?? 'spawn',
-    forkProvider: config.forkProvider ?? 'fork',
+  for (const key of REMOVED_CONFIG_KEYS) {
+    if (Object.hasOwn(config, key)) {
+      throw new Error(`tool-agent-team: ${key} is no longer supported; create teammates with a subagent tool`)
+    }
   }
   const installed = new Map<Agent, () => void>()
   const maybeInstall = (agent: Agent): void => {
     if (installed.has(agent) || ctx.agentTeams.tryMembership(agent) === undefined) return
-    installed.set(agent, install(agent, ctx, resolved))
+    installed.set(agent, install(agent, ctx))
   }
   for (const agent of ctx.agents.list()) maybeInstall(agent)
   ctx.on('agent/created', ({ agent }) => { maybeInstall(agent) })

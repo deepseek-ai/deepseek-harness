@@ -1,5 +1,5 @@
 ---
-description: "Nine tools that let the model create, message, and coordinate teammates, for compositions mounting the experimental Team plugins."
+description: "Five task-board and wait tools plus coordination guidance for every member of an experimental Team composition."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets the model create named teammates, send them messages, inspect availability, wait for progress, interrupt stuck work, and coordinate through a shared task board. Every team member receives the same nine tools and guidance for coordinating in a shared workspace. It replaces legacy subagent controls with the same tool names, so compositions that need both must disable the legacy definitions. The package is published under its experimental name and provides no stability guarantee.
+This package lets every Team member coordinate shared work: create, claim, and complete tasks on the shared board, and wait for teammates instead of polling. Each member also receives the shared-checkout coordination policy and a statement of its role. Creating, messaging, listing, and interrupting teammates stay on the standard subagent tools, so the package adds only five tool schemas. It is published under its experimental name and provides no stability guarantee.
 
 ## Table of Contents
 
@@ -25,47 +25,38 @@ This package lets the model create named teammates, send them messages, inspect 
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when the model should run a team through tools. Once mounted, every team member — the Lead and each teammate — gets the same nine tools plus the same coordination policy. Each member receives its current role and name through required runtime context; `spawn_teammate` sends the initial task unchanged.
+Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when Team members should coordinate through tools. Once mounted, the Lead and every subagent below it, fresh or fork, get the same five tools, the same policy section, and a required runtime-context statement of their role.
 
 ### When to choose it
 
-Choose it when the model should create and coordinate teammates by itself rather than a human driving subagent controls. Avoid it when the legacy global subagent tools with the same names must stay available: the team tools replace them for team members, so a composition that wants both must disable the legacy definitions.
+Choose it whenever the Team domain is mounted and models should use the board; without it, the board is reachable only through `ctx.agentTeams`. Teammates are created and reached through the standard `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` tools, so the composition also needs `@deepseek-ai/dsh-tool-subagent` and `@deepseek-ai/dsh-tool-subagent-control`.
 
 ### Smallest working example
 
-The smallest addition to an existing composition is the two-package fragment from the [agent-team README](../agent-team/README.md#smallest-working-setup): durable session storage, the team domain package, and this package. The plugin itself takes two optional settings:
+The plugin takes no configuration; mount it beside the Team domain as in the [agent-team setup](../agent-team/README.md#smallest-working-setup):
 
 ```yaml
 - id: tool-agent-team
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
-  config:
-    freshProvider: spawn
-    forkProvider: fork
 ```
 
-| Field | Default | Meaning |
-|---|---|---|
-| `freshProvider` | `spawn` | Provider that starts fresh teammates |
-| `forkProvider` | `fork` | Provider that starts fork teammates |
+A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) is the exhaustive source for every accepted field and its JSDoc.
-
-Try it by asking the Lead model: "create a teammate named reviewer to check the diff, then send reviewer the change summary". The model calls the creation tool and then the messaging tool.
+Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned id addresses it.
 
 ### What the model can do
 
-The nine tools group into four capabilities:
+The five tools cover two capabilities; the standard subagent tools cover the third:
 
-- **Create a teammate** — `spawn_teammate` takes a name, a description, and the initial task; only the Lead can call it.
-- **Send messages** — `send_message` steers a running member at its nearest step boundary, starts or resumes an inactive member.
-- **See and wait** — `list_agents` returns each member’s `target` and availability; `wait_agent` waits for the next team change; `interrupt_agent` stops a teammate's current turn (Lead only).
 - **Manage the task board** — `team_task_create`, `team_task_list`, `team_task_get`, and `team_task_update` add, browse, read, and update shared tasks.
+- **Wait for teammates** — `wait_agent` waits for the next task, member status, or inbox change after the call starts.
+- **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Creation and listing results identify members by `target`, with no member Session ID. Use that value in message and interrupt calls or the task tools’ `owner` parameter; task `ownerName` uses the same value. `inactive` means no turn is executing, whether the member is loaded or must be resumed; it does not describe task completion or outcome. `provisioning` and `failed` describe member creation. Any member can message any other member and use the task board; only the Lead creates and interrupts teammates. Task updates keep the domain's owner and revision checks, so an outdated edit is rejected instead of overwriting newer work.
+Task `owner` arguments and `ownerId` results use Session ids. Descriptions are display text and may repeat. Any member can use the board; only the Lead reassigns tasks. Updates enforce ownership and revision checks, rejecting stale edits.
 
 ### What success and failure look like
 
-`send_message` returns `{ "sent": true }` after inbox acceptance, without exposing the message ID. Success does not confirm recipient processing or a synchronous storage flush; send failures are reported as tool errors. `wait_agent` returns `noProgress` right away when no other member is running or provisioning, telling the caller to wake a teammate first; otherwise it waits for the next change and the caller re-reads state afterward. Task edits based on an outdated revision are rejected rather than overwriting newer work.
+Task tools return compact JSON task views or task pages. A stale `expected_revision`, an unauthorized action, or an unready task is reported as a tool error instead of overwriting newer work. `wait_agent` returns `{ "timedOut": false }` after a change and `{ "timedOut": true }` at its timeout; when no other member is running, it returns `noProgress` with reason `no-active-peer` right away, telling the caller to wake a teammate with `send_message` first.
 
 -----
 
@@ -79,23 +70,24 @@ This section explains the design decisions behind the adapter and points at the 
 
 ### Design philosophy
 
-The adapter is built on three commitments:
+The adapter is built on four commitments:
 
-- **Scoped, not global.** Every registration lives on the member Agent's own `ctx`; installation uses the member identity available when the Agent is published.
+- **Scoped, not global.** Every registration lives on the member Agent's own `ctx`; installation uses the Team membership available when the Agent is published.
+- **One tool family.** Team registers no messaging, listing, or interruption tool; the standard subagent tools serve Leads and teammates alike.
 - **Declared results, compact JSON.** Every tool declares its complete result schema and renders that value as compact JSON, so the compiler checks `execute` against what the model is promised and no result spends tokens on indentation.
 - **The domain owns authority.** Tools delegate to `ctx.agentTeams`, which enforces Lead authority and revision checks; the adapter adds no weaker path.
 
-The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns the model-facing and scoping decisions.
+The [subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) owns the model-facing and scoping decisions.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: config, the fixed policy text, and the nine scoped tool registrations |
+| [`src/index.ts`](src/index.ts) | Plugin entry: removed-key rejection, the fixed policy text, identity context, and the five scoped tool registrations |
 
 ### Policy and tools
 
-One `team:policy` section on the member scope states the shared coordination rules; the fixed text and the nine tool registrations are declared in [`src/index.ts`](src/index.ts). The nine tool schemas are registered in scopes recognized as Team members at publication. Scoped registrations with the same names as the legacy global continuable-subagent controls shadow those globals for team members only.
+One `team:policy` section and one required `team:identity` runtime-context entry on the member scope carry the shared coordination rules and the member's role; the fixed text and the five tool registrations are declared in [`src/index.ts`](src/index.ts). The five tool schemas are registered in every scope recognized as a Team member at publication, including fork children, so parent and fork requests list identical tools and system prompts. No registration shares a name with a subagent control, so `send_message`, `list_agents`, and `interrupt_agent` resolve to the global subagent tools in every member scope.
 
 ### Scoped registration and teardown
 
@@ -112,27 +104,68 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
+- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, and interruption by Session id.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team) — every tool schema the model receives.
-- [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) — model-facing, scoping, and isolation decisions.
+- [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — model-facing, scoping, and tool-family decisions.
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Team policy and tools
+### Team policy system prompt
 
 #### What the model sees
 
-One shared system policy covers Team availability, shared-cwd safety, task coordination, Steer delivery, inbox acceptance, and the Lead’s duty to wait. All nine schemas are identical for Leads and teammates; execution enforces Lead-only operations. Required runtime context states `You are the Team Lead named "lead".` or `You are teammate "<name>".` with `Your Team Lead is named "lead".`, plus roster and messaging instructions. Identity comes from current Team membership, survives optional-context suppression, and is restored when compaction removes its snapshot. An ordinary fork from a teammate receives its current Lead identity.
+Every Team member's system prompt carries one `team:policy` section; the Lead and every teammate see the same text:
+
+##### Team policy
+
+```markdown
+Agent Teams is available in this session. Teammates are subagents. Use agent ids with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+
+The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
+
+Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
+
+Use agent ids as task owners. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents shows direct contacts by default; descendants scope discovers deeper agents without granting message or assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+```
 
 #### Token effect
 
-Fixed policy and schema cost on every Team member request. Identity is part of the complete runtime-context snapshot. An unchanged retained snapshot adds no message; changed or removed context causes the loop to append a complete snapshot, including identity. Tool calls add compact JSON roster, task, wait, or receipt results. Peer content is retained by the Team domain in the target's history.
+The section is a fixed cost on every request of every Team member.
 
 #### KV Cache effect
 
-With the same provider/model, shared system policy, and tool schemas, a fork retains the parent request prefix and appends its task and current runtime context. Tool results and peer messages append after the reusable request prefix. Sessions recorded with identity inside the system prompt can change that prefix on their first request under this layout; actual provider cache hits remain best-effort.
+The text is identical for the Lead and every descendant and does not change while the plugin stays loaded, so it keeps a stable system-prompt prefix, including between a parent and its `subagent_fork` child. Loading or unloading the plugin changes the system prompt of every member and invalidates their cached prefixes.
+
+### Team identity runtime context
+
+#### What the model sees
+
+Required `team:identity` runtime context states `You are the Team Lead. Your agent id is "<lead id>".` for a root and `You are a teammate in the Team led by agent "<lead id>".` for a subagent. It follows current membership, survives optional-context suppression, and is restored after compaction. An ordinary fork of a teammate is a new root and receives the Lead statement.
+
+#### Token effect
+
+Identity is part of the complete runtime-context snapshot. An unchanged retained snapshot adds no message; changed or removed context causes the loop to append a complete snapshot, including identity.
+
+#### KV Cache effect
+
+Identity arrives in a runtime-context snapshot after the request prefix, so a `subagent_fork` child keeps its parent's system prompt, tools, and inherited messages and appends its teammate statement after them. Actual provider cache hits remain best-effort.
+
+### Task and wait tool schemas
+
+#### What the model sees
+
+Every Team member receives the same five schemas, listed in the [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team). Results are compact JSON task views, task pages, or wait values. When no other member is running, `wait_agent` returns `noProgress` with reason `no-active-peer` and the message `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.` Lead-only `reassign` is enforced at execution, not by a different schema.
+
+#### Token effect
+
+The five schemas are a fixed cost on every Team member request. Tool calls add compact JSON results; `team_task_list` returns at most 100 tasks per page.
+
+#### KV Cache effect
+
+The schemas are identical for the Lead and every descendant, including `subagent_fork` children, so a fork's tool list matches its parent's request prefix. Tool results append after the reusable prefix. Loading or unloading the plugin changes every member's tool list and invalidates their cached prefixes.
 
 ## Known Limitations and Deferred Work
 
@@ -141,6 +174,7 @@ With the same provider/model, shared system policy, and tool schemas, a fork ret
 These limits describe what the policy and tools cannot guarantee for a team. They are current package constraints, not a comparison with other collaboration surfaces.
 
 - **Prompt policy is coordination, not confinement** — it cannot stop Bash or external processes from writing overlapping files.
+- **Installation follows publication** — an Agent that is not a Team member when it is published, such as a subagent whose parent is not loaded, receives no Team tools, policy, or identity, even after its parent loads.
 - **No Web controls** — browser roster and task-board presentation is outside this runtime package.
 - **Experimental prototype with no stability promise** — the package is public, but its schemas can change freely while it incubates.
 

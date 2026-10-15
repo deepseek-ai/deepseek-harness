@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team-profile` enables [Agent Teams](../agent-team/README.md) collaboration, tools, and Web UI with one bundle. Delegate work to teammates and view members, shared tasks, and teammate sessions in Web. Ordinary subagent delegation and overlapping global child controls are disabled; Workflow can still create fresh children. The bundle ships with dsh switched off. Enable it from the Plugins page or add it to an initialized profile.
+`dsh-experimental-agent-team-profile` enables [Agent Teams](../agent-team/README.md) collaboration, tools, and Web UI with one bundle. The Lead starts subagents as teammates that share a task board and wait for each other; Web shows members, shared tasks, and teammate sessions. The base profile's delegation and messaging tools stay available. The bundle ships with dsh switched off. Enable it from the Plugins page or add it to an initialized profile.
 
 ## Table of Contents
 
@@ -34,7 +34,7 @@ dsh plugin --profile headless add @deepseek-ai/dsh-experimental-agent-team-profi
 dsh --profile headless "Use Agent Teams to split this task between two teammates, wait, and summarize."
 ```
 
-The profile must already contain `@deepseek-ai/dsh-base`, whose Subagent services and provider rows this layer consumes. Removing the package with `dsh plugin --profile <name> remove @deepseek-ai/dsh-experimental-agent-team-profile` removes the bundle from the profile's ordered layer list.
+The profile must already contain `@deepseek-ai/dsh-base`, whose Subagent services, providers, and tools this layer relies on. Removing the package with `dsh plugin --profile <name> remove @deepseek-ai/dsh-experimental-agent-team-profile` removes the bundle from the profile's ordered layer list.
 
 Enable Agent Teams on the Web or Desktop Plugins page to activate both tools and UI. For a CLI Web profile, use:
 
@@ -42,11 +42,11 @@ Enable Agent Teams on the Web or Desktop Plugins page to activate both tools and
 dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ```
 
-In an existing profile’s `package.json`, keep `@deepseek-ai/dsh-experimental-agent-team-profile` in `dsh.profile.bundles` and remove the separate `@deepseek-ai/dsh-experimental-agent-team-web-profile` entry. User patches targeting `ui-agent-team` still apply.
+In an existing profile’s `package.json`, keep `@deepseek-ai/dsh-experimental-agent-team-profile` in `dsh.profile.bundles` and remove the separate `@deepseek-ai/dsh-experimental-agent-team-web-profile` entry. User patches targeting `ui-agent-team` still apply. A user patch that sets a removed Team key keeps that Team row from activating; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) lists the removed keys and tools.
 
 ### What you get
 
-The layer adds the Agent Teams domain and its scoped creation, roster, messaging, interruption, waiting, and task-board tools. Direct delegation uses `spawn_teammate`, which supports fresh and fork context. The `subagent` and `subagent_fork` tools and overlapping global child controls are disabled. Workflow retains the base profile’s `spawn` provider, while the underlying Subagent services and both providers remain available to teammates and workflow.
+The layer adds the Team domain, task-board and wait tools, and UI, without disabling base rows. The Lead uses `subagent` for fresh context or `subagent_fork` for inherited history, describing the task with `description`. Standard controls use agent ids.
 
 In Web and Desktop conversations, the [Team UI](../client-ui-agent-team/README.md) displays the member roster and shared task board and opens teammate sessions. The same bundle switch controls the tools and browser UI. The Plugins page reads the bundle's [icon](icon.svg) from its `package.json.icon` declaration, including while the bundle is disabled.
 
@@ -58,7 +58,7 @@ In Web and Desktop conversations, the [Team UI](../client-ui-agent-team/README.m
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after `dsh-base`, the patch disables `tool-subagent-control`, `tool-subagent-list-agents`, `tool-subagent`, and `tool-subagent-fork`, and inserts the Team service, tools, and UI with explicit providers and limits. The UI plugin has an inert Host entry; only the Web Client loader mounts its browser entry, so headless needs no Web server.
+The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after `dsh-base`, the patch only inserts rows: the Team service with `maxTasks: 256`, the Team tools, and the UI. The UI plugin has an inert Host entry; only the Web Client loader mounts its browser entry, so headless needs no Web server.
 
 | File | Role |
 |---|---|
@@ -73,8 +73,8 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 ## Further Exploration
 
 - [Experimental packages](../README.md) — incubation status and publication policy.
-- [Agent Teams service](../agent-team/README.md) — durable roster and task board, plus direct messaging.
-- [Agent Teams tools](../tool-agent-team/README.md) — the Team-scoped model tool surface.
+- [Agent Teams service](../agent-team/README.md) — Team membership, roster, and the durable task board.
+- [Agent Teams tools](../tool-agent-team/README.md) — the task and wait tools, policy, and identity every member receives.
 - [Agent Teams browser UI](../client-ui-agent-team/README.md) — roster, task board, and teammate session navigation.
 - [Base bundle](../../bundle/base/README.md) — the profile layer this patch extends.
 
@@ -87,25 +87,24 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 
 #### What the model sees
 
-The Team policy and schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only: Team-scoped `list_agents`, `send_message`, and `interrupt_agent` replace the disabled global continuable-child controls. `spawn_teammate` is the direct delegation tool. Workflow’s `agent()` calls create fresh one-shot children; their prompts must contain the context needed for their tasks.
+The Team policy, identity, and schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only: every Team member gains the five task and wait tools, while `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` keep their base-profile schemas.
 
 #### Token effect
 
-The bundle adds the Team policy and tool schemas described by `@deepseek-ai/dsh-experimental-tool-agent-team`; it adds no prompt text of its own.
+The bundle adds the Team policy section, the identity statement, and the five tool schemas described by `@deepseek-ai/dsh-experimental-tool-agent-team`; it adds no prompt text of its own.
 
 #### KV Cache effect
 
-The shared system prompt and tool schemas remain prefix-stable while the bundle patch and configured tool schemas remain unchanged. Team identity is appended through runtime-context snapshots; [Team tools](../tool-agent-team/README.md#model-experience) define snapshot reuse.
+Every member, including `subagent_fork` children, receives the same Team policy and tool schemas, so a fork keeps its parent's request prefix; enabling or disabling the bundle changes both for every member. Team identity is appended through runtime-context snapshots; [Team tools](../tool-agent-team/README.md#model-experience) define snapshot reuse.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Opt-in only** — the package ships with the installation switched off; no shipped CLI, Web, SDK, ACP, or Python profile enables it.
-- **Workflow child tools** — the [Team tool visibility limitation](../tool-agent-team/README.md#known-limitations-and-deferred-work) also applies to workflow children.
+- **Workflow children join the Team** — continuable Workflow `agent()` children receive the same Team tools, policy, and sibling message routes. Direct children of the Lead appear in its roster.
 - **Shared checkout** — every teammate observes the same working directory; this bundle adds no worktree isolation or filesystem locking.
-- **Preset-scoped child controls** — Web presets can still mount continuable Subagent controls in their own scope; this top-level bundle does not replace those registrations.
-- **Base profile required** — the patch depends on row ids and Subagent providers supplied by `dsh-base`; it is not a standalone profile.
+- **Base profile required** — teammates are created and reached through the Subagent services, providers, and tools that `dsh-base` mounts; the layer is not a standalone profile.
 
 <a id="dev-note"></a>
 ### Dev Note

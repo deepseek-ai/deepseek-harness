@@ -78,6 +78,7 @@ import { subagentCatalogProjectionDefinition } from './catalog.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
+export type {} from './projection.ts'
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
 export { SubagentRunId } from './types.ts'
@@ -294,13 +295,13 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Steer one model-authored message to the sender's direct parent or direct
-   * continuable child. A running target admits it at the nearest step boundary;
+   * Steer one model-authored message to the sender's direct parent, direct
+   * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
    * an idle target starts a turn, and an absent direct child cold-resumes from
    * persistence. The service derives durable sender attribution from the exact
    * live sender. Caller cancellation stops only pre-acceptance work.
    * @param sender - exact live Agent authorizing and originating the message.
-   * @param targetId - durable direct-parent or direct-child session id.
+   * @param targetId - durable direct-parent, direct-child, or sibling session id.
    * @param content - model-authored content to deliver.
    * @param options - caller cancellation before inbox acceptance.
    * @returns the accepted message's inbox id.

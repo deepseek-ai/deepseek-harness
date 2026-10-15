@@ -1,11 +1,11 @@
 /** Shared Team task DAG commands and runtime-enriched views. */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { TeamMembership } from './roster.ts'
+import type { TeamMembership } from './membership.ts'
 import { TeamError } from './error.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
-import { resolveActiveMember } from './roster.ts'
+import { resolveMember } from './membership.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
 import { TeamId, TeamTaskId } from './types.ts'
@@ -37,7 +37,7 @@ export class TeamTaskBoard {
 
   /**
    * Create one unowned pending task in the Team Lead log.
-   * @param membership - exact caller membership resolved by the Team roster.
+   * @param membership - exact caller membership.
    * @param request - task text, blockers, and advisory write scopes.
    * @returns the revision-one task view.
    */
@@ -70,7 +70,7 @@ export class TeamTaskBoard {
 
   /**
    * Return one task, including a deleted tombstone.
-   * @param membership - exact caller membership resolved by the Team roster.
+   * @param membership - exact caller membership.
    * @param id - Team-local task identity.
    * @returns the latest task value and derived readiness diagnostics.
    */
@@ -84,7 +84,7 @@ export class TeamTaskBoard {
 
   /**
    * List current non-deleted tasks in numeric creation order.
-   * @param membership - exact caller membership resolved by the Team roster.
+   * @param membership - exact caller membership.
    * @returns detached current task views.
    */
   list(membership: TeamMembership): TeamTaskView[] {
@@ -177,13 +177,12 @@ export class TeamTaskBoard {
               'TEAM_TASK_INVALID_TRANSITION',
             )
           }
-          if (request.owner === undefined || request.owner.trim().length === 0) {
+          if (request.owner === undefined) {
             next = this.withoutOwner({ ...current, status: 'pending' })
             break
           }
           if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
-          const assignee = resolveActiveMember(root, state, request.owner)
-          next = { ...current, status: 'in_progress', ownerId: assignee.id }
+          next = { ...current, status: 'in_progress', ownerId: resolveMember(root, state, request.owner) }
           break
         }
         case 'delete': {

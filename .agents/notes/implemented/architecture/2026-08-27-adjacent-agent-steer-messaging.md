@@ -17,13 +17,14 @@ The child-only tool and system-prompt section also preceded every inherited fork
 `SubagentRuntime.sendMessage(sender, targetId, content, { signal })` is the only public model-authored message operation. The continuation manager accepts only the exact live sender and a target on one adjacent edge:
 
 - parent to direct continuable child, authorized by the child's durable `SessionHeader.parentSession`;
-- resident continuable child to its exact live direct parent, authorized by the child's Activation.
+- resident continuable child to its exact live direct parent, authorized by the child's Activation;
+- a resident continuable child to a continuable sibling of the same live parent, authorized by that parent’s child authority ([subagent teammates](2026-10-15-agent-teams-as-subagents.md)).
 
-Siblings, self-targets, ancestors beyond one edge, stale Agent objects, unknown targets, and one-shot children are not alternate routes. The operation has no caller-supplied source, delivery mode, offline parent mailbox, or provider dispatch.
+Self-targets, ancestors beyond one edge, stale Agent objects, unknown targets, and one-shot children are not alternate routes. The operation has no caller-supplied source, delivery mode, offline parent mailbox, or provider dispatch.
 
 Every accepted message uses `Agent.steer()`. A running target receives it at the nearest step boundary; an idle target starts a turn. An absent direct child is cold-resumed through the existing continuation lifecycle before the same Steer delivery. The manager retains waking-send accounting so a continuation-managed target cannot settle between synchronous inbox insertion and driver admission.
 
-Every direction uses one durable source. The service derives `senderSessionId` from the authorized Agent and frames the model-visible content as `Agent <sender-id> sent a message:`, so attribution cannot diverge from authority.
+Every direction uses one durable source. The service derives `senderSessionId` from the exact live sender and frames content as `Agent <sender-id> sent a message:`, including sibling delivery under the parent’s authority.
 
 ```ts
 import type { SessionId } from '@deepseek-ai/dsh-session'

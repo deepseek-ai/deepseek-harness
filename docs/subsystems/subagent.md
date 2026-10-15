@@ -173,7 +173,7 @@ interface ContinuableCreateSpec {
 
 ## Messages and interruption
 
-sendMessage authorizes the exact live sender and permits only adjacent local agents. Running children receive steering input; absent continuable children resume from persistence. External executions reject follow-ups. Both local and external executions automatically report their final text, structured result, diagnostic, and status in the parent settlement notice. Local children can also send messages through send_message. caller delivery suppresses settlement notices. drainDescendants and drainChildren await owned work teardown for local and external activations.
+sendMessage requires the exact live sender and a target Session id. Every sender can reach a direct continuable child; a resident continuable child can also reach its direct parent and continuable siblings. Sibling delivery uses the shared live parent’s authority, preserving the actual sender’s id. Running targets receive Steer; absent children and siblings cold-resume. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status through parent settlement notices; caller delivery suppresses those notices. drainDescendants and drainChildren await owned teardown.
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -453,13 +453,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 async waitForChildren(parent: Agent): Promise<boolean>
 
 /**
- * Steer one model-authored message to the sender's direct parent or direct
- * continuable child. A running target admits it at the nearest step boundary;
+ * Steer one model-authored message to the sender's direct parent, direct
+ * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
  * an idle target starts a turn, and an absent direct child cold-resumes from
  * persistence. The service derives durable sender attribution from the exact
  * live sender. Caller cancellation stops only pre-acceptance work.
  * @param sender - exact live Agent authorizing and originating the message.
- * @param targetId - durable direct-parent or direct-child session id.
+ * @param targetId - durable direct-parent, direct-child, or sibling session id.
  * @param content - model-authored content to deliver.
  * @param options - caller cancellation before inbox acceptance.
  * @returns the accepted message's inbox id.
