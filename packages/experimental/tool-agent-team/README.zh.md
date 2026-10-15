@@ -40,7 +40,7 @@ kind: "package-reference"
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
-设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
+设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
 
 让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的 id 用于寻址。
 

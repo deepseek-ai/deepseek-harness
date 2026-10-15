@@ -146,6 +146,28 @@ export function protocolChoices(
   return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
 }
 
+/**
+ * The reasoning levels a hand-declared route's models may declare, read out of
+ * the owning namespace's own schema for the same reason as
+ * {@link protocolChoices}: the levels the page offers and the keys the
+ * adapter accepts in `reasoningEfforts` come from the same `Config`.
+ * @param namespace - the namespace view whose schema declares the profile shape.
+ * @param schema - settings schema operations.
+ * @returns the levels in the schema's escalation order, or an empty list when the schema has none.
+ */
+export function reasoningLevelChoices(
+  namespace: SettingsNamespaceView | undefined,
+  schema: SettingsSchemaOperations,
+): string[] {
+  if (namespace === undefined) return []
+  const path = ['providers', PROBE_ROUTE, 'models', '0', 'reasoningEfforts']
+  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), path)
+  // `false | { [level]: value }`: the dict branch's key schema lists the levels.
+  const branches = (node as { list?: readonly { type?: string; sKey?: unknown }[] } | undefined)?.list ?? []
+  const keys = branches.find(branch => branch.type === 'dict')?.sKey as { list?: readonly { value?: unknown }[] } | undefined
+  return (keys?.list ?? []).map(entry => entry.value).filter((value): value is string => typeof value === 'string')
+}
+
 /** The credential reference a resolved profile names (its `apiKeyEnv` field). */
 function apiKeyEnvOf(
   namespace: SettingsNamespaceView | undefined,

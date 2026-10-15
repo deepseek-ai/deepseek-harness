@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Install `@deepseek-ai/dsh-subagent-codex` into a Profile when delegated work should run in a genuine, unattended Codex session in the parent Session's workspace. Each delegation uses a fresh isolated Codex thread for one self-contained text task and returns only its final answer or a safe failure diagnostic. Native Codex configuration and authentication remain authoritative, while `permissionMode` selects the non-interactive approval and sandbox behavior. The Bundle supplies a compatible native Codex payload and adds its delegation tool as a global tool.
+Install `@deepseek-ai/dsh-subagent-codex` into a Profile when delegated work should run in a genuine, unattended Codex session in the parent Session's workspace. Each delegation uses a fresh isolated Codex thread for one self-contained text task and returns only the selected answer or a safe failure diagnostic. Native Codex configuration and authentication remain authoritative, while `permissionMode` selects the non-interactive approval and sandbox behavior. The Bundle supplies a compatible native Codex payload and adds its delegation tool as a global tool.
 
 ## Table of Contents
 
@@ -74,7 +74,7 @@ The tool returns a child id after accepting the task and sends its result to the
 
 ### What you get
 
-The completion notice contains the final Codex answer, or the stop reason and optional safe diagnostic. The parent Session also retains the external task identity and complete terminal result independently of the notice; no local child Session is created. Product reasoning, tool activity, raw stderr, and workspace diffs do not enter the parent Session.
+The completion notice contains the selected Codex answer, or the stop reason and optional safe diagnostic. The parent Session also retains the external task identity and complete terminal result independently of the notice; no local child Session is created. Product reasoning, tool activity, raw stderr, and workspace diffs do not enter the parent Session.
 
 ### Failure and recovery
 
@@ -107,7 +107,7 @@ This section explains how the provider drives a real Codex app-server and where 
 
 ### Run flow
 
-A start accepts only a non-empty sequence of text blocks and uses the child cwd selected by the subagent service. It spawns the fixed command through the subprocess seam, performs the `initialize` → `initialized` handshake, maps the Profile-selected mode and optional model into official `thread/start` fields beside `{ cwd, ephemeral: true }`, and publishes the run only after Codex returns a valid ephemeral thread. The published result starts exactly one turn, accepts only notifications for that run's thread and turn, and waits for the authoritative `turn/completed` terminal. The latest `agentMessage` with `phase: "final_answer"` wins; when Codex emits no explicit final phase, the latest message with `phase: null` is the compatibility fallback. A successful turn with no nonblank answer settles as an error. Failed turns use the coarse categories `limit`, `access-policy`, `service`, `transport`, `product-error`, `invalid-result`, or `unknown`; an early app-server exit uses `process`, and applicable connection and stream failures retain a numeric `httpStatusCode`.
+A start accepts only a non-empty sequence of text blocks and uses the child cwd selected by the subagent service. It spawns the fixed command through the subprocess seam, performs the `initialize` → `initialized` handshake, maps the Profile-selected mode and optional model into official `thread/start` fields beside `{ cwd, ephemeral: true }`, and publishes the run only after Codex returns a valid ephemeral thread. The published result starts exactly one turn, accepts only notifications for that run's thread and turn, and waits for the authoritative `turn/completed` terminal. The latest `agentMessage` with `phase: "final_answer"` wins; without one, the latest `phase: "partial_answer"` message (stable answer text that later assistant output or tool calls may follow) is selected; when Codex emits neither explicit answer phase, the latest message with `phase: null` is the compatibility fallback. `commentary` messages are never selected, and any other phase fails the run. A successful turn with no nonblank answer settles as an error. Failed turns use the coarse categories `limit`, `access-policy`, `service`, `transport`, `product-error`, `invalid-result`, or `unknown`; an early app-server exit uses `process`, and applicable connection and stream failures retain a numeric `httpStatusCode`.
 
 </details>
 
@@ -147,11 +147,11 @@ Independent of the parent request cache. Reuse depends only on Codex's own provi
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent model first receives a child id, then the final Codex answer or a failure notice with its stop reason and safe diagnostic. Diagnostics contain only fixed stage, category, and observed protocol or process facts. Product reasoning, intermediate messages, tool activity, stderr, usage, product identifiers, commands, paths, and raw protocol payloads are not copied into the parent Session.
+Through `dsh-tool-subagent`, the parent model first receives a child id, then the selected Codex answer (final, partial, or unphased, in that order of precedence) or a failure notice with its stop reason and safe diagnostic. Diagnostics contain only fixed stage, category, and observed protocol or process facts. Product reasoning, intermediate messages, tool activity, stderr, usage, product identifiers, commands, paths, and raw protocol payloads are not copied into the parent Session.
 
 #### Token effect
 
-Parent input grows by the start acknowledgement and completion notice, including the final answer or failure detail. Child tokens do not enter the parent context. This provider adds no parent tool schema by itself.
+Parent input grows by the start acknowledgement and completion notice, including the selected answer or failure detail. Child tokens do not enter the parent context. This provider adds no parent tool schema by itself.
 
 #### KV Cache effect
 
@@ -170,7 +170,7 @@ These limits define when this provider is a poor fit or needs special operationa
 - **The native platform payload is required at delegation time** — installs that omit optional dependencies, unsupported platforms, and missing or damaged payloads fail at the first run; there is no host-CLI fallback.
 - **Compatibility is pinned by development evidence** — upgrading from the verified 0.153.4 protocol baseline requires regenerating upstream schema evidence and rerunning handshake, answer-selection, approval, cancellation, keyless real-product, and credentialed DeepSeek nonce tests.
 - **No human approval path** — known unattended approval requests are denied and unknown server requests fail closed; the three Profile modes never create a DSH interaction channel or per-call allow policy.
-- **Assistant payload is final text only** — failed runs can also expose a separate safe diagnostic; reasoning, intermediate messages, tool traffic, usage, stderr, and workspace diffs remain outside the parent Session. Task identity and terminal results are retained in the parent log.
+- **Assistant payload is the selected answer text only** — failed runs can also expose a separate safe diagnostic; reasoning, intermediate messages, tool traffic, usage, stderr, and workspace diffs remain outside the parent Session. Task identity and terminal results are retained in the parent log.
 - **No optional shared capabilities** — `agentPreset`, `agentOptions`, output schemas, and harness depth enforcement are rejected by the shared service for this provider.
 - **No wall-clock timeout or side-effect rollback** — the caller cancels long work, and files or external systems changed before cancellation are not restored.
 

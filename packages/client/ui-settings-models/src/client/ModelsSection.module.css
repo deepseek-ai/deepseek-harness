@@ -575,6 +575,44 @@
   line-height: 18px;
 }
 
+.modelReasoning {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelReasoningLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelReasoningHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Level select, API value, and delete action; the column labels share the grid. */
+.modelReasoningRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelReasoningRow .selectInput {
+  max-width: none;
+}
+
+.modelReasoningValueInput {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
 .modelEmpty {
   padding: 12px;
   border: 1px dashed var(--dsw-alias-border-l3);
