@@ -68,7 +68,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It requires a Host subprocess runtime, checks that `binDir/wecom-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `wecom` PATH contribution, and mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `wecom` over this package's `skills/` directory, without the default roots or watching. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It requires a Host subprocess runtime, checks that `binDir/wecom-cli` is executable, registers `binDir` with [Shell environment](../../shell/shell-env/README.md) as the `wecom` PATH contribution that provides `wecom-cli`, and mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `wecom` over this package's `skills/` directory, without the default roots or watching. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill: the DSH guidance, an index of the guides, and how to open them. [`skills/wecom/guides/`](skills/wecom/guides) is an unchanged copy of `skills/` from `WecomTeam/wecom-cli` at commit `4c74ff2`, because upstream publishes the skills only in that repository and not in the npm package. The filesystem provider discovers only `<root>/<name>/SKILL.md`, so the guides are not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
 
@@ -119,6 +119,20 @@ Each load adds the entry body to the retained tool history. Guides and their ref
 
 Loading appends a tool result and does not rewrite earlier context.
 
+### Plugin CLIs entry
+
+#### What the model sees
+
+The row declares `wecom-cli` with its private PATH entry, so the [Shell environment](../../shell/shell-env/README.md#model-experience) Plugin CLIs section of the system prompt lists `` `wecom-cli` (wecom) `` while the row is loaded and the shell runs on this Host.
+
+#### Token effect
+
+The entry adds a few tokens to that section; the section's own text belongs to Shell environment.
+
+#### KV Cache effect
+
+Loading or unloading the row changes the section text, and provider cache reuse may end at the first changed token.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -135,6 +149,6 @@ Loading appends a tool result and does not rewrite earlier context.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-`.gitattributes` marks `skills/wecom/guides/**` as vendored and exempts it from whitespace checks, so the copy keeps upstream whitespace; the entry `SKILL.md` gets ordinary checks. Specs and the `wecom-skills` session snapshot use stand-in executables through `binDir`.
+The guides keep upstream whitespace, including trailing spaces that mark Markdown line breaks, and no whitespace exemption covers them: a commit that adds upstream lines with trailing whitespace fails the pre-commit `git diff --cached --check`. Specs and the `wecom-skills` session snapshot use stand-in executables through `binDir`.
 
 </details>

@@ -68,7 +68,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/wecom-cli` 是否可执行，把 `binDir` 作为 `wecom` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并在本包的 `skills/` 目录上挂载一个名为 `wecom` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/wecom-cli` 是否可执行，把 `binDir` 作为提供 `wecom-cli` 的 `wecom` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并在本包的 `skills/` 目录上挂载一个名为 `wecom` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是唯一的 skill：DSH 指引、子指南索引和打开方式。[`skills/wecom/guides/`](skills/wecom/guides) 原样复制自 `WecomTeam/wecom-cli` 在提交 `4c74ff2` 时的 `skills/`，因为上游只在该仓库发布这些 skill，没有放进 npm 包。文件系统提供方只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
@@ -119,6 +119,20 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 加载会追加一条工具结果，不改写更早的上下文。
 
+### Plugin CLIs 条目
+
+#### 模型看到什么
+
+本行在私有 PATH 条目中声明了 `wecom-cli`，因此该行加载、且 Shell 在本 Host 上运行时，系统提示词中 [Shell 环境](../../shell/shell-env/README.zh.md#model-experience)的 Plugin CLIs 一节会列出 `` `wecom-cli` (wecom) ``。
+
+#### Token 影响
+
+该条目只给这一节增加几个 token；这一节本身的文字归 Shell 环境所有。
+
+#### KV Cache 影响
+
+加载或卸载该行会改变这一节的文字，provider 的缓存复用可能在第一个变化的 token 处结束。
+
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -135,6 +149,6 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-`.gitattributes` 把 `skills/wecom/guides/**` 标为 vendored 并免除空白检查，使复制的文件保留上游空白；总入口 `SKILL.md` 照常检查。单测与 `wecom-skills` 会话快照通过 `binDir` 使用替身可执行文件。
+子指南保留上游的空白，包括表示 Markdown 换行的行尾空格，且没有任何空白豁免：新增带行尾空白的上游行的提交，会被 pre-commit 的 `git diff --cached --check` 拒绝。单测与 `wecom-skills` 会话快照通过 `binDir` 使用替身可执行文件。
 
 </details>
