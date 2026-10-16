@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 提供可继续子级的全局控制工具：`send_message` 在父子或同级间发送 Steer 消息，`interrupt_agent` 停止后代当前轮次并保留收件箱和后代，可单独加载的 `list-agents` 插件按 id 和描述发现代理。父级与可继续子级继承相同的工具定义和顺序。
+`dsh-tool-subagent-control` 提供可继续子级的全局控制工具：`send_message` 在父子或同级间发送 Steer 消息，`interrupt_agent` 停止后代当前轮次并保留收件箱和后代，可单独加载的 `list-agents` 插件按名称和描述发现代理。父级与可继续子级继承相同的工具定义和顺序。
 
 ## 目录
 
@@ -148,7 +148,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-每个后代按稳定顺序显示一行：`<id> [<status>] parent=<id> depth=<n> — <label>`。可继续子级的列表先显示 `<id> [<status>] — your parent`，再显示 `<id> [<status>] — sibling: <label>`。未知模式或无法读取的目录输出 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
+每个后代按稳定顺序显示一行：`<name> [<status>] parent=<name> depth=<n> — <label>`。可继续子级的列表先显示 `<name> [<status>] — your parent`，再显示 `<name> [<status>] — sibling: <label>`。未知模式或无法读取的目录输出 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
 
 #### Token 影响
 
