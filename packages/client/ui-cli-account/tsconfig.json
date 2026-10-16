@@ -15,9 +15,6 @@
       "path": "../../api/gateway/tsconfig.client.json"
     },
     {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
       "path": "../../connector/cli-account"
     },
     {

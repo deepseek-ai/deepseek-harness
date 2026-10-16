@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-cli-account",
   "description": "Shared Plugins page pieces for CLI app plugins: the account connection mirror and components, linked into the Web shell",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -28,7 +28,6 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
-    "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-cli-account": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",

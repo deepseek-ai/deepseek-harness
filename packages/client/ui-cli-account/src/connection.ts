@@ -1,7 +1,6 @@
 /** Browser mirror of one CLI plugin's Host account view and the Plugins page's account actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { CliAccountView, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
