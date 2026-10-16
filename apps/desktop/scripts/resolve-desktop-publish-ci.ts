@@ -62,6 +62,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
   const env = process.env
   if (!env.GITHUB_EVENT_PATH || !env.GITHUB_REPOSITORY || !env.GITHUB_OUTPUT) throw new Error('desktop publish: Actions context required')
   const event = z.object({ inputs: inputsSchema }).parse(JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8')))
-  const selected = selectDesktopPackage(env.GITHUB_REPOSITORY, event.inputs, JSON.parse(env.DESKTOP_PUBLISH_RUNNERS || '{}'), desktopPublishApi)
+  const inputs = { ...event.inputs, package_run_attempt: env.DESKTOP_PACKAGE_ATTEMPT || event.inputs.package_run_attempt }
+  const selected = selectDesktopPackage(env.GITHUB_REPOSITORY, inputs, JSON.parse(env.DESKTOP_PUBLISH_RUNNERS || '{}'), desktopPublishApi)
   await appendFile(env.GITHUB_OUTPUT, `selection=${JSON.stringify(selected)}\nrunner=${selected.runnerLabel}\n`)
 }

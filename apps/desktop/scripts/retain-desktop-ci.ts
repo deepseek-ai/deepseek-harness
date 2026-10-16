@@ -6,6 +6,7 @@ import { desktopBuildRecordFilename, desktopUpdateMetadataFilename, resolveDeskt
 import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs'
 import { retainDesktopRelease, type DesktopRetainedSource } from './desktop-release-store.ts'
 import { validateDesktopBuildVersion } from './desktop-build-version.mjs'
+import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]
@@ -66,8 +67,10 @@ export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(
   }
   const retained = await retainDesktopRelease(desktopReleasesRoot(env), source, names.map(name => join(artifacts, name)))
   if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `directory=${retained}\n`)
+  const nextStep = desktopPublishQualificationError(qualification)
+    ?? `Publish separately with package_run_id=${env.GITHUB_RUN_ID} and package_run_attempt=${env.GITHUB_RUN_ATTEMPT}`
   if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-    `\nRetained package: ${env.GITHUB_RUN_ID}/${env.GITHUB_RUN_ATTEMPT}\n\nPublish separately with package_run_id=${env.GITHUB_RUN_ID} and package_run_attempt=${env.GITHUB_RUN_ATTEMPT}\n`)
+    `\nRetained package: ${env.GITHUB_RUN_ID}/${env.GITHUB_RUN_ATTEMPT}\n\n${nextStep}\n`)
   return retained
 }
 

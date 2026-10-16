@@ -10,10 +10,10 @@ on:
         default: test
         required: true
       signing:
-        description: '签名方式：unsigned 仅供内部测试；signed 使用机器配置的 EV 硬件令牌'
+        description: '签名方式：unsigned 仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请选择 signed（EV 硬件令牌）'
         type: choice
-        options: [unsigned, signed]
-        default: unsigned
+        options: [signed, unsigned]
+        default: signed
         required: true
       test_release_id:
         description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'

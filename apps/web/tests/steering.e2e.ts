@@ -100,7 +100,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
       await scaffold?.close()
     } finally {
       // A failing close (unconsumed fixture, mismatched snapshot) must not
-      // leave the Host clock pinned for the suites after this one.
+      // leave the pinned Host clock running for the suites after this one.
       hostClock?.mockRestore()
     }
   })

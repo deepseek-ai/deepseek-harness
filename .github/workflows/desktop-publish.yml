@@ -31,6 +31,11 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+      - name: Reject debugging packages before dependency installation
+        id: preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node apps/desktop/scripts/preflight-desktop-publish.mjs
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v7.0.0
         with:
@@ -41,6 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DESKTOP_PUBLISH_RUNNERS: ${{ vars.DESKTOP_PUBLISH_RUNNERS }}
+          DESKTOP_PACKAGE_ATTEMPT: ${{ steps.preflight.outputs.attempt }}
         run: node --import tsx apps/desktop/scripts/resolve-desktop-publish-ci.ts
 
   prepare:
