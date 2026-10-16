@@ -398,23 +398,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent names
 
-Names are unique in one live subagent tree; the root is `lead`. The root Session owns immutable assignments and the projection excludes inherited facts. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
-
-```ts type-equiv
-/** One immutable name assigned in the root Session before child publication. */
-interface SubagentNameData {
-  readonly name: string
-  readonly id: SessionId
-}
-```
-
-```ts type-equiv
-/** Root-owned name assignments, excluding fork-inherited events. */
-interface SubagentNamesState {
-  readonly inheritedEventCount: SessionLogOffset
-  readonly entries: readonly SubagentNameData[]
-}
-```
+Names are unique in one live subagent tree; the root is `lead`. Parent catalogs retain immutable assignments; local descriptors carry each child’s own name. A runtime index shares reservations across the tree and rebuilds from catalogs. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -469,12 +453,11 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
- * @param caller - exact live Agent selecting the tree.
- * @param id - target identity; omission selects the caller.
+ * Read an Agent's own descriptor-backed name, retaining legacy addresses for older children.
+ * @param agent - exact live Agent whose name is requested.
  * @returns lead, the immutable assigned name, or a legacy address.
  */
-nameOf(caller: Agent, id: SessionId = caller.id): string
+nameOf(agent: Agent): string
 
 /**
  * Resolve a tree-wide name without granting authority to act on its Agent.

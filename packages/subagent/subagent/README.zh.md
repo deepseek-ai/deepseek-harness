@@ -61,7 +61,7 @@ kind: "package-reference"
 
 `startActivation({ name, provider, label, request, signal, delivery })` 返回 `{ childId, name, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息，支持冷恢复；外部子级只执行一次，拒绝继续执行。`request.agentOptions` 覆盖受支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 允许 workflow 等待结果，不发送父级通知或初始返回指引。本地 parent 交付要求持久化；caller 交付可使用临时本地会话。冷恢复要求持久化和 Session query。
 
-agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。`SubagentNames` 在异步准备前预留名字，释放失败且未发布的启动，并将成功分配作为 `subagent/named` 记录在根 Session 中。`subagentNames` 投影在结束和重启后保留分配，排除分叉继承的事件。`nameOf()` 和 `resolveName()` 在名字与稳定 Session id 之间转换，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
+agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。每个父级 catalog 记录其子级名字，包括采用 caller 交付的外部执行；本地子级 descriptor 携带相同名字供恢复使用。根级运行时索引在异步准备前预留名字，释放失败且未发布的启动，并在执行结束后保留已提交分配。每个在线根从 catalog 重建一次索引，排除继承条目；不可读分支会阻止初始化。`nameOf(agent)` 读取 Agent 自身名字，`resolveName()` 解析树内名字，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
 
 ### 子级 preset
 
@@ -123,7 +123,7 @@ agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建
 
 本地 Agent 发生失败且后续没有成功提交 `turn/end` 时，会在所拥有的后代结束后以 `error` 结算。未认领的输入不会使该失败 activation 一直驻留。后续成功提交的轮次结束记录会取代实时失败，提供恢复后的结果。
 
-本地创建成功后，无论结果交付给谁，都会向父 Session 追加 `subagent/catalog` 事实。外部创建仅在使用 `delivery: 'parent'` 时追加目录事实；调用方拥有的外部执行保留调用方自己的成员记录。外部条目以 `mode: 'external'` 标记没有本地 Session 的子级。目录仅在创建时记录一次成员关系，不携带执行状态。完整结果交给调用方或父级完成通知。投影排除继承事实。直接列表读取一个父级投影，因此已完成的本地工作流子级仍可被发现、打开或继续。Catalog 载荷 v0 记录本地模式，v1 还接受未知模式，v2 记录外部执行，读取器支持三版。历史迁移在 descriptor 不可用时根据可读子 header 追加 v1 `subagent/catalog`；本地创建保留 v0。其 `mode: 'unknown'` 投影让子会话保持可见，但不表示支持继续执行；已有完整条目仍具有权威性。
+本地或外部创建成功后，无论结果交付给谁，都会向父 Session 追加 `subagent/catalog` 事实。外部条目以 `mode: 'external'` 标记没有本地 Session 的子级。目录仅在创建时记录一次成员关系，不携带执行状态。完整结果交给调用方或父级完成通知。投影排除继承事实。直接列表读取一个父级投影，因此已完成的本地工作流子级仍可被发现、打开或继续。Catalog 载荷 v0 记录本地模式，v1 还接受未知模式，v2 记录外部执行，读取器支持三版。历史迁移在 descriptor 不可用时根据可读子 header 追加 v1 `subagent/catalog`；本地创建保留 v0。其 `mode: 'unknown'` 投影让子会话保持可见，但不表示支持继续执行；已有完整条目仍具有权威性。
 
 <a id="restoring-child-composition"></a>
 ### 恢复子级组装

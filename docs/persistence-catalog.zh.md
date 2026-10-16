@@ -63,10 +63,9 @@
 | `event:session/title-llm-request` | event | `79a4c87f8bfb4d6d05cd9952b99210d6a7db3b478c4a01d94b4c50602308c056` | [`{ type: "session/title-llm-request" }`](#persistence-type-sha256-79a4c87f8bfb4d6d05cd9952b99210d6a7db3b478c4a01d94b4c50602308c056) |
 | `event:step/end` | event | `e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05` | [`{ type: "step/end" }`](#persistence-type-sha256-e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05) |
 | `event:step/start` | event | `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986` | [`{ type: "step/start" }`](#persistence-type-sha256-4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986) |
-| `event:subagent/catalog` | event | `53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac` | [`{ type: "subagent/catalog" }`](#persistence-type-sha256-53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac) |
-| `event:subagent/descriptor` | event | `b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5` | [`{ type: "subagent/descriptor" }`](#persistence-type-sha256-b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5) |
+| `event:subagent/catalog` | event | `8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3` | [`{ type: "subagent/catalog" }`](#persistence-type-sha256-8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3) |
+| `event:subagent/descriptor` | event | `194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc` | [`{ type: "subagent/descriptor" }`](#persistence-type-sha256-194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc) |
 | `event:subagent/model-selection-policy` | event | `a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc` | [`{ type: "subagent/model-selection-policy" }`](#persistence-type-sha256-a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc) |
-| `event:subagent/named` | event | `273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6` | [`{ type: "subagent/named" }`](#persistence-type-sha256-273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6) |
 | `event:system/message` | event | `69081694be231d56fd9580ba14645fd5e35373202605d5c5c841a9435b5fa3b1` | [`{ type: "system/message" }`](#persistence-type-sha256-69081694be231d56fd9580ba14645fd5e35373202605d5c5c841a9435b5fa3b1) |
 | `event:team/member` | event | `4fb59762612c3e3ac3a3bd4f84c9c148d3c3893bd422ba2b201cc039fabd49bc` | [`{ type: "team/member" }`](#persistence-type-sha256-4fb59762612c3e3ac3a3bd4f84c9c148d3c3893bd422ba2b201cc039fabd49bc) |
 | `event:team/message/delivered` | event | `48f9c19417a1abbedfa59f4667bba36b93ac2db407adf5e84cb3ba0de30942cb` | [`{ type: "team/message/delivered" }`](#persistence-type-sha256-48f9c19417a1abbedfa59f4667bba36b93ac2db407adf5e84cb3ba0de30942cb) |
@@ -941,7 +940,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'subagent/catalog': SubagentCatalogEvent
 ```
 
-来源：[`packages/subagent/subagent/src/catalog.ts:45`](../packages/subagent/subagent/src/catalog.ts)
+来源：[`packages/subagent/subagent/src/catalog.ts:48`](../packages/subagent/subagent/src/catalog.ts)
 
 <a id="subagentdescriptor--log-only"></a>
 
@@ -958,7 +957,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:39`](../packages/subagent/subagent/src/descriptor.ts)
 
 <a id="subagentmodel-selection-policy--log-only"></a>
 
@@ -978,20 +977,6 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```
 
 来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
-
-<a id="subagentnamed--log-only"></a>
-
-#### `subagent/named` — log-only
-
-```ts persistence-catalog
-/**
- * A tree-wide agent name, retained after its execution ends.
- * @param data - the name and durable child identity.
- */
-'subagent/named': SubagentNameData
-```
-
-来源：[`packages/subagent/subagent/src/names.ts:26`](../packages/subagent/subagent/src/names.ts)
 
 ### `system/*`
 
@@ -2626,14 +2611,6 @@ SHA-256: `0a8a062bc9c3c0d97fd97742262f2ea53dd32297f834e81114870d38ac3dc6da`
 
 `"subagent/model-selection-policy"`
 
-<a id="persistence-type-sha256-fdca5e24e7a0bb1af1f3536b8c85787ca1dbca2802f632bf4a5347a2ba62fdb1"></a>
-
-### `"subagent/named"`
-
-SHA-256: `fdca5e24e7a0bb1af1f3536b8c85787ca1dbca2802f632bf4a5347a2ba62fdb1`
-
-`"subagent/named"`
-
 <a id="persistence-type-sha256-511801b0a6470d98566e8385d3dffddb2b67f79fcf73ed6056f46c3cc0a245a7"></a>
 
 ### `"success"`
@@ -3340,7 +3317,7 @@ SHA-256: `c748fb42c80a120038a8c587af80ec39924803c401364db11c8974d5bf6d0262`
 
 [`ContextSnapshotSection`](#persistence-type-sha256-86e1e384495ee09ac2d60c9db3610f1f1fddac2d248f6f1d6000e78054680219) 的数组。
 
-<a id="persistence-type-sha256-6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f"></a>
+<a id="persistence-type-sha256-f37e394b9557d1a228d6b2f29f9586c394d75fe9578ebb25aa143565aba50182"></a>
 
 <a id="persistence-type-continuablesubagentdescriptordata"></a>
 
@@ -3348,9 +3325,9 @@ SHA-256: `c748fb42c80a120038a8c587af80ec39924803c401364db11c8974d5bf6d0262`
 
 ### `ContinuableSubagentDescriptorData`
 
-SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
+SHA-256: `f37e394b9557d1a228d6b2f29f9586c394d75fe9578ebb25aa143565aba50182`
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:72`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:78`](../packages/subagent/subagent/src/descriptor.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -3359,6 +3336,7 @@ SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
 | `agentReasoningEffort` | 可选 | `string` |
 | `label` | 必需 | `string` |
 | `mode` | 必需 | `"continuable"` |
+| `name` | 可选 | `string` |
 | `persona` | 可选 | `string` |
 | `provider` | 必需 | `string` |
 | `toolFilter` | 可选 | [`ToolRestriction`](#persistence-type-sha256-3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f) |
@@ -4380,7 +4358,7 @@ SHA-256: `8e8e91646a5cae3fc78f7532a0013ff2088ae47077642c2edd507a508209b8af`
 | `operation` | 必需 | `"dispatch"` |
 | `version` | 必需 | `1` |
 
-<a id="persistence-type-sha256-5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564"></a>
+<a id="persistence-type-sha256-f73798a0676cd6a7d7890fcd09bf2a9cd8ad0967b6c7afd7d3edd3f5fbc1c124"></a>
 
 <a id="persistence-type-oneshotsubagentdescriptordata"></a>
 
@@ -4388,14 +4366,15 @@ SHA-256: `8e8e91646a5cae3fc78f7532a0013ff2088ae47077642c2edd507a508209b8af`
 
 ### `OneShotSubagentDescriptorData`
 
-SHA-256: `5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564`
+SHA-256: `f73798a0676cd6a7d7890fcd09bf2a9cd8ad0967b6c7afd7d3edd3f5fbc1c124`
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:61`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:67`](../packages/subagent/subagent/src/descriptor.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
 | `label` | 可选 | `string` |
 | `mode` | 必需 | `"one-shot"` |
+| `name` | 可选 | `string` |
 | `provider` | 必需 | `string` |
 | `version` | 必需 | `number` |
 
@@ -4835,7 +4814,7 @@ SHA-256: `47e9095591ae36e7c39ee62553097772f2bfa16304536a72dbbc3f691f605180`
 - [`{ type: "finish" }`](#persistence-type-sha256-a2b49331716ba0a7078b026d145306a70eae64b7313c3e6204bd931e75ec3bb1)
 - [`{ type: "usage" }`](#persistence-type-sha256-f1a96afe7503ac1817de769cd0ba13d9b80111c7034c50106b3344ecc14cc515)
 
-<a id="persistence-type-sha256-f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87"></a>
+<a id="persistence-type-sha256-d356f2b4478fe252cf18d8017a277417a9d1b1f88b7bbdfbf5600092a7b7a09d"></a>
 
 <a id="persistence-type-packagessubagentsubagentsrccatalogtssubagentcatalogevent"></a>
 
@@ -4843,20 +4822,20 @@ SHA-256: `47e9095591ae36e7c39ee62553097772f2bfa16304536a72dbbc3f691f605180`
 
 ### `SubagentCatalogEvent`
 
-SHA-256: `f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87`
+SHA-256: `d356f2b4478fe252cf18d8017a277417a9d1b1f88b7bbdfbf5600092a7b7a09d`
 
-来源：[`packages/subagent/subagent/src/catalog.ts:29`](../packages/subagent/subagent/src/catalog.ts)
+来源：[`packages/subagent/subagent/src/catalog.ts:30`](../packages/subagent/subagent/src/catalog.ts)
 
 以下类型之一：
 
-- [`{ childCreatedAt, childId, label, mode, … }`](#persistence-type-sha256-e2ad8f5bcd813f268ffef1b10a12d7ddd2b8ced8b9b6d0275b3f6b7ed094a187)
-- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09)
-- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-5d542ac7bdf13310c46e1a884dec9fb18ad8c6e153cff207e639cd7bf9d7e694)
-- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-b6896938660a1dfe4ddd100fb3164d9f8fa57feeabfe37441a80106c9942697a)
-- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-a0f25b5aeeebf2bf1542ce67726b095e3b139a39c71861d57e827f12dea1f499)
-- [`{ childCreatedAt, childId, label, mode, … }`](#persistence-type-sha256-0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd)
+- [`{ childCreatedAt, childId, label, mode, … }`](#persistence-type-sha256-d64be7afff109c07a5496c2d7d0f7c84d145e9abddbe4f340c15d84d42ea4b05)
+- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-6b70feb8fff1ac400560495d7e0156daed0e4cf2f73f0439f2e3b5d7038b2512)
+- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-4237004e46a01bdef8c8923aa7d5c1d90cf1cd5467dca15dd0da5668b4d43b69)
+- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-d452d8c6f47c6fa32773048a0cb44b825ca2d8e7aa28abb5f6f1afb1b965ba3a)
+- [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-3ec336899b3fcfeaeb163a3fc407e6ad3108993d9925ef439fe3fbb3cd6d3c25)
+- [`{ childCreatedAt, childId, label, mode, … }`](#persistence-type-sha256-9f808a869b1ef076e20a960c51b0c1c919b03025fa2661516cc36b3f452f60ee)
 
-<a id="persistence-type-sha256-86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde"></a>
+<a id="persistence-type-sha256-e17928cecf8a76d8a2f4574d1bf86e5451d1af445032e5626e0711bfe0392509"></a>
 
 <a id="persistence-type-packagessubagentsubagentsrcdescriptortssubagentdescriptordata"></a>
 
@@ -4864,31 +4843,14 @@ SHA-256: `f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87`
 
 ### `SubagentDescriptorData`
 
-SHA-256: `86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde`
+SHA-256: `e17928cecf8a76d8a2f4574d1bf86e5451d1af445032e5626e0711bfe0392509`
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:89`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:95`](../packages/subagent/subagent/src/descriptor.ts)
 
 以下类型之一：
 
-- [`ContinuableSubagentDescriptorData`](#persistence-type-sha256-6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f)
-- [`OneShotSubagentDescriptorData`](#persistence-type-sha256-5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564)
-
-<a id="persistence-type-sha256-b0b7b7f4d127101c49bfd0128e6f37c4627ebbc8baddf5b2e9edff1dac8c84b8"></a>
-
-<a id="persistence-type-packagessubagentsubagentsrcnamestssubagentnamedata"></a>
-
-<a id="persistence-type-subagentnamedata"></a>
-
-### `SubagentNameData`
-
-SHA-256: `b0b7b7f4d127101c49bfd0128e6f37c4627ebbc8baddf5b2e9edff1dac8c84b8`
-
-来源：[`packages/subagent/subagent/src/names.ts:15`](../packages/subagent/subagent/src/names.ts)
-
-| 属性 | 存在性 | 类型 |
-|---|---|---|
-| `id` | 必需 | `string` |
-| `name` | 必需 | `string` |
+- [`ContinuableSubagentDescriptorData`](#persistence-type-sha256-f37e394b9557d1a228d6b2f29f9586c394d75fe9578ebb25aa143565aba50182)
+- [`OneShotSubagentDescriptorData`](#persistence-type-sha256-f73798a0676cd6a7d7890fcd09bf2a9cd8ad0967b6c7afd7d3edd3f5fbc1c124)
 
 <a id="persistence-type-sha256-4e97c3d85c0fc817ee58873c38c25a2474abaaa0af4839311b50b68db3b8cf1a"></a>
 
@@ -5923,11 +5885,11 @@ SHA-256: `df843efd87c78cf8de98f8e0d0216956cd568d0d0e56a22c853663e274aa1a18`
 
 [`{ capturedFormatVersion?, capturedThroughSeq, compacted, inputIndex, … }`](#persistence-type-sha256-4f91f187baeabef5c7950c4780d31bbe39f3345dff591a6cf26ac7e135ac1cf4) 的数组。
 
-<a id="persistence-type-sha256-0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd"></a>
+<a id="persistence-type-sha256-9f808a869b1ef076e20a960c51b0c1c919b03025fa2661516cc36b3f452f60ee"></a>
 
 ### `{ childCreatedAt, childId, label, mode, … }`
 
-SHA-256: `0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd`
+SHA-256: `9f808a869b1ef076e20a960c51b0c1c919b03025fa2661516cc36b3f452f60ee`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5935,13 +5897,14 @@ SHA-256: `0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd`
 | `childId` | 必需 | `string` |
 | `label` | 必需 | `string` |
 | `mode` | 必需 | `"continuable"` |
+| `name` | 可选 | `string` |
 | `version` | 必需 | `0` |
 
-<a id="persistence-type-sha256-e2ad8f5bcd813f268ffef1b10a12d7ddd2b8ced8b9b6d0275b3f6b7ed094a187"></a>
+<a id="persistence-type-sha256-d64be7afff109c07a5496c2d7d0f7c84d145e9abddbe4f340c15d84d42ea4b05"></a>
 
 ### `{ childCreatedAt, childId, label, mode, … }`
 
-SHA-256: `e2ad8f5bcd813f268ffef1b10a12d7ddd2b8ced8b9b6d0275b3f6b7ed094a187`
+SHA-256: `d64be7afff109c07a5496c2d7d0f7c84d145e9abddbe4f340c15d84d42ea4b05`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5949,27 +5912,14 @@ SHA-256: `e2ad8f5bcd813f268ffef1b10a12d7ddd2b8ced8b9b6d0275b3f6b7ed094a187`
 | `childId` | 必需 | `string` |
 | `label` | 必需 | `string` |
 | `mode` | 必需 | `"continuable"` |
+| `name` | 可选 | `string` |
 | `version` | 必需 | `1` |
 
-<a id="persistence-type-sha256-5d542ac7bdf13310c46e1a884dec9fb18ad8c6e153cff207e639cd7bf9d7e694"></a>
+<a id="persistence-type-sha256-3ec336899b3fcfeaeb163a3fc407e6ad3108993d9925ef439fe3fbb3cd6d3c25"></a>
 
 ### `{ childCreatedAt, childId, label?, mode, … }`
 
-SHA-256: `5d542ac7bdf13310c46e1a884dec9fb18ad8c6e153cff207e639cd7bf9d7e694`
-
-| 属性 | 存在性 | 类型 |
-|---|---|---|
-| `childCreatedAt` | 必需 | `number` |
-| `childId` | 必需 | `string` |
-| `label` | 可选 | `string` |
-| `mode` | 必需 | `"one-shot"` |
-| `version` | 必需 | `0` |
-
-<a id="persistence-type-sha256-a0f25b5aeeebf2bf1542ce67726b095e3b139a39c71861d57e827f12dea1f499"></a>
-
-### `{ childCreatedAt, childId, label?, mode, … }`
-
-SHA-256: `a0f25b5aeeebf2bf1542ce67726b095e3b139a39c71861d57e827f12dea1f499`
+SHA-256: `3ec336899b3fcfeaeb163a3fc407e6ad3108993d9925ef439fe3fbb3cd6d3c25`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5977,13 +5927,14 @@ SHA-256: `a0f25b5aeeebf2bf1542ce67726b095e3b139a39c71861d57e827f12dea1f499`
 | `childId` | 必需 | `string` |
 | `label` | 可选 | `string` |
 | `mode` | 必需 | `"unknown"` |
+| `name` | 可选 | `string` |
 | `version` | 必需 | `1` |
 
-<a id="persistence-type-sha256-b6896938660a1dfe4ddd100fb3164d9f8fa57feeabfe37441a80106c9942697a"></a>
+<a id="persistence-type-sha256-4237004e46a01bdef8c8923aa7d5c1d90cf1cd5467dca15dd0da5668b4d43b69"></a>
 
 ### `{ childCreatedAt, childId, label?, mode, … }`
 
-SHA-256: `b6896938660a1dfe4ddd100fb3164d9f8fa57feeabfe37441a80106c9942697a`
+SHA-256: `4237004e46a01bdef8c8923aa7d5c1d90cf1cd5467dca15dd0da5668b4d43b69`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5991,13 +5942,14 @@ SHA-256: `b6896938660a1dfe4ddd100fb3164d9f8fa57feeabfe37441a80106c9942697a`
 | `childId` | 必需 | `string` |
 | `label` | 可选 | `string` |
 | `mode` | 必需 | `"one-shot"` |
-| `version` | 必需 | `1` |
+| `name` | 可选 | `string` |
+| `version` | 必需 | `0` |
 
-<a id="persistence-type-sha256-cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09"></a>
+<a id="persistence-type-sha256-6b70feb8fff1ac400560495d7e0156daed0e4cf2f73f0439f2e3b5d7038b2512"></a>
 
 ### `{ childCreatedAt, childId, label?, mode, … }`
 
-SHA-256: `cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09`
+SHA-256: `6b70feb8fff1ac400560495d7e0156daed0e4cf2f73f0439f2e3b5d7038b2512`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6005,7 +5957,23 @@ SHA-256: `cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09`
 | `childId` | 必需 | `string` |
 | `label` | 可选 | `string` |
 | `mode` | 必需 | `"external"` |
+| `name` | 可选 | `string` |
 | `version` | 必需 | `2` |
+
+<a id="persistence-type-sha256-d452d8c6f47c6fa32773048a0cb44b825ca2d8e7aa28abb5f6f1afb1b965ba3a"></a>
+
+### `{ childCreatedAt, childId, label?, mode, … }`
+
+SHA-256: `d452d8c6f47c6fa32773048a0cb44b825ca2d8e7aa28abb5f6f1afb1b965ba3a`
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `childCreatedAt` | 必需 | `number` |
+| `childId` | 必需 | `string` |
+| `label` | 可选 | `string` |
+| `mode` | 必需 | `"one-shot"` |
+| `name` | 可选 | `string` |
+| `version` | 必需 | `1` |
 
 <a id="persistence-type-sha256-a81059ca06999da1e712414520c2c65e491d052fcf9640fae20aa38f0a5dc735"></a>
 
@@ -8673,33 +8641,33 @@ SHA-256: `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986`
 | `time` | 必需 | `number` |
 | `type` | 必需 | `"step/start"` |
 
-<a id="persistence-type-sha256-53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac"></a>
+<a id="persistence-type-sha256-8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3"></a>
 
 <a id="persistence-type-eventsubagentcatalog"></a>
 
 ### `{ type: "subagent/catalog" }`
 
-SHA-256: `53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac`
+SHA-256: `8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
-| `data` | 必需 | [`SubagentCatalogEvent`](#persistence-type-sha256-f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87) |
+| `data` | 必需 | [`SubagentCatalogEvent`](#persistence-type-sha256-d356f2b4478fe252cf18d8017a277417a9d1b1f88b7bbdfbf5600092a7b7a09d) |
 | `ignorable` | 可选 | `true` |
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |
 | `type` | 必需 | `"subagent/catalog"` |
 
-<a id="persistence-type-sha256-b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5"></a>
+<a id="persistence-type-sha256-194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc"></a>
 
 <a id="persistence-type-eventsubagentdescriptor"></a>
 
 ### `{ type: "subagent/descriptor" }`
 
-SHA-256: `b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5`
+SHA-256: `194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
-| `data` | 必需 | [`SubagentDescriptorData`](#persistence-type-sha256-86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde) |
+| `data` | 必需 | [`SubagentDescriptorData`](#persistence-type-sha256-e17928cecf8a76d8a2f4574d1bf86e5451d1af445032e5626e0711bfe0392509) |
 | `ignorable` | 可选 | `true` |
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |
@@ -8720,22 +8688,6 @@ SHA-256: `a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc`
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |
 | `type` | 必需 | `"subagent/model-selection-policy"` |
-
-<a id="persistence-type-sha256-273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6"></a>
-
-<a id="persistence-type-eventsubagentnamed"></a>
-
-### `{ type: "subagent/named" }`
-
-SHA-256: `273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6`
-
-| 属性 | 存在性 | 类型 |
-|---|---|---|
-| `data` | 必需 | [`SubagentNameData`](#persistence-type-sha256-b0b7b7f4d127101c49bfd0128e6f37c4627ebbc8baddf5b2e9edff1dac8c84b8) |
-| `ignorable` | 可选 | `true` |
-| `seq` | 必需 | `number` |
-| `time` | 必需 | `number` |
-| `type` | 必需 | `"subagent/named"` |
 
 <a id="persistence-type-sha256-69081694be231d56fd9580ba14645fd5e35373202605d5c5c841a9435b5fa3b1"></a>
 

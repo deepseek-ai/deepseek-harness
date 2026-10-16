@@ -400,23 +400,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent 名字
 
-名字在一棵在线子代理树内唯一；根名为 `lead`。根 Session 拥有不可变的名字分配，投影排除继承的事实。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
-
-```ts type-equiv
-/** One immutable name assigned in the root Session before child publication. */
-interface SubagentNameData {
-  readonly name: string
-  readonly id: SessionId
-}
-```
-
-```ts type-equiv
-/** Root-owned name assignments, excluding fork-inherited events. */
-interface SubagentNamesState {
-  readonly inheritedEventCount: SessionLogOffset
-  readonly entries: readonly SubagentNameData[]
-}
-```
+名字在一棵在线子代理树内唯一；根名为 `lead`。父级 catalog 保留不可变的名字分配；本地 descriptor 携带子级自身名字。运行时索引在树内共享预留，并从 catalog 重建。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -471,12 +455,11 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
- * @param caller - exact live Agent selecting the tree.
- * @param id - target identity; omission selects the caller.
+ * Read an Agent's own descriptor-backed name, retaining legacy addresses for older children.
+ * @param agent - exact live Agent whose name is requested.
  * @returns lead, the immutable assigned name, or a legacy address.
  */
-nameOf(caller: Agent, id: SessionId = caller.id): string
+nameOf(agent: Agent): string
 
 /**
  * Resolve a tree-wide name without granting authority to act on its Agent.

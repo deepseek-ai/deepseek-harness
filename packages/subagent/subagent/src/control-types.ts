@@ -56,7 +56,10 @@ export type SubagentCatalogRow =
  * One recursive catalog row. Traversal may also return diagnostics for
  * unknown catalog modes or unreadable child catalogs.
  */
-export type SubagentListEntry =
+export type SubagentListEntry = {
+  /** Immutable name from the parent catalog; absent for older children. */
+  readonly name?: string
+} & (
   | SubagentCatalogRow & {
     readonly kind: 'child'
     /** Whether the child catalog contains a direct child. */
@@ -74,6 +77,7 @@ export type SubagentListEntry =
      */
     readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
   }
+)
 
 /** Durable parent/child browsing address; unknown mode is resolved when child history is read. */
 export type SubagentAddress =

@@ -110,7 +110,7 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
         claim(record.data.item.version, 'id')
       }
       // Workflow-owned children embed their run identity even when the caller does not log workflow progress.
-      if (record.type === 'subagent/named' && isRecord(record.data) && typeof record.data.name === 'string') {
+      if ((record.type === 'subagent/catalog' || record.type === 'subagent/descriptor') && isRecord(record.data) && typeof record.data.name === 'string') {
         const workflow = WORKFLOW_AGENT_NAME_RE.exec(record.data.name)
         if (workflow !== null) claim(workflow[1], 'workflow')
       }

@@ -1,139 +1,133 @@
-/** Durable tree-wide agent names and unpublished creation reservations.
+/** Root-scoped name reservations reconstructed from parent-owned catalogs.
  * @module @deepseek-ai/dsh-subagent/names
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { z } from 'zod'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { liveCatalogEntries } from './catalog.ts'
+import { subagentNameSchema } from './descriptor.ts'
 import { SubagentError } from './error.ts'
-import { listDescendants } from './list-children.ts'
+import { listChildren } from './list-children.ts'
 
-/** One immutable name assigned in the root Session before child publication. */
-export interface SubagentNameData {
-  readonly name: string
-  readonly id: SessionId
+interface NameEntry {
+  readonly id: SessionId | undefined
+  readonly committed: boolean
 }
 
-declare module '@deepseek-ai/dsh-session/types' {
-  interface SessionEventMap {
-    /**
-     * A tree-wide agent name, retained after its execution ends.
-     * @param data - the name and durable child identity.
-     */
-    'subagent/named': SubagentNameData
-  }
-}
-
-/** Root-owned name assignments, excluding fork-inherited events. */
-export interface SubagentNamesState {
-  readonly inheritedEventCount: SessionLogOffset
-  readonly entries: readonly SubagentNameData[]
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    subagentNames: SubagentNamesState
-  }
-}
-
-const nameSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/).refine(value => value !== 'lead' && value !== 'unowned')
-const entrySchema = z.object({ name: nameSchema, id: z.string().transform(SessionId) }).strict()
-
-const stateSchema: z.ZodType<SubagentNamesState> = z.object({
-  inheritedEventCount: z.number().int().nonnegative().transform(SessionLogOffset),
-  entries: z.array(entrySchema),
-}).strict().refine(state => new Set(state.entries.map(entry => entry.name)).size === state.entries.length
-  && new Set(state.entries.map(entry => entry.id)).size === state.entries.length, 'duplicate persisted agent name or identity')
-
-/** Host-only name projection; corrupt duplicate assignments reject restoration. */
-export const subagentNamesProjectionDefinition = {
-  key: 'subagentNames',
-  stateVersion: 0,
-  stateSchema,
-  init: (_header: SessionHeader, inheritedEventCount: SessionLogOffset): SubagentNamesState => ({ inheritedEventCount, entries: [] }),
-  apply: (state, event: SessionEvent) => {
-    if (event.type !== 'subagent/named' || event.seq < state.inheritedEventCount) return state
-    const entry = entrySchema.parse(event.data)
-    if (state.entries.some(existing => existing.name === entry.name || existing.id === entry.id)) {
-      throw new SubagentError('duplicate persisted agent name or identity; restore a valid Session log', 'CORRUPT_AGENT_NAMES')
-    }
-    return { ...state, entries: [...state.entries, entry] }
-  },
-} satisfies ProjectionDefinition<'subagentNames', SubagentNamesState>
-
-/** Owns creation reservations; committed assignments come only from the root projection. */
+/** Committed identities and unpublished reservations shared by one live root. */
 export class SubagentNames {
-  private readonly pending = new WeakMap<Session, Set<string>>()
+  private readonly trees = new WeakMap<Agent, Map<string, NameEntry>>()
 
   /** @param ctx - subagent service context with live Agents and Session projections. */
   constructor(private readonly ctx: Context) {}
 
   /**
-   * Reserve a unique name before asynchronous child preparation.
+   * Reserve a name and any known local identity before child preparation.
    * @param parent - exact live spawning Agent.
    * @param name - explicit lower-case name; lead and unowned are reserved.
-   * @returns a publication operation and an idempotent unpublished-reservation release.
-   * @throws when the name is invalid, taken, or the live tree is unavailable.
+   * @param signal - cancellation while rebuilding historical assignments.
+   * @param id - reserved local identity, when the provider does not allocate it.
+   * @returns a catalog publication operation and unpublished-reservation release.
+   * @throws when the name or identity is taken, invalid, or cannot be checked.
    */
-  reserve(parent: Agent, name: string): { commit(id: SessionId): void; [Symbol.dispose](): void } {
-    if (!nameSchema.safeParse(name).success) {
+  async reserve(parent: Agent, name: string, signal: AbortSignal, id?: SessionId): Promise<{
+    commit(id: SessionId, publish: () => void): void
+    [Symbol.dispose](): void
+  }> {
+    if (!subagentNameSchema.safeParse(name).success) {
       throw new SubagentError('agent name must start with a lower-case letter and contain only lower-case letters, digits, underscores, or hyphens; lead and unowned are reserved', 'INVALID_AGENT_NAME')
     }
     const root = this.rootOf(parent)
-    let pending = this.pending.get(root.session)
-    if (pending === undefined) {
-      pending = new Set()
-      this.pending.set(root.session, pending)
-    }
-    if (pending.has(name) || this.entries(root.session).some(entry => entry.name === name)) {
+    const names = await this.index(root, signal)
+    signal.throwIfAborted()
+    if (this.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
+    if (names.has(name)) {
       throw new SubagentError(`agent name "${name}" is already in use in this tree; choose another name`, 'DUPLICATE_AGENT_NAME')
     }
-    pending.add(name)
+    const checkId = (candidate: SessionId): void => {
+      for (const [other, value] of names) {
+        if (other !== name && value.id === candidate) throw new SubagentError(`subagent "${candidate}" already exists`, 'DUPLICATE_CHILD')
+      }
+    }
+    if (id !== undefined) checkId(id)
+    names.set(name, { id, committed: false })
+    let committed = false
     return {
-      commit: (id) => {
+      commit: (childId, publish) => {
         if (this.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
-        root.session.append('subagent/named', { name, id })
+        checkId(childId)
+        publish()
+        names.set(name, { id: childId, committed: true })
+        committed = true
       },
-      [Symbol.dispose]: () => { pending.delete(name) },
+      [Symbol.dispose]: () => { if (!committed) names.delete(name) },
     }
   }
 
   /**
-   * Read an agent's model-facing name in the caller's tree.
-   * @param caller - exact live Agent selecting the tree.
-   * @param id - target identity; defaults to the caller.
-   * @returns lead, an assigned name, or a stable legacy address for an older unnamed identity.
+   * Read an Agent's name from its own descriptor projection.
+   * @param agent - exact live Agent.
+   * @returns lead for roots, the descriptor name, or an older child's legacy address.
    */
-  nameOf(caller: Agent, id: SessionId = caller.id): string {
-    const root = this.rootOf(caller)
-    if (id === root.id) return 'lead'
-    return this.entries(root.session).find(entry => entry.id === id)?.name ?? `legacy:${id}`
+  nameOf(agent: Agent): string {
+    if (this.ctx.agents.get(agent.id) !== agent) {
+      throw new SubagentError('agent naming requires the exact live caller', 'UNAUTHORIZED')
+    }
+    if (agent.session.header.origin !== 'subagent') return 'lead'
+    const state = this.ctx.get('sessionProjections')?.stateOf(agent.session, 'subagent')
+    if (state === undefined) throw new SubagentError('agent names require the subagent identity projection', 'CONTINUATION_UNAVAILABLE')
+    const identity = state.identity
+    return identity !== undefined && agent.session.isOwnSeq(identity.seq) && identity.name !== undefined
+      ? identity.name : `legacy:${agent.id}`
   }
 
   /**
-   * Resolve a name without granting message, interrupt, or assignment authority.
+   * Resolve a name without granting messaging, interruption, or assignment authority.
    * @param caller - exact live Agent selecting the tree.
-   * @param name - assigned name or a legacy address returned by discovery.
-   * @param signal - cancellation during legacy catalog discovery.
-   * @returns the durable identity; the consuming operation still authorizes access.
-   * @throws when the name is absent from the caller's tree.
+   * @param name - assigned name or an older child's legacy address.
+   * @param signal - cancellation while rebuilding historical assignments.
+   * @returns the durable identity for the consuming operation to authorize.
+   * @throws when the name is absent or historical catalogs cannot be read.
    */
   async resolve(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
     signal?.throwIfAborted()
     const root = this.rootOf(caller)
     if (name === 'lead') return root.id
-    const entries = this.entries(root.session)
-    const entry = entries.find(candidate => candidate.name === name)
-    if (entry !== undefined) return entry.id
-    if (name.startsWith('legacy:')) {
-      const id = SessionId(name.slice('legacy:'.length))
-      if (!entries.some(candidate => candidate.id === id)
-        && (await listDescendants(this.ctx, root.id, signal)).some(candidate => candidate.id === id)) return id
-    }
+    const entry = (await this.index(root, signal)).get(name)
+    if (entry?.committed && entry.id !== undefined) return entry.id
     throw new SubagentError(`agent name "${name}" was not found; use list_agents to discover available names`, 'AGENT_NAME_NOT_FOUND')
+  }
+
+  /** Rebuild once per live root; concurrent readers adopt the first completed index. */
+  private async index(root: Agent, signal?: AbortSignal): Promise<Map<string, NameEntry>> {
+    signal?.throwIfAborted()
+    const existing = this.trees.get(root)
+    if (existing !== undefined) return existing
+    const names = new Map<string, NameEntry>([['lead', { id: root.id, committed: true }]])
+    const ids = new Set<SessionId>([root.id])
+    const pending = [...liveCatalogEntries(this.ctx.get('sessionProjections'), root.session)]
+    for (const entry of pending) {
+      signal?.throwIfAborted()
+      const name = entry.name ?? `legacy:${entry.id}`
+      if (names.get(name)?.id === entry.id) continue
+      if (names.has(name) || ids.has(entry.id)) {
+        throw new SubagentError('duplicate cataloged agent name or identity; restore valid subagent catalogs', 'CORRUPT_AGENT_NAMES')
+      }
+      names.set(name, { id: entry.id, committed: true })
+      ids.add(entry.id)
+      if (entry.mode !== 'external') {
+        const live = this.ctx.get('sessions')?.get(entry.id)
+        pending.push(...(live === undefined
+          ? await listChildren(this.ctx, entry.id, signal)
+          : liveCatalogEntries(this.ctx.get('sessionProjections'), live)))
+      }
+    }
+    signal?.throwIfAborted()
+    this.rootOf(root)
+    const shared = this.trees.get(root) ?? names
+    this.trees.set(root, shared)
+    return shared
   }
 
   /** Resolve only uninterrupted live subagent ancestry, never a fork's inherited parent. */
@@ -153,12 +147,5 @@ export class SubagentNames {
       root = parent
     }
     return root
-  }
-
-  /** Read the authoritative root projection without keeping a second name index. */
-  private entries(root: Session): readonly SubagentNameData[] {
-    const state = this.ctx.get('sessionProjections')?.stateOf(root, 'subagentNames')
-    if (state === undefined) throw new SubagentError('agent names require the subagentNames projection', 'CONTINUATION_UNAVAILABLE')
-    return state.entries
   }
 }

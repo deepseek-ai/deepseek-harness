@@ -12,6 +12,7 @@ import {
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import {
   establishExternalCatalogChild,
+  establishCatalogChild,
   liveCatalogEntries,
   subagentCatalogProjectionDefinition,
 } from '../src/catalog.ts'
@@ -72,12 +73,12 @@ describe('subagent catalog projection', () => {
       await ctx.plugin(SessionStore)
       const parent = ctx.sessions.create(header.id)
       const before = Date.now()
-      establishExternalCatalogChild(parent, SessionId('external'), 'External work')
+      establishExternalCatalogChild(parent, SessionId('external'), 'External work', 'worker')
       const events = parent.snapshotEvents()
       expect(events).toHaveLength(1)
       expect(events[0]).toMatchObject({
         type: 'subagent/catalog',
-        data: { version: 2, childId: 'external', mode: 'external', label: 'External work' },
+        data: { version: 2, childId: 'external', mode: 'external', label: 'External work', name: 'worker' },
       })
       const entries = subagentCatalogProjectionDefinition.wire.view(fold(events))
       expect(entries).toHaveLength(1)
@@ -86,6 +87,24 @@ describe('subagent catalog projection', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+
+  it('preserves a field-free historical descriptor when establishing its catalog', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      const parent = ctx.sessions.create(header.id)
+      establishCatalogChild(parent, { ...header, id: SessionId('legacy') }, { mode: 'continuable', label: 'Old child' })
+      expect(subagentCatalogProjectionDefinition.wire.view(fold(parent.snapshotEvents())))
+        .toEqual([{ id: 'legacy', createdAt: 0, mode: 'continuable', label: 'Old child' }])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects reserved names in persisted catalog entries', () => {
+    const event = fact(0, 'child', 1, { mode: 'continuable', label: 'Review' })
+    expect(() => fold([{ ...event, data: { ...event.data, name: 'lead' } }])).toThrow()
   })
 
   it('publishes detached catalog views and changes only for new own facts', async () => {

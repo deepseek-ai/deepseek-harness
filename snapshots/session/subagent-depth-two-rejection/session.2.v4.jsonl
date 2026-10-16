@@ -1,5 +1,5 @@
 {"type":"session","version":4,"id":"{{session:3}}","createdAt":1789625678926,"cwd":"{{cwd}}","parentSession":"{{session:2}}","isSeeded":false,"origin":"subagent","delegationDepth":2}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"Start depth two","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","name":"worker-2","label":"Start depth two","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
 {"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}

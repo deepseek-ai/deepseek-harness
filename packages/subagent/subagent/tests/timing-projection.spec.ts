@@ -29,13 +29,13 @@ function fold(events: SessionEvent[]) {
 }
 
 describe('subagent timing projection', () => {
-  it('preserves historical one-shot identity without inventing a label', () => {
+  it.each([undefined, 'historical child'])('preserves historical one-shot identity (label: %s)', (label) => {
     const descriptor = {
       ...event('subagent/descriptor', 1, 110),
-      data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn' },
+      data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', ...label === undefined ? {} : { label } },
     } as SessionEvent
     const state = subagentIdentityProjectionDefinition.apply(subagentIdentityProjectionDefinition.init(), descriptor)
-    expect(subagentIdentityProjectionDefinition.wire.view(state)).toEqual({ mode: 'one-shot', seq: 1 })
+    expect(subagentIdentityProjectionDefinition.wire.view(state)).toEqual({ mode: 'one-shot', seq: 1, ...label === undefined ? {} : { label } })
   })
 
   it('registers with the optional session projection registry', async () => {

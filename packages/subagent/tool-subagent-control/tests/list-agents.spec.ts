@@ -178,6 +178,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
       },
       {
         id: started.childId,
+        name: started.name,
         createdAt: 2,
         label: 'real child',
         mode: 'continuable',
@@ -228,10 +229,6 @@ describe('dsh-tool-subagent-control/list-agents', () => {
 
   it('reports an unreadable historical branch alongside a settled continuable child', async () => {
     const { ctx, parent } = await setup([textResponse('done')])
-    parent.session.append('subagent/catalog', {
-      version: 1, childId: SessionId('historical-one-shot'), childCreatedAt: 1,
-      mode: 'one-shot', label: 'finished once',
-    })
     const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`, delivery: 'parent',
       provider: 'spawn',
       label: 'summarize the doc',
@@ -239,11 +236,15 @@ describe('dsh-tool-subagent-control/list-agents', () => {
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
+    parent.session.append('subagent/catalog', {
+      version: 1, childId: SessionId('historical-one-shot'), childCreatedAt: 1,
+      mode: 'one-shot', label: 'finished once',
+    })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'legacy:historical-one-shot [diagnostic: unavailable] parent=lead depth=1\n'
-      + `${started.name} [inactive] parent=lead depth=1 — summarize the doc`,
+      `${started.name} [inactive] parent=lead depth=1 — summarize the doc\n`
+      + 'legacy:historical-one-shot [diagnostic: unavailable] parent=lead depth=1',
     )
   })
 
@@ -381,7 +382,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
       { chunks: textResponse('delta'), gate: releaseDelta.promise },
     ])
     const { ctx, parent } = await setupWith(adapter)
-    const start = async (label: string) => (await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    const start = async (label: string) => (await ctx.subagents.startActivation({ name: label.split(' ')[0]!,
       delivery: 'caller', provider: 'spawn', label,
       request: { prompt: [{ type: 'text', text: label }], parent }, signal: testToolSignal,
     })).childId
@@ -398,24 +399,30 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     expect(fromAlpha.isError).toBe(false)
     expect(text(fromAlpha)).toBe([
       'lead [inactive] — your parent',
-      `${ctx.subagents.nameOf(parent, beta)} [inactive] — sibling: beta task`,
-      `${ctx.subagents.nameOf(parent, gamma)} [inactive] — sibling: gamma task`,
-      `${ctx.subagents.nameOf(parent, delta)} [running] — sibling: delta task`,
+      'beta [inactive] — sibling: beta task',
+      'gamma [inactive] — sibling: gamma task',
+      'delta [running] — sibling: delta task',
     ].join('\n'))
     const fromDelta = await callTool(ctx, 'list_agents', {}, ctx.agents.get(delta))
     expect(text(fromDelta)).toBe([
       'lead [inactive] — your parent',
-      `${ctx.subagents.nameOf(parent, alpha)} [running] — sibling: alpha task`,
-      `${ctx.subagents.nameOf(parent, beta)} [inactive] — sibling: beta task`,
-      `${ctx.subagents.nameOf(parent, gamma)} [inactive] — sibling: gamma task`,
+      'alpha [running] — sibling: alpha task',
+      'beta [inactive] — sibling: beta task',
+      'gamma [inactive] — sibling: gamma task',
     ].join('\n'))
     const fromParent = await callTool(ctx, 'list_agents', {}, parent)
     expect(text(fromParent)).toBe([
-      `${ctx.subagents.nameOf(parent, alpha)} [running] parent=lead depth=1 — alpha task`,
-      `${ctx.subagents.nameOf(parent, beta)} [inactive] parent=lead depth=1 — beta task`,
-      `${ctx.subagents.nameOf(parent, gamma)} [inactive] parent=lead depth=1 — gamma task`,
-      `${ctx.subagents.nameOf(parent, delta)} [running] parent=lead depth=1 — delta task`,
+      'alpha [running] parent=lead depth=1 — alpha task',
+      'beta [inactive] parent=lead depth=1 — beta task',
+      'gamma [inactive] parent=lead depth=1 — gamma task',
+      'delta [running] parent=lead depth=1 — delta task',
     ].join('\n'))
+
+    const entries = await ctx.subagents.listChildren(parent.id)
+    const legacy = vi.spyOn(ctx.subagents, 'listChildren').mockResolvedValue(entries.map(({ name: _name, ...entry }) => entry))
+    expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha))))
+      .toContain(`legacy:${beta} [inactive] — sibling: beta task`)
+    legacy.mockRestore()
 
     const catalog = vi.spyOn(ctx.subagents, 'listChildren').mockResolvedValue([])
     expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha)))).toBe('(no subagents)')

@@ -75,7 +75,6 @@ import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
-import { subagentNamesProjectionDefinition } from './names.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
@@ -228,7 +227,6 @@ export class SubagentRuntime extends TypertRemoteService {
     })
     ctx.inject(['sessionProjections'], (projectionCtx) => {
       projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition)
-      projectionCtx.sessionProjections.register(subagentNamesProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
     })
@@ -287,13 +285,12 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
-   * @param caller - exact live Agent selecting the tree.
-   * @param id - target identity; omission selects the caller.
+   * Read an Agent's own descriptor-backed name, retaining legacy addresses for older children.
+   * @param agent - exact live Agent whose name is requested.
    * @returns lead, the immutable assigned name, or a legacy address.
    */
-  nameOf(caller: Agent, id: SessionId = caller.id): string {
-    return this.requireManager().names.nameOf(caller, id)
+  nameOf(agent: Agent): string {
+    return this.requireManager().names.nameOf(agent)
   }
 
   /**

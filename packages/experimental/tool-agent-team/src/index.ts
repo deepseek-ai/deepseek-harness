@@ -95,10 +95,28 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
   }
 }
 
-/** Project durable task ownership to the names used by collaboration tools. */
-function namedTask(ctx: Context, caller: Agent, task: TeamTaskView) {
-  const { ownerId, ...view } = task
-  return { ...view, ...ownerId === undefined ? {} : { ownerName: ctx.subagents.nameOf(caller, ownerId) } }
+type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
+
+/** Project task owners from live descriptors or the Team’s direct-child catalog. */
+async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<NamedTaskView[]> {
+  const { root } = ctx.agentTeams.membership(caller)
+  const names = new Map<SessionId, string>([[root.id, 'lead']])
+  const missing = new Set<SessionId>()
+  for (const { ownerId } of tasks) {
+    if (ownerId === undefined || names.has(ownerId)) continue
+    const agent = ctx.agents.get(ownerId)
+    if (agent === undefined) missing.add(ownerId)
+    else names.set(ownerId, ctx.subagents.nameOf(agent))
+  }
+  if (missing.size > 0) {
+    for (const entry of await ctx.subagents.listChildren(root.id, signal)) {
+      names.set(entry.id, entry.name ?? `legacy:${entry.id}`)
+    }
+  }
+  return tasks.map(({ ownerId, ...view }) => ({
+    ...view,
+    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
+  }))
 }
 
 /** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
@@ -128,7 +146,7 @@ function install(agent: Agent, ctx: Context): () => void {
         const { role, root } = ctx.agentTeams.membership(agent)
         return role === 'lead'
           ? 'You are the Team Lead. Your name is lead.'
-          : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(agent, root.id))}.`
+          : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(root))}.`
       },
     }))
 
@@ -181,12 +199,13 @@ function install(agent: Agent, ctx: Context): () => void {
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_create')
-        return namedTask(ctx, caller, await ctx.agentTeams.createTask(caller, {
+        const task = await ctx.agentTeams.createTask(caller, {
           subject: args.subject,
           description: args.description,
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        }))
+        })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -205,10 +224,10 @@ function install(agent: Agent, ctx: Context): () => void {
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      execute(args, exec) {
+      async execute(args, exec) {
         const status = args.status
         const caller = callingAgent(exec.agent, 'team_task_list')
-        const filtered = ctx.agentTeams.listTasks(caller).map(task => namedTask(ctx, caller, task)).filter(task =>
+        const filtered = (await namedTasks(ctx, caller, ctx.agentTeams.listTasks(caller), exec.signal)).filter(task =>
           (status === undefined || task.status === status)
           && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
           && (args.ready === undefined || task.ready === args.ready))
@@ -230,9 +249,10 @@ function install(agent: Agent, ctx: Context): () => void {
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
-      execute(args, exec) {
+      async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_get')
-        return Promise.resolve(namedTask(ctx, caller, ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))))
+        const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -259,10 +279,12 @@ function install(agent: Agent, ctx: Context): () => void {
         const caller = callingAgent(exec.agent, 'team_task_update')
         // Team authorizes historical members that predate subagent catalogs.
         const legacyId = args.owner?.startsWith('legacy:') ? SessionId(args.owner.slice('legacy:'.length)) : undefined
+        const { root } = ctx.agentTeams.membership(caller)
+        const historical = legacyId !== undefined && legacyId !== root.id
+          && !(await ctx.subagents.listChildren(root.id, exec.signal)).some(entry => entry.id === legacyId && entry.name !== undefined)
         const owner = args.owner === undefined ? undefined
-          : legacyId !== undefined && ctx.subagents.nameOf(caller, legacyId) === args.owner ? legacyId
-            : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
-        return namedTask(ctx, caller, await ctx.agentTeams.updateTask(caller, {
+          : historical ? legacyId : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+        const task = await ctx.agentTeams.updateTask(caller, {
           taskId: TeamTaskId(args.task_id),
           expectedRevision: args.expected_revision,
           action: args.action,
@@ -271,7 +293,8 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
           ...owner === undefined ? {} : { owner },
-        }))
+        })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
   } catch (error: unknown) {

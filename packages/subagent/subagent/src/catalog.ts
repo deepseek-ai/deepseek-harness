@@ -16,6 +16,7 @@ import type {
 } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition, SessionProjectionRegistry } from '@deepseek-ai/dsh-session-projection'
 import type { SubagentCatalogEntry } from './projection-types.ts'
+import { subagentNameSchema } from './descriptor.ts'
 import { SubagentError } from './error.ts'
 
 /** Catalog payload version emitted by local child creation. */
@@ -28,6 +29,8 @@ type KnownCatalogMode =
 /** Parent catalog v0 records local modes, v1 adds unknown children, and v2 records external executions. */
 export type SubagentCatalogEvent =
   & {
+    /** Immutable tree-wide name; absent in older catalogs. */
+    readonly name?: string
     readonly childId: SessionId
     readonly childCreatedAt: number
   } & (
@@ -55,6 +58,7 @@ export interface SubagentCatalogState {
 const sessionIdSchema = z.string() as unknown as z.ZodType<SessionId>
 const oneShotCatalogSchema = z.object({
   version: z.union([z.literal(0), z.literal(1)]),
+  name: subagentNameSchema.optional(),
   childId: sessionIdSchema,
   childCreatedAt: z.number().int().nonnegative(),
   mode: z.literal('one-shot'),
@@ -62,6 +66,7 @@ const oneShotCatalogSchema = z.object({
 }).strict()
 const continuableCatalogSchema = z.object({
   version: z.union([z.literal(0), z.literal(1)]),
+  name: subagentNameSchema.optional(),
   childId: sessionIdSchema,
   childCreatedAt: z.number().int().nonnegative(),
   mode: z.literal('continuable'),
@@ -127,7 +132,7 @@ export const subagentCatalogProjectionDefinition = {
     if (event.type !== 'subagent/catalog' || event.seq < state.inheritedEventCount) return state
     return { ...state, head: appendChunkedList(state.head, eventDataSchema.parse(event.data)) }
   },
-  stateVersion: 6,
+  stateVersion: 7,
   wire: { viewSchema, view: subagentCatalogEntries },
 } satisfies ProjectionDefinition<'subagentCatalog', SubagentCatalogState>
 
@@ -140,7 +145,7 @@ export const subagentCatalogProjectionDefinition = {
 export function establishCatalogChild(
   parent: Session,
   child: SessionHeader,
-  descriptor: { readonly mode: 'continuable'; readonly label: string },
+  descriptor: { readonly mode: 'continuable'; readonly label: string; readonly name?: string },
 ): void {
   parent.append('subagent/catalog', {
     version: SUBAGENT_CATALOG_VERSION,
@@ -148,6 +153,7 @@ export function establishCatalogChild(
     childCreatedAt: child.createdAt,
     mode: descriptor.mode,
     label: descriptor.label,
+    ...descriptor.name === undefined ? {} : { name: descriptor.name },
   })
 }
 
@@ -159,14 +165,16 @@ const EXTERNAL_SUBAGENT_CATALOG_VERSION = 2
  * @param parent - durable direct parent receiving the discovery fact.
  * @param childId - identity returned by the external provider.
  * @param label - display label assigned by the caller.
+ * @param name - immutable tree-wide name assigned at creation.
  */
-export function establishExternalCatalogChild(parent: Session, childId: SessionId, label: string): void {
+export function establishExternalCatalogChild(parent: Session, childId: SessionId, label: string, name: string): void {
   parent.append('subagent/catalog', {
     version: EXTERNAL_SUBAGENT_CATALOG_VERSION,
     childId,
     childCreatedAt: Date.now(),
     mode: 'external',
     label,
+    name,
   })
 }
 

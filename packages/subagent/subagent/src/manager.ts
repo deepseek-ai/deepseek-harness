@@ -392,7 +392,6 @@ export class SubagentManager {
     assertSubagentMaxDepth(request.maxDepth)
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
-    using reservation = this.names.reserve(parent, spec.name)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
     // Snapshot before any await: invalid descriptor JSON rejects the call
     // before a child exists, and the detached value is what reaches the log.
@@ -402,6 +401,7 @@ export class SubagentManager {
     const agentReasoningEffort = agentOptions.reasoningEffort
     const descriptor = snapshotSubagentDescriptor({
       mode: 'continuable',
+      name: spec.name,
       provider: spec.provider,
       label: spec.label,
       ...agentProvider !== undefined ? { agentProvider } : {},
@@ -417,6 +417,8 @@ export class SubagentManager {
     // but the service is also callable outside a turn.
     const releaseHold = this.holdOwnership(parent, childId)
     try {
+      using reservation = await this.names.reserve(parent, spec.name, spec.signal, childId)
+      this.assertAdmitting(parent)
       const cwd = await this.resolveDirectory(request, spec.signal)
       const prepared = await this.host.prepareContinuable(spec.provider, {
         sessionId: childId,
@@ -474,8 +476,7 @@ export class SubagentManager {
           { source: { kind: 'user' }, signal: spec.signal, delivery: 'queue' },
           parent,
           () => {
-            establishCatalogChild(parent.session, childHeader, descriptor)
-            reservation.commit(childId)
+            reservation.commit(childId, () => { establishCatalogChild(parent.session, childHeader, descriptor) })
           },
         )
       })
@@ -503,11 +504,12 @@ export class SubagentManager {
   async startExternal(spec: SubagentActivationSpec): Promise<SubagentActivation> {
     const parent = spec.request.parent
     this.assertAdmitting(parent)
-    using reservation = this.names.reserve(parent, spec.name)
     const pendingId = brandString<SessionId>(randomUUID())
     const releaseHold = this.holdOwnership(parent, pendingId)
     let activation: Activation | undefined
     try {
+      using reservation = await this.names.reserve(parent, spec.name, spec.signal)
+      this.assertAdmitting(parent)
       const cwd = await this.resolveDirectory(spec.request, spec.signal)
       activation = await this.materialize({
         kind: 'external',
@@ -524,10 +526,8 @@ export class SubagentManager {
       this.assertAdmitting(parent)
       this.assertLiveParent(parent, activation.childId)
       spec.signal.throwIfAborted()
-      if (spec.delivery === 'parent') {
-        establishExternalCatalogChild(parent.session, activation.childId, spec.label)
-      }
-      reservation.commit(activation.childId)
+      const childId = activation.childId
+      reservation.commit(childId, () => { establishExternalCatalogChild(parent.session, childId, spec.label, spec.name) })
       this.announce(activation)
       return this.receipt(activation)
     } catch (error: unknown) {
@@ -1391,7 +1391,7 @@ export class SubagentManager {
       }
       activation = await this.materialize({
         kind: 'local',
-        name: this.names.nameOf(parent, childId),
+        name: descriptor.name ?? `legacy:${childId}`,
         childId,
         provider: descriptor.provider,
         parent,

@@ -28,6 +28,7 @@ import type { SubagentRunEndInfo, SubagentRunInfo } from '../src/index.ts'
 import type { SubagentPromptRequestId } from '../src/control-types.ts'
 import * as activationResults from '../src/activation.ts'
 import { requireLocalActivation } from '../src/activation.ts'
+import { SubagentNames } from '../src/names.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import {
@@ -563,6 +564,10 @@ describe('SubagentRuntime.startActivation', () => {
       childId: reservedId,
     })).rejects.toMatchObject({ code: 'DUPLICATE_CHILD' })
     expect(ctx.agents.get(reservedId)).toBeUndefined()
+    const other = await ctx.agentLoop.create(SessionId('other-root'), { provider: 'mock', model: 'mock' })
+    await expect(ctx.subagents.startActivation({
+      delivery: 'parent', ...startSpec(other), childId: reservedId,
+    })).rejects.toMatchObject({ code: 'DUPLICATE_CHILD' })
   })
 
   it('rejects reserved child ids for an external backend before dispatch', async () => {
@@ -600,6 +605,7 @@ describe('SubagentRuntime.startActivation', () => {
     expect(descriptorIndex).toBeLessThan(turnStartIndex)
     const descriptor = loaded.events[descriptorIndex] as SessionEvent<'subagent/descriptor'>
     expect(descriptor.data).toEqual({
+      name: started.name,
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',
       provider: 'spawn',
@@ -796,6 +802,7 @@ describe('SubagentRuntime.startActivation', () => {
     const descriptor = child.session.snapshotEvents().find(event => event.type === 'subagent/descriptor')
 
     expect(descriptor?.data).toEqual({
+      name: started.name,
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',
       provider: 'spawn',
@@ -1038,12 +1045,37 @@ describe('direct-child Queue residency routing', () => {
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
 
+    const restored = new SubagentNames(ctx)
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    const reservations = await Promise.allSettled([
+      restored.reserve(parent, 'next', new AbortController().signal),
+      restored.reserve(parent, 'next', new AbortController().signal),
+    ])
+    try {
+      expect(reservations.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+      const rejected = reservations.filter(result => result.status === 'rejected')
+      expect(rejected).toHaveLength(1)
+      for (const result of rejected) expect(result.reason).toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
+      expect(await restored.resolve(parent, started.name)).toBe(started.childId)
+      const reads = observe.mock.calls.length
+      expect(reads).toBe(2)
+      expect(await restored.resolve(parent, started.name)).toBe(started.childId)
+      expect(observe).toHaveBeenCalledTimes(reads)
+    } finally {
+      for (const result of reservations) if (result.status === 'fulfilled') result.value[Symbol.dispose]()
+      observe.mockRestore()
+    }
+    const names: string[] = []
+    ctx.on('agent/created', ({ agent }) => {
+      if (agent.id === started.childId) names.push(ctx.subagents.nameOf(agent))
+    })
     const messageId = await queuePrompt(ctx, parent, started.childId, message('continue please'))
     expect(messageId).toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(userTexts(loaded.events)).toEqual(['child task', 'continue please'])
+    expect(names).toEqual([started.name])
     // One descriptor only: cold resume never re-seeds it.
     expect(loaded.events.filter(event => event.type === 'subagent/descriptor')).toHaveLength(1)
   })

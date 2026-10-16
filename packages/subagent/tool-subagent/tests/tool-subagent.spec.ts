@@ -785,7 +785,7 @@ describe('dsh-tool-subagent local activation', () => {
       signal,
       callId: ToolCallId(callId),
       name: 'subagent_gated',
-      arguments: { name: `child-${randomUUID()}`, description, prompt: 'work' },
+      arguments: { name: callId, description, prompt: 'work' },
       agent: parent,
     })
     const cancelledResult = execute('continuable-cancelled', 'cancelled sibling', cancelled.signal)
@@ -805,7 +805,7 @@ describe('dsh-tool-subagent local activation', () => {
 
     expect(succeeded.isError ? undefined : succeeded.value).toEqual({
       kind: 'activation',
-      name: ctx.subagents.nameOf(parent, survivingChildId),
+      name: 'continuable-surviving',
     })
     await vi.waitFor(() => {
       expect(ctx.agents.get(survivingChildId!)).toBeUndefined()

@@ -51,14 +51,14 @@ function project(
 ): ListAgentsEntry | undefined {
   const at = { parent: nameOf(entry.parentId), depth: entry.depth }
   if (entry.kind === 'diagnostic') {
-    return { kind: 'diagnostic', name: nameOf(entry.id), reason: entry.reason, ...at }
+    return { kind: 'diagnostic', name: entry.name ?? `legacy:${entry.id}`, reason: entry.reason, ...at }
   }
   // One-shot children cannot be continued by send_message, so the model
   // never selects them; discovery still traversed them for descendants.
   if (entry.mode !== 'continuable') return undefined
   return {
     kind: 'child',
-    name: nameOf(entry.id),
+    name: entry.name ?? `legacy:${entry.id}`,
     label: entry.label,
     status: statusOf(agents, entry.id),
     ...at,
@@ -78,13 +78,13 @@ async function family(ctx: Context, caller: Agent, signal: AbortSignal): Promise
     ? ctx.agents.get(header.parentSession)
     : undefined
   if (parent === undefined) return []
-  const rows: ListAgentsEntry[] = [{ kind: 'parent', name: ctx.subagents.nameOf(caller, parent.id), status: statusOf(ctx.agents, parent.id) }]
+  const rows: ListAgentsEntry[] = [{ kind: 'parent', name: ctx.subagents.nameOf(parent), status: statusOf(ctx.agents, parent.id) }]
   const children = await ctx.subagents.listChildren(parent.id, signal)
   const own = children.find(entry => entry.id === caller.id)
   if (own?.mode !== 'continuable') return []
   for (const entry of children) {
     if (entry.id === caller.id || entry.mode !== 'continuable') continue
-    rows.push({ kind: 'sibling', name: ctx.subagents.nameOf(caller, entry.id), label: entry.label, status: statusOf(ctx.agents, entry.id) })
+    rows.push({ kind: 'sibling', name: entry.name ?? `legacy:${entry.id}`, label: entry.label, status: statusOf(ctx.agents, entry.id) })
   }
   return rows
 }
@@ -168,10 +168,12 @@ export function apply(ctx: Context): void {
       }
       const adjacent = await family(ctx, parent, exec.signal)
       const entries = await ctx.subagents.listDescendants(parent.id, exec.signal)
+      const names = new Map(entries.map(entry => [entry.id, entry.name ?? `legacy:${entry.id}`]))
+      names.set(parent.id, ctx.subagents.nameOf(parent))
       return [
         ...adjacent,
         ...entries
-          .map(entry => project(ctx.agents, entry, id => ctx.subagents.nameOf(parent, id)))
+          .map(entry => project(ctx.agents, entry, id => names.get(id) as string))
           .filter(entry => entry !== undefined),
       ]
     },
