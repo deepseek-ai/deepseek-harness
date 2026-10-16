@@ -78,7 +78,7 @@ const signal = new AbortController().signal
 
 /** Start one caller-delivery child whose history carries `TASK:<marker>`. */
 async function start(ctx: Context, parent: Agent, marker: string, description = 'shared responsibility'): Promise<SessionId> {
-  const started = await ctx.subagents.startActivation({
+  const started = await ctx.subagents.startActivation({ name: marker,
     provider: 'spawn',
     label: description,
     request: { prompt: [{ type: 'text', text: `TASK:${marker}` }], parent },
@@ -128,7 +128,7 @@ describe('subagent sibling messages', () => {
 
     await ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'hello' }], { signal })
     const delivered = (await storedUserMessages(ctx, b)).find(event => event.data.source.kind === 'agent-message')!
-    expect(textOf(delivered)).toBe(`Agent ${a} sent a message: hello`)
+    expect(textOf(delivered)).toBe('Agent a sent a message: hello')
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     ctx.subagents.interrupt(a, { kind: 'ancestor', agent: parent })
     await settled(ctx, a)

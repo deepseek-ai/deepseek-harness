@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -98,7 +99,7 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
   const parent = ctx.agents.get(request.parent.id)
     ?? (await ctx.agents.create({ sessionId: request.parent.id })).agent
   const { label, signal, ...options } = request
-  return subagents.startActivation({
+  return subagents.startActivation({ name: `child-${randomUUID()}`,
     provider, label: label ?? provider, request: { ...options, parent }, signal, delivery,
   })
 }
@@ -205,7 +206,7 @@ describe('SubagentRuntime', () => {
 
   it('rejects continuable operations when their runtime services are absent', async () => {
     const { subagents } = await service(false)
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       delivery: 'parent',
       provider: 'unused',
       label: 'unused child',
@@ -224,7 +225,7 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service(false)
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: provider.name,
       label: 'Unavailable runtime',
       request: baseRequest(),
@@ -252,7 +253,7 @@ describe('SubagentRuntime', () => {
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
     const { agent: parent } = await ctx.agents.create({ sessionId: SessionId('reserved-parent') })
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: provider.name,
       label: 'Reserved team child',
       childId: SessionId('reserved-child'),
@@ -648,7 +649,7 @@ it('rejects a disposed parent before starting provider execution', async () => {
   subagents.registerProvider(provider)
   const handle = await ctx.agents.create({ sessionId: SessionId('disposed-parent') })
   await handle.dispose()
-  await expect(subagents.startActivation({
+  await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: provider.name, label: 'work', delivery: 'caller', signal: new AbortController().signal,
     request: { parent: handle.agent, prompt: [] },
   })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })

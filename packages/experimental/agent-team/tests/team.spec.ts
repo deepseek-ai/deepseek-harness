@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -79,7 +80,7 @@ function teamInternals(ctx: Context): TeamServiceInternals {
 
 /** Start one teammate: a continuable child of the Lead. */
 async function spawn(ctx: Context, lead: Agent, description: string | undefined, provider = 'spawn'): Promise<SessionId> {
-  const started = await ctx.subagents.startActivation({
+  const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider,
     label: `${description ?? 'shared'} responsibility`,
     request: { prompt: content(`${description ?? 'shared'} initial`), parent: lead },
@@ -130,7 +131,7 @@ describe('Team identity and membership', () => {
     const { ctx, lead } = await setup(['hang', 'hang', 'hang'])
     const named = await waitRunning(ctx, await spawn(ctx, lead, 'alpha'))
     const unnamed = await waitRunning(ctx, await spawn(ctx, lead, undefined))
-    const grandchildId = (await ctx.subagents.startActivation({
+    const grandchildId = (await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: 'spawn', label: 'nested', delivery: 'caller', signal: SIGNAL,
       request: { prompt: content('nested'), parent: named },
     })).childId

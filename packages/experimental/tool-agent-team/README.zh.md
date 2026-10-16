@@ -52,7 +52,7 @@ kind: "package-reference"
 - **等待 teammate**——`wait_agent` 等待调用开始后的下一次任务、成员状态或 inbox 变化。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-任务 `owner` 参数和 `ownerId` 结果使用 Session id。描述用于展示，可以重复。任何成员均可使用任务板；只有 Lead 能重新分配任务。更新校验所有权和修订，拒绝过期编辑。
+任务 `owner` 参数与 `ownerName` 结果使用 agent 名字；根名为 `lead`。描述可以重复。任何成员均可使用任务板；只有 Lead 能重新分配任务。更新校验所有权和修订，拒绝过期编辑。
 
 ### 成功与失败的表现
 
@@ -104,7 +104,7 @@ member scope 上的一个 `team:policy` 段落和一个必需的 `team:identity`
 
 - [agent-team 包](../agent-team/README.zh.md)——这些工具背后的 `ctx.agentTeams` 领域服务。
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与服务 API。
-- [子代理控制工具](../../subagent/tool-subagent-control/README.zh.md)——按 Session id 发消息、列举和中断。
+- [子代理控制工具](../../subagent/tool-subagent-control/README.zh.md)——按 agent 名字 发消息、列举和中断。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)——模型接收的每个工具 schema。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——模型侧、scoping 与工具族决策。
 
@@ -122,13 +122,13 @@ member scope 上的一个 `team:policy` 段落和一个必需的 `team:identity`
 ##### Team 策略
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use agent ids with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent ids as task owners. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant message or assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant message or assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
 ```
 
 #### Token 影响
@@ -143,7 +143,7 @@ Use agent ids as task owners. The Lead can reassign to itself, its direct contin
 
 #### 模型看到什么
 
-必需的 `team:identity` 运行时上下文对根显示 `You are the Team Lead. Your agent id is "<lead id>".`，对子代理显示 `You are a teammate in the Team led by agent "<lead id>".`。它跟随当前成员身份，不受可选上下文关闭影响，并在压缩后恢复。队友的普通分叉是新的根，接收 Lead 声明。
+必需的 `team:identity` runtime context 对根声明 `You are the Team Lead. Your name is lead.`，对子代理声明 `Your name is "<name>". You are a teammate in the Team led by "lead".`。它跟随当前成员关系，不受可选上下文抑制影响，压缩后会恢复。队友的普通分叉是新的根，收到 Lead 声明。
 
 #### Token 影响
 

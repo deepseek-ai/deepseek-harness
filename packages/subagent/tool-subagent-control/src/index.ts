@@ -10,10 +10,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { brandString } from '@deepseek-ai/dsh-brand'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { markAdjacentAgentSendMessageTool } from '@deepseek-ai/dsh-subagent/internal'
 
@@ -31,10 +29,10 @@ export function apply(ctx: Context): void {
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
       + 'Returns delivery confirmation, not the agent\'s answer.',
     parameters: {
-      agent_id: {
+      name: {
         type: 'string',
         required: true,
-        description: 'The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.',
+        description: 'The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.',
       },
       message: {
         type: 'string',
@@ -52,7 +50,7 @@ export function apply(ctx: Context): void {
       },
       render: (args, _value) => [{
         type: 'text',
-        text: `message delivered to agent ${args.agent_id}`,
+        text: `message delivered to agent ${args.name}`,
       }],
     },
     async execute(args, exec) {
@@ -63,7 +61,7 @@ export function apply(ctx: Context): void {
       const message: ContentBlock[] = [{ type: 'text', text: args.message }]
       const messageId = await ctx.subagents.sendMessage(
         sender,
-        brandString<SessionId>(args.agent_id),
+        await ctx.subagents.resolveName(sender, args.name, exec.signal),
         message,
         { signal: exec.signal },
       )
@@ -78,10 +76,10 @@ export function apply(ctx: Context): void {
       + 'You can continue a local direct child\'s conversation later with send_message. '
       + 'External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.',
     parameters: {
-      agent_id: {
+      name: {
         type: 'string',
         required: true,
-        description: 'The id of an agent created under you: your direct child or a deeper descendant.',
+        description: 'The name of an agent created under you: your direct child or a deeper descendant.',
       },
     },
     output: {
@@ -94,10 +92,10 @@ export function apply(ctx: Context): void {
       },
       render: (args, _value) => [{
         type: 'text',
-        text: `interrupt requested for agent ${args.agent_id}`,
+        text: `interrupt requested for agent ${args.name}`,
       }],
     },
-    execute(args, exec) {
+    async execute(args, exec) {
       const caller = exec.agent
       if (!caller) {
         // Ancestor authority requires an exact live calling agent.
@@ -105,8 +103,8 @@ export function apply(ctx: Context): void {
       }
       // The service authorizes the exact live caller against the target's
       // recorded lineage; the tool adds no authority of its own.
-      ctx.subagents.interrupt(brandString<SessionId>(args.agent_id), { kind: 'ancestor', agent: caller })
-      return Promise.resolve({ accepted: true })
+      ctx.subagents.interrupt(await ctx.subagents.resolveName(caller, args.name, exec.signal), { kind: 'ancestor', agent: caller })
+      return { accepted: true }
     },
   }))
 }

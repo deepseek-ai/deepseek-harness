@@ -32,7 +32,7 @@ class MockDelegatingAdapter extends LlmAdapter {
       const selectedRoute = process.env.DSH_TEST_CHILD_DEFAULT_ROUTE === '1'
         ? { reasoning_effort: 'max' }
         : { provider: 'mock', model: 'mock-routed', reasoning_effort: 'max' }
-      const args = JSON.stringify({
+      const args = JSON.stringify({ name: 'loader-child',
         description: 'route probe',
         prompt: 'report your route and workspace',
         ...selectedRoute,

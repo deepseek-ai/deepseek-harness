@@ -181,13 +181,13 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "agent_id": {
+          "name": {
             "type": "string",
-            "description": "The id of an agent created under you: your direct child or a deeper descendant."
+            "description": "The name of an agent created under you: your direct child or a deeper descendant."
           }
         },
         "required": [
-          "agent_id"
+          "name"
         ]
       }
     },
@@ -245,7 +245,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry ids, descriptions, and status; descendant rows also carry parent ids and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry names, descriptions, and status; descendant rows also carry parent names and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -358,9 +358,9 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "agent_id": {
+          "name": {
             "type": "string",
-            "description": "The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
+            "description": "The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
           },
           "message": {
             "type": "string",
@@ -368,7 +368,7 @@
           }
         },
         "required": [
-          "agent_id",
+          "name",
           "message"
         ]
       }
@@ -391,10 +391,14 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish."
+          },
           "cwd": {
             "type": "string",
             "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -409,6 +413,7 @@
           }
         },
         "required": [
+          "name",
           "description",
           "prompt"
         ]
@@ -416,10 +421,14 @@
     },
     {
       "name": "subagent_fork",
-      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish."
+          },
           "cwd": {
             "type": "string",
             "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -434,6 +443,7 @@
           }
         },
         "required": [
+          "name",
           "description",
           "prompt"
         ]
@@ -866,13 +876,13 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "agent_id": {
+            "name": {
               "type": "string",
-              "description": "The id of an agent created under you: your direct child or a deeper descendant."
+              "description": "The name of an agent created under you: your direct child or a deeper descendant."
             }
           },
           "required": [
-            "agent_id"
+            "name"
           ]
         }
       },
@@ -930,7 +940,7 @@
       },
       {
         "name": "list_agents",
-        "description": "List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry ids, descriptions, and status; descendant rows also carry parent ids and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry names, descriptions, and status; descendant rows also carry parent names and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -1113,9 +1123,9 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "agent_id": {
+            "name": {
               "type": "string",
-              "description": "The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
+              "description": "The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
             },
             "message": {
               "type": "string",
@@ -1123,7 +1133,7 @@
             }
           },
           "required": [
-            "agent_id",
+            "name",
             "message"
           ]
         }
@@ -1146,10 +1156,14 @@
       },
       {
         "name": "subagent",
-        "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+        "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
         "parameters": {
           "type": "object",
           "properties": {
+            "name": {
+              "type": "string",
+              "description": "Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish."
+            },
             "cwd": {
               "type": "string",
               "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -1164,6 +1178,7 @@
             }
           },
           "required": [
+            "name",
             "description",
             "prompt"
           ]
@@ -1171,10 +1186,14 @@
       },
       {
         "name": "subagent_fork",
-        "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+        "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
         "parameters": {
           "type": "object",
           "properties": {
+            "name": {
+              "type": "string",
+              "description": "Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish."
+            },
             "cwd": {
               "type": "string",
               "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -1189,6 +1208,7 @@
             }
           },
           "required": [
+            "name",
             "description",
             "prompt"
           ]

@@ -53,19 +53,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Teammates
 
-Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions are display text and may repeat.
+Ask the Lead to start a subagent with a unique `name` and a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned name addresses the teammate; descriptions may repeat.
 
 Every root agent leads its own Team, and every live subagent below it, at any depth, receives Team tools. The roster lists the Lead, its direct continuable children, and historical `team/member` records. Deeper descendants work on the same board under their Session ids but have no roster row.
 
 ### Messages between teammates
 
-Members use standard `send_message` with Session ids: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
+Members use standard `send_message` with agent names: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
 
 ### Shared task board
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by Session id to itself, a direct continuable child, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
+A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by agent name to itself, a direct continuable child, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
@@ -173,7 +173,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model sees Team state through task-tool results; coordination events never enter the conversation. Task views identify their owner through `ownerId`. Failures surface as tool errors with the `TeamError` message, including the current revision for stale updates.
+The model sees Team state through task-tool results; coordination events never enter the conversation. Model-facing task views identify their owner through `ownerName`; host views retain `ownerId`. Failures surface as tool errors with the `TeamError` message, including the current revision for stale updates.
 
 #### Token effect
 

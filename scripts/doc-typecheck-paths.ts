@@ -22,3 +22,14 @@ export function builtDeclarationPath(candidate: string): string {
   }
   throw new Error(`doc-typecheck: cannot map workspace source path to built declarations: ${candidate}`)
 }
+
+/**
+ * Exclude frozen release guides from checks against the current API.
+ * @param path - repository-relative Markdown path, with either separator.
+ * @param currentVersion - root package version whose upgrade guides remain editable.
+ * @returns whether current workspace declarations apply to this document.
+ */
+export function usesCurrentDocumentApi(path: string, currentVersion: string): boolean {
+  const guide = /^docs\/upgrade-guide\/v([^/]+)\//.exec(path.replaceAll('\\', '/'))
+  return guide === null || guide[1] === currentVersion
+}

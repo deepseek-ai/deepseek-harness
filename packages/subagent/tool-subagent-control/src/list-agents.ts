@@ -19,22 +19,22 @@ export const inject = ['tools', 'subagents', 'agents']
 type ListAgentsEntry =
   | {
     readonly kind: 'parent'
-    readonly id: SessionId
+    readonly name: string
     readonly status: 'running' | 'inactive'
   }
   | {
     readonly kind: 'child' | 'sibling'
-    readonly id: SessionId
+    readonly name: string
     readonly label: string
     readonly status: 'running' | 'inactive'
-    readonly parent?: SessionId
+    readonly parent?: string
     readonly depth?: number
   }
   | {
     readonly kind: 'diagnostic'
-    readonly id: SessionId
+    readonly name: string
     readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
-    readonly parent?: SessionId
+    readonly parent?: string
     readonly depth?: number
   }
 
@@ -47,17 +47,18 @@ function statusOf(agents: { get(id: SessionId): Agent | undefined }, id: Session
 function project(
   agents: { get(id: SessionId): Agent | undefined },
   entry: SubagentDescendantListEntry,
+  nameOf: (id: SessionId) => string,
 ): ListAgentsEntry | undefined {
-  const at = { parent: entry.parentId, depth: entry.depth }
+  const at = { parent: nameOf(entry.parentId), depth: entry.depth }
   if (entry.kind === 'diagnostic') {
-    return { kind: 'diagnostic', id: entry.id, reason: entry.reason, ...at }
+    return { kind: 'diagnostic', name: nameOf(entry.id), reason: entry.reason, ...at }
   }
   // One-shot children cannot be continued by send_message, so the model
   // never selects them; discovery still traversed them for descendants.
   if (entry.mode !== 'continuable') return undefined
   return {
     kind: 'child',
-    id: entry.id,
+    name: nameOf(entry.id),
     label: entry.label,
     status: statusOf(agents, entry.id),
     ...at,
@@ -77,13 +78,13 @@ async function family(ctx: Context, caller: Agent, signal: AbortSignal): Promise
     ? ctx.agents.get(header.parentSession)
     : undefined
   if (parent === undefined) return []
-  const rows: ListAgentsEntry[] = [{ kind: 'parent', id: parent.id, status: statusOf(ctx.agents, parent.id) }]
+  const rows: ListAgentsEntry[] = [{ kind: 'parent', name: ctx.subagents.nameOf(caller, parent.id), status: statusOf(ctx.agents, parent.id) }]
   const children = await ctx.subagents.listChildren(parent.id, signal)
   const own = children.find(entry => entry.id === caller.id)
   if (own?.mode !== 'continuable') return []
   for (const entry of children) {
     if (entry.id === caller.id || entry.mode !== 'continuable') continue
-    rows.push({ kind: 'sibling', id: entry.id, label: entry.label, status: statusOf(ctx.agents, entry.id) })
+    rows.push({ kind: 'sibling', name: ctx.subagents.nameOf(caller, entry.id), label: entry.label, status: statusOf(ctx.agents, entry.id) })
   }
   return rows
 }
@@ -97,7 +98,7 @@ export function apply(ctx: Context): void {
     name: 'list_agents',
     description:
       'List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. '
-      + 'Rows carry ids, descriptions, and status; descendant rows also carry parent ids and depth. '
+      + 'Rows carry names, descriptions, and status; descendant rows also carry parent names and depth. '
       + 'You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. '
       + 'running means it is working; inactive means it is not currently working. '
       + 'You will be notified when a direct child finishes; there is no need to keep checking its status. '
@@ -113,7 +114,7 @@ export function apply(ctx: Context): void {
               additionalProperties: false,
               properties: {
                 kind: { type: 'string', required: true, enum: ['parent'] },
-                id: { type: 'string', required: true },
+                name: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
               },
             },
@@ -122,7 +123,7 @@ export function apply(ctx: Context): void {
               additionalProperties: false,
               properties: {
                 kind: { type: 'string', required: true, enum: ['child', 'sibling'] },
-                id: { type: 'string', required: true },
+                name: { type: 'string', required: true },
                 label: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
                 parent: { type: 'string' },
@@ -134,7 +135,7 @@ export function apply(ctx: Context): void {
               additionalProperties: false,
               properties: {
                 kind: { type: 'string', required: true, enum: ['diagnostic'] },
-                id: { type: 'string', required: true },
+                name: { type: 'string', required: true },
                 reason: { type: 'string', required: true, enum: ['corrupt', 'unsupported', 'unavailable'] },
                 parent: { type: 'string' },
                 depth: { type: 'number' },
@@ -149,12 +150,12 @@ export function apply(ctx: Context): void {
           text: entries.length === 0
             ? '(no subagents)'
             : entries.map((entry) => {
-              if (entry.kind === 'parent') return `${entry.id} [${entry.status}] — your parent`
-              if (entry.kind === 'sibling') return `${entry.id} [${entry.status}] — sibling: ${entry.label}`
+              if (entry.kind === 'parent') return `${entry.name} [${entry.status}] — your parent`
+              if (entry.kind === 'sibling') return `${entry.name} [${entry.status}] — sibling: ${entry.label}`
               const at = ` parent=${String(entry.parent)} depth=${String(entry.depth)}`
               return entry.kind === 'diagnostic'
-                ? `${entry.id} [diagnostic: ${entry.reason}]${at}`
-                : `${entry.id} [${entry.status}]${at} — ${entry.label}`
+                ? `${entry.name} [diagnostic: ${entry.reason}]${at}`
+                : `${entry.name} [${entry.status}]${at} — ${entry.label}`
             }).join('\n'),
         }]
       },
@@ -170,7 +171,7 @@ export function apply(ctx: Context): void {
       return [
         ...adjacent,
         ...entries
-          .map(entry => project(ctx.agents, entry))
+          .map(entry => project(ctx.agents, entry, id => ctx.subagents.nameOf(parent, id)))
           .filter(entry => entry !== undefined),
       ]
     },

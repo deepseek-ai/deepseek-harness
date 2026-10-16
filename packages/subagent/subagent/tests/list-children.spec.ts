@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -71,7 +72,7 @@ async function startChild(
   parent: Agent,
   label: string,
 ): Promise<SessionId> {
-  const started = await ctx.subagents.startActivation({ delivery: 'parent',
+  const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`, delivery: 'parent',
     provider: 'spawn',
     label,
     request: { prompt: [{ type: 'text', text: `task: ${label}` }], parent },

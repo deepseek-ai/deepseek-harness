@@ -56,15 +56,17 @@ function agentMessageSource(sender: Agent): AgentMessageSource {
  * Build the model-visible and durable representation of one adjacent-Agent message.
  * @param sender - exact live Agent that authored the message.
  * @param content - model-visible message blocks supplied by the sender.
+ * @param senderName - immutable tree-wide name shown to the recipient.
  * @returns the durable user-message representation delivered to the recipient.
  */
 export function createAgentMessage(
   sender: Agent,
   content: ContentBlock[],
+  senderName: string,
 ): ReturnType<typeof createUserMessage> {
   return createUserMessage({
     content: [
-      { type: 'text' as const, text: `Agent ${sender.id} sent a message: ` },
+      { type: 'text' as const, text: `Agent ${senderName} sent a message: ` },
       ...content,
     ],
     source: agentMessageSource(sender),
@@ -73,21 +75,23 @@ export function createAgentMessage(
 
 /**
  * Append adjacent-Agent return guidance to a continuable child's initial task.
- * @param parentId - durable parent session id named in the guidance.
+ * @param parentName - name of the direct parent.
+ * @param childName - name assigned to this child.
  * @param prompt - initial model-visible task blocks.
  * @returns task blocks followed by the continuable return guidance.
  */
 export function withContinuableReturnGuidance(
-  parentId: SessionId,
+  parentName: string,
+  childName: string,
   prompt: ContentBlock[],
 ): ContentBlock[] {
-  const encodedParentId = JSON.stringify(parentId)
+  const encodedParentName = JSON.stringify(parentName)
   return [
     ...prompt,
     {
       type: 'text',
-      text: `Your parent agent id is ${encodedParentId}. Before you finish, send your result to that agent with `
-        + `send_message({ agent_id: ${encodedParentId}, message: "<self-contained result>" }). The parent shares `
+      text: `Your name is ${JSON.stringify(childName)}. Your parent agent name is ${encodedParentName}. Before you finish, send your result to that agent with `
+        + `send_message({ name: ${encodedParentName}, message: "<self-contained result>" }). The parent shares `
         + 'your workspace but does not automatically receive your transcript, tool output, or reasoning. Send '
         + 'earlier messages as well when a finding changes what the parent should do next; sending a message '
         + 'does not end your turn.',
@@ -98,13 +102,13 @@ export function withContinuableReturnGuidance(
 /**
  * One line telling a parent that a background child is finished and why, in
  * the parent's own task vocabulary.
- * @param childId - the durable child the parent knows by id.
+ * @param childName - the immutable name the parent uses for the child.
  * @param stopReason - how the child's last ordinary turn ended.
  * @param continuable - whether the child accepts a later message.
  * @returns the model-facing opening line of the settlement notice.
  */
-function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
-  const subject = `Background subagent ${childId}`
+function settlementSummary(childName: string, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
+  const subject = `Background subagent ${childName}`
   switch (stopReason) {
     case 'completed':
       return continuable
@@ -130,17 +134,19 @@ function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopR
 
 /**
  * Build the runtime-owned settlement notice from the child's nonempty closing text.
- * @param childId - durable child session id named in the notice.
+ * @param childId - durable child identity retained in message attribution.
+ * @param childName - immutable name shown in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
  * @param continuable - whether the child can accept another task.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
   childId: SessionId,
+  childName: string,
   terminal: SubagentResult,
   continuable = true,
 ): ReturnType<typeof createUserMessage> {
-  const summary = settlementSummary(childId, terminal.stopReason, continuable)
+  const summary = settlementSummary(childName, terminal.stopReason, continuable)
   // Parent providers receive this notice as a user message and may reject
   // nontext assistant blocks. Keep this conversion local so SDK/UI consumers
   // retain the complete child output.

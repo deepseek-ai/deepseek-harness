@@ -45,15 +45,15 @@ This package takes no configuration: the root plugin provides `send_message` and
 
 ### send_message
 
-Sends a message to the Session id in `agent_id`. Any exact live Agent may target its direct continuable child; a resident continuable child may also target its direct parent or continuable siblings. Sibling delivery uses the shared live parent’s authority and preserves the actual sender. A working target receives the message at its nearest step boundary through Steer; an inactive child or sibling starts or resumes a turn. Success returns inbox acceptance (`messageId`), never a reply. An unsupported target, unavailable parent, unknown child, missing descriptor, or rejected admission returns an error.
+Sends a message to the agent `name`. Any exact live Agent may target its direct continuable child; a resident continuable child may also target its direct parent or continuable siblings. Sibling delivery uses the shared live parent’s authority and preserves the actual sender. A working target receives the message at its nearest step boundary through Steer; an inactive child or sibling starts or resumes a turn. Success returns inbox acceptance (`messageId`), never a reply. An unsupported target, unavailable parent, unknown name, missing descriptor, or rejected admission returns an error.
 
 ### interrupt_agent
 
-`agent_id` identifies a descendant by Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+`name` identifies a descendant. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 ### list_agents
 
-Lists all reachable continuable descendants in stable pre-order, with each row’s direct parent id and depth. A continuable subagent with a live parent first sees that parent and its continuable siblings. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children are traversal nodes but not output rows. Unknown modes and unreadable child catalogs produce diagnostics. Ordinary Session forks are not catalog entries.
+Lists all reachable continuable descendants in stable pre-order, with each row’s direct parent name and depth. A continuable subagent with a live parent first sees that parent and its continuable siblings. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children are traversal nodes but not output rows. Unknown modes and unreadable child catalogs produce diagnostics. Ordinary Session forks are not catalog entries.
 
 -----
 
@@ -67,11 +67,11 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Thin adapters over `ctx.subagents.sendMessage()`, `interrupt()`, and the list projections; residency, cold resume, and authorization belong to the service. Tools pass the exact live calling Agent (`exec.agent`) as sender and authority, and convert `agent_id` to the branded Session id.
+Thin adapters resolve names through `ctx.subagents.resolveName()` before calling `sendMessage()` or `interrupt()`. Residency, cold resume, and authorization belong to the service. Tools pass the exact live calling Agent (`exec.agent`) as sender and authority.
 
 ### Delivery and signal ownership
 
-The tool forwards its execution signal, which owns admission only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`, including sibling delivery under the parent’s authority. Attribution never grants authority.
+The tool forwards its execution signal, which owns admission only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`, including sibling delivery under the parent’s authority. Attribution never grants authority.
 
 ### Listing projection
 
@@ -106,7 +106,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes an `agent_id` and `message`; `interrupt_agent` takes an `agent_id`; `list_agents` takes no arguments. All addresses are Session ids; descriptions are display text and may repeat.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `name` and `message`; `interrupt_agent` takes `name`; `list_agents` takes no arguments. The root is `lead`; descriptions may repeat. Older unnamed agents have stable `legacy:<session-id>` addresses.
 
 #### Token effect
 
@@ -120,7 +120,7 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-`interrupt requested for agent <agent_id>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; an absent or settled target still renders the acceptance line.
+`interrupt requested for agent <name>` on acceptance. An unknown name or unauthorized caller — self, sibling, stale, or non-ancestor — returns an error; a known settled target still renders the acceptance line.
 
 #### Token effect
 
@@ -134,11 +134,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <agent_id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s supported parent, child, and sibling routes, or rejected admission, produces an errored result.
+`message delivered to agent <name>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s supported parent, child, and sibling routes, or rejected admission, produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; the target’s response never returns through this call. Children use parent and sibling ids from `list_agents` for follow-up messages.
+One short acknowledgement per call; the target’s response never returns through this call. Children use parent and sibling names from `list_agents` for follow-up messages.
 
 #### KV Cache effect
 

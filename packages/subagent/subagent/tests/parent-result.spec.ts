@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** Parent result delivery independent of a local child's messaging tool. */
 
@@ -24,7 +25,7 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   const adapter = new MockAdapter([textResponse('CHILD_RESULT_42'), textResponse('Parent received the answer.')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
-  const activation = await ctx.subagents.startActivation({
+  const activation = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
     request: {
       parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
@@ -58,7 +59,7 @@ it('delivers structured output to the parent when the child has send_message', a
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
-  const activation = await ctx.subagents.startActivation({
+  const activation = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
     request: {
       parent, prompt: [{ type: 'text', text: 'Find the answer.' }],

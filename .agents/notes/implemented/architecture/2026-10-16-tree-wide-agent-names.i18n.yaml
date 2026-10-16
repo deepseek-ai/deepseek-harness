@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-16-tree-wide-agent-names.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-16-tree-wide-agent-names.md
+/agent-note-tree-wide-agent-names:
+  en: e976b1e450bda2b9
+  zh: e7a35fec64a52cb7
+/agent-note-tree-wide-agent-names/problem:
+  en: 45ad48d0442bbd54
+  zh: 46837f64f46568b8
+/agent-note-tree-wide-agent-names/decision:
+  en: 53822735b4ce3e4e
+  zh: 316cb613b22a3e80
+/agent-note-tree-wide-agent-names/alternatives-considered:
+  en: 93964747050c9265
+  zh: 2acb9708d145894b
+/agent-note-tree-wide-agent-names/consequences:
+  en: 7810ae426c76bfcd
+  zh: 4b954c0f0672c534
+/agent-note-tree-wide-agent-names/testing:
+  en: 4210801f0de47c2c
+  zh: fe4d154a15796478

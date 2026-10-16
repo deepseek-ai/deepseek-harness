@@ -75,6 +75,7 @@ import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
+import { subagentNamesProjectionDefinition } from './names.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
@@ -227,6 +228,7 @@ export class SubagentRuntime extends TypertRemoteService {
     })
     ctx.inject(['sessionProjections'], (projectionCtx) => {
       projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition)
+      projectionCtx.sessionProjections.register(subagentNamesProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
     })
@@ -282,6 +284,28 @@ export class SubagentRuntime extends TypertRemoteService {
     return provider.prepareContinuable === undefined
       ? manager.startExternal(spec)
       : manager.startLocal(spec)
+  }
+
+  /**
+   * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
+   * @param caller - exact live Agent selecting the tree.
+   * @param id - target identity; omission selects the caller.
+   * @returns lead, the immutable assigned name, or a legacy address.
+   */
+  nameOf(caller: Agent, id: SessionId = caller.id): string {
+    return this.requireManager().names.nameOf(caller, id)
+  }
+
+  /**
+   * Resolve a tree-wide name without granting authority to act on its Agent.
+   * @param caller - exact live Agent selecting the tree.
+   * @param name - a name returned by creation or discovery.
+   * @param signal - cancellation during historical discovery.
+   * @returns the durable Session identity for the consuming operation to authorize.
+   * @throws when the name is absent or the caller's live tree is unavailable.
+   */
+  resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
+    return this.requireManager().names.resolve(caller, name, signal)
   }
 
   /**

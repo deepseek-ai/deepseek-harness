@@ -33,6 +33,7 @@ import type { SubagentDescriptorData } from './descriptor.ts'
 import { establishCatalogChild, establishExternalCatalogChild, liveCatalogEntries } from './catalog.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 import { SubagentError } from './error.ts'
+import { SubagentNames } from './names.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { ActivationObserver } from './lifecycle.ts'
 import type {
@@ -70,6 +71,7 @@ interface SubagentHost {
 
 /** Inputs shared by fresh and resumed Activation materialization. */
 interface MaterializeBase {
+  name: string
   childId: SessionId
   provider: string
   parent: Agent
@@ -131,6 +133,8 @@ function failureMessage(error: unknown): string {
 
 /** Own subagent requests and the resources of every live activation. */
 export class SubagentManager {
+  /** Tree-wide durable names and pending creation reservations. */
+  readonly names: SubagentNames
   /** Child session id → its live Activation. Process-local, never durable. */
   private readonly resident = new Map<SessionId, Activation>()
   /** Root identities retain their pool across child settlement without retaining dead roots. */
@@ -167,6 +171,7 @@ export class SubagentManager {
     // the drain before releasing the scope; a cleanup effect on the same scope
     // as the Agent handles would let structural handle disposal bypass
     // child-first ordering.
+    this.names = new SubagentNames(ctx)
     const scope = ctx.plugin(function activationOwner() {})
     this.ownerCtx = scope.ctx
     ctx.on('agent/disposed', ({ agent }) => {
@@ -387,6 +392,7 @@ export class SubagentManager {
     assertSubagentMaxDepth(request.maxDepth)
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
+    using reservation = this.names.reserve(parent, spec.name)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
     // Snapshot before any await: invalid descriptor JSON rejects the call
     // before a child exists, and the detached value is what reaches the log.
@@ -439,6 +445,7 @@ export class SubagentManager {
         }
         const activation = await this.materialize({
           kind: 'local',
+          name: spec.name,
           childId,
           provider: spec.provider,
           parent,
@@ -462,12 +469,13 @@ export class SubagentManager {
         return await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller' && isAdjacentAgentSendMessageTool(this.ctx.get('tools')?.get('send_message', child))
-            ? withContinuableReturnGuidance(parent.id, request.prompt)
+            ? withContinuableReturnGuidance(this.names.nameOf(parent), spec.name, request.prompt)
             : request.prompt,
           { source: { kind: 'user' }, signal: spec.signal, delivery: 'queue' },
           parent,
           () => {
             establishCatalogChild(parent.session, childHeader, descriptor)
+            reservation.commit(childId)
           },
         )
       })
@@ -495,6 +503,7 @@ export class SubagentManager {
   async startExternal(spec: SubagentActivationSpec): Promise<SubagentActivation> {
     const parent = spec.request.parent
     this.assertAdmitting(parent)
+    using reservation = this.names.reserve(parent, spec.name)
     const pendingId = brandString<SessionId>(randomUUID())
     const releaseHold = this.holdOwnership(parent, pendingId)
     let activation: Activation | undefined
@@ -502,6 +511,7 @@ export class SubagentManager {
       const cwd = await this.resolveDirectory(spec.request, spec.signal)
       activation = await this.materialize({
         kind: 'external',
+        name: spec.name,
         childId: pendingId,
         provider: spec.provider,
         parent,
@@ -517,6 +527,7 @@ export class SubagentManager {
       if (spec.delivery === 'parent') {
         establishExternalCatalogChild(parent.session, activation.childId, spec.label)
       }
+      reservation.commit(activation.childId)
       this.announce(activation)
       return this.receipt(activation)
     } catch (error: unknown) {
@@ -576,7 +587,7 @@ export class SubagentManager {
     }
     if (resident !== undefined && targetId !== sender.id
       && this.catalogOf(resident.parent.session).some(child => child.id === targetId && child.mode === 'continuable')) {
-      const message = createAgentMessage(sender, content)
+      const message = createAgentMessage(sender, content, this.names.nameOf(sender))
       return this.deliverToChild(resident.parent, targetId, [...message.content], {
         signal: options.signal,
         delivery: 'steer',
@@ -942,6 +953,7 @@ export class SubagentManager {
     const observer = this.host.observeActivation(provider, childId, parent)
 
     const activation: Activation = {
+      name: inputs.name,
       pool,
       releaseSlot,
       childId,
@@ -1206,7 +1218,7 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(activation.parent.id)
       if (parent !== activation.parent) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activationAgent(activation) !== undefined,
+        activation.childId, activation.name, terminal, activationAgent(activation) !== undefined,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1237,6 +1249,7 @@ export class SubagentManager {
   private receipt(activation: Activation): SubagentActivation {
     return {
       childId: activation.childId,
+      name: activation.name,
       result: activation.result.promise,
       dispose: () => this.dispose(activation),
     }
@@ -1317,7 +1330,7 @@ export class SubagentManager {
         'PARENT_UNAVAILABLE',
       )
     }
-    const message = createAgentMessage(sender, content)
+    const message = createAgentMessage(sender, content, this.names.nameOf(sender))
     this.sendAgentMessage(parent, message)
     return message.id
   }
@@ -1378,6 +1391,7 @@ export class SubagentManager {
       }
       activation = await this.materialize({
         kind: 'local',
+        name: this.names.nameOf(parent, childId),
         childId,
         provider: descriptor.provider,
         parent,
@@ -1442,7 +1456,7 @@ export class SubagentManager {
     parent: Agent,
   ): MessageId {
     const message = options.source === undefined
-      ? createAgentMessage(parent, content)
+      ? createAgentMessage(parent, content, this.names.nameOf(parent))
       : createUserMessage({ content, source: options.source })
     options.signal.throwIfAborted()
     this.assertAdmitting(parent)
