@@ -203,7 +203,7 @@ export function liveCatalogEntries(
 }
 
 /**
- * Read committed tree names from the root catalog, including its named direct children.
+ * Read root catalog assignments, including legacy addresses for unnamed direct children.
  * @param state - root Session's own catalog state.
  * @param rootId - root identity reserved for lead.
  * @returns immutable name-to-child assignments; incomplete descendant rows live only in their parent.
@@ -213,11 +213,12 @@ export function catalogNames(state: SubagentCatalogState, rootId: SessionId): Re
   const names = new Map<string, SessionId>()
   const ids = new Set<SessionId>([rootId])
   for (const entry of iterateChunkedList(state.head)) {
-    if (entry.name === undefined || names.get(entry.name) === entry.childId) continue
-    if (names.has(entry.name) || ids.has(entry.childId)) {
+    const name = entry.name ?? `legacy:${entry.childId}`
+    if (names.get(name) === entry.childId) continue
+    if (names.has(name) || ids.has(entry.childId)) {
       throw new SubagentError('duplicate cataloged agent name or identity; restore the root catalog', 'CORRUPT_AGENT_NAMES')
     }
-    names.set(entry.name, entry.childId)
+    names.set(name, entry.childId)
     ids.add(entry.childId)
   }
   return names

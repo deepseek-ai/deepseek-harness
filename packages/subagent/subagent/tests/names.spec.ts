@@ -143,6 +143,24 @@ describe('tree-wide agent names', () => {
     expect(names.nameOf(agent)).toBe('legacy:old-child')
   })
 
+  it('keeps unnamed direct-child ids occupied without reading their logs', async () => {
+    const { ctx, parent, names } = await setup()
+    parent.session.append('subagent/catalog', { version: 0, childId: SessionId('legacy-child'), childCreatedAt: 0, mode: 'continuable', label: 'Old child' })
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    try {
+      expect(() => names.reserve(parent, 'writer', signal, SessionId('legacy-child')))
+        .toThrow(expect.objectContaining({ code: 'DUPLICATE_CHILD' }))
+      using reservation = names.reserve(parent, 'external', signal)
+      const publish = vi.fn()
+      expect(() => { reservation.commit(SessionId('legacy-child'), publish) })
+        .toThrow(expect.objectContaining({ code: 'DUPLICATE_CHILD' }))
+      expect(publish).not.toHaveBeenCalled()
+      expect(observe).not.toHaveBeenCalled()
+    } finally {
+      observe.mockRestore()
+    }
+  })
+
   it('traverses unnamed legacy catalogs with cycles and external leaves', async () => {
     const { ctx, parent, names } = await setup()
     const child = ctx.sessions.create(SessionId('old'), { meta: { origin: 'subagent', parentSession: parent.id } })
