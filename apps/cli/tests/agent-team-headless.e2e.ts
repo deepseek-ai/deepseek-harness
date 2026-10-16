@@ -91,8 +91,9 @@ describe('dsh run with Agent Teams enabled', () => {
       const workflowChild = parsed.find(log => log.some(record => record.type === 'user/message'
         && JSON.stringify((record.data as { content: unknown }).content) === JSON.stringify([{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }])))
       expect(workflowChild).toBeDefined()
-      expect(workflowChild!.find(record => record.type === 'subagent/descriptor')?.data)
-        .toMatchObject({ mode: 'continuable', provider: 'spawn', name: expect.stringMatching(/^workflow-/) })
+      const workflowDescriptor = workflowChild!.find(record => record.type === 'subagent/descriptor')?.data as Record<string, unknown>
+      expect(workflowDescriptor).toMatchObject({ mode: 'continuable', provider: 'spawn' })
+      expect(workflowDescriptor.name).toMatch(/^workflow-/)
       expect(workflowChild!.filter(record => record.type === 'user/message'
         && (record.data as { source: { kind: string } }).source.kind === 'user').map(record => record.data))
         .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
@@ -105,7 +106,7 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(eventTypes).not.toContain('team/member')
       const catalog = root!.filter(record => record.type === 'subagent/catalog').map(record => record.data)
       expect(catalog).toEqual(expect.arrayContaining([
-        expect.objectContaining({ version: 0, name: expect.stringMatching(/^workflow-/) }),
+        expect.objectContaining({ version: 0, name: workflowDescriptor.name }),
         expect.objectContaining({ version: 0, name: 'implementer', label: 'Own deterministic implementation.' }),
         expect.objectContaining({ version: 0, name: 'researcher', label: 'Own deterministic research.' }),
       ]))
