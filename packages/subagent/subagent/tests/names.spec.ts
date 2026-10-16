@@ -119,6 +119,7 @@ describe('tree-wide agent names', () => {
       name, childId: SessionId('ephemeral-child'), provider: 'spawn', label: 'Check', delivery: 'caller', signal,
       request: { parent, prompt: [{ type: 'text', text: 'Reply' }] },
     })
+    await expect(start('Reviewer')).rejects.toMatchObject({ code: 'INVALID_AGENT_NAME' })
     const first = await start('first')
     await first.result
     expect(ctx.agents.get(first.childId)).toBeUndefined()

@@ -244,7 +244,7 @@ export function snapshotSubagentDescriptor(
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode: input.mode,
     provider: input.provider,
-    ...input.name === undefined ? {} : { name: subagentNameSchema.parse(input.name) },
+    ...input.name === undefined ? {} : { name: input.name },
     label: input.label,
     ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
     ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},
