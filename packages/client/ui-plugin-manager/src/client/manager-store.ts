@@ -25,6 +25,7 @@ import type {
   PluginSpecInspection,
   ReadOnlyReason,
   Registry,
+  RestartReason,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import { normalizeRegistry, NPMMIRROR_REGISTRY, OFFICIAL_NPM_REGISTRY, REGISTRY_URL } from '@deepseek-ai/dsh-plugin-manager/registry'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -32,6 +33,8 @@ import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { LocalizedText, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { SettingsDescribeFace, ConfigForms } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ConfigLedger } from './config-ledger.ts'
+import type { PluginTabInstall } from './slot-contract.ts'
+import type { PluginTab } from './tab-ledger.ts'
 import { shortName } from './presentation.ts'
 
 /** The action a failed notice names. */
@@ -39,7 +42,7 @@ export type FailedAction = 'enable' | 'disable' | 'uninstall' | 'rowEnable' | 'r
 
 /** What the last action left to say, shown as a toast; `seq` tells one showing from the next. */
 export type ManagerNotice =
-  | { readonly kind: 'restart'; readonly packageName: string; readonly seq: number }
+  | { readonly kind: 'restart'; readonly packageName: string; readonly reason: RestartReason | undefined; readonly seq: number }
   | { readonly kind: 'overridden'; readonly packageName: string; readonly seq: number }
   | { readonly kind: 'cancelled'; readonly seq: number }
   | { readonly kind: 'refresh-failed'; readonly seq: number }
@@ -197,6 +200,11 @@ export interface InstallState {
   readonly spec: string
   /** The spec form was reopened after switching away from a failed GitHub address. */
   readonly mirrorRecovery?: boolean
+  /**
+   * The spec came from a confirmed entry of another tab, with that entry's name and version: the dialog shows no spec
+   * form, only its check and outcome.
+   */
+  readonly confirmed?: { readonly title: string; readonly version: string }
   /** The registries the Host configured, read when the dialog opens; null until the Host answered. */
   readonly registries: PluginRegistries | null
   /** The registry this install asks first: the one last used, else the Host's first. */
@@ -224,6 +232,8 @@ export interface InstallState {
   readonly installedVersion: string | null
   /** Whether the finished run's bundle waits for the next start to load. */
   readonly restartRequired: boolean
+  /** Why it waits, when the Host says. */
+  readonly restartReason?: RestartReason
   /**
    * The run's failure, once one settled the dialog: the Host's refusal
    * `code` with its diagnostic as `reason`, or the transport's words alone;
@@ -265,7 +275,8 @@ export function isInstallPending(phase: InstallState['phase']): boolean {
  * this recovery does not apply; test for undefined, because null is a valid entry.
  */
 export function githubRecoveryRegistry(install: InstallState): Registry | undefined {
-  if (install.phase !== 'failed' || install.failure?.failedAt !== 'spec-host'
+  // The mirror recovery reopens the spec form, which a confirmed spec does not have.
+  if (install.confirmed !== undefined || install.phase !== 'failed' || install.failure?.failedAt !== 'spec-host'
     || (install.failure.kind !== 'network' && install.failure.kind !== 'timeout')) return undefined
   const host = install.subject?.host?.toLowerCase().split(':')[0]
   if (host !== 'github.com' && !host?.endsWith('.github.com')) return undefined
@@ -322,12 +333,21 @@ export interface PluginManagerFace {
     pluginManager: SnapshotStore<PluginManagerState>
     /** The plugins carrying configuration, bound by the renderer as useConfigLedger. */
     configLedger: HostObservable<ConfigLedger>
+    /** Tabs other plugins contribute, bound by the renderer as usePluginTabs. */
+    pluginTabs: HostObservable<readonly PluginTab[]>
   }
   /** Read the Host once the tab first renders. */
   ensure: () => void
   /** Read the Host again. */
   refresh: () => void
   openInstall: () => void
+  /**
+   * Open the install dialog with a version the person confirmed elsewhere, such as a Discover entry, and start
+   * checking it; the dialog shows no spec form. A hidden installation reopens instead. The registry is asked first for
+   * this dialog only and never remembered.
+   * @param target - the exact spec, optional registry, and the name and version the dialog shows.
+   */
+  installFrom: (target: PluginTabInstall) => void
   /** Hide immediately, abort a check, or request cancellation while retaining the Host-owned installation. */
   closeInstall: () => void
   editInstallSpec: (text: string) => void
@@ -354,7 +374,7 @@ export interface PluginManagerFace {
   clearHighlight: () => void
   /** Put a bundle into, or take it out of, the profile's layer list. */
   setEnabled: (packageName: string, enabled: boolean) => void
-  /** Install the host's catalog version while retaining the current selection. */
+  /** Remove an installed package and install the host's catalog version, selected as the package was. */
   update: (packageName: string) => void
   /** Ask before removing a package from the profile. */
   uninstall: (packageName: string) => void
@@ -475,10 +495,12 @@ const IDLE_INSTALL: InstallState = {
 
 /** The dialog back at its spec: the run and its outcome forgotten, the spec and the registries kept. */
 function specAgain(install: InstallState): InstallState {
-  const { open, spec, registries, registry, mirrorRecovery } = install
-  return { ...IDLE_INSTALL, open, spec, registries, registry,
+  const { open, spec, registries, registry, mirrorRecovery, confirmed } = install
+  return {
+    ...IDLE_INSTALL, open, spec, registries, registry,
     ...install.subject?.selection === undefined ? {} : { subject: install.subject },
-    ...mirrorRecovery === undefined ? {} : { mirrorRecovery } }
+    ...mirrorRecovery === undefined ? {} : { mirrorRecovery }, ...confirmed === undefined ? {} : { confirmed },
+  }
 }
 
 /**
@@ -540,6 +562,8 @@ export class PluginManagerController {
   private noticeSeq = 0
   private analyticsAttempt: { input: string; started: number } | undefined
   private registryRead: RegistryRead | undefined
+  /** A Discover entry chose the dialog's registry; that choice applies to this dialog only and is never remembered. */
+  private transientRegistry = false
   /** The registry last used from this browser, kept across dialogs and page loads; null until one was used. */
   private readonly registryMemory: SnapshotStore<RegistryChoice | null> = createSnapshotStore<RegistryChoice | null>(null, {
     persist: { name: 'dsh.plugin-manager.install-registry' },
@@ -576,29 +600,29 @@ export class PluginManagerController {
   /**
    * Build the face the tab's slot registration injects.
    * @param configLedger - the projection of the plugins carrying configuration, bound beside the tab's own state.
+   * @param pluginTabs - the tabs other plugins contribute through `plugins.tab`.
    * @param resolveText - render-time package text resolution supplied by the locale service.
    * @returns the tab's snapshot sources and its actions.
    */
-  inject(configLedger: HostObservable<ConfigLedger>, resolveText: PluginManagerFace['resolveText']): PluginManagerFace {
+  inject(
+    configLedger: HostObservable<ConfigLedger>, pluginTabs: HostObservable<readonly PluginTab[]>, resolveText: PluginManagerFace['resolveText'],
+  ): PluginManagerFace {
     return {
       resolveText,
-      hooks: { pluginManager: this.store, configLedger, configurations: this.ctx.configForms.describe() },
+      hooks: { pluginManager: this.store, configLedger, pluginTabs, configurations: this.ctx.configForms.describe() },
       configForm: id => this.ctx.configForms.get(id),
       ensure: () => { if (this.getSnapshot().status === 'idle') void this.load() },
       refresh: () => { void this.refresh() },
       openInstall: () => {
         this.ctx.get('productAnalytics')?.track('plugin_add_button_click', {})
-        const install = this.getSnapshot().install
-        if (install.requestId === undefined) {
-          // A new dialog starts from the registry last used here and reads what the Host offers; a hidden install reopens as it is.
-          this.patch({ install: { ...IDLE_INSTALL, open: true, registry: this.registryMemory.getSnapshot() ?? OFFICIAL_REGISTRY } })
-          const read: RegistryRead = { choice: this.getSnapshot().install.registry }
-          this.registryRead = read
-          read.done = this.readRegistries(read).finally(() => { delete read.done })
-        } else {
-          this.patchInstall({ open: true })
-        }
-        void this.reconcileInstall()
+        this.openDialog()
+      },
+      installFrom: ({ spec, registry, title, version }) => {
+        // A hidden installation reopens as it is; only one installation runs at a time.
+        if (!this.openDialog()) return
+        this.transientRegistry = registry !== undefined
+        this.patchInstall({ spec, confirmed: { title, version }, ...registry === undefined ? {} : { registry: { kind: 'custom', url: registry } } })
+        void this.runInstall()
       },
       closeInstall: () => {
         if (isInstallPending(this.getSnapshot().install.phase)) {
@@ -621,7 +645,9 @@ export class PluginManagerController {
       runInstall: () => { void this.runInstall() },
       toggleRegistryOptions: () => { this.patchInstall({ registryOpen: !this.getSnapshot().install.registryOpen }) },
       chooseRegistry: (choice) => {
-        if (this.getSnapshot().install.phase === 'idle') this.patchInstall({ registry: choice, registryError: false })
+        if (this.getSnapshot().install.phase !== 'idle') return
+        this.transientRegistry = false
+        this.patchInstall({ registry: choice, registryError: false })
       },
       changeRegistry: () => {
         const install = this.getSnapshot().install
@@ -661,7 +687,24 @@ export class PluginManagerController {
       },
       update: (packageName) => {
         const pkg = this.getSnapshot().packages.find(pkg => pkg.name === packageName)
-        if (pkg?.installTarget !== undefined && pkg.availability !== 'installation') this.openCatalogInstall(pkg, pkg.installTarget, pkg.enabled)
+        const target = pkg?.installTarget
+        if (pkg === undefined || target === undefined || pkg.availability === 'installation') return
+        if (!pkg.installed) {
+          this.openCatalogInstall(pkg, target, pkg.enabled)
+          return
+        }
+        // An installed package is removed before another version is installed. Without HMR a running bundle stays
+        // installed, and the installation over it waits for the restart.
+        void this.run(packageName, { packageName, action: 'uninstall' }, async () => {
+          const removed = await this.ctx.remote.pluginManager.removeBundle(packageName)
+          if (removed.ok && removed.value.error?.code === 'stop-profile') {
+            this.openCatalogInstall(pkg, target, pkg.enabled)
+            return
+          }
+          // A failed removal throws; without HMR a removal waits for the restart, and the installation follows it.
+          this.applied(removed, packageName)
+          this.openCatalogInstall(pkg, target, pkg.enabled)
+        })
       },
       uninstall: (packageName) => {
         this.pendingConfirm = () => this.run(packageName, { packageName, action: 'uninstall' }, async () => {
@@ -681,6 +724,26 @@ export class PluginManagerController {
       },
       dismissNotice: () => { this.patch({ notice: null }) },
     }
+  }
+
+  /**
+   * Open the install dialog: a new one starts from the registry last used here and reads what the Host offers; a hidden
+   * installation reopens as it is.
+   * @returns whether a new dialog started.
+   */
+  private openDialog(): boolean {
+    const started = this.getSnapshot().install.requestId === undefined
+    if (started) {
+      this.transientRegistry = false
+      this.patch({ install: { ...IDLE_INSTALL, open: true, registry: this.registryMemory.getSnapshot() ?? OFFICIAL_REGISTRY } })
+      const read: RegistryRead = { choice: this.getSnapshot().install.registry }
+      this.registryRead = read
+      read.done = this.readRegistries(read).finally(() => { delete read.done })
+    } else {
+      this.patchInstall({ open: true })
+    }
+    void this.reconcileInstall()
+    return started
   }
 
   /**
@@ -928,7 +991,7 @@ export class PluginManagerController {
     const currentChoice = this.getSnapshot().install.registry
     const selected = currentChoice.kind === 'custom' ? { ...currentChoice, url: currentChoice.url.trim() } : currentChoice
     const registry: Registry = selected.kind === 'custom' ? selected.url : selected.registry
-    this.registryMemory.set(selected)
+    if (!this.transientRegistry) this.registryMemory.set(selected)
     if (catalogSubject !== undefined) {
       this.inspectAbort = undefined
       await this.startInstall({ ...catalogSubject, registry })
@@ -1026,6 +1089,7 @@ export class PluginManagerController {
         installed: result.bundle ?? null,
         installedVersion: result.version ?? null,
         restartRequired: result.application === 'restart-required',
+        ...result.restartReason === undefined ? {} : { restartReason: result.restartReason },
         approvedBuilds: result.approvedBuilds ?? [],
         ...asked,
       })
@@ -1197,7 +1261,7 @@ export class PluginManagerController {
         this.patch({ notice: { kind: 'cancelled', seq: ++this.noticeSeq } })
         return
       case 'restart-required':
-        this.patch({ notice: { kind: 'restart', packageName, seq: ++this.noticeSeq } })
+        this.patch({ notice: { kind: 'restart', packageName, reason: result.restartReason, seq: ++this.noticeSeq } })
         return
       case 'overridden':
         this.patch({ notice: { kind: 'overridden', packageName, seq: ++this.noticeSeq } })

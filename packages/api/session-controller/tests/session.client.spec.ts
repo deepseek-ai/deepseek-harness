@@ -513,6 +513,19 @@ describe('prompt and cancel errors', () => {
     expect(session.getSnapshot().subagent).toEqual({ address: CHILD, parentAvailable: true })
   })
 
+  it('sends an addressed child continuation under its echo request id and retires a refused echo', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    await session.open()
+    const accepted = session.beginSubmission({ mode: 'queue', text: '继续', attachments: [] })
+    await session.prompt([{ type: 'text', text: '继续' }], 'queue', undefined, accepted.requestId)
+    expect(mock.log.requests('subagents/prompt')).toMatchObject([{ requestId: accepted.requestId, ...CHILD }])
+    expect(session.getSnapshot().pendingSubmissions.map(echo => echo.requestId)).toEqual([accepted.requestId])
+
+    const refused = session.beginSubmission({ mode: 'queue', text: '附件', attachments: [] })
+    await session.prompt([{ type: 'file', receiptId: 'receipt' as never }], 'queue', undefined, refused.requestId)
+    expect(session.getSnapshot().pendingSubmissions.map(echo => echo.requestId)).toEqual([accepted.requestId])
+  })
+
   it('forwards continuation image parts to the subagent prompt Remote unstripped', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
     await session.open()

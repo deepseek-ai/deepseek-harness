@@ -192,6 +192,36 @@ export type VfsMutation =
 /** Receives one committed VFS mutation. */
 export type VfsMutationListener = (mutation: VfsMutation) => void
 
+/** One file a lazy archive carries, by its path relative to the archive root. */
+export interface VfsDeferredFile {
+  /** Entry name inside the archive, relative to {@link VfsDeferredArchive.root}. */
+  readonly path: string
+  /** Byte length the archive must hold for this entry. */
+  readonly size: number
+}
+
+/**
+ * Files registered by path and size whose bytes arrive with one archive on the
+ * first asynchronous read of any of them. Existence, stats, and listings answer
+ * from the registration. Until the archive arrives, synchronous reads, writes,
+ * appends, truncation, chmod, rename, and link are refused; unlink and recursive
+ * removal drop the registration, and seeding the path replaces it. The fetched
+ * archive is checked against the registered paths and sizes only.
+ */
+export interface VfsDeferredArchive {
+  /** Archive name quoted in refusals and fetch failures. */
+  readonly name: string
+  /** Virtual directory the archive's relative entry names mount under. */
+  readonly root: string
+  /** Every regular file the archive carries; anything else in it refuses the archive. */
+  readonly files: readonly VfsDeferredFile[]
+  /**
+   * Fetch the archive.
+   * @returns The uncompressed ustar bytes.
+   */
+  load(): Promise<Uint8Array>
+}
+
 /** Durable observer attached to the synchronous VFS. */
 export interface VfsMutationSink {
   /**
@@ -254,4 +284,9 @@ export interface Vfs {
   subscribe(listener: VfsMutationListener): () => void
   /** Settle the attached durable mutation sink, if any. */
   flush(): Promise<void>
+  /**
+   * Fetch the lazy archive that supplies a registered path.
+   * @returns A promise that settles once the path's archive arrived, or undefined when the path needs no fetch.
+   */
+  whenReadable(path: string): Promise<void> | undefined
 }

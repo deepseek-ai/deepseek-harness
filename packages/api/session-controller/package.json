@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-session-controller",
   "description": "Session Remote commands, cold reads, and live control transport",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -122,6 +122,7 @@
     }
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-default-model": "workspace:*",

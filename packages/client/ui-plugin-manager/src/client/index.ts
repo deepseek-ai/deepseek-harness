@@ -24,6 +24,7 @@ import { PluginManagerPage } from './PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from './PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from './PluginsPanelIcon.tsx'
 import { configLedgerSource } from './config-ledger.ts'
+import { tabLedgerSource } from './tab-ledger.ts'
 import { PluginManagerController } from './manager-store.ts'
 import { en, zh, type PluginManagerLocaleKey } from './locales.ts'
 import { createNavigationStore } from './navigation-store.ts'
@@ -48,7 +49,7 @@ export type { ConfigLedger, OfficialItem } from './config-ledger.ts'
 export type { PluginManagerFace } from './manager-store.ts'
 export type { PluginManagerLocaleKey } from './locales.ts'
 export type {
-  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps,
+  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps, PluginTabInstall, PluginTabProps,
   PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
 } from './slot-contract.ts'
 
@@ -99,7 +100,7 @@ export function apply(ctx: ClientContext): void {
   // the page's own; a plugin's configuration arrives through the slots the
   // page declares here, so the page never names a configurable plugin.
   const configLedger = configLedgerSource(ctx)
-  const face = controller.inject(configLedger, text => ctx.locale.resolveText(text))
+  const face = controller.inject(configLedger, tabLedgerSource(ctx), text => ctx.locale.resolveText(text))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'plugin-manager.refresh-toast', locale: NS,
     inject: (): PluginRefreshToastFace => ({
@@ -118,6 +119,7 @@ export function apply(ctx: ClientContext): void {
       inject: () => face,
       children: {
         'plugins.add.actions': { kind: 'list', scope: 'root' },
+        'plugins.tab': { kind: 'list', scope: 'root' },
         'plugins.item': { kind: 'list', scope: 'root' },
         'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
         'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
@@ -133,6 +135,7 @@ export function apply(ctx: ClientContext): void {
     const disposeNavigation = ctx.reflect.provide('pluginNavigation', {
       openBundle: (packageName: string) => {
         ctx.layout.selectPanel(PANEL_ID)
+        instance.actions.setTab('installed')
         instance.actions.setView({ kind: 'package', name: packageName })
       },
     })

@@ -12,11 +12,20 @@ import SubagentRuntime, {
   type SubagentPromptRequestId,
 } from '@deepseek-ai/dsh-subagent'
 import { deliverSubagentPrompt, type HostPromptDeliverer } from '@deepseek-ai/dsh-subagent/internal'
+import type { PeerId, Principal, RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
+
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface PrincipalMap {
+    /** Test-only non-owner caller shared by the access specs. */
+    'test-guest': { readonly kind: 'test-guest'; readonly guest: string }
+  }
+}
 
 const PARENT = SessionId('parent')
 const CHILD = SessionId('child')
 const PARENT_CREATED_AT = 1
 const REQUEST_ID = 'req-1' as SubagentPromptRequestId
+const GUEST: Principal = { kind: 'test-guest', guest: 'subagent' }
 const signal = new AbortController().signal
 /** Durable-reference base for the fake store; per-test ids and media types override. */
 const IMAGE_REF = { attachmentId: 'att', mediaType: 'image/png', bytes: 2, width: 1, height: 1 }
@@ -192,6 +201,27 @@ describe('subagent prompt Remote', () => {
       signal,
       'queue',
     )
+  })
+
+  it('records a non-owner caller on the follow-up source and nothing for the owner', async () => {
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(subagents).mockResolvedValue('m-guest' as MessageId)
+    const as = (principal: Principal) => ctx.extend({
+      invocation: {
+        request: { namespace: 'subagents', method: 'prompt', args: {} },
+        service: 'subagents',
+        peer: { id: 'subagent-peer' as PeerId, ctx, principal, interactions: 'answer', signal, dispose: async () => {} },
+        signal,
+        uplink: <In>(): AsyncIterable<In> => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
+      } satisfies RemoteInvocation,
+    }).subagents
+
+    await expect(as(GUEST).prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-guest' })
+    await expect(as({ kind: 'owner' }).prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-guest' })
+    expect(delivery.mock.calls.map(call => call[3])).toEqual([
+      { kind: 'user', rpcId: REQUEST_ID, principal: GUEST },
+      { kind: 'user', rpcId: REQUEST_ID },
+    ])
   })
 
   it('passes steer delivery through the same admission operation', async () => {

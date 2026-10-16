@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration.
+Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration. Node resolves `/client` to the standalone ESM `lib/client.node.js` bundle for programmatic Cordis composition; browsers use the `lib/client.browser.js` loader factory through the logical `/plugins/.../client.js` URL. Both bundles use the same registry implementation, separate from the Host package root.
 
 ### Minimal setup
 
@@ -45,9 +45,13 @@ Invocation information is available through existing `ctx.typert.local.get/list`
 
 Generated artifacts register through the [loader](../loader/README.md) in Loader compositions; any other owner calls `ctx.typert.register(contribution)` directly and receives the exact disposer that withdraws it. Duplicate package-face identities, schema keys, invocation ids, or endpoints reject the whole batch before anything is committed.
 
+Harness offline integrations register an ordinary `TYPERT_REMOTE` contribution with `ctx.typert.remotes.register(contribution)` in their profile Context. `$mount(contribution)` already performs that registration, so registering and mounting the same contribution in the same registry duplicates it and fails. Keep offline metadata ownership separate from the live connection-and-mount Context. Independent offline consumers may instead read `TYPERT_REMOTE.methods` without any Registry. Registry state belongs to its Context and process, is not shared across processes, and neither registration nor querying opens a connection.
+
 ### Lookup and Context providers
 
 Remote calls resolve Host objects and scoped Contexts through `ctx.typert.lookups` and `ctx.typert.contexts`. `registerHost()` installs the Host wire declaration and its wire-to-Context resolver, while `configureHost()` replaces only that resolver. `registerClient()` installs the bidirectional Client adapter for the same merge-declared kind. Host-to-Client event sources carry their domain identity explicitly instead of projecting it back from a Context.
+
+`ctx.typert.resources` holds the default wire field of each resource kind declared in `TypertResourceMap`. The domain that owns a kind registers it with `register(kind, { field })` as a Cordis effect of the calling fiber; a second registration of one kind throws, and so does `global`, the built-in identity-less resource kind. `get(kind)` reads one declaration, and `entries()` lists every registered `{ kind, field }` in registration order. A lookup provider and a Host Context adapter may name the resource kind of their wire identity through `resource`, and a configured resolver keeps it. The Gateway reads all three when it resolves the resources of a non-owner call.
 
 -----
 
@@ -69,6 +73,7 @@ The registry is built on one principle: a contribution is one atomic, fiber-owne
 - `ctx.typert.remotes` — consumer-selected contributions mounted in the calling fiber.
 - `ctx.typert.lookups` — lookup providers plus composition-owned resolver overrides per key.
 - `ctx.typert.contexts` — Host Context providers and Client Context binders per scoped key.
+- `ctx.typert.resources` — the default wire field per resource kind.
 
 Each sub-registry publishes `TypertRegistryChange` events to subscribed listeners; a throwing listener is logged and does not stop later listeners.
 

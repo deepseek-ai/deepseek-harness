@@ -22,7 +22,8 @@
       - text: openai API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 留空时保留现有认证（OPENAI_API_KEY）
+        - /placeholder: 留空使用环境认证（OPENAI_API_KEY）
+      - paragraph: 已检测到环境变量（OPENAI_API_KEY）
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

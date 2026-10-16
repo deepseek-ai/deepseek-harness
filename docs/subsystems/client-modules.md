@@ -58,10 +58,22 @@ interface WebBootBatch {
 ```
 
 ```ts type-equiv
+/** Host release identity; two releases are the same when both fields are equal. */
+interface WebBootRelease {
+  /** Release version label. */
+  version: string
+  /** Source commit fixed in when the Host was built; absent when the build recorded none. */
+  commit?: string
+}
+```
+
+```ts type-equiv
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 interface WebBootGraph {
   /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
+  /** Host release identity; absent from a Host that publishes none. */
+  release?: WebBootRelease
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
    * rows whose `external` requests that package. Cordis activation order is
@@ -74,6 +86,8 @@ interface WebBootGraph {
 ```
 
 Initial publication and HMR derive each row's `rev` from the entry's mtime, ctime, and size, without hashing executable bytes. The same artifacts retain their revisions across Host restarts. The initial descriptors partition rows into bootstrap and application scheduling phases, and either phase may contain several descriptors. Their URLs contain only the ordered package-resource list and a revision derived from those row revisions; phase names do not enter the route. Graph composition preserves row order while greedily splitting before the map-form URL exceeds 3 KiB, without concatenating scripts or reading maps. The graph revision hashes the entry and batch descriptors. `immediately` marks the stage-one registration barrier; rows within one combo share its script transport, while separate combos load independently.
+
+`release` pairs this package's version with the source commit the client build fixes into the built Host artifact, and stays outside the graph revision. A page applies graphs and rebuilt frames only while the Host serves the page's boot release; another release waits for a page reload ([Host release changes](../../packages/client/modules/README.md#host-release-changes)).
 
 ## The scan
 

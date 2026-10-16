@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-remotes",
   "description": "Remote BFF assembly for application-selected Host capabilities",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -81,6 +81,7 @@
     "@deepseek-ai/dsh-permission-presets": "workspace:*",
     "@deepseek-ai/dsh-schedule": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-reference": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
@@ -93,6 +94,7 @@
     "@deepseek-ai/dsh-api-terminal-controller": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-mcp-manager": "workspace:*",
+    "@deepseek-ai/dsh-plugin-market": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-office-to-pdf": "workspace:*",
     "@deepseek-ai/dsh-api-account-controller": "workspace:*",

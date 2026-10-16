@@ -13,9 +13,33 @@
 #include "progress.h"
 #include "extract.h"
 #include "extract-report.h"
+#include "directory-report.h"
 #include "uninstall-data.h"
 
 using namespace Gdiplus;
+
+// Returns whether the UTF-8 report was saved; failure still presents the original error unless silent.
+extern "C" __declspec(dllexport) int __cdecl InstallerReportDirectoryFailure(
+    HWND parent, DWORD error, LPCWSTR source, LPCWSTR destination, DWORD restoreError, LPCWSTR backup,
+    LPCWSTR log, LPCWSTR reportPath, int show, LPCWSTR title, LPCWSTR heading, LPCWSTR hint, LPCWSTR copy,
+    LPCWSTR expand, LPCWSTR collapse, LPCWSTR savedFormat, LPCWSTR unsaved, LPCWSTR copied) {
+    try {
+        const std::wstring report = directory_report::Compose(error, source, destination, restoreError, backup, extract_report::ReadOutput(log));
+        const bool saved = extract_report::WriteUtf8(reportPath, report);
+        if (show) {
+            std::wstring footer = saved ? savedFormat : unsaved;
+            const auto placeholder = footer.find(L"%s");
+            if (saved && placeholder != std::wstring::npos) footer.replace(placeholder, 2, reportPath);
+            const extract_report::DialogStrings strings{title, heading, copy, expand, collapse, footer.c_str(), copied};
+            const std::wstring content = directory_report::Content(error, hint, restoreError, backup);
+            extract_report::Show(parent, content, extract_report::BoundedExcerpt(extract_report::Lines(extract_report::Trim(report))), report, strings);
+        }
+        return saved ? 1 : 0;
+    } catch (const std::bad_alloc&) {
+        if (show) MessageBoxW(parent, hint, heading, MB_OK | MB_ICONEXCLAMATION);
+        return 0;
+    }
+}
 
 // Saves the extraction failure report and, unless silent, presents its headline with a copy action.
 // Returns 1 when the report file was written and 0 otherwise; the dialog outcome never fails the caller.

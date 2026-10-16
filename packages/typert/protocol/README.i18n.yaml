@@ -18,8 +18,11 @@
   en: c479b5b665822198
   zh: 1ffb789c18043baf
 /deepseek-ai-dsh-typert-protocol/use-this-package/exposing-a-host-method:
-  en: 82a3db72a51105ff
-  zh: 46848784380732be
+  en: 63968de5fc817d06
+  zh: fbe2804b2a2d70d3
+/deepseek-ai-dsh-typert-protocol/use-this-package/identifying-the-caller-and-admitting-non-owner-callers:
+  en: 78e08ae732a8f6f4
+  zh: be15fb7599994fb9
 /deepseek-ai-dsh-typert-protocol/use-this-package/associating-host-objects-and-contexts-with-wire-identities:
   en: 3db384ae6f215632
   zh: 56207184b09d4018
@@ -36,8 +39,8 @@
   en: 4f45bb46a1920984
   zh: 70408d3b59d2735a
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/remote-markers:
-  en: 93b83a9441a5a3c2
-  zh: c4eb143ddd167a27
+  en: 082530713c5cea83
+  zh: 592fe5d9636ef288
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/protocol-maps-and-descriptors:
   en: c202904201402211
   zh: 3db1d83683b4fd2a
@@ -45,8 +48,8 @@
   en: aac79a7b4682371e
   zh: bc9cc513c1ced3e6
 /deepseek-ai-dsh-typert-protocol/understand-the-implementation/source-map:
-  en: 8b878e0e003b86ec
-  zh: 5d92998ad2964d7c
+  en: 74fdb78bf4e7753b
+  zh: dad439ba2a323ff9
 /deepseek-ai-dsh-typert-protocol/further-exploration:
   en: 84191d1b07fb8bb6
   zh: 9a5212732ed38ab6
@@ -57,8 +60,8 @@
   en: b1c49d5e440d9d41
   zh: 87ead78472415189
 /deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work:
-  en: 6079caacbcd01f08
-  zh: 70295e443f35afe8
+  en: 32a7ede4de20ad4e
+  zh: 57b86c314cd376b8
 /deepseek-ai-dsh-typert-protocol/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

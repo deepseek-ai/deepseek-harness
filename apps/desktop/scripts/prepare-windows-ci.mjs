@@ -1,6 +1,7 @@
 /** Resolve a manual Windows build version and validate the selected machine preset. */
 import { appendFileSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { desktopCiVersion as windowsCiVersion } from './desktop-ci-version.mjs'
 export { desktopCiVersion as windowsCiVersion } from './desktop-ci-version.mjs'
 import { loadDesktopPackageEnvironment, validateDesktopPackageEnvironment } from './desktop-package-environment.mjs'
@@ -23,5 +24,5 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
   validateDesktopPackageEnvironment(environment, { platform: 'win32', arch: 'x64' }, { unsigned: mode === 'unsigned' })
   if (!process.env.GITHUB_OUTPUT || !process.env.GITHUB_STEP_SUMMARY) throw new Error('Run this adapter from GitHub Actions')
   appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`)
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Windows x64 ${mode} installer\n\nVersion: ${version}\n\nCommit: ${process.env.GITHUB_SHA}\n\nPreset: ${process.env.DSH_PACKAGING_PRESET}\n`)
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Windows x64 ${mode} installer\n\nVersion: ${version}\n\nCommit: ${execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()}\n\nChannel: ${process.env.DSH_DESKTOP_UPDATE_CHANNEL}\n\nSource: ${process.env.PACKAGE_SOURCE_REF}\n\nPreset: ${process.env.DSH_PACKAGING_PRESET}\n`)
 }

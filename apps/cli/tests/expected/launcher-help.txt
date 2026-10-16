@@ -11,8 +11,8 @@ Arguments:
 Options:
   -V, --version                  output the version number
   --profile <name>               the profile under $DSH_HOME/profiles to boot
-  --from-default-profile <name>  initialize a new custom profile from a shipped
-                                 profile template
+  --from-default-profile <name>  replace a custom profile with a fresh copy of a
+                                 shipped profile template
   --patch <path>                 extra patch-list overlay applied after the
                                  profile layer (repeatable)
   --dump-config                  print the composed profile tree and exit
@@ -24,7 +24,7 @@ Options:
 Examples:
   dsh web                                   boot the web profile (same as: dsh --profile web)
   dsh rescue --from-default-profile web
-                                            create rescue from the shipped web template, then boot it
+                                            recreate rescue from the shipped web template, then boot it
   dsh headless "run the tests"              answer one task, print the result, and exit
   dsh tui --patch ./extra.yml               boot a custom profile with one extra overlay
   dsh tui --resume <session>                arguments after the launcher flags reach the app

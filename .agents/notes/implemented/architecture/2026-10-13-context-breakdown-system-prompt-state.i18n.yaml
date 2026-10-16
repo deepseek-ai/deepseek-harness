@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-13-context-breakdown-system-prompt-state.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-13-context-breakdown-system-prompt-state.md
+/agent-note-context-breakdown-retains-only-system-prompts:
+  en: 9b155f87202e037e
+  zh: 8d4190c00412b892
+/agent-note-context-breakdown-retains-only-system-prompts/problem:
+  en: 7cbbdfbe7da9ae7a
+  zh: 50368b272d7b5ebc
+/agent-note-context-breakdown-retains-only-system-prompts/decision:
+  en: 52d5c42112c5c6dc
+  zh: 744dbbcc52193300
+/agent-note-context-breakdown-retains-only-system-prompts/verification:
+  en: 68a7375ca7fe99e8
+  zh: e3c7d108740e8952
+/agent-note-context-breakdown-retains-only-system-prompts/alternatives-considered:
+  en: 2bd0e83c5298da2b
+  zh: 336259b6985eb7b5
+/agent-note-context-breakdown-retains-only-system-prompts/consequences:
+  en: 839a919ff16bc53c
+  zh: bf0d4f3a783ead1d

@@ -350,6 +350,13 @@ describe('package payload constraints', () => {
     },
   )
 
+  it('exempts the private plugin market generator from release rules in its own directory only', () => {
+    const dir = 'apps/plugin-market-generator'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    expect(checkWorkspaceManifest({ dir: 'apps/other-tool', manifest })).not.toEqual([])
+  })
+
   it('rejects locale publication entries without their resource exports', () => {
     const dir = 'packages/experimental/auto-review'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
@@ -439,6 +446,18 @@ it('requires the Inspector Worker, Client chunks, and mirrored DevTools resource
   for (const omitted of ['lib/client.*.js', 'lib/worker.js', 'lib/devtools/**']) {
     expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: manifest.files!.filter(file => file !== omitted) } }))
       .toEqual([expect.stringContaining('package.json files must be')])
+  }
+})
+
+it('requires both physical Client entries only for opted-in packages', () => {
+  for (const dir of ['packages/client/connection', 'packages/api/gateway', 'packages/typert/registry']) {
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    for (const omitted of ['lib/client.node.js', 'lib/client.browser.js']) {
+      const files = manifest.files!.filter(file => file !== omitted)
+      expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
   }
 })
 

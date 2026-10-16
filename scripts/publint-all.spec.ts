@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { once } from 'node:events'
 import { execa } from 'execa'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { Message } from 'publint'
+import { isBrowserBundleFormatFalsePositive } from './publint-browser-format.ts'
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const runner = fileURLToPath(new URL('./publint-all.ts', import.meta.url))
@@ -90,6 +92,20 @@ async function run(root: string, signal: AbortSignal) {
   expectCompleted(completed)
   return completed
 }
+
+describe('publint browser format filtering', () => {
+  it('exempts browser factories but not the sibling Node ESM artifact', () => {
+    const format = (file: string): Message => ({
+      code: 'FILE_INVALID_FORMAT',
+      args: { actualFilePath: `package/lib/${file}` },
+      path: ['./client'],
+    }) as Message
+    expect(isBrowserBundleFormatFalsePositive(format('client.browser.js'))).toBe(true)
+    expect(isBrowserBundleFormatFalsePositive(format('client.js'))).toBe(true)
+    expect(isBrowserBundleFormatFalsePositive(format('client.node.js'))).toBe(false)
+    expect(isBrowserBundleFormatFalsePositive(format('client.node.helper.js'))).toBe(false)
+  })
+})
 
 describe('publint package runner', () => {
   it('reports deadline cancellation after every owned child closes', async ({ signal }) => {

@@ -276,8 +276,13 @@ export interface PiImageRequestBudget {
   maxBytes: number
 }
 
-/** Deterministic request target for one source under the route budgets. */
-function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageRequestBudget): ImageRequestTarget {
+/**
+ * Resolve the request target for one source under the route budgets.
+ * @param ref - normalized source image.
+ * @param budget - resolved route pixel and byte limits.
+ * @returns dimensions and byte target shared by serialization and screenshot coordinate mapping.
+ */
+export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageRequestBudget): ImageRequestTarget {
   return { ...requestImageDimensions(ref.width, ref.height, budget.maxPixels), maxBytes: budget.maxBytes }
 }
 

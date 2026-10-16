@@ -8,6 +8,7 @@ import type { SessionRecord } from '@deepseek-ai/dsh-session-query'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
+import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import SessionController from '../src/index.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiSessionList } from '../src/list.ts'
@@ -181,10 +182,15 @@ describe('Session-list work slices', () => {
   it('routes an overridden budget through the public Session Controller', async () => {
     const h = await harness([{ id: 'first', phase: 'cold' }, { id: 'middle', phase: 'cold' }, { id: 'last', phase: 'cold' }], 4)
     const dispose = (): void => {}
-    h.ctx.provide('typert', { lookups: { configure: () => dispose }, contexts: { configureHost: () => dispose } } as never)
+    h.ctx.provide('typert', {
+      lookups: { configure: () => dispose },
+      contexts: { configureHost: () => dispose },
+      resources: { register: () => dispose },
+    } as never)
     h.ctx.provide('fileUploads', { registerAgentResolver: () => dispose } as never)
     h.ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'test', model: 'test' }) } as never)
     h.ctx.provide('workspaceRegistry', { list: () => [], archivedSessionIds: [] } as never)
+    new RemoteAccessService(h.ctx)
     const controller = new SessionController(h.ctx, { nativeOpen: false, listWorkSliceMs: 4 }, { canOpenPath: () => false })
     const yieldWork = vi.spyOn(scheduler, 'yield')
     const result = await controller.list({}, new AbortController().signal)

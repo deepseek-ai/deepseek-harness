@@ -14,7 +14,7 @@ export function installPlatformSessionPublisher(ctx: Context, publish: (session:
       const lifetime = new AbortController()
       const updates = (async () => {
         try {
-          for await (const _state of account.watch(lifetime.signal)) {
+          for await (const _state of account.watch(lifetime.signal, true)) {
             if (lifetime.signal.aborted) break
             const session = await account.getPlatformSession()
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Disposal can abort during the credential read.

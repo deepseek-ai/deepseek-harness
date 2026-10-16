@@ -9,6 +9,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import type {
   InvocationDescriptor,
+  RemoteAccessResourceKind,
   TypertClientContextAdapter,
   TypertContextMap,
   TypertContextRegistry,
@@ -16,6 +17,8 @@ import type {
   TypertDisposer,
   TypertHostContextAdapter,
   TypertHostContextResolver,
+  TypertResourceDeclaration,
+  TypertResourceRegistry,
   TypertLocalRegistry,
   TypertLookupHost,
   TypertLookupDefinition,
@@ -255,6 +258,8 @@ class LookupStore {
     return {
       parameter: provider.parameter,
       wire: provider.wire,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- domain packages merge resource kinds into TypertResourceMap.
+      ...provider.resource === undefined ? {} : { resource: provider.resource },
       hostTypeSymbol: provider.hostTypeSymbol,
       wireTypeSymbol: provider.wireTypeSymbol,
       resolve: id => resolver.resolve(id),
@@ -372,6 +377,8 @@ class ContextStore {
     return {
       wire: adapter.wire,
       wireTypeSymbol: adapter.wireTypeSymbol,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- domain packages merge resource kinds into TypertResourceMap.
+      ...adapter.resource === undefined ? {} : { resource: adapter.resource },
       resolve: id => resolver.resolve(id),
     }
   }
@@ -439,6 +446,48 @@ interface HostContextResolverEntry {
   resolve(id: unknown): Promise<Context | undefined>
 }
 
+/** The built-in identity-less resource kind; no declared resource kind may take its name. */
+const GLOBAL_RESOURCE_KIND = 'global' satisfies RemoteAccessResourceKind
+
+class ResourceStore {
+  private readonly declarations = new Map<string, ProviderEntry<TypertResourceDeclaration>>()
+  private readonly changes: ChangeSource
+
+  constructor(report: ReportObserverError) {
+    this.changes = new ChangeSource(report)
+  }
+
+  view(ctx: Context): TypertResourceRegistry {
+    return {
+      register: (kind, declaration) => this.register(ctx, kind, declaration),
+      get: kind => this.declarations.get(kind)?.provider,
+      entries: () => [...this.declarations].map(([kind, entry]) => Object.freeze({ kind, field: entry.provider.field })),
+      subscribe: listener => this.changes.subscribe(ctx, listener),
+    }
+  }
+
+  private register(ctx: Context, kind: string, declaration: TypertResourceDeclaration): TypertDisposer {
+    validateSegment('resource kind', kind)
+    if (kind === GLOBAL_RESOURCE_KIND) {
+      throw new Error(`typert: resource kind "${GLOBAL_RESOURCE_KIND}" is reserved for the built-in global resource`)
+    }
+    validateWireName('resource field', declaration.field)
+    if (this.declarations.has(kind)) throw new Error(`typert: resource kind "${kind}" is already registered`)
+    const entry: ProviderEntry<TypertResourceDeclaration> = { provider: { field: declaration.field }, owner: {} }
+    const { declarations, changes } = this
+    return ctx.effect(function* () {
+      declarations.set(kind, entry)
+      changes.emit({ kind: 'resource', key: kind })
+      yield () => {
+        /* v8 ignore next -- duplicate registration is rejected, so this effect remains the kind's unique owner. */
+        if (declarations.get(kind) !== entry) return
+        declarations.delete(kind)
+        changes.emit({ kind: 'resource', key: kind })
+      }
+    }, `typert.resources.register(${JSON.stringify(kind)})`)
+  }
+}
+
 /**
  * Registry of generated schemas, package reflection, invocations, and Remote
  * dependency providers.
@@ -451,6 +500,7 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
   private readonly remoteStore: RemoteStore
   private readonly lookupStore: LookupStore
   private readonly contextStore: ContextStore
+  private readonly resourceStore: ResourceStore
 
   constructor(ctx: Context) {
     super(ctx, 'typert')
@@ -462,6 +512,7 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
     this.remoteStore = new RemoteStore(new DescriptorStore('remote', report))
     this.lookupStore = new LookupStore(report)
     this.contextStore = new ContextStore(report)
+    this.resourceStore = new ResourceStore(report)
   }
 
   /** Current-environment invocation definitions. */
@@ -488,6 +539,11 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
   /** Host and Client Context adapters. */
   get contexts(): TypertContextRegistry {
     return this.contextStore.view(this.ctx)
+  }
+
+  /** Default wire fields of resource kinds. */
+  get resources(): TypertResourceRegistry {
+    return this.resourceStore.view(this.ctx)
   }
 
   /**

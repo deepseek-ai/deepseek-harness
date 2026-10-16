@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-09-composer-command-chip.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-composer-command-chip.md
+/agent-note-claimed-commands-as-atomic-composer-chips:
+  en: 66d4f149698760c8
+  zh: de219f394dfd4a4c
+/agent-note-claimed-commands-as-atomic-composer-chips/problem:
+  en: 831c97e0de131639
+  zh: ea35b4b179ff33f0
+/agent-note-claimed-commands-as-atomic-composer-chips/decision:
+  en: 6ac53f6cd1307897
+  zh: 2f1dbe762b52f18e
+/agent-note-claimed-commands-as-atomic-composer-chips/alternatives-considered:
+  en: 9c694a21237d7772
+  zh: b35ba7bf8b73b679
+/agent-note-claimed-commands-as-atomic-composer-chips/consequences:
+  en: 089365d6a4be0ebb
+  zh: b30384c717a7ea1d

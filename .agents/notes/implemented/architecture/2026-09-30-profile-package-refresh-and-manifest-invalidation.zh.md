@@ -17,9 +17,9 @@ Host 运行期间有两处状态没有随变化更新：
 
 | 负责方 | 做什么 | 不做什么 |
 |---|---|---|
-| resolver（`app-boot/src/profile-resolution/resolver.ts`） | `replace()` 允许移除 `scope: profile` 条目和 profile 本地包名 | 不碰 Node 的任何缓存 |
-| plugin-manager | 在包操作的确定时点调用 `pluginPackages.refresh()` | 不构造 resolution；不管模块缓存与包配置缓存 |
-| HMR（`packages/boot/hmr`） | 使包配置失效，并保留作为 JSON 模块加载的 manifest 的普通重载 | 不因仅作为配置的 manifest 重载插件；不处理 `node_modules` 包替换 |
+| resolver（`app-boot/src/profile-resolution/resolver.ts`） | `replace()` 允许移除 `scope: profile` 条目和 profile 本地包名，并允许原地更改保留的 profile 条目的版本 | 不碰 Node 的任何缓存 |
+| plugin-manager | 没有 HMR 时，在包操作的确定时点调用 `pluginPackages.refresh()`；有 HMR 时，把发布交给其重新组合 | 不构造 resolution；不管模块缓存与包配置缓存 |
+| HMR（`packages/boot/hmr`） | 使包配置失效，并保留作为 JSON 模块加载的 manifest 的普通重载；重新组合时替换已加载包文件发生变化的插件（[替换说明](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)） | 不因仅作为配置的 manifest 重载插件 |
 
 ### runtime resolution
 
@@ -29,20 +29,18 @@ Host 运行期间有两处状态没有随变化更新：
 
 - `scope: profile` 的条目可以移除。
 - profile 本地包名可以移除。
-- 保留的 profile 条目保持规范化目录、版本与作用域不变；另一个已选 bundle 提供同一包时，可以更换声明锚点。安装范围的映射与声明锚点保持不变。profile 范围不能变；新本地包名不能覆盖已有条目；已发布的 link 名称不能换真实目录。
+- 保留的 profile 条目保持规范化目录与作用域不变；另一个已选 bundle 提供同一包时，可以更换声明锚点；包被原地升级时，可以更改版本（[替换说明](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)）。安装范围的映射与声明锚点保持不变。profile 范围不能变；新本地包名不能覆盖已有条目。已发布的 link 名称可以选中其他真实目录；Node 缓存的原目录真实路径会被重新定位。
 
 ### plugin-manager
 
 | 操作 | 发布时点 |
 |---|---|
-| 安装新包 | pnpm 成功、保存 bundle 选择之后，reconciliation 之前；无论是否立即启用都发布 |
-| 覆盖已安装的包 | 不发布，结果为 `restart-required` |
-| 启用 bundle | 保存选择后发布，再做 reconciliation |
-| 停用 bundle | 有 HMR 时，reconciliation 让插件退出后再发布；没有 HMR 时不发布，运行中的插件继续使用原表 |
-| 卸载 | pnpm remove 成功后，在 HMR 事务内发布 |
-| 安装失败、取消、卸载失败 | 不发布 |
+| 有 HMR 时的安装、启用、停用或卸载 | 在 HMR 的重新组合内，新一代丢弃的行停止之后、新一代应用之前（[替换说明](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)） |
+| 没有 HMR 时安装新包或启用 bundle | 保存 profile 文件之后，reconciliation 之前 |
+| 没有 HMR 时卸载 | pnpm remove 成功后 |
+| 没有 HMR 时停用、覆盖已安装的包、安装失败或取消、卸载失败 | 不发布；spec 指明已安装的包时，覆盖安装在 pnpm 运行之前被拒绝 |
 
-`createRuntimeResolution()` 返回 `ProfileRuntimeResolution`，它私有保存构造时的 installAnchor、home 和 profile 目录；`computeLatestResolution()` 用同一组输入重新读取 profile，返回表示最新代的新对象，原实例不变；Worker 只收到表数据。`PluginPackages.refresh()` 调用当前 resolution 的 `computeLatestResolution()` 再 `replace()`；以纯数据构造的 resolution 无法刷新，调用时抛错。
+`createRuntimeResolution()` 返回 `ProfileRuntimeResolution`，它私有保存构造时的 installAnchor、home 和 profile 目录；`computeLatestResolution()` 用同一组输入重新读取 profile，返回表示最新代的新对象，原实例不变；Worker 只收到表数据。`PluginPackages.refresh()` 调用当前 resolution 的 `computeLatestResolution()`，再调用 `replace()`；以纯数据构造的 resolution 无法刷新，调用时抛错。app-boot 的 `recomposeProfile()` 先停止新一代不再列出的行，使其插件在包仍有映射时完成释放，再发布一次最新一代；已发布的表不会再次发布。
 
 没有 HMR 时，取消启动 bundle 的选择不会停止它的插件。只要该 bundle 仍未选中，后续包操作就保留当前 runtime 表，不发布其移除。其他无 HMR 的安装和未运行 bundle 卸载仍正常发布。
 
@@ -79,7 +77,7 @@ binding 的 `getNearestParentPackageJSON` 只被 `package_json_reader` 自己调
 
 ### 后续工作
 
-- 不支持 `node_modules` 内在线替换、同路径重装、link 换目标及跨包重载传播。包更新需要重启进程；这不保证每个管理操作的结果都已正确报告这一要求。
+- 移动到其他目录的保留 profile 映射需要等待重启；Plugin Manager 通过卸载再安装来移动包。`node_modules` 内的原地替换由[替换说明](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)处理。
 - 使用异步 loader 线程的 TSX 版本，其线程内包配置不受这些 hook 管理。线程同步留待后续；本次不提供通用 Worker 缓存同步。
 - 注册了同步 resolve hooks 时，CommonJS 私有请求缓存刷新留待后续；这些请求保留原有 loader 行为。
 - 销毁 HMR 会恢复原生 reader，其此前缓存的配置可能重新可见。跨 HMR 替换保留失效状态留待后续。
@@ -90,7 +88,7 @@ binding 的 `getNearestParentPackageJSON` 只被 `package_json_reader` 自己调
 
 **在 runtime resolution 发布时全量重读已见过的 manifest（#5496）。** 它把包配置失效放进了绑定表发布，和模块缓存脱了钩：覆盖已安装的包时报需要重启，但下一次无关的发布会让新导入拿到新版本，旧插件仍在运行。包配置缓存属于内容，应该和模块缓存由同一方负责，也就是 HMR。
 
-**让 HMR 支持 `node_modules` 内的包重载。** 这需要沿包含 `node_modules` 的模块图确定受影响插件，防止共享库和 Cordis 被重复求值，还要处理动态 import 漏边、模块副作用和 Worker。本次不做，这些场景继续要求重启。
+**让 HMR 支持 `node_modules` 内的包重载。** 这需要沿包含 `node_modules` 的模块图确定受影响插件，防止共享库和 Cordis 被重复求值，还要处理动态 import 漏边、模块副作用和 Worker。本次不做；[替换说明](2026-10-01-replace-changed-package-modules-on-recomposition.zh.md)在 profile 重新组合时加入了这一能力。
 
 **package.json 变化时重载所有插件。** 仅作为配置的 manifest 不要求模块求值。实际作为 JSON 模块导入的 manifest 保留普通的依赖驱动重载。
 

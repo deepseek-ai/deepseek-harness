@@ -195,6 +195,14 @@ const UPDATE_DESCRIPTION =
   'Change a reminder in place, keeping its id. Supply a new title, prompt, or at most one timing parameter; '
   + 'omitted fields keep their stored values. To change a relative delay, create a new reminder.'
 
+const CREATE_TITLE_DESCRIPTION =
+  `Concise task name in the user's language, at most ${MAX_TITLE_LENGTH} characters. `
+  + 'Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. '
+  + 'Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, '
+  + 'or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. '
+  + 'Do not append parenthetical notes. '
+  + 'Put scheduling information in the timing parameters and execution instructions in prompt.'
+
 /** Deterministic model content for every canonical Schedule value. */
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
   // The ToolRuntime has already validated the value against the lossless-JSON output schema.
@@ -454,7 +462,7 @@ function registerScheduleTools(ctx: Context): void {
       title: {
         type: 'string',
         required: true,
-        description: `Task name of at most ${MAX_TITLE_LENGTH} characters, shown on the task card and in task lists.`,
+        description: CREATE_TITLE_DESCRIPTION,
       },
       after_seconds: {
         type: 'number',
@@ -534,7 +542,7 @@ function registerScheduleTools(ctx: Context): void {
       id: { type: 'string', required: true, description: 'Schedule id returned by schedule_list.' },
       title: {
         type: 'string',
-        description: `New task name of at most ${MAX_TITLE_LENGTH} characters.`,
+        description: 'New task name; follow the schedule_create title rules.',
       },
       prompt: {
         type: 'string',

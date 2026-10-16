@@ -1,0 +1,12 @@
+- insert:
+    - id: config-editor
+      name: cordis:editor
+    - id: settings
+      name: cordis:settings
+    - id: plugin-manager
+      name: cordis:manager
+    - id: plugin-market
+      name: cordis:market
+      config:
+        indexes:
+          - https://first.example/index.json

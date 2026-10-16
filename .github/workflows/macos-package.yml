@@ -4,21 +4,43 @@ on:
   workflow_dispatch:
     inputs:
       preset:
-        description: 'Machine preset (configured on the packaging runner)'
+        description: '打包环境：选择机器上的 test 或 production 配置；同时决定后续发布环境'
         type: choice
         options: [test, production]
         default: test
         required: true
       skip_notarization:
-        description: 'Skip notarization/stapling: internal debugging only, not for distribution or updates'
+        description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
         type: boolean
         default: false
         required: true
-      build_version:
-        description: 'Version: auto recommended; explicit version must match the checkout product prefix'
+      test_release_id:
+        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
         type: string
-        default: auto
+        default: ''
+        required: false
+      source_ref:
+        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
+        type: string
+        default: master
         required: true
+      update_channel:
+        description: '升级通道：nightly 或 latest（须为稳定版本）；自动更新不会切换通道'
+        type: choice
+        options: [nightly, latest]
+        default: nightly
+        required: true
+      version_mode:
+        description: '版本模式：default 为 test 自动编号、production 跟随产品；product 保留原版本，auto 自动编号，manual 手填'
+        type: choice
+        options: [default, product, auto, manual]
+        default: default
+        required: true
+      build_version:
+        description: '手动版本号：仅 manual 时填写完整版本；须为产品原版本或受支持的预发布后缀'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -36,14 +58,37 @@ jobs:
         shell: bash
     env:
       PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
+      PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
+      PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
+      DSH_DESKTOP_UPDATE_CHANNEL: ${{ inputs.update_channel }}
       DSH_TELEMETRY_DISABLED: '1'
       DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
     steps:
       - uses: actions/checkout@v7.0.1
         id: checkout
         with:
           persist-credentials: false
           clean: true
+          ref: ${{ inputs.source_ref }}
+      - name: Validate selected source and adapter support
+        run: >-
+          node -e "const fs=require('node:fs'); const ref=process.env.PACKAGE_SOURCE_REF;
+          const cp=require('node:child_process'); const preset=process.env.DSH_PACKAGING_PRESET;
+          if(!['test','production'].includes(preset)) throw Error('Unknown packaging preset');
+          const tag=/^dsh-v[0-9][0-9A-Za-z.-]*$/.test(ref);
+          if(preset==='production' && ref!=='master' && !tag) throw Error('Production source must be master or dsh-v*');
+          if(tag) {
+          const v=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+          if(ref!=='dsh-v'+v) throw Error('Source tag must match product version');
+          const tagged=cp.execFileSync('git',['rev-parse','--verify','refs/tags/'+ref+'^{commit}'],{encoding:'utf8'}).trim();
+          const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          if(tagged!==head) throw Error('Checkout does not match source tag');
+          } else {
+          const branch=cp.execFileSync('git',['rev-parse','--abbrev-ref','HEAD'],{encoding:'utf8'}).trim();
+          if(branch==='HEAD' || branch!==ref || ref.startsWith('refs/')) throw Error('Select a branch in this repository, not a SHA or PR ref');
+          }
+          if(!fs.readFileSync('apps/desktop/scripts/desktop-ci-version.mjs','utf8').includes('PACKAGE_VERSION_MODE')) throw Error('Source lacks Desktop channel/version CI support; select a newer release');"
       - uses: pnpm/action-setup@v5.0.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -71,6 +116,12 @@ jobs:
           args=()
           if [[ "$PACKAGE_SKIP_NOTARIZATION" = true ]]; then args+=(--skip-notarization); fi
           pnpm run package:desktop:mac:arm64 --build-version "$PACKAGE_VERSION" "${args[@]}"
+      - name: Retain complete package outside the checkout
+        id: retained
+        env:
+          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
+          PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
+        run: node --import tsx apps/desktop/scripts/retain-desktop-ci.ts
       - name: Retain packaging diagnostics
         if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v7.0.1
@@ -86,8 +137,6 @@ jobs:
         with:
           name: macos-arm64-${{ steps.settings.outputs.mode }}-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
-          path: |
-            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.dmg
-            apps/desktop/.desktop-build/targets/mac-arm64/${{ steps.settings.outputs.artifacts }}/*.zip
+          path: ${{ steps.retained.outputs.directory }}/*
           if-no-files-found: error
           retention-days: 14

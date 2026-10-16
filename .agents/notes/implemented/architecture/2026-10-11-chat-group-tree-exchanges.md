@@ -33,7 +33,7 @@ The host claims the waking input right after `turn/start`, assembles the system 
 
 **Declare a business role (`input`, `notice`) on Nodes.** That places business semantics in the grouping mechanism; group-tree positions describe structure only, and each business Definition chooses its position.
 
-**Correct the scroll room for folds not caused by own input.** Notices should not fold at all, and correcting the room would not remove that unnecessary fold; it remains a residual issue for human input from another tab.
+**Correct the scroll room for folds not caused by own input.** Notices should not fold at all, and correcting the room would not remove that unnecessary fold. Folds caused by human input without an echo on this page are handled by [one fold motion for collapsing on the next message](2026-10-13-chat-single-fold-motion.md).
 
 **Read Turn inputs at `turn`.** Terminal errors, max-token notices, and the completed-turn footer also stand outside the process disclosure, so reading `turn` would treat them as opening input; Turn inputs need their own position.
 
@@ -45,7 +45,7 @@ The host claims the waking input right after `turn/start`, assembles the system 
 - External Definitions place their Chat rows through `groupTree`. Apart from the two `assistant-step` rules, ui-chat names no kind when it groups, folds, or detects Turn inputs, and built-in kinds keep the placement their former kind lists gave them.
 - Under On next message, a long run of notice-woken Turns (up to 31 goal-mode Turns in sampled Sessions) stays expanded until the human types again.
 - When the loaded window holds no opening Turn, every loaded Turn belongs to the latest exchange.
-- Human input from another tab folds when its `user/message` arrives, about 200 ms later than the former `turn/start` fold; that fold still uses generic room and is unchanged here.
+- Human input from another tab folds when its `user/message` arrives, about 200 ms later than the former `turn/start` fold; its landing follows [one fold motion for collapsing on the next message](2026-10-13-chat-single-fold-motion.md).
 
 ## Testing
 

@@ -34,6 +34,9 @@ import * as os from '../../src/node/builtin_modules/implemented/os.ts'
 import * as perfHooks from '../../src/node/builtin_modules/implemented/perf_hooks.ts'
 import { DSH_HOME, DSH_TMP } from '../../src/storage/paths.ts'
 
+/** Node's standard code for a feature the running platform cannot provide. */
+const PLATFORM_UNAVAILABLE = 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM'
+
 /** Every refusal writes its message to the console before throwing; keep the run quiet. */
 const quiet = (): void => { vi.spyOn(console, 'error').mockImplementation(() => {}) }
 
@@ -68,14 +71,15 @@ const CONSTRUCTED: [string, Record<string, unknown>, readonly string[]][] = [
 ]
 
 describe('not-implemented stubs', () => {
-  it('names the module and the symbol, and reports before throwing', () => {
+  it('names the module and the symbol, carries the Node platform code, and reports before throwing', () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = notAvailableError('node:zlib', 'gzipSync')
     expect(error.message).toBe('web-preview: node:zlib.gzipSync is not available in the worker host')
+    expect(error.code).toBe(PLATFORM_UNAVAILABLE)
     expect(reported).toHaveBeenCalledWith(error.message)
 
     const stub = notImplementedFail('node:zlib', 'gzipSync')
-    expect(() => stub()).toThrow(error.message)
+    expect(() => stub()).toThrow(expect.objectContaining({ message: error.message, code: PLATFORM_UNAVAILABLE }))
   })
 
   for (const [module, namespace, members] of CALLED) {
@@ -103,6 +107,12 @@ describe('not-implemented stubs', () => {
   it('serves cross-spawn\'s callable default export as the same refusal', () => {
     expect(crossSpawn.default).toBe(crossSpawn.spawn)
     expect(crossSpawn.default.sync).toBe(crossSpawn.sync)
+  })
+
+  it('refuses node:worker_threads construction with the Node platform code', () => {
+    quiet()
+    expect(() => new workerThreads.MessageChannel()).toThrow(expect.objectContaining({ code: PLATFORM_UNAVAILABLE }))
+    expect(() => new workerThreads.Worker('')).toThrow(expect.objectContaining({ code: PLATFORM_UNAVAILABLE }))
   })
 
   it('keeps the CommonJS interop marker and a default export on every replaced module', () => {

@@ -153,6 +153,7 @@ function writeReleaseRecord(
     target: target.name,
     version: buildVersion,
     environment: update.environment,
+    channel: update.channel,
     publicUrl: update.publicUrl,
     // Upload reads this to tag the commit a production release was packaged from.
     ...packaged === undefined ? {} : { commit: packaged.commit, dirty: packaged.dirty },

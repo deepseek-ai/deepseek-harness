@@ -18,14 +18,14 @@
   en: 17c6bcdefa05a8f8
   zh: 4ee18f832276144d
 /desktop-packaging/release-versions:
-  en: d80a92c02a583b80
-  zh: b27f75ff29fcea1a
+  en: 3f38ab26ee195b39
+  zh: f00eddafa8f3b9ca
 /desktop-packaging/configuration-and-local-builds:
-  en: e4f526604231ed43
-  zh: d412179ffdc402ba
+  en: f5dc36baf414ecc5
+  zh: 8984741b356ac1d3
 /desktop-packaging/windows-actions-packaging:
-  en: e3f51e7130a0fe05
-  zh: 70fd6a40d5899871
+  en: e1b101593f6f755e
+  zh: 121f225de399de1e
 /desktop-packaging/macos-self-hosted-packaging:
   en: a3af9523fdc60036
   zh: 5e18d4740e9b7f57
@@ -45,8 +45,8 @@
   en: b42f103358d0dfd7
   zh: a534164ad9eb00da
 /desktop-packaging/runtime-file-selection-and-installation-checks:
-  en: 06d5c666a3e7f2e4
-  zh: c1d4a55cc29e11e3
+  en: bfd89e1d139c5729
+  zh: 5d6cced5462ba13e
 /desktop-packaging/desktop-runtime-preparation:
   en: a7aa3066e649ffe8
   zh: 4334637910058c09

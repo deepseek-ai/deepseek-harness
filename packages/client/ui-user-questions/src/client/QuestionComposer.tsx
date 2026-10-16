@@ -545,7 +545,13 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                     placeholder would read as somewhere to type. */}
                 {(review === undefined || draft.custom !== '') && (hasOptions
                   ? (
-                    <div className={clsx(css.customRow, draft.custom !== '' && css.customRowActive)}>
+                    <div
+                      className={clsx(
+                        css.customRow,
+                        draft.custom !== '' && css.customRowActive,
+                        question.multiSelect !== true && draft.selected.length > 0 && css.customRowYielded,
+                      )}
+                    >
                       {question.multiSelect === true
                         ? (
                           <span

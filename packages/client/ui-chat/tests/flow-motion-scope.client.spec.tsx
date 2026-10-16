@@ -3,6 +3,7 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ChatViewport } from '../src/client/chat/use-chat-viewport.ts'
+import { ScrollFollow } from '../src/client/chat/use-scroll-follow.ts'
 import { useSearchableHidden } from '../src/client/chat/searchable-hidden.ts'
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }) })
@@ -20,10 +21,11 @@ function viewport() {
   document.body.append(list)
   const owner = new ChatViewport()
   owner.attach(list, column)
-  return { list, row, spacer, owner, dispose: () => { owner.detach(); list.remove() } }
+  const unbind = owner.bindReader({ follow: new ScrollFollow(false, 25), landedAtTail: vi.fn(), pending: () => false })
+  return { list, row, spacer, owner, dispose: () => { unbind(); owner.detach(); list.remove() } }
 }
 
-it('isolates fold anchoring and reservation between viewports', async () => {
+it('isolates fold anchoring and batch room between viewports', async () => {
   const first = viewport()
   const second = viewport()
   try {

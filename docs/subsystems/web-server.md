@@ -116,12 +116,27 @@ createSharedFetchHandler(channel: '/api'): ConnectionFetchHandler
 requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
 
 /**
- * Admit one request: it passes {@link requestRejection} and speaks for the
- * operator, or it is refused with that status.
+ * Admit an HTTP request against its signed browser or API credential and live Peer.
  * @param request - request headers from the HTTP or upgrade request.
- * @returns the operator Peer, or the rejection status.
+ * @returns the credential's Peer, or the rejection status.
  */
 admit(request: ConnectionTrustRequest): PeerAdmission
+
+/**
+ * Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.
+ * @param options - fixed principal and optional interaction participation (default `answer`).
+ * @returns a new Peer distinct from every other Peer.
+ */
+createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
+
+/**
+ * Claim a physical socket for an API Peer; browser sockets share their owner Peer.
+ * @param request - authenticated upgrade request headers.
+ * @returns the Peer and idempotent release, or 409 for duplicate API ownership.
+ * The carrier releases on socket termination or failed upgrade; release removes
+ * API admission synchronously without cancelling independent HTTP calls.
+ */
+admitConnection(request: ConnectionTrustRequest): ConnectionAdmission
 
 /**
  * Authenticate one frontend index request, owning a token redirect or 401.
@@ -140,6 +155,8 @@ authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexRespons
  */
 authenticatedUrl(baseUrl: string): string
 ```
+
+Types: [Principal](typert.md)
 
 Source: [`packages/client/connection/src/rpc.ts`](../../packages/client/connection/src/rpc.ts)
 

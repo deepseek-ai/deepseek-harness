@@ -458,14 +458,16 @@ it.each([
   })
 })
 
-it('turns a plugin off and on without duplicating patch overrides', async () => {
+it('turns a plugin off and on without leaving a patch override the bundle already implies', async () => {
   const { manager, dir } = await fixture()
   const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
   expect(await manager.setPluginEnabled(id, false)).toMatchObject({ changed: true, application: 'applied' })
   expect((await manager.listPlugins()).find(row => row.entryId === id)?.enabled).toBe(false)
   expect(await manager.setPluginEnabled(id, false)).toMatchObject({ changed: false, application: 'applied' })
-  expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: true, application: 'applied' })
   expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8').match(/id: managed/g)).toHaveLength(1)
+  expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: true, application: 'applied' })
+  expect((await manager.listPlugins()).find(row => row.entryId === id)?.enabled).toBe(true)
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).not.toContain('id: managed')
 })
 
 it('retains installed dependencies when toggling a bundle and appends it when re-enabled', async () => {
@@ -481,9 +483,11 @@ it('retains installed dependencies when toggling a bundle and appends it when re
 })
 
 it('reports an overlay overriding a saved plugin toggle', async () => {
-  const { manager } = await fixture('live', true)
+  const { manager, dir } = await fixture('live', true)
+  writeFileSync(join(dir, 'cordis.patch.yml'), '- id: managed\n  disabled: true\n')
   const id = (await manager.listPlugins()).find(row => row.patchId === 'managed')!.entryId
   expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: true, application: 'overridden' })
+  expect(await manager.setPluginEnabled(id, true)).toMatchObject({ changed: false, application: 'overridden' })
 })
 
 it('saves startup-only toggles and refuses removal of currently used packages', async () => {
@@ -731,6 +735,7 @@ it.each([
   '@deepseek-ai/dsh-host-plugin-inventory',
   '@deepseek-ai/dsh-typert-registry',
   '@deepseek-ai/dsh-api-remotes',
+  '@deepseek-ai/dsh-api-remote-access',
 ])('protects the management dependency %s and its containing bundle', async (name) => {
   const { ctx, manager, bundle, profile, dir } = await fixture('startup')
   bundle('extra', [{ id: 'dependency', name, disabled: true }])
@@ -793,14 +798,23 @@ it('restores the manifest when the package pnpm added declares no bundle', async
   expect((await manager.listBundles()).some(row => row.name === 'plain')).toBe(false)
 })
 
-it('never removes an existing dependency after installation validation fails', async () => {
+it('refuses to install over an installed package, by name, version or local directory, without running pnpm', async () => {
   const { manager, dir } = await fixture()
-  writeFileSync(join(dir, 'node_modules', 'extra', 'package.json'), '{"name":"extra"}')
   const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({ exitCode: 0, output: '', truncated: false, logPath: '/operation.log' })
   onTestFinished(() => { install.mockRestore() })
-  const result = await manager.installBundle('extra')
-  expect(result).toMatchObject({ application: 'failed', stage: 'install', error: { code: 'not-bundle' } })
-  expect(install).toHaveBeenCalledOnce()
+  for (const spec of ['extra', 'extra@2', join(dir, 'node_modules', 'extra'), `link:${join(dir, 'node_modules', 'extra')}`]) {
+    expect(await manager.installBundle(spec)).toMatchObject({ application: 'failed', stage: 'install', changed: false, error: { code: 'already-installed' } })
+  }
+  // A tarball saved as a path relative to the profile, and a refused install's script approvals, write nothing.
+  const manifest = readProfileManifest('test', dir)
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ ...manifest, dependencies: { extra: 'file:../extra-1.0.0.tgz' } }))
+  const workspace = join(dir, 'pnpm-workspace.yaml')
+  const settings = existsSync(workspace) ? readFileSync(workspace, 'utf8') : undefined
+  expect(await manager.installBundle(join(dir, '..', 'extra-1.0.0.tgz'), { approvedBuilds: ['native-provider'] }))
+    .toMatchObject({ application: 'failed', changed: false, error: { code: 'already-installed' } })
+  expect(existsSync(workspace) ? readFileSync(workspace, 'utf8') : undefined).toBe(settings)
+  writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  expect(install).not.toHaveBeenCalled()
   expect(readProfileManifest('test', dir).dependencies).toEqual({ extra: '1.0.0' })
 })
 
@@ -851,12 +865,18 @@ it('returns unchanged failures as warnings while toggling and removing another b
   expect(remove).toHaveBeenCalledOnce()
 })
 
-it('reports repeated installs as requiring restart and ambiguous package changes as failures', async () => {
+it('recognizes a repeated installation without HMR that leaves the saved dependency as it was', async () => {
+  const { manager, dir } = await fixture('startup')
+  const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({ exitCode: 0, output: '', truncated: false, logPath: join(dir, 'pnpm.log') })
+  onTestFinished(() => { install.mockRestore() })
+  expect(await manager.installBundle(`link:${join(dir, 'node_modules', 'extra')}`, { enabled: false }))
+    .toMatchObject({ changed: false, application: 'restart-required', bundle: 'extra', enabled: false })
+})
+
+it('reports ambiguous package changes as failures', async () => {
   const { manager, dir } = await fixture()
   const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({ exitCode: 0, output: '', truncated: false, logPath: join(dir, 'pnpm.log') })
   onTestFinished(() => { install.mockRestore() })
-  expect(await manager.installBundle('extra')).toMatchObject({ changed: false, application: 'restart-required' })
-  expect(await manager.installBundle('extra@1')).toMatchObject({ changed: false, application: 'restart-required' })
   expect(await manager.installBundle('extra-long@1')).toMatchObject({ changed: false, application: 'failed', error: { code: 'ambiguous-install' } })
   install.mockImplementationOnce(async () => {
     writeFileSync(join(dir, 'package.json'), '{}')
@@ -864,6 +884,41 @@ it('reports repeated installs as requiring restart and ambiguous package changes
   })
   expect(await manager.installBundle('unknown')).toMatchObject({ changed: false, application: 'failed', error: { code: 'ambiguous-install' } })
   expect(readProfileManifest('test', dir).dependencies).toEqual({ extra: '1.0.0' })
+})
+
+it('removes a package with the registry it was installed from, so pnpm verifies its lockfile entries there', async () => {
+  const { manager, dir, bundle } = await fixture()
+  const corp = 'https://npm.corp.example/'
+  const pnpm = vi.spyOn(operations, 'runProfilePnpm').mockImplementation(async (_context, args) => {
+    const name = String(args[1])
+    const manifest = readProfileManifest('test', dir)
+    if (args[0] === 'add') {
+      bundle(name, [{ id: name, name: './plugin.mjs', config: { service: name } }])
+      manifest.dependencies = { ...manifest.dependencies, [name]: '1.0.0' }
+    } else {
+      delete manifest.dependencies?.[name]
+    }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+    return { exitCode: 0, output: '', truncated: false, logPath: join(dir, 'pnpm.log') }
+  })
+  onTestFinished(() => { pnpm.mockRestore() })
+  expect(await manager.installBundle('mirrored', { enabled: false, registry: corp })).toMatchObject({ application: 'applied' })
+  expect(await manager.removeBundle('mirrored')).toMatchObject({ application: 'applied' })
+  expect(pnpm.mock.calls.at(-1)?.[1]).toEqual(['remove', 'mirrored', `--config.registry=${corp}`])
+  // A failed installation records no registry, and a failed removal keeps the recorded one for the retry.
+  pnpm.mockResolvedValueOnce({ exitCode: 1, output: 'failed', truncated: false, logPath: join(dir, 'pnpm.log') })
+  expect(await manager.installBundle('failing', { enabled: false, registry: corp })).toMatchObject({ application: 'failed' })
+  expect(await manager.installBundle('mirrored', { enabled: false, registry: corp })).toMatchObject({ application: 'applied' })
+  pnpm.mockResolvedValueOnce({ exitCode: 1, output: 'remove failed', truncated: false, logPath: join(dir, 'pnpm.log') })
+  expect(await manager.removeBundle('mirrored')).toMatchObject({ application: 'failed' })
+  expect(await manager.removeBundle('mirrored')).toMatchObject({ application: 'applied' })
+  expect(pnpm.mock.calls.at(-1)?.[1]).toEqual(['remove', 'mirrored', `--config.registry=${corp}`])
+  // A package this manager did not install is removed with the registry an installation asks first.
+  bundle('mirrored', [])
+  const manifest = readProfileManifest('test', dir)
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ ...manifest, dependencies: { ...manifest.dependencies, mirrored: '1.0.0' } }))
+  await manager.removeBundle('mirrored')
+  expect(pnpm.mock.calls.at(-1)?.[1]).toEqual(['remove', 'mirrored'])
 })
 
 it('streams pnpm output, reports the installation phases, and names the installed bundle', async () => {
@@ -1401,7 +1456,7 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   expect(managed()).toBeUndefined()
   expect((await manager.listBundles()).find(bundle => bundle.name === 'extra')?.error).toEqual({
     code: 'incompatible-version',
-    incompatible: [{ name: 'extra', version: '1.0.0', runtimeVersion: runtime, peers: { '@deepseek-ai/dsh': '999.0.0' } }],
+    incompatible: [{ name: 'extra', version: '1.0.0', runtimeVersion: runtime, requirements: { '@deepseek-ai/dsh': '999.0.0' } }],
   })
   expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed' })
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, true)).toMatchObject({ changed: false, application: 'failed' })
@@ -1426,7 +1481,7 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
 
 it('reports a package run refused for compatibility as a typed refusal', async () => {
   const { manager } = await fixture()
-  const incompatible = [{ name: 'dsh-x', version: '2.0.0', runtimeVersion: getDshRuntimeVersion(), peers: { '@deepseek-ai/dsh': '999.0.0' } }]
+  const incompatible = [{ name: 'dsh-x', version: '2.0.0', runtimeVersion: getDshRuntimeVersion(), requirements: { '@deepseek-ai/dsh': '999.0.0' } }]
   const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({
     exitCode: 1, output: 'dsh: installation rejected', truncated: false, logPath: 'pnpm.log', kind: 'unknown', incompatible,
   })
@@ -1521,30 +1576,6 @@ it('uses the generic exact installer and keeps an Official entry through on, off
   expect(await manager.removeBundle(name)).toMatchObject({ application: 'applied' })
   expect((await manager.listBundles()).filter(item => item.name === name)).toHaveLength(1)
   expect((await manager.listBundles()).find(item => item.name === name)).toMatchObject({ official: true, availability: 'missing', enabled: false, installed: false })
-})
-
-it.each([true, false])('updates an Official dependency while preserving selection=%s and requiring restart', async (enabled) => {
-  const { manager, dir, bundle, profile } = await fixture()
-  const name = OFFICIAL_ON_DEMAND_CATALOG[0]!.packageName
-  bundle(name, [], profile.home)
-  const manifest = readProfileManifest('test', dir)
-  manifest.dependencies = { ...manifest.dependencies, [name]: '1.0.0' }
-  if (enabled) manifest.dsh!.profile!.bundles!.push(name)
-  writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
-  const listed = (await manager.listBundles()).find(item => item.name === name)
-  expect(listed).toMatchObject({ version: '1.0.0', official: true, availability: 'profile',
-    installTarget: { spec: `${name}@${getDshRuntimeVersion()}`, version: getDshRuntimeVersion() } })
-  expect(listed?.error).toBeUndefined()
-  const pnpm = vi.spyOn(operations, 'runProfilePnpm').mockImplementation(async () => {
-    const current = readProfileManifest('test', dir)
-    current.dependencies = { ...current.dependencies, [name]: getDshRuntimeVersion() }
-    writeFileSync(join(dir, 'package.json'), JSON.stringify(current))
-    return { exitCode: 0, output: '', truncated: false, logPath: '/install.log' }
-  })
-  onTestFinished(() => { pnpm.mockRestore() })
-  expect(await manager.installBundle(`${name}@${getDshRuntimeVersion()}`, { enabled, saveExact: true }))
-    .toMatchObject({ application: 'restart-required', enabled })
-  expect(readProfileManifest('test', dir).dsh?.profile?.bundles?.includes(name)).toBe(enabled)
 })
 
 it('restores dependency and selection after an exact version is unavailable', async () => {
@@ -1653,12 +1684,4 @@ it.each(['absent', 'bundle', 'not-bundle', 'unreadable'])('keeps a missing sourc
   })
   expect((await manager.listBundles()).find(item => item.name === name)?.error?.diagnostic).toContain('restore the checkout')
   expect((await manager.listBundles()).find(item => item.name === name)?.installTarget).toBeUndefined()
-})
-
-it('recognizes a repeated local link install without a dependency-spec change', async () => {
-  const { manager, dir } = await fixture()
-  const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({ exitCode: 0, output: '', truncated: false, logPath: join(dir, 'pnpm.log') })
-  onTestFinished(() => { install.mockRestore() })
-  expect(await manager.installBundle(`link:${join(dir, 'node_modules', 'extra')}`, { enabled: false }))
-    .toMatchObject({ changed: false, application: 'restart-required', bundle: 'extra', enabled: false })
 })

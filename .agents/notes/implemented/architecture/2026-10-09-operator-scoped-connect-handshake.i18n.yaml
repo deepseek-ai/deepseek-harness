@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-10-09-operator-scoped-connect-handshake.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-operator-scoped-connect-handshake.md
+/agent-note-peer-scoped-connect-handshake:
+  en: 90137ec146d1a60e
+  zh: 3dbb0c96426beb36
+/agent-note-peer-scoped-connect-handshake/problem:
+  en: 3658160e034e0e58
+  zh: 980d922aded8713b
+/agent-note-peer-scoped-connect-handshake/decision:
+  en: 414dfe949a53c4d9
+  zh: 7e6efdd57f2eb240
+/agent-note-peer-scoped-connect-handshake/decision/admission-and-ownership:
+  en: 95ad4c8c433fdc9b
+  zh: 379ccd5e077d7dee
+/agent-note-peer-scoped-connect-handshake/decision/accepted-retention:
+  en: f58c1b39855740da
+  zh: 99343095a357fa3f
+/agent-note-peer-scoped-connect-handshake/decision/events-and-client-scope:
+  en: e0bdf2f82d79d2a8
+  zh: 5df84ee473916161
+/agent-note-peer-scoped-connect-handshake/alternatives-considered:
+  en: bcc97e06d4565be1
+  zh: d11e9e9680b26c03
+/agent-note-peer-scoped-connect-handshake/verification:
+  en: 81ce03ab4e1fd0d4
+  zh: c2729e7e2db56f67
+/agent-note-peer-scoped-connect-handshake/consequences:
+  en: 91f5f80f733c174c
+  zh: 76cbb31b0d2e8764

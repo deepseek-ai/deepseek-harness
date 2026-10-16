@@ -1,5 +1,6 @@
 /** React-free browser terminal state and reconnecting Remote-stream ownership. */
 import { preferredShell, rememberShell } from './shell-preference.ts'
+import type { TerminalInventory } from './inventory.ts'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import { RemoteStreamCarrierError, type ClientRemote, type RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
@@ -83,6 +84,7 @@ export class TerminalView {
    * @param sessionId - Session owning the terminal.
    * @param remote - typed terminal Remote operations.
    * @param gateway - reconnecting stream factory.
+   * @param inventory - Session-owned terminal list shared by all views.
    * @param id - Host terminal identity, reused when recovering an item from its Session list.
    * @param createWhenMissing - allow allocation only for a new tab, never a listed terminal.
    * @param shellPath - explicit shell chosen at the guide; omission uses the remembered available shell.
@@ -92,8 +94,9 @@ export class TerminalView {
     private readonly sessionId: SessionId,
     private readonly remote: TerminalRemote,
     private readonly gateway: Pick<ClientRemote, '$stream'>,
+    private readonly inventory: TerminalInventory,
     readonly id: WebTerminalId,
-    private readonly createWhenMissing = true,
+    private createWhenMissing = true,
     private readonly shellPath?: string,
     private readonly retain?: (signal: AbortSignal) => Promise<void>,
   ) {}
@@ -104,8 +107,9 @@ export class TerminalView {
    */
   mount(): () => void {
     this.mounted = true
-    if (this.state.getSnapshot().info === undefined) void this.refresh()
-    else this.connect()
+    const state = this.state.getSnapshot()
+    if (state.phase === 'idle') void this.refresh()
+    else if (state.info !== undefined && state.phase !== 'failed' && state.phase !== 'closed') this.connect()
     return () => {
       this.mounted = false
       this.detach()
@@ -113,22 +117,24 @@ export class TerminalView {
   }
 
   /**
-   * Start or recover this tab, deduplicating mounts and retries during allocation.
-   * Only a new tab may allocate a shell; listed terminals cannot be silently replaced.
+   * Start or explicitly retry this tab, sharing Session discovery with other views.
+   * New identities allocate directly; confirmed or restored terminals cannot be replaced.
    * @returns after environment lookup and creation or recovery settle.
    */
   refresh(): Promise<void> {
     if (this.creation !== undefined) return this.creation
     if (this.loading !== undefined) return this.loading
     if (this.closing !== undefined || this.lifetime.signal.aborted) return Promise.resolve()
+    const retry = this.state.getSnapshot().phase !== 'idle'
     this.patch({ phase: 'loading', error: undefined, issue: undefined })
     this.loading = (async () => {
       const [environment, available] = await Promise.all([
-        this.remote.environment(this.sessionId, this.lifetime.signal), this.remote.list(this.sessionId),
+        this.remote.environment(this.sessionId, this.lifetime.signal),
+        this.createWhenMissing ? undefined : this.inventory.read(retry),
       ])
       if (this.stopped()) return
       this.patch({ environment: valueOf(environment) })
-      const info = valueOf(available).find(item => item.id === this.id)
+      const info = available?.get(this.id)
       if (info !== undefined) this.adopt(info)
       else if (this.createWhenMissing) {
         let path = this.shellPath
@@ -156,6 +162,7 @@ export class TerminalView {
         cols: Math.min(80, environment.maxCols), rows: Math.min(24, environment.maxRows),
       }, this.lifetime.signal))
       if (!this.lifetime.signal.aborted) {
+        this.inventory.update(info)
         this.adopt(info)
       }
     })().catch((error: unknown) => { this.fail(error) }).finally(() => { this.creation = undefined })
@@ -163,6 +170,7 @@ export class TerminalView {
   }
 
   private adopt(info: WebTerminalInfo): void {
+    this.createWhenMissing = false
     this.patch({ info, title: info.title })
     if (this.retain === undefined) { if (this.mounted && this.closing === undefined) this.connect(); return }
     void this.retain(this.lifetime.signal).then(() => {
@@ -285,7 +293,9 @@ export class TerminalView {
     if (title.trim() === this.state.getSnapshot().title || this.lifetime.signal.aborted) return
     try {
       valueOf(await this.remote.rename(this.sessionId, this.id, title))
+      if (this.stopped()) return
       const current = this.state.getSnapshot().info
+      if (current !== undefined) this.inventory.update({ ...current, title: title.trim() })
       this.patch({ ...(current === undefined ? {} : { info: { ...current, title: title.trim() } }), title: title.trim() })
     } catch (error) { this.fail(error) }
   }
@@ -302,6 +312,7 @@ export class TerminalView {
       // Even a refused or lost creation response may leave an allocation to close.
       await this.creation
       valueOf(await this.remote.close(this.sessionId, this.id))
+      this.inventory.remove(this.id)
       this.detach()
       this.patch({ phase: 'closed', writable: false })
     })().catch((error: unknown) => { this.closing = undefined; this.fail(error); throw error })
@@ -363,6 +374,7 @@ export class TerminalView {
           continue
         }
         if (frame.type !== 'output') {
+          this.inventory.update(frame.info)
           this.patch({ info: frame.info, title: frame.info.title, phase: 'connected', writable: frame.info.state === 'running' && frame.writable })
         }
         if (frame.type !== 'state') {
@@ -393,6 +405,7 @@ export class TerminalView {
   private fail(error: unknown): void {
     const failure = remoteErrorOf(error)
     const issue = failure?.code === 'terminal/view' ? failure.details.issue : failure?.code === 'terminal/limit-reached' ? 'terminalLimit' : failure?.code === 'terminal/unavailable' ? 'missingTerminal' : undefined
+    if (!this.stopped() && issue === 'missingTerminal') this.inventory.remove(this.id)
     this.patch({ phase: error instanceof RemoteStreamCarrierError ? 'disconnected' : 'failed', writable: false, issue, error: error instanceof Error ? error.message : String(error) })
   }
 }

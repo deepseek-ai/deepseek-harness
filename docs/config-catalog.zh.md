@@ -183,8 +183,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-api-gateway`
 
-- `inject`: `typert`
-- `source`: [`packages/api/gateway/src/index.ts:147`](../packages/api/gateway/src/index.ts)
+- `inject`: `typert` · `remoteAccess`
+- `source`: [`packages/api/gateway/src/index.ts:156`](../packages/api/gateway/src/index.ts)
 
 ```ts config-catalog
 /** Gateway transport configuration. */
@@ -221,8 +221,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
-- `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:80`](../packages/api/session-controller/src/index.ts)
+- `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
+- `source`: [`packages/api/session-controller/src/index.ts:94`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -302,8 +302,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-api-workspace-controller`
 
-- `inject`: `typert` · `workspaceRegistry`
-- `source`: [`packages/api/workspace-controller/src/index.ts:33`](../packages/api/workspace-controller/src/index.ts)
+- `inject`: `remoteAccess` · `typert` · `workspaceRegistry`
+- `source`: [`packages/api/workspace-controller/src/index.ts:37`](../packages/api/workspace-controller/src/index.ts)
 
 ```ts config-catalog
 /** First-use directory policy for the Host account. */
@@ -437,7 +437,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:92`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -451,7 +451,7 @@ export interface ConnectionConfig {
    * an entry here. A non-canonical or non-bare authority fails plugin load.
    */
   trustedHosts?: string[]
-  /** Absolute browser-session lifetime in days. Default: 30. */
+  /** Absolute browser and API cookie lifetime in days. Default: 30. */
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
@@ -500,7 +500,7 @@ export interface Config {
 
 - `inject`: `deepseekAccount` · `productTelemetry`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/client/product-analytics/src/index.ts:14`](../packages/client/product-analytics/src/index.ts)
+- `source`: [`packages/client/product-analytics/src/index.ts:15`](../packages/client/product-analytics/src/index.ts)
 
 ```ts config-catalog
 /** Application-owned collection policy; no user settings surface. */
@@ -509,6 +509,10 @@ export interface Config {
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
+  /** Maximum execution time per static environment query, in milliseconds. */
+  environmentQueryTimeoutMillis: number
+  /** Maximum captured bytes per environment query output stream. */
+  environmentQueryMaxOutputBytes: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-product-analytics -->
@@ -1026,6 +1030,21 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
+<a id="deepseek-aidsh-experimental-cua-macos"></a>
+
+## `@deepseek-ai/dsh-experimental-cua-macos`
+
+- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+- `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:16`](../packages/experimental/cua-macos/src/index.ts)
+
+```ts config-catalog
+/** Native preparation, operation bounds, and profile-local application grants. */
+export type Config = CuaConfig
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-inspector -->
 <a id="deepseek-aidsh-experimental-inspector"></a>
 
@@ -1439,7 +1458,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-hmr`
 
 - `refs`: `ChokidarOptions` (`chokidar`)
-- `source`: [`packages/boot/hmr/src/index.ts:53`](../packages/boot/hmr/src/index.ts)
+- `source`: [`packages/boot/hmr/src/index.ts:56`](../packages/boot/hmr/src/index.ts)
 
 ```ts config-catalog
 /** Module roots and watcher timing, with Chokidar deployment options. */
@@ -2498,6 +2517,30 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-plugin-manager -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-plugin-market -->
+<a id="deepseek-aidsh-plugin-market"></a>
+
+## `@deepseek-ai/dsh-plugin-market`
+
+- `inject`: `pluginManager`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/boot/plugin-market/src/index.ts:32`](../packages/boot/plugin-market/src/index.ts)
+
+```ts config-catalog
+/** Index sources and fetch limits. */
+export interface Config {
+  /** Index URLs in display order; Settings and `setIndexes` write this field without remounting the service. */
+  indexes: Volatile<string[]>
+  /** Deadline for one index fetch, including the body. */
+  fetchTimeoutMs: number
+  /** Largest accepted index body in bytes. */
+  maxBytes: number
+  /** Lifetime of a successfully read index document. */
+  cacheTtlMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-plugin-market -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-plugin-package-inventory-deepseek -->
 <a id="deepseek-aidsh-plugin-package-inventory-deepseek"></a>
 
@@ -2834,10 +2877,10 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 ## `@deepseek-ai/dsh-session-persistence-jsonl`
 
-- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:90`](../packages/session/session-persistence-jsonl/src/index.ts)
+- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:94`](../packages/session/session-persistence-jsonl/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config for the JSONL backend's root and physical encoding. */
+/** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
   /**
    * Root directory for all session files. Required (no default): a default of
@@ -2849,6 +2892,12 @@ export interface Config {
   root: string
   /** Physical encoding; defaults to checksummed Zstandard frames. */
   compression?: JsonlCompression
+  /**
+   * Maximum directory, header, and stat reads in flight across all concurrent
+   * listings of this backend (`list()`, the root encoding check, and historical
+   * fingerprints). Defaults to 3.
+   */
+  listConcurrency?: number
 }
 
 /** Physical encoding selected for JSONL session artifacts. */
@@ -3341,7 +3390,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 - `inject`: `workingDirectory`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/subagent/subagent/src/index.ts:184`](../packages/subagent/subagent/src/index.ts)
+- `source`: [`packages/subagent/subagent/src/index.ts:186`](../packages/subagent/subagent/src/index.ts)
 
 ```ts config-catalog
 /** Host configuration for continuable subagent capacity. */
@@ -4580,6 +4629,7 @@ export interface Config {
 | `@deepseek-ai/dsh-acp-app` | `cmdlineArgs` | [`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts) |
 | `@deepseek-ai/dsh-agent` | — | [`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts) |
 | `@deepseek-ai/dsh-api-account-controller` | `deepseekAccount` · `agents` | [`packages/api/account-controller/src/index.ts`](../packages/api/account-controller/src/index.ts) |
+| `@deepseek-ai/dsh-api-remote-access` | — | [`packages/api/remote-access/src/index.ts`](../packages/api/remote-access/src/index.ts) |
 | `@deepseek-ai/dsh-api-remotes` | `typertGateway` | [`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts) |
 | `@deepseek-ai/dsh-authorization` | `credentials` | [`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts) |
 | `@deepseek-ai/dsh-browser-use` | — | [`packages/browser-use/browser-use/src/index.ts`](../packages/browser-use/browser-use/src/index.ts) |
@@ -4607,6 +4657,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-open-in-app` | — | [`packages/client/ui-open-in-app/src/index.ts`](../packages/client/ui-open-in-app/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
@@ -4729,12 +4780,14 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-slots` | — | [`packages/client/ui-slots/src/index.ts`](../packages/client/ui-slots/src/index.ts) |
 | `@deepseek-ai/dsh-client-web` | — | [`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts) |
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
+| `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-inspector-profile` | — | [`packages/experimental/inspector-profile/src/index.ts`](../packages/experimental/inspector-profile/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-plugin-market-bundle` | — | [`packages/experimental/plugin-market-bundle/src/index.ts`](../packages/experimental/plugin-market-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-ralph-bundle` | — | [`packages/experimental/ralph-bundle/src/index.ts`](../packages/experimental/ralph-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-session-search` | — | [`packages/experimental/session-search/src/index.ts`](../packages/experimental/session-search/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-session-titles-bundle` | — | [`packages/experimental/session-titles-bundle/src/index.ts`](../packages/experimental/session-titles-bundle/src/index.ts) |
@@ -4753,6 +4806,7 @@ export interface Config {
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
+| `@deepseek-ai/dsh-plugin-market-index` | — | [`packages/util/plugin-market-index/src/index.ts`](../packages/util/plugin-market-index/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |
 | `@deepseek-ai/dsh-scope` | — | [`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts) |

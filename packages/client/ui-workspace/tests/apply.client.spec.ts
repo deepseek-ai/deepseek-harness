@@ -8,7 +8,7 @@ import { SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client
 import type { WorkspaceId, WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -54,6 +54,8 @@ const workspaceState = (
   items, archivedSessionIds, pinnedSessionIds, state: 'idle', phase: 'ready', error: null,
 })
 
+const ALLOWED: HostObservable<boolean> = createSnapshotStore(true)
+
 async function bench() {
   const ctx = new Context()
   const commands = new Map<string, ShortcutCommand>()
@@ -66,6 +68,8 @@ async function bench() {
   })
   ctx.provide('uiConversation', {})
   await ctx.plugin(SlotRegistry).await()
+  const accessSource = vi.fn((_kind: string, _id: string, _action: string): HostObservable<boolean> => ALLOWED)
+  ctx.provide('remoteAccess', { source: accessSource })
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
@@ -158,7 +162,7 @@ async function bench() {
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands,
+    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
     workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
@@ -215,8 +219,20 @@ describe('ui-workspace apply', () => {
 
   it('declares the services it drives', () => {
     expect(inject).toEqual([
-      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts',
+      'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
     ])
+  })
+
+  it('publishes the Workspace access Hook over the remoteAccess service', async () => {
+    const b = await bench()
+    onTestFinished(() => b.ctx.fiber.dispose())
+    const provideRoot = vi.spyOn(b.slots, 'provideRoot')
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const keyed = provideRoot.mock.calls.map(([contribution]) => contribution.keyedHooks?.['workspaceAccess']).find(Boolean)
+    // `useWorkspaceAccess(workspaceId, action)` reads the Workspace resource's answer; a call without an action names no source.
+    expect(keyed?.('w1', 'workspace/follow')).toBe(ALLOWED)
+    expect(b.accessSource).toHaveBeenCalledWith('workspace', 'w1', 'workspace/follow')
+    expect(keyed?.('w1')).toBeUndefined()
   })
 
   it('reports a default Workspace creation failure through the shared notice overlay', async () => {

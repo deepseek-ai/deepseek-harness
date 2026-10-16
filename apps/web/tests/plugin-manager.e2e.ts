@@ -26,6 +26,9 @@ const LIVE_EXPECTED = join(SNAPSHOT_DIR, 'live-enabled.expected.md')
 const EXPORTS_EXPECTED = join(SNAPSHOT_DIR, 'exports.expected.md')
 const EXPORTS_EN_EXPECTED = join(SNAPSHOT_DIR, 'exports-en.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
+const { version: badgeVersion } = JSON.parse(await readFile(
+  new URL('../../../packages/experimental/badge-skill-bundle/package.json', import.meta.url), 'utf8',
+)) as { version: string }
 const MODE = webSnapshotMode()
 /** The profile manifest's bundles as the scaffold initializes them. */
 const SCAFFOLD_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', SCAFFOLD_DEFAULTS_BUNDLE]
@@ -687,6 +690,49 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('shows an optional feature preview before activation and leaves other plugin details unchanged', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-preview'))
+    const panel = await openPluginsPanel()
+    await panel.getByRole('button', { name: '更多', exact: true }).click()
+    await panel.getByRole('button', { name: '查看 DSH 徽章技能', exact: true }).click()
+    const detail = panel.locator('[data-plugin-detail]')
+    const preview = detail.getByRole('img', { name: 'DSH 徽章技能功能预览', exact: true })
+    await preview.waitFor()
+    await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
+    expect(await preview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
+    expect(await detail.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+    const fits = await preview.evaluate((image: HTMLImageElement) => {
+      const bounds = image.getBoundingClientRect()
+      const parent = image.parentElement!.getBoundingClientRect()
+      return bounds.width > 0 && bounds.height > 0 && bounds.left >= parent.left && bounds.right <= parent.right + 1
+    })
+    expect(fits).toBe(true)
+    await detail.getByText(`v${badgeVersion}`, { exact: true }).waitFor()
+    await detail.getByText(badgeVersion, { exact: true }).waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'preview.expected.md'),
+      await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+        replacements: [[badgeVersion, '{{version}}']],
+      }), MODE)
+    const chineseSource = await preview.getAttribute('src')
+    try {
+      await setLanguage('en')
+      const englishPreview = detail.getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
+      await englishPreview.waitFor()
+      await englishPreview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
+      expect(await englishPreview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
+      expect(await englishPreview.getAttribute('src')).not.toBe(chineseSource)
+    } finally {
+      await setLanguage('zh')
+    }
+    expect(await preview.getAttribute('src')).toBe(chineseSource)
+    await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
+    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
+    // Detail icons have alt=""; only feature previews expose an image role.
+    expect(await panel.getByRole('img').count()).toBe(0)
+    await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('localizes independent exports and falls back per field without activating the plugins', async () => {
     onTestFinished(closeSettings)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-exports'))
@@ -1067,7 +1113,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md', 'header-responsive.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
     ])
   })
 })
@@ -1100,7 +1146,7 @@ describe('web e2e: startup-applied plugin management', () => {
       // The selection is saved and the switch turns on, but nothing mounts before the next start; a toast says so.
       await expect.poll(bundles, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toEqual([...SCAFFOLD_BUNDLES, '@fixture/bundle'])
       await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
-      await page.getByText('更改将在下次启动生效', { exact: true }).waitFor({ timeout: 10_000 })
+      await page.getByText('请重启 DSH 使更改生效。这个 profile 只在启动时应用更改。', { exact: true }).waitFor({ timeout: 10_000 })
       expect(mounted()?.fiber?.state).toBeUndefined()
       // The pack's page lists its rows from their declarations, with no live entry to switch.
       await panel.getByRole('button', { name: '查看 @fixture/bundle' }).click()

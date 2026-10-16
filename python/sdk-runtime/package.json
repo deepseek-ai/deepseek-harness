@@ -75,6 +75,7 @@
     "@deepseek-ai/dsh-persona": "workspace:*",
     "@deepseek-ai/dsh-plan-mode": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-plugin-market": "workspace:*",
     "@deepseek-ai/dsh-plugin-package-inventory-deepseek": "workspace:*",
     "@deepseek-ai/dsh-pwsh-local": "workspace:*",
     "@deepseek-ai/dsh-repeat-tool-reminder": "workspace:*",

@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-macos/README.md
+/:
+  en: a1503331d3f35516
+  zh: fcb8e5220ff732e1
+/deepseek-ai-dsh-experimental-cua-macos:
+  en: 022ca213425e11ee
+  zh: d64631748ed91cc2
+/deepseek-ai-dsh-experimental-cua-macos/summary:
+  en: 4549f02fc53854a5
+  zh: 6f74f1130b6623a8
+/deepseek-ai-dsh-experimental-cua-macos/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7b30b973a849247d
+/deepseek-ai-dsh-experimental-cua-macos/use-this-package:
+  en: e2e1797ad6b73f25
+  zh: 35b7a06e471e433c
+/deepseek-ai-dsh-experimental-cua-macos/use-this-package/connect-an-external-execution-environment:
+  en: e7909c9b43e44fbc
+  zh: 98949877d4ea3a86
+/deepseek-ai-dsh-experimental-cua-macos/understand-the-implementation:
+  en: 8b9ec208ca057a4a
+  zh: e8dbb45891ad15b8
+/deepseek-ai-dsh-experimental-cua-macos/further-exploration:
+  en: ff9fac614001a98f
+  zh: 329678941154aaea
+/deepseek-ai-dsh-experimental-cua-macos/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations:
+  en: ab7cba4a42334ab9
+  zh: f77cd9d84624b6c2
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/what-the-model-sees:
+  en: c221fa5ce647b1dd
+  zh: 9388c91a9f89e029
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/what-the-model-sees/operation-guidance-verbatim:
+  en: 2dbc22ffd1f8a717
+  zh: d4458872e75305d9
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/token-effect:
+  en: ab52b46d874fa8b9
+  zh: e87d3620ef77cb06
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/kv-cache-effect:
+  en: a2c9acb5a4320dda
+  zh: e8d1586af60215c4
+/deepseek-ai-dsh-experimental-cua-macos/known-limitations-and-deferred-work:
+  en: 9d8af4c39fe407a3
+  zh: afec49eedfd702cb
+/deepseek-ai-dsh-experimental-cua-macos/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: 8122fa08b2aa95fa

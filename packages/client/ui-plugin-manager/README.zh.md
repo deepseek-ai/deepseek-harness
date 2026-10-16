@@ -27,13 +27,13 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在侧栏选择**插件**。信息按钮使用 11px 的 caption 色图标和 20px 方形悬停区域，与副标题间隔 4px。它说明当前页用于配置官方插件、安装和管理其他插件，**设置 → 内置插件**则展示内置插件列表及运行状态。悬停或聚焦显示共享 tooltip；点击后保持展开，直至再次点击、Escape、Tab 或外部点击。页面首次打开时通过 `api-remotes` 读取清单与组合包；没有受管 profile 的 Host 上页面显示为不可用。**内置插件配置**按配置的顺序列出官方配置页：子智能体、网页搜索、Agent 循环、终端。**实验性插件**展示主要的可选组合包，标题旁的**更多**打开同名的独立页面。该页列出全部官方组合包，也包含主列表已有的条目，Codex 和 Claude Code 子智能体排在最后。返回按钮回到主列表，**已安装插件**保持在实验性插件下方。组合包详情返回打开它的列表。目录条目在安装或移除后保持原位置。**已安装插件**列出其他 profile 组合包。安装随附的可选组合包没有卸载操作。实验性包在两个列表中均保留**实验性**标签。启停组合包不会改变它的分组或位置。没有组合包 patch 的依赖不是插件，除非 profile 选中了它才会带异常标签列出。全局配置仍在设置的**内置插件**分区中编辑。
+在侧栏选择**插件**。信息按钮使用 11px 的 caption 色图标和 20px 方形悬停区域，与副标题间隔 4px。它说明当前页用于配置官方插件、安装和管理其他插件，**设置 → 内置插件**则展示内置插件列表及运行状态。悬停或聚焦显示共享 tooltip；点击后保持展开，直至再次点击、Escape、Tab 或外部点击。页面首次打开时通过 `api-remotes` 读取清单与组合包；没有受管 profile 的 Host 上页面显示为不可用。**内置插件配置**按配置的顺序列出官方配置页：子智能体、网页搜索、Agent 循环、终端。**实验性插件**展示主要的可选组合包，标题旁的**更多**打开同名的独立页面。该页列出全部官方组合包，也包含主列表已有的条目，Codex 和 Claude Code 子智能体排在最后。返回按钮回到主列表，**已安装插件**保持在实验性插件下方。组合包详情返回打开它的列表。目录条目在安装或移除后保持原位置。**已安装插件**列出其他 profile 组合包。安装随附的可选组合包没有卸载操作。实验性包在两个列表中均保留**实验性**标签。组合包详情可在说明下方展示功能配图，未启用时也可查看；**DSH 徽章技能**按界面语言展示中文或英文配图，解码失败时显示简短提示，不影响管理操作。开启仅在该页列出的组合包会按该页中的位置把它加入主列表，关闭后它只留在该页；其他组合包在两个列表中均保持原位。没有组合包 patch 的依赖不是插件，除非 profile 选中了它才会带异常标签列出。全局配置仍在设置的**内置插件**分区中编辑。
 
 空间不足时，页头将整个操作组移到下一行。操作文案保持单行，信息按钮紧随副标题文字。
 
 已安装的组合包及其插件行在卡片和详情页中，按当前界面语言显示各自的标题与描述。每个字段先读取导出的 locale `meta`，缺失时回退到包根插件可访问的 `package.json`，子路径插件从不读取；标题最终使用完整包名或模块名，两处都没有描述时不提供包描述。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。组合包卡片、详情和组件行显示包根的清单 `icon` 或导出的 `./icon`，或子路径插件导出的 `<子路径>/icon`；未声明或无法解码时保留默认插画。安装预览仍使用注册表或 manifest 信息。
 
-官方按需卡片在安装前即可离线显示。开启会打开已有的安装进度对话框，安装[当前 Host 提供的目标](../../boot/plugin-manager/README.zh.md#use-this-package)并选择配置层。安装源回退、取消和脚本审批继续使用同一组控件。关闭保留依赖；移除是独立操作。版本或开发链接来源不同会提供**更新**；详情显示当前及所提供的来源和版本。更新保留选择状态，并报告是否需要重启。文件缺失或不可读的包在诊断旁保留记录的依赖来源。已启用的 bundle 在 checkout 目标不可用时仍可关闭。
+官方按需卡片在安装前即可离线显示。开启会打开已有的安装进度对话框，安装[当前 Host 提供的目标](../../boot/plugin-manager/README.zh.md#use-this-package)并选择配置层。安装源回退、取消和脚本审批继续使用同一组控件。关闭保留依赖；移除是独立操作。版本或开发链接来源不同会提供**更新**；详情显示当前及所提供的来源和版本。更新先删除已安装的包，再以相同的选择状态安装所提供的包，并报告是否需要重启；删除之后安装失败时，该包保持未安装。文件缺失或不可读的包在诊断旁保留记录的依赖来源。已启用的 bundle 在 checkout 目标不可用时仍可关闭。
 
 首次读取列表时，页面显示一条较短的分组标题占位和四行骨架卡片，沿用真实卡片的行、图标和文字间距，操作区域留白。骨架使用与 Session 搜索相同的透明度呼吸动效，在减少动态效果模式下保持静止。无障碍加载文案和读取时机不变；刷新时保留已有列表，安装及组件加载仍使用各自的状态提示。
 
@@ -66,7 +66,7 @@ Host 将网络失败或超时归因于 GitHub 地址，且提供 npmmirror 时�
 
 ### 切换组合包里的一行
 
-组合包页面上行的开关调用 `pluginManager.setPluginEnabled`，往 profile 的 `cordis.patch.yml` 写入该行的 `disabled` 覆盖。启用了 HMR 的 profile 的树随即重组，该行的宿主半区卸下或挂上，组合包其余部分照常运行，页面无需重载即跟随客户端模块图。行使用共享状态标记表示 Host fiber 阶段：pending 与 disabled 为 idle，loading 与 unloading 为 ongoing，active 为 done，failed 为 error。开关只出现在已打开的组合包上；没有存活条目的行，以及 Host 不通过 profile patch 寻址的行，带着 Host 的原因锁定。超过十行的列表带一个按本地化标题、描述、行 id 和模块名筛选的输入框。
+组合包页面上行的开关调用 `pluginManager.setPluginEnabled`，按[开关规则](../../boot/plugin-manager/README.zh.md#use-this-package)在 profile 的 `cordis.patch.yml` 中记录该行的启用状态。启用了 HMR 的 profile 的树随即重组，该行的宿主半区卸下或挂上，组合包其余部分照常运行，页面无需重载即跟随客户端模块图。行使用共享状态标记表示 Host fiber 阶段：pending 与 disabled 为 idle，loading 与 unloading 为 ongoing，active 为 done，failed 为 error。开关只出现在已打开的组合包上；没有存活条目的行，以及 Host 不通过 profile patch 寻址的行，带着 Host 的原因锁定。超过十行的列表带一个按本地化标题、描述、行 id 和模块名筛选的输入框。
 
 ### 配置页
 
@@ -96,7 +96,13 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 行页只在某个 `plugins.row.config` 条目点名这一行时存在，因此给行的贡献渲染在该配置打开的页面上。
 
+### 页面标签页
+
+其他插件向 `plugins.tab` 列表 slot 注册条目，即可在页面自带的**已安装**标签页之后添加一个标签页；条目的 `label` 为标签页命名，`order` 决定其位置。至少存在一个条目时，标签页显示在页头下方；在组合包、行或官方插件的页面上隐藏。离开**插件**后，所选标签页保持不变；所选标签页的条目被移除时，回到**已安装**。页面渲染所选条目以代替自身的分组，并在此时隐藏自身的刷新和添加按钮。owner props 提供 `install({ spec, registry?, title, version })` 和 `openPackage(name)`。`install` 用于用户已在标签页中确认的版本：安装对话框在检查界面打开，不显示 spec 表单，在以较小等宽字显示的 spec 上方用 `title` 和 `version` 标明插件，并在进度和结果界面保持该名称，完成后显示已安装的版本；只在这一次安装中首先使用 `registry`，且从不记住它；被拒绝后提供**重试**；如果有隐藏中的安装任务，则改为重新打开该任务。`openPackage` 切换到**已安装**，并在该标签页列出该组合包时打开其页面；页面不列出的组合包（例如内置 profile 组合包）只打开「已安装」列表。已确认的安装不提供 GitHub 镜像恢复，因为该恢复会重新打开 spec 表单；其返回按钮用于取消正在进行的安装。[`ui-plugin-market`](../ui-plugin-market/README.zh.md) 在这里贡献**发现**标签页。
+
 -----
+
+内置配图遵循[功能配图创作指引](../../../docs/cookbook/adding-a-plugin-preview.zh.md)：可选，每种语言一张 640×300 SVG，必须同时提供英文和中文。内部映射及素材测试约束格式，包没有配图声明接口。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -122,7 +128,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 自定义条目页以 Host 条目 id 作为注册 id；行页面使用 bundle 包名和行 id。当条目提供可编辑 Config 字段时，页面宿主传入 `form.state` 和 `form.mutate(operations, expectedRevision)`。自定义页面负责草稿和校验提示，并可复用 ui-primitives 的 `ConfigField`。整个 bundle 的页面可以包含多个条目，因此没有单一表单。
 
-页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择主列表、完整的实验性插件列表、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。新的注册从主列表开始。安装后的高亮仅在当前页面有对应卡片时滚动定位，不改变所选页面。其他 Client 插件注入 `pluginNavigation`，调用 `ctx.pluginNavigation.openBundle(packageName)` 即可打开组合包详情，不改变当前 Session。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 名称以 `@deepseek-ai/dsh-experimental-` 开头的官方包显示实验性标记。
+页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择主列表、完整的实验性插件列表、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。新的注册从主列表开始。安装后的高亮仅在当前页面有对应卡片时滚动定位，不改变所选页面。其他 Client 插件注入 `pluginNavigation`，调用 `ctx.pluginNavigation.openBundle(packageName)` 即可打开组合包详情，不改变当前 Session。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 名称以 `@deepseek-ai/dsh-experimental-` 开头的官方包显示实验性标记。功能配图是 `src/client/assets/` 下的 SVG 文件，由页面按包名指定并嵌入 Client bundle；包不能自行声明配图（[决策依据](../../../.agents/notes/implemented/feature/2026-10-14-built-in-plugin-feature-previews.zh.md)）。
 
 `plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。`plugins.bundle.activation` 在用户从列表显式启用后提供 Bundle 自有引导，并传入关闭引导和打开详情的回调。仅列出已启用的 Bundle 不会触发引导。
 
@@ -153,6 +159,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 ## 已知限制与延期工作
 
+- 功能配图每种语言只有一张，没有深色主题版本，因此徽章技能配图在深色主题中仍为浅色背景。
 - Ping 响应时间不代表包下载吞吐量。探测使用 Host fetch 的网络路径，pnpm 专用代理设置可能使用不同路径；用户始终可以手动选择安装源，安装仍遵循现有回退规则。
 
 <a id="known-limitations-and-deferred-work"></a>

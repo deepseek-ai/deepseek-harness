@@ -1,0 +1,60 @@
+.dialog {
+  width: min(480px, 100%);
+}
+
+.transitions {
+  display: grid;
+  grid-template-columns: max-content minmax(0, max-content) 56px minmax(0, max-content);
+  justify-content: start;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.label {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.release {
+  font-family: var(--ds-font-family-code);
+  overflow-wrap: anywhere;
+}
+
+.solid {
+  color: var(--dsw-alias-label-primary);
+}
+
+.faded {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Both connectors share one 1px stroke; only style and color differ. */
+.line {
+  position: relative;
+  height: 0;
+  border-top-width: 1px;
+}
+
+/* Arrowhead at the end of the connector, centered on its stroke. */
+.line::after {
+  position: absolute;
+  top: -3.5px;
+  right: -1px;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-left: 5px solid currentColor;
+  content: '';
+}
+
+.done {
+  border-top-style: solid;
+  border-top-color: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.pending {
+  border-top-style: dashed;
+  border-top-color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-tertiary);
+}

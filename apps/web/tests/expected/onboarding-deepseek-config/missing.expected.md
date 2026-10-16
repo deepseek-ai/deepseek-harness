@@ -4,6 +4,6 @@
   - text: API 密钥
   - button "认证说明": "?"
   - textbox "API 密钥":
-    - /placeholder: 留空时保留现有认证（DEEPSEEK_API_KEY）
+    - /placeholder: 输入 API 密钥
   - button "稍后配置"
   - button "保存并继续" [disabled]

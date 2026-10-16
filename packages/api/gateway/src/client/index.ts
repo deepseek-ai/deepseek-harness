@@ -102,7 +102,8 @@ interface InstalledMethod {
 /** Typed Remote service augmented by generated direct namespaces and Gateway stream supervision. */
 export interface ClientRemote extends TypertClientRemote {
   /**
-   * Create one independently cancellable, reconnecting logical stream.
+   * Create an independently cancellable, reconnecting logical stream.
+   * Requires interactions=answer; passive Clients use generated stream methods.
    * @param options - domain-owned opener and generation-end classification.
    * @returns a single-consumer stream annotated with physical generation ids.
    */
@@ -146,8 +147,8 @@ class ClientRemoteService extends Service implements ClientRemote {
   private readonly connection: ConnectionHandle
   private readonly namespaces = new Map<string, RemoteNamespaceHandle>()
   private hostFacts: RemoteHostFacts | undefined
-  private readonly streams = new RemoteStreamMuxClient()
-  private readonly events: ClientRemoteEvents
+  private readonly streams: RemoteStreamMuxClient
+  private readonly events: ClientRemoteEvents | undefined
   private mutations = Promise.resolve()
 
   constructor(ctx: Context) {
@@ -155,16 +156,24 @@ class ClientRemoteService extends Service implements ClientRemote {
     this.ownerCtx = ctx
     const connection = ctx.get('connection') as ConnectionHandle
     this.connection = connection
-    this.events = new ClientRemoteEvents(
-      ctx,
-      connection,
-      (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
+    this.streams = new RemoteStreamMuxClient(
+      path => connection.openWebSocket(path),
+      connection.interactions === 'answer',
     )
+    if (connection.interactions === 'answer') {
+      this.events = new ClientRemoteEvents(
+        ctx,
+        connection,
+        (endpoint, payload, signal) => this.openRemoteStream(endpoint, payload, signal),
+      )
+    }
+    // API callers retain a lifecycle socket even when they do not receive events.
+    // HTTP dispatch never waits for this independent connection attempt.
     if (connection.rpc.open === undefined) this.streams.start()
     let disposed = false
     let loop: ReturnType<ConnectionHandle['start']> | undefined
     const start = (): void => {
-      if (disposed) return
+      if (disposed || connection.interactions === 'none') return
       if (connection.rpc.open === undefined) this.streams.start()
       loop = connection.start({
         onConnected: () => { this.ownerCtx.emit('connection/reset') },
@@ -179,12 +188,15 @@ class ClientRemoteService extends Service implements ClientRemote {
     ctx.effect(() => async () => {
       disposed = true
       loop?.stop()
-      await this.events.dispose()
+      await this.events?.dispose()
       await this.streams.close()
     }, 'api-gateway.client.transport')
   }
 
   $stream<Item>(options: RemoteStreamOptions<Item>): RemoteStream<Item> {
+    if (this.connection.interactions === 'none') {
+      throw new Error('client api: $stream requires interactions=answer; use a generated stream method')
+    }
     return new RemoteStream(this.connection, options)
   }
 
@@ -213,6 +225,7 @@ class ClientRemoteService extends Service implements ClientRemote {
     event: Event,
     listener: TypertClientEventListener<Event>,
   ): () => void {
+    if (this.events === undefined) throw new Error('client api: forwarded events require interactions=answer')
     return this.events.subscribe(this.ctx, event, listener)
   }
 

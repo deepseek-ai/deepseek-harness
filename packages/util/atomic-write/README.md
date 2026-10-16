@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-atomic-write` to replace a file without exposing partial content or following a symlinked temporary path. Its writer lock serializes read-modify-write cycles across processes so concurrent writers cannot overwrite one another with stale state. Each replacement uses caller-selected permission bits on a fresh inode, which safely narrows an existing file's permissions. This zero-dependency library accepts strings; it does not provide a `cordis.yml` plugin or crash durability because it does not call `fsync`.
+Use `dsh-atomic-write` to replace a file without exposing partial content or following a symlinked temporary path. Its writer lock serializes read-modify-write cycles across processes so concurrent writers cannot overwrite one another with stale state. Each replacement uses caller-selected permission bits on a fresh inode, which safely narrows an existing file's permissions. This zero-dependency library accepts strings and binary byte arrays; it does not provide a `cordis.yml` plugin or crash durability because it does not call `fsync`.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Use `dsh-atomic-write` to replace a file without exposing partial content or fol
 <a id="use-this-package"></a>
 ## Use this package
 
-Use `writeFileAtomic` when a file-backed store must replace one already-rendered string without ever exposing a partial, symlink-hijacked, or wider-permission state, and `withFileLock` when several processes read-modify-write the same file. The smallest path is one call with the final content and the replacement's permission bits.
+Use `writeFileAtomic` when a file-backed store must replace complete text or binary content without ever exposing a partial, symlink-hijacked, or wider-permission state, and `withFileLock` when several processes read-modify-write the same file. The smallest path is one call with the final content and the replacement's permission bits.
 
 ### Writing a file atomically
 
@@ -60,7 +60,7 @@ Only writers contend — readers never take the lock — and a contender backs o
 
 Windows retries one `EPERM` when the lock cannot be observed, because its holder can release between exclusive creation and the existence check. A repeated unconfirmed `EPERM` is rethrown without running the operation.
 
-The lock's parent directory must already exist, so `withFileLock` rejects an invalid parent hierarchy before running the operation. A process that exits while holding the lock leaves the lock sibling behind, and the next writer takes it over. A lock whose record is empty or incomplete, or names a PID that a live process reused, is not taken over; later writers time out, and an operator removes it only after verifying that no writer still owns it.
+The lock's parent directory must already exist, so `withFileLock` rejects an invalid parent hierarchy before running the operation. A process that exits while holding the lock leaves the lock sibling behind, and the next writer takes it over. A lock whose record is empty or incomplete, or names a PID that a live process reused, is not taken over; later writers time out, and an operator removes it only after verifying that no writer still owns it. An optional `signal` cancels acquisition and contention waits; the operation owns cancellation after it starts.
 
 -----
 
@@ -122,7 +122,7 @@ Nothing here enters a request prefix, so provider cache reuse is unaffected.
 These limits define where the package is not the right tool. They are current package constraints, not a task backlog.
 
 - **Atomic, not durable** — no `fsync` of the file or its directory, so after a crash the rename may be observed unwound. The file-backed stores here re-read and republish on boot, keeping durability the caller's policy.
-- **String content only** — no `Buffer` or stream form until a consumer needs one.
+- **Callers supply complete content** — strings and `Uint8Array` (including `Buffer`) are accepted; streaming writes are unsupported.
 - **Some orphaned locks require operator recovery** — a lock whose record is empty or incomplete, or names a PID a live process reused, stays in place; later writers time out without deleting it. A contender that ends between creating a claim and removing the lock leaves both `<filename>.lock` and `<filename>.lock.takeover-<record hash>`, and the operator removes both.
 - **One host and one PID namespace** — the probe runs on the contender's host. Writers on several hosts sharing a network filesystem, or containers sharing a volume, can see a live holder as exited, take over its lock, and write at the same time as it.
 

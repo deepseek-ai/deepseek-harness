@@ -36,6 +36,8 @@ harness 可以运行前台与后台命令、编辑文件和委派工作，但无
 
 agent scope dispose（资源释放）时先撤销注册，再等待全部所属 PTY 完全停稳。未发布的后端 setup 同样是受追踪的生命周期操作：owner 或服务 dispose 会中止服务自有的 signal，等待后端结算与回滚完成后才返回。即使后端 reject，或返回的会话在回滚 close 时失败，调用方取消仍会原样保留其 `AbortSignal.reason`；该清理失败不会替换调用方原因，而会继续受追踪，留待后续 owner 或服务 dispose 处理。由 lifecycle dispose 触发的回滚 close 失败会使 spawn 与该 lifecycle dispose 都 reject，而 `TerminalBackendCleanupError` 让后端在不替换调用方取消的前提下，为该 lifecycle dispose 保留自身的启动清理失败。若调用方取消在 dispose 开始前已经结算，该清理失败会继续作为受追踪的 owner activity 保留，直到后续 owner 或服务 dispose 消费并报告它，因此沙箱模式策略不会把清理失败误判为完全停稳。后端或工具插件 reload 不会遗留会话：所有权持续存放在 `TerminalSessionService` 中，直到 agent 结束，与 [`ctx.jobs`](../../../../packages/jobs/jobs/README.zh.md) 的服务持有记录模式一致。服务会先同步把会话预留给一次活跃发送，再返回该操作；后台发送同样会在 job id 对外可见前完成预留。第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消无法跨越操作所有权。
 
+[清理依赖提案](../../proposed/architecture/2026-10-09-cordis-cleanup-dependency-lifetimes.zh.md)区分提前关闭准入或可选通知与释放必需的完成观察器。PTY 所有权与完全停稳的清理要求仍然成立。
+
 ### 安全与进程边界
 
 注册的 `shell` 后端只约束终端如何启动，不约束启动后输入的命令。因此 `dsh-terminal-bash` 在 spawn 前应用两层保护：

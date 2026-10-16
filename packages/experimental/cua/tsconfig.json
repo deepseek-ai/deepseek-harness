@@ -1,0 +1,60 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../computer-use/computer-use"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../ptc-runtime/ptc-runtime"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../llm/llm"
+    }
+  ]
+}

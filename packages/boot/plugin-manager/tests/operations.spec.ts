@@ -200,7 +200,7 @@ it.each([
   })
   expect(outcome.exitCode).toBe(1)
   expect(outcome.incompatible).toEqual([
-    { name: 'plugin', version: '1.0.0', runtimeVersion: getDshRuntimeVersion(), peers: { '@deepseek-ai/dsh': '999.0.0' } },
+    { name: 'plugin', version: '1.0.0', runtimeVersion: getDshRuntimeVersion(), requirements: { '@deepseek-ai/dsh': '999.0.0' } },
   ])
   expect(outcome.output).toContain('installation rejected')
   expect(outcome.output).toContain('plugin@1.0.0')
@@ -233,6 +233,19 @@ it.each(['plugin@1.0.0', '@scope/plugin@1.0.0'])('rejects the registry spec %s t
   expect(command.run.mock.calls[0]?.[1] as readonly string[]).toContain('view')
   expect(existsSync(join(dir, 'node_modules'))).toBe(false)
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(manifestBefore)
+})
+
+it('rejects a registry spec whose engines.dsh the pre-install lookup denies, ignoring its peers', async () => {
+  const { context, pnpm } = fixture()
+  pnpm.view = () => ({
+    exitCode: 0,
+    stdout: JSON.stringify({ name: 'plugin', version: '1.0.0', engines: { dsh: '999.0.0' }, peerDependencies: { '@deepseek-ai/dsh': '*' } }),
+  })
+  const outcome = await runProfilePnpm(context, ['add', 'plugin@1.0.0'], { execution: 'service', outputBytes: 8192 })
+  expect(outcome).toMatchObject({ exitCode: 1 })
+  expect(outcome.incompatible).toMatchObject([{ name: 'plugin', version: '1.0.0', requirements: { 'engines.dsh': '999.0.0' } }])
+  expect(command.run.mock.calls[0]?.[1] as readonly string[]).toEqual(expect.arrayContaining(['view', 'engines', 'peerDependencies']))
+  expect(command.run).toHaveBeenCalledTimes(1)
 })
 
 it('reads the last match when the registry lookup answers with several versions', async () => {
@@ -350,7 +363,7 @@ it.each([true, false])('rejects incompatible installed manifests before activati
     execution: 'service', outputBytes: 8192, activateNewBundles, onOutput: (text) => { messages.push(text) },
   })
   expect(outcome.exitCode).toBe(1)
-  expect(outcome.incompatible).toMatchObject([{ name: 'incompatible', version: '1.0.0', peers: { '@deepseek-ai/dsh-app-boot': '>=999.0.0' } }])
+  expect(outcome.incompatible).toMatchObject([{ name: 'incompatible', version: '1.0.0', requirements: { '@deepseek-ai/dsh-app-boot': '>=999.0.0' } }])
   expect(outcome.output).toContain('incompatible@1.0.0')
   expect(outcome.output).toContain('installation rejected')
   expect(readFileSync(outcome.logPath, 'utf8')).toContain('incompatible@1.0.0')

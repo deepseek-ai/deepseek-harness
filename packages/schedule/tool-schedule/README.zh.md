@@ -84,7 +84,7 @@ kind: "package-reference"
 
 #### What the model sees
 
-只要本包在调用方 Agent 的作用域内可见，模型就会收到生成的 [`schedule_create`、`schedule_list`、`schedule_update` 与 `schedule_delete` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-schedule)。
+只要本包在调用方 Agent 的作用域内可见，模型就会收到生成的 [`schedule_create`、`schedule_list`、`schedule_update` 与 `schedule_delete` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-schedule)。标题指引不会改写已存标题，也不会在现有的非空和长度检查之外增加校验。
 
 #### Token effect
 

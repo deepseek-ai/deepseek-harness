@@ -8,8 +8,9 @@ import { dirname, join, normalize, resolve, SEP } from '../module-system/posix-p
 import { IMAGE_OVERLAY_DIRECTORIES } from '../image-layout.ts'
 import { parseTar } from './tar.ts'
 import type {
-  Vfs, VfsBigIntStats, VfsDir, VfsDirent, VfsEncoding, VfsError, VfsFileHandle, VfsMutation, VfsOpenFile,
-  VfsMutationListener, VfsMutationSink, VfsReadOptions, VfsSeedOptions, VfsStatOptions, VfsStats, VfsWriteOptions,
+  Vfs, VfsBigIntStats, VfsDeferredArchive, VfsDir, VfsDirent, VfsEncoding, VfsError, VfsFileHandle, VfsMutation,
+  VfsOpenFile, VfsMutationListener, VfsMutationSink, VfsReadOptions, VfsSeedOptions, VfsStatOptions, VfsStats,
+  VfsWriteOptions,
 } from './types.ts'
 
 const decoder = new TextDecoder()
@@ -24,6 +25,25 @@ interface FileNode {
   identity?: bigint
   /** One path normally, a Set only for hard links, or undefined after the final unlink. */
   paths: string | Set<string> | undefined
+}
+
+/** One lazy archive's registration and its single in-flight fetch. */
+interface DeferredArchiveState {
+  readonly name: string
+  readonly root: string
+  readonly load: () => Promise<Uint8Array>
+  /** Absolute registered path to its byte length. */
+  readonly files: ReadonlyMap<string, number>
+  /** The fetch every waiting reader shares; cleared when it fails so a later read retries. */
+  fetching: Promise<void> | undefined
+}
+
+/** A registered file whose bytes have not arrived. */
+interface DeferredFile {
+  readonly size: number
+  readonly mode: number
+  readonly mtimeMs: number
+  readonly archive: DeferredArchiveState
 }
 
 /** Creation default for files, Node's `0o666` under the classic `022` umask. */
@@ -179,6 +199,8 @@ export interface MemoryVfsOptions {
  */
 export class MemoryVfs implements Vfs {
   private readonly files = new Map<string, FileNode>()
+  /** Files a lazy archive supplies on their first asynchronous read. */
+  private readonly deferred = new Map<string, DeferredFile>()
   private readonly directories = new Set<string>([SEP])
   /** Directory permission bits; absence means {@link DEFAULT_DIRECTORY_MODE}. */
   private readonly directoryModes = new Map<string, number>()
@@ -235,7 +257,10 @@ export class MemoryVfs implements Vfs {
 
   /** Promise face mirroring `node:fs/promises` for the methods the roster uses. */
   readonly promises = {
-    readFile: async (path: string, options?: VfsReadOptions): Promise<string | Uint8Array> => this.readFileSync(path, options),
+    readFile: async (path: string, options?: VfsReadOptions): Promise<string | Uint8Array> => {
+      await this.whenReadable(path)
+      return this.readFileSync(path, options)
+    },
     writeFile: async (path: string, data: string | Uint8Array, options?: VfsWriteOptions): Promise<void> => {
       this.writeFileSync(path, data, options)
     },
@@ -255,11 +280,13 @@ export class MemoryVfs implements Vfs {
     truncate: async (path: string, length?: number): Promise<void> => { this.truncateSync(path, length) },
     chmod: async (path: string, mode: number): Promise<void> => { this.chmodSync(path, mode) },
     opendir: async (path: string): Promise<VfsDir> => this.opendir(path),
-    open: async (path: string, flags?: string, mode?: number): Promise<VfsFileHandle> => this.open(path, flags, mode),
+    open: async (path: string, flags?: string, mode?: number): Promise<VfsFileHandle> => {
+      await this.whenReadable(path)
+      return this.open(path, flags, mode)
+    },
     /** Resolves for any existing path: the VFS grants read and write to everything it holds. */
     access: async (path: string): Promise<void> => {
-      const target = normalize(resolve(path))
-      if (!this.files.has(target) && !this.directories.has(target)) fail('ENOENT', 'access', target)
+      if (!this.existsSync(path)) fail('ENOENT', 'access', normalize(resolve(path)))
     },
   }
 
@@ -270,6 +297,103 @@ export class MemoryVfs implements Vfs {
   }
 
   /**
+   * Register files whose bytes arrive with one archive on the first
+   * asynchronous read of any of them. Their parent directories are created now.
+   * @param archive - Archive name, mount root, registered files, and fetch.
+   * @throws When a registered path already holds a file, directory, or another registration.
+   */
+  deferArchive(archive: VfsDeferredArchive): void {
+    const root = this.key(archive.root)
+    const files = new Map<string, number>()
+    for (const file of archive.files) {
+      const target = this.key(join(root, file.path))
+      if (this.files.has(target) || this.directories.has(target) || this.deferred.has(target) || files.has(target)) {
+        throw new Error(`webworker vfs: ${target} is already registered, so lazy archive ${archive.name} cannot supply it`)
+      }
+      files.set(target, file.size)
+    }
+    const state: DeferredArchiveState = { name: archive.name, root, load: () => archive.load(), files, fetching: undefined }
+    const mtimeMs = Date.now()
+    for (const [target, size] of files) {
+      this.seedDirectory(dirname(target))
+      this.deferred.set(target, { size, mode: DEFAULT_FILE_MODE, mtimeMs, archive: state })
+      this.touchDirectory(dirname(target))
+    }
+  }
+
+  /**
+   * Fetch the lazy archive that supplies a registered path. Concurrent readers
+   * of one archive share one fetch; a failed fetch leaves its files registered,
+   * so the next read fetches again.
+   * @param path - Path about to be read asynchronously.
+   * @returns A promise that settles once the archive arrived, or undefined when the path needs no fetch.
+   */
+  whenReadable(path: string): Promise<void> | undefined {
+    const file = this.deferred.get(this.key(path))
+    if (file === undefined) return undefined
+    file.archive.fetching ??= this.fetchArchive(file.archive)
+    return file.archive.fetching
+  }
+
+  /** Fetch, validate against the registration, and mount one archive's files. */
+  private async fetchArchive(state: DeferredArchiveState): Promise<void> {
+    try {
+      let archive: Uint8Array
+      try {
+        archive = await state.load()
+      } catch (error) {
+        throw new Error(`webworker vfs: lazy archive ${state.name} could not be fetched`, { cause: error })
+      }
+      const entries = new Map<string, Uint8Array>()
+      for (const entry of parseTar(archive)) {
+        if (entry.directory) continue
+        const relativeName = entry.name.startsWith('./') ? entry.name.slice(2) : entry.name
+        const target = this.key(join(state.root, relativeName))
+        const size = state.files.get(target)
+        if (size === undefined) {
+          throw new Error(`webworker vfs: lazy archive ${state.name} carries unregistered entry "${relativeName}"`)
+        }
+        if (entry.bytes.length !== size) {
+          throw new Error(`webworker vfs: lazy archive ${state.name} holds ${String(entry.bytes.length)} bytes for ${target}, registered as ${String(size)}`)
+        }
+        entries.set(target, entry.bytes)
+      }
+      for (const target of state.files.keys()) {
+        if (!entries.has(target)) throw new Error(`webworker vfs: lazy archive ${state.name} lacks registered file ${target}`)
+      }
+      for (const [target, bytes] of entries) {
+        const file = this.deferred.get(target)
+        // A file removed or replaced after registration keeps its current state.
+        if (file?.archive !== state) continue
+        this.deferred.delete(target)
+        // The path identity observed while registered becomes the file identity.
+        const identity = this.identities.get(target)
+        this.identities.delete(target)
+        this.setFile(target, {
+          bytes, mtimeMs: file.mtimeMs, mode: file.mode, paths: undefined, ...identity === undefined ? {} : { identity },
+        })
+      }
+    } catch (error) {
+      state.fetching = undefined
+      throw error
+    }
+  }
+
+  /** Refuse a synchronous operation on a registered file whose bytes have not arrived. */
+  private requireArrived(syscall: string, target: string): void {
+    const file = this.deferred.get(target)
+    if (file === undefined) return
+    const error = new Error(
+      `ERR_DSH_VFS_DEFERRED: ${syscall} cannot wait for '${target}', which lazy archive ${file.archive.name} `
+      + 'supplies on its first asynchronous read',
+    ) as VfsError
+    error.code = 'ERR_DSH_VFS_DEFERRED'
+    error.path = target
+    error.syscall = syscall
+    throw error
+  }
+
+  /**
    * Read a file.
    * @param path - File path.
    * @param options - `'utf8'` or `{encoding}` for text; omitted for bytes.
@@ -277,6 +401,7 @@ export class MemoryVfs implements Vfs {
    */
   readFileSync(path: string, options?: VfsReadOptions): string | Uint8Array {
     const target = this.key(path)
+    this.requireArrived('open', target)
     const node = this.files.get(target)
     if (node === undefined) {
       if (this.directories.has(target)) fail('EISDIR', 'read', target)
@@ -292,7 +417,7 @@ export class MemoryVfs implements Vfs {
    */
   existsSync(path: string): boolean {
     const target = this.key(path)
-    return this.files.has(target) || this.directories.has(target)
+    return this.files.has(target) || this.directories.has(target) || this.deferred.has(target)
   }
 
   /**
@@ -304,11 +429,14 @@ export class MemoryVfs implements Vfs {
   statSync(path: string, options?: VfsStatOptions): VfsStats | VfsBigIntStats {
     const target = this.key(path)
     const node = this.files.get(target)
+    const deferred = this.deferred.get(target)
     const [size, mtimeMs, directory, mode] = node !== undefined
       ? [node.bytes.length, node.mtimeMs, false, node.mode] as const
-      : this.directories.has(target)
-        ? [0, this.directoryMtimes.get(target) ?? 0, true, this.directoryModes.get(target) ?? DEFAULT_DIRECTORY_MODE] as const
-        : fail('ENOENT', 'stat', target)
+      : deferred !== undefined
+        ? [deferred.size, deferred.mtimeMs, false, deferred.mode] as const
+        : this.directories.has(target)
+          ? [0, this.directoryMtimes.get(target) ?? 0, true, this.directoryModes.get(target) ?? DEFAULT_DIRECTORY_MODE] as const
+          : fail('ENOENT', 'stat', target)
     const identity = node === undefined ? this.identityOf(target) : this.identityOfFile(node)
     return options?.bigint === true
       ? bigIntStatsOf(size, mtimeMs, directory, identity, mode, node === undefined ? 1 : this.fileLinkCount(node))
@@ -499,12 +627,12 @@ export class MemoryVfs implements Vfs {
   readdirSync(path: string, options?: { withFileTypes?: boolean }): string[] & VfsDirent[] {
     const target = this.key(path)
     if (!this.directories.has(target)) {
-      if (this.files.has(target)) fail('ENOTDIR', 'scandir', target)
+      if (this.files.has(target) || this.deferred.has(target)) fail('ENOTDIR', 'scandir', target)
       fail('ENOENT', 'scandir', target)
     }
     const prefix = target === SEP ? SEP : `${target}${SEP}`
     const names = new Set<string>()
-    for (const candidate of [...this.files.keys(), ...this.directories]) {
+    for (const candidate of [...this.files.keys(), ...this.deferred.keys(), ...this.directories]) {
       if (!candidate.startsWith(prefix) || candidate === target) continue
       const rest = candidate.slice(prefix.length)
       if (rest === '') continue
@@ -547,7 +675,7 @@ export class MemoryVfs implements Vfs {
    */
   mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): string | undefined {
     const target = this.key(path)
-    if (this.files.has(target)) fail('EEXIST', 'mkdir', target)
+    if (this.files.has(target) || this.deferred.has(target)) fail('EEXIST', 'mkdir', target)
     if (this.directories.has(target)) {
       if (options?.recursive === true) return undefined
       fail('EEXIST', 'mkdir', target)
@@ -574,6 +702,7 @@ export class MemoryVfs implements Vfs {
    */
   writeFileSync(path: string, data: string | Uint8Array, options?: VfsWriteOptions): void {
     const target = this.key(path)
+    this.requireArrived('open', target)
     if (this.directories.has(target)) fail('EISDIR', 'open', target)
     if (!this.directories.has(dirname(target))) fail('ENOENT', 'open', target)
     const flag = options?.flag ?? 'w'
@@ -688,6 +817,7 @@ export class MemoryVfs implements Vfs {
    */
   openFileSync(path: string, flags = 'r', mode?: number): VfsOpenFile {
     const target = this.key(path)
+    this.requireArrived('open', target)
     const access = openMode(flags)
     const existing = this.files.get(target)
     if (this.directories.has(target)) fail('EISDIR', 'open', target)
@@ -746,6 +876,7 @@ export class MemoryVfs implements Vfs {
    */
   appendFileSync(path: string, data: string | Uint8Array): void {
     const target = this.key(path)
+    this.requireArrived('open', target)
     const existing = this.files.get(target)
     const addition = typeof data === 'string' ? encoder.encode(data) : data
     if (existing === undefined) {  this.writeFileSync(target, addition); return }
@@ -760,6 +891,8 @@ export class MemoryVfs implements Vfs {
   renameSync(from: string, to: string): void {
     const source = this.key(from)
     const destination = this.key(to)
+    this.requireArrived('rename', source)
+    this.requireArrived('rename', destination)
     if (source === destination) return
     const node = this.files.get(source)
     if (node !== undefined) {
@@ -779,13 +912,17 @@ export class MemoryVfs implements Vfs {
     if (!this.directories.has(source)) fail('ENOENT', 'rename', source)
     if (this.files.has(destination)) fail('ENOTDIR', 'rename', destination)
     if (!this.directories.has(dirname(destination))) fail('ENOENT', 'rename', destination)
+    const prefix = `${source}${SEP}`
+    // Refuse before the destination changes: a refused move leaves both trees as they were.
+    for (const registered of this.deferred.keys()) {
+      if (registered.startsWith(prefix)) this.requireArrived('rename', registered)
+    }
     if (this.directories.has(destination)) {
       if (this.readdirSync(destination).length > 0) fail('ENOTEMPTY', 'rename', destination)
       this.directories.delete(destination)
       this.directoryModes.delete(destination)
       this.directoryMtimes.delete(destination)
     }
-    const prefix = `${source}${SEP}`
     const movedFiles: Array<{ path: string; bytes: Uint8Array; mode: number }> = []
     for (const [candidate, value] of [...this.files]) {
       if (!candidate.startsWith(prefix)) continue
@@ -834,9 +971,10 @@ export class MemoryVfs implements Vfs {
   linkSync(existing: string, next: string): void {
     const source = this.key(existing)
     const target = this.key(next)
+    this.requireArrived('link', source)
     const node = this.files.get(source)
     if (node === undefined) fail('ENOENT', 'link', source)
-    if (this.files.has(target) || this.directories.has(target)) fail('EEXIST', 'link', target)
+    if (this.existsSync(target)) fail('EEXIST', 'link', target)
     if (!this.directories.has(dirname(target))) fail('ENOENT', 'link', target)
     this.setFile(target, node)
     this.touchDirectory(dirname(target))
@@ -850,6 +988,7 @@ export class MemoryVfs implements Vfs {
    */
   truncateSync(path: string, length = 0): void {
     const target = this.key(path)
+    this.requireArrived('truncate', target)
     const node = this.files.get(target)
     if (node === undefined) fail('ENOENT', 'truncate', target)
     this.truncateFile(node, length)
@@ -862,6 +1001,7 @@ export class MemoryVfs implements Vfs {
    */
   chmodSync(path: string, mode: number): void {
     const target = this.key(path)
+    this.requireArrived('chmod', target)
     const node = this.files.get(target)
     if (node !== undefined) {
       this.chmodFile(node, mode)
@@ -882,7 +1022,7 @@ export class MemoryVfs implements Vfs {
    */
   unlinkSync(path: string): void {
     const target = this.key(path)
-    if (this.deleteFile(target) === undefined) fail('ENOENT', 'unlink', target)
+    if (this.deleteFile(target) === undefined && !this.deferred.delete(target)) fail('ENOENT', 'unlink', target)
     this.forgetIdentity(target)
     this.touchDirectory(dirname(target))
     this.publish({ kind: 'remove', path: target })
@@ -895,7 +1035,7 @@ export class MemoryVfs implements Vfs {
    */
   rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void {
     const target = this.key(path)
-    if (this.deleteFile(target) !== undefined) {
+    if (this.deleteFile(target) !== undefined || this.deferred.delete(target)) {
       this.forgetIdentity(target)
       this.touchDirectory(dirname(target))
       this.publish({ kind: 'remove', path: target })
@@ -905,6 +1045,7 @@ export class MemoryVfs implements Vfs {
       if (options?.recursive !== true) fail('ERR_FS_EISDIR', 'rm', target)
       const prefix = `${target}${SEP}`
       for (const candidate of [...this.files.keys()]) if (candidate.startsWith(prefix)) this.deleteFile(candidate)
+      for (const candidate of [...this.deferred.keys()]) if (candidate.startsWith(prefix)) this.deferred.delete(candidate)
       for (const candidate of [...this.directories]) {
         if (!candidate.startsWith(prefix)) continue
         this.directories.delete(candidate)
@@ -943,6 +1084,8 @@ export class MemoryVfs implements Vfs {
   seed(path: string, data: string | Uint8Array, options: VfsSeedOptions = {}): void {
     const target = this.key(path)
     this.seedDirectory(dirname(target))
+    // Seeded bytes supersede a lazy registration for the same path.
+    this.deferred.delete(target)
     this.setFile(target, {
       bytes: typeof data === 'string' ? encoder.encode(data) : data,
       mtimeMs: options.mtimeMs ?? this.touch(target),
@@ -962,7 +1105,7 @@ export class MemoryVfs implements Vfs {
     if (!this.directories.has(target)) {
       const parent = dirname(target)
       if (parent !== target) this.seedDirectory(parent)
-      if (this.files.has(target)) fail('EEXIST', 'mkdir', target)
+      if (this.files.has(target) || this.deferred.has(target)) fail('EEXIST', 'mkdir', target)
       this.directories.add(target)
       this.directoryMtimes.set(target, options.mtimeMs ?? Date.now())
       this.touchDirectory(parent)
@@ -985,7 +1128,7 @@ export class MemoryVfs implements Vfs {
 /**
  * Mount a tar image produced by the build-time collector.
  *
- * Entry names are relative to `root` (`node_modules/...`, `config/cordis.yml`);
+ * Entry names are relative to `root` (`node_modules/...`, `config/vfs-manifest.json`);
  * an absolute entry name is a collector defect and fails loud. File contents
  * stay views into `image` — nothing is copied at mount time.
  * @param image - The ustar archive, as `inflateImage` produces it from the fetched image.

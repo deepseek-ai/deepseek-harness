@@ -1,7 +1,7 @@
 /** Node-half composition diagnostics for package metadata and built client bundles. */
 
 import { Hash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -14,6 +14,39 @@ import { renderIndexInjections, type WebServer, type WebRoute } from '@deepseek-
 import * as modulesClient from '../src/client/index.ts'
 import { ClientModuleRegistry, bootInjections, orderByModuleGraph } from '../src/index.ts'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
+
+/**
+ * Paths whose synchronous read refuses, as a browser Worker refuses a file
+ * whose bytes arrive only through an asynchronous fetch.
+ */
+const syncRefused = vi.hoisted(() => new Set<string>())
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    readFileSync: ((path: Parameters<typeof actual.readFileSync>[0], ...rest: unknown[]) => {
+      if (syncRefused.has(String(path))) {
+        throw Object.assign(new Error(`synchronous read refused for ${String(path)}`), { code: 'ERR_DSH_VFS_DEFERRED' })
+      }
+      return (actual.readFileSync as (...args: unknown[]) => unknown)(path, ...rest)
+    }) as typeof actual.readFileSync,
+  }
+})
+
+/** Paths whose next asynchronous read fails once, as a lazily fetched file whose download fails. */
+const asyncFailOnce = vi.hoisted(() => new Set<string>())
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    readFile: ((path: Parameters<typeof actual.readFile>[0], ...rest: unknown[]) => {
+      if (typeof path === 'string' && asyncFailOnce.delete(path)) return Promise.reject(new Error(`download failed for ${path}`))
+      return (actual.readFile as (...args: unknown[]) => unknown)(path, ...rest)
+    }) as typeof actual.readFile,
+  }
+})
 
 const MODULES_ID = '@deepseek-ai/dsh-client-modules'
 const UI_RENDERER_ID = '@deepseek-ai/dsh-client-ui-renderer'
@@ -44,6 +77,7 @@ afterEach(async () => {
   }))
   if (root !== undefined) rmSync(root, { recursive: true, force: true })
   root = undefined
+  syncRefused.clear()
 })
 
 it.each([false, true])('tracks the Web carrier lifetime when server-first is %s', async (serverFirst) => {
@@ -77,6 +111,24 @@ it.each([false, true])('tracks the Web carrier lifetime when server-first is %s'
   await expect.poll(() => routes.size).toBe(1)
   await modules.dispose()
   expect(routes.size).toBe(0)
+})
+
+it('publishes this package version and the build commit as the Host release in every composed graph', async () => {
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+  const mount = async (commit: string | undefined) => {
+    vi.stubEnv('DSH_CLIENT_COMMIT_HASH', commit)
+    const ctx = new Context()
+    contexts.push({ ctx })
+    ctx.provide('loader', { entries: () => [] })
+    await ctx.plugin(ClientModuleRegistry)
+    vi.unstubAllEnvs()
+    return ctx.get('clientModules')!.graph()
+  }
+  const graph = await mount('abc1234')
+  expect(graph.release).toEqual({ version, commit: 'abc1234' })
+  expect(bootInjections(graph).at(-1)).toEqual({ kind: 'global', name: '__DSH_BOOT__', value: graph })
+  expect(modulesClient.parseBootManifest(graph).release).toEqual({ version, commit: 'abc1234' })
+  expect((await mount(undefined)).release).toEqual({ version })
 })
 
 /** Create a resolvable package whose client export points at the returned path. */
@@ -913,6 +965,73 @@ describe('client bundle activation', () => {
     expect(chunk.body.toString('utf8')).toContain(`sourceMappingURL=${chunkMapReference('client.terminal.js', row.rev)}`)
     expect((await routeRequest(route, url.replace('.js?', '.js.map?'))).status).toBe(200)
     expect((await routeRequest(route, url.replace(`rev=${row.rev}`, 'rev=stale'))).status).toBe(404)
+  })
+
+  it('reads a package-local chunk and its map body only through the asynchronous filesystem face', async () => {
+    const packageName = '@fixture/async-chunk'
+    const clientPath = writePackage(packageName)
+    const chunkPath = join(dirname(clientPath), 'client.pdf.js')
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = { load: () => require.async("./client.pdf.js") }\n')
+    writeFileSync(chunkPath, 'module.exports = { marker: "pdf loaded" }\n')
+    syncRefused.add(chunkPath)
+    const { service, route } = constructWithRoute([packageName])
+    const row = service.graph().entries[0]!
+    const url = chunkReference(packageName, 'client.pdf.js', row.rev)
+
+    const chunk = await routeRequest(route, url)
+    expect(chunk.status).toBe(200)
+    expect(chunk.body.toString('utf8')).toContain('pdf loaded')
+    const map = await routeRequest(route, url.replace('.js?', '.js.map?'))
+    expect(map.status).toBe(200)
+    expect(JSON.parse(map.body.toString('utf8'))).toMatchObject({ version: 3 })
+  })
+
+  it('reads a package-local chunk again after its first asynchronous read fails', async () => {
+    const packageName = '@fixture/retried-chunk'
+    const clientPath = writePackage(packageName)
+    const chunkPath = join(dirname(clientPath), 'client.excel.js')
+    mkdirSync(dirname(clientPath), { recursive: true })
+    writeFileSync(clientPath, 'module.exports = { load: () => require.async("./client.excel.js") }\n')
+    writeFileSync(chunkPath, 'module.exports = { marker: "excel loaded" }\n')
+    asyncFailOnce.add(chunkPath)
+    const { service, route } = constructWithRoute([packageName])
+    const url = chunkReference(packageName, 'client.excel.js', service.graph().entries[0]!.rev)
+
+    await expect(routeRequest(route, url)).rejects.toThrow(`download failed for ${chunkPath}`)
+    const retried = await routeRequest(route, url)
+    expect(retried.status).toBe(200)
+    expect(retried.body.toString('utf8')).toContain('excel loaded')
+  })
+
+  it('loads a renamed browser export at the logical URL without exposing Node bundles as chunks', async () => {
+    const packageName = '@fixture/dual-client'
+    const legacyPath = writePackage(packageName, {
+      dsh: { client: { platform: 'web' } },
+      exports: {
+        './client': {
+          types: './lib/types/client/index.d.ts',
+          node: './lib/client.node.js',
+          browser: './lib/client.browser.js',
+          default: './lib/client.browser.js',
+        },
+        './package.json': './package.json',
+      },
+    })
+    mkdirSync(dirname(legacyPath), { recursive: true })
+    writeFileSync(join(dirname(legacyPath), 'client.browser.js'), 'module.exports = { browser: true }\n')
+    for (const name of ['client.node.js', 'client.node.helper.js']) {
+      writeFileSync(join(dirname(legacyPath), name), 'throw new Error("Node code must not reach a browser")\n')
+    }
+    const { service, route } = constructWithRoute([packageName])
+    const row = service.graph().entries[0]!
+    expect(row.url).toContain(`${packageName}/client.js`)
+    expect((await routeRequest(route, row.url)).body.toString('utf8')).toContain('browser: true')
+    for (const name of ['client.node.js', 'client.node.helper.js']) {
+      for (const suffix of ['', '.map']) {
+        expect((await routeRequest(route, chunkReference(packageName, name + suffix, row.rev))).status).toBe(404)
+      }
+    }
   })
 
   it('publishes a new chunk revision when a completed build rewrites only the entry timestamp', async () => {

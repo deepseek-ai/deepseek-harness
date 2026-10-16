@@ -46,6 +46,7 @@ Choose this backend when consumers benefit from one artifact per session — nav
 |---|---|---|
 | `root` | required | Root directory for all session files |
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
+| `listConcurrency` | `3` | Maximum directory, header, and stat reads in flight, shared by every concurrent listing of this backend |
 
 Live-event write batching is not configuration: the batching window is the seam's internal scheduling policy inside each write handle.
 

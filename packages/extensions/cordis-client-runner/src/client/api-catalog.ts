@@ -545,11 +545,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionHandle',
-    declaration: 'export interface ConnectionHandle {\n    readonly isLoopback: boolean;\n    readonly generation: ConnectionGenerationState;\n    readonly state: ConnectionStateSource;\n    readonly rpc: ClientConnectionRpc;\n    reconnect(): void;\n    registerGenerationSource(source: ConnectionGenerationSource): () => void;\n    start(sinks: ConnectionSinks, config?: ConnectionRecoveryConfig): ConnectionLoop;\n}',
+    declaration: 'export interface ConnectionHandle {\n    readonly interactions: ConnectionInteractions;\n    readonly isLoopback: boolean;\n    readonly generation: ConnectionGenerationState;\n    readonly state: ConnectionStateSource;\n    readonly rpc: ClientConnectionRpc;\n    openWebSocket(path: string): ConnectionWebSocket;\n    reconnect(): void;\n    registerGenerationSource(source: ConnectionGenerationSource): () => void;\n    start(sinks: ConnectionSinks, config?: ConnectionRecoveryConfig): ConnectionLoop;\n}',
   },
   {
     name: 'ConnectionHostInfo',
     declaration: 'export interface ConnectionHostInfo {\n    readonly home: string;\n}',
+  },
+  {
+    name: 'ConnectionInteractions',
+    declaration: 'export type ConnectionInteractions = \'answer\' | \'none\';',
   },
   {
     name: 'ConnectionLoop',
@@ -578,6 +582,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConnectionStateSource',
     declaration: 'export interface ConnectionStateSource {\n    getSnapshot(): ConnectionState | undefined;\n    subscribe(listener: () => void): () => void;\n}',
+  },
+  {
+    name: 'ConnectionWebSocket',
+    declaration: 'export interface ConnectionWebSocket {\n    readonly readyState: number;\n    send(data: string): void;\n    close(code?: number, reason?: string): void;\n    addEventListener<Event extends keyof ConnectionWebSocketEventMap>(event: Event, listener: (event: ConnectionWebSocketEventMap[Event]) => void, options?: {\n        readonly once?: boolean;\n    }): void;\n    removeEventListener<Event extends keyof ConnectionWebSocketEventMap>(event: Event, listener: (event: ConnectionWebSocketEventMap[Event]) => void): void;\n}',
+  },
+  {
+    name: 'ConnectionWebSocketEventMap',
+    declaration: 'export interface ConnectionWebSocketEventMap {\n    readonly open: object;\n    readonly error: object;\n    readonly close: object;\n    readonly message: {\n        readonly data: unknown;\n    };\n}',
   },
   {
     name: 'DraftInitializationOptions',
@@ -661,7 +673,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KeyedStandardSource',
-    declaration: 'export type KeyedStandardSource = (key: string) => HostObservable<unknown> | undefined;',
+    declaration: 'export type KeyedStandardSource = (key: string, member?: string) => HostObservable<unknown> | undefined;',
   },
   {
     name: 'KeyPropsOf',

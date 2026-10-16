@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
 import { isBuiltin } from 'node:module'
 import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { WorkspaceTypertGenerator } from '../packages/typert/generator/src/workspace.ts'
 import { writeModuleGraph } from './gen-module-graph.ts'
@@ -32,6 +33,8 @@ function workspaceRange(name: string): 'workspace:*' | 'workspace:~' {
   return name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-') ? 'workspace:*' : 'workspace:~'
 }
 const RELEASE_MANIFEST_GLOB = 'packages/!(experimental)/*/package.json'
+/** Every package group, experimental included, follows the same published dependency policy. */
+const POLICY_MANIFEST_GLOB = 'packages/*/*/package.json'
 const WORKSPACE_MANIFEST_GLOBS = [
   'apps/*/package.json',
   'packages/*/*/package.json',
@@ -113,10 +116,15 @@ function packageNameOf(specifier: string): string | undefined {
   return specifier.startsWith('@') ? parts.length >= 2 ? `${parts[0]}/${parts[1]}` : undefined : parts[0]
 }
 
-/** Read package manifests used for scope discovery and workspace-name checks. */
+/**
+ * Read package manifests used for scope discovery and workspace-name checks.
+ * @param root - Repository containing the workspace manifests.
+ * @returns Every workspace package, the non-experimental release packages, and the packages the policy covers.
+ */
 export function readWorkspacePackageManifests(root: string): {
   all: WorkspacePackageManifest[]
   release: WorkspacePackageManifest[]
+  policy: WorkspacePackageManifest[]
 } {
   const read = (manifestPath: string): WorkspacePackageManifest => {
     const manifest = JSON.parse(readFileSync(resolve(root, manifestPath), 'utf8')) as PackageDependencyManifest
@@ -129,8 +137,11 @@ export function readWorkspacePackageManifests(root: string): {
     }
   }
   const all = globSync(WORKSPACE_MANIFEST_GLOBS, { cwd: root }).map(normalizePath).sort().map(read)
-  const releasePaths = new Set(globSync(RELEASE_MANIFEST_GLOB, { cwd: root }).map(normalizePath))
-  return { all, release: all.filter(pkg => releasePaths.has(pkg.manifestPath)) }
+  const subset = (pattern: string): WorkspacePackageManifest[] => {
+    const paths = new Set(globSync(pattern, { cwd: root }).map(normalizePath))
+    return all.filter(pkg => paths.has(pkg.manifestPath))
+  }
+  return { all, release: subset(RELEASE_MANIFEST_GLOB), policy: subset(POLICY_MANIFEST_GLOB) }
 }
 
 function duplicates(values: readonly string[]): string[] {
@@ -161,7 +172,7 @@ export function discoverPackageDependencyScope(
   ] as const) {
     for (const name of duplicates(values)) violations.push(`${field} lists ${name} more than once`)
     for (const name of values) {
-      if (!byName.has(name)) violations.push(`${field} names unknown release package ${name}`)
+      if (!byName.has(name)) violations.push(`${field} names unknown package ${name}`)
     }
   }
   for (const name of include) {
@@ -389,7 +400,78 @@ function hostSourceEntries(root: string, pkg: WorkspacePackageManifest): string[
   return [...entries].sort()
 }
 
-function readHostRuntimeUses(root: string, pkg: WorkspacePackageManifest, generatedHostSource?: string): {
+/** tsdown build faces the repository build runs; each package config contributes its configs under both. */
+const BUILD_FACES = ['host', 'client'] as const
+
+/** One tsdown configuration as far as Host entry discovery reads it. */
+interface BuildEntryConfig {
+  readonly entry?: unknown
+  readonly platform?: unknown
+}
+
+/** Flatten a tsdown entry declaration to its paths: a string, a list, or an output-name map. */
+function buildEntryPaths(entry: unknown, configPath: string): string[] {
+  if (entry === undefined || entry === '') return []
+  if (typeof entry === 'string') return [entry]
+  if (Array.isArray(entry) && entry.every(value => typeof value === 'string')) return entry
+  if (entry !== null && typeof entry === 'object' && !Array.isArray(entry)
+    && Object.values(entry).every(value => typeof value === 'string')) return Object.values(entry) as string[]
+  throw new Error(`${configPath}: tsdown entry ${JSON.stringify(entry)} is not a path, a path list, or an output-name map`)
+}
+
+/**
+ * Read the Host-side source entries a package-local `tsdown.config.ts` builds, such as Worker-thread and child-process
+ * entries that no package export names. The config is evaluated under every repository build face; configs for the
+ * browser platform and entries under `src/client/` (Client faces, including the Node Client half) are not Host
+ * entries. A package without a local config builds only the workspace default `index` and `startup` entries, which
+ * its `src/index.ts` and exports already cover.
+ * @param root - Repository containing the package.
+ * @param pkg - Package whose build configuration is read.
+ * @returns Absolute source paths, sorted; empty without a package-local config.
+ * @throws {Error} when the config has no usable default export or an entry has no source module.
+ */
+export async function readHostBuildEntries(root: string, pkg: WorkspacePackageManifest): Promise<string[]> {
+  const configPath = resolve(root, pkg.dir, 'tsdown.config.ts')
+  if (!existsSync(configPath)) return []
+  const display = normalizePath(relative(root, configPath))
+  const loaded = await import(pathToFileURL(configPath).href) as { default?: unknown }
+  const exported = loaded.default
+  if (exported === undefined || exported === null) throw new Error(`${display}: tsdown config has no default export`)
+  const configs: BuildEntryConfig[] = []
+  for (const face of BUILD_FACES) {
+    const value: unknown = typeof exported === 'function'
+      ? await (exported as (inline: { env: Record<string, string> }) => unknown)({ env: { DSH_BUILD_FACE: face } })
+      : exported
+    configs.push(...(Array.isArray(value) ? value : [value]) as BuildEntryConfig[])
+  }
+  const packageDir = resolve(root, pkg.dir)
+  const clientDir = join(packageDir, 'src', 'client') + sep
+  const entries = new Set<string>()
+  for (const config of configs) {
+    if (config.platform === 'browser') continue
+    for (const path of buildEntryPaths(config.entry, display)) {
+      if (!/^(?:\.\/)?(?:lib\/types|src)\//.test(path)) {
+        throw new Error(`${display}: tsdown entry ${path} cannot map to a source entry`)
+      }
+      const source = path.replace(/^(?:\.\/)?(?:lib\/types|src)\//, './src/')
+      const matched = /[*{]/.test(source)
+        ? globSync(source.replace(/\.[cm]?[jt]sx?$/, '.{ts,tsx,mts,cts}'), { cwd: packageDir }).map(match => resolve(packageDir, match))
+        : [resolveLocal(resolve(root, pkg.manifestPath), source)].filter(match => match !== undefined)
+      if (matched.length === 0 && !/[*{]/.test(source)) {
+        throw new Error(`${display}: tsdown entry ${path} has no source module`)
+      }
+      for (const match of matched) if (!match.startsWith(clientDir)) entries.add(match)
+    }
+  }
+  return [...entries].sort()
+}
+
+function readHostRuntimeUses(
+  root: string,
+  pkg: WorkspacePackageManifest,
+  hostBuildEntries: readonly string[],
+  generatedHostSource?: string,
+): {
   packageUses: Map<string, string[]>
   exportUses: HostRuntimeExportUse[]
 } {
@@ -417,7 +499,7 @@ function readHostRuntimeUses(root: string, pkg: WorkspacePackageManifest, genera
       if (target !== undefined) visit(target)
     }
   }
-  for (const entry of hostSourceEntries(root, pkg)) visit(entry)
+  for (const entry of [...hostSourceEntries(root, pkg), ...hostBuildEntries]) visit(entry)
   const generated = generatedHostSource ?? generatedHostSources(root, [pkg]).get(pkg.name)
   if (generated !== undefined) collect(`${normalizePath(pkg.dir)}/lib/typert.host.js`, generated)
   return {
@@ -465,20 +547,21 @@ function readAllSourceUses(root: string, pkg: WorkspacePackageManifest): Map<str
  * @param workspaceNames - Workspace package identities.
  * @param policy - Reviewed Host exports, required services, and development-only relationships.
  * @param generatedHostSource - Host module already emitted in memory by a batched Typert pass.
- * @returns Source-derived dependency facts without writing build artifacts.
+ * @returns Source-derived dependency facts without writing build artifacts; Host roles include the build entries
+ * {@link readHostBuildEntries} reads from the package's tsdown config.
  */
-export function readPackageDependencyFacts(
+export async function readPackageDependencyFacts(
   root: string,
   pkg: WorkspacePackageManifest,
   role: PackageDependencyRole,
   workspaceNames: ReadonlySet<string>,
   policy: PackageDependencyPolicy = PACKAGE_DEPENDENCY_POLICY,
   generatedHostSource?: string,
-): PackageDependencyFacts {
+): Promise<PackageDependencyFacts> {
   const inject = pkg.manifest.dsh?.client?.inject ?? []
   const hostRuntime = role === 'client-only'
     ? { packageUses: new Map<string, string[]>(), exportUses: [] }
-    : readHostRuntimeUses(root, pkg, generatedHostSource)
+    : readHostRuntimeUses(root, pkg, await readHostBuildEntries(root, pkg), generatedHostSource)
   const servicePeers = policy.requiredServicePeers?.[pkg.name] ?? []
   const allSourceUses = readAllSourceUses(root, pkg)
   for (const name of servicePeers) {
@@ -574,21 +657,28 @@ export function collectHostDependencyExportPolicyViolations(
   return violations.sort()
 }
 
-/** Read every package covered by the current dependency policy. */
-export function readPackageDependencyState(
+/**
+ * Read every package covered by the current dependency policy.
+ * @param root - Repository containing the workspace manifests, sources, and package build configs.
+ * @param policy - Reviewed scope overrides and Host export classifications.
+ * @returns Facts for every covered package, the covered manifests, and policy configuration violations.
+ */
+export async function readPackageDependencyState(
   root: string,
   policy: PackageDependencyPolicy = PACKAGE_DEPENDENCY_POLICY,
-): PackageDependencyState {
+): Promise<PackageDependencyState> {
   const packages = readWorkspacePackageManifests(root)
   const workspaceNames = new Set(packages.all.map(pkg => pkg.name))
-  const discovered = discoverPackageDependencyScope(packages.release, policy)
+  const discovered = discoverPackageDependencyScope(packages.policy, policy)
   const generated = generatedHostSources(root, discovered.selected.filter(pkg => pkg.role !== 'client-only'))
-  const facts = discovered.selected.map(pkg =>
-    readPackageDependencyFacts(root, pkg, pkg.role, workspaceNames, policy, generated.get(pkg.name)))
+  const facts: PackageDependencyFacts[] = []
+  for (const pkg of discovered.selected) {
+    facts.push(await readPackageDependencyFacts(root, pkg, pkg.role, workspaceNames, policy, generated.get(pkg.name)))
+  }
   const selectedNames = new Set(facts.map(fact => fact.manifest.name))
   return {
     facts,
-    packages: packages.release,
+    packages: packages.policy,
     policyViolations: [
       ...discovered.violations,
       ...collectHostDependencyExportPolicyViolations(facts, workspaceNames, policy),
@@ -901,9 +991,9 @@ function refreshPnpmLockfile(root: string): void {
   if (result.status !== 0) throw new Error(`pnpm lockfile refresh exited with status ${String(result.status)}`)
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
-  let state = readPackageDependencyState(root)
+  let state = await readPackageDependencyState(root)
   const fix = process.argv.includes('--fix')
   if (fix) {
     if (state.policyViolations.length > 0) {
@@ -916,7 +1006,7 @@ function main(): void {
       console.log(
         `${GATE}: refreshed pnpm-lock.yaml and wrote ${String(graphChanges.length)} module-graph artifact(s).`,
       )
-      state = readPackageDependencyState(root)
+      state = await readPackageDependencyState(root)
     }
   }
   const violations = [
@@ -945,4 +1035,4 @@ function main(): void {
   }
 }
 
-if (import.meta.main) main()
+if (import.meta.main) await main()

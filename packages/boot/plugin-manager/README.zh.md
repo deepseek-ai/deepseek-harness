@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-基于 base 的 profile 提供管理服务。在 Web 中，侧边栏的**插件**页（[ui-plugin-manager](../../client/ui-plugin-manager/README.zh.md)）管理 profile 的组合包及其能唯一定位的行；设置页的插件列表保持只读。Agent 预设条目保持只读。`plugin_manager` 工具提供相同操作，在 Creator 模式中启用。其他预设仍默认禁用。 每个工具操作都要求 `danger-full-access` 或本次调用的批准。在较低沙箱模式下，`ask` 会请求审批；`never`、拒绝、取消或审批渠道不可用时均不执行。批准不改变会话的权限模式。profile 变更跨会话持久化，已安装的 Host 代码在宿主进程内运行，不受工作区沙箱限制。依赖构建脚本仍需单独批准。
+基于 base 的 profile 提供管理服务。在 Web 中，侧边栏的**插件**页（[ui-plugin-manager](../../client/ui-plugin-manager/README.zh.md)）管理 profile 的组合包及其能唯一定位的行；设置页的插件列表保持只读。Agent 预设条目保持只读。`plugin_manager` 工具提供相同操作，在 Creator 模式中启用。其他预设仍默认禁用。每个工具操作都要求 `danger-full-access` 或本次调用的批准。在较低沙箱模式下，`ask` 会请求审批；`never`、拒绝、取消或审批渠道不可用时均不执行。批准不改变会话的权限模式。profile 变更跨会话持久化，已安装的 Host 代码在宿主进程内运行，不受工作区沙箱限制。依赖构建脚本仍需单独批准。
 
 未使用 Agent 预设的部署在 profile patch 中启用工具；使用预设的会话由其预设中的 `tool-plugin-manager` 条目控制。
 
@@ -37,7 +37,7 @@ kind: "package-reference"
   disabled: false
 ```
 
-插件开关只更新 profile 的 `cordis.patch.yml` 中最后一条匹配覆盖项的 `disabled`；没有匹配项时追加。匹配依据是条目 id，以及覆盖项声明的模块名称。组合包开关修改 `package.json` 的有序 `dsh.profile.bundles` 列表。关闭保留依赖；开启追加到列表末尾，可能改变配置优先级。安装新组合包默认启用。home 和单次启动 patch 保留更高优先级。
+插件开关只更新 profile 的 `cordis.patch.yml` 中最后一条匹配覆盖项的 `disabled`；没有匹配项时追加。匹配依据是条目 id，以及覆盖项声明的模块名称。如果组合包层和其余 profile patch 已使条目处于所请求的状态，仅含 `id` 与 `disabled` 的覆盖项会被移除，也不会追加覆盖项，因此 profile patch 只记录与组合包不同的设置。该比较不计入 home 和单次启动 patch；它们在 profile patch 之后应用，不决定 profile patch 记录什么。组合包开关修改 `package.json` 的有序 `dsh.profile.bundles` 列表。关闭保留依赖；开启追加到列表末尾，可能改变配置优先级。安装新组合包默认启用。home 和单次启动 patch 保留更高优先级。
 
 已选择但无法加载的组合包仍会出现在 `listBundles` 中，并携带 `error`；`enabled` 表示保存的选择，不代表加载成功。插件页面显示错误并允许取消选择。损坏的组合包无法启用。管理组合包的文件变得不可读后仍受保护。
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 已发布的安装提供 `package@<当前 DSH 版本>`。源码 Web 与开发 Desktop 提供 `link:<工作区包的绝对目录>`，目录来自当前 CLI 的安装位置，包括其开发符号链接。包名通过工作区清单解析；当前工作目录和预发布版本后缀不用于选择 checkout。包、bundle patch 或已构建入口缺失时报告诊断，不回退到注册表。使用 `pnpm install` 和 `pnpm run build` 准备 checkout。链接包使用该 checkout 的依赖与 peer；代码改变后仍需重新构建并重启。即使版本相同，注册表副本或其他 checkout 的链接也可能需要替换。
 
-官方按需安装与显式更新调用和其他组合包相同的 `installBundle` 操作。注册表目标使用 `saveExact: true`；开发目标保留普通 `link:` 依赖。更新传入当前 `enabled` 选择状态；替换已有依赖会报告 `restart-required`。关闭仅取消选择配置层，移除使用原有移除检查。安装失败恢复 profile 清单和锁文件；安装成功后激活失败可能保留已保存的依赖和选择。原有 peer 兼容性检查继续生效，不增加仅针对官方条目的版本准入规则。
+官方按需安装调用和其他组合包相同的 `installBundle` 操作。注册表目标使用 `saveExact: true`；开发目标保留普通 `link:` 依赖。显式更新先删除已安装的包，再以当前 `enabled` 选择状态安装目标；没有 HMR 时，自启动起运行的组合包无法删除，因此安装直接覆盖它并报告 `restart-required`。删除之后安装失败或被取消时，该包保持未安装，重新安装的组合包排在选择列表末尾。关闭仅取消选择配置层，移除使用原有移除检查。安装失败恢复 profile 清单和锁文件；安装成功后激活失败可能保留已保存的依赖和选择。原有 peer 兼容性检查继续生效，不增加仅针对官方条目的版本准入规则。
 
 `installBundle` 在启动 pnpm 前通过 `git ls-remote` 检查 GitHub 仓库，使用 profile 目录及安装器的 Git 与代理配置。`githubConnectionTimeoutMs` 默认为 5000 毫秒，只限制这次检查，不限制包下载或构建。检查禁用凭据助手和认证提示；只有网络失败与超时会停止安装，通过现有失败类型与诊断日志返回，并标记 `failedAt: 'spec-host'`。认证、仓库查找及其他失败继续交给 pnpm，包括其 HTTPS 到 SSH 的回退。取消安装或销毁管理器会停止检查及其子进程。注册表包、本地路径、压缩包和其他 Git 主机跳过此检查。仓库可达后，下载或组合包验证仍可能失败。
 
@@ -66,13 +66,13 @@ pnpm 11 拦下依赖脚本时，失败的安装在 `pendingBuilds` 里报告 pro
 <a id="version-compatibility-and-exemptions"></a>
 ### 版本兼容性与豁免
 
-点名软件包的安装命令（`add`，或带 spec 的 `install`）会在 pnpm 运行前完成检查：本地路径直接读取其 `package.json`，registry spec 通过 pnpm 的 registry 查询得到该范围选中的版本及其声明的 peer。不兼容的 DSH peer 会在 pnpm 运行前使操作失败，因此不会下载任何内容、不会运行构建脚本；调用方随请求提交的构建批准在此检查之前记录，会保留下来。git 或 tarball spec 必须先抓取，因此在安装后才判定：此时操作会恢复 profile 清单与锁文件，并按恢复后的锁文件重新安装（profile 原本没有锁文件时，按恢复后的清单重新安装且不创建锁文件），同时报告该恢复是否成功；已获准构建脚本的副作用可能保留。本次运行未改动的依赖不会阻塞无关操作：它保持已安装状态，运行会输出点名它的警告，由 profile 启动拒绝加载。请求 `enabled: false` 的安装同样受检。启动检查独立执行；版本范围语义见 [App boot](../app-boot/README.zh.md#profiles)。版本豁免不授权依赖脚本。
+点名软件包的安装命令（`add`，或带 spec 的 `install`）会在 pnpm 运行前完成检查：本地路径直接读取其 `package.json`，registry spec 通过 pnpm 的 registry 查询得到该范围选中的版本及其声明的 `engines` 和 `peerDependencies`。未满足的 DSH 版本要求会在 pnpm 运行前使操作失败，因此不会下载任何内容、不会运行构建脚本；调用方随请求提交的构建批准在此检查之前记录，会保留下来。git 或 tarball spec 必须先抓取，因此在安装后才判定：此时操作会恢复 profile 清单与锁文件，并按恢复后的锁文件重新安装（profile 原本没有锁文件时，按恢复后的清单重新安装且不创建锁文件），同时报告该恢复是否成功；已获准构建脚本的副作用可能保留。本次运行未改动的依赖不会阻塞无关操作：它保持已安装状态，运行会输出点名它的警告，由 profile 启动拒绝加载。请求 `enabled: false` 的安装同样受检。启动检查独立执行；版本范围语义见 [App boot](../app-boot/README.zh.md#profiles)。版本豁免不授权依赖脚本。
 
 豁免保存在 profile 自己的 `compatibility.json` 中（与 `package.json`、`cordis.patch.yml` 并列），将精确的 `package-name@version` 映射到精确 DSH 运行时版本列表。写豁免不改变依赖、组合包选择或 patch 层。插件升级和 DSH 升级都不继承授权。使用 `plugin_manager` 的 `list_version_exemptions` 获取运行时版本与已有授权，再通过 `set_version_exemption` 提交 `target`、`runtimeVersion` 和 `enabled`。授权还要求 `acceptRisk: true`；只能在警告用户不兼容插件可能导致崩溃或数据丢失，并获得用户对此版本组合的明确许可后传入。服务校验确认参数和版本，不核实对话历史。撤销可以移除历史运行时版本的授权。
 
 授权在下一次组合时生效。在线 profile 会重新组合，被授权的插件会在当前会话中挂载，结果报告 `applied`；仅启动型 profile 在重启前保留当前条目并报告 `restart-required`。
 
-CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version <package@version> --dsh-version <runtime> --accept-risk` 和 `revoke-version <package@version> --dsh-version <runtime>`。授权会在保存前打印风险警告。兼容性拒绝带有 `incompatible-version` 错误码，以及每个被拒绝软件包的 `name`、`version`、`runtimeVersion` 和未满足的 `peers`；各界面自行呈现这份记录。Web 页面通过 locale 词典生成文案，CLI 拒绝时打印精确的 `allow-version` 命令。通过工具或 CLI 添加豁免后，重试原操作。
+CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version <package@version> --dsh-version <runtime> --accept-risk` 和 `revoke-version <package@version> --dsh-version <runtime>`。授权会在保存前打印风险警告。兼容性拒绝带有 `incompatible-version` 错误码，以及每个被拒绝软件包的 `name`、`version`、`runtimeVersion` 和未满足的 `requirements`（键为 `engines.dsh` 或 DSH peer 包名）；各界面自行呈现这份记录。Web 页面通过 locale 词典生成文案，CLI 拒绝时打印精确的 `allow-version` 命令。通过工具或 CLI 添加豁免后，重试原操作。
 
 ### 配置
 
@@ -97,7 +97,7 @@ CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version 
 
 服务与 `dsh plugin` 共用 [operations.ts](src/operations.ts) 中的包管理操作。启动器提供当前 profile；[DSH HMR](../hmr/README.zh.md) 串行执行模块重载、文件监听和管理写入。每次配置刷新重新读取组合包选择与 patch 层，更新原有根 Include，并等待已移除插件释放资源及剩余 Loader 树稳定。CLI 与 service 操作共用 profile manifest 写锁，防止并发包操作和 manifest 写入。HMR 不获取该锁。pnpm 在 HMR 队列之外执行；安装在 pnpm 成功后选入组合包，删除则在执行 pnpm 前取消选入并完成卸载。
 
-安装新包、启用组合包、有 HMR 时停用组合包并等插件退出后、以及删除成功后，都会发布 profile 的 runtime resolution。共享依赖的规范化目录、版本和作用域不变时，可以改由另一个组合包声明。没有 HMR 时，已取消选入的启动组合包仍在运行：只要保存的选择列表中缺少任何这样的组合包，后续包操作就保留整张当前表，并报告 `restart-required`。其他新安装和未运行组合包的删除仍可在没有 HMR 时发布；激活等待重启。覆盖已安装的包不发布，并报告 `restart-required`（[决策](../../../.agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.zh.md)）。
+没有 HMR 时，安装新包、启用组合包以及删除成功后，都会发布 profile 的 runtime resolution；有 HMR 时，每个操作都把发布交给 [HMR](../hmr/README.zh.md) 的重新组合，该重新组合在相关插件停止后移除被丢弃的映射。共享依赖的规范化目录和作用域不变时，可以改由另一个组合包声明。没有 HMR 时，已取消选入的启动组合包仍在运行：只要保存的选择列表中缺少任何这样的组合包，后续包操作就保留整张当前表，并报告 `restart-required`。其他新安装和未运行组合包的删除仍可在没有 HMR 时发布；激活等待重启。有 HMR 时，spec 指明已安装的包，`installBundle()` 在运行 pnpm 之前以 `already-installed` 拒绝安装；spec 可以是 registry 包名、本地目录，或保存依赖时使用的 git 或 tarball spec。因此，有 HMR 时无法在不能删除的包（例如带有插件管理的组合包）上安装。安装另一个版本需要先卸载再安装，因此在安装新版本之前，旧版本的插件停止，其模块被逐出，其映射被移除；Web 页面中官方插件的更新会依次执行这两步。运行 pnpm 之后才能确定包名的 git 或 tarball spec 仍可能安装到已安装的包上：没有 HMR 时报告 `restart-required`；有 HMR 时，重新组合替换已加载文件发生变化的运行中插件。替换版本导入或启动失败时报告 `failed` 及激活诊断，该诊断给出导入错误；旧版本不再运行，此后每次操作都会再次导入它，因此其文件或依赖被修正后它即启动。未变化的导入失败在后续操作中作为警告报告；已变化的导入失败使后续操作失败。已安装的包现在解析到其他目录，或 DSH 安装的映射发生变化，使 runtime resolution 拒绝发布时，它停止并重新启动该发布将丢弃的行，组合保持不变，并报告带 `package-moved` 的 `restart-required`。停用或删除组合包时，会逐出因此被删除映射的那些包的模块。每个 `restart-required` 结果都带有 `restartReason`：`no-hmr`、`package-moved`，或只有重启后才能加载的已变化模块的 [HMR 待处理原因](../hmr/README.zh.md)，除非操作报告 `overridden`（[决策](../../../.agents/notes/implemented/architecture/2026-09-30-profile-package-refresh-and-manifest-invalidation.zh.md)）。
 
 service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，与退出状态一并报告 `timedOut`，不论信号留下什么退出状态都归类为 `timeout`，且不再转问下一个注册表，因此单次操作占用 profile 锁的时长有上界；CLI 继承终端、不捕获输出，因此不受此上界约束，由操作者中断。运行以进程退出为完成点，随后只在一个有界的宽限窗口内排空管道，因此继承管道的孙进程无法让操作挂起。诊断文件会在调用结束前关闭，包括准备或创建进程失败的情况。被终止的运行会停止整棵进程树并等待其消失，因为生命周期脚本的存活时间超过启动它的 pnpm 进程（issue #4981）。每个操作把它启动的 pnpm 运行记录在 `.plugin-manager/run.json` 中，并在运行结束时删除该记录。持有者进程已退出的锁会被下一个写入方接管，但该进程的 pnpm 进程树可能仍在运行，因此发现记录的操作最多等待五秒让记录中的运行停止，否则不运行 pnpm，并以指明该进程与记录文件的诊断失败。仅依赖字段变化不会触发配置重载。
 
@@ -122,7 +122,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 
 #### 模型看到什么
 
-[`plugin_manager` 工具](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plugin-manager) 列出插件条目和组合包，并执行影响整个 profile 的改动。结果包含保存状态变化、应用状态和包管理诊断。管理操作不会向 Agent 注入消息。
+[`plugin_manager` 工具](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plugin-manager) 列出插件条目和组合包，并执行影响整个 profile 的改动。结果包含保存状态变化、应用状态和包管理诊断。未直接应用的变更结果会增加 `nextStep`，这是一句根据应用状态、拒绝代码、包管理器失败类型或重启原因生成的说明，指出模型下一步做什么或告诉用户什么。管理操作不会向 Agent 注入消息。
 
 #### Token 影响
 
@@ -137,7 +137,8 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 <a id="known-limitations-and-deferred-work"></a>
 
 - Web 一次批准显示出来的整组待决定包，没有逐包选择。
-- 替换已有包后需要重启进程，以加载新的 JavaScript 模块版本。
+- 命令改动锁文件时，pnpm 按默认注册表校验锁文件中的每个 tarball URL。某个包从其他注册表安装后，使用默认注册表安装另一个包，或在重启后删除该包，可能以 `ERR_PNPM_TARBALL_URL_MISMATCH` 失败。
+- 没有 HMR 时，替换包需要重启进程。在 Plugin Manager 之外重新链接仍处于安装状态的包，需要等待重启。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。
 - 管理器不能关闭自身所需的管理组件、修改其他 profile 或编辑 agent 预设组合。
 - 失败的删除可能留下部分依赖改动，失败或被取消的安装可能在 `node_modules` 或 pnpm 缓存中留下已下载文件。文件缺失的未启用依赖仍可删除。诊断日志保留在 profile 的 `.plugin-manager/logs` 目录中。
@@ -156,7 +157,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 | 包操作成功后解析表发布失败 | 保留已完成的磁盘改动和上一张运行时表。报告 `application: 'failed'` 及发布诊断；pnpm 的零退出码不代表发布成功。 |
 | 卸载：任一步失败 | 停在失败步骤，保留已完成的改动和待重试删除的依赖，报告卸载失败。不重新启用组合包。 |
 
-pnpm 执行和组合包校验成功即完成安装，后续发布或启用失败不撤销安装。卸载依次执行：从 `dsh.profile.bundles` 移除组合包、卸载运行时贡献、执行 `pnpm remove`，然后发布 runtime resolution，除非没有 HMR 且已取消选入的启动组合包仍在运行。任一步失败都不继续执行后续步骤；删除后的发布失败不会恢复已删除的包。 profile 依赖和安装都不持有的已选名称（例如已下线的组合包）同样可卸载；其卸载在取消选择后结束，不运行 pnpm。
+pnpm 执行和组合包校验成功即完成安装，后续发布或启用失败不撤销安装。卸载依次执行：从 `dsh.profile.bundles` 移除组合包、卸载运行时贡献、执行 `pnpm remove`，然后发布 runtime resolution，除非没有 HMR 且已取消选入的启动组合包仍在运行。`pnpm remove` 使用本管理器在当前进程中最近一次安装该包时所用的注册表，因为 pnpm 按默认注册表校验锁文件中的 tarball URL；进程启动前安装的包使用安装时首先询问的注册表删除。任一步失败都不继续执行后续步骤；删除后的发布失败不会恢复已删除的包。 profile 依赖和安装都不持有的已选名称（例如已下线的组合包）同样可卸载；其卸载在取消选择后结束，不运行 pnpm。
 
 恢复只重写这两份快照文件；用户编写的 patch 配置、应用数据、诊断日志以及 pnpm 已下载的文件保持原样，没有 manifest 引用的包由下一次包操作清理。
 

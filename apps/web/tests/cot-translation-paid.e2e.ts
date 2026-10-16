@@ -21,6 +21,7 @@ import {
 
 const BUNDLE_NAME = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
 const BUNDLE = fileURLToPath(new URL('../../../packages/experimental/cot-translation-bundle', import.meta.url))
+const { version: bundleVersion } = JSON.parse(await readFile(join(BUNDLE, 'package.json'), 'utf8')) as { version: string }
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v4.jsonl', import.meta.url))
 const EXPECTED = fileURLToPath(new URL('./expected/cot-translation-paid', import.meta.url))
 const MODE = webSnapshotMode()
@@ -192,8 +193,12 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   const save = panel.getByRole('button', { name: '保存', exact: true })
   await save.click(); await expect.poll(() => save.isDisabled()).toBe(true)
   expect(calls).toEqual([])
+  await panel.getByText(`v${bundleVersion}`, { exact: true }).waitFor()
+  await panel.getByText(bundleVersion, { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'paid-choices.expected.md'),
-    await captureStableAria(settings, '[data-plugin-panel]', scaffold.workspaceCwd, { replacements: [[BUNDLE, '{{bundle}}']] }), MODE)
+    await captureStableAria(settings, '[data-plugin-panel]', scaffold.workspaceCwd, {
+      replacements: [[BUNDLE, '{{bundle}}'], [bundleVersion, '{{version}}']],
+    }), MODE)
   await reasoning.locator('[data-disclosure-row]').first().click()
   const translated = reasoning.locator('[data-cot-translation]')
   await translated.getByText(TRANSLATED, { exact: true }).waitFor()

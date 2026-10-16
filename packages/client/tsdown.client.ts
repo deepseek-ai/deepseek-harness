@@ -6,20 +6,21 @@
  * lightningcss inside the bundle: `x.module.css` yields its hashed class map
  * and injects a tagged style at factory execution, while `x.css?inline`
  * exports compiled text for a plugin-owned lifecycle effect. The virtual
- * loaders register each real stylesheet as a watch dependency.
+ * loaders register each real stylesheet as a watch dependency. SVG, PNG, and
+ * WebP imports become watched base64 data URLs inside the bundle.
  * Non-experimental client outputs reject experimental module and stylesheet
  * inputs, including origins recorded by chained source maps.
  */
 import { readFile, stat, utimes } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
-import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Rolldown, type TsdownPlugin, type UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 import { optionalStringArray } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from './web/src/platform.ts'
-import { clientBuildEnvironmentDefines } from '../../scripts/client-build-environment.ts'
+import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
 import { isExperimentalPackageName } from '../../scripts/experimental-package-policy.ts'
 import { BundleInputIsolation, physicalBundleInput } from '../../scripts/bundle-input-isolation.ts'
 
@@ -33,6 +34,9 @@ const GLOBAL_CSS_VIRTUAL_PREFIX = '\0dsh-global-css:'
 const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const INLINE_CSS_QUERY = '?inline'
+
+/** Image imports become base64 data URLs embedded in the plugin's own bundle. */
+const IMAGE_MEDIA_TYPES = new Map([['.svg', 'image/svg+xml'], ['.png', 'image/png'], ['.webp', 'image/webp']])
 
 /** Emit one plugin-owned style injector and an optional CSS Modules export. */
 function styleInjectionModule(
@@ -104,7 +108,7 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * `import.meta.dirname`. Its `package.json` name is the plugin id stamped into
  * the __ModuleLoader__.load handoff and onto the injected style tags.
  * @param libEntry - node-half entries.
- * @param options - phase placement, lib overrides, companion Node configs, and optional per-file Client banner.
+ * @param options - phase placement, lib overrides, optional independently bundled Node Client, companion configs, and per-file Client banner.
  * @returns ENV-selected tsdown config for the current build face.
  * @throws {Error} when `<packageDir>/package.json` is unreadable or declares no name.
  */
@@ -118,13 +122,16 @@ export function clientBundle(
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(manifest, clientEntry, options.clientBanner)
+    const client = clientConfig(manifest, clientEntry, options.clientBanner, options.dualClient === true)
     const node = [lib, ...(options.companions ?? [])]
+    const clientFaces = options.dualClient === true
+      ? [nodeClientConfig(manifest, clientEntry), client]
+      : [client]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     if (face === 'client') {
-      return options.hostPhase === true ? [client] : [...node, client]
+      return options.hostPhase === true ? clientFaces : [...node, ...clientFaces]
     }
-    return [...node, client]
+    return [...node, ...clientFaces]
   }
 }
 
@@ -208,6 +215,8 @@ export function clientOnly(configs: readonly UserConfig[]): BuildFaceConfig {
 interface ClientBundleOptions {
   /** Emit the Node-side artifacts during the Host pass instead of the Client pass. */
   readonly hostPhase?: boolean
+  /** Emit independent ESM `client.node.js` and browser-factory `client.browser.js` from the same Client entry. */
+  readonly dualClient?: boolean
   /** Additional Node-side configs emitted alongside the package library. */
   readonly companions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */
@@ -243,6 +252,8 @@ function clientLibraryConfig(
     fixedExtension: false,
     dts: false,
     clean: false,
+    // Public client build values are fixed into the Node half as they are into the browser half.
+    define: clientBuildValueDefines(process.env),
     deps: {
       // The Node half runs from a real install: a production dependency is on
       // disk there and stays an import, everything else inlines. Stating both
@@ -467,7 +478,30 @@ function asyncChunkRequirePlugin(): TsdownPlugin {
   }
 }
 
-function clientConfig(manifest: PackageManifest, entry: string, clientBanner?: (fileName: string) => string | undefined): UserConfig {
+/** Bundle the Client entry for plain Node independently of the Host entry and browser factory. */
+function nodeClientConfig(manifest: PackageManifest, entry: string): UserConfig {
+  const isolation = clientInputIsolation(manifest.name)
+  return clientLibraryConfig(manifest, [entry], {
+    name: `${manifest.name}/client-node`,
+    entry: { 'client.node': entry },
+    sourcemap: true,
+    inputOptions: { resolve: { conditionNames: ['node', 'import', 'module', 'default'] } },
+    plugins: [tscSourceMapPlugin(), isolation.plugin],
+    outputOptions: {
+      entryFileNames: 'client.node.js',
+      chunkFileNames: 'client.node.[name].js',
+      sourcemapExcludeSources: false,
+      sourcemapPathTransform: isolation.sourcePath,
+    },
+  })
+}
+
+function clientConfig(
+  manifest: PackageManifest,
+  entry: string,
+  clientBanner?: (fileName: string) => string | undefined,
+  dualClient = false,
+): UserConfig {
   const id = manifest.name
   let requested: ReadonlySet<string> | undefined
   const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
@@ -475,9 +509,8 @@ function clientConfig(manifest: PackageManifest, entry: string, clientBanner?: (
   return {
     name: `${id}/client`,
     entry: { client: entry },
-    // Browser bundle lands next to the node half (single lib/ artifact dir;
-    // the entryFileNames pin keeps it exactly lib/client.js). clean must stay
-    // off — a default clean would wipe the node-half output emitted above.
+    // Browser bundle lands beside the Node artifacts. clean must stay off:
+    // cleaning this invocation would wipe the independently emitted Node entry.
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
@@ -599,12 +632,25 @@ function clientConfig(manifest: PackageManifest, entry: string, clientBanner?: (
         const { code } = transform({ filename: fileId, code: source, minify: true })
         return styleInjectionModule(id, fileId, code.toString())
       },
+    }, {
+      name: 'dsh-image-inline',
+      resolveId(source: string, importer: string | undefined) {
+        if (importer === undefined || !IMAGE_MEDIA_TYPES.has(extname(source))) return null
+        return sourceAssetPath(source, importer)
+      },
+      async load(fileId: string) {
+        const mediaType = IMAGE_MEDIA_TYPES.get(extname(fileId))
+        if (mediaType === undefined) return null
+        this.addWatchFile(fileId)
+        const data = await readFile(fileId)
+        return `export default ${JSON.stringify(`data:${mediaType};base64,${data.toString('base64')}`)};`
+      },
     }],
     outputOptions: {
-      entryFileNames: 'client.js',
+      entryFileNames: dualClient ? 'client.browser.js' : 'client.js',
       // The imported source basename becomes the published chunk name; package
       // files lists and artifact tests pin every intentional chunk.
-      chunkFileNames: 'client.[name].js',
+      chunkFileNames: dualClient ? 'client.browser.[name].js' : 'client.[name].js',
       sourcemapExcludeSources: false,
       // The map is served from /plugins/<scoped-package>/client.js.map. The
       // browser resolves its local sources back into URLs that mirror the

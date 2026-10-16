@@ -369,6 +369,7 @@ function ciSharedStaticGates(): Gate[] {
     pnpmScript('default-product-isolation', 'verify-default-product-isolation', { label: 'default product isolation' }),
     pnpmScript('product-use', 'verify-product-use', { label: 'product package classification' }),
     pnpmScript('official-bundle-catalog', 'verify-official-bundle-catalog', { label: 'Official bundle catalog' }),
+    pnpmScript('provider-data', 'verify-provider-data', { label: 'pi-ai provider metadata' }),
     pnpmScript('application-entrypoints', 'verify-application-entrypoints', { label: 'application entrypoints' }),
     pnpmScript('constraints', 'constraints'),
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
@@ -392,6 +393,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
+    pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
   ]
 }
 
@@ -788,6 +790,7 @@ function hygieneLeafGates(options: { artifactNeeds?: string[] } = {}): Gate[] {
     pnpmScript('default-product-isolation', 'verify-default-product-isolation', { label: 'default product isolation' }),
     pnpmScript('product-use', 'verify-product-use', { label: 'product package classification' }),
     pnpmScript('official-bundle-catalog', 'verify-official-bundle-catalog', { label: 'Official bundle catalog' }),
+    pnpmScript('provider-data', 'verify-provider-data', { label: 'pi-ai provider metadata' }),
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
     pnpmScript('application-entrypoints', 'verify-application-entrypoints', { label: 'application entrypoints' }),
     pnpmScript('dsh-package-licenses', 'verify-dsh-package-licenses', { label: 'DSH package licenses' }),

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua/README.md
+/:
+  en: aa3d316ef17feae7
+  zh: 5a30d743ce257d5b
+/deepseek-ai-dsh-cua:
+  en: 0ef7ee882840cf1b
+  zh: 01b9e768eff2d302
+/deepseek-ai-dsh-cua/summary:
+  en: f4d9cc48587d62a2
+  zh: d1bac6c1fe7eb29e
+/deepseek-ai-dsh-cua/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 1db86285abf6c499
+/deepseek-ai-dsh-cua/use-this-package:
+  en: 52cacbe2d2aeb2bc
+  zh: b3c65814d9a17052
+/deepseek-ai-dsh-cua/understand-the-implementation:
+  en: effcee57d8854c32
+  zh: d02c6b76e7249051
+/deepseek-ai-dsh-cua/further-exploration:
+  en: b8b0aece886fadaa
+  zh: ecd8c88d601f2179
+/deepseek-ai-dsh-cua/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cua/model-experience/authorized-application-operations:
+  en: 0faf1e4d409d61aa
+  zh: 1866dd0b702f2a26
+/deepseek-ai-dsh-cua/model-experience/authorized-application-operations/what-the-model-sees:
+  en: 4f90c4a6b121bce0
+  zh: c36ab4b80985c76e
+/deepseek-ai-dsh-cua/model-experience/authorized-application-operations/token-effect:
+  en: 88463f0304c207bd
+  zh: 6d3ae2f1b8e45747
+/deepseek-ai-dsh-cua/model-experience/authorized-application-operations/kv-cache-effect:
+  en: 2d5df52dafa1d940
+  zh: 06e815759b9150c3
+/deepseek-ai-dsh-cua/known-limitations-and-deferred-work:
+  en: da6aefcb279aea83
+  zh: b45b7bb300b9f792
+/deepseek-ai-dsh-cua/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

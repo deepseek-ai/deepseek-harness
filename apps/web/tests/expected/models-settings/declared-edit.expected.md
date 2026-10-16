@@ -59,6 +59,40 @@
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - group "推理等级 1":
+            - text: 推理等级
+            - button "推理等级说明": "?"
+            - switch "推理等级 1" [checked]
+            - combobox "档位 1":
+              - option "off" [selected]
+              - option "minimal"
+              - option "medium"
+              - option "xhigh"
+              - option "max"
+            - textbox "off API 参数值" [disabled]:
+              - /placeholder: 关闭思考
+            - button "删除档位 off"
+            - combobox "档位 2":
+              - option "minimal"
+              - option "low" [selected]
+              - option "medium"
+              - option "xhigh"
+              - option "max"
+            - textbox "low API 参数值":
+              - /placeholder: low
+              - text: low
+            - button "删除档位 low"
+            - combobox "档位 3":
+              - option "minimal"
+              - option "medium"
+              - option "high" [selected]
+              - option "xhigh"
+              - option "max"
+            - textbox "high API 参数值":
+              - /placeholder: high
+              - text: high
+            - button "删除档位 high"
+            - button "添加档位"
           - button "添加模型"
       - button "取消"
       - button "保存"

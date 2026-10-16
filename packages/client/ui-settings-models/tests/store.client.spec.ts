@@ -20,10 +20,10 @@ it('carries the endpoint and native authentication the adapter reports onto the 
   const nativeAuth = { env: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'], oauth: true }
   expect(joinProviderDirectory([], [{
     provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'],
-    defaultBaseURL: 'https://api.anthropic.com', nativeAuth,
+    defaultBaseURL: 'https://api.anthropic.com', baseURLEnv: ['ENDPOINT'], nativeAuth,
   }])).toEqual([{
     provider: 'anthropic', displayName: 'anthropic', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'anthropic'],
-    active: false, defaultBaseURL: 'https://api.anthropic.com', nativeAuth,
+    active: false, defaultBaseURL: 'https://api.anthropic.com', baseURLEnv: ['ENDPOINT'], nativeAuth,
   }])
 })
 
@@ -162,6 +162,20 @@ function api(overrides: {
 }
 
 describe('ModelsSettingsStore', () => {
+  it('describes native variables without exposing secret values and respects the 64-reference limit', async () => {
+    const providers = Array.from({ length: 65 }, (_, index) => ({
+      provider: `fixture-${index}`, displayName: 'fixture', settingsNs: 'llm-pi-ai', settingsPath: ['providers', `fixture-${index}`], active: false,
+      nativeAuth: { env: [`NATIVE_${index}`], oauth: false },
+    }))
+    const { ctx, mirror, seenRefs } = api({ providers: () => Promise.resolve(ok({ providers })) })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    await store.load()
+    expect(seenRefs.map(refs => refs.length)).toEqual([64, 64, 2])
+    expect(seenRefs.flat()).toContain('NATIVE_64')
+    expect(store.store.getSnapshot().rows[64]!.credentialChecks)
+      .toEqual({ NATIVE_64: { configured: false, writable: true } })
+  })
+
   it('joins rows with configured, removable, and credential state', async () => {
     const { ctx, mirror, seenRefs } = api()
     const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)

@@ -17,7 +17,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
-  bindSnapshotSelector, conversationSnapshot, makeTranslate,
+  allowAllAccess, bindSnapshotSelector, conversationSnapshot, makeTranslate,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -117,6 +117,7 @@ function kitFor(snapshot: SessionSnapshot, injected: Partial<QueueDockInjected> 
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
     ),
     useWorkspaces: (() => { throw new Error('unused') }) as never,
+    ...allowAllAccess,
     useProjection: (() => undefined) as never,
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useChat: (() => { throw new Error('unused') }) as QueueDockProps['useChat'],

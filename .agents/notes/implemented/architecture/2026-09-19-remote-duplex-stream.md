@@ -88,7 +88,7 @@ Every Remote stream accepts a Client uplink. The method's return type `RemoteStr
 | Half-close | One direction has ended while the other remains open |
 | Item | One business value in one direction; every item is validated by the codec independently |
 | inbox | The bounded uplink queue the Host keeps per logical stream |
-| Peer | The party the connection layer admitted, one `PeerScope`; this Host has exactly one Peer, the operator |
+| Peer | The party one connection speaks for, one `PeerScope` carrying its principal; every browser connection shares `connection.browserPeer`, and in-process code creates its own through `connection.createPeer()` ([Peer principals](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md)) |
 | Invocation context | `RemoteInvocation`: the request, receiving service, Peer, cancellation signal, and uplink entry of this call |
 
 ### Type signatures
@@ -135,7 +135,7 @@ export interface RemoteInvocation {
   }
   /** Cordis service key of the receiving service. */
   readonly service: string
-  /** The Peer that initiated the call. In-process carriers and unadmitted calls are the operator. */
+  /** The Peer that initiated the call; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
@@ -180,24 +180,30 @@ The mechanism relies on two existing Cordis behaviors:
 /** The opaque identity of one Peer. */
 export type PeerId = Branded<'PeerId'>
 
-/** One Peer's session on this Host: opened and released by the admitting side; ctx owns connection-lifetime registrations. */
+/** One Peer's session on this Host: opened and released by its creator; ctx owns connection-lifetime registrations. */
 export interface PeerScope {
   readonly id: PeerId
   readonly ctx: Context
+  /** Caller identity fixed at creation. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed. */
+  readonly signal: AbortSignal
+  /** Participation in forwarded interactions; independent of RBAC. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 ```
 
-This Host has exactly one Peer: the operator. `@deepseek-ai/dsh-client-connection` creates it with `createScope(connectionCtx, peer)` when the service applies, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, and `dispose()` runs with the Connection's release and quiets the fiber. It is exposed as `connection.operator`.
+`@deepseek-ai/dsh-client-connection` implements the one Peer class, `Peer(owner, { principal, interactions? })`, with `createScope(owner, peer)`, the same mechanism an Agent uses to create its own scope: the Peer object is the ScopeKey, `peer.ctx` carries connection-lifetime effects, `peer.signal` aborts when the scope ends, and `dispose()` quiets the fiber. Connection creates `connection.browserPeer` with the owner principal when the service applies; [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) owns principals, `createPeer()`, and access checks.
 
 | Member | Semantics |
 | --- | --- |
-| `connection.operator: PeerScope` | The only Peer; lives and dies with the Connection |
-| `connection.admit(request): PeerAdmission` | Runs the existing `requestRejection`: returns `{ rejection: 401 \| 403 }` when refused, otherwise `{ peer: operator }`. Future admitters plug in here |
+| `connection.browserPeer: PeerScope` | The Peer every authenticated browser connection shares; owner principal; lives and dies with the Connection |
+| `connection.admit(request): PeerAdmission` | Checks Host/Origin and signed browser or API Cookies; returns `{ rejection: 401 \| 403 }` or the credential's live Peer; connect publishes the API Peer and its lifecycle socket releases it |
 
-The Gateway's `handleUpgrade(req, socket, head, peer)` binds an opener with a fixed Peer to that socket and registers socket closure in `peer.ctx.effect`; when the scope is already inactive, it closes the socket directly with 1001 instead. When `InvokeRemoteRequest.peer?` or the `peer` parameter of `RemoteStreamOpener` is absent, the answer is the operator, so existing in-process callers change nothing; in a composition without a Connection, the operator stand-in the Gateway builds for itself is likewise created through `createScope`, with the same `dispose()` contract. Looking up a Peer by id, associating a carrier with a second Peer, and Peer open and close events all wait until the first consumer that needs multiple Peers appears.
+The Gateway's `handleUpgrade(req, socket, head, peer)` binds an opener with a fixed Peer to that socket and registers socket closure in `peer.ctx.effect`; when the scope is already inactive, it closes the socket directly with 1001 instead. `InvokeRemoteRequest.peer` and the `peer` parameter of `RemoteStreamOpener` and `wireStream.open` are required, so every in-process caller names its Peer, and the Gateway creates none. Looking up a Peer by id and Peer open and close events wait until the first consumer that needs them appears.
 
-The Peer carries no access model: who the Peer is and what it may do are attached by business plugins on their own through `peer.ctx`.
+The Peer carries its principal; what that principal may call is decided by the roles, bindings, and policies that [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) defines.
 
 ### Client face
 
@@ -312,7 +318,7 @@ Credit frames wait until a consumer that needs sustained high-volume uplink appe
 | Worker tunnel (`packages/experimental/webworker-runtime`) | The page adds `stream-uplink-item` / `stream-uplink-end` frames; `serveStream` assembles them into an `uplink` handed to `seams.openStream`. Same-origin trusted boundary: no inbox limit, and items after `end` are dropped |
 | `remote-mock` (`packages/test-support/remote-mock`) | `StreamHandle.uplink: AsyncIterable<unknown>`; `rpc.open` passes it through |
 
-An in-process carrier with no `peer` means the operator.
+An in-process carrier passes its Peer explicitly; the in-page Host of the worker tunnel passes `connection.browserPeer`.
 
 ### Relation to `$events`
 
@@ -326,7 +332,7 @@ An in-process carrier with no `peer` means the operator.
 // types.ts
 export type RemoteStream<Out, In = never> = AsyncIterable<Out> & { readonly [STREAM_UPLINK]?: In }
 export type PeerId = Branded<'PeerId'>
-export interface PeerScope { readonly id: PeerId; readonly ctx: Context; dispose(): Promise<void> }
+export interface PeerScope { readonly id: PeerId; readonly ctx: Context; readonly principal: Principal; readonly signal: AbortSignal; dispose(): Promise<void> }
 export interface RemoteInvocation { … }              // see Host face
 declare module '@deepseek-ai/cordis' { interface Context { readonly invocation: RemoteInvocation | undefined } }
 
@@ -363,13 +369,13 @@ export interface InvokeRemoteRequest {
   readonly args: Readonly<Record<string, unknown>>
   /** Uplink items; absent is equivalent to an iterator that ends immediately. */
   readonly uplink?: AsyncIterable<unknown>
-  /** The Peer that initiated the call; absent means the operator. */
-  readonly peer?: PeerScope
+  /** The Peer that initiated the call; required on every path. */
+  readonly peer: PeerScope
   readonly signal?: AbortSignal
 }
 
 export interface TypertGatewayWireStream {
-  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope | undefined, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
+  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
   failure: (error: unknown) => RemoteStreamFailure
 }
 
@@ -396,7 +402,7 @@ const signal = request.signal ?? NEVER_ABORTED_SIGNAL
 const invocation = new GatewayInvocation(
   { namespace: request.namespace, method: request.method, args: request.args },
   descriptor.service,
-  request.peer ?? this.operatorPeer(),
+  request.peer,
   signal,
   new UplinkDecoder(request.uplink ?? EMPTY_ASYNC_ITERABLE, descriptor.uplink?.codec, endpoint, control),
 )
@@ -446,8 +452,8 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-protocol` (`types.ts`, `index.ts`) | `RemoteStream`, `RemoteStreamHandle`, `PeerId`, `PeerScope`, `RemoteInvocation`, the `ctx.invocation` declaration merge, `InvocationDescriptor.uplink`; the decorator recognizes only `mode: 'stream'`; `TypertRemoteService` registers the `invocation` accessor when constructed |
 | `dsh-typert-registry` | Load-time validation that `uplink.codec` is a valid strict codec |
 | `dsh-typert-generator` (`model.ts`, `analyzer.ts`, `emitter.ts`) | `remoteResultType` recognizes `RemoteStream<Out, In>` and generates the `uplink` boundary; the descriptor emits `uplink: { codec }`; the generated Client signature returns `RemoteStreamHandle<Out, In>`; the parameter loop accepts only business parameters and a final `signal` |
-| `dsh-client-connection` (`operator-peer.ts`, `rpc.ts`, `rpc-host.ts`, `index.ts`) | The operator `PeerScope`; `connection.operator` and `admit`; the `/api` and upgrade routes obtain the Peer through `admit`; the optional `uplink` of `rpc.open` |
-| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)`; `operatorPeer()` |
+| `dsh-client-connection` (`peer.ts`, `rpc.ts`, `rpc-host.ts`, `index.ts`) | The `Peer` class; `connection.browserPeer` and `admit`; the `/api` and upgrade routes obtain the Peer through `admit`; the optional `uplink` of `rpc.open` |
+| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client (`client/index.ts`, `client/stream-client.ts`) | `invokeStream` returns the handle; the uplink pump is driven by the handle's queue |
 | `dsh-webworker-runtime`, `dsh-remote-mock` | The worker tunnel's two uplink frames and the `serveStream` assembly; `StreamHandle.uplink`; the direct proxy returns the real handle |
 | Documentation | The READMEs of gateway, the api group, connection, protocol, and generator; `docs/api-gateway`; the type-equiv blocks of `docs/subsystems/typert`; the config and Cordis catalogs |
@@ -562,7 +568,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 **Putting the Client's `send` on the `AsyncIterable` the generated method returns.** Hanging methods on an `AsyncIterable` is unconventional; the handle type `RemoteStreamHandle` extends it explicitly.
 
-**Copying the Access mechanism.** Access control is business semantics, served by `vouch` and the `remote/invoke` waterfall; this Note only needs "whose stream is this", and `PeerScope` suffices.
+**Copying the Access mechanism.** Access control is business semantics, served by `vouch` and the `remote/invoke` waterfall; this Note only needs "whose stream is this", and `PeerScope` suffices. Method-level access control later moved to [Peer principals and method-level Remote access control](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.md), which supersedes this part.
 
 **Keeping unary RPC for the uplink.** One HTTP round trip, one authentication, and one lookup per uplink; two carriers with no ordering relation that only Client-side serialization can order; no EOF; cancellation that does not cover both halves; a hand-made correlation key per feature.
 
@@ -578,7 +584,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 - **`this.ctx.invocation` is `undefined` outside a Remote call**, so a method that reads it must handle the optional; a service method invoked only directly in process correctly reads `undefined`.
 - **Web terminals use `attach`** for screen output and input commands, with provider acknowledgements and per-attachment writable state; their Client retains the current generation's handle and never replays input.
 - **The inbox limit applies to every stream**: a method that does not read its uplink fails as a whole when it receives many uplink frames. This is a deliberate explicit failure, recorded in the README.
-- **The operator is the only Peer**, and `admit` is the only admission point; the first consumer that needs a second Peer must add opening, association, and events in `dsh-client-connection`.
+- **Every browser connection shares `browserPeer`**, and `admit` is the only network admission point; in-process code creates further Peers with `connection.createPeer()`.
 - **No cross-direction ordering guarantee between uplink and downlink**; a protocol that needs request-response pairing carries its own sequence numbers.
 - **Upper-layer supervisors expose only the downlink**: `$stream`, snapshot and journal do not expose `send`; a domain that writes uplink retains its generated physical handle for that generation.
 - **The worker tunnel behaves differently from the WebSocket carrier**: no inbox limit, and items after `end` are dropped, because page to worker is a same-origin trusted boundary.
@@ -591,7 +597,7 @@ Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` co
 - Gateway Host: exact-key validation in frame parsing; `UplinkInbox` buffering during opening, `item` after `end`, overflow, ignored unknown `streamId`, and cleanup on socket closure; `UplinkDecoder` delivery with and without a codec and abort on decode failure; `uplink()` taken only once; the `extend({ invocation })` view and the origin of `peer`; `cancellableStream` closing the uplink before `return()`.
 - Gateway Client: the handle's `send` (JSON validation, queued before open, throws after termination), idempotent `end`, `dispose` driving the `cancel` frame and ending later reads; the pump's three exits; the pump stopping as soon as a terminal frame arrives.
 - typert: the analyzer's handling of `RemoteStream<Out, In>`, `RemoteStream<Out>`, `never`, and the existing `AsyncIterable<Out>`; decorator options; registry load-time validation.
-- connection: the three outcomes of `admit`, 401, 403, and the operator; the operator reaching handlers through the bridge and the shared handler; release with the Connection.
+- connection: the three outcomes of `admit`, 401, 403, and `browserPeer`; `browserPeer` reaching handlers through the bridge and the shared handler; release with the Connection.
 - remote-mock and the worker tunnel: uplink pass-through; the direct proxy returning the real handle.
 - Existing stream and unary method tests pass without changed expectations.
 

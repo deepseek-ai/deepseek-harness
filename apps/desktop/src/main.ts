@@ -33,6 +33,7 @@ import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } fro
 import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
+import { desktopUpdateChannel } from './update-channel.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { DesktopCommandManager } from './command-management.ts'
 import { serveWebDocument, authenticateWebHost, forwardWebRequest } from './web-document.ts'
@@ -583,6 +584,8 @@ async function main(): Promise<void> {
     return startup
   }
 
+  const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
+  const updateChannel = desktopUpdateChannel(manifest)
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
@@ -636,7 +639,7 @@ async function main(): Promise<void> {
     },
     undefined, undefined, undefined,
     (success, reason) => { void track('desktop_upgrade_download_result', { is_success: success, ...reason === undefined ? {} : { error_reason: reason } }) },
-
+    updateChannel,
   )
 
   const updateSchedule = new DesktopUpdateSchedule(updates, resolveDesktopUpdateScheduleConfig(process.env))
@@ -1285,7 +1288,6 @@ async function main(): Promise<void> {
   })
 
   mainWindow = createMainWindow()
-  const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
   if (typeof manifest !== 'object' || manifest === null) throw new Error('desktop policy: invalid application manifest')
   const developmentPolicy = app.isPackaged ? undefined : process.env.DSH_DESKTOP_MANDATORY_UPDATE_CONFIG
   const policyInput: unknown = app.isPackaged
@@ -1302,6 +1304,7 @@ async function main(): Promise<void> {
     let wasBlocking = false
     mandatoryPolicy = new DesktopMandatoryUpdatePolicy(policyConfig, {
       platform: process.platform as 'win32' | 'darwin', arch: process.arch as 'x64' | 'arm64',
+      channel: updateChannel,
       bundledDshVersion: app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion(),
     }, (state) => {
       if (state.error !== 'authentication-required') policyAuthenticationQueued = false

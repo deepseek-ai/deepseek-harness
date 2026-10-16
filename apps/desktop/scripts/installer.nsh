@@ -195,6 +195,37 @@ ManifestDPIAware true
   ${EndIf}
 !macroend
 
+!macro customInstallerDirectoryFailed
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  ${GetTime} "" "L" $0 $1 $2 $3 $4 $5 $6
+  StrCpy $0 "$dshDirectoryLogDirectory\directory-failure-$2$1$0-$4$5$6.log"
+  StrCpy $1 1
+  ${If} ${Silent}
+    StrCpy $1 0
+  ${EndIf}
+  StrCpy $3 "$(INSTALLER_DIRECTORY_HINT)"
+  ${If} $dshRestoreError != 0
+    StrCpy $3 "$(INSTALLER_DIRECTORY_RESTORE_HINT)"
+  ${EndIf}
+  System::Call '$PLUGINSDIR\window-frame.dll::InstallerReportDirectoryFailure(p $HWNDPARENT, i $dshDirectoryError, w "$dshDirectorySource", w "$dshDirectoryDestination", i $dshRestoreError, w "$dshOldDirectory", w "$PLUGINSDIR\directory-operations.log", w r0, i r1, w "$(^SetupCaption)", w "$(INSTALLER_DIRECTORY_FAILED)", w r3, w "$(INSTALLER_EXTRACT_COPY)", w "$(INSTALLER_EXTRACT_EXPAND)", w "$(INSTALLER_EXTRACT_COLLAPSE)", w "$(INSTALLER_EXTRACT_SAVED)", w "$(INSTALLER_EXTRACT_UNSAVED)", w "$(INSTALLER_EXTRACT_COPIED)") i.r2 ?c'
+  ${If} $2 == 1
+    DetailPrint $0
+  ${EndIf}
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+!macroend
+
 !ifndef BUILD_UNINSTALLER
   !include "${__FILEDIR__}\installer-directories.nsh"
 !endif

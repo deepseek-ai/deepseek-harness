@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 键盘与鼠标
 
-菜单打开期间 composer 表面保持焦点：行在 mousedown 时完成 pick，高亮由 `aria-activedescendant` 承载，指针落在菜单与所在 composer 卡片之外即关闭菜单。从 launcher 按钮打开菜单时会先把键盘还给编辑器再开菜单，因此方向键在那里同样可用。空格与回车裁决按注册序轮询可选的 `matchSpace`／`matchEnter` 钩子；第一个非 undefined 的应答胜出，source 也可以拒绝它无法整体消费的提交。Tab 会作用于高亮补全项：声明 `drill: true` 的候选项以 `action: 'drill'` 进入 `onPick`，普通候选项则以 `action: 'pick'` 完成选定；没有高亮项时 Tab 原样放行，原生焦点遍历不受影响。Escape 与 Shift+Tab 则是离开菜单——它们从不选定，因此退出动作不会消耗或改写草稿。被关闭的菜单保持关闭：同一个 token 以同一查询重新 track 时菜单不会重开——因此指针关闭之后恢复光标、或已选定的命令关闭它自己打开的界面，都不会把菜单召回来；输入新的查询或移到另一个 token 才会重新武装。可下钻行尾的 chevron 向指针用户提供同一个动词。实现可选 `header` 钩子的 source 还会在其分组上方发布面包屑：流水线在每次命中时用实时查询、以及该查询由下钻还是由键入产生这一事实重新询问它，点击面包屑经 `onPick` 以 `action: 'drill'` 回到该 source。
+菜单打开期间 composer 表面保持焦点：行在 mousedown 时完成 pick，高亮由 `aria-activedescendant` 承载，指针落在菜单与所在 composer 卡片之外即关闭菜单。从 launcher 按钮打开菜单时会先把键盘还给编辑器再开菜单，因此方向键在那里同样可用。空格与回车裁决按注册序轮询可选的 `matchSpace`／`matchEnter` 钩子；第一个非 undefined 的应答胜出，source 也可以拒绝它无法整体消费的提交。恢复持久化的命令 chip 时，`resolveClaim` 轮询可选的 `matchClaim` 钩子：它等待 source 自身预热完成，只应答 claim，从不打开弹窗、运行动作或执行命令。Tab 会作用于高亮补全项：声明 `drill: true` 的候选项以 `action: 'drill'` 进入 `onPick`，普通候选项则以 `action: 'pick'` 完成选定；没有高亮项时 Tab 原样放行，原生焦点遍历不受影响。Escape 与 Shift+Tab 则是离开菜单——它们从不选定，因此退出动作不会消耗或改写草稿。被关闭的菜单保持关闭：同一个 token 以同一查询重新 track 时菜单不会重开——因此指针关闭之后恢复光标、或已选定的命令关闭它自己打开的界面，都不会把菜单召回来；输入新的查询或移到另一个 token 才会重新武装。可下钻行尾的 chevron 向指针用户提供同一个动词。实现可选 `header` 钩子的 source 还会在其分组上方发布面包屑：流水线在每次命中时用实时查询、以及该查询由下钻还是由键入产生这一事实重新询问它，点击面包屑经 `onPick` 以 `action: 'drill'` 回到该 source。
 
 来源可以实现 `openReference(session, reference)`，打开草稿引用而不提交。来源可以先接受预览请求，再异步加载目录。标签按来源名称路由；可编辑文本按来源当前的词表路由。返回 `false`、来源缺失或控制器已释放时，保留编辑器原有的手势处理。
 

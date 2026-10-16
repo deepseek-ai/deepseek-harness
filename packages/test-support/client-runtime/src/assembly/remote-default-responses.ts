@@ -53,5 +53,7 @@ export const remoteDefaultResponses: RemoteTable = {
     'account/watch': openStream([{ status: 'signed-out', attempt: null, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }]),
     // api-workspace-controller client `apply`: the follow stream's opening baseline, then open.
     'workspace/follow': openStream([{ type: 'baseline', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] } }]),
+    // api-remote-access client `mountAccess`: the owner's access snapshot, then open.
+    'remoteAccess/follow': openStream([{ type: 'baseline', owner: true }]),
   },
 }

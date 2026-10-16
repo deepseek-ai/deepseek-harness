@@ -80,12 +80,13 @@ export class RemoteStreamMuxServer {
       const bound: BoundStreamOpener = (endpoint, payload, uplink, control, window) =>
         this.open(endpoint, payload, uplink, peer, control, window)
       const connection = new RemoteStreamMuxConnection(websocket, bound, this.failure, this.streamInboxBytes, alive)
-      const done = connection.run()
-      this.connections.add(done)
-      void done.then(() => {
-        this.connections.delete(done)
-        void release()
+      const done = connection.run().catch((error: unknown) => {
+        console.error('[api-gateway] Remote stream connection failed:', error)
+      }).then(async () => { await release() }).catch((error: unknown) => {
+        console.error('[api-gateway] Remote stream scope cleanup failed:', error)
       })
+      this.connections.add(done)
+      void done.then(() => { this.connections.delete(done) })
     })
   }
 
@@ -453,8 +454,8 @@ function rawText(data: RawData): string {
  * @param socket - carrier socket that receives the HTTP rejection.
  * @param status - authentication or browser-trust rejection status.
  */
-export function rejectRemoteStreamUpgrade(socket: Duplex, status: 401 | 403): void {
-  const reason = status === 401 ? 'Unauthorized' : 'Forbidden'
+export function rejectRemoteStreamUpgrade(socket: Duplex, status: 401 | 403 | 409): void {
+  const reason = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Conflict'
   const body = reason.toLowerCase()
   socket.end([
     `HTTP/1.1 ${String(status)} ${reason}`,

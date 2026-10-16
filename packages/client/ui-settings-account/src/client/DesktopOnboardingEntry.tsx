@@ -9,6 +9,8 @@ import { DesktopOnboarding } from './DesktopOnboarding.tsx'
 
 /** Observable sources and actions supplied by the account plugin's apply closure. */
 export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 'state' | 'account' | 't' | 'exiting' | 'locale'> {
+  /** Publish whether onboarding covers the workspace. @param visible - includes loading, saving, and exit animation. */
+  setVisible: (visible: boolean) => void
   hooks: {
     onboarding: HostObservable<DesktopOnboardingState>
     account: HostObservable<AccountSnapshot>
@@ -20,7 +22,7 @@ export interface DesktopOnboardingInjected extends Omit<DesktopOnboardingProps, 
  * @param props - shell overlay bindings and account-owned actions.
  * @returns the unfinished flow, retained briefly after successful completion unless motion is reduced.
  */
-export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
+export function DesktopOnboardingEntry({ useOnboarding, useAccount, setVisible, ...props }:
   PropsRuntime<'shell.overlay'> & PropsLocale<'settings.account'> & InjectFace<DesktopOnboardingInjected>) {
   const locale = props.t('onboardingArtworkLocale')
   const state = useOnboarding(value => value)
@@ -53,6 +55,8 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, ...props }:
   }, [exiting])
 
   const displayed = state.visible ? state : exiting || pendingCompletion ? lastVisible : null
+  const visible = displayed !== null || state.status === 'loading'
+  useLayoutEffect(() => { setVisible(visible) }, [setVisible, visible])
   if (displayed === null) return state.status === 'loading'
     ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
   return <DesktopOnboarding {...props} locale={locale} state={pendingCompletion ? { ...displayed, status: 'saving' } : displayed}

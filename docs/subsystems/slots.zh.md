@@ -86,11 +86,12 @@ Slot 声明固定两个相互独立的维度。
 
 | 可用范围 | Props | Owner |
 |---|---|---|
-| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo` | `ui-session` |
-| 所有 scope | `useWorkspaces` | `ui-workspace` |
+| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
+| 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
-| `session` | `sessionId`、`useSession`、`useProjection` | `ui-session` |
-| `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection` | `ui-session` |
+| `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |
+| `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection`、`useAccess` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session-maybe` | 结果可选的 `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
@@ -172,7 +173,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
-└─ conversation.hero.agentPreset
+├─ conversation.hero.agentPreset
+└─ conversation.hero.options
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]

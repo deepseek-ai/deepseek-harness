@@ -3,7 +3,9 @@ import { afterEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import { bindTypertRemote, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry, { type TypertContribution } from '@deepseek-ai/dsh-typert-registry'
+import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import TypertGateway from '../src/index.ts'
+import { ownerPeer } from './peer.ts'
 
 const contexts: Context[] = []
 afterEach(async () => { await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose())) })
@@ -39,6 +41,7 @@ async function setup() {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(TypertRegistry)
+  await ctx.plugin(RemoteAccessService)
   await ctx.plugin(TypertGateway)
   const service = new ItemsService(ctx)
   return { ctx, service }
@@ -47,11 +50,11 @@ async function setup() {
 it('validates source dispatch with the ordinary local Registry before invoking the Service', async () => {
   const { ctx, service } = await setup()
   ctx.typert.register(contribution)
-  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready' } } }))
+  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready' } }, peer: ownerPeer(ctx) }))
     .resolves.toBe('ready')
   for (const args of [{}, { request: { title: 'ready', extra: true } }, { request: { title: 1 } }]) {
     const code: unknown = expect.stringMatching(/^gateway\/(arguments|input)-invalid$/)
-    await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args }))
+    await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args, peer: ownerPeer(ctx) }))
       .rejects.toMatchObject({ code })
   }
   expect(service.calls).toBe(1)
@@ -59,7 +62,7 @@ it('validates source dispatch with the ordinary local Registry before invoking t
 
 it('allows limited source fallback without recovering erased object constraints', async () => {
   const { ctx, service } = await setup()
-  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready', extra: true } } }))
+  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready', extra: true } }, peer: ownerPeer(ctx) }))
     .resolves.toBe('ready')
   expect(service.calls).toBe(1)
 })
@@ -71,7 +74,7 @@ it('refuses source fallback after the strict definition owner unloads', async ()
   expect(ctx.typert.local.get('items/read')).toBe(contribution.invocations[0])
   await owner.dispose()
   expect(ctx.typert.local.get('items/read')).toBeUndefined()
-  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready' } } }))
+  await expect(ctx.typertGateway.invoke({ namespace: 'items', method: 'read', args: { request: { title: 'ready' } }, peer: ownerPeer(ctx) }))
     .rejects.toMatchObject({ code: 'gateway/definition-unavailable' })
   expect(service.calls).toBe(0)
 })

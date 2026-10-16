@@ -147,6 +147,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
   },
   {
+    key: 'pluginMarket',
+    pkg: 'plugin-market',
+    title: 'Plugin market index reader',
+    mode: 'core',
+    consumers: ['client-ui-plugin-market', 'plugin-market'],
+    note: 'Fetches and validates the index sources the user configures; installation goes through the plugin manager.',
+  },
+  {
     key: 'profileContext',
     pkg: 'app-boot',
     title: 'Launcher-owned profile data',
@@ -369,6 +377,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Typert Host invocation gateway',
     mode: 'core',
     note: 'Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier.',
+  },
+  {
+    key: 'remoteAccess',
+    pkg: 'api-remote-access',
+    title: 'Remote method access control',
+    mode: 'core',
+    consumers: ['api-gateway', 'api-session-controller', 'api-workspace-controller'],
+    note: 'Decides which Remote methods a non-owner Peer may call through business-registered role-based policies, filters list results, and streams each Peer access snapshot.',
   },
   {
     key: 'sessionPersistence',

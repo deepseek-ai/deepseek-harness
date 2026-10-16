@@ -172,7 +172,7 @@ it('publishes the identity a bonus read resolved, so the session can scope accou
   await f.grant('test-account-token')
   const lifetime = new AbortController()
   const states: AccountView[] = []
-  const watching = (async () => { for await (const state of f.account.watch(lifetime.signal)) states.push(state) })()
+  const watching = (async () => { for await (const state of f.account.watch(lifetime.signal, true)) states.push(state) })()
   try {
     await expect.poll(() => states.length).toBe(1)
     expect(await f.account.getUnnotifiedBonuses(clientMetadata('en'))).toMatchObject({ accountId: USER })

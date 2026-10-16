@@ -18,6 +18,11 @@
   cursor: pointer;
 }
 
+/* A command chip selected by its first deletion keystroke keeps the hover tint until the next deletion removes it. */
+[data-composer-command][data-selected] > .reference {
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
 .textRef {
   display: inline-block;
   max-width: 100%;

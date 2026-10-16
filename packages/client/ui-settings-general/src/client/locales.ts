@@ -36,6 +36,13 @@ export const zh = {
   'connection.connected': '连接成功',
   'connection.reconnect': '连接异常，点击立即重连',
   'connection.restart': '连接中断，正在重试，点击立即重连',
+  'hostRelease.title': '服务版本变化',
+  'hostRelease.description': '服务版本已变化，本页面已暂停热更新，刷新后加载新版本。',
+  'hostRelease.service': '服务',
+  'hostRelease.page': '页面',
+  'hostRelease.unknown': '未解析',
+  'hostRelease.reload': '刷新以加载新版本',
+  'hostRelease.later': '暂不刷新',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -77,4 +84,11 @@ export const en = {
   'connection.connected': 'Connected',
   'connection.reconnect': 'Disconnected, reconnect now',
   'connection.restart': 'Reconnecting, reconnect now',
+  'hostRelease.title': 'Service version changed',
+  'hostRelease.description': 'The service version changed. This page paused live updates; reload to load the new version.',
+  'hostRelease.service': 'Service',
+  'hostRelease.page': 'Page',
+  'hostRelease.unknown': 'Unknown',
+  'hostRelease.reload': 'Reload to load the new version',
+  'hostRelease.later': 'Not now',
 } satisfies Record<SettingsKey, string>

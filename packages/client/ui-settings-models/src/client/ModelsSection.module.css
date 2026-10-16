@@ -575,6 +575,44 @@
   line-height: 18px;
 }
 
+.modelReasoning {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelReasoningLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelReasoningHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Level select, API value, and delete action; the column labels share the grid. */
+.modelReasoningRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelReasoningRow .selectInput {
+  max-width: none;
+}
+
+.modelReasoningValueInput {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
 .modelEmpty {
   padding: 12px;
   border: 1px dashed var(--dsw-alias-border-l3);
@@ -635,6 +673,43 @@ select.input {
 }
 
 .input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.keyInput {
+  position: relative;
+}
+
+.keyInputFilled {
+  padding-right: 40px;
+}
+
+.keyToggle {
+  position: absolute;
+  inset: 1px 1px 1px auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.keyToggle:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.keyToggle:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.keyToggle:disabled {
   opacity: 0.6;
   cursor: default;
 }

@@ -52,6 +52,11 @@
     - id: typert-gateway
       name: '@deepseek-ai/dsh-api-gateway'
 
+    # Method-level access control for non-owner Peers; the Gateway requires it,
+    # and its Client half publishes the standard access Hooks.
+    - id: remote-access
+      name: '@deepseek-ai/dsh-api-remote-access'
+
     - id: session-title
       name: '@deepseek-ai/dsh-session-title'
       config:

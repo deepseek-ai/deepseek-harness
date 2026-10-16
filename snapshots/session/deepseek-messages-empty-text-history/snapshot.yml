@@ -1,0 +1,10 @@
+version: 1
+scenario: deepseek-messages-empty-text-history
+profile: headless
+composition: default
+recording: authored
+header:
+  class: deepseek-messages-empty-text-history
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

@@ -11,7 +11,7 @@
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -118,6 +118,7 @@ function mount(
     useSessionStatus: select => select(new Map()),
     useSessionRetainInfo: () => undefined,
     useResource: () => { throw new Error('The task manager does not load document resources') },
+    ...allowAllAccess,
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'),
     onRetry: vi.fn(async () => {}),
     onNewTask: vi.fn(),

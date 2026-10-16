@@ -10,6 +10,7 @@ import type {} from '@deepseek-ai/dsh-api-terminal-controller/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WebTerminalId, WebTerminalInfo, TerminalEnvironment } from '../src/types.ts'
 import { TerminalView, type TerminalRemote } from '../src/client/model.ts'
+import { TerminalInventory } from '../src/client/inventory.ts'
 import { TerminalCloseRequests } from '../src/client/close-requests.ts'
 import { TerminalBindings } from '../src/client/bindings.ts'
 import * as TerminalClient from '../src/client/index.ts'
@@ -52,22 +53,142 @@ function fixture() {
     })),
   }
   const gateway: Pick<ClientRemote, '$stream'> = { $stream: options => new RemoteStream({ generation: createSnapshotStore(undefined) }, options) }
-  function view() {
-    const model = new TerminalView(sessionId, remote, gateway, info.id)
+  function view(restored = false) {
+    const inventory = new TerminalInventory(() => remote.list(sessionId))
+    cleanups.push(() => inventory.dispose())
+    const model = new TerminalView(sessionId, remote, gateway, inventory, info.id, !restored)
     cleanups.push(() => model.dispose())
     return model
   }
-  async function service() {
+  async function service(connected = false) {
     const ctx = new Context()
     ctx.provide('remote', { ...gateway, terminal: remote } as never)
     ctx.provide('remote.terminal', remote)
+    ctx.provide('connection', { generation: createSnapshotStore(connected ? {} : undefined) } as never)
     const fiber = ctx.plugin(TerminalClient)
     cleanups.push(async () => { await ctx.fiber.dispose() })
     await fiber
-    return { service: ctx.webTerminals, dispose: () => fiber.dispose() }
+    return { service: ctx.webTerminals, ctx, dispose: () => fiber.dispose() }
   }
   return { remote, view, service }
 }
+
+it('shares one Session list across concurrent and later restored terminal views', async () => {
+  storage()
+  const h = fixture()
+  const { service } = await h.service()
+  const terminals = Array.from({ length: 8 }, (_, index) => ({ ...info, id: `restored-${index}` as WebTerminalId }))
+  vi.mocked(h.remote.list).mockResolvedValue(success(terminals))
+  const first = terminals.slice(0, 4).map((terminal, index) => service.view(sessionId, `tab-${index}`, `content-${index}`, terminal.id))
+  await Promise.all(first.map(model => model.refresh()))
+  for (const [index, terminal] of terminals.slice(4).entries()) {
+    const model = service.view(sessionId, `later-${index}`, `later-${index}`, terminal.id)
+    await model.refresh()
+    expect(model.state.getSnapshot().info?.id).toBe(terminal.id)
+  }
+  expect(h.remote.list).toHaveBeenCalledOnce()
+  expect(h.remote.create).not.toHaveBeenCalled()
+})
+
+it('creates new terminal identities without reading the Session list', async () => {
+  storage()
+  const h = fixture()
+  const { service } = await h.service()
+  for (let index = 0; index < 8; index++) {
+    const model = service.view(sessionId, `new-${index}`, `new-${index}`)
+    await model.refresh()
+  }
+  expect(h.remote.create).toHaveBeenCalledTimes(8)
+  expect(h.remote.list).not.toHaveBeenCalled()
+})
+
+it('preserves a missing terminal failure across remounts without retrying discovery', async () => {
+  storage()
+  const h = fixture()
+  const { service } = await h.service()
+  const model = service.view(sessionId, 'missing', 'missing', info.id)
+  await model.refresh()
+  const failed = model.state.getSnapshot()
+  expect(failed.issue).toBe('missingTerminal')
+  for (let index = 0; index < 5; index++) {
+    model.mount()()
+    await setImmediate()
+  }
+  expect(model.state.getSnapshot()).toBe(failed)
+  expect(h.remote.list).toHaveBeenCalledOnce()
+  expect(h.remote.create).not.toHaveBeenCalled()
+})
+
+it('refreshes each discovered Session once per reconnect and ignores the initial connection notification', async () => {
+  storage()
+  const h = fixture()
+  const { service, ctx } = await h.service()
+  vi.mocked(h.remote.list).mockResolvedValue(success([info]))
+  await service.view(sessionId, 'a', 'a', info.id).refresh()
+  await service.view(sessionId, 'b', 'b', info.id).refresh()
+  await service.view('new-session' as SessionId, 'new', 'new').refresh()
+  ctx.emit('connection/reset')
+  expect(h.remote.list).toHaveBeenCalledOnce()
+  ctx.emit('connection/reset')
+  await service.recover(sessionId)
+  expect(h.remote.list).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(h.remote.list).mock.calls.every(call => call[0] === sessionId)).toBe(true)
+})
+
+it('refreshes after late plugin activation and retains a failed refresh for explicit retry', async () => {
+  const h = fixture()
+  const { service, ctx, dispose } = await h.service(true)
+  vi.mocked(h.remote.list).mockResolvedValueOnce(success([info]))
+  expect(await service.recover(sessionId)).toEqual([info])
+  vi.mocked(h.remote.list).mockResolvedValueOnce(failure('Offline'))
+  ctx.emit('connection/reset')
+  await expect(service.recover(sessionId)).rejects.toThrow('Offline')
+  await expect(service.recover(sessionId)).rejects.toThrow('Offline')
+  expect(h.remote.list).toHaveBeenCalledTimes(2)
+  vi.mocked(h.remote.list).mockResolvedValueOnce(success([]))
+  expect(await service.recover(sessionId, true)).toEqual([])
+  await dispose()
+  ctx.emit('connection/reset')
+  expect(h.remote.list).toHaveBeenCalledTimes(3)
+})
+
+it('shares failed discovery between views and keeps a disposed view from cancelling another waiter', async () => {
+  storage()
+  const h = fixture()
+  const { service } = await h.service()
+  vi.mocked(h.remote.list).mockResolvedValueOnce(failure('Offline'))
+  const first = service.view(sessionId, 'a', 'a', info.id)
+  await first.refresh()
+  const second = service.view(sessionId, 'b', 'b', info.id)
+  await second.refresh()
+  expect(h.remote.list).toHaveBeenCalledOnce()
+  expect(second.state.getSnapshot().error).toBe('Offline')
+  const listed = Promise.withResolvers<RemoteResult<WebTerminalInfo[]>>()
+  vi.mocked(h.remote.list).mockReturnValueOnce(listed.promise)
+  const pending = Promise.all([first.refresh(), second.refresh()])
+  try {
+    await first.dispose()
+    const disposed = first.state.getSnapshot()
+    listed.resolve(success([info]))
+    await pending
+    expect(first.state.getSnapshot()).toBe(disposed)
+    expect(second.state.getSnapshot().info?.id).toBe(info.id)
+    expect(h.remote.list).toHaveBeenCalledTimes(2)
+  } finally { listed.resolve(success([])); await pending }
+})
+
+it('joins a failed reconnect lookup during plugin disposal without publishing another failure', async () => {
+  const h = fixture()
+  const { service, ctx, dispose } = await h.service(true)
+  await service.recover(sessionId)
+  const listed = Promise.withResolvers<RemoteResult<WebTerminalInfo[]>>()
+  vi.mocked(h.remote.list).mockReturnValueOnce(listed.promise)
+  ctx.emit('connection/reset')
+  const disposing = dispose()
+  listed.reject(new Error('Connection closed during disposal'))
+  await disposing
+  expect(h.remote.list).toHaveBeenCalledTimes(2)
+})
 
 it('starts automatically and deduplicates overlapping mounts and refreshes', async () => {
   const h = fixture()
@@ -90,7 +211,7 @@ it('starts automatically and deduplicates overlapping mounts and refreshes', asy
 it('recovers a listed process without creating another, including its title and screen', async () => {
   const h = fixture()
   vi.mocked(h.remote.list).mockResolvedValue(success([{ ...info, title: 'Build' }]))
-  const model = h.view()
+  const model = h.view(true)
   model.mount()
   await model.refresh()
   expect(h.remote.create).not.toHaveBeenCalled()
@@ -103,8 +224,10 @@ it('does not recreate a recovered terminal that disappeared after the recovery l
   const { service } = await h.service()
   vi.mocked(h.remote.list).mockResolvedValueOnce(success([info]))
   expect(await service.recover(sessionId)).toEqual([info])
+  vi.mocked(h.remote.retain).mockImplementation(() => { throw new RemoteError('terminal/unavailable', 'gone', {}) })
   const model = service.view(sessionId, 'recovered', 'recovered', info.id)
   await model.refresh()
+  await expect.poll(() => model.state.getSnapshot().issue).toBe('missingTerminal')
   expect(model.state.getSnapshot()).toMatchObject({ phase: 'failed', writable: false })
   expect(model.state.getSnapshot().issue).toBe('missingTerminal')
   expect(h.remote.create).not.toHaveBeenCalled()
@@ -259,15 +382,15 @@ it('queries current held views after a slow recovery response and reports discov
   const listed = Promise.withResolvers<RemoteResult<WebTerminalInfo[]>>()
   vi.mocked(h.remote.list).mockReturnValueOnce(listed.promise)
   const recovering = service.recover(sessionId)
-  vi.mocked(h.remote.list).mockResolvedValueOnce(success([info]))
   const model = service.view(sessionId, 'recovered', 'recovered', info.id)
-  await model.refresh()
-  listed.resolve(success([info]))
+  const loading = model.refresh()
+  try { expect(h.remote.list).toHaveBeenCalledOnce() }
+  finally { listed.resolve(success([info])); await loading }
   expect(await recovering).toEqual([])
   expect(service.view(sessionId, 'recovered', 'recovered', info.id)).toBe(model)
   expect(model.id).toBe(info.id)
   vi.mocked(h.remote.list).mockResolvedValueOnce(failure('Session unavailable'))
-  await expect(service.recover(sessionId)).rejects.toThrow('Session unavailable')
+  await expect(service.recover(sessionId, true)).rejects.toThrow('Session unavailable')
 })
 
 it('ignores an unknown tab and retries only saved close requests', async () => {
@@ -703,7 +826,9 @@ it('ignores a delayed retention failure after the restored view was disposed', a
   vi.mocked(h.remote.list).mockResolvedValue(success([info]))
   const retained = Promise.withResolvers<undefined>()
   const gateway: Pick<ClientRemote, '$stream'> = { $stream: options => new RemoteStream({ generation: createSnapshotStore(undefined) }, options) }
-  const model = new TerminalView(sessionId, h.remote, gateway, info.id, false, undefined, () => retained.promise)
+  const inventory = new TerminalInventory(() => h.remote.list(sessionId))
+  cleanups.push(() => inventory.dispose())
+  const model = new TerminalView(sessionId, h.remote, gateway, inventory, info.id, false, undefined, () => retained.promise)
   cleanups.push(() => model.dispose())
   await model.refresh()
   await model.dispose()

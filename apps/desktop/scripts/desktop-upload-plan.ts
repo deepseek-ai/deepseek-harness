@@ -5,7 +5,6 @@ import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { dump, load } from 'js-yaml'
-import { prerelease } from 'semver'
 import type { DesktopPackageTargetName } from './package-target.ts'
 import {
   desktopBuildRecordFilename,
@@ -63,6 +62,8 @@ export interface DesktopUploadPlanOptions {
   readonly repositoryRoot?: string
   readonly appRoot?: string
   readonly artifactsRoot?: string
+  /** Original product version from a verified retained build; absent reads the checkout manifests. */
+  readonly packagedProductVersion?: string
 }
 
 interface UpdateFileInfo {
@@ -188,8 +189,8 @@ export async function createDesktopUploadPlan(
   const repositoryRoot = options.repositoryRoot ?? REPOSITORY_ROOT
   const appRoot = options.appRoot ?? APP_ROOT
   const artifactsRoot = options.artifactsRoot ?? desktopTargetBuildPaths(targetName).artifacts
-  const dshVersion = await manifestVersion(join(repositoryRoot, 'package.json'), 'dsh package')
-  const desktopVersion = await manifestVersion(join(appRoot, 'package.json'), 'desktop package')
+  const dshVersion = options.packagedProductVersion ?? await manifestVersion(join(repositoryRoot, 'package.json'), 'dsh package')
+  const desktopVersion = options.packagedProductVersion ?? await manifestVersion(join(appRoot, 'package.json'), 'desktop package')
   if (dshVersion !== desktopVersion) {
     throw new Error(`desktop upload: desktop version ${desktopVersion} does not match current dsh version ${dshVersion}`)
   }
@@ -211,12 +212,14 @@ export async function createDesktopUploadPlan(
   }
   if (buildRecord.schemaVersion !== 1
     || buildRecord.target !== targetName
+    || (buildRecord.channel ?? 'nightly') !== update.channel
     || buildRecord.environment !== update.environment
     || buildRecord.publicUrl !== update.publicUrl) {
     throw new Error(`desktop upload: ${targetName} package completion record for ${buildVersion} does not match the ${update.environment} update destination`)
   }
 
-  const metadataFilename = desktopUpdateMetadataFilename(buildVersion, target.platform)
+  if (update.channel === 'latest' && buildVersion.includes('-')) throw new Error('desktop upload: latest requires a stable version')
+  const metadataFilename = desktopUpdateMetadataFilename(buildVersion, target.platform, update.channel)
   const metadataPath = join(artifactsRoot, metadataFilename)
   let metadataValue: unknown
   try {
@@ -274,10 +277,6 @@ export async function createDesktopUploadPlan(
     contents: dump(published),
   }
   artifacts.push(channelArtifact)
-  if (prerelease(buildVersion) === null) {
-    const stableFilename = metadataFilename.replace('nightly', 'latest')
-    artifacts.push({ ...channelArtifact, filename: stableFilename, key: `${update.keyPrefix}/${stableFilename}` })
-  }
   const latestFilename = `dsh-latest-${target.platform === 'darwin' ? 'macos' : 'windows'}-${target.arch}.${target.platform === 'darwin' ? 'dmg' : 'exe'}`
   const latestKey = `desktop/${latestFilename}`
   return {

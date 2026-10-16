@@ -30,3 +30,4 @@ failed.links count=2 hrefs={{origin}}/usage,{{origin}}/usage
 failed.reached usages=2 gets=1 summaries=1
 en.notice=Bonus credited / You received a CNY 9.00 DSH trial credit.
 en.get locale=en_US query=
+web.notice=赠金已到账 / 已赠送您 4.00 元 DSH 体验赠金。 acks=1

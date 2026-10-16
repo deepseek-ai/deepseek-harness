@@ -10,7 +10,10 @@ import TypertRegistry, {
 import type {
   InvocationDescriptor,
   TypertContext,
+  TypertResource,
+  TypertResourceKind,
   TypertLookup,
+  TypertRegistryChange,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
 import { createTypertRemoteInfo, isTypertRemoteMethod } from '@deepseek-ai/dsh-typert-protocol/remote-info'
@@ -24,6 +27,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertContextMap {
     registryFixture: TypertContext<string>
     registryFixtureOther: TypertContext<string>
+  }
+
+  interface TypertResourceMap {
+    /** Test-only resource kind whose identity is the fixture lookup's wire id. */
+    registryFixture: TypertResource<string>
   }
 }
 
@@ -414,6 +422,73 @@ describe('TypertRegistry', () => {
     expect(ctx.typert.lookups.definitions()).toHaveLength(1)
     expect(ctx.typert.contexts.getHost('registryFixture')).toBeUndefined()
     expect(ctx.typert.contexts.getClient('registryFixture')).toBeUndefined()
+  })
+
+  it('registers one default field per resource kind and withdraws it with its fiber', async () => {
+    const ctx = await makeCtx()
+    const changes: TypertRegistryChange[] = []
+    ctx.typert.resources.subscribe((change) => { changes.push(change) })
+    const fiber = ctx.plugin({
+      inject: ['typert'],
+      apply: (pluginCtx: Context) => { pluginCtx.typert.resources.register('registryFixture', { field: 'fixtureId' }) },
+    })
+    await fiber
+    expect(ctx.typert.resources.get('registryFixture')).toEqual({ field: 'fixtureId' })
+    expect(ctx.typert.resources.entries()).toEqual([{ kind: 'registryFixture', field: 'fixtureId' }])
+    expect(() => ctx.typert.resources.register('registryFixture', { field: 'otherId' })).toThrow('already registered')
+    expect(() => ctx.typert.resources.register('registryFixture', { field: '' })).toThrow()
+    await fiber.dispose()
+    expect(ctx.typert.resources.get('registryFixture')).toBeUndefined()
+    expect(ctx.typert.resources.entries()).toEqual([])
+    expect(changes).toEqual([
+      { kind: 'resource', key: 'registryFixture' },
+      { kind: 'resource', key: 'registryFixture' },
+    ])
+    const dispose = ctx.typert.resources.register('registryFixture', { field: 'fixtureId' })
+    await dispose()
+    expect(ctx.typert.resources.get('registryFixture')).toBeUndefined()
+  })
+
+  it('reserves the built-in global resource kind', async () => {
+    const ctx = await makeCtx()
+    const changes: TypertRegistryChange[] = []
+    ctx.typert.resources.subscribe((change) => { changes.push(change) })
+    const reserved: string = 'global'
+    expect(() => ctx.typert.resources.register(reserved as TypertResourceKind, { field: 'globalId' }))
+      .toThrow('resource kind "global" is reserved for the built-in global resource')
+    expect(ctx.typert.resources.get('global')).toBeUndefined()
+    expect(changes).toEqual([])
+  })
+
+  it('keeps a lookup provider\'s resource kind under a configured resolver', async () => {
+    const ctx = await makeCtx()
+    ctx.typert.lookups.register('fixture', {
+      parameter: 'agent',
+      wire: 'agentId',
+      resource: 'registryFixture',
+      hostTypeSymbol: '@fixture/agent#Agent',
+      wireTypeSymbol: '@fixture/session#SessionId',
+      resolve: () => undefined,
+    })
+    expect(ctx.typert.lookups.get('fixture')?.resource).toBe('registryFixture')
+    ctx.typert.lookups.configure('fixture', () => undefined)
+    expect(ctx.typert.lookups.get('fixture')?.resource).toBe('registryFixture')
+  })
+
+  it('keeps a Host Context adapter\'s resource kind under a configured resolver', async () => {
+    const ctx = await makeCtx()
+    const scoped = ctx.extend()
+    ctx.typert.contexts.registerHost('registryFixture', {
+      wire: 'agentId',
+      wireTypeSymbol: '@fixture/session#SessionId',
+      resource: 'registryFixture',
+      resolve: () => undefined,
+    })
+    expect(ctx.typert.contexts.getHost('registryFixture')?.resource).toBe('registryFixture')
+    ctx.typert.contexts.configureHost('registryFixture', id => id === 'agent-1' ? scoped : undefined)
+    const configured = ctx.typert.contexts.getHost('registryFixture')
+    expect(configured).toMatchObject({ wire: 'agentId', wireTypeSymbol: '@fixture/session#SessionId', resource: 'registryFixture' })
+    await expect(configured?.resolve('agent-1')).resolves.toBe(scoped)
   })
 
   it('configures an asynchronous lookup resolver independently of provider load order', async () => {

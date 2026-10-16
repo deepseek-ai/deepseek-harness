@@ -25,9 +25,9 @@ function toolInput(raw: string): Record<string, unknown> {
 
 function assistant(message: Message, model: string, onReplayDegrade?: (reason: string) => void): WireBlock[] {
   const replay = readReplay(message, model, onReplayDegrade)
-  return message.content.map((block, index): WireBlock => {
+  return message.content.flatMap((block, index): WireBlock | WireBlock[] => {
     switch (block.type) {
-      case 'text': return { type: 'text', text: block.text }
+      case 'text': return block.text.length === 0 ? [] : { type: 'text', text: block.text }
       case 'reasoning': return {
         type: 'thinking', thinking: block.text,
         ...replay?.[index]?.signature === undefined ? {} : { signature: replay[index].signature },
@@ -40,7 +40,8 @@ function assistant(message: Message, model: string, onReplayDegrade?: (reason: s
 
 /** Serialize one complete request using already prepared image bytes.
  * User and tool-result content omits reasoning and tool-call blocks.
- * Empty user messages are skipped; empty tool results retain their call ids.
+ * Empty assistant text blocks and empty user/assistant messages are skipped;
+ * empty tool results retain their call ids.
  * Developer messages, already projected for this route by `LlmRuntime`, become
  * system-role updates after the preceding user turn, with tool changes as
  * `tool_addition` and `tool_removal` references to the declared tool.
@@ -114,13 +115,13 @@ export function serialize(
       }
       continue
     }
-    if (message.role === 'assistant') flushSystemUpdates()
     const content: WireBlock[] = message.role === 'assistant'
       ? assistant(message, options.model, onReplayDegrade)
       : message.role === 'tool'
         ? [{ type: 'tool_result', tool_use_id: message.toolCallId, content: input(message.content), ...message.isError === undefined ? {} : { is_error: message.isError } }]
         : message.content.flatMap((block): WireBlock[] => input([block]))
-    if (message.role === 'user' && content.length === 0) continue
+    if ((message.role === 'user' || message.role === 'assistant') && content.length === 0) continue
+    if (message.role === 'assistant') flushSystemUpdates()
     const wireRole = message.role === 'tool' ? 'user' : message.role
     const previous = messages.at(-1)
     if (previous?.role === wireRole) previous.content.push(...content)

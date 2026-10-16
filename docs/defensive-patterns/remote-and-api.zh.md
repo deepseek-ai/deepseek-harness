@@ -44,13 +44,14 @@ class ApiProxy {
 
 ## `@Remote` 标在能力方法上
 
-`@Remote` 有四项纪律，审查者分别核对：标注执行能力的具体方法；面向 Client 的类型经生成器来自既有定义，而不是手写第二份；载荷只承载 JSON，远程方法不做输出侧 decode；既有的方法与字段名只增不改。每项纪律消除一类不同的缺陷——壳方法藏起真正暴露的是哪个操作，手写的第二份类型会与生成结果漂移，输出侧 decode 在 Gateway 已有的 codec 之外再造一条结果路径，改名则让所有调用方在同一次变更里一起断掉。
+`@Remote` 有五项纪律，审查者分别核对：标注执行能力的具体方法；面向 Client 的类型经生成器来自既有定义，而不是手写第二份；载荷只承载 JSON，远程方法不做输出侧 decode；既有的方法与字段名只增不改；方法指明其访问的全部资源，且只从 invocation 读取调用方。每项纪律消除一类不同的缺陷——壳方法藏起真正暴露的是哪个操作，手写的第二份类型会与生成结果漂移，输出侧 decode 在 Gateway 已有的 codec 之外再造一条结果路径，改名让所有调用方在同一次变更里一起断掉，遗漏资源、未过滤的聚合结果或按参数判定调用方则让非 owner 访问没有 binding 授予它的内容。
 
 - **标能力方法。** 标注落在执行该操作的具体方法上（`list`、`prompt`、`interruptByParent`），绝不落在转发给真正实现的壳方法上。判定看被标注方法的函数体：函数体只做转发，标注就标错了方法。
 - **类型靠推断。** 面向 Client 的类型从生成结果取别名——`type SessionRemote = TypertClientRemote['session']`——而不是重写一份。判定看是否出现字段与生成的 Client 类型重复的手写声明；生成映射及其声明合并的正家是 [typert.zh.md](../subsystems/typert.zh.md)。
 - **线上载荷只承载 JSON、不做输出侧 decode。** Remote 方法的**线上载荷**是 JSON，二进制在字段级表达。Host 签名保留 Gateway 已支持的形式——经解析变成 Host 对象的 lookup 参数、末尾的 `AbortSignal`、以 `@Remote({ mode: 'stream' })` 声明的流式返回；`@Remote` 不做输出侧 decode，结果由生成的 codec 与 Gateway 校验。判定看带该标注的方法上是否出现 decode、流重组或整体非 JSON 值；可跨越 Remote 方法的内容正家是 [编程模型](../api-gateway.zh.md#programming-model)。
 - **存量名只增不改。** 迁移不改 Client 已在调用的远程方法名或字段名；新语义新增条目，改名是独立的一刀、单独评审。判定看 diff 是否改名或删除了已经经 `ctx.remote.<namespace>` 暴露的名字。
-- **不覆盖。** 不带该标注的方法仍是有进程内调用者的普通 service 方法；这四项纪律约束的是什么成为 Remote 方法，而不是 service 可以实现什么。
+- **调用方身份与访问。** 每个 Remote 方法都受访问控制：`@Remote({ resources })` / `@RemoteScope(key, { resources })` 的读取函数与自动解析必须指明方法访问的全部资源，因为访问控制从不检查它们遗漏的资源；返回多个资源的方法对每一项经 `this.ctx.remoteAccess.allows(resource)` 过滤。调用方只从 `this.ctx.invocation.peer.principal` 读取，绝不从参数读取；在 Remote 方法内构造用户消息 source 时经 `principalOf(this.ctx.invocation)` 记录调用方，并向下传递已构造的 source，而不是把 principal 当函数参数传递。每条调用路径都显式给出 Peer。判定看方法解析出的资源是否遗漏其访问的资源、聚合结果是否未过滤、principal 是否从 wire 数据读取或经辅助函数参数逐层传递、Remote 方法内构造的用户消息 source 是否未经 `principalOf`；设计的正家是 [Peer 身份属性 Agent Note](../../.agents/notes/implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
+- **不覆盖。** 不带该标注的方法仍是有进程内调用者的普通 service 方法；这五项纪律约束的是什么成为 Remote 方法，而不是 service 可以实现什么。
 - **例外。** 确需改名或新增 decode 路径，须先说明收益与对既有调用方的影响，并取得对应领域专家的确认；作者不得自行批准。
 
 生成的映射是面向 Client 类型的唯一来源，标注落在具体方法上，载荷保持 JSON：

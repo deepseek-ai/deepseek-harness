@@ -1,0 +1,99 @@
+{
+  "name": "@deepseek-ai/dsh-cua",
+  "description": "Shared Computer Use application objects, authorization, and logged tool execution",
+  "version": "0.2.1-alpha.4",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/cua"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./api": {
+      "types": "./lib/types/api.d.ts",
+      "default": "./lib/api.js"
+    },
+    "./bridge": {
+      "types": "./lib/types/bridge.d.ts",
+      "default": "./lib/bridge.js"
+    },
+    "./native-client": {
+      "types": "./lib/types/native-client.d.ts",
+      "default": "./lib/native-client.js"
+    },
+    "./protocol": {
+      "types": "./lib/types/protocol.d.ts",
+      "default": "./lib/protocol.js"
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/api.js",
+    "lib/bridge.js",
+    "lib/native-client.js",
+    "lib/protocol.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-computer-use": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:~",
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-atomic-write": "workspace:*"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop": "workspace:*",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-attachment-local": "workspace:*",
+    "@deepseek-ai/dsh-computer-use": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-subprocess-local": "workspace:*",
+    "@deepseek-ai/dsh-fs-local": "workspace:*",
+    "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
+    "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
+    "@deepseek-ai/dsh-sandbox-local": "workspace:*",
+    "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
+    "sharp": "^0.35.3",
+    "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-settings": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-config-editor": "workspace:*",
+    "@deepseek-ai/dsh-hmr": "workspace:*",
+    "@deepseek-ai/cordis-plugin-timer": "workspace:~"
+  }
+}

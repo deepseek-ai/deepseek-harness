@@ -139,13 +139,16 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
   ): void
 
-  export function Remote(option: string | { readonly mode?: 'stream'; readonly name?: string }):
+  export function Remote(option: string | { readonly mode?: 'stream'; readonly name?: string; readonly resources?: object }):
   <This extends object, Args extends unknown[], Result>(
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,
   ) => void
 
-  export function RemoteScope(key: Extract<keyof TypertContextMap, string>, exportName?: string):
+  export function RemoteScope(
+    key: Extract<keyof TypertContextMap, string>,
+    option?: string | { readonly name?: string; readonly resources?: object },
+  ):
   <This extends object, Args extends unknown[], Result>(
     method: (this: This, ...args: Args) => Result,
     context: ClassMethodDecoratorContext<This, (this: This, ...args: Args) => Result>,

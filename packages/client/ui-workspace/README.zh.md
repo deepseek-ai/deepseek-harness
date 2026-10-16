@@ -81,6 +81,8 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 首次使用的目录名与其存储标题都是固定的，都不跟随读者语言：`workspaces.initializeDefault` 不携带任何名称，同一安装环境在切换语言后仍只有一个磁盘路径和一个存储标题。仍保留该自动标题的工作区，在本包展示它的所有位置——侧栏行及其悬浮卡片、搜索结果元信息、hero 选择器菜单、重命名与删除对话框——都通过控制器的 `workspaceDisplayTitle` 显示为本地化的默认名称。重命名对话框以屏幕上的标签作为初值，而判断确认是否需要保存用的是存储标题，因此对这类工作区直接确认未改动的初值即可固定该名称，该行不再跟随语言；重名检查按工作区身份而非标题排除目标自身。
 
+本包注入 Client `remoteAccess` 服务，并提供根作用域标准 Hook `useWorkspaceAccess(workspaceId, action)`，回答当前 Peer 能否在某个 Workspace 资源上调用 `action`；其快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
@@ -101,7 +103,7 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 Session 行的 "..." 菜单和行尾悬停按钮是 WorkspaceBrowser 注册项声明的两个 `list` slot：`sidebar.workspaces.session.menu.item` 与 `sidebar.workspaces.session.row.action`。每一个菜单行、每一个悬停按钮都是条目，本包自己的 action 也不例外：`apply` 以客户端插件注册自己 action 的同一方式注册 `pin`（菜单 100、按钮 200）、`rename`（200）、`fork`（300）、`archive`（菜单 400、按钮 100）和 `session-id`（450），因此插件 action 落在其 `order` 所指的位置，以另一个 `priority` 复用内置 id 则遮蔽该 action。
 
-条目只接收行身份（`sessionId`、`displayTitle`），其余一切自己负责：用自己注入的 hook 读自己关心的 Host 状态（置顶与归档集合，以每次 Workspace 快照只派生一次的 Set 形式），自己决定是否显示（Host 规定归档与置顶互斥，所以 pin 在归档行上不渲染），整套行为放在注册项自己的 `inject` face 里（置顶成功后顺带把会话推到保存顺序最前，归档成功后发提示），浮层也自己带——重命名对话框、停止并归档对话框和行 action 的提示是本包注册在 `shell.overlay` 的条目，由 action 注入的请求驱动。菜单条目渲染一个 `role="menuitem"` 的按钮（本包自己的行用 ui-primitives 的 `MenuItemButton`，它带宿主样式，开启新分组的行加 `separatorBefore`，分隔线随行一起出现和消失），并通过 slot 级 `useMenuOpenState` hook（菜单自身的打开状态，从该行的渲染出现处绑定）关闭菜单；悬停按钮条目渲染一个图标按钮，按钮条会拦住点击、不让它打开该行。browser 不再向行传任何 action 回调，它剩下的动作只有搜索结果里的恢复按钮和标题双击，后者发出的是同一个重命名请求。
+条目只接收行身份（`sessionId`、`displayTitle`），其余一切自己负责：用自己注入的 hook 读自己关心的 Host 状态（置顶与归档集合，以每次 Workspace 快照只派生一次的 Set 形式），自己决定是否显示（Host 规定归档与置顶互斥，所以 pin 在归档行上不渲染；`useSessionAccess(sessionId, 'session/fork')` 为 false 时 fork 不渲染），整套行为放在注册项自己的 `inject` face 里（置顶成功后顺带把会话推到保存顺序最前，归档成功后发提示），浮层也自己带——重命名对话框、停止并归档对话框和行 action 的提示是本包注册在 `shell.overlay` 的条目，由 action 注入的请求驱动。菜单条目渲染一个 `role="menuitem"` 的按钮（本包自己的行用 ui-primitives 的 `MenuItemButton`，它带宿主样式，开启新分组的行加 `separatorBefore`，分隔线随行一起出现和消失），并通过 slot 级 `useMenuOpenState` hook（菜单自身的打开状态，从该行的渲染出现处绑定）关闭菜单；悬停按钮条目渲染一个图标按钮，按钮条会拦住点击、不让它打开该行。browser 不再向行传任何 action 回调，它剩下的动作只有搜索结果里的恢复按钮和标题双击，后者发出的是同一个重命名请求。
 
 现有通知浮层按通知 kind 分派 `workspace.toast`。各 keyed 注册注入本地化展示映射与自己的操作，只有归档通知订阅查看筛选状态。它们渲染包内的 `workspace.toast.content` Factory，所有展示共用一处 Toast primitive。现有通知状态、显示序号、最新提示替换及关闭逻辑仍共享；语言或筛选变化不会重新启动同一条提示的计时。
 

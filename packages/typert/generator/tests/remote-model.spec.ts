@@ -540,7 +540,7 @@ export type {`,
       name: 'an unknown Remote mode',
       mode: 'duplex',
       method: 'async *attach(agent: Agent, signal: AbortSignal): AsyncIterable<CreateGoalResult>',
-      message: 'Remote\\(\\) options require name or mode: "stream"',
+      message: 'Remote\\(\\) options require name, mode: "stream", or resources',
     },
   ])('rejects $name', ({ mode, method, message }) => {
     const root = copyFixture()
@@ -676,6 +676,67 @@ export interface BoxPayload {
     const [artifact] = new WorkspaceTypertGenerator(root).generate()
     expect(artifact?.remote?.dts).toContain("'create-goal': (request: CreateGoalRequest) => Promise<RemoteResult<CreateGoalResult>>")
     assertRemoteConsumerTypechecks(artifact?.remote?.dts, artifact?.remote?.dtsMap, root)
+  })
+
+  it('reads export names from options whose resource readers stay runtime-only', () => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace(
+        '  @Remote\n  async create(',
+        "  @Remote({ name: 'createGoal', resources: { session: (agentId: string) => agentId } })\n  async create(",
+      )
+      .replace(
+        "  @RemoteScope('agent')\n",
+        "  @RemoteScope('agent', { name: 'renameGoal', resources: { session: (request: RenameGoalRequest) => request.title } })\n",
+      ))
+
+    const model = remotePackage(root)
+    expect(model.invocations.map(invocation => [invocation.method, invocation.implementation])).toEqual([
+      ['createGoal', 'create'],
+      ['renameGoal', 'rename'],
+      ['watch', undefined],
+    ])
+    expect(JSON.stringify(model.invocations)).not.toContain('resources')
+  })
+
+  it.each([
+    {
+      name: 'an unknown Remote option',
+      decorator: '@Remote({ resources: {}, audit: true })\n  async create(',
+      message: 'Remote\\(\\) options require name, mode: "stream", or resources',
+    },
+    {
+      name: 'a stream option on a Remote Scope',
+      decorator: "@RemoteScope('agent', { mode: 'stream' })\n  rename(",
+      message: 'RemoteScope\\(\\) options require name or resources',
+    },
+    {
+      name: 'empty Remote Scope options',
+      decorator: "@RemoteScope('agent', {})\n  rename(",
+      message: 'RemoteScope\\(\\) options require name or resources',
+    },
+    {
+      name: 'a computed Remote Scope name',
+      decorator: "@RemoteScope('agent', { name: `rename${'Goal'}` })\n  rename(",
+      message: 'RemoteScope\\(\\) name must be an endpoint segment',
+    },
+    {
+      name: 'shorthand Remote Scope options',
+      decorator: "@RemoteScope('agent', { resources })\n  rename(",
+      message: 'RemoteScope\\(\\) options must use named values',
+    },
+    {
+      name: 'an untransportable Remote Scope export name',
+      decorator: "@RemoteScope('agent', 'rename goal')\n  rename(",
+      message: 'RemoteScope\\(\\) name must be a string literal containing only RPC endpoint segment characters',
+    },
+  ])('rejects $name', ({ decorator, message }) => {
+    const root = copyFixture()
+    editFile(root, 'packages/remote/src/index.ts', source => source
+      .replace(decorator.includes('create(') ? '@Remote\n  async create(' : "@RemoteScope('agent')\n  rename(", decorator)
+      .replace('export class GoalService', 'const resources = {}\n\nexport class GoalService'))
+
+    expect(() => analyzeRemote(root, false)).toThrow(new RegExp(message))
   })
 
   it.each(['create#v2', 'create goal', '.', '..'])('rejects untransportable Remote alias %s', (alias) => {

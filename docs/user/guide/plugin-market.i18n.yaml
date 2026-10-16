@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for plugin-market.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/user/guide/plugin-market.md
+/plugin-markets:
+  en: 09b2a6328dcae63c
+  zh: ac7bce767e4f5011
+/plugin-markets/summary:
+  en: 2716b194b8a12aa7
+  zh: b90773d095851969
+/plugin-markets/table-of-contents:
+  en: a8d1e6785c3c3c30
+  zh: 7ea1eaa8204a5a1e
+/plugin-markets/turn-on-discover:
+  en: 96b2fd994f8f3e7e
+  zh: 203e8460ec6aed7a
+/plugin-markets/browse-and-install:
+  en: cf616bba26958533
+  zh: 1e32df16a6f4bba7
+/plugin-markets/publish-an-index:
+  en: b85b82b22c1e14b8
+  zh: 920c0d6f20956c07
+/plugin-markets/generate-an-index-with-the-reference-generator:
+  en: 57a48912c00e1c85
+  zh: 69f2934eed0fbadf
+/plugin-markets/index-format-reference:
+  en: d058d12c27433f64
+  zh: f43b85e4934817f3
+/plugin-markets/further-exploration:
+  en: 3c0a90e8bf73c89b
+  zh: 95608eb4f6278cb4
+/plugin-markets/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -44,6 +44,8 @@ describe('native directory picker', () => {
     // macOS key equivalents resolve against the menu, never the focused field.
     expect(call[1][3] ?? '').toContain("addItemWithTitleActionKeyEquivalent('Paste', 'paste:', 'v')")
     expect(call[1][3] ?? '').toContain('canChooseDirectories = true')
+    // A cancelled panel still lists its current directory in `URLs`.
+    expect(call[1][3] ?? '').toContain("if (panel.runModal !== $.NSModalResponseOK) return '';")
     expect(call[1][4]).toBe('Select Workspace Directory')
     expect(call[2]).toBeInstanceOf(AbortSignal)
     expect(call[3]).toBe('hidden')

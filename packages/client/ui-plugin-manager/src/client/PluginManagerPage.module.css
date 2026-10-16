@@ -1017,6 +1017,15 @@ label.registryOption {
   overflow-wrap: anywhere;
 }
 
+.subjectSpec {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
 .subjectDesc,
 .subjectMeta {
   margin: 0;
@@ -1298,6 +1307,17 @@ label.registryOption {
   margin-top: 12px;
 }
 
+.packagePreview {
+  display: block;
+  align-self: flex-start;
+  max-width: 100%;
+  max-height: 320px;
+  margin-top: 24px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+  object-fit: contain;
+}
+
 .detailSections {
   display: flex;
   flex-direction: column;
@@ -1492,4 +1512,33 @@ label.registryOption {
   line-height: 18px;
   color: var(--dsw-alias-state-error-primary);
   overflow-wrap: anywhere;
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+/* Installed and contributed tabs under the page header, aligned with the title; the negative margin halves
+   the page's 32px row gap, so the tabs read as part of the header. */
+.pageTabs {
+  display: flex;
+  margin-top: -16px;
+}
+
+.pageTabList {
+  width: fit-content;
+  min-width: 240px;
+}
+
+/* The Installed groups keep the page's row gap inside their tab panel. */
+.installedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }

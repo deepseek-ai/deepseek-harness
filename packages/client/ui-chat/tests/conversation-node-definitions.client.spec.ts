@@ -2856,3 +2856,27 @@ it('retains a sign-out cancellation notice when reopening a partial turn', () =>
     code: 'ACCOUNT_SIGNED_OUT', message: 'Stopped because you signed out of DeepSeek.',
   })
 })
+
+it('reports a turn closed after its process exited as a stopped turn', () => {
+  const value = assembler([
+    at(7, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
+  ], true)
+  expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({
+    code: 'INTERRUPTED', message: 'The DSH process exited before this turn finished.',
+  })
+})
+
+it('reports an interrupted ending on a turn observed from its start', () => {
+  const value = assembler([
+    at(1, 'turn/start', { turn: 1 }),
+    at(2, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
+  ])
+  expect(node(snapshot(value), 'turn-error')?.data).toMatchObject({ seq: 2, turn: 1, code: 'INTERRUPTED' })
+})
+
+it('keeps user cancellations and forked endings free of a failure row', () => {
+  for (const reason of [{ kind: 'aborted', reason: { kind: 'user' } }, { kind: 'forked' }] as const) {
+    const value = assembler([at(7, 'turn/end', { turn: 1, reason })], true)
+    expect(node(snapshot(value), 'turn-error')).toBeUndefined()
+  }
+})

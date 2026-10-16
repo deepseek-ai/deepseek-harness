@@ -9,6 +9,7 @@ import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
+import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
@@ -409,8 +410,12 @@ export type SessionRequestId = Branded<'session-request-id'>
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** Browser prompt correlation and optional Host-validated time zone. */
-    'user-rpc': { kind: 'user'; rpcId: SessionRequestId; clientTimeZone?: string }
+    /**
+     * Browser prompt correlation, optional Host-validated time zone, and the
+     * caller that submitted the prompt. `principal` is written only for a
+     * caller other than the owner, so an absent `principal` means the owner.
+     */
+    'user-rpc': { kind: 'user'; rpcId: SessionRequestId; clientTimeZone?: string; principal?: Principal }
   }
 }
 

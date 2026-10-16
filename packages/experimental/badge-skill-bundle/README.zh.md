@@ -1,5 +1,5 @@
 ---
-description: "提供可发现的 powered-by-DSH 徽章技能。"
+description: "让 Agent 为文档、PR 等产出添加「powered by dsh」徽章。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-向预设支持技能加载的智能体提供实验性 DSH 徽章技能。共享提供者不添加模型工具。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
+让预设支持技能加载的智能体为文档、PR 等产出添加「powered by dsh」徽章。共享提供者不添加模型工具。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
 
 ## 目录
 

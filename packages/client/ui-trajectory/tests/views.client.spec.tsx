@@ -11,7 +11,7 @@ import type { GlobalStandardProps, PropsRenderSlots } from '@deepseek-ai/dsh-cli
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, type ComponentProps, type FC, type ReactNode } from 'react'
-import { bindSnapshotSelector, SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   EMPTY_CONVERSATION_SNAPSHOT, UiConversation,
@@ -235,6 +235,7 @@ function standaloneProps(
     ),
     useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),
+    ...allowAllAccess,
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot(trajectory))),
     useInput: bindSnapshotSelector(input),
     inputActions,
@@ -365,6 +366,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     useSessionStatus,
     useSessionRetainInfo: () => undefined,
     useWorkspaces,
+    ...allowAllAccess,
     useProjection,
     useInput,
     inputActions,

@@ -50,9 +50,6 @@ export const WEB_FIXTURE_TIME = Date.parse('2026-01-15T12:00:00+08:00')
  */
 export const PLUGIN_TOGGLE_SETTLE_MS = 10_000
 
-/** How often a pinned browser clock advances, in milliseconds. */
-const PINNED_CLOCK_STEP_MS = 250
-
 /**
  * Pin the Host clock to the shared fixture day for one scenario suite.
  *
@@ -74,31 +71,36 @@ export function pinHostClock(): MockInstance<typeof Date.now> {
 }
 
 /**
- * Pin a scenario page's clock to the shared fixture day, advancing with real
+ * Pin a scenario page's calendar to the shared fixture day, advancing with real
  * time. Pair it with {@link pinHostClock} for a scenario that stamps its own
  * message times, and with `seedSession`'s `createdAt` for a seeded one.
  *
- * The frozen instant is re-applied from the anchor on an interval rather than
- * left at one value, because product logic reads two `Date.now()` values to
- * decide a minimum display hold or a deadline window; a permanently frozen
- * clock stops supplying elapsed time, so a title that owes its golden settled
- * text keeps rendering its previous one. Both clocks therefore advance at the
- * real rate and stay within one step of each other.
- * @param page - page whose clock is pinned.
- * @returns the disposer that stops re-pinning; call it in teardown.
+ * Only the page's `Date` reads the fixture day; native timers and
+ * `requestAnimationFrame` keep their real scheduling. Playwright's
+ * `page.clock` is not used: its server records clock state with the Vitest
+ * worker's `Date.now`, which {@link pinHostClock} replaces, so after a
+ * navigation the page clock replays the gap between the real and fixture days
+ * and hands the resulting negative delay to native `setTimeout`. The browser
+ * truncates that delay to a 32-bit integer, and in about half of the dates the
+ * result is a positive delay of weeks that stops every page timer. The `Date`
+ * override is installed for every later document and on the current one, and
+ * stays until the page closes.
+ * @param page - page whose calendar is pinned.
  */
-export async function pinBrowserClock(page: Page): Promise<() => void> {
-  const startedAt = Date.now()
-  const step = async (): Promise<void> => {
-    try {
-      await page.clock.setFixedTime(WEB_FIXTURE_TIME + (Date.now() - startedAt))
-    } catch {
-      // The page closed under the interval; teardown owns the last word.
-    }
+export async function pinBrowserClock(page: Page): Promise<void> {
+  // The worker's `new Date()` keeps the real clock even when `Date.now` is pinned.
+  const offset = WEB_FIXTURE_TIME - new Date().getTime()
+  const install = (offset: number): void => {
+    const NativeDate = Date
+    const now = (): number => NativeDate.now() + offset
+    globalThis.Date = new Proxy(NativeDate, {
+      construct: (target, args, newTarget): Date => Reflect.construct(target, args.length === 0 ? [now()] : args, newTarget) as Date,
+      apply: () => new NativeDate(now()).toString(),
+      get: (target, property, receiver): unknown => property === 'now' ? now : Reflect.get(target, property, receiver),
+    })
   }
-  await step()
-  const timer = setInterval(() => { void step() }, PINNED_CLOCK_STEP_MS)
-  return () => { clearInterval(timer) }
+  await page.addInitScript(install, offset)
+  await page.evaluate(install, offset)
 }
 
 /**

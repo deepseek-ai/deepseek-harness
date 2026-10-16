@@ -186,7 +186,7 @@ interface ToolArgsMap {
   schedule_create: {
     /** Reminder content to present when the target becomes due. */
     prompt: string;
-    /** Task name of at most 120 characters, shown on the task card and in task lists. */
+    /** Concise task name in the user's language, at most 120 characters. Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. Do not append parenthetical notes. Put scheduling information in the timing parameters and execution instructions in prompt. */
     title: string;
     /** Delay in whole seconds. */
     after_seconds?: number;
@@ -233,7 +233,7 @@ interface ToolArgsMap {
   schedule_update: {
     /** Schedule id returned by schedule_list. */
     id: string;
-    /** New task name of at most 120 characters. */
+    /** New task name; follow the schedule_create title rules. */
     title?: string;
     /** New reminder content. */
     prompt?: string;

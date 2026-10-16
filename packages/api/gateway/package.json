@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-gateway",
   "description": "Typert Remote Host dispatcher and Client API endpoint",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -20,7 +20,9 @@
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
-      "default": "./lib/client.js"
+      "node": "./lib/client.node.js",
+      "browser": "./lib/client.browser.js",
+      "default": "./lib/client.browser.js"
     },
     "./types": {
       "types": "./lib/types/types.d.ts",
@@ -51,7 +53,8 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
-    "lib/client.js",
+    "lib/client.browser.js",
+    "lib/client.node.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -64,10 +67,10 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-client-connection": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-cmdline": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",

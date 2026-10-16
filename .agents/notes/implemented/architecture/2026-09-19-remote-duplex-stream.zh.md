@@ -88,7 +88,7 @@ Client 句柄的 `send()` 提供上行项，`end()` 半关闭上行，`dispose()
 | 半关闭 | 一个方向已结束而另一个方向仍开放 |
 | 项 | 一个方向上的一个业务值；每项独立经 codec 校验 |
 | inbox | Host 侧每逻辑流一个的有界上行队列 |
-| Peer | 连接层被接纳的一方，一个 `PeerScope`；本 Host 只有操作者一个 Peer |
+| Peer | 一条连接代表的一方，一个携带 principal 的 `PeerScope`；所有浏览器连接共享 `connection.browserPeer`，进程内代码经 `connection.createPeer()` 自建（[Peer 身份属性](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)） |
 | 调用上下文 | `RemoteInvocation`：本次调用的请求、接收服务、Peer、取消信号与上行入口 |
 
 ### 类型签名
@@ -135,7 +135,7 @@ export interface RemoteInvocation {
   }
   /** Cordis service key of the receiving service. */
   readonly service: string
-  /** The Peer that initiated the call. In-process carriers and unadmitted calls are the operator. */
+  /** The Peer that initiated the call; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket closure, uplink failure. */
   readonly signal: AbortSignal
@@ -180,24 +180,30 @@ declare module '@deepseek-ai/cordis' {
 /** The opaque identity of one Peer. */
 export type PeerId = Branded<'PeerId'>
 
-/** One Peer's session on this Host: opened and released by the admitting side; ctx owns connection-lifetime registrations. */
+/** One Peer's session on this Host: opened and released by its creator; ctx owns connection-lifetime registrations. */
 export interface PeerScope {
   readonly id: PeerId
   readonly ctx: Context
+  /** Caller identity fixed at creation. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed. */
+  readonly signal: AbortSignal
+  /** Participation in forwarded interactions; independent of RBAC. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 ```
 
-本 Host 只有一个 Peer：操作者。`@deepseek-ai/dsh-client-connection` 在服务 apply 时用 `createScope(connectionCtx, peer)` 建它，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，`dispose()` 随 connection 释放让 fiber 静默。它以 `connection.operator` 暴露。
+`@deepseek-ai/dsh-client-connection` 实现唯一的 Peer 类 `Peer(owner, { principal, interactions? })`，用 `createScope(owner, peer)` 建立，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，scope 结束时 `peer.signal` 中止，`dispose()` 让 fiber 静默。Connection 在服务 apply 时以 owner principal 创建 `connection.browserPeer`；principal、`createPeer()` 与访问检查归 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
 
 | 成员 | 语义 |
 | --- | --- |
-| `connection.operator: PeerScope` | 唯一的 Peer，随 connection 生灭 |
-| `connection.admit(request): PeerAdmission` | 过既有的 `requestRejection`：被拒返回 `{ rejection: 401 \| 403 }`，否则返回 `{ peer: operator }`。将来的接纳方在这里接入 |
+| `connection.browserPeer: PeerScope` | 所有通过认证的浏览器连接共享的 Peer；principal 为 owner；随 connection 生灭 |
+| `connection.admit(request): PeerAdmission` | 检查 Host/Origin 与浏览器或 API 签名 Cookie；返回 `{ rejection: 401 \| 403 }` 或凭据对应的存活 Peer；API Peer 在 connect 时发布，并由其生命周期 socket 负责释放 |
 
-网关 `handleUpgrade(req, socket, head, peer)` 为该 socket 绑一个固定 Peer 的 opener，并在 `peer.ctx.effect` 里登记 socket 关闭；scope 已失效时改为直接以 1001 关闭 socket。`InvokeRemoteRequest.peer?` 与 `RemoteStreamOpener` 的 `peer` 形参缺席时按操作者作答，现有进程内调用方零改动；没有 connection 的组合里网关自建的操作者替身同样经 `createScope` 建立，`dispose()` 契约一致。按 id 查 Peer、把载体关联到第二个 Peer、Peer 的开关事件，都等第一个需要多 Peer 的消费者出现时再加。
+网关 `handleUpgrade(req, socket, head, peer)` 为该 socket 绑一个固定 Peer 的 opener，并在 `peer.ctx.effect` 里登记 socket 关闭；scope 已失效时改为直接以 1001 关闭 socket。`InvokeRemoteRequest.peer`、`RemoteStreamOpener` 与 `wireStream.open` 的 `peer` 形参均为 required，每个进程内调用方都显式给出 Peer，网关不自建 Peer。按 id 查 Peer、Peer 的开关事件，都等第一个需要它们的消费者出现时再加。
 
-Peer 不携带访问模型：Peer 是谁、能做什么，由业务插件通过 `peer.ctx` 自行附加。
+Peer 携带自己的 principal；该 principal 能调用什么，由 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md) 定义的 role、binding 与 policy 判定。
 
 ### Client 面
 
@@ -312,7 +318,7 @@ credit 帧留待需要持续大流量上行的消费者出现时再加；inbox �
 | worker 隧道（`packages/experimental/webworker-runtime`） | 页面新增 `stream-uplink-item` / `stream-uplink-end` 帧；`serveStream` 把它们组装成 `uplink` 交给 `seams.openStream`。同源可信边界：没有 inbox 上限，`end` 之后的项丢弃 |
 | `remote-mock`（`packages/test-support/remote-mock`） | `StreamHandle.uplink: AsyncIterable<unknown>`；`rpc.open` 透传 |
 
-进程内载体的 `peer` 缺席即操作者。
+进程内载体显式传入 Peer；worker 隧道的页内 Host 传 `connection.browserPeer`。
 
 ### 与 `$events` 的关系
 
@@ -326,7 +332,7 @@ credit 帧留待需要持续大流量上行的消费者出现时再加；inbox �
 // types.ts
 export type RemoteStream<Out, In = never> = AsyncIterable<Out> & { readonly [STREAM_UPLINK]?: In }
 export type PeerId = Branded<'PeerId'>
-export interface PeerScope { readonly id: PeerId; readonly ctx: Context; dispose(): Promise<void> }
+export interface PeerScope { readonly id: PeerId; readonly ctx: Context; readonly principal: Principal; readonly signal: AbortSignal; dispose(): Promise<void> }
 export interface RemoteInvocation { … }              // see Host face
 declare module '@deepseek-ai/cordis' { interface Context { readonly invocation: RemoteInvocation | undefined } }
 
@@ -363,13 +369,13 @@ export interface InvokeRemoteRequest {
   readonly args: Readonly<Record<string, unknown>>
   /** Uplink items; absent is equivalent to an iterator that ends immediately. */
   readonly uplink?: AsyncIterable<unknown>
-  /** The Peer that initiated the call; absent means the operator. */
-  readonly peer?: PeerScope
+  /** The Peer that initiated the call; required on every path. */
+  readonly peer: PeerScope
   readonly signal?: AbortSignal
 }
 
 export interface TypertGatewayWireStream {
-  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope | undefined, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
+  open: (endpoint: string, payload: unknown, uplink: AsyncIterable<unknown>, peer: PeerScope, signal: AbortSignal) => Promise<AsyncIterable<unknown>>
   failure: (error: unknown) => RemoteStreamFailure
 }
 
@@ -396,7 +402,7 @@ const signal = request.signal ?? NEVER_ABORTED_SIGNAL
 const invocation = new GatewayInvocation(
   { namespace: request.namespace, method: request.method, args: request.args },
   descriptor.service,
-  request.peer ?? this.operatorPeer(),
+  request.peer,
   signal,
   new UplinkDecoder(request.uplink ?? EMPTY_ASYNC_ITERABLE, descriptor.uplink?.codec, endpoint, control),
 )
@@ -446,8 +452,8 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-protocol`（`types.ts`、`index.ts`） | `RemoteStream`、`RemoteStreamHandle`、`PeerId`、`PeerScope`、`RemoteInvocation`、`ctx.invocation` 声明合并、`InvocationDescriptor.uplink`；修饰器只认 `mode: 'stream'`；`TypertRemoteService` 构造时注册 `invocation` accessor |
 | `dsh-typert-registry` | 加载校验 `uplink.codec` 为有效的严格 codec |
 | `dsh-typert-generator`（`model.ts`、`analyzer.ts`、`emitter.ts`） | `remoteResultType` 识别 `RemoteStream<Out, In>` 并生成 `uplink` boundary；描述符输出 `uplink: { codec }`；生成的 Client 签名返回 `RemoteStreamHandle<Out, In>`；参数循环只认业务参数与末位 `signal` |
-| `dsh-client-connection`（`operator-peer.ts`、`rpc.ts`、`rpc-host.ts`、`index.ts`） | 操作者 `PeerScope`；`connection.operator` 与 `admit`；`/api` 与升级路由经 `admit` 取 Peer；`rpc.open` 的可选 `uplink` |
-| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)`；`operatorPeer()` |
+| `dsh-client-connection`（`peer.ts`、`rpc.ts`、`rpc-host.ts`、`index.ts`） | `Peer` 类；`connection.browserPeer` 与 `admit`；`/api` 与升级路由经 `admit` 取 Peer；`rpc.open` 的可选 `uplink` |
+| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client（`client/index.ts`、`client/stream-client.ts`） | `invokeStream` 返回句柄；上行泵由句柄的队列驱动 |
 | `dsh-webworker-runtime`、`dsh-remote-mock` | worker 隧道的两种上行帧与 `serveStream` 组装；`StreamHandle.uplink`；直接代理返回真句柄 |
 | 文档 | gateway、api 组、connection、protocol、generator 的 README；`docs/api-gateway`；`docs/subsystems/typert` 的 type-equiv 块；config 与 Cordis 目录 |
@@ -562,7 +568,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 **客户端 `send` 放在生成方法返回的 `AsyncIterable` 上。** `AsyncIterable` 上挂方法不常规；句柄类型 `RemoteStreamHandle` 显式扩展它。
 
-**照搬 Access 机制。** 访问控制是业务语义，`vouch` 与 `remote/invoke` waterfall 为它服务；本 Note 只需要"这条流是谁的"，`PeerScope` 就够。
+**照搬 Access 机制。** 访问控制是业务语义，`vouch` 与 `remote/invoke` waterfall 为它服务；本 Note 只需要"这条流是谁的"，`PeerScope` 就够。方法级访问控制后来归入 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)，该部分由其 supersede。
 
 **继续用 unary RPC 做上行。** 每次上行一次 HTTP 往返、一次鉴权、一次查找；两条载体没有顺序关系，只能靠客户端串行化；没有 EOF；取消不覆盖两半；每个功能各造一套关联键。
 
@@ -578,7 +584,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 - **`this.ctx.invocation` 在非 Remote 调用下是 `undefined`**，方法读它要处理可选；一个只被进程内直接调用的服务方法读到 `undefined` 是正确行为。
 - **Web 终端使用 `attach`** 传输屏幕输出和输入命令，并提供提供者确认和附件专属可写状态；Client 保留当前代次的句柄，绝不重放输入。
 - **inbox 上限对所有流生效**：一个不读上行的方法收到大量上行帧会整流失败。这是刻意的显式失败，README 记明。
-- **Peer 只有操作者一个**，`admit` 是唯一的接纳点；第一个需要第二个 Peer 的消费者要在 `dsh-client-connection` 加上打开、关联与事件。
+- **所有浏览器连接共享 `browserPeer`**，`admit` 是唯一的网络接纳点；进程内代码经 `connection.createPeer()` 创建其他 Peer。
 - **上行与下行之间没有跨方向顺序保证**；需要请求应答配对的协议自带序号。
 - **上层监督器仅暴露下行**：`$stream`、snapshot 和 journal 不暴露 `send`；需要写入上行的领域保留该代次的生成物理句柄。
 - **worker 隧道与 WebSocket 载体行为不同**：没有 inbox 上限，`end` 之后的项丢弃，因为页面到 worker 是同源可信边界。
@@ -591,7 +597,7 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 - 网关 Host：帧解析的精确键校验；`UplinkInbox` 的 opening 缓冲、`end` 后 `item`、超限、未知 `streamId` 忽略、socket 关闭时的收尾；`UplinkDecoder` 有无 codec 两种交付与解码失败中止；`uplink()` 只能取一次；`extend({ invocation })` 视图与 `peer` 的来源；`cancellableStream` 先关 uplink 再 `return()`。
 - 网关 Client：句柄的 `send`（JSON 校验、open 前入队、终止后抛错）、`end` 幂等、`dispose` 驱动 `cancel` 帧并结束后续读取；泵的三种退出；终止帧到达即停泵。
 - typert：analyzer 对 `RemoteStream<Out, In>`、`RemoteStream<Out>`、`never` 与既有 `AsyncIterable<Out>` 的处理；修饰器选项；registry 加载校验。
-- connection：`admit` 的 401、403 与操作者三种结果；操作者经桥与共享处理器到达；随 connection 释放。
+- connection：`admit` 的 401、403 与 `browserPeer` 三种结果；`browserPeer` 经桥与共享处理器到达；随 connection 释放。
 - remote-mock、worker 隧道：上行透传；直接代理返回真句柄。
 - 既有 stream 与 unary 方法的测试不改期望值即通过。
 

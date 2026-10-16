@@ -336,6 +336,7 @@ it.each(['handled', 'claim', 'message'] as const)('counts only a message after a
     track: () => {}, arbitrate: () => 'pass', onSpace: () => false,
     serializeReference: async () => '', openReference: () => false, toggleSource: () => {},
     adjudicate: () => pending.promise,
+    resolveClaim: () => Promise.resolve(undefined),
   }
   const shell = new SessionInputShell({ actx: {} as Context, inputTriggers: () => inputTriggers,
     submissionState, messageSubmitted: report, defaultSink: sink, commandAttachments })
@@ -373,6 +374,7 @@ it('retains occurrence time and Session facts across arbitration and independent
       track: () => {}, arbitrate: () => 'pass', onSpace: () => false,
       serializeReference: async () => '', openReference: () => false, toggleSource: () => {},
       adjudicate: () => pending.promise,
+      resolveClaim: () => Promise.resolve(undefined),
     }),
     defaultSink: sink,
   })

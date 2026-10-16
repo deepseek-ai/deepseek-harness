@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh/profile-boot
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
@@ -88,15 +88,22 @@ const PROFILE_ROOT_CONFIG = `# dsh profile root — an empty entry list. The tre
 export const PROFILE_ROOT_FILENAME = 'cordis.yml'
 
 /**
- * Initialize a missing profile from one shipped template. This copies only
- * the template's bundle list; local state from the
+ * Replace the named custom profile with a fresh copy of one shipped template.
+ * This copies only the template's bundle list; local state from the
  * same-named shipped profile is not read, and no inheritance metadata is
- * persisted. Shipped profile names are reserved, and the target directory is
- * claimed exclusively so existing or concurrent state is never reused.
- * @param name - the new profile name.
+ * persisted. The new profile is assembled in a `.<name>.staging-*` directory
+ * under the profiles directory and moved into place; only then is any previous
+ * target directory, including its dependencies and user patch, deleted. A
+ * failed move restores the previous directory; when restoring also fails, it
+ * stays in the staging directory. Shipped profile names, compared without
+ * case, are reserved. Concurrent replacements leave one complete copy; each
+ * one either succeeds or reports the concurrent recreation.
+ * @param name - the profile name to create or replace.
  * @param fromDefaultProfile - shipped profile template to copy.
  * @param home - Harness home containing the profile directory.
- * @throws when the template is unknown, the target name is shipped, or the target directory exists.
+ * @throws when the template is unknown, the target name is shipped, another process recreates the target
+ *   between the two renames, or a file-system operation fails; a restore failure is an `AggregateError`
+ *   that names the staging path holding the previous profile.
  */
 export function initializeProfileFromDefault(
   name: string,
@@ -113,42 +120,62 @@ export function initializeProfileFromDefault(
       `${NAME}: unknown default profile ${JSON.stringify(fromDefaultProfile)}; expected one of ${expected}`,
     )
   }
-  if (Object.hasOwn(PROFILE_TEMPLATES, name)) {
+  // Case-insensitive file systems resolve a case variant such as `Web` to the shipped directory.
+  const shipped = Object.keys(PROFILE_TEMPLATES).find(shippedName => shippedName.toLowerCase() === name.toLowerCase())
+  if (shipped !== undefined) {
     throw new Error(
-      `${NAME}: profile ${JSON.stringify(name)} is shipped and cannot be a custom profile target; `
+      `${NAME}: profile ${JSON.stringify(name)} names shipped profile ${JSON.stringify(shipped)} and cannot be a custom profile target; `
       + 'omit --from-default-profile to use it',
     )
   }
   mkdirSync(dirname(dir), { recursive: true })
+  // The staging directory sits beside the target so both renames stay on one filesystem.
+  const staging = mkdtempSync(join(dirname(dir), `.${name}.staging-`))
+  const previous = join(staging, 'previous')
   try {
-    mkdirSync(dir)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    const manifestPath = join(dir, 'package.json')
-    if (existsSync(manifestPath)) {
-      throw new Error(
-        `${NAME}: profile ${JSON.stringify(name)} already exists at ${manifestPath}; `
-        + 'omit --from-default-profile to use it',
-      )
-    }
-    throw new Error(
-      `${NAME}: profile directory ${dir} already exists; choose an unused profile name`,
-    )
-  }
-  try {
-    initProfile(dir, template.bundles)
-  } catch (error) {
+    const fresh = join(staging, 'new', name)
+    initProfile(fresh, template.bundles)
+    let moved = false
     try {
-      rmSync(dir, { recursive: true, force: true })
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        `${NAME}: profile initialization failed and ${dir} could not be removed`,
-      )
+      renameSync(dir, previous)
+      moved = true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
+    try {
+      renameSync(fresh, dir)
+    } catch (error) {
+      // Windows reports EPERM instead of EEXIST or ENOTEMPTY, so the target's state identifies a concurrent winner.
+      if (existsSync(dir)) {
+        // The concurrent replacement supersedes the previous profile.
+        rmSync(previous, { recursive: true, force: true })
+        throw new Error(`${NAME}: profile ${JSON.stringify(name)} was recreated concurrently at ${dir}`, { cause: error })
+      }
+      if (moved) {
+        try {
+          renameSync(previous, dir)
+        } catch (restoreError) {
+          throw new AggregateError(
+            [error, restoreError],
+            `${NAME}: profile replacement failed and ${dir} could not be restored from ${previous}`,
+          )
+        }
+      }
+      throw error
+    }
+  } catch (error) {
+    // A previous profile that could not be restored stays in staging at the reported path.
+    if (!existsSync(previous)) rmSync(staging, { recursive: true, force: true })
     throw error
   }
+  try {
+    rmSync(staging, { recursive: true, force: true })
+  } catch (error) {
+    // The replacement is complete; leftover files only occupy space.
+    process.stderr.write(`${NAME}: replaced profile ${JSON.stringify(name)} but could not remove ${staging}: ${String(error)}\n`)
+  }
 }
+
 /**
  * Load a resolved profile for `name` and (re)write the empty root config. The
  * root is always rewritten: the whole composition is patch layers, and the
@@ -160,9 +187,9 @@ export function initializeProfileFromDefault(
  * the identical base).
  * @param name - the profile name.
  * @param userLayer - `false` skips parsing `cordis.patch.yml` (the default dump).
- * @param fromDefaultProfile - shipped template used once to initialize a missing profile.
+ * @param fromDefaultProfile - shipped template that replaces the profile before loading it.
  * @returns the loaded profile.
- * @throws when explicit initialization names an unknown template or an existing profile.
+ * @throws when explicit initialization names an unknown template or a shipped target.
  */
 export function prepareProfile(name: string, userLayer = true, fromDefaultProfile?: string): Profile {
   if (fromDefaultProfile !== undefined) initializeProfileFromDefault(name, fromDefaultProfile)
@@ -190,7 +217,7 @@ interface ComposedProfile {
  * then the telemetry switch.
  * @param name - the profile name.
  * @param patchFiles - `--patch` overlay paths, in argv order.
- * @param fromDefaultProfile - shipped template for a missing named profile.
+ * @param fromDefaultProfile - shipped template that replaces the named profile.
  * @param resolvedProfile - application-owned profile and installation.
  * @returns the profile and its patch layers.
  */
@@ -224,7 +251,7 @@ export interface RunProfileOptions {
   profile: string
   /** Loaded application profile; bypasses named profile initialization when supplied. */
   resolvedProfile?: ResolvedProfileRuntime | undefined
-  /** Shipped template used once to initialize a missing profile. */
+  /** Shipped template that replaces the named profile before boot. */
   fromDefaultProfile?: string | undefined
   /** `--patch` overlay paths, in argv order. */
   patchFiles: readonly string[]

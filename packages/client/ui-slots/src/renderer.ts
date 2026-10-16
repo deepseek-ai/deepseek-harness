@@ -61,8 +61,12 @@ export interface StoreInstanceLike {
   readonly actions: Record<string, (...params: never[]) => void>
 }
 
-/** Resolve one member of an open-key standard hook family. */
-export type KeyedStandardSource = (key: string) => HostObservable<unknown> | undefined
+/**
+ * Resolve one member of an open-key standard hook family. `member` is present
+ * only when the Hook is called as `useName(key, member)`; the resolver returns
+ * the same source object for the same arguments while that source is live.
+ */
+export type KeyedStandardSource = (key: string, member?: string) => HostObservable<unknown> | undefined
 
 /**
  * Framework-neutral inputs from which the renderer materializes standard
@@ -74,7 +78,11 @@ export interface StandardSourceBinding {
   readonly key: string | undefined
   /** Fixed-name sources; each `name` becomes a `useName` selector Hook. */
   readonly hooks: Readonly<Record<string, HostObservable<unknown> | undefined>>
-  /** Open-key source families; each `name` becomes a `useName(key, selector)` Hook. */
+  /**
+   * Open-key source families; each `name` becomes a `useName(key, selector?, equal?)`
+   * Hook, which also accepts `useName(key, member)` to read the resolver's
+   * `(key, member)` source without a selector.
+   */
   readonly keyedHooks: Readonly<Record<string, KeyedStandardSource | undefined>>
   /** Stable plain values copied into standard props. */
   readonly props: Readonly<Record<string, unknown>>

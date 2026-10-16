@@ -59,7 +59,7 @@ getUnnotifiedBonuses 读取同一来源上的 GET /api/v0/users/get_unnotified_b
 
 已鉴权客户端提供浏览器可访问的回调来源（含 SSH 本地转发端口）和 UI 类型。提供者固定回调路径，并在初始化与兑换时使用同一个 redirect_uri。回调请求使用 state 和 PKCE 校验，不要求 RPC 鉴权。完成、取消和卸载仅移除本次尝试的路由。兑换失败发布 failed 状态，不自动重试：Web 关闭授权标签页，原标签页显示失败弹窗；回调页尝试自行关闭，并提供手动关闭提示。Desktop 收到 HTTP 204，并通过账号状态流聚焦现有登录界面。
 
-Host 诊断通过标准输出及 Host 调试器 Console 输出，前缀为 `[deepseek-account]`。日志包含接口路径、HTTP 状态、数值响应码、失败阶段、校验失败的字段路径、实际类型和校验码，以及浏览器 URL 拒绝规则，不包含请求头、请求和响应正文、授权 URL 或原始异常。
+Host 诊断仅在请求、响应校验或登录失败时，通过 `console.error` 写入标准错误及 Host 调试器 Console，前缀为 `[deepseek-account]`。成功请求、调用方主动取消和正常账号状态变化不输出日志；请求超时仍记录为失败。失败诊断包含接口路径、HTTP 状态、数值响应码、失败阶段、校验失败的字段路径、实际类型和校验码，以及浏览器 URL 拒绝规则，不包含请求头、请求和响应正文、授权 URL 或原始异常。
 
 `rewriteBrowserOrigin` 默认为 `false`，要求浏览器地址同源。私有开发 patch 可设为 `true`，将授权页和完成页地址映射到 `platformOrigin`，保留固定路径和查询字符串。原地址必须使用 HTTPS 或已匹配配置来源；仍拒绝用户名密码、片段和非预期路径。发布的 profile 保持严格同源校验。
 
@@ -99,7 +99,7 @@ attemptTimeoutMs 包含初始化、等待浏览器和兑换的耗时。初始化
 
 [桌面登录决策](../../../.agents/notes/implemented/architecture/2026-09-14-deepseek-account-login.zh.md)记录取消和存储的职责。
 
-登录后首次读取资料使用 auth_exchange 返回并经筛选的 user。user 为 null 或格式无效时回退到 current；后续刷新及 Host 重启也查询 current。current 请求失败时保留 Host 内存中同一凭证最近一次成功的资料；凭证变更或提供者销毁时清空。current 成功返回的稳定账号 ID 首次可用或变化时会通知 watch 订阅者，供标识使用方重新读取 getPlatformSession；重复相同 ID 的刷新不通知。exchange 负责登记提交的设备信息。
+登录后首次读取资料使用 auth_exchange 返回并经筛选的 user。user 为 null 或格式无效时回退到 current；后续刷新及 Host 重启也查询 current。current 请求失败时保留 Host 内存中同一凭证最近一次成功的资料；凭证变更或提供者销毁时清空。current 成功返回的稳定账号 ID 首次可用或变化时仅通知使用 `watch(signal, true)` 的 Host 订阅者，供标识使用方重新读取 getPlatformSession；重复相同 ID 的刷新不通知。exchange 负责登记提交的设备信息。
 
 accountRequestHeaders 覆盖 requestHeaders，供 current、余额以及内嵌 Platform 页面/API 请求使用。Cookie 按名称合并，路由覆盖保留其他部署 Cookie。授权初始化、兑换、取消和退登保持使用 requestHeaders。两组请求头仅供 Host 和 Electron 主进程使用；快照的 userId 同样仅限 Host，渲染层 bootstrap 仅接收 origin 和 token。
 

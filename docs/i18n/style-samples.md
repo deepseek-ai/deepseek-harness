@@ -24,9 +24,9 @@
 
 这些都是踩坑总结得出的缺陷分类规范：下文每种范式都对应一类曾上线、或险些流入线上的问题，每条规范旨在杜绝同类问题复现。编写生命周期、并发、子进程、资源销毁相关代码前，请务必阅读本文档。
 
-> **Dispose must reach quiescence, not just request it** — A teardown that issues kills/aborts but returns before the work stops leaves orphans. Make cleanup async and await the children's exit (kill → await `done`), and close listener/notification registries BEFORE killing so late completions stay silent. Tests prove disposal waited (pid gone right after `await fiber.dispose()`), not merely that the process eventually dies.
+> **Dispose must reach quiescence, not just request it** — Await child exit after killing or aborting. Optional notifications may stop early; resources and listeners needed for completion or final persistence must survive until consumers settle.
 
-**dispose（资源释放）必须等待所有任务完全停稳，不能仅下发终止指令就返回**：如果清理过程只发出终止或中断信号，却不等任务停止就返回，就会留下孤儿进程。清理应采用异步方式，等待所有子任务彻底退出（先发出终止信号，再等待退出）；发出信号前应先关闭监听器与通知注册表，使延迟到达的完成事件不再触发通知。测试要证明 dispose 的确等到清理完成：执行完 `await fiber.dispose()` 后进程 PID 立即消失，不能只检查进程最终会自行消亡。
+**dispose（资源释放）必须等待所有任务完全停稳，不能仅下发终止指令就返回**：发出终止或中止信号后，等待子进程退出。可选通知可以提前停止；完成操作或最终持久化所需的资源与监听器，必须保持可用直到消费者结束。
 
 > **Async state is not synchronous state** — `agent.followup()` does not flip status before returning; a background job's completion races turn boundaries; `reader.close()` fires for both EOF and disposal. Never gate control flow on a status you only just requested — drive lifecycle off the events/promises that actually fire (`agent/status`, `task.done`), and observe the transition (saw `running` THEN `idle`) instead of treating status as a per-follow-up result: several queued follow-ups run as consecutive turns under one `running` interval, while cancellation or disposal can discard unstarted items.
 

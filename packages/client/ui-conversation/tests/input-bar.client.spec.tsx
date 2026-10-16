@@ -16,7 +16,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { $getRoot, $isTextNode } from 'lexical'
 import {
-  bindSnapshotSelector, conversationSnapshot as conversationFixture, makeTranslate, RemoteError,
+  allowAllAccess, bindSnapshotSelector, conversationSnapshot as conversationFixture, makeTranslate, RemoteError,
   sessionSnapshot as sessionFixture,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -191,6 +191,7 @@ function bench(over?: BenchOptions) {
     useWorkspaces: bindSnapshotSelector(createSnapshotStore({
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),
+    ...allowAllAccess,
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'plan'
         ? over?.plan
@@ -1506,12 +1507,12 @@ describe('machine pending lock', () => {
 })
 
 describe('decorations', () => {
-  /** The claim-token styled leaf (the transform's inline accent color). */
-  function tokenSpanOf(container: HTMLElement): HTMLElement | null {
-    return container.querySelector('[data-lexical-text][style*="business-primary"]')
+  /** The claimed command chip's host element. */
+  function commandChipOf(container: HTMLElement): HTMLElement | null {
+    return container.querySelector('[data-composer-command]')
   }
 
-  it('claimed token styles the leading leaf and sets the blank-args hint variable', () => {
+  it('a claim renders the leading command chip and sets the blank-args hint variable', () => {
     // Dictionary-less stub: an unmatched hint key keeps the machine's raw hint.
     const { view, shell, textarea } = bench({ t: makeTranslate({}) })
     act(() => {
@@ -1520,15 +1521,14 @@ describe('decorations', () => {
         { name: 'goal', token: '/goal ', hint: '目标内容', submit: () => Promise.resolve({ kind: 'success' as const }) },
         { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
       )
-      shell.editor.update(() => {}, { discrete: true }) // flush the queued decoration refresh
     })
-    expect(tokenSpanOf(view.container)?.textContent).toBe('/goal ')
+    expect(commandChipOf(view.container)?.textContent).toBe('/goal')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('目标内容'))
-    // Args typed: the hint disappears, the token style stays.
-    act(() => { shell.setDraft('/goal 发布') })
-    act(() => { shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
+    // Args typed: the hint disappears, the chip stays.
+    act(() => { shell.actions.insertText('发布', shell.actions.captureInsertion()) })
+    expect(shell.snapshot.draft).toBe('/goal 发布')
     expect(textarea.style.getPropertyValue('--dsh-composer-hint')).toBe('')
-    expect(tokenSpanOf(view.container)).not.toBeNull()
+    expect(commandChipOf(view.container)).not.toBeNull()
   })
 
   it('a locale entry for the claimed command overrides the raw claim hint (trailing-space token)', () => {

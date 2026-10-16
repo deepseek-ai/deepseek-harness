@@ -15,7 +15,7 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { registerToasts } from '../src/client/toast/register.ts'
 import { ArchiveToastEntry } from '../src/client/toast/Toast.tsx'
@@ -84,6 +84,7 @@ const standard: GlobalStandardProps = {
   usePanelInfo,
   useResource,
   useWorkspaces: hook(workspaces),
+  ...allowAllAccess,
 }
 
 type MenuRowProps = PropsRuntime<'sidebar.workspaces.session.menu.item'> & PropsLocale<'workspace'>
@@ -235,6 +236,16 @@ describe('fork and rename rows', () => {
     expect(forkSession).toHaveBeenCalledWith(sid('one'))
     expect(setMenuOpen).toHaveBeenCalledWith(false)
     expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(forkSession))
+  })
+
+  it('omits the fork row when the access snapshot excludes session/fork for this Session', () => {
+    const { state } = openMenu()
+    const useSessionAccess = vi.fn(() => false)
+    const { container } = render(
+      <ForkSessionMenuItem {...menuRow(state)} useSessionAccess={useSessionAccess} forkSession={vi.fn()} />,
+    )
+    expect(container.innerHTML).toBe('')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'session/fork')
   })
 
   it('rename closes the menu, then asks for the dialog with the row title', () => {

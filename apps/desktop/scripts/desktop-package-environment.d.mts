@@ -9,6 +9,7 @@ export function localMacOSPackageEnvironment(environment?: NodeJS.ProcessEnv): N
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
  * @param platform Target platform.
  * @param environment Parent environment, retained only for unrelated build tools.
  * @param appRoot Desktop application directory; relative credential paths resolve here.

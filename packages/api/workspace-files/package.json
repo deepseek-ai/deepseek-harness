@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-workspace-files",
   "description": "Workspace file service and Client resource provider: bounded reads, directory listing, and live metadata over the workspaceFiles Remote namespace",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -64,6 +64,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",

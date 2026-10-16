@@ -90,3 +90,23 @@ it('cache maintenance reaches cache path validation without a signing file', asy
     expect(result.stderr).not.toContain('cannot read')
   })
 })
+
+it.each(['win32', 'darwin'] as const)('applies an explicit test channel override on %s without changing the preset file', async (platform) => {
+  await withPreset(async (root) => {
+    const path = join(root, 'presets/test.env')
+    const original = 'a'.repeat(32)
+    await writeFile(path, `DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDOWNLOAD_TEST_RELEASE_ID=${original}\n`)
+    const env = { DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test' }
+    const select = (id: string) => loadDesktopPackageEnvironment(platform,
+      { ...env, PACKAGE_TEST_RELEASE_ID: id }, root, { unsigned: true })
+    expect(select('b'.repeat(32)).DOWNLOAD_TEST_RELEASE_ID).toBe('b'.repeat(32))
+    expect(select('').DOWNLOAD_TEST_RELEASE_ID).toBe(original)
+    expect(select('   ').DOWNLOAD_TEST_RELEASE_ID).toBe(original)
+    expect(() => select('../other')).toThrow(/32 lowercase hexadecimal/u)
+    expect(() => select('A'.repeat(32))).toThrow(/32 lowercase hexadecimal/u)
+    await writeFile(join(root, 'presets/production.env'), 'DSH_DESKTOP_AUTO_UPDATE_ENV=production\n')
+    expect(() => loadDesktopPackageEnvironment(platform,
+      { ...env, DSH_PACKAGING_PRESET: 'production', PACKAGE_TEST_RELEASE_ID: original }, root, { unsigned: true }))
+      .toThrow(/requires the test preset/u)
+  })
+})

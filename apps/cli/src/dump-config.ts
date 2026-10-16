@@ -27,7 +27,7 @@ const NAME = 'dsh'
  * (the recovery diagnostic for a broken `cordis.patch.yml`, which is then
  * never parsed).
  * @param patches - `--patch` overlay paths, in argv order.
- * @param fromDefaultProfile - shipped template used once to initialize a missing profile.
+ * @param fromDefaultProfile - shipped template that replaces the profile before loading it.
  */
 export function runDumpConfig(
   profile: string,

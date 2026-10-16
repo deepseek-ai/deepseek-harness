@@ -92,6 +92,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`fast-xml-parser`](https://github.com/NaturalIntelligence/fast-xml-parser) | MIT |
 | [`fflate`](https://github.com/101arrowz/fflate) | MIT |
 | [`got`](https://github.com/sindresorhus/got) | MIT |
+| [`hosted-git-info`](https://github.com/npm/hosted-git-info) | ISC |
 | [`immer`](https://github.com/immerjs/immer) | MIT |
 | [`ipaddr.js`](https://github.com/whitequark/ipaddr.js) | MIT |
 | [`js-yaml`](https://github.com/nodeca/js-yaml) | MIT |
@@ -110,10 +111,12 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`micromark-util-sanitize-uri`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri) | MIT |
 | [`micromark-util-symbol`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-symbol) | MIT |
 | [`mime-types`](https://github.com/jshttp/mime-types) | MIT |
+| [`minisearch`](https://github.com/lucaong/minisearch) | MIT |
 | [`negotiator`](https://github.com/jshttp/negotiator) | MIT |
 | [`node-addon-require-builtin`](https://www.npmjs.com/package/node-addon-require-builtin) | MIT |
 | [`node-pty`](https://github.com/microsoft/node-pty) | MIT |
 | [`open`](https://github.com/sindresorhus/open) | MIT |
+| [`p-limit`](https://github.com/sindresorhus/p-limit) | MIT |
 | [`papaparse`](https://github.com/mholt/PapaParse) | MIT |
 | [`pdfjs-dist`](https://github.com/mozilla/pdf.js) | Apache-2.0 |
 | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
@@ -128,6 +131,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`shiki`](https://github.com/shikijs/shiki) | MIT |
 | [`simple-icons`](https://github.com/simple-icons/simple-icons) | CC0-1.0 |
 | [`supports-color`](https://github.com/chalk/supports-color) | MIT |
+| [`tar`](https://github.com/isaacs/node-tar) | BlueOak-1.0.0 |
 | [`tsx`](https://github.com/privatenumber/tsx) | MIT |
 | [`turndown`](https://github.com/mixmark-io/turndown) | MIT |
 | [`typescript`](https://github.com/microsoft/TypeScript) | Apache-2.0 |
@@ -201,6 +205,7 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`@types/babel__code-frame`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/big.js`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/compression`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
+| [`@types/hosted-git-info`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/js-yaml`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/jsdom`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/mdast`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
@@ -251,7 +256,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`selfsigned`](https://github.com/jfromaniello/selfsigned) | MIT |
 | [`smol-toml`](https://github.com/squirrelchat/smol-toml) | BSD-3-Clause |
 | [`spdx-expression-parse`](https://github.com/jslicense/spdx-expression-parse.js) | MIT |
-| [`tar`](https://github.com/isaacs/node-tar) | BlueOak-1.0.0 |
 | [`tsdown`](https://github.com/rolldown/tsdown) | MIT |
 | [`typescript-language-server`](https://github.com/typescript-language-server/typescript-language-server) | Apache-2.0 |
 | [`vite`](https://github.com/vitejs/vite) | MIT |

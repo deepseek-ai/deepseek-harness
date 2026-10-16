@@ -61,13 +61,15 @@ pnpm --dir apps/desktop run package:win:x64 --build-version 0.1.6-alpha.1.202609
 
 production 发布使用产品版本本身，不传 `--build-version`。其上传成功后会把打包所用 commit 打成 `desktop-v<版本>` 标签；来自有改动工作区的构建不打标签，打标签失败也只打印手工命令，不会让已完成的上传变成失败。test 与本地构建有意不留标签，而所有产物的清单都记录 `dshBuildCommit` 与 `dshBuildDirty`，直接分发的构建同样可溯源。
 
-版本派生不改变固定更新通道，也不改变 `nightly.yml` / `nightly-mac.yml` 文件名。SemVer 排序为 `0.1.6-alpha.1 < 0.1.6-alpha.1.20260916.1 < 0.1.6-alpha.2`，稳定基础版本的测试版低于该稳定版。客户端只接受更高版本：替换 feed 无法让已安装的较高版本更新到较低的纠正版。这类客户端需要手动安装；保持自动降级关闭。[已归档的版本决策](../../../.agents/notes/archived/process/2026-09-16-desktop-release-version-derivation.md)解释为什么不能用通道名替换预发布标识。
+安装包独立于版本和发布环境内置 `DSH_DESKTOP_UPDATE_CHANNEL`（默认 `nightly`，也可选择 `latest`）。自动更新始终保留该通道，即使安装的是稳定版本；手动安装另一通道的包才会切换。latest 包拒绝预发布版本。稳定产品可生成 nightly 的 `-test.<date>.<sequence>` 构建，但该版本低于稳定基准，不能升级已安装的更高版本。保持自动降级关闭；稳定修复版需要提升产品版本。CI 版本选择与发布见 [CI 发布](../publishing/ci/README.zh.md#package-and-publish)。
 
 <a id="configuration-and-local-builds"></a>
 
 ## 配置与本地构建
 
 本地 Windows 命令通过 `DSH_PACKAGING_CONFIG_DIR` 指定机器配置绝对目录，通过 `DSH_PACKAGING_PRESET` 选择 `test` 或 `production`。加载器读取 `presets/<preset>.env`；签名命令另读 `secrets/windows-signing.env`。相对证书和 SignTool 路径以声明它们的文件所在目录为基准。公开 preset 拒绝凭据，签名文件不能覆盖公开配置。配置缺失立即失败，不回退到 `.env.windows`；不选择 preset 的命令保留原 dotenv 行为。未签名和仅准备 preset 不读取签名文件。缓存维护也只读取公开 preset 配置。签名测试包还需现有下载 origin 和 release ID，但无需上传凭据。本地 preset 命令使用 `--build-version auto` 时仅按本地产物编号；Actions 使用运行编号和重试次数。
+
+两个手动打包工作流都接受 `test_release_id`。留空沿用机器 preset；非空值必须是 32 位小写十六进制字符串，且仅允许 test preset。加载器通过 `PACKAGE_TEST_RELEASE_ID` 应用覆盖值，不修改 preset 文件。同一平台连续升级测试需使用相同值。轮换默认值只影响后续构建：已安装客户端保留原更新地址，旧对象仍可访问，除非另行删除。随机前缀降低地址的可发现性，但不提供下载身份认证。
 
 不选择机器 preset 时，打包、上传以及手动 macOS 签名检查（本地 macOS 未签名构建除外）使用 `apps/desktop/.env.windows` 或 `.env.macos`，由目标平台选择。复制对应的 [Windows 模板](../.env.windows.example) 或 [macOS 模板](../.env.macos.example)，填写本机配置；Git 忽略这两个本地文件，安装产物也不包含它们。发布字段只从选定的配置文件读取，不回退到系统或 shell 中的同名变量；`PATH`、代理和构建工具环境仍保留。发布版本是命令参数而非发布字段，上传从打包写下的完成记录中读取它。文件使用 UTF-8，支持 BOM；相对证书、SignTool、Apple API Key 和钥匙串路径以 `apps/desktop` 为基准，变量值不做 shell 展开，包含 `#` 或空格的密码需要引号。Windows CI 读取相同的机器 preset。
 
@@ -101,7 +103,9 @@ macOS 正式发布和本地未签名 DMG 都通过 [electron-builder 配置](../
 
 ## Windows Actions 打包
 
-`Package Desktop · Windows` [手动工作流](../../../.github/workflows/windows-package.yml) 选择专用 Windows x64 runner 标签 `dsh-win-package-trial`，并使用机器 preset `test` 或 `production`。选择 `unsigned`（默认）或 `signed`；签名模式复用现有 EV token 预检、签名缓存与失败 interlock，不发布或上传 release。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中的 CI 标识；显式值可以是源码产品版本，或扩展构建版本，例如产品 `0.2.1-alpha.1` 对应 `0.2.1-alpha.1.20261009.1`。版本前缀必须匹配所选源码；校验错误显示其当前示例。manifest 保持不变。
+runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-signing/README.zh.md#machine-setup)。
+
+`Package Desktop · Windows` [手动工作流](../../../.github/workflows/windows-package.yml) 选择专用 Windows x64 runner 标签 `dsh-win-package-trial`，并使用机器 preset `test` 或 `production`。选择 `signed`（默认）或 `unsigned`；签名模式复用现有 EV token 预检、签名缓存与失败 interlock，不发布或上传 release。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中的 CI 标识；显式值可以是源码产品版本，或扩展构建版本，例如产品 `0.2.1-alpha.1` 对应 `0.2.1-alpha.1.20261009.1`。版本前缀必须匹配所选源码；校验错误显示其当前示例。manifest 保持不变。
 
 在 Actions 选择工作流、源码分支、preset、签名模式和版本，再点击 Run workflow。输入变更合并前，用 `gh workflow run windows-package.yml --ref <branch> -f preset=test -f signing=unsigned -f build_version=auto` 测试已推送分支；合并后验证网页表单。它不监听 push 或 PR。日志和成功生成的 EXE 保留 14 天。依赖打包流程前检查日志和安装包；安装是独立操作。检出前，Node 删除 runner 专用源码目录，不跟随依赖 junction；工作流校验目标位置并拒绝链接祖先目录。不得指向日常开发目录。运行共享一个并发组，不取消正在进行的构建；最多保留一个待运行任务，新触发会替换它。仅在成功完成干净检出后上传诊断。机器配置位于 checkout 之外，不作为产物上传。
 
@@ -241,6 +245,8 @@ pwsh -NoProfile -File apps/desktop/scripts/smoke-windows.ps1 -Makensis $Makensis
 ```
 
 Windows 安装器在启动时和选定目标目录后检查应用是否正在运行，通过检查后才将新版本解压到安装目录旁边。通过同卷目录改名替换前，安装器会再次检查。运行中的应用会阻止安装；更新启动允许等待应用退出，最长十秒。同路径升级在替换成功前保留旧目录；解压失败时旧版不变，替换失败时尝试恢复旧目录。安装器在启动前清理旧版备份。强制结束安装器或断电可能留下 `.new-*` 或 `.old-*` 目录；不同安装位置或安装范围迁移仍使用 electron-builder 的旧卸载器流程。
+
+目录改名、空目标目录删除和旧版恢复遇到 Windows 错误 5、32 或 33 时最多尝试十次，每次等待递增 250 毫秒（每个操作合计等待 11.25 秒）。其他错误立即停止。替换失败时，安装器将 Windows 错误、相关路径和恢复结果写入解压报告旁的 `directory-failure-<时间戳>.log`。如果恢复失败，安装器会清理未被占用的暂存文件并保留备份。上报此失败后，退出清理不再重试恢复。请保留报告所列的备份目录，并在重新安装前联系支持人员。静默安装保存相同的诊断，不显示弹窗。
 
 解压失败时，安装器会把 7-Zip 的结果和完整错误输出写入更新缓存目录 `%LOCALAPPDATA%\<按包名派生>-updater\installer-logs\extract-failure-<时间戳>.log`（当前为 `@deepseek-aidsh-desktop-updater`），并在弹窗中显示首条错误行和 **复制错误信息** 按钮；静默安装只写入报告。未签名的 Windows 构建（`DSH_DESKTOP_UNSIGNED=1`）会将安装包命名为 `deepseek-harness-<版本>-win-x64-unsigned.exe`，以免被误当作发布产物。
 

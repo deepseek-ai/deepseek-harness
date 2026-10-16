@@ -222,3 +222,10 @@ const previous = hooks.resolve
 hooks.resolve = (specifier, context, next) =>
   pinned.has(specifier) ? pinned.get(specifier) : previous(specifier, context, next)
 ```
+
+## 包模块不在模块顶层 await
+
+包源码模块的异步工作在它调用的函数里启动（例如自己处理 rejection 的显式 `main()`），模块顶层不使用 `await`、`for await` 或 `await using`：模块顶层的等待会让每个导入方的求值跟着等待，把 rejection 变成模块求值失败，而且无法降级成浏览器 Worker 镜像使用的同步 CommonJS 包装。
+
+- 判定依据：[verify-no-top-level-await.ts](../../scripts/verify-no-top-level-await.ts)，以 `pnpm run verify-no-top-level-await` 运行，也由 `scripts/run-gates.ts` 作为 `no-top-level-await` 门禁运行；它解析每个 `packages/*/*/src/**/*.{ts,tsx}` 文件，只按声明排除可执行入口：以 `#!` 开头的源码，或包的 `bin` 字段指向的 `lib/` 产物所对应的源码。
+- 例外：无。

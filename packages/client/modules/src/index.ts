@@ -25,6 +25,7 @@
 
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
@@ -34,11 +35,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
-import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph } from './client/manifest.ts'
+import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
 
 export { stripClientSuffix } from './client/manifest.ts'
 export type {
-  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph,
+  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
 } from './client/manifest.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -380,11 +381,17 @@ function identitySectionMap(source: string, sourceUrl: string): Record<string, u
   }
 }
 
-/** Run one producer in the first requester's microtask, not off-thread, and share its settlement. */
-function lazyBody(produce: () => Buffer): () => Promise<Buffer> {
+/**
+ * Run one producer in the first requester's microtask, not off-thread, and share its settlement. A rejected run is
+ * dropped once it settles, so the next request produces again.
+ */
+function lazyBody(produce: () => Buffer | Promise<Buffer>): () => Promise<Buffer> {
   let result: Promise<Buffer> | undefined
   return () => {
-    result ??= Promise.resolve().then(produce)
+    result ??= Promise.resolve().then(produce).catch((error: unknown) => {
+      result = undefined
+      throw error
+    })
     return result
   }
 }
@@ -596,6 +603,11 @@ window.__ModuleLoader__={
 export class ClientModuleRegistry extends Service {
   static inject = ['loader']
 
+  /**
+   * Host release identity published in every graph: this package's version, which releases share
+   * with the CLI, and the source commit the client build fixes into the built Host artifact.
+   */
+  private readonly release: WebBootRelease
   private readonly table = new Map<string, WebPluginRecord>()
   private readonly sources = new Map<string, ClientPackageSource>()
   // Resolution is entry-local: the same specifier can resolve differently in
@@ -618,6 +630,10 @@ export class ClientModuleRegistry extends Service {
    */
   constructor(ctx: Context) {
     super(ctx, 'clientModules')
+    const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
+    // The client build fixes this read into the built Host artifact.
+    const commit = process.env.DSH_CLIENT_COMMIT_HASH
+    this.release = commit === undefined ? { version } : { version, commit }
     // Subscribe before seeding so a fiber arriving mid-activation lands in the
     // same dirty set (Set idempotence makes the overlap harmless). An entry-less
     // fiber is a child plugin or a manual mount — never a loader row; O(1) drop.
@@ -805,7 +821,12 @@ export class ClientModuleRegistry extends Service {
     this.batchResponses = batchResponses
     this.responses = responses
     const batches = artifacts.map(artifact => artifact.descriptor)
-    return { rev: shortHash(JSON.stringify({ entries, batches })), entries, batches }
+    return {
+      rev: shortHash(JSON.stringify({ entries, batches })),
+      release: this.release,
+      entries,
+      batches,
+    }
   }
 
   private notifyGraphChanged(): void {
@@ -1090,7 +1111,9 @@ export class ClientModuleRegistry extends Service {
       const requested = requestUrl.pathname.slice(prefix.length)
       const sourceMap = requested.endsWith('.map')
       const fileName = sourceMap ? requested.slice(0, -'.map'.length) : requested
-      if (!CLIENT_CHUNK.test(fileName)) return undefined
+      // The Node Client entry and its split chunks share this directory but
+      // must never be served as browser factory scripts.
+      if (!CLIENT_CHUNK.test(fileName) || fileName === 'client.node.js' || fileName.startsWith('client.node.')) return undefined
       if (resourceUrl !== chunkUrl(record.entry.id, fileName, record.entry.rev, sourceMap)) return undefined
       return { record, fileName, sourceMap, resourceUrl }
     }
@@ -1105,20 +1128,22 @@ export class ClientModuleRegistry extends Service {
     const clientPath = join(dirname(record.meta.clientPath), fileName)
     if (!existsSync(clientPath)) return undefined
     const sourceMapUrl = chunkMapReference(fileName, record.entry.rev)
-    const resource = (): ComboResource => ({
+    // An on-demand chunk is read asynchronously: a host whose filesystem fetches
+    // lazily requested files on first read can serve it without a blocking read.
+    const resource = async (): Promise<ComboResource> => ({
       id: record.entry.id,
       rev: record.entry.rev,
       clientPath,
       fileName,
-      bundle: readFileSync(clientPath),
+      bundle: await readFile(clientPath),
     })
     const response: LazyResponse = sourceMap
       ? {
-        body: lazyBody(() => buildComboSourceMap([resource()], this.readSourceMap, fileName)),
+        body: lazyBody(async () => buildComboSourceMap([await resource()], this.readSourceMap, fileName)),
         contentType: 'application/json; charset=utf-8',
       }
       : {
-        body: lazyBody(() => buildComboScript([resource()], sourceMapUrl)),
+        body: lazyBody(async () => buildComboScript([await resource()], sourceMapUrl)),
         contentType: 'text/javascript; charset=utf-8',
       }
     this.responses.set(resourceUrl, response)

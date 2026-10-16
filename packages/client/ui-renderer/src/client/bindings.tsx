@@ -101,12 +101,42 @@ function useAbsentSnapshot<S>(
   return undefined
 }
 
-/** Erased open-key selector Hook synthesized from one keyed source family. */
+/**
+ * Erased open-key selector Hook synthesized from one keyed source family.
+ * A string second argument names a member: the Hook reads the source the
+ * resolver returns for `(key, member)` without a selector.
+ */
 export type KeyedSnapshotHook = (
   keyOrSelector: string | ((value: unknown) => unknown),
-  selectorOrEqual?: ((value: unknown) => unknown) | ((left: unknown, right: unknown) => boolean),
+  memberOrSelectorOrEqual?: string | ((value: unknown) => unknown) | ((left: unknown, right: unknown) => boolean),
   equal?: (left: unknown, right: unknown) => boolean,
 ) => unknown
+
+interface KeyedHookCall {
+  readonly key: string | undefined
+  readonly member: string | undefined
+  readonly selector: ((value: unknown) => unknown) | undefined
+  readonly equal: ((left: unknown, right: unknown) => boolean) | undefined
+}
+
+/** Read the `(key, member)`, `(key, selector?, equal?)`, or `(selector, equal?)` call forms. */
+function keyedHookCall(
+  defaultKey: string | undefined,
+  keyOrSelector: Parameters<KeyedSnapshotHook>[0],
+  second: Parameters<KeyedSnapshotHook>[1],
+  equal: Parameters<KeyedSnapshotHook>[2],
+): KeyedHookCall {
+  if (typeof keyOrSelector !== 'string') {
+    return {
+      key: defaultKey,
+      member: undefined,
+      selector: keyOrSelector,
+      equal: second as ((left: unknown, right: unknown) => boolean) | undefined,
+    }
+  }
+  if (typeof second === 'string') return { key: keyOrSelector, member: second, selector: undefined, equal: undefined }
+  return { key: keyOrSelector, member: undefined, selector: second as ((value: unknown) => unknown) | undefined, equal }
+}
 
 /**
  * Bind an open-key source family.
@@ -126,13 +156,13 @@ export function keyedObservableHook(
   const cacheKey = defaultKey ?? NO_DEFAULT_KEY
   let hook = hooks.get(cacheKey)
   if (hook === undefined) {
-    hook = (keyOrSelector, selectorOrEqual, equal) => {
-      const keyed = typeof keyOrSelector === 'string'
-      const key = keyed ? keyOrSelector : defaultKey
-      const selector = (keyed ? selectorOrEqual : keyOrSelector) as ((value: unknown) => unknown) | undefined
-      const comparison = (keyed ? equal : selectorOrEqual) as ((left: unknown, right: unknown) => boolean) | undefined
-      const useValue = observableHook(key === undefined ? absentSource : source(key) ?? absentSource)
-      return useValue(selector ?? identity, comparison)
+    hook = (keyOrSelector, second, equal) => {
+      const call = keyedHookCall(defaultKey, keyOrSelector, second, equal)
+      const resolved = call.key === undefined
+        ? undefined
+        : call.member === undefined ? source(call.key) : source(call.key, call.member)
+      const useValue = observableHook(resolved ?? absentSource)
+      return useValue(call.selector ?? identity, call.equal)
     }
     hooks.set(cacheKey, hook)
   }
@@ -142,11 +172,9 @@ export function keyedObservableHook(
 const NO_DEFAULT_KEY = Symbol('no default key')
 const keyedHookCache = new WeakMap<KeyedStandardSource, Map<string | symbol, KeyedSnapshotHook>>()
 const identity = (value: unknown): unknown => value
-const absentKeyedHook: KeyedSnapshotHook = (keyOrSelector, selectorOrEqual, equal) => {
-  const keyed = typeof keyOrSelector === 'string'
-  const selector = (keyed ? selectorOrEqual : keyOrSelector) as ((value: unknown) => unknown) | undefined
-  const comparison = (keyed ? equal : selectorOrEqual) as ((left: unknown, right: unknown) => boolean) | undefined
-  return observableHook(absentSource)(selector ?? identity, comparison)
+const absentKeyedHook: KeyedSnapshotHook = (keyOrSelector, second, equal) => {
+  const call = keyedHookCall(undefined, keyOrSelector, second, equal)
+  return observableHook(absentSource)(call.selector ?? identity, call.equal)
 }
 
 /** Subscribe the tree to the atomically assembled root standard-source roster. */

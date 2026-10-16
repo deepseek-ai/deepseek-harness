@@ -17,9 +17,9 @@ Two pieces of Host state did not follow changes while the process ran:
 
 | Owner | Does | Does not |
 |---|---|---|
-| resolver (`app-boot/src/profile-resolution/resolver.ts`) | `replace()` allows removing `scope: profile` entries and profile-local names | Touch any Node cache |
-| plugin-manager | Calls `pluginPackages.refresh()` at fixed points of package operations | Construct resolutions or manage module and package-configuration caches |
-| HMR (`packages/boot/hmr`) | Expires package configuration and preserves ordinary reloads for manifests loaded as JSON modules | Reload plugins for configuration-only manifests; handle `node_modules` package replacement |
+| resolver (`app-boot/src/profile-resolution/resolver.ts`) | `replace()` allows removing `scope: profile` entries and profile-local names, and changing a retained profile entry's version in place | Touch any Node cache |
+| plugin-manager | Without HMR, calls `pluginPackages.refresh()` at fixed points of package operations; with HMR, leaves publication to its recomposition | Construct resolutions or manage module and package-configuration caches |
+| HMR (`packages/boot/hmr`) | Expires package configuration and preserves ordinary reloads for manifests loaded as JSON modules; replaces plugins whose loaded package files changed during recomposition ([replacement Note](2026-10-01-replace-changed-package-modules-on-recomposition.md)) | Reload plugins for configuration-only manifests |
 
 ### Runtime resolution
 
@@ -29,20 +29,18 @@ Validation of a new generation in `replace()`:
 
 - `scope: profile` entries may be removed.
 - Profile-local package names may be removed.
-- Retained profile entries keep their normalized directory, version, and scope, but may change declaring anchor when another selected bundle supplies the same package. Installation mappings and declaring anchors remain unchanged. The profile scope cannot change; a new local name cannot override an existing entry; a published link name cannot select another real directory.
+- Retained profile entries keep their normalized directory and scope, but may change declaring anchor when another selected bundle supplies the same package, and may change version when the package is upgraded in place ([replacement Note](2026-10-01-replace-changed-package-modules-on-recomposition.md)). Installation mappings and declaring anchors remain unchanged. The profile scope cannot change; a new local name cannot override an existing entry. A published link name may select another real directory; Node's cached real paths of the previous one are relocated.
 
 ### Plugin Manager
 
 | Operation | Publication point |
 |---|---|
-| Install a new package | After pnpm succeeds and the bundle selection is saved, before reconciliation, whether or not the bundle is enabled |
-| Overwrite an installed package | No publication; the result is `restart-required` |
-| Enable a bundle | After the selection is saved, before reconciliation |
-| Disable a bundle | With HMR, after reconciliation stops its plugins; without HMR, no publication, and running plugins keep the current table |
-| Remove | After pnpm remove succeeds, inside the HMR transaction |
-| Failed or cancelled install, failed removal | No publication |
+| Install, enable, disable or remove with HMR | Inside HMR's recomposition, after the rows the generation drops stopped and before the generation applies ([replacement Note](2026-10-01-replace-changed-package-modules-on-recomposition.md)) |
+| Install a new package or enable a bundle without HMR | After the profile files are saved, before reconciliation |
+| Remove without HMR | After pnpm remove succeeds |
+| Disable without HMR, an install over an installed package, a failed or cancelled install, a failed removal | No publication; an install over a package the spec names is refused before pnpm runs |
 
-`createRuntimeResolution()` returns a `ProfileRuntimeResolution`, which privately keeps the installation anchor, Harness home, and profile directory it was computed from. Its `computeLatestResolution()` rereads that profile with the same inputs and returns a new object for the latest generation, leaving the original unchanged; Workers receive only the table fields. `PluginPackages.refresh()` calls the current resolution's `computeLatestResolution()` and then `replace()`; a resolution constructed as plain data cannot be refreshed and makes the call throw.
+`createRuntimeResolution()` returns a `ProfileRuntimeResolution`, which privately keeps the installation anchor, Harness home, and profile directory it was computed from. Its `computeLatestResolution()` rereads that profile with the same inputs and returns a new object for the latest generation, leaving the original unchanged; Workers receive only the table fields. `PluginPackages.refresh()` calls the current resolution's `computeLatestResolution()` and then `replace()`; a resolution constructed as plain data cannot be refreshed and makes the call throw. app-boot's `recomposeProfile()` first stops the rows the generation no longer lists, so their plugins dispose while their packages are still mapped, then publishes the latest generation once; a table that is already published is not published again.
 
 Without HMR, deselecting a startup bundle does not stop its plugins. While such a bundle remains deselected, later package operations keep the existing runtime table instead of publishing its removal. Other no-HMR installations and removals of non-running bundles still publish normally.
 
@@ -79,7 +77,7 @@ The binding's `getNearestParentPackageJSON` is called only by `package_json_read
 
 ### Future Work
 
-- Online replacement inside `node_modules`, same-path reinstall, changed link targets, and cross-package reload propagation remain unsupported. Package updates need process restart; this does not guarantee that every management result already reports that requirement correctly.
+- A retained profile mapping that moves to another directory waits for a restart; Plugin Manager moves a package by removing and installing it. In-place replacement inside `node_modules` is handled by the [replacement Note](2026-10-01-replace-changed-package-modules-on-recomposition.md).
 - TSX versions using an asynchronous loader thread keep that thread's package configuration outside these hooks. Synchronizing it is deferred; this change does not provide general Worker cache synchronization.
 - CommonJS private-request-cache refresh with registered synchronous resolve hooks is deferred. Those requests retain their original loader behavior.
 - Disposing HMR restores the native readers, whose previous cached configuration can become visible again. Preserving invalidation state across HMR replacement is deferred.
@@ -90,7 +88,7 @@ The binding's `getNearestParentPackageJSON` is called only by `package_json_read
 
 **Reread every observed manifest when runtime resolution publishes (#5496).** This places package-configuration expiry in table publication, decoupled from module caches: overwriting an installed package reports restart, yet the next unrelated publication makes new imports load the new version while the old plugin still runs. Package configuration is content and belongs with module caches, in HMR.
 
-**Let HMR reload packages inside `node_modules`.** It requires finding affected plugins over a module graph that includes `node_modules`, preventing duplicate evaluation of shared libraries and Cordis, and handling missing dynamic-import edges, module side effects, and Workers. It is not done here; those scenarios keep requiring restart.
+**Let HMR reload packages inside `node_modules`.** It requires finding affected plugins over a module graph that includes `node_modules`, preventing duplicate evaluation of shared libraries and Cordis, and handling missing dynamic-import edges, module side effects, and Workers. It is not done here; the [replacement Note](2026-10-01-replace-changed-package-modules-on-recomposition.md) adds it at profile recomposition.
 
 **Reload every plugin for a package.json change.** Configuration-only manifests do not require module evaluation. Manifests actually imported as JSON modules retain ordinary dependency-driven reloads.
 

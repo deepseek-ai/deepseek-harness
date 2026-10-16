@@ -1,0 +1,90 @@
+// Shared helper admission preserves connection settings and private runtime ownership.
+import Foundation
+import Darwin
+import Testing
+@testable import CuaNative
+
+private let runtimeKey = String(repeating: "a", count: 64)
+
+private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
+    var config: [String: JSONValue] = [
+        "maxRequestBytes": .number(4096), "maxResponseBytes": .number(8192), "axTimeoutMs": .number(250),
+        "textEventIntervalMs": .number(0.5), "screenshotTimeoutMs": .number(2000),
+        "timeoutMs": .number(8000), "graceMs": .number(500),
+    ]
+    config.merge(overrides) { _, value in value }
+    return try JSONEncoder().encode(JSONValue.object([
+        "type": .string("hello"), "protocol": .number(1), "runtimeKey": .string(runtimeKey), "config": .object(config),
+    ]))
+}
+
+@Test func admitsPerConnectionConfiguration() throws {
+    let configuration = try HelperConfiguration(hello: hello(), runtimeKey: runtimeKey)
+    #expect(configuration.maxRequestBytes == 4096)
+    #expect(configuration.maxResponseBytes == 8192)
+    #expect(configuration.axTimeoutSeconds == 0.25)
+    #expect(configuration.textEventIntervalSeconds == 0.0005)
+    #expect(configuration.screenshotTimeoutSeconds == 2)
+    #expect(configuration.timeoutSeconds == 8)
+    #expect(configuration.shutdownGraceSeconds == 0.5)
+    #expect(throws: NativeFailure.self) {
+        try HelperConfiguration(hello: hello(), runtimeKey: String(repeating: "b", count: 64))
+    }
+}
+
+@Test(arguments: [
+    ("maxRequestBytes", JSONValue.number(1023)), ("maxResponseBytes", .number(1.5)),
+    ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
+    ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
+    ("unexpected", .bool(true)),
+])
+func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throws {
+    #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: hello(overrides: [name: value]), runtimeKey: runtimeKey) }
+}
+
+@Test func rejectsSharedHelloFieldsAndProtocolVersions() throws {
+    let base = try JSONDecoder().decode(JSONValue.self, from: hello())
+    for (name, value) in [("protocol", JSONValue.number(2)), ("type", .string("request")), ("extra", .null)] {
+        var fields = try #require(base.object)
+        fields[name] = value
+        let data = try JSONEncoder().encode(JSONValue.object(fields))
+        #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: data, runtimeKey: runtimeKey) }
+    }
+}
+
+@Test func versionLocksStayExclusiveUntilOwnerRelease() throws {
+    let directory = "/tmp/cua-\(UUID().uuidString.prefix(12))"
+    let options = try SharedHelperOptions(arguments: ["--ensure-shared", "--runtime-key", runtimeKey,
+                                                     "--runtime-directory", directory, "--startup-timeout-ms", "1000"])
+    try options.prepareDirectory()
+    defer { try? FileManager.default.removeItem(atPath: directory) }
+    var first = try SharedHelperLock(path: options.versionLockPath)
+    #expect(first != nil)
+    try withExtendedLifetime(first) {
+        let competing = try SharedHelperLock(path: options.versionLockPath)
+        #expect(competing == nil)
+    }
+    first = nil
+    let successor = try SharedHelperLock(path: options.versionLockPath)
+    #expect(successor != nil)
+}
+
+@Test func refusesSymlinkRuntimeDirectories() throws {
+    let directory = "/tmp/cua-\(UUID().uuidString.prefix(12))"
+    guard symlink("/tmp", directory) == 0 else { throw SharedSocket.failure("Creating fixture symlink") }
+    defer { unlink(directory) }
+    let options = try SharedHelperOptions(arguments: ["--ensure-shared", "--runtime-key", runtimeKey,
+                                                     "--runtime-directory", directory, "--startup-timeout-ms", "1000"])
+    #expect(throws: NativeFailure.self) { try options.prepareDirectory() }
+}
+
+@Test func validatesSharedLaunchIdentityAndSocketPath() throws {
+    for arguments in [
+        ["--ensure-shared", "--runtime-key", "invalid", "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "1000"],
+        ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "relative", "--startup-timeout-ms", "1000"],
+        ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "0"],
+        ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "/" + String(repeating: "x", count: 100), "--startup-timeout-ms", "1000"],
+    ] {
+        #expect(throws: NativeFailure.self) { try SharedHelperOptions(arguments: arguments) }
+    }
+}

@@ -74,6 +74,7 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
     expect(quotaNoticeEntry(c)).toBeDefined()
     expect(platformHostEntry(c)).toBeUndefined()
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-onboarding')).toBe(false)
+    expect(operations(c).hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
   }
 }, 60_000)
 
@@ -204,6 +205,82 @@ it('reports the account sampled by the click when a native read outlasts a sign-
   device.resolve('platform=darwin; os=15.0; app_arch=arm64; memory_gib=16.0')
   await vi.waitFor(() => { expect(open).toHaveBeenCalledOnce() })
   expect(new URL(String(open.mock.calls.at(-1)![0])).searchParams.get('prefill_uid')).toBe('account-user')
+}, 60_000)
+
+it('publishes one avatar load and retries it through the shared Settings refresh action', async ({ start }) => {
+  const images: HTMLImageElement[] = []
+  vi.stubGlobal('Image', function () {
+    const image = document.createElement('img')
+    images.push(image)
+    return image
+  })
+  const c = await start()
+  const actions = operations(c)
+  const picture: AccountDetails['profile'] = {
+    status: 'ready', value: { id: 'account-user' as AccountUserId, name: 'User', contact: null, avatarUrl: 'https://example.test/avatar.png' },
+  }
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(picture))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(images).toHaveLength(1) })
+  images[0]!.dispatchEvent(new Event('error'))
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  await actions.refreshAccount()
+  expect(images).toHaveLength(2)
+  images[1]!.dispatchEvent(new Event('error'))
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  images[2]!.dispatchEvent(new Event('load'))
+  expect(actions.hooks.account.getSnapshot().avatar).toEqual({ url: picture.value.avatarUrl, status: 'ready' })
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  const ready = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  expect(images).toHaveLength(4)
+  images[3]!.dispatchEvent(new Event('load'))
+  const successor = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar).toBe(successor)
+  c.mock.streams.push('account/watch', view)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
+  expect(actions.hooks.account.getSnapshot().avatar).toBeUndefined()
+  expect(images[3]!.getAttribute('src')).toBeNull()
+}, 60_000)
+
+it('keeps successful account refreshes silent and reports only failed reads', async ({ start }) => {
+  vi.stubGlobal('dshDesktop', {})
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  const c = await start()
+  const actions = operations(c)
+  await actions.refreshAccount()
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(profile))
+  c.mock.remote.account.getBalance.mockResolvedValue(ok({ status: 'ready', value: [], bonusWallets: [] }))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().details?.profile).toEqual(profile) })
+  await actions.refreshAccount()
+  for (const spy of [output, info, log]) {
+    expect(spy.mock.calls.filter(call => String(call[0]).startsWith('[deepseek-account]'))).toEqual([])
+  }
+  c.mock.remote.account.getProfile.mockResolvedValueOnce(ok({ status: 'failed' }))
+  c.mock.remote.account.getBalance.mockRejectedValueOnce(new Error('private-transport-detail'))
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'profile',
+  }))
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-transport-detail')
+  c.mock.remote.account.getBalance.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'private-rpc-detail', {}) })
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-rpc-detail')
 }, 60_000)
 
 it('coalesces refreshes, publishes independent failures, and rejects stale responses after sign-out or unload', async ({ start }) => {
@@ -649,6 +726,12 @@ for (const native of [false, true]) it(`exposes desktop progress actions and dis
   const c = await start()
   const entry = c.ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'desktop-onboarding')!
   const injected = (entry.inject!() as object) as DesktopOnboardingInjected
+  expect(injected.hooks.account.getSnapshot().desktopOnboardingVisible).toBe(true)
+  injected.setVisible(false)
+  expect(injected.hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
+  const revealed = injected.hooks.account.getSnapshot()
+  injected.setVisible(false)
+  expect(injected.hooks.account.getSnapshot()).toBe(revealed)
   // Onboarding requests the shared native page through the one host; it holds no
   // bridge of its own.
   if (native) expect(injected.openPlatformPage).toBeDefined()

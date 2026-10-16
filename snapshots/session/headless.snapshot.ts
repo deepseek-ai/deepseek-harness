@@ -118,6 +118,8 @@ function bindsOsAssignedPort(argument: ts.Expression | undefined): boolean {
   if (argument === undefined) return false
   if (ts.isNumericLiteral(argument)) return Number(argument.text) === 0
   if (!ts.isObjectLiteralExpression(argument)) return false
+  if (argument.properties.some(property => !ts.isSpreadAssignment(property) && propertyName(property.name) === 'path')
+    && argument.properties.every(property => !ts.isSpreadAssignment(property) && propertyName(property.name) !== 'port')) return true
   let portIsZero: boolean | undefined
   for (const property of argument.properties) {
     if (ts.isSpreadAssignment(property)) {
@@ -982,12 +984,16 @@ describe('headless recorded-session snapshots', () => {
       "server.listen(0, '127.0.0.1')",
       "server.listen({ port: 0, host: '127.0.0.1' })",
       'server.listen({ ...options, port: 0 })',
+      'server.listen({ path: socketPath })',
     ].join('\n'))).toEqual([])
     expect(listenerPortViolations('fixed.mjs', 'server.listen(43118)')).toEqual([
       'fixed.mjs:1: listener port 43118 must use listen(0, ...) or listen({ port: 0, ... })',
     ])
     expect(listenerPortViolations('dynamic.mjs', 'server.listen({ port, ...options })')).toEqual([
       'dynamic.mjs:1: listener port { port, ...options } must use listen(0, ...) or listen({ port: 0, ... })',
+    ])
+    expect(listenerPortViolations('mixed.mjs', 'server.listen({ path, port: 43118 })')).toEqual([
+      'mixed.mjs:1: listener port { path, port: 43118 } must use listen(0, ...) or listen({ port: 0, ... })',
     ])
   })
 

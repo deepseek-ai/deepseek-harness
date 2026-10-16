@@ -80,6 +80,8 @@ export const MODULE_PROXIES: Record<string, string> = {
   'got': './node/external_packages/got.ts',
   '@vscode/ripgrep': './node/external_packages/ripgrep.ts',
   '@earendil-works/pi-ai': './node/external_packages/pi-ai.ts',
+  // Node internal modules for callers without `--expose-internals`.
+  'node-addon-require-builtin': './node/external_packages/node-addon-require-builtin.ts',
   // Constructible fakes whose methods are never reached.
   'ws': './node/external_packages/ws.ts',
 }

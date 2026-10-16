@@ -3,7 +3,8 @@
  * `sidebar.settings` occupant — panel chrome, section navigation, and the
  * onboarding stage — and registers everything on the Settings pages that
  * belongs to no single feature: the trigger/header chrome content,
- * local-document action, General section, and `settings` dictionaries.
+ * local-document action, General section, `settings` dictionaries, and the
+ * Host release change confirmation.
  * Feature-owned rows and sections stay with their features.
  * Export discipline: packages/client/AGENTS.md.
  */
@@ -11,6 +12,8 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and its fixed Host facts.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+// Type-only: pulls the ctx.modules merge.
+import type {} from '@deepseek-ai/dsh-client-modules/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { closeTopModal } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the settings slot declarations plus the ctx.configForms Context
@@ -37,6 +40,7 @@ import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperTo
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from './settings-document-store.ts'
+import { HostReleasePrompt, type HostReleasePromptInjected } from './HostReleasePrompt.tsx'
 import { en, zh, type SettingsKey } from './locales.ts'
 
 export type {
@@ -65,7 +69,7 @@ const NS = 'settings'
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; registrations depend on their slots through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts', 'modules']
 
 /**
  * Register the `settings` dictionaries, the chrome content, and the General
@@ -236,4 +240,13 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
+  // The page's module system applies no plugin update from another Host release; this dialog offers the reload.
+  const releasePromptInjected = (): HostReleasePromptInjected => ({
+    dismissRelease: () => { ctx.modules.entries.dismissRelease() },
+    reloadPage: () => { globalThis.location.reload() },
+    hooks: { releaseChange: ctx.modules.entries.releaseChange },
+  })
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'host-release-change', locale: NS, inject: releasePromptInjected,
+  }, HostReleasePrompt))
 }

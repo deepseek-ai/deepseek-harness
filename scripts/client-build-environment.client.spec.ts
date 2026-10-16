@@ -8,6 +8,7 @@ import {
   assertClientBuildEnvironment,
   clientBuildEnvironmentDefines,
   clientBuildProcessEnvironment,
+  clientBuildValueDefines,
   officialClientBuildEnvironment,
   readClientBuildRecord,
   repositoryClientBuildEnvironment,
@@ -216,20 +217,23 @@ describe('client build environment', () => {
   })
 
   it('defines only public client values over a non-enumerable fallback', () => {
-    expect(clientBuildEnvironmentDefines({
+    const environment = {
       PATH: '/bin',
       DSH_TEST_API_KEY: 'secret',
       DSH_CLIENT_VARIANT: 'quoted "value"',
       DSH_CLIENT_EMPTY: '',
       DSH_CLIENT_UNSET: undefined,
-    })).toEqual({
-      'process.env': '{}',
+    }
+    const values = {
       'process.env.DSH_CLIENT_EMPTY': '""',
       'process.env.DSH_CLIENT_VARIANT': '"quoted \\"value\\""',
-    })
+    }
+    expect(clientBuildEnvironmentDefines(environment)).toEqual({ 'process.env': '{}', ...values })
+    // Node faces keep their runtime `process.env` and fix only the public values.
+    expect(clientBuildValueDefines(environment)).toEqual(values)
   })
 
-  it('feeds the same build-process value to dynamic tsdown bundles and the Vite shell', async () => {
+  it('feeds the same build-process value to dynamic tsdown bundles, their Node faces, and the Vite shell', async () => {
     process.env[PROBE_NAME] = 'shared-value'
 
     const configs = clientBundle(join(import.meta.dirname, '../packages/client/ui-sidebar'), [
@@ -241,6 +245,9 @@ describe('client build environment', () => {
       'process.env': '{}',
       [PROBE_KEY]: '"shared-value"',
     })
+    const node = configs.find(config => config.name === '@deepseek-ai/dsh-client-ui-sidebar')
+    expect(node?.define).toMatchObject({ [PROBE_KEY]: '"shared-value"' })
+    expect(node?.define).not.toHaveProperty(['process.env'])
 
     const viteConfigPath = '../apps/web/vite.config.ts'
     const viteModule: unknown = await import(viteConfigPath)
@@ -278,6 +285,13 @@ describe('client build environment', () => {
     const chunked = buildFixture(officialEnvironment)
     write(join(chunked, 'packages/client/example/lib/client.pdf.js'), 'module.exports = {}\n')
     expect(() => { readClientBuildRecord(chunked) }).toThrow(/artifacts differ/)
+
+    const dual = buildFixture(officialEnvironment)
+    write(join(dual, 'packages/client/example/lib/client.node.js'), 'export const node = true\n')
+    write(join(dual, 'packages/client/example/lib/client.node.helper.js'), 'export const helper = true\n')
+    expect(() => { readClientBuildRecord(dual) }).not.toThrow()
+    write(join(dual, 'packages/client/example/lib/client.browser.js'), 'module.exports = { browser: true }\n')
+    expect(() => { readClientBuildRecord(dual) }).toThrow(/artifacts differ/)
   })
 
   it('keeps public client values out of workflow-wide environments', () => {

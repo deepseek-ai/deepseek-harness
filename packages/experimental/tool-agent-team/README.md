@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets the model create named teammates, send them messages, inspect availability, wait for progress, interrupt stuck work, and coordinate through a shared task board. Every team member receives the same nine tools and guidance for coordinating in a shared workspace. Choose it when the model should operate a team only after you explicitly request one. It replaces legacy subagent controls with the same tool names, so compositions that need both must disable the legacy definitions. The package is published under its experimental name and provides no stability guarantee.
+This package lets the model create named teammates, send them messages, inspect availability, wait for progress, interrupt stuck work, and coordinate through a shared task board. Every team member receives the same nine tools and guidance for coordinating in a shared workspace. It replaces legacy subagent controls with the same tool names, so compositions that need both must disable the legacy definitions. The package is published under its experimental name and provides no stability guarantee.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when the m
 
 ### When to choose it
 
-Choose it when the model should create and coordinate teammates by itself rather than a human driving subagent controls. Avoid it when the legacy global subagent tools with the same names must stay available: the team tools replace them for team members, so a composition that wants both must disable the legacy definitions. The fixed policy creates teammates only when you explicitly ask for a team or teammates, so ordinary tasks never trigger delegation on their own.
+Choose it when the model should create and coordinate teammates by itself rather than a human driving subagent controls. Avoid it when the legacy global subagent tools with the same names must stay available: the team tools replace them for team members, so a composition that wants both must disable the legacy definitions.
 
 ### Smallest working example
 
@@ -124,7 +124,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-One shared system policy covers explicit delegation, shared-cwd safety, task coordination, Steer delivery, inbox acceptance, and the Lead’s duty to wait. All nine schemas are identical for Leads and teammates; execution enforces Lead-only operations. Required runtime context states `You are the Team Lead named "lead".` or `You are teammate "<name>".` with `Your Team Lead is named "lead".`, plus roster and messaging instructions. Identity comes from current Team membership, survives optional-context suppression, and is restored when compaction removes its snapshot. An ordinary fork from a teammate receives its current Lead identity.
+One shared system policy covers Team availability, shared-cwd safety, task coordination, Steer delivery, inbox acceptance, and the Lead’s duty to wait. All nine schemas are identical for Leads and teammates; execution enforces Lead-only operations. Required runtime context states `You are the Team Lead named "lead".` or `You are teammate "<name>".` with `Your Team Lead is named "lead".`, plus roster and messaging instructions. Identity comes from current Team membership, survives optional-context suppression, and is restored when compaction removes its snapshot. An ordinary fork from a teammate receives its current Lead identity.
 
 #### Token effect
 
@@ -141,7 +141,6 @@ With the same provider/model, shared system policy, and tool schemas, a fork ret
 These limits describe what the policy and tools cannot guarantee for a team. They are current package constraints, not a comparison with other collaboration surfaces.
 
 - **Prompt policy is coordination, not confinement** — it cannot stop Bash or external processes from writing overlapping files.
-- **No autonomous team creation** — ordinary tasks do not trigger delegation unless the user explicitly requests it.
 - **No Web controls** — browser roster and task-board presentation is outside this runtime package.
 - **Experimental prototype with no stability promise** — the package is public, but its schemas can change freely while it incubates.
 

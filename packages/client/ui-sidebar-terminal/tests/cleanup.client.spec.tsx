@@ -2,7 +2,7 @@
 /** Cleanup errors remain reachable after the terminal tab has disappeared. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TerminalCloseFailure } from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
 import { TerminalCleanup } from '../src/client/TerminalCleanup.tsx'
@@ -15,6 +15,7 @@ const unusedHook = (): never => { throw new Error('Terminal cleanup does not con
 const standard: Omit<CleanupProps, 'useCloseFailures' | 'retryClose' | 't'> = {
   useSessions: unusedHook, useSessionStatus: unusedHook, useSessionRetainInfo: unusedHook, usePanelInfo: unusedHook,
   useWorkspaces: unusedHook, useResource: unusedHook,
+  ...allowAllAccess,
 }
 
 it('stays absent for ordinary closes and offers a retry only after cleanup fails', () => {

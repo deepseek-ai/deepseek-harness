@@ -1,0 +1,66 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-native-result",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { Buffer } = await import('node:buffer');\\nconst app = await tools.cua({ method: 'getApp', params: { selector: 'test.fixture' } });\\nconst state = await tools.cua({ method: 'getState', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst shot = await tools.cua({ method: 'screenshot', params: { appHandle: app.appHandle, windowId: 7 } });\\nconst bytes = Buffer.from(shot.data, 'base64');\\nreturn { appHandle: app.appHandle, hasIncrement: state.tree.includes('Increment'), pngBytes: bytes.length, signature: bytes.subarray(0, 8).toString('hex'), imageWidth: shot.attachment.width, imageHeight: shot.attachment.height };\",\"description\":\"Read native CUA values and receive one screenshot\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "Received native CUA values and one PNG screenshot through PTC. The PNG is 90 bytes with signature 89504e470d0a1a0a."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

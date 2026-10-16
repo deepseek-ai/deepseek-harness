@@ -38,7 +38,10 @@ describe('experimental Inspector Host plugin', () => {
     const registerUpgrade = vi.fn<(_route: WebUpgradeRoute) => () => void>(() => releaseUpgrade)
     const routes: Pick<WebServer, 'register' | 'registerUpgrade'> = { register: registerRoute, registerUpgrade }
     let authenticated = false
-    const auth: Pick<BrowserAuth, 'isAuthenticated'> = { isAuthenticated: () => authenticated }
+    const auth: Pick<BrowserAuth, 'isAuthenticated' | 'authenticateApi'> = {
+      isAuthenticated: () => authenticated,
+      authenticateApi: () => undefined,
+    }
     context.provide('webServer', routes as WebServer)
     const connection = new HostConnectionService(context, [], auth as BrowserAuth)
     const fiber = context.plugin(
@@ -79,7 +82,7 @@ describe('experimental Inspector Host plugin', () => {
 
     const value = bootstrap?.kind === 'global' ? bootstrap.value : undefined
     const api = connection.createSharedFetchHandler('/api')
-    const fetched = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`))
+    const fetched = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)
     expect(fetched.headers.get('cache-control')).toBe('no-store')
     expect(await fetched.json()).toEqual(value)
     expect(open).not.toHaveBeenCalled()
@@ -115,7 +118,7 @@ describe('experimental Inspector Host plugin', () => {
     const afterDispose: IndexInjection[] = []
     context.emit('webserver/index-inject', afterDispose)
     expect(afterDispose).toEqual([])
-    expect((await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`))).status).toBe(404)
+    expect((await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)).status).toBe(404)
   })
 
   it('closes the started Worker when a later plugin registration fails', async () => {
@@ -155,7 +158,7 @@ describe('experimental Inspector Host plugin', () => {
       app: { name: 'chrome' }, wait: false,
     })
     const api = connection.createSharedFetchHandler('/api')
-    const response = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`))
+    const response = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)
     expect(response.status).toBe(200)
     expect(await response.json()).toHaveProperty('endpoint', expect.stringContaining('/ingest'))
   })

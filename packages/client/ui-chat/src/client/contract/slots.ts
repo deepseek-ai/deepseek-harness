@@ -17,6 +17,8 @@ import type {
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { MarkdownFileMentions, MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+// Type-only: the Session-scope access Hook (`useAccess`) the Chat entries read.
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { createChatStore } from '../stores.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
 import type { FlowMotionRows } from '../chat/flow-motion.ts'

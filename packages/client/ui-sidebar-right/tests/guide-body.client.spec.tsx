@@ -19,7 +19,7 @@ import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 import { GuideBody } from '../src/client/tabs/guide/GuideBody.tsx'
 import type { GuideBodyProps } from '../src/client/tabs/guide/GuideBody.tsx'
 import type { SidebarRightGuideBox } from '../src/client/tab-registry.ts'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import css from '../src/client/tabs/guide/GuideBody.module.css'
 
 afterEach(cleanup)
@@ -31,6 +31,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useInput: unused, useChat: unused, useTrajectory: unused,
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
+  ...allowAllAccess,
   inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }

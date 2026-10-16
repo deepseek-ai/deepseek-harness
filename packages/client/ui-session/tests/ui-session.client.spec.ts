@@ -715,25 +715,49 @@ describe('ui-session apply', () => {
     const slots = {
       provideRoot: vi.fn(),
       installScope: vi.fn(),
+      bindStoreScope: vi.fn(),
+    }
+    const accessSources = new Map<string, HostObservable<boolean>>()
+    const remoteAccess = {
+      source: vi.fn((kind: string, id: string, action: string): HostObservable<boolean> => {
+        const key = `${kind}:${id}:${action}`
+        let source = accessSources.get(key)
+        if (source === undefined) {
+          source = createSnapshotStore(false)
+          accessSources.set(key, source)
+        }
+        return source
+      }),
     }
     ctx.provide('sessions', bench.sessions)
     ctx.provide('slots', slots as never)
+    ctx.provide('remoteAccess', remoteAccess)
 
     apply(ctx)
 
     expect(ctx.uiSession).toBeInstanceOf(UiSession)
     const retainInfoMatcher: unknown = expect.any(Function)
+    const sessionAccessMatcher: unknown = expect.any(Function)
     expect(slots.provideRoot).toHaveBeenCalledWith({
       hooks: {
         sessions: bench.sessions.list,
         sessionStatus: ctx.uiSession.sessionStatus,
       },
-      keyedHooks: { sessionRetainInfo: retainInfoMatcher },
+      keyedHooks: { sessionRetainInfo: retainInfoMatcher, sessionAccess: sessionAccessMatcher },
     })
     expect(slots.installScope).toHaveBeenCalledWith('session', ctx.uiSession.adapter)
     const root = slots.provideRoot.mock.calls[0]![0] as RootStandardSourceContribution
     expect(root.keyedHooks?.sessionRetainInfo?.(sessionId('s1')))
       .toBe(bench.retainInfo(sessionId('s1')))
+    // `useSessionAccess(sessionId, action)` reads the Session resource's answer; a call without an action names no source.
+    expect(root.keyedHooks?.sessionAccess?.(sessionId('s1'), 'session/fork'))
+      .toBe(remoteAccess.source('session', sessionId('s1'), 'session/fork'))
+    expect(root.keyedHooks?.sessionAccess?.(sessionId('s1'))).toBeUndefined()
+
+    // The Session scope's `useAccess(action)` reads the bound Session's answer from the same source.
+    const binding = bench.binding(sessionId('s2'))
+    const scoped = ctx.uiSession.bindingSource(bench.reference(binding)).getSnapshot()
+    expect(scoped.keyedHooks.access?.('session/fork')).toBe(remoteAccess.source('session', sessionId('s2'), 'session/fork'))
   })
 
   it('keeps the Host loader half inert', () => {

@@ -55,6 +55,7 @@ const KIND_TEMPLATES: Readonly<Record<string, string>> = {
  * library; the check re-derives the entry shape so a stale entry fails loud.
  */
 const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
+  'packages/experimental/cua': 'Shared CUA objects and installer consumed by platform providers; no plugin entry.',
   'packages/experimental/browser-use-runtime': 'Provider-owned browser resource management and MCP integration helpers; no plugin entry.',
   'packages/boot/app-boot': 'Boot library the app bins import; plain helper exports.',
   'packages/boot/cmdline': 'Command-line library the app bins import; plain module exports.',
@@ -99,6 +100,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/util/native-command': 'Host-side subprocess runner utility.',
   'packages/util/output-retention': 'Zero-dependency retention utility.',
   'packages/util/package-manifest': 'Shared package manifest declarations with type-only exports.',
+  'packages/util/plugin-market-index': 'Plugin market index validation library.',
   'packages/util/time': 'Zero-dependency time-zone canonicalization utility.',
   'packages/util/timeout': 'Zero-dependency timeout utility.',
   'packages/util/values': 'Stateless lossless-JSON and immutable-value helpers.',

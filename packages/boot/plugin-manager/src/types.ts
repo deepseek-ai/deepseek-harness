@@ -8,22 +8,31 @@ import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types
 /** Reasons a profile control cannot modify its target. */
 export type ReadOnlyReason = 'management-required' | 'unaddressable'
 
-/** A package whose declared DSH peers reject the running DSH version, without an exemption for the exact pair. */
+/** A package whose declared DSH requirements reject the running DSH version, without an exemption for the exact pair. */
 export interface IncompatiblePlugin {
   name: string
   version: string
   runtimeVersion: string
-  /** Only the DSH peer ranges the running version does not satisfy. */
-  peers: Record<string, string>
+  /** Only the requirements the running version does not satisfy, keyed `engines.dsh` or by DSH peer package name. */
+  requirements: Record<string, string>
 }
 
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
 }
+
+/**
+ * Why a change waits for the next start: `no-hmr` profiles apply changes only at startup; `package-moved` changes map an
+ * installed package to another directory without removing it first, or change or locally override a package the DSH
+ * installation provides; `host-module` changes reach
+ * modules the running process itself imports; `unmanaged-plugin` changes reach a plugin running outside a Loader entry;
+ * `module-comparison` means loaded modules could not be compared with disk.
+ */
+export type RestartReason = 'no-hmr' | 'package-moved' | 'host-module' | 'unmanaged-plugin' | 'module-comparison'
 
 /** One running-profile entry and its persistent control availability. */
 export type PluginInfo = PluginInventoryEntry & (
@@ -123,6 +132,8 @@ export interface ChangeResult {
   changed: boolean
   /** `cancelled` is an installation the caller stopped, its files restored. */
   application: 'applied' | 'restart-required' | 'overridden' | 'failed' | 'cancelled'
+  /** Present with `restart-required`: why the change takes effect only at the next start. */
+  restartReason?: RestartReason
   /** Last attempted step; successful installation can proceed to enablement. */
   stage: 'install' | 'enable' | 'remove'
   target: string

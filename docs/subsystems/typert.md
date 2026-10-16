@@ -200,13 +200,37 @@ interface RemoteStreamHandle<Out, In> extends AsyncIterable<Out> {
 
 ```ts type-equiv
 /**
- * One Peer's session on this Host. Connection owns it: `ctx` is the Cordis
+ * Merge-extensible caller identities. Each driver declares its own entry.
+ * Every entry is a JSON value with a unique literal `kind`, carries no
+ * credential, and is safe to persist in a Session log.
+ */
+interface PrincipalMap {
+  /** The local user who owns this Host. */
+  owner: { readonly kind: 'owner' }
+}
+```
+
+```ts type-equiv
+/** One caller identity; the authorization layer reads only this. */
+type Principal = PrincipalMap[keyof PrincipalMap]
+```
+
+```ts type-equiv
+/**
+ * One Peer's session on this Host. Its creator owns it: `ctx` is the Cordis
  * scope that owns connection-lifetime registrations and is disposed with the
- * Peer. Who the Peer is and what it may do are not recorded here.
+ * Peer, and `principal` is the caller identity fixed when the Peer was created.
  */
 interface PeerScope {
   readonly id: PeerId
+  /** Connection-lifetime registrations; disposed with the Peer. */
   readonly ctx: Context
+  /** Caller identity fixed at creation by in-process Host code; no wire field can set it. */
+  readonly principal: Principal
+  /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
+  readonly signal: AbortSignal
+  /** Whether the Peer may open a forwarded-event stream; this does not grant business permissions. */
+  readonly interactions: 'answer' | 'none'
   /**
    * Tear down every registration made through `ctx`.
    * @returns settles once the scope has quiesced; racing calls share one completion.
@@ -239,7 +263,7 @@ interface RemoteInvocation {
   }
   /** Cordis service key of the receiving Service. */
   readonly service: string
-  /** Peer the call speaks for; an in-process carrier speaks for the operator. */
+  /** Peer the call speaks for; every carrier names it explicitly. */
   readonly peer: PeerScope
   /** Carrier cancellation: Client cancel, socket close, or an uplink failure. */
   readonly signal: AbortSignal
@@ -260,9 +284,81 @@ interface RemoteInvocation {
 }
 ```
 
+## Remote access resources
+
+Every Remote method is under the access control of [`dsh-api-remote-access`](../../packages/api/remote-access/README.md): a non-owner call is allowed only when the policy for its principal kind binds, on every resource the call touches, a role that lists the endpoint action. The package that owns an identity type merge-declares its resource kind in `TypertResourceMap`; `global`, the built-in identity-less resource, is never a kind there. The Gateway reads a kind's identities from the `resources` readers of `@Remote({ resources })` or `@RemoteScope(key, { resources })`, else from a lookup parameter or scoped Context that declares the kind as its `resource`, else from the default field registered in `typert.resources`; a call that names no resource touches `global`. The [Peer principals Agent Note](../../.agents/notes/implemented/architecture/2026-10-12-peer-principal-and-remote-access.md) owns the decision.
+
+```ts type-equiv
+/**
+ * Merge-extensible resource kinds whose identities a Remote call or forwarded
+ * event may carry. The package that owns an identity type declares its kind;
+ * the value is that kind's identity type, a string type such as a branded id.
+ * `global` names the built-in identity-less resource and is never a kind here.
+ */
+interface TypertResourceMap {}
+```
+
+```ts type-equiv
+/** One resource kind: the built-in `global` kind or a declared kind. */
+type RemoteAccessResourceKind = 'global' | TypertResourceKind
+```
+
+```ts type-equiv
+/**
+ * One resource a call or forwarded event touches: `global`, or one identity
+ * of a declared kind. Identities are wire values, read before any lookup
+ * resolves or validates them.
+ */
+type RemoteAccessResource =
+  | { readonly kind: 'global' }
+  | {
+    [Kind in TypertResourceKind]: { readonly kind: Kind; readonly id: TypertResourceId<TypertResourceMap[Kind]> }
+  }[TypertResourceKind]
+```
+
+```ts type-equiv
+/**
+ * Explicit endpoint and resource choices for one Remote Scope method.
+ * @template WireArgs - the decorated method's positional parameters as the
+ *   wire carries them; the default `never` admits readers of any tuple.
+ */
+interface RemoteScopeOptions<WireArgs extends readonly unknown[] = never> {
+  /** Exported endpoint method; omission retains the implementation member name. */
+  readonly name?: string
+  /**
+   * Per-kind readers of the resources one call touches. Each receives the
+   * method's arguments as its own parameters, JSON arguments as their Typert
+   * codecs validated them, a lookup parameter as its wire identity and a
+   * cancellation parameter as the call's signal, so it performs plain reads
+   * only, and returns one identity, several, or `undefined` for none. A
+   * throw, an empty list, or an identity other than a non-empty string
+   * refuses the call. For a kind without a reader, the Gateway reads the
+   * identity of a scoped Context whose Host adapter declares that `resource`
+   * and of lookup parameters declaring it, else the field registered in
+   * `typert.resources`: a top-level argument or, failing that, the first
+   * object argument. A call that carries no identity touches `global`. The
+   * readers and these defaults together must name every resource the method
+   * accesses: access control never checks a resource they omit.
+   */
+  readonly resources?: TypertResourceReaders<WireArgs>
+}
+```
+
+```ts type-equiv
+/**
+ * Explicit endpoint, stream, and resource choices for one direct Remote method.
+ * @template WireArgs - the decorated method's positional parameters as the
+ *   wire carries them; the default `never` admits readers of any tuple.
+ */
+interface RemoteMethodOptions<WireArgs extends readonly unknown[] = never> extends RemoteScopeOptions<WireArgs> {
+  /** `stream`: deliver each Iterable item over the shared logical-stream carrier. */
+  readonly mode?: 'stream'
+}
+```
+
 ## Typert registry
 
-`ctx.typert` separates current-environment descriptors, explicitly selected Remote contributions, lookup providers, and scoped Context providers. A lookup provider owns the stable wire declaration and default resolver; Host composition can configure an effect-scoped synchronous or asynchronous resolver for the same key, and unloading that configuration restores the default policy. Registrations are Cordis-owned effects and return awaitable disposers.
+`ctx.typert` separates current-environment descriptors, explicitly selected Remote contributions, lookup providers, scoped Context providers, and the default fields of resource kinds. A lookup provider owns the stable wire declaration and default resolver; Host composition can configure an effect-scoped synchronous or asynchronous resolver for the same key, and unloading that configuration restores the default policy. Registrations are Cordis-owned effects and return awaitable disposers.
 
 ```ts type-equiv
 /** Minimal Typert runtime consumed through dependency inversion. */
@@ -271,6 +367,7 @@ interface TypertRegistryContract {
   readonly remotes: TypertRemoteRegistry
   readonly lookups: TypertLookupRegistry
   readonly contexts: TypertContextRegistry
+  readonly resources: TypertResourceRegistry
 }
 ```
 
@@ -283,7 +380,7 @@ interface TypertRemoteNamespaceMap {}
 
 ## Host Gateway
 
-Connection decodes its carrier envelope before calling `ctx.typertGateway`. The request carries exact named wire fields and the carrier's cancellation signal separately; infrastructure and boundary failures ride `TypertGatewayError`, whose `gateway/*` codes are ordinary `RemoteError` codes, so the RPC adapter passes every structurally identified `RemoteError` through with its code and details intact and folds only unrecognized exceptions into `gateway/internal`.
+Connection decodes its carrier envelope before calling `ctx.typertGateway`. The request carries exact named wire fields, the carrier's cancellation signal, and the Peer the call speaks for separately; every carrier and in-process caller names that Peer, and the Gateway refuses a disposed one with `gateway/peer-disposed`. For a non-owner call the Gateway resolves its resources and asks `ctx.remoteAccess.decide()` after argument validation and before any lookup or Context resolution; infrastructure and boundary failures ride `TypertGatewayError`, whose `gateway/*` codes are ordinary `RemoteError` codes, so the RPC adapter passes every structurally identified `RemoteError` through with its code and details intact and folds only unrecognized exceptions into `gateway/internal`.
 
 ```ts type-equiv
 /** One Remote method request after a carrier has decoded its envelope. */
@@ -301,8 +398,8 @@ interface InvokeRemoteRequest {
   readonly uplink?: AsyncIterable<unknown>
   /** Carrier-provided frame capacity; absent for carriers without an encoded-frame inbox limit. */
   readonly uplinkWindow?: RemoteUplinkWindow | undefined
-  /** Peer the call speaks for; absent means an in-process carrier, answered as the operator. */
-  readonly peer?: PeerScope
+  /** Peer the call speaks for; every carrier and in-process caller names it explicitly. */
+  readonly peer: PeerScope
   /** Carrier or direct-caller cancellation injected only into cancellation-aware methods. */
   readonly signal?: AbortSignal
 }
@@ -319,11 +416,13 @@ type TypertGatewayErrorCode =
   | 'gateway/context-unavailable'
   | 'gateway/definition-unavailable'
   | 'gateway/input-invalid'
+  | 'gateway/interactions-forbidden'
   | 'gateway/invocation-unavailable'
   | 'gateway/lookup-failed'
   | 'gateway/lookup-not-found'
   | 'gateway/lookup-unavailable'
   | 'gateway/method-unavailable'
+  | 'gateway/peer-disposed'
   | 'gateway/protocol'
   | 'gateway/provider-mismatch'
   | 'gateway/result-invalid'
@@ -338,8 +437,8 @@ interface TypertGateway {
   /** Carrier adapter shared by WebSocket and in-process transports. */
   readonly wireStream: TypertGatewayWireStream
   /**
-   * Check for an active Client event stream.
-   * @returns whether a stream is open and has not been cancelled.
+   * Check for an active owner Client event stream, the only kind that can answer forwarded waterfalls.
+   * @returns whether an owner stream is open and has not been cancelled.
    */
   hasLiveClient(): boolean
   /**
@@ -403,6 +502,88 @@ interface TypertClientRemote extends TypertRemoteNamespaceMap {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxremoteaccess--remoteaccessservice"></a>
+
+### `ctx.remoteAccess` — `RemoteAccessService`
+
+Registry of access policies, the Gateway's access decisions, list filtering, and the per-Peer access snapshot. Every composition that mounts the Gateway mounts this service too.
+
+```ts cordis-catalog
+/**
+ * Register the policy of one non-owner principal kind in the caller's
+ * fiber; open snapshots are recomputed on registration and removal.
+ * @param kind - the principal kind the policy serves; never `owner`.
+ * @param policy - business-owned bindings and refusal reasons for principals of `kind`.
+ * @returns disposer removing this policy.
+ * @throws Error when `kind` already has a policy.
+ */
+registerPolicy<K extends Exclude<keyof PrincipalMap, 'owner'>>(kind: K, policy: RemoteAccessPolicy<PrincipalMap[K]>): () => void
+
+/**
+ * Report that the bindings or condition answers for `principal` may have
+ * changed. Business packages call this on every grant, revocation, mode
+ * change, and expiry; open snapshots re-push, and the next failure of each
+ * policy is logged again.
+ * @param principal - affected principal; omitted for every principal.
+ */
+invalidate(principal?: Principal): void
+
+/**
+ * Gateway-only: decide one request whose resources the Gateway resolved.
+ * The owner is allowed, and so is `remoteAccess/follow`: every Peer reads
+ * its own snapshot. Otherwise the action is allowed only when, on every
+ * listed resource, some binding of the principal's policy names that
+ * resource, has a role listing the action, and has no condition or a
+ * condition that allows. `bindings()` is called once per decision.
+ * @param request - the caller or recipient, the action, the resources it
+ *   touches, and a call's arguments.
+ * @returns `allow`; or `deny` with `no-allow` when the principal kind has
+ *   no policy, the first refusing condition's reason on the first resource
+ *   no binding allows, else `explain()`'s reason, else `no-allow`;
+ *   `policy-failed` when `bindings()`, a condition, or `explain()` throws,
+ *   logged once per policy until the next `invalidate()`. The Gateway
+ *   throws `remote-access/denied` for a denied call and drops a denied event.
+ */
+decide(request: RemoteAccessRequest<Principal>): RemoteAccessDecision
+
+/**
+ * Filter items inside a Remote method. The invocation is read from the
+ * Context that accessed this service, so call it as
+ * `this.ctx.remoteAccess.allows(resource)` from the Remote method. Each
+ * check reads the policy's bindings again, so a long-running stream sees
+ * binding changes from the next check on.
+ * @param resource - resource of one result item.
+ * @returns true for the owner and outside a Remote call; otherwise whether
+ *   the invocation's endpoint action is allowed on `resource` without call
+ *   arguments, false when the policy is absent or fails.
+ */
+allows(resource: RemoteAccessResource): boolean
+
+/**
+ * The baseline a page opens with before its snapshot stream connects. A
+ * business package rendering a non-owner page assigns this value to
+ * {@link REMOTE_ACCESS_SNAPSHOT_KEY} after every index injection row,
+ * replacing the owner baseline the webServer index carries.
+ * @param principal - the page's caller identity.
+ * @returns the owner baseline for the owner; otherwise the principal's current grants.
+ */
+snapshotFor(principal: Principal): RemoteAccessBaseline
+
+/**
+ * Stream the calling Peer's access snapshot: one baseline, then `upsert`
+ * and `remove` frames after each `invalidate()` and each policy
+ * registration or removal that changes a grant. The owner receives only
+ * `{ owner: true }`. The generation ends when `signal` aborts or this
+ * service unloads, so a reloaded service starts every reader from a fresh
+ * baseline.
+ * @param signal - generation cancellation.
+ * @returns the access frames of one generation.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<RemoteAccessFrame>
+```
+
+Source: [`packages/api/remote-access/src/index.ts`](../../packages/api/remote-access/src/index.ts)
 
 <a id="ctxtypert--typertregistry"></a>
 
@@ -476,8 +657,8 @@ Resolve strict generated definitions or conservative SRC markers against current
 
 ```ts cordis-catalog
 /**
- * Check for an active Client event stream.
- * @returns whether a stream is open and has not been cancelled.
+ * Check for an active owner Client event stream, the only kind that can answer forwarded waterfalls.
+ * @returns whether an owner stream is open and has not been cancelled.
  */
 hasLiveClient(): boolean
 

@@ -1,7 +1,7 @@
 /** Generic unary RPC contracts shared by the Host and Client Connection halves. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import type { PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Correlation id minted by a caller and echoed by the Connection response. */
 export type RpcId = Branded<'rpc-id'>
@@ -115,14 +115,23 @@ export interface ConnectionIndexResponse {
   end(body?: string): unknown
 }
 
-/** Outcome of admitting one request: the operator Peer it speaks for, or the status refusing it. */
+/** Outcome of admitting one request: the Peer it speaks for, or the status refusing it. */
 export type PeerAdmission =
   | { readonly peer: PeerScope }
   | { readonly rejection: 401 | 403 }
 
+/** Socket admission claims API ownership until its carrier calls release, including failed upgrades. */
+export type ConnectionAdmission =
+  | {
+    readonly peer: PeerScope
+    /** Remove and dispose an API Peer; browser releases leave the shared browser Peer intact. */
+    readonly release: () => Promise<void>
+  }
+  | { readonly rejection: 401 | 403 | 409 }
+
 /**
  * Handler invoked after Connection has decoded the transport envelope.
- * `peer` is the Peer the request was admitted as: the operator.
+ * `peer` is the Peer the carrier admitted or the in-process caller supplied.
  */
 export type ConnectionRpcHandler = (
   endpoint: string,
@@ -148,7 +157,11 @@ export interface ConnectionFetchRoute {
   readonly methods: readonly ConnectionFetchMethod[]
   /** Buffered requests obey the configured JSON cap; streaming requests arrive with backpressure and no aggregate cap. */
   readonly requestBody: ConnectionRequestBodyMode
-  /** Handle one request after the physical carrier has applied its trust and authentication policy. */
+  /**
+   * Handle one request after the physical carrier has applied its trust and
+   * authentication policy. Only owner Peers reach an exact route; the shared
+   * handler answers 403 for every other principal.
+   */
   readonly fetch: (request: Request) => Promise<Response>
 }
 
@@ -195,8 +208,8 @@ export interface HostConnectionHandle {
   readonly rpc: HostConnectionRpc
   /** Exact Fetch routes for streaming or browser-native responses. */
   readonly fetch: HostConnectionFetch
-  /** The operator Peer every admitted request speaks for; its scope lives as long as Connection. */
-  readonly operator: PeerScope
+  /** The owner Peer every authenticated browser connection shares. */
+  readonly browserPeer: PeerScope
 
   /**
    * Whether this deployment accepts authorities beyond loopback: true only
@@ -220,12 +233,27 @@ export interface HostConnectionHandle {
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
 
   /**
-   * Admit one request: it passes {@link requestRejection} and speaks for the
-   * operator, or it is refused with that status.
+   * Admit an HTTP request against its signed browser or API credential and live Peer.
    * @param request - request headers from the HTTP or upgrade request.
-   * @returns the operator Peer, or the rejection status.
+   * @returns the credential's Peer, or the rejection status.
    */
   admit(request: ConnectionTrustRequest): PeerAdmission
+
+  /**
+   * Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.
+   * @param options - fixed principal and optional interaction participation (default `answer`).
+   * @returns a new Peer distinct from every other Peer.
+   */
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
+
+  /**
+   * Claim a physical socket for an API Peer; browser sockets share their owner Peer.
+   * @param request - authenticated upgrade request headers.
+   * @returns the Peer and idempotent release, or 409 for duplicate API ownership.
+   * The carrier releases on socket termination or failed upgrade; release removes
+   * API admission synchronously without cancelling independent HTTP calls.
+   */
+  admitConnection(request: ConnectionTrustRequest): ConnectionAdmission
 
   /**
    * Authenticate one frontend index request, owning a token redirect or 401.
@@ -257,9 +285,10 @@ export interface ConnectionFetchHandler {
   /**
    * Dispatch one already-authenticated request.
    * @param request - Fetch request below the shared channel.
-   * @returns the registered response or a 404 response.
+   * @param peer - Peer to dispatch as; required, never defaulted.
+   * @returns the registered response, a 403 response for an exact route and a non-owner Peer, or a 404 response.
    */
-  fetch(request: Request): Promise<Response>
+  fetch(request: Request, peer: PeerScope): Promise<Response>
 }
 
 /** Client caller for logical RPC channels carried by the current transport. */

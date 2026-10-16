@@ -1409,36 +1409,27 @@ class FaceAnalyzer {
           }
           marker = { kind: 'direct', exportName }
         } else {
-          if (!ts.isObjectLiteralExpression(argument) || argument.properties.length === 0) {
-            this.fail(argument, 'Remote() options require name or mode: "stream"')
-          }
-          marker = { kind: 'direct' }
-          for (const property of argument.properties) {
-            if (!ts.isPropertyAssignment(property)) this.fail(property, 'Remote() options must use named values')
-            const name = memberName(property.name)
-            if (name === 'mode' && stringLiteralValue(property.initializer) === 'stream') marker = { ...marker, mode: 'stream' }
-            else if (name === 'name') {
-              const value = stringLiteralValue(property.initializer)
-              if (value === undefined || !isRemoteSegment(value)) this.fail(property, 'Remote() name must be an endpoint segment')
-              marker = { ...marker, exportName: value }
-            } else this.fail(property, 'Remote() options require name or mode: "stream"')
-          }
+          marker = { kind: 'direct', ...this.remoteOptions(argument, 'Remote') }
         }
       } else if (ts.isCallExpression(expression)
         && this.isTypeMetaSymbol(expression.expression, 'RemoteScope')) {
         if (expression.arguments.length < 1 || expression.arguments.length > 2) {
-          this.fail(expression, 'RemoteScope() requires a Context key and optional exported method name')
+          this.fail(expression, 'RemoteScope() requires a Context key and an optional exported method name or options object')
         }
         const context = stringLiteralValue(expression.arguments[0])
         if (context === undefined || !isRemoteSegment(context)) {
           this.fail(expression.arguments[0] ?? expression, 'RemoteScope() key must be a string literal containing only RPC endpoint segment characters')
         }
-        const exportArgument = expression.arguments[1]
-        const exportName = exportArgument === undefined ? undefined : stringLiteralValue(exportArgument)
-        if (exportArgument !== undefined && (exportName === undefined || !isRemoteSegment(exportName))) {
-          this.fail(exportArgument, 'RemoteScope() name must be a string literal containing only RPC endpoint segment characters')
+        const option = expression.arguments[1]
+        const exportName = option === undefined ? undefined : stringLiteralValue(option)
+        if (option === undefined || exportName !== undefined) {
+          if (exportName !== undefined && !isRemoteSegment(exportName)) {
+            this.fail(option ?? expression, 'RemoteScope() name must be a string literal containing only RPC endpoint segment characters')
+          }
+          marker = { kind: 'context', context, ...exportName === undefined ? {} : { exportName } }
+        } else {
+          marker = { kind: 'context', context, ...this.remoteOptions(option, 'RemoteScope') }
         }
-        marker = { kind: 'context', context, ...exportName === undefined ? {} : { exportName } }
       } else {
         continue
       }
@@ -1446,6 +1437,37 @@ class FaceAnalyzer {
       found = marker
     }
     return found
+  }
+
+  /**
+   * Read the options object of `@Remote` or `@RemoteScope`. `resources`
+   * accepts any expression: its readers run only at runtime, where the
+   * Gateway reads them from the prototype descriptor, so generation records
+   * nothing for them.
+   */
+  private remoteOptions(
+    argument: ts.Expression,
+    decorator: 'Remote' | 'RemoteScope',
+  ): { readonly exportName?: string; readonly mode?: 'stream' } {
+    const requirement = decorator === 'Remote'
+      ? 'Remote() options require name, mode: "stream", or resources'
+      : 'RemoteScope() options require name or resources'
+    if (!ts.isObjectLiteralExpression(argument) || argument.properties.length === 0) this.fail(argument, requirement)
+    let options: { readonly exportName?: string; readonly mode?: 'stream' } = {}
+    for (const property of argument.properties) {
+      if (!ts.isPropertyAssignment(property)) this.fail(property, `${decorator}() options must use named values`)
+      const name = memberName(property.name)
+      if (decorator === 'Remote' && name === 'mode' && stringLiteralValue(property.initializer) === 'stream') {
+        options = { ...options, mode: 'stream' }
+      } else if (name === 'name') {
+        const value = stringLiteralValue(property.initializer)
+        if (value === undefined || !isRemoteSegment(value)) this.fail(property, `${decorator}() name must be an endpoint segment`)
+        options = { ...options, exportName: value }
+      } else if (name !== 'resources') {
+        this.fail(property, requirement)
+      }
+    }
+    return options
   }
 
   /**

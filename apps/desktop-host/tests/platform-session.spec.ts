@@ -11,6 +11,7 @@ const state: AccountView = {
 class Account extends DeepSeekAccount {
   getDeviceIdentity = async () => ({ osVersion: 'test-os' })
   fail = false
+  identityChangesRequested = false
   ended = Promise.withResolvers<undefined>()
   reading = Promise.withResolvers<undefined>()
   finished = Promise.withResolvers<undefined>()
@@ -26,7 +27,8 @@ class Account extends DeepSeekAccount {
   override async rejectToken() {}
   override async resolveToken() { return undefined }
   override async getPlatformSession() { this.reading.resolve(undefined); return this.read() }
-  override async *watch(signal: AbortSignal) {
+  override async *watch(signal: AbortSignal, includeIdentityChanges = false) {
+    this.identityChangesRequested = includeIdentityChanges
     const abort = () => { this.ended.resolve(undefined) }
     signal.addEventListener('abort', abort, { once: true })
     try {
@@ -48,6 +50,9 @@ it('clears removed credentials and publishes the replacement provider session', 
   try {
     const first = await ctx.plugin(Account)
     await delivered.promise
+    expect(ctx.deepseekAccount).toBeInstanceOf(Account)
+    if (!(ctx.deepseekAccount instanceof Account)) throw new Error('missing account fixture')
+    expect(ctx.deepseekAccount.identityChangesRequested).toBe(true)
     expect(sessions.at(-1)?.token).toBe('test')
     await first.dispose()
     expect(sessions.at(-1)).toBeNull()

@@ -18,6 +18,45 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
 
+## Market records
+
+[Plugin Market](../../packages/boot/plugin-market/README.md) reads index format 1, validated by [`dsh-plugin-market-index`](../../packages/util/plugin-market-index/README.md).
+
+`MarketIndexSummary` carries one configured index URL with the `title` and `description` of its last successful read and, when the last read failed, its `error`.
+
+`MarketQuery` selects one page of an index: fuzzy `text`, a `category`, `labels` that must all be present, a `MarketSort`, `offset`, `limit` up to 100, `refresh` to fetch again instead of using a cached document, and `fetchedAt` to continue the pages of one document. `MarketSearchResult` carries the index URL, `title`, optional `description`, market `metadata`, the document's `fetchedAt`, the page's `entries`, the `total` number of matches, and the `nextOffset`. Each `MarketListingEntry` adds `defaultVersion`, the version installed by default, and `installation`, the profile's status for the package name; each of its `versions` adds `install`, the exact spec and optional first registry for `installBundle`, and `compatibility`, the evaluation of its `engines.dsh` including a version exemption.
+
+## Profile reconciliation
+
+<a id="profile-reconciliation"></a>
+
+```ts type-equiv
+/** Outcome of {@link Hmr.reconcileProfile}. */
+interface ProfileReconciliation {
+  /** Diagnostics for Loader entries left inactive. */
+  warnings: string[]
+  /** Loaded modules whose files changed on disk and whose previous code keeps running until a restart. */
+  pending: PendingModule[]
+  /**
+   * Why every change waits for a restart: `module-comparison` when module caches cannot be inspected or their files
+   * compared, even when no URLs are known; `package-moved` when the runtime resolution cannot publish a moved package.
+   */
+  restartReason?: 'module-comparison' | 'package-moved'
+}
+```
+
+```ts type-equiv
+/** A changed module that loads only after a restart. */
+interface PendingModule {
+  url: string
+  /**
+   * `host-module`: the process entry point's static graph imports it. `unmanaged-plugin`: it is imported by a plugin
+   * that runs outside a traversable Loader entry. `module-comparison`: loaded modules could not be compared with disk.
+   */
+  reason: 'host-module' | 'unmanaged-plugin' | 'module-comparison'
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -78,6 +117,21 @@ async watchConfig(filename: string, refresh: () => Promise<void>): Promise<() =>
  * @returns Linked module URLs, or an empty list for an uncached module.
  */
 async getLinked(url: string): Promise<string[]>
+
+/**
+ * Recompose the profile from its manifest and patch files, replacing running plugins whose loaded files below the
+ * profile directory or its linked package targets changed on disk, and publishing its runtime resolution. Changed
+ * modules are evicted and the Loader entries running them stop; app-boot's {@link recomposeProfile} then publishes the
+ * resolution, applies the generation, starts the stopped entries with the current files and configuration,
+ * imports entries whose import failed again, and judges activation. Afterwards the modules below the mappings the
+ * recomposition dropped are evicted, so a removed or deselected package is imported afresh when it returns. Callers run
+ * inside {@link runExclusive}.
+ * @param requiredIds Entry ids whose inactive state is reported as a failure even when it predates this call.
+ * @returns Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.
+ * @throws The patch read, publication, preparation, apply, or activation failure of the recomposition, including a
+ * replacement plugin that fails to load or start, whose previous code no longer runs.
+ */
+async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation>
 ```
 
 Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
@@ -179,6 +233,56 @@ Manage profile files and apply their declared reload lifecycle.
 ```
 
 Source: [`packages/boot/plugin-manager/src/index.ts`](../../packages/boot/plugin-manager/src/index.ts)
+
+<a id="ctxpluginmarket--pluginmarket"></a>
+
+### `ctx.pluginMarket` — `PluginMarket`
+
+Fetches, validates, and caches configured market indexes; annotates entries with the profile's installation facts.
+
+```ts cordis-catalog
+/**
+ * List the configured index sources without fetching them.
+ * @returns every source in order, with the title of its last successful read and, when the last read failed, its error.
+ */
+@Remote listIndexes(): MarketIndexSummary[]
+
+/**
+ * Replace the configured index sources through Settings, without remounting this service.
+ * `plugin-market/changed` announces the committed list. A URL already configured is kept as written, so a client can
+ * add or remove sources beside one that `listIndexes` reports as unusable.
+ * @param urls - index URLs in display order.
+ * @throws {RemoteError} `plugin-market/invalid-index-url` for an invalid new URL or a repeated URL;
+ * `plugin-market/settings-unavailable` without Settings or a profile entry.
+ */
+@Remote async setIndexes(urls: string[]): Promise<void>
+
+/**
+ * Return one page of the plugins of a configured index that match a query. Concurrent reads of a URL share one
+ * fetch; a successful document is reused for `cacheTtlMs` unless `refresh` is set. Matching and ordering read only
+ * the document; installation status and compatibility are computed for the returned page on every call.
+ * @param url - a configured index URL.
+ * @param query - text, filters, order, page, and whether to bypass the cached document.
+ * @returns the index header, the page's plugins with each plugin's default version and installation status and each
+ *   version's compatibility and install arguments, the number of matches, and the next page's offset.
+ * @throws {RemoteError} `plugin-market/invalid-query`, `plugin-market/unknown-index`, `plugin-market/invalid-index-url`,
+ *   `plugin-market/fetch-failed`, or `plugin-market/invalid-index`.
+ */
+@Remote async search(url: string, query: MarketQuery): Promise<MarketSearchResult>
+
+/**
+ * Read one plugin of a configured index, using the cached document as `search` does.
+ * @param url - a configured index URL.
+ * @param name - the plugin's package name.
+ * @returns the plugin with its default version, installation status, and annotated versions; undefined when the
+ *   index does not list it.
+ * @throws {RemoteError} `plugin-market/unknown-index`, `plugin-market/invalid-index-url`, `plugin-market/fetch-failed`,
+ *   or `plugin-market/invalid-index`.
+ */
+async entry(url: string, name: string): Promise<MarketListingEntry | undefined>
+```
+
+Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-market/src/index.ts)
 
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 
@@ -320,4 +424,24 @@ An installation moved between its Host phases. `installing` is announced once pe
 ```
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-market-events"></a>
+
+### `plugin-market/*` events
+
+<a id="plugin-marketchanged--emit"></a>
+
+#### `plugin-market/changed` — emit
+
+The configured index sources changed.
+
+```ts cordis-catalog
+/**
+ * The configured index sources changed.
+ * @mode emit
+ */
+'plugin-market/changed'(): void
+```
+
+Source: [`packages/boot/plugin-market/src/types.ts`](../../packages/boot/plugin-market/src/types.ts)
 <!-- END GENERATED cordis-surface -->

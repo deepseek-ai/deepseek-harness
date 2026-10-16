@@ -11,13 +11,18 @@
  * tunnel. The same page opens the seeded Workspace and showcase Session,
  * verifies its tool/subagent/history examples, then writes through the
  * settings and credentials providers. That keeps the upstream Chokidar
- * instances exercised over the Worker filesystem implementation.
+ * instances exercised over the Worker filesystem implementation. The same
+ * page then proves the boot is the served profile boot: the Plugins page lists
+ * the installation's optional bundles, enabling one applies its patch layer
+ * after the base layers, and a page chunk's lazy archive is fetched only when
+ * that chunk is requested.
  *
  * The site is served the way a static host serves it: bytes from `dist/` with
  * no rewrite rules, so a missing file is a 404 rather than the index page.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { gunzipSync } from 'node:zlib'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -25,15 +30,15 @@ import { tmpdir } from 'node:os'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import type { Browser } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { expect, it } from 'vitest'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import {
-  composeProfile, configTrees, indexWorkspacePackages, packVfsImage, packPreviewFixture,
-  previewFixtures, WRAPPER_CONTRACT,
+  packPreviewFixture, packRepositoryImage, previewFixtures, WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'
 import {
-  IMAGE_FILE_NAME, PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
-  type PreviewFixtureManifest,
+  IMAGE_FILE_NAME, IMAGE_MANIFEST_PATH, parseImageManifest, parseTar, PREVIEW_FIXTURE_MANIFEST_FILE,
+  PREVIEW_FIXTURE_MANIFEST_VERSION, type ImageManifest, type PreviewFixtureManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import {
   VFS_EXAMPLE_SESSION_IDS,
@@ -56,6 +61,18 @@ const SNAPSHOT_MODE = webSnapshotMode()
 
 /** Profile the preview deployment composes; `build:preview` packs the same one. */
 const PROFILE = 'web'
+
+/** Optional bundle whose patch layer disables a base row and inserts its replacement. */
+const SESSION_TITLES_BUNDLE = '@deepseek-ai/dsh-experimental-session-titles-bundle'
+const BASE_TITLE_MODULE = '@deepseek-ai/dsh-session-title-first-prompt-llm'
+const BUNDLE_TITLE_MODULE = '@deepseek-ai/dsh-session-title-all-prompts-llm'
+const INSPECTOR_BUNDLE = '@deepseek-ai/dsh-experimental-inspector-profile'
+const INSPECTOR_MODULE = '@deepseek-ai/dsh-experimental-inspector'
+const SESSION_INSPECTOR_MODULE = '@deepseek-ai/dsh-experimental-session-inspector'
+
+/** Package whose terminal chunk the page requests through `require.async`. */
+const TERMINAL_PACKAGE = '@deepseek-ai/dsh-client-ui-sidebar-terminal'
+const TERMINAL_CHUNK = `node_modules/${TERMINAL_PACKAGE}/lib/client.terminal.js`
 
 /** Stable labels authored by the deterministic VFS example fixture. */
 const SHOWCASE_TITLE = 'WebWorker Preview Showcase'
@@ -96,6 +113,8 @@ const HERO_TIMEOUT_MS = 240_000
 /** One served origin over `dist/`. */
 interface Site {
   readonly origin: string
+  /** Every static-host-relative path requested so far, page and Worker alike. */
+  readonly served: readonly string[]
   /** Release the port; call after the browser is gone. */
   close(): Promise<void>
 }
@@ -103,6 +122,8 @@ interface Site {
 interface PreviewAssets {
   /** Static-host-relative path to a generated file outside `dist/`. */
   readonly overrides: ReadonlyMap<string, string>
+  /** Manifest of the base image the site serves. */
+  readonly manifest: ImageManifest
   cleanup(): void
 }
 
@@ -141,19 +162,21 @@ function requireVfsAssets(): PreviewAssets {
     writeFileSync(path, bytes)
     overrides.set(relativePath, path)
   }
-  if (!existsSync(IMAGE_FILE)) {
-    const packed = packVfsImage({
-      config: composeProfile(REPO_ROOT, PROFILE),
-      profile: PROFILE,
-      workspaces: indexWorkspacePackages(REPO_ROOT),
-      resolveFrom: REPO_ROOT,
-      configTrees: configTrees(REPO_ROOT),
-    })
+  let image: Uint8Array
+  if (existsSync(IMAGE_FILE)) {
+    image = readFileSync(IMAGE_FILE)
+  } else {
+    const packed = packRepositoryImage(REPO_ROOT, PROFILE)
     if (packed.missing.length > 0) {
       throw new Error(`preview boot: ${String(packed.missing.length)} dependencies did not resolve: ${packed.missing.join(', ')}`)
     }
+    image = packed.image
     writeAsset(`preview/${IMAGE_FILE_NAME}`, packed.image)
+    for (const archive of packed.lazyArchives) writeAsset(`preview/${archive.name}`, archive.image)
   }
+  const manifestEntry = parseTar(gunzipSync(image)).find(entry => entry.name === IMAGE_MANIFEST_PATH)
+  if (manifestEntry === undefined) throw new Error('preview boot: the base image carries no manifest')
+  const manifest = parseImageManifest(JSON.parse(new TextDecoder().decode(manifestEntry.bytes)), IMAGE_MANIFEST_PATH)
   const currentCache = buildVfsExampleFiles().get('home/storages/session_projcache.json')
   if (currentCache === undefined) throw new Error('preview boot: generated example has no projection cache')
   const cacheDirectory = join(directory, 'current-projection-cache')
@@ -172,13 +195,13 @@ function requireVfsAssets(): PreviewAssets {
       overlays: [`fixtures/${fixture.id}.tar.gz`],
     }
   })
-  const manifest: PreviewFixtureManifest = {
+  const fixtureManifest: PreviewFixtureManifest = {
     version: PREVIEW_FIXTURE_MANIFEST_VERSION,
     defaultFixture: fixtures[0]?.id ?? null,
     fixtures,
   }
-  writeAsset(`preview/${PREVIEW_FIXTURE_MANIFEST_FILE}`, `${JSON.stringify(manifest, null, 2)}\n`)
-  return { overrides, cleanup: () => { rmSync(directory, { recursive: true, force: true }) } }
+  writeAsset(`preview/${PREVIEW_FIXTURE_MANIFEST_FILE}`, `${JSON.stringify(fixtureManifest, null, 2)}\n`)
+  return { overrides, manifest, cleanup: () => { rmSync(directory, { recursive: true, force: true }) } }
 }
 
 /**
@@ -186,14 +209,17 @@ function requireVfsAssets(): PreviewAssets {
  * @param request - Incoming request; only its path is read.
  * @param response - Response to write the bytes or the 404 to.
  * @param overrides - Generated deployment files served before `dist/`.
+ * @param served - Request log the site appends every static-host-relative path to.
  */
 async function respond(
   request: IncomingMessage,
   response: ServerResponse,
   overrides: ReadonlyMap<string, string>,
+  served: string[],
 ): Promise<void> {
   const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
   const relative = normalize(decodeURIComponent(path)).replace(/^\/+/, '')
+  served.push(relative)
   try {
     const body = await readFile(overrides.get(relative) ?? join(DIST_ROOT, relative))
     response.writeHead(200, { 'content-type': MIME[extname(relative)] ?? 'application/octet-stream' })
@@ -213,13 +239,15 @@ async function respond(
  * @returns The origin to navigate, and its teardown.
  */
 async function serveDist(overrides: ReadonlyMap<string, string>): Promise<Site> {
-  const server = createServer((request, response) => { void respond(request, response, overrides) })
+  const served: string[] = []
+  const server = createServer((request, response) => { void respond(request, response, overrides, served) })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('preview boot: the static server bound no port')
   return {
     origin: `http://127.0.0.1:${String(address.port)}`,
+    served,
     close: async () => {
       server.closeAllConnections()
       await new Promise<void>((closed, reject) => {
@@ -261,7 +289,7 @@ it('boots the packed worker deployment to an interactive page', async () => {
       const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
       try {
         await bootEmptyPreview(site.origin, browser)
-        await bootPreview(site.origin, browser)
+        await bootPreview(site, assets.manifest, browser)
       } finally {
         await browser.close()
       }
@@ -275,10 +303,12 @@ it('boots the packed worker deployment to an interactive page', async () => {
 
 /**
  * Open the preview page and hold it to both boot milestones.
- * @param origin - Origin serving `dist/`.
+ * @param site - Site serving `dist/`, with its request log.
+ * @param manifest - Manifest of the base image the site serves.
  * @param browser - Browser to open the page in.
  */
-async function bootPreview(origin: string, browser: Browser): Promise<void> {
+async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser): Promise<void> {
+  const { origin } = site
   const page = await newEnglishPage(browser)
   const pageErrors: Error[] = []
   const consoleErrors: string[] = []
@@ -519,15 +549,207 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
 
     await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
     await page.getByText(SHOWCASE_OLDEST, { exact: true }).waitFor({ timeout: 15_000 })
+
+    await requestLazyChunk(page, site, manifest)
+    await toggleOptionalBundles(page)
+    await openSessionInspector(page)
     expect(pageErrors.map(error => error.message)).toEqual([])
     expect(consoleErrors.filter(line =>
-      /watchFile|failed to watch|node-addon-system\.probe|sandbox backend is usable|SANDBOX_UNAVAILABLE/i.test(line))).toEqual([])
+      /watchFile|failed to watch|node-addon-system\.probe|sandbox backend is usable|SANDBOX_UNAVAILABLE|cannot be nested|config reload at/i
+        .test(line))).toEqual([])
   } catch (error) {
     await saveFailureShot(page, 'preview-boot')
     throw pageErrors.length === 0
       ? error
       : new AggregateError([error, ...pageErrors], 'preview boot failed, with uncaught page errors')
   }
+}
+
+/**
+ * Request the terminal chunk through the page's tunnel and prove its lazy
+ * archive is fetched then, once, and not before.
+ * @param page - Booted preview page.
+ * @param site - Site whose request log records Worker fetches too.
+ * @param manifest - Manifest naming the chunk's archive.
+ */
+async function requestLazyChunk(page: Page, site: Site, manifest: ImageManifest): Promise<void> {
+  const archive = manifest.lazy.find(entry => entry.files.some(file => file.path === TERMINAL_CHUNK))?.archive
+  if (archive === undefined) throw new Error(`preview boot: the image registers no lazy archive for ${TERMINAL_CHUNK}`)
+  const fetched = (): number => site.served.filter(path => path === `preview/${archive}`).length
+  expect(fetched()).toBe(0)
+  const chunk = await page.evaluate(async ({ id }) => {
+    const transport = (globalThis as typeof globalThis & {
+      __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+      __DSH_BOOT__?: { entries: Array<{ id: string; rev: string }> }
+    })
+    const row = transport.__DSH_BOOT__?.entries.find(entry => entry.id === id)
+    if (transport.__DSH_TRANSPORT__ === undefined || row === undefined) throw new Error(`no boot graph row for ${id}`)
+    const results: Array<{ status: number; size: number }> = []
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await transport.__DSH_TRANSPORT__.fetch(`/plugins/${id}/client.terminal.js?rev=${row.rev}`, { method: 'GET' })
+      results.push({ status: response.status, size: (await response.text()).length })
+    }
+    return results
+  }, { id: TERMINAL_PACKAGE })
+  expect(chunk.map(result => result.status)).toEqual([200, 200])
+  expect(chunk[0]!.size).toBeGreaterThan(0)
+  // Two chunk requests, one archive fetch: the Worker filesystem keeps what arrived.
+  expect(fetched()).toBe(1)
+}
+
+/**
+ * Open the Plugins page, prove every optional bundle and installed plugin reads
+ * its metadata, then switch each optional bundle on and off. Both changes apply
+ * live; the session-titles layer applies after the base layers, and the
+ * Inspector bundle runs Session Inspector without the NodeJS Inspector Worker.
+ * @param page - Booted preview page.
+ */
+async function toggleOptionalBundles(page: Page): Promise<void> {
+  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+  const panel = page.locator('[data-plugin-panel]')
+  const cards = panel.locator('[data-plugin-group="extensions"] [data-plugin-package]')
+  await cards.first().waitFor({ timeout: 30_000 })
+  const listed = await cards.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-plugin-package')))
+  expect(listed.filter(name => name !== null && OPTIONAL_BUNDLES.includes(name)).length).toBeGreaterThan(0)
+  const result = await page.evaluate(async () => {
+    type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
+    const transport = (globalThis as typeof globalThis & {
+      __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+    }).__DSH_TRANSPORT__
+    if (transport === undefined) throw new Error('preview transport is absent after boot')
+    const remote = async <T>(endpoint: string, args: object): Promise<T> => {
+      const answered = await transport.fetch(`/api/${endpoint}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: `preview-${endpoint.replace('/', '-')}`, method: endpoint, payload: { args } }),
+      })
+      const body = await answered.json() as Result<T>
+      if (!body.result.ok) throw new Error(`${endpoint} failed: ${body.result.error.message}`)
+      return body.result.value
+    }
+    interface Bundle {
+      name: string
+      optional: boolean
+      enabled: boolean
+      availability: string
+      error?: unknown
+      meta?: { title?: unknown; icon?: unknown; error?: unknown }
+    }
+    interface Plugin { entryId: string; moduleName: string; enabled: boolean; fiberPhase: string | null }
+    interface Inventory { entries: Array<{ moduleName: string; meta?: { error?: unknown } }> }
+    const bundles = await remote<Bundle[]>('pluginManager/listBundles', {})
+    const inventory = await remote<Inventory>('pluginInventory/list', {})
+    const stateOf = (plugin: Plugin): string => `${plugin.moduleName} ${String(plugin.enabled)} ${String(plugin.fiberPhase)}`
+    const rowsOf = (plugins: Plugin[]): string[] => plugins.map(plugin => `${plugin.entryId} ${stateOf(plugin)}`).sort()
+    const baseline = await remote<Plugin[]>('pluginManager/listPlugins', {})
+    const before = new Map(baseline.map(plugin => [plugin.entryId, stateOf(plugin)]))
+    const toggles: Array<{
+      name: string
+      enable: string
+      disable: string
+      error: unknown
+      plugins: Plugin[]
+      changed: number
+      inactive: string[]
+      restored: boolean
+    }> = []
+    for (const entry of bundles.filter(candidate => candidate.optional)) {
+      const enable = await remote<{ application: string; error?: unknown }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: true })
+      const plugins = await remote<Plugin[]>('pluginManager/listPlugins', {})
+      const disable = await remote<{ application: string }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: false })
+      const after = await remote<Plugin[]>('pluginManager/listPlugins', {})
+      const changed = plugins.filter(plugin => before.get(plugin.entryId) !== stateOf(plugin))
+      toggles.push({
+        name: entry.name,
+        enable: enable.application,
+        disable: disable.application,
+        error: enable.error ?? null,
+        plugins,
+        changed: changed.length,
+        inactive: changed.filter(plugin => plugin.enabled && plugin.fiberPhase !== 'active').map(stateOf),
+        restored: JSON.stringify(rowsOf(after)) === JSON.stringify(rowsOf(baseline)),
+      })
+    }
+    return {
+      optional: bundles.filter(entry => entry.optional).map(entry => ({
+        name: entry.name, enabled: entry.enabled, availability: entry.availability, error: entry.error ?? null,
+        title: typeof entry.meta?.title, icon: typeof entry.meta?.icon, metaError: entry.meta?.error ?? null,
+      })),
+      inventoryErrors: inventory.entries.filter(row => row.meta?.error !== undefined)
+        .map(row => ({ moduleName: row.moduleName, error: row.meta?.error })),
+      toggles,
+    }
+  })
+  expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
+  expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation' || entry.error !== null)).toEqual([])
+  // Metadata resolves through the Worker's Node internal modules: every optional bundle shows its title and icon.
+  expect(result.optional.filter(entry => entry.metaError !== null || entry.title !== 'object' || entry.icon !== 'string')).toEqual([])
+  expect(result.inventoryErrors).toEqual([])
+  console.info(`preview boot: optional bundle toggles ${JSON.stringify(result.toggles.map(({ name, enable, disable, error }) => ({ name, enable, disable, error })))}`)
+  expect(result.toggles.filter(toggle => toggle.enable !== 'applied' || toggle.disable !== 'applied')
+    .map(({ name, enable, disable }) => ({ name, enable, disable }))).toEqual([])
+  // Each bundle changes Loader rows, every enabled row it changes runs, and switching it off restores the prior rows.
+  expect(result.toggles.filter(toggle => toggle.changed === 0 || toggle.inactive.length > 0 || !toggle.restored)
+    .map(({ name, changed, inactive, restored }) => ({ name, changed, inactive, restored }))).toEqual([])
+  const pluginsWith = (bundle: string): Array<{ moduleName: string; enabled: boolean; fiberPhase: string | null }> =>
+    result.toggles.find(toggle => toggle.name === bundle)?.plugins ?? []
+  // The bundle layer applies after the base layers: its disable of the base title row takes effect.
+  expect(pluginsWith(SESSION_TITLES_BUNDLE).filter(plugin => plugin.moduleName === BASE_TITLE_MODULE).map(plugin => plugin.enabled))
+    .toEqual([false])
+  expect(pluginsWith(SESSION_TITLES_BUNDLE).filter(plugin => plugin.moduleName === BUNDLE_TITLE_MODULE).map(plugin => plugin.enabled))
+    .toEqual([true])
+  // Session Inspector runs; NodeJS Inspector starts without its Worker on this platform.
+  const inspectorRows = pluginsWith(INSPECTOR_BUNDLE)
+    .filter(plugin => plugin.moduleName === SESSION_INSPECTOR_MODULE || plugin.moduleName === INSPECTOR_MODULE)
+    .map(({ moduleName, enabled, fiberPhase }) => ({ moduleName, enabled, fiberPhase }))
+  expect(inspectorRows.sort((a, b) => a.moduleName.localeCompare(b.moduleName)))
+    .toEqual([
+      { moduleName: INSPECTOR_MODULE, enabled: true, fiberPhase: 'active' },
+      { moduleName: SESSION_INSPECTOR_MODULE, enabled: true, fiberPhase: 'active' },
+    ])
+}
+
+/**
+ * Switch one bundle through the page's tunnel.
+ * @param page - Booted preview page.
+ * @param bundle - Bundle package name.
+ * @param enabled - Requested state.
+ * @returns The plugin manager's application result.
+ */
+async function setBundle(page: Page, bundle: string, enabled: boolean): Promise<string> {
+  return await page.evaluate(async ({ name, enabled }) => {
+    const transport = (globalThis as typeof globalThis & {
+      __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+    }).__DSH_TRANSPORT__
+    if (transport === undefined) throw new Error('preview transport is absent after boot')
+    const answered = await transport.fetch('/api/pluginManager/setBundleEnabled', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request', rpcId: 'preview-set-bundle', method: 'pluginManager/setBundleEnabled', payload: { args: { name, enabled } },
+      }),
+    })
+    type Answer = { result: { ok: true; value: { application: string } } | { ok: false; error: { message: string } } }
+    const body = await answered.json() as Answer
+    if (!body.result.ok) throw new Error(`setBundleEnabled failed: ${body.result.error.message}`)
+    return body.result.value.application
+  }, { name: bundle, enabled })
+}
+
+/**
+ * Enable the Inspector bundle and open Session Inspector from the right sidebar: the page learns of the new Client
+ * plugin through the tunnel's event stream, without a reload.
+ * @param page - Booted preview page.
+ */
+async function openSessionInspector(page: Page): Promise<void> {
+  expect(await setBundle(page, INSPECTOR_BUNDLE, true)).toBe('applied')
+  await page.getByRole('tree', { name: 'Sessions' }).getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE }).click()
+  await page.getByText(SHOWCASE_TAIL, { exact: true }).waitFor({ timeout: 30_000 })
+  // The showcase opens with a file tab in the right sidebar; a new tab shows the guide entries.
+  await page.getByRole('button', { name: 'New tab', exact: true }).click()
+  await page.locator('[data-sidebar-right-guide-entry="session-inspector-log"]').click({ timeout: 30_000 })
+  await page.getByRole('table', { name: 'Raw Log', exact: true }).waitFor({ timeout: 15_000 })
+  expect(await setBundle(page, INSPECTOR_BUNDLE, false)).toBe('applied')
 }
 
 /** Verify the chooser can boot the untouched base image and reach first-run UI. */
@@ -579,11 +801,12 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
     })
     expect(sessionCount).toBe(0)
     expect(pageErrors.map(error => error.message)).toEqual([])
-    // Two accepted static-host 404s, sorted (the boot fetches race): the HMR
-    // event stream has no server here, and the open-in-app availability read
-    // has no host routes — the controller publishes an empty list and the
-    // header renders no button, which is that surface's designed degradation.
-    expect([...failedResponses].sort()).toEqual(['/open-in-app/apps', '/plugins/events'])
+    // One accepted static-host 404: the open-in-app availability read has no
+    // host routes — the controller publishes an empty list and the header
+    // renders no button, which is that surface's designed degradation. The
+    // client graph event stream travels through the tunnel.
+    expect([...failedResponses]).toEqual(['/open-in-app/apps'])
+    // HMR recomposes configuration against the Worker's empty ES module cache without asking for a restart.
     expect(consoleErrors.filter(line => !line.includes('Failed to load resource: the server responded with a status of 404')))
       .toEqual([])
   } catch (error) {

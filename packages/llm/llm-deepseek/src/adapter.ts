@@ -15,6 +15,8 @@ import { serialize } from './serialize.ts'
 import { parseSse } from './sse.ts'
 import { translate } from './translate.ts'
 import { providerError, providerErrorDetail } from './transport.ts'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { resolveRequestImageTarget } from './request-pricing.ts'
 
 /** DeepSeek provider using Messages content and native thinking replay. */
 export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapter {
@@ -39,6 +41,11 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
   }
   override imageRequestPricing(_provider: string, model: string) {
     return imagePricing(this.dependencies.options(), model, this.imageAccess)
+  }
+  override imageRequestTarget(_provider: string, model: string, image: ImageAttachmentRef) {
+    const entry = this.dependencies.options().models.find(entry => entry.id === model)
+    if (entry === undefined) throw new LlmError(`DeepSeek model "${model}" has no declared image projection`, 'UNKNOWN_MODEL')
+    return resolveRequestImageTarget(entry, image)
   }
   override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
     const connection = await this.connection(signal)

@@ -37,6 +37,8 @@ Factory `children` remain ordinary global Slots and must match `SlotMap`, while 
 
 Every registered component receives props composed from five framework shares: the runtime share (`owner` from the parent's render call site, plus the session standard kit and global seat), the child-render share (`renderSlot` statically narrowed to declared children), the Factory-render share (`renderFactorySlot`), the store share (the declared handle's selector hook and draft-stripped actions), and the business share (inferred from `inject`). Components reference the derived props aliases; they never re-type a share locally.
 
+An open-key standard Hook, called as `useName(key, selector?, equal?)`, also accepts `useName(key, member)`: a string second argument reads the `KeyedStandardSource` resolver's `(key, member)` source without a selector. The resolver returns the same source object for the same arguments while that source is live.
+
 ### Store seats
 
 A register call may declare a store seat with `store: defineStore(...)`: `init` infers the state schema and `actions` is the complete draft-transform write set. Components read through the selector hook and write through the baked callbacks; the engine implementation of `defineStore` lives in the runtime package and satisfies the `DefineStore` contract exported here.

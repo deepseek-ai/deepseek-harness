@@ -35,7 +35,7 @@ describe('Connection binary RPC', () => {
         attachments: [{ path: ['data'], bytes: data }],
       }))
       const handler = connection.createSharedFetchHandler('/api')
-      ctx.webServer.register({ kind: 'prefix', path: '/api', handler: (req, res) => bridge(req, res, handler) })
+      ctx.webServer.register({ kind: 'prefix', path: '/api', handler: (req, res) => bridge(req, res, handler, connection.browserPeer) })
       let transferred = 0
       let encoding: string | undefined
       const rpc = createWebConnectionRpc((path, init) => new Promise((resolve, reject) => {
@@ -111,7 +111,7 @@ describe('Connection binary RPC', () => {
       const shared = connection.createSharedFetchHandler('/api')
       const mediaTypes: (string | null)[] = []
       const rpc = createWebConnectionRpc(async (url, init) => {
-        const response = await shared.fetch(new Request(new URL(url, 'http://host'), init))
+        const response = await shared.fetch(new Request(new URL(url, 'http://host'), init), connection.browserPeer)
         mediaTypes.push(response.headers.get('content-type'))
         return response
       })
@@ -144,7 +144,7 @@ describe('Connection binary RPC', () => {
         attachments: [{ path: ['content'], bytes: content }],
       }))
       const handler = connection.createSharedFetchHandler('/api')
-      const rpc = createWebConnectionRpc((url, init) => handler.fetch(new Request(new URL(url, 'http://host'), init)))
+      const rpc = createWebConnectionRpc((url, init) => handler.fetch(new Request(new URL(url, 'http://host'), init), connection.browserPeer))
       expect(await rpc.call('/api', 'fixture/read', {})).toEqual({
         ok: true, value: { content: new Uint8Array([0, 128, 255]), metadata: { count: 1 } },
       })
@@ -211,7 +211,7 @@ describe('Connection binary RPC', () => {
       const connection = ctx.get('connection') as HostConnectionService
       connection.rpc.intercept('/api', () => true, async () => next)
       const handler = connection.createSharedFetchHandler('/api')
-      const rpc = createWebConnectionRpc((url, init) => handler.fetch(new Request(new URL(url, 'http://host'), init)))
+      const rpc = createWebConnectionRpc((url, init) => handler.fetch(new Request(new URL(url, 'http://host'), init), connection.browserPeer))
       const expected = {
         files: [{ name: 'a.png', content: data }, { name: 'b.png', content: new Uint8Array([2, 3]) }, { name: 'empty' }],
         'dots./[]': [new Uint8Array(), null, [data]],

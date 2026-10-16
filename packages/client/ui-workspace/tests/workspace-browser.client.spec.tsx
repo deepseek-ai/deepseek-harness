@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -122,6 +122,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessionRetainInfo: () => undefined,
     usePanelInfo, useResource,
     useWorkspaces: hook(workspaceState([])),
+    ...allowAllAccess,
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     startSession: vi.fn(),

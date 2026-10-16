@@ -282,6 +282,48 @@ describe('Remote stream mux server carrier lifecycle', () => {
     await didReturn
   })
 
+  it('reports connection and Peer cleanup faults after the physical socket has closed', async () => {
+    const entry = await startMux(async () => { throw new Error('fixture opener failure') })
+    const client = await connect(entry.url)
+    const serverSocket = acceptedSocket(entry.mux)
+    const write = Promise.withResolvers<(error?: Error) => void>()
+    const writer = serverSocket as { send(data: unknown, callback: (error?: Error) => void): void }
+    const sending = vi.spyOn(writer, 'send').mockImplementation((_data, callback) => { write.resolve(callback) })
+    const connectionFailure = new Error('fixture terminal close failure')
+    const cleanupFailure = new Error('fixture Peer close failure')
+    const close = serverSocket.close.bind(serverSocket)
+    const closing = vi.spyOn(serverSocket, 'close').mockImplementation((code, reason) => {
+      if (code === 1011) throw connectionFailure
+      if (code === 1001) throw cleanupFailure
+      close(code, reason)
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let finishWrite: ((error?: Error) => void) | undefined
+    try {
+      client.send(openFrame('write-during-close'))
+      finishWrite = await write.promise
+      const clientClosed = once(client, 'close')
+      const serverClosed = once(serverSocket, 'close')
+      client.close()
+      await Promise.all([clientClosed, serverClosed])
+      finishWrite(new Error('fixture write interrupted by socket close'))
+      await entry.mux.close()
+      expect(serverSocket.readyState).toBe(WebSocket.CLOSED)
+      expect(client.readyState).toBe(WebSocket.CLOSED)
+      expect(report.mock.calls).toEqual([
+        ['[api-gateway] Remote stream connection failed:', connectionFailure],
+        ['[api-gateway] Remote stream scope cleanup failed:', cleanupFailure],
+      ])
+      expect(closing).toHaveBeenCalledWith(1011, 'Remote stream failure could not be delivered')
+      expect(closing).toHaveBeenCalledWith(1001, 'peer left')
+    } finally {
+      sending.mockRestore()
+      closing.mockRestore()
+      finishWrite?.(new Error('fixture teardown'))
+      report.mockRestore()
+    }
+  })
+
   it('terminates active sockets on close and reports a repeated close', async () => {
     let opened!: () => void
     const didOpen = new Promise<void>((resolve) => { opened = resolve })
@@ -575,6 +617,9 @@ async function fixturePeer(): Promise<PeerScope> {
   return {
     id: 'fixture-peer' as PeerId,
     ctx: fiber.ctx,
+    principal: { kind: 'owner' },
+    interactions: 'answer',
+    signal: new AbortController().signal,
     dispose: async () => { await fiber.dispose() },
   }
 }

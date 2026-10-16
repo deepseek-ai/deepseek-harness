@@ -2008,6 +2008,11 @@
     },
     {
       "doc": "docs/subsystems/client-modules.md",
+      "symbol": "WebBootRelease",
+      "source": "packages/client/modules/src/client/manifest.ts"
+    },
+    {
+      "doc": "docs/subsystems/client-modules.md",
       "symbol": "WebBootGraph",
       "source": "packages/client/modules/src/client/manifest.ts"
     },
@@ -2088,6 +2093,16 @@
     },
     {
       "doc": "docs/subsystems/typert.md",
+      "symbol": "PrincipalMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "Principal",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
       "symbol": "PeerScope",
       "source": "packages/typert/protocol/src/types.ts"
     },
@@ -2100,6 +2115,31 @@
       "doc": "docs/subsystems/typert.md",
       "symbol": "RemoteInvocation",
       "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "TypertResourceMap",
+      "source": "packages/typert/protocol/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResourceKind",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteAccessResource",
+      "source": "packages/typert/protocol/src/remote-access.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteScopeOptions",
+      "source": "packages/typert/protocol/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/typert.md",
+      "symbol": "RemoteMethodOptions",
+      "source": "packages/typert/protocol/src/index.ts"
     },
     {
       "doc": "docs/subsystems/typert.md",
@@ -2431,6 +2471,16 @@
       "doc": "docs/subsystems/worktrees.md",
       "symbol": "CreatedWorktree",
       "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/boot.md",
+      "symbol": "ProfileReconciliation",
+      "source": "packages/boot/hmr/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/boot.md",
+      "symbol": "PendingModule",
+      "source": "packages/boot/hmr/src/index.ts"
     }
   ]
 }

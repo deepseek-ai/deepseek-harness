@@ -48,18 +48,20 @@ function mount(initiallyDone = false, initiallyLoading = false) {
   }
   let account: AccountSnapshot = {
     view: { status: 'credential-stored', attempt: null, links: { usageUrl: 'https://example.com/usage', topUpUrl: 'https://example.com/top_up' } },
-    failed: false, details: undefined,
+    failed: false, details: undefined, avatar: undefined,
   }
   // This entry consumes only its injected selectors; the shell owns the global hooks.
   const globals = {} as GlobalStandardProps
+  const setVisible = vi.fn()
   const element = () => <DesktopOnboardingEntry {...globals}
-    useOnboarding={select => select(state)} useAccount={select => select(account)}
+    setVisible={setVisible} useOnboarding={select => select(state)} useAccount={select => select(account)}
     update={async () => true} complete={async () => true} retry={async () => true}
     t={key => key in zh ? zh[key as AccountKey] : key} />
   const view = render(element())
   act(() => { vi.runOnlyPendingTimers() })
   return {
     unmount: view.unmount,
+    setVisible,
     resolve() {
       state = { ...state, status: 'ready', visible: !initiallyDone }
       view.rerender(element())
@@ -166,4 +168,23 @@ it.each([false, true])('covers the workspace until initial onboarding eligibilit
   expect(screen.queryByRole('status')).toBeNull()
   expect(appRoot.inert).toBe(!done)
   if (!done) expect(screen.getByRole('button', { name: zh.onboardingStart })).toBeTruthy()
+})
+
+it('withholds notices through loading, completion confirmation, and the exit animation', () => {
+  const view = mount(false, true)
+  expect(view.setVisible).toHaveBeenLastCalledWith(true)
+  view.resolve()
+  view.finish('saving')
+  expect(view.setVisible).not.toHaveBeenCalledWith(false)
+  view.finish()
+  act(() => { vi.advanceTimersByTime(179) })
+  expect(view.setVisible).not.toHaveBeenCalledWith(false)
+  act(() => { vi.advanceTimersByTime(1) })
+  expect(view.setVisible).toHaveBeenLastCalledWith(false)
+})
+
+it('does not release notices when onboarding is closed before completion', () => {
+  const view = mount()
+  view.unmount()
+  expect(view.setVisible).not.toHaveBeenCalledWith(false)
 })

@@ -3,6 +3,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AskUserQuestionAnswerItem } from '@deepseek-ai/dsh-user-questions/types'
@@ -122,6 +123,7 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestion
   useSessionStatus: selector => selector(attentionState),
   useSessionRetainInfo: () => undefined,
   useWorkspaces: selector => selector(workspaceState),
+  ...allowAllAccess,
   useConversation: selector => selector(conversationState),
   useChat: selector => selector(chatState),
   useTrajectory: selector => selector(trajectoryState),

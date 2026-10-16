@@ -387,11 +387,17 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 @Remote('unpinSession') unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue>
 
 /**
- * Stream a complete Workspace baseline followed by ordered increments.
+ * Stream a complete Workspace baseline followed by ordered increments. A
+ * non-owner receives only the Workspaces and Sessions `allows()` admits.
+ * When a delivered Workspace is no longer admitted at its next change or
+ * the next order change, the stream sends a `replace` frame with the
+ * complete filtered state instead of a `remove`, because a Client never
+ * resurrects a removed Workspace; a `remove` frame reports a deletion and
+ * reaches only a Client that received that Workspace.
  * @param signal - generation cancellation.
  * @returns baseline followed by ordered Workspace increments.
  */
-@Remote({ mode: 'stream' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>
 ```
 
 Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)

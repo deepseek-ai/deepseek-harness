@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-test-runtime",
   "description": "Browser test runtimes: a jsdom slot bench with test-owned Session and Workspace doubles, and a whole-client tier that boots the web roster through the production bootClient over an endpoint-named Remote mock",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -59,6 +59,7 @@
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
     "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
@@ -76,6 +77,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@deepseek-ai/dsh-client-web": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",

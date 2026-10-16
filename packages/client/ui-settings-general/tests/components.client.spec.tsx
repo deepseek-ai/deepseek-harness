@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
@@ -25,6 +25,7 @@ function derivedDocumentStore(remote: object) {
 import { en, zh } from '../src/client/locales.ts'
 import { CurrentVersionRow } from '../src/client/CurrentVersionRow.tsx'
 import { DesktopUpdateBadge } from '../src/client/DesktopUpdateIndicator.tsx'
+import { HostReleasePrompt, type HostReleasePromptProps } from '../src/client/HostReleasePrompt.tsx'
 import type { DesktopUpdateView } from '../src/types.ts'
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs() })
@@ -41,6 +42,7 @@ const useSessionStatus: TriggerContentProps['useSessionStatus'] = selector => se
 const kit = {
   useSessions: unusedHook, useSessionStatus,
   usePanelInfo, useSessionRetainInfo: () => undefined, useResource, useWorkspaces: unusedHook,
+  ...allowAllAccess,
 }
 
 describe('Desktop collapsed update badge', () => {
@@ -244,5 +246,67 @@ describe('current version', () => {
     vi.stubEnv('DSH_CLIENT_VERSION', undefined)
     const view = render(<CurrentVersionRow {...kit} t={t} />)
     expect(view.container.textContent).toBe('')
+  })
+})
+
+describe('Host release change confirmation', () => {
+  type Release = { version: string; commit?: string }
+  type Change = { page: Release | undefined; previous: Release | undefined; host: Release | undefined } | undefined
+  function prompt(change: Change, dictionary: Record<string, string> = en) {
+    const dismissRelease = vi.fn()
+    const reloadPage = vi.fn()
+    const props: HostReleasePromptProps = {
+      ...kit,
+      t: key => dictionary[key] ?? key,
+      useReleaseChange: select => select(change),
+      dismissRelease,
+      reloadPage,
+    }
+    return { dismissRelease, reloadPage, view: render(<HostReleasePrompt {...props} />) }
+  }
+
+  it('stays hidden while no release change is announced', () => {
+    prompt(undefined)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows the service and page transitions and either reloads or keeps the page', () => {
+    const { dismissRelease, reloadPage } = prompt({
+      page: { version: '0.2.1' }, previous: { version: '0.2.2' }, host: { version: '0.2.3', commit: 'abc1234' },
+    })
+    const dialog = screen.getByRole('dialog', { name: 'Service version changed' })
+    // Changed versions show only the versions.
+    expect(dialog.textContent).toContain('Service0.2.20.2.3Page0.2.10.2.3')
+    expect(dialog.textContent).toContain(en['hostRelease.description'])
+    // The dialog opens without a user gesture; initial focus keeps the page.
+    expect(document.activeElement?.textContent).toBe('Not now')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload to load the new version' }))
+    expect(reloadPage).toHaveBeenCalledOnce()
+    expect(dismissRelease).not.toHaveBeenCalled()
+    const keep = screen.getAllByRole('button', { name: 'Not now' })
+    // The footer action and the dialog's close control both keep the page.
+    expect(keep).toHaveLength(2)
+    for (const button of keep) fireEvent.click(button)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(dismissRelease).toHaveBeenCalledTimes(3)
+  })
+
+  it('shows commits for a transition within one version and labels what the Host did not publish', () => {
+    prompt({
+      page: { version: '0.2.0' },
+      previous: { version: '0.2.1', commit: 'aaaaaaa' },
+      host: { version: '0.2.1', commit: 'bbbbbbb' },
+    })
+    expect(screen.getByRole('dialog').textContent).toContain('Serviceaaaaaaabbbbbbb' + 'Page0.2.00.2.1')
+    cleanup()
+    prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: { version: '0.2.1', commit: 'bbbbbbb' } }, zh)
+    expect(screen.getByRole('dialog', { name: '服务版本变化' }).textContent)
+      .toContain('服务未解析bbbbbbb页面未解析bbbbbbb')
+    cleanup()
+    prompt({ page: undefined, previous: undefined, host: { version: '0.2.1' } })
+    expect(screen.getByRole('dialog').textContent).toContain('ServiceUnknown0.2.1PageUnknown0.2.1')
+    cleanup()
+    prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: undefined })
+    expect(screen.getByRole('dialog').textContent).toContain('Service0.2.1UnknownPage0.2.1Unknown')
   })
 })

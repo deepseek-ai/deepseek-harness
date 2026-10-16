@@ -46,15 +46,21 @@ export class GoalService extends TypertRemoteService {
 
 一元方法可以直接返回 `Uint8Array`，也可以将其放在嵌套对象、数组、元组、可选字段、联合类型和递归类型中。生成器提供可选的结果 codec `encode()` 和 `decode()`：编码仅访问类型可能包含字节的子树，解码则校验还原后的值；Client 声明在每个字节位置使用 `Uint8Array<ArrayBuffer>`，同时保留其他字段类型。纯 JSON 结果不经 Host 字节识别或 Client 解析直接传递。参数、事件与流条目仍仅支持 JSON；不支持运行时对象循环。
 
-流方法（`@Remote({ mode: 'stream' })`）返回 `Iterable`、`AsyncIterable` 或 `RemoteStream<Out, In>`。`In` 声明 Client 可以在同一条逻辑流上回送的项；方法通过 `this.ctx.invocation.uplink<In>()` 读取它们，描述符携带其 codec。`RemoteInvocation` 还给出接收服务 `service`、发起调用的 `peer`（连接层接纳的一个 `PeerScope`）与载体 `signal`；非 Remote 调用派生的 Context 上 `ctx.invocation` 为 `undefined`：树中第一个 `bindTypertRemote()` 绑定（每个 `TypertRemoteService` 构造函数都会建立一个）在根上注册该 accessor。生成的 Client 流方法返回 `RemoteStreamHandle<Out, In>`：在下行迭代之外提供 `send`、`end` 与 `dispose` 的句柄。上行项在 Host 逐项校验，因为它们来自浏览器；下行项是 Host 方法产出的值，原样透传。
+流方法（`@Remote({ mode: 'stream' })`）返回 `Iterable`、`AsyncIterable` 或 `RemoteStream<Out, In>`。`In` 声明 Client 可以在同一条逻辑流上回送的项；方法通过 `this.ctx.invocation.uplink<In>()` 读取它们，描述符携带其 codec。`RemoteInvocation` 还给出接收服务 `service`、发起调用的 `peer`（其载体指明的 `PeerScope`）与载体 `signal`；非 Remote 调用派生的 Context 上 `ctx.invocation` 为 `undefined`：树中第一个 `bindTypertRemote()` 绑定（每个 `TypertRemoteService` 构造函数都会建立一个）在根上注册该 accessor。Cordis 的跨副本 `Context.is()` 可识别传给构建产物 Service 的源码 Context，因此混合源码／构建组合仍保留此 accessor 和调用局部的 principal。生成的 Client 流方法返回 `RemoteStreamHandle<Out, In>`：在下行迭代之外提供 `send`、`end` 与 `dispose` 的句柄。上行项在 Host 逐项校验，因为它们来自浏览器；下行项是 Host 方法产出的值，原样透传。
 
-`@Remote` 选项仅包含 `name` 和 `mode`；输入策略由消费方选择，而非方法注解。`method.input(options?: TypertRemoteInputOptions)` 返回缓存的 `TypertRemoteValue<Input>`，唯一选项是 `strict?: boolean`。`method.input()` 与 `{ strict: false }` 保留普通 Remote 处理方式：已声明对象接受并剥离未知字段。`{ strict: true }` 递归拒绝未声明字段，而显式 JSON 值和字典键保持开放，字典值仍按声明校验。两种具名参数封装都拒绝额外参数。选择一个视图（`const input = method.input({ strict: true })`），即可通过 `input.create().parse(raw)` 与 `input.jsonSchema` 取得匹配的解析和投影；这不会改变 Host 分发。[生成器](<../generator/README.zh.md#ordinary-remote-metadata>)负责发布及配套 codec。
+`@Remote` 选项仅包含 `name`、`mode` 与下文所述的 `resources` 读取函数；输入策略由消费方选择，而非方法注解。`method.input(options?: TypertRemoteInputOptions)` 返回缓存的 `TypertRemoteValue<Input>`，唯一选项是 `strict?: boolean`。`method.input()` 与 `{ strict: false }` 保留普通 Remote 处理方式：已声明对象接受并剥离未知字段。`{ strict: true }` 递归拒绝未声明字段，而显式 JSON 值和字典键保持开放，字典值仍按声明校验。两种具名参数封装都拒绝额外参数。选择一个视图（`const input = method.input({ strict: true })`），即可通过 `input.create().parse(raw)` 与 `input.jsonSchema` 取得匹配的解析和投影；这不会改变 Host 分发。[生成器](<../generator/README.zh.md#ordinary-remote-metadata>)负责发布及配套 codec。
 
 普通 `./remote` 产物将 `TYPERT_REMOTE` 导出为 `TypertRemoteInfo`，它扩展可挂载的 `TypertRemoteContribution`。类型化的 `methods[endpoint]` 条目就是 `descriptors` 中同一个直接方法描述符对象，并带有派生的 `input(options?)` 和 `invoke(remote, input, signal?)`。参数文档位于 `parameters[].description`；`result` 是唯一的结果 codec、解析器和可选投影。一元描述符省略 `mode`；流使用 `'stream'`。仅使用 Context 接收器的方法保留在 `descriptors` 和作用域声明中，不进入 `methods`。
 
 已发布的纯入口 `@deepseek-ai/dsh-typert-protocol/remote-info` 提供 `createTypertRemoteInfo(spec, z)`，返回类实例而非构造函数。构造时只保留静态 spec 和调用方传入的 Zod 运行时；首次读取 `descriptors` 或 `methods` 时才构建并缓存两者共享的索引。每种输入策略的视图、解析器及可选 JSON Schema 投影都独立惰性求值并缓存；`method.input().create()` 请求普通解析器。原始 spec 要求 Zod factory，而面向消费方的 `TypertSchema<T>` 仅保证 `parse(value: unknown): T`。JSON Schema 来自生成器投影，而非运行时 `z.toJSONSchema()`。纯叶入口没有运行时导入；Zod 由生成产物提供。读取元数据和 schema 绝不发起网络调用；根入口也重新导出该 factory，但会导入 Cordis。
 
 调用器接收调用方拥有、已挂载且无作用域的 Client Remote，并在调用时解析其命名空间方法。它保留命名空间接收者、可选位置参数空位和 signal，不使用 async 包装，直接转发同一个 `Promise<RemoteResult<DecodedOutput>>` 或完整 `RemoteStreamHandle<Output, Uplink>`。`DecodedOutput` 默认采用原始输出类型；生成器仅为含字节的一元方法指定 `RemoteDecoded<Output>`，避免递归重映射普通 JSON 结果；`result.create().parse()` 保留原始输出类型，不会规范化共享字节缓冲区。任一输入变体或结果不支持 JSON Schema 时，文档与解析能力仍然保留；各变体的 `jsonSchemaError` 说明其投影缺失的原因。Registry 读取方使用同一纯入口提供的 `isTypertRemoteMethod(descriptor)`，将基础描述符收窄为这些直接调用能力。
+
+### 识别调用方并放行非 owner 调用方
+
+`PeerScope.principal` 是进程内 Host 代码创建 Peer 时固定的调用方身份；任何 wire 字段都无法设置它，`PeerScope.signal` 则在 Peer scope 结束时中止。`PrincipalMap` 可合并扩展：每个驱动方声明一个 JSON 条目，带唯一的字面量 `kind` 且不含凭据，因为 principal 可能持久化到会话日志中；内置条目是 `owner: { kind: 'owner' }`。在持久输出上记录调用方的 Remote 方法调用 `principalOf(this.ctx.invocation)`：调用方不是 owner 时它返回该 principal，对 owner 以及在 Remote 调用之外返回 `undefined`；方法只在其有定义时写入该字段。
+
+每个 Remote 方法都受访问控制：由 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md) 判定非 owner 调用方能否在该调用触及的资源上调用它。`TypertResourceMap` 与 `TypertLookupMap` 并列、可合并扩展：拥有身份类型的包以 `TypertResource<Id>` 声明自己的资源种类（`dsh-session` 声明 `session: TypertResource<SessionId>`，`dsh-workspace` 声明 `workspace: TypertResource<WorkspaceId>`）。`RemoteAccessResource` 要么是内置、无身份的 `{ kind: 'global' }`，要么是某个已声明种类加其身份；资源之间相互独立，`global` 上的访问不蕴含任何会话上的访问。运行时由拥有该种类的领域经 `typert.resources.register(kind, { field })` 登记默认 wire 字段，该登记拒绝 `global`；lookup provider 与 Host Context adapter 经 `resource` 声明其 wire 身份所属的种类，因此带 Agent 查找参数或 Agent 作用域接收器的方法无需选项即携带 `session` 资源。`@Remote` 与 `@RemoteScope` 的 `resources` 选项把种类映射到一个以方法 wire 参数为自身位置参数的读取函数；这些参数的类型从被装饰的方法推断，查找参数映射为其 wire 类型，因此 `@Remote({ name: 'page', resources: { session: request => request.address.sessionId } })` 可以读取默认规则读不到的字段。读取函数与默认规则都未给出资源的调用触及 `global`；它们必须给出方法访问的全部资源，因为访问控制从不检查被遗漏的资源。`TypertForwardableEventEntry` 中的转发 `emit` 条目可以声明 `resources` 读取函数，其类型由该事件自身的参数决定；未声明的条目触及 `global`。资源解析归 [API Gateway](../../api/gateway/README.zh.md)；判定与拒绝原因归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md)。
 
 ### 把 Host 对象与 Context 关联到 wire identity
 
@@ -97,7 +103,9 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 ### Remote 标记
 
-`@Remote` 与 `@RemoteScope` 调度一个初始化器，把方法名、可选导出名与调用模式追加到原型描述符；`remoteMethods(service)` 校验其版本，并返回与已存描述符分离、按声明顺序排列的快照，供 Gateway 的源码模式回退读取。标记要求名称为字符串的公开、非静态实例方法，同一方法上的冲突标记会被拒绝。
+`@Remote` 与 `@RemoteScope` 调度一个初始化器，把方法名、可选导出名、调用模式与冻结的 `resources` 读取函数追加到原型描述符；`remoteMethods(service)` 校验其版本，并返回与已存描述符分离、按声明顺序排列的快照，供 Gateway 的源码模式回退读取。标记要求名称为字符串的公开、非静态实例方法，同一方法上的冲突标记会被拒绝。
+
+读取函数在创建装饰器时校验，并按每次装饰器应用冻结为一条记录；Gateway 按实现成员名从 `remoteMethods(service)` 读取它们，因此协议包的另一个已安装副本也能读取同一记录。
 
 ### 协议映射与描述符
 
@@ -114,10 +122,12 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 装饰器、Gateway 绑定、`remoteMethods`、段校验 |
+| [`src/principal.ts`](src/principal.ts) | `principalOf`：Remote 调用生产者记录的调用方 principal |
+| [`src/remote-access.ts`](src/remote-access.ts) | 基于 `TypertResourceMap` 的 `RemoteAccessResource`、`RemoteAccessResourceKind` 与 `RemoteAccessResourceOf` |
 | [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem` |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
 | [`src/remote-info.ts`](src/remote-info.ts) | 纯惰性 info factory 与直接方法类型守卫 |
-| [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
+| [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PrincipalMap`、`Principal`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
 
 </details>
 
@@ -152,7 +162,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 这些限制说明声明能表示什么；它们是当前包约束，不是任务积压。
 
-- **装饰器标记是最小化的**——标记包含方法名、可选的导出别名与流模式，以及直接或 Context 接收器选择；参数、结果、查找、schema 与文档元数据需要 Typert 构建流水线。
+- **装饰器标记是最小化的**——标记包含方法名、可选的导出别名、流模式、资源读取函数，以及直接或 Context 接收器选择；参数、结果、查找、schema 与文档元数据需要 Typert 构建流水线。
 - **Remote 签名受限**——装饰器只接受具有字符串名称的公开、非静态实例方法，源码模式执行无法表示重载、解构、默认参数或剩余参数签名。
 
 <a id="dev-note"></a>

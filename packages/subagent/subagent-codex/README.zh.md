@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-当委派工作需要在父会话工作区中的真实无人值守 Codex 会话内运行时，把 `@deepseek-ai/dsh-subagent-codex` 安装进 Profile。每次委派都会为一个自包含文本任务使用全新且隔离的 Codex 线程，并且只返回其最终答案或安全失败诊断。原生 Codex 配置和身份验证继续作为权威来源，而 `permissionMode` 选择非交互式审批和沙箱行为。Bundle 提供兼容的原生 Codex 载荷，并以全局工具形式添加委派工具。
+当委派工作需要在父会话工作区中的真实无人值守 Codex 会话内运行时，把 `@deepseek-ai/dsh-subagent-codex` 安装进 Profile。每次委派都会为一个自包含文本任务使用全新且隔离的 Codex 线程，并且只返回所选答案或安全失败诊断。原生 Codex 配置和身份验证继续作为权威来源，而 `permissionMode` 选择非交互式审批和沙箱行为。Bundle 提供兼容的原生 Codex 载荷，并以全局工具形式添加委派工具。
 
 ## 目录
 
@@ -74,7 +74,7 @@ Bundle 将 `tool-subagent-codex` 作为 Host 条目插入，因此 `subagent_cod
 
 ### 你会得到什么
 
-完成通知包含 Codex 的最终答案，或停止原因与可选的安全诊断。父会话还独立保存外部任务的身份和完整终态结果；无需创建本地子 Session。产品推理、工具活动、原始 stderr 与工作区差异不会进入父会话。
+完成通知包含所选的 Codex 答案，或停止原因与可选的安全诊断。父会话还独立保存外部任务的身份和完整终态结果；无需创建本地子 Session。产品推理、工具活动、原始 stderr 与工作区差异不会进入父会话。
 
 ### 失败与恢复
 
@@ -107,7 +107,7 @@ Bundle 将 `tool-subagent-codex` 作为 Host 条目插入，因此 `subagent_cod
 
 ### 运行流程
 
-一次启动只接受非空的文本块序列，并使用子代理服务选择的子级 cwd。它经子进程 seam spawn 固定命令，完成 `initialize` → `initialized` 握手，把 Profile 选择的模式与可选模型映射为官方 `thread/start` 字段并与 `{ cwd, ephemeral: true }` 一起发送，且仅在 Codex 返回有效的临时线程后发布运行。已发布的结果恰好启动一个轮次，只接受与此次运行的线程和轮次匹配的通知，并等待权威的 `turn/completed` 终态。以最后一条 `phase: "final_answer"` 的 `agentMessage` 为准；若 Codex 没有发出明确的最终阶段，则以最后一条 `phase: null` 的消息作为兼容性回退。成功完成的轮次若没有非空白答案，结果也会判为错误。失败轮次使用粗粒度类别 `limit`、`access-policy`、`service`、`transport`、`product-error`、`invalid-result` 或 `unknown`；app-server 提前退出使用 `process`，适用的连接与 stream 失败保留数值 `httpStatusCode`。
+一次启动只接受非空的文本块序列，并使用子代理服务选择的子级 cwd。它经子进程 seam spawn 固定命令，完成 `initialize` → `initialized` 握手，把 Profile 选择的模式与可选模型映射为官方 `thread/start` 字段并与 `{ cwd, ephemeral: true }` 一起发送，且仅在 Codex 返回有效的临时线程后发布运行。已发布的结果恰好启动一个轮次，只接受与此次运行的线程和轮次匹配的通知，并等待权威的 `turn/completed` 终态。以最后一条 `phase: "final_answer"` 的 `agentMessage` 为准；若没有，则选最后一条 `phase: "partial_answer"` 的消息（稳定的回答文本，其后仍可能有助手输出或工具调用）；若 Codex 两种明确的回答阶段都没有发出，则以最后一条 `phase: null` 的消息作为兼容性回退。`commentary` 消息绝不会被选中，其它任何阶段都会使运行失败。成功完成的轮次若没有非空白答案，结果也会判为错误。失败轮次使用粗粒度类别 `limit`、`access-policy`、`service`、`transport`、`product-error`、`invalid-result` 或 `unknown`；app-server 提前退出使用 `process`，适用的连接与 stream 失败保留数值 `httpStatusCode`。
 
 </details>
 
@@ -147,11 +147,11 @@ Codex 子级会在一个全新的临时线程中，以单个轮次接收这些�
 
 #### 模型看到什么
 
-通过 `dsh-tool-subagent`，父模型先收到 child id，随后收到 Codex 最终答案或带停止原因与安全诊断的失败通知。诊断只包含固定的阶段、类别和已观测的协议或进程事实。产品推理、中间消息、工具活动、stderr、用量、产品标识符、命令、路径与原始协议载荷不会复制到父 Session。
+通过 `dsh-tool-subagent`，父模型先收到 child id，随后收到所选的 Codex 答案（按 final、partial、未标阶段的优先次序）或带停止原因与安全诊断的失败通知。诊断只包含固定的阶段、类别和已观测的协议或进程事实。产品推理、中间消息、工具活动、stderr、用量、产品标识符、命令、路径与原始协议载荷不会复制到父 Session。
 
 #### Token 影响
 
-父级输入会增加启动确认与完成通知，包括最终答案或失败信息。子任务 token 不进入父级上下文。本提供方自身不添加父级工具 schema。
+父级输入会增加启动确认与完成通知，包括所选答案或失败信息。子任务 token 不进入父级上下文。本提供方自身不添加父级工具 schema。
 
 #### KV Cache 影响
 
@@ -170,7 +170,7 @@ Codex 子级会在一个全新的临时线程中，以单个轮次接收这些�
 - **委派时必须存在原生平台载荷**——省略 optional dependencies 的安装、不受支持的平台以及缺失或损坏的载荷都会在第一次运行时失败；不会回退到宿主 CLI。
 - **兼容性由开发证据锁定**——若要从已验证的 0.153.4 协议基线升级，必须重新生成上游 schema 证据，并重新运行握手、答案选择、审批、取消、无密钥真实产品以及带密钥的 DeepSeek 随机数测试。
 - **没有人工审批路径**——已知的无人值守审批请求会被拒绝，未知服务器请求会以默认拒绝方式使运行失败；三种 Profile 模式都不会创建 DSH 交互通道或逐次调用 allow 策略。
-- **assistant 载荷仅包含最终文本**——失败运行还可公开独立的安全诊断；推理、中间消息、工具通信、用量、stderr 与工作区差异不会进入父 Session。任务身份与终态结果保存在父日志中。
+- **assistant 载荷仅包含所选回答文本**——失败运行还可公开独立的安全诊断；推理、中间消息、工具通信、用量、stderr 与工作区差异不会进入父 Session。任务身份与终态结果保存在父日志中。
 - **没有可选的共享能力**——对于本提供方，共享服务会拒绝 `agentPreset`、`agentOptions`、输出 schema 和 harness 深度强制约束。
 - **没有按实际经过时间触发的超时或副作用回滚**——长时间运行的工作由调用方取消，且取消前已更改的文件或外部系统不会恢复原状。
 

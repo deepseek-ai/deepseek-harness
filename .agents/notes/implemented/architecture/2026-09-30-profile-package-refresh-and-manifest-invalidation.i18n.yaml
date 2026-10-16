@@ -12,23 +12,23 @@
   en: a15c7c13f167e5ac
   zh: a15c7c13f167e5ac
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/responsibilities:
-  en: 3ffd0c78fa204b04
-  zh: f468bab00a7ff357
+  en: d53a850a2deabc08
+  zh: 01c2f735f2a9562a
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/runtime-resolution:
-  en: ca45b973e1968533
-  zh: 002f23bb70e4fed7
+  en: 42a3ed903fbb5483
+  zh: 7e1f6df1137794c3
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/plugin-manager:
-  en: 9b04926c175f22e8
-  zh: fbf05dd4065b0738
+  en: 7ec1ad2a691bbd12
+  zh: 01057bbe0240056a
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/hmr-package-configuration-expiry:
   en: c7de8dafe47a5587
   zh: 6010a70d8451edd1
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/decision/future-work:
-  en: 31818f8f7f80470b
-  zh: ecb7ac85bb49cf6d
+  en: 8b5faf72418a43dd
+  zh: 3d676c9b54697a2a
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/alternatives-considered:
-  en: 7c1c6d21570cda0d
-  zh: e6f8334c85f1b404
+  en: f04a27b3525180b0
+  zh: 9f3a01d0400c5a88
 /agent-note-refresh-runtime-resolution-after-package-operations-and-expire-hmr-package-configuration/verification:
   en: 939cedceed200cb2
   zh: c7bb02d0da400c8d

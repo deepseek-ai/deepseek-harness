@@ -84,11 +84,12 @@ The shipped adapters add these standard props. They are available according to t
 
 | Availability | Props | Owner |
 |---|---|---|
-| every scope | `useSessions`, `useSessionStatus`, `useSessionRetainInfo` | `ui-session` |
-| every scope | `useWorkspaces` | `ui-workspace` |
+| every scope | `useSessions`, `useSessionStatus`, `useSessionRetainInfo`, `useSessionAccess` | `ui-session` |
+| every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
+| every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
-| `session` | `sessionId`, `useSession`, `useProjection` | `ui-session` |
-| `session-maybe` | optional `sessionId`, `useSession`, `useProjection` results | `ui-session` |
+| `session` | `sessionId`, `useSession`, `useProjection`, `useAccess` (the bound Session's answer) | `ui-session` |
+| `session-maybe` | optional `sessionId`, `useSession`, `useProjection`, `useAccess` results | `ui-session` |
 | `session` | `useConversation`, `useInput`, `inputActions` | `ui-conversation` |
 | `session-maybe` | optional `useConversation`, `useInput`, `inputActions` results | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
@@ -170,7 +171,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
-└─ conversation.hero.agentPreset
+├─ conversation.hero.agentPreset
+└─ conversation.hero.options
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]

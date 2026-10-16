@@ -1,18 +1,20 @@
 /**
- * Repository knowledge for the packer: where this tree's workspaces, profile
- * composition, and config trees are, and how to report a pack.
+ * Repository knowledge for the packer: where this tree's workspaces, installation
+ * manifest, profile bundles, and config trees are, and how to report a pack.
  *
  * The library half takes all of this as parameters. Keeping the lookup here is what
  * lets the same library pack a different tree, and what keeps `pack.ts` free of
  * assumptions about pnpm workspaces or the `dsh` CLI.
  * @module @deepseek-ai/dsh-experimental-webworker-packer/src/repository
  */
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { DSH_HOME_ENV } from '@deepseek-ai/dsh-home-paths'
-import type { ConfigTree, ImageTree, PackResult } from './pack.ts'
+import {
+  bundlePatchPaths, composeEntries, loadOverlayPatches, OPTIONAL_BUNDLES, PROFILE_TEMPLATES, resolveBundleDir,
+} from '@deepseek-ai/dsh-app-boot'
+import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { PLATFORM_ENTRY_CONFIG } from '@deepseek-ai/dsh-experimental-webworker-runtime'
+import { collectModuleNames, packVfsImage, type ConfigTree, type ImageInstallation, type ImageTree, type PackResult } from './pack.ts'
 
 export { packPreviewFixture } from './preview.ts'
 
@@ -24,11 +26,11 @@ export { packPreviewFixture } from './preview.ts'
  */
 const WORKSPACE_SCAN_ROOTS = ['vendor', 'packages', 'native/system/packages', 'apps']
 
-/** Composition entry point package: the `dsh` CLI, run from source. */
+/** The `dsh` installation package: its manifest anchors bundle resolution, as the launcher's does. */
 const CLI_PACKAGE = 'apps/cli'
 
-/** Composition entry point: the `dsh` CLI, run from source. */
-const CLI_ENTRY = `${CLI_PACKAGE}/src/bin.ts`
+/** Diagnostic prefix for the app-boot readers this module calls. */
+const BIN_NAME = 'dsh-pack-vfs-image'
 
 /** Repository-owned deterministic filesystem content offered by the preview. */
 const PREVIEW_EXAMPLE_ROOT = 'packages/experimental/webworker-runtime/tests/fixtures/vfs-example'
@@ -84,35 +86,108 @@ export function indexWorkspacePackages(repoRoot: string): Map<string, string> {
   return index
 }
 
+/** The bundles one image offers and the packages it must materialize for them. */
+export interface ProfileRoster {
+  /** The profile template's bundles, then the installation's optional bundles. */
+  readonly bundles: readonly string[]
+  /** Those bundle packages plus every package their patch rows name, deduplicated. */
+  readonly roster: readonly string[]
+}
+
 /**
- * Compose one profile through the real CLI dump path, leaving `!!js`
- * unevaluated. The dump runs against a throwaway Harness home, so the
- * profile's own layer is the freshly initialized empty patch file and the
- * machine's `$DSH_HOME` — its profile manifest with locally installed
- * bundles, and its patch files — would otherwise leak this machine's plugins
- * into the image and break the same-tree-same-bytes guarantee.
+ * Read what one shipped profile offers from the installation the launcher boots:
+ * the template's bundles and every optional bundle, each resolved from the CLI
+ * manifest as the launcher resolves them, and the packages their patch files name.
+ * Machine state never contributes, so the same tree always packs the same roster.
  * @param repoRoot - Absolute repository root.
- * @param profile - Profile name to compose.
- * @returns The composed YAML.
+ * @param profile - Shipped profile template name.
+ * @returns Bundle names and the roster to materialize.
+ * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
  */
-export function composeProfile(repoRoot: string, profile: string): string {
-  const home = mkdtempSync(join(tmpdir(), 'dsh-pack-home-'))
-  try {
-    return execFileSync(
-      process.execPath,
-      [
-        '--import', 'tsx/esm', join(repoRoot, CLI_ENTRY),
-        '--profile', profile,
-        // `--dump-config` over the throwaway home: the profile's own patch
-        // layer is a freshly initialized empty file, so the dump is the
-        // shipped composition alone.
-        '--dump-config',
-      ],
-      { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: { ...process.env, [DSH_HOME_ENV]: home } },
-    )
-  } finally {
-    rmSync(home, { recursive: true, force: true })
+export function profileRoster(repoRoot: string, profile: string): ProfileRoster {
+  const template = shippedTemplate(profile)
+  const bundles = [...new Set([...template.bundles, ...OPTIONAL_BUNDLES])]
+  const names = new Set<string>(bundles)
+  for (const bundle of bundles) collectModuleNames(bundlePatches(repoRoot, bundle), names)
+  return { bundles, roster: [...names] }
+}
+
+/**
+ * The home patch one shipped profile's image carries: every row `PLATFORM_ENTRY_CONFIG` names, with the config the
+ * template's bundle layers compose for it and the Worker's required fields over that config. A patch replaces a row's
+ * whole config, so the composed fields stay; the image carries the same bundle files read here.
+ * @param repoRoot - Absolute repository root.
+ * @param profile - Shipped profile template name.
+ * @returns Home patch rows; a row the composition lacks contributes none.
+ * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
+ */
+export function platformHomePatch(repoRoot: string, profile: string): PatchOptions[] {
+  const composed: unknown = composeEntries([shippedTemplate(profile).bundles.flatMap(bundle => bundlePatches(repoRoot, bundle))])
+  return Object.entries(PLATFORM_ENTRY_CONFIG).flatMap(([id, fields]) => {
+    const row = findRow(composed, id)
+    if (row === undefined) return []
+    const config = typeof row.config === 'object' && row.config !== null && !Array.isArray(row.config) ? row.config : {}
+    return [{ id, config: { ...config, ...fields } }]
+  })
+}
+
+/** Find one Loader row by id, inside group configs too. */
+function findRow(rows: unknown, id: string): { config?: unknown } | undefined {
+  if (!Array.isArray(rows)) return undefined
+  for (const row of rows as Array<{ id?: unknown; config?: unknown }>) {
+    if (row.id === id) return row
+    const nested = findRow(row.config, id)
+    if (nested !== undefined) return nested
   }
+  return undefined
+}
+
+/** The shipped template of one profile, or a refusal naming it. */
+function shippedTemplate(profile: string): { readonly bundles: readonly string[] } {
+  const template = Object.hasOwn(PROFILE_TEMPLATES, profile) ? PROFILE_TEMPLATES[profile] : undefined
+  if (template === undefined) throw new Error(`vfs image: no shipped profile template named ${JSON.stringify(profile)}`)
+  return template
+}
+
+/** One bundle's patch rows, resolved from the CLI manifest as the launcher resolves them. */
+function bundlePatches(repoRoot: string, bundle: string): PatchOptions[] {
+  const directory = resolveBundleDir(BIN_NAME, bundle, installationManifest(repoRoot).manifest, join(repoRoot, CLI_PACKAGE))
+  const declaration = (JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as {
+    dsh?: { bundle?: Parameters<typeof bundlePatchPaths>[1] }
+  }).dsh?.bundle
+  if (declaration === undefined) throw new Error(`vfs image: bundle ${bundle} declares no dsh.bundle`)
+  return bundlePatchPaths(directory, declaration).flatMap(file => loadOverlayPatches(BIN_NAME, file))
+}
+
+/**
+ * The installation manifest the image anchors bundle resolution at.
+ * @param repoRoot - Absolute repository root.
+ * @returns The CLI package name and its manifest path.
+ */
+export function installationManifest(repoRoot: string): ImageInstallation {
+  const manifest = join(repoRoot, CLI_PACKAGE, 'package.json')
+  const { name } = JSON.parse(readFileSync(manifest, 'utf8')) as { name: string }
+  return { name, manifest }
+}
+
+/**
+ * Pack this repository's base image for one shipped profile.
+ * @param repoRoot - Absolute repository root.
+ * @param profile - Shipped profile template name.
+ * @param root - Virtual root; the runtime default when omitted.
+ * @returns The packed image and its lazy archives.
+ */
+export function packRepositoryImage(repoRoot: string, profile: string, root?: string): PackResult {
+  return packVfsImage({
+    profile,
+    roster: profileRoster(repoRoot, profile).roster,
+    installation: installationManifest(repoRoot),
+    ...root === undefined ? {} : { root },
+    workspaces: indexWorkspacePackages(repoRoot),
+    resolveFrom: repoRoot,
+    configTrees: configTrees(repoRoot),
+    homePatch: platformHomePatch(repoRoot, profile),
+  })
 }
 
 /**
@@ -203,6 +278,9 @@ export function describePack(result: PackResult, repoRoot: string, outputFile: s
     `  raw                 ${megabytes(Object.values(result.files).reduce((sum, bytes) => sum + bytes.byteLength, 0))}`,
     `  compressed          ${megabytes(result.image.byteLength)}`,
     `  config + presets    ${megabytes(sizeOf('config/'))}`,
+    `  lazy archives       ${String(result.lazyArchives.length)} (${megabytes(result.lazyArchives.reduce((sum, archive) => sum + archive.image.byteLength, 0))} compressed)`,
+    ...result.lazyArchives.map(archive =>
+      `    ${megabytes(archive.image.byteLength).padStart(9)}  ${archive.name}  ${archive.files.join(', ')}`),
     `  javascript entries  ${String(result.javascriptEntries)} (dropped ${String(result.executables.length)} executable scripts, ${String(result.pageBundles.length)} page bundles verbatim)`,
     `  wrapper contract    ${result.contract}`,
     `  transform           ${String(result.transform.rewritten)} of ${String(result.transform.visited)} reached entries rewritten, ${String(result.droppedJavascriptEntries)} unreachable dropped`,

@@ -269,6 +269,8 @@ export interface LlmConfigurableProvider {
    * Absent when the route has no fixed endpoint.
    */
   defaultBaseURL?: string
+  /** Environment variables used to construct a provider endpoint; absent when none are reported. */
+  baseURLEnv?: readonly string[]
   /** Authentication the adapter performs when the profile names no credential reference; absent when it reports none. */
   nativeAuth?: LlmNativeAuth
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */

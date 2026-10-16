@@ -22,7 +22,7 @@ export type AccountMenuProps = PropsRuntime<'settings.launcher'> & PropsLocale<'
 export function AccountMenu({
   subscribeSessionExpired, subscribeModelSignInRequired, wide, settingsShortcut, openSettings, openOnboarding, settingsOpen,
   useAccount, useTheme, signOut, hasRunningAccountTasks, refreshAccount, bonusNoticeShown, bonusNoticeDismissed,
-  contactUs, showLogin, start, cancel, t,
+  contactUs, showLogin, start, cancel, avatarFailed, t,
 }: AccountMenuProps) {
   const anchor = useRef<HTMLDivElement>(null)
   // The launcher outlives the panel, so a false-to-true edge is one Settings entry:
@@ -57,14 +57,17 @@ export function AccountMenu({
   return <div ref={anchor} className={css.root}>
     {signInNotice > 0 && <Toast key={signInNotice} text={t('modelSignInRequired')} onDone={() => { setSignInNotice(0) }} />}
     {expiryNotice && <Toast text={t('sessionExpired')} onDone={() => { setExpiryNotice(false) }} />}
-    {signedIn && account.notice && <AccountNoticeCard key={account.notice.orderId} notice={account.notice}
+    {signedIn && !account.desktopOnboardingVisible && !account.onboarding && account.notice && <AccountNoticeCard
+      key={account.notice.orderId} notice={account.notice}
       anchor={anchor} title={t('bonusNoticeTitle')} closeLabel={t('close')}
       onShown={bonusNoticeShown} onDismiss={bonusNoticeDismissed} />}
     <Menu open={open} side="top" portal autoFocus className={css.anchor} listClassName={signedIn ? undefined : css.signedOutMenu}
       anchor={<button ref={trigger} type="button" className={css.trigger} data-collapsed={!wide} data-signed-out={!signedIn} aria-label={t('menu')}
         aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(value => !value) }}>
         {signedIn
-          ? <span className={css.avatar}><AccountAvatar url={profile?.status === 'ready' ? profile.value.avatarUrl : null} /></span>
+          ? <span className={css.avatar} data-avatar-status={account.avatar?.status}>
+            <AccountAvatar avatar={account.avatar} avatarFailed={avatarFailed} />
+          </span>
           : <IconEllipsisOutlineMedium size={14} />}
         {wide && <span className={css.label}>{signedIn ? label : t('more')}</span>}
       </button>}

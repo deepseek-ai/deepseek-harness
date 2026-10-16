@@ -28,6 +28,7 @@ const ORDER_EN = '44444444-4444-4444-8444-444444444444'
 const ORDER_RETRY = '55555555-5555-4555-8555-555555555555'
 const ORDER_REPEAT = '66666666-6666-4666-8666-666666666666'
 const ORDER_TOPUP = '77777777-7777-4777-8777-777777777777'
+const ORDER_WEB = '99999999-9999-4999-8999-999999999999'
 
 const CLAIM_DAYS = 30
 
@@ -566,6 +567,18 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     observations.push(`en.get locale=${String(enGet.locale)} query=${enGet.query}`)
     expect(enGet.locale).toBe('en_US')
     expect(enGet.query).toBe('')
+
+    await enPage.close()
+    await page.close()
+    platform.clearUnnotified()
+    platform.grant(ORDER_WEB, '4.00')
+    const webPage = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN' })
+    tripwires.push(watchConsole(webPage))
+    await webPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const webNotice = await shownNotice(webPage, '已赠送您 4.00 元 DSH 体验赠金。')
+    await expect.poll(() => platform.acks.filter(item => item.orderId === ORDER_WEB).length).toBe(1)
+    observations.push(`web.notice=${webNotice} acks=1`)
+    await webPage.close()
 
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'notice-flow.expected.md'), observations.join('\n'), MODE)
     for (const tripwire of tripwires) {

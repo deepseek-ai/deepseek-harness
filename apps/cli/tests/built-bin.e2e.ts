@@ -666,7 +666,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     }
   }, SPAWN_TIMEOUT_MS + 30_000)
 
-  it('creates a custom profile from the shipped web template before booting it', async () => {
+  it('creates and then replaces a custom profile from the shipped web template before booting it', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-from-default-profile-'))
     try {
       const created = await runBuiltBin(
@@ -689,14 +689,14 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toContain('[]')
       expect(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')).toContain('nodeLinker: hoisted')
 
+      writeFileSync(join(dir, 'cordis.patch.yml'), '- id: local-change\n  disabled: true\n')
       const repeated = await runBuiltBin(
         ['rescue', '--from-default-profile', 'web', '--help'],
         { DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' },
       )
-      expect(repeated.code).toBe(1)
-      expect(repeated.stdout).toBe('')
-      expect(repeated.stderr).toContain('profile "rescue" already exists')
-      expect(repeated.stderr).toContain('omit --from-default-profile to use it')
+      expect(repeated.code).toBe(0)
+      expect(repeated.stderr).toBe('')
+      expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).not.toContain('local-change')
 
       const reopened = await runBuiltBin(
         ['rescue', '--help'],

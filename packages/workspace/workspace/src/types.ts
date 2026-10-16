@@ -7,7 +7,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type {} from '@deepseek-ai/dsh-typert-protocol'
+import type { TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
  * Identifies one workspace record. A generated uuid, never the path: path
@@ -16,6 +16,11 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
 export type WorkspaceId = Branded<'WorkspaceId'>
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface TypertResourceMap {
+    /** One Workspace; the Workspace Controller registers its default `workspaceId` wire field. */
+    workspace: TypertResource<WorkspaceId>
+  }
+
   interface RemoteErrorDetailsMap {
     /** No registration carries that Workspace identity. */
     'workspace/not-found': { readonly workspaceId: WorkspaceId }

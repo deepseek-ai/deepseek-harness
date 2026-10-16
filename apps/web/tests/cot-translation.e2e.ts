@@ -18,6 +18,7 @@ import {
 
 const BUNDLE_NAME = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
 const BUNDLE = fileURLToPath(new URL('../../../packages/experimental/cot-translation-bundle', import.meta.url))
+const { version: bundleVersion } = JSON.parse(await readFile(join(BUNDLE, 'package.json'), 'utf8')) as { version: string }
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v4.jsonl', import.meta.url))
 const EXPECTED = fileURLToPath(new URL('./expected/cot-translation', import.meta.url))
 const MODE = webSnapshotMode()
@@ -209,9 +210,11 @@ it.skipIf(MODE === 'record')('persists Bing reasoning translation across reopen 
   expect(await provider.inputValue()).toBe('bing')
   expect(await target.inputValue()).toBe('auto')
   await panel.getByText('展开的思考内容会发送给所选翻译服务，可能包含私有代码或对话细节。', { exact: true }).waitFor()
+  await panel.getByText(`v${bundleVersion}`, { exact: true }).waitFor()
+  await panel.getByText(bundleVersion, { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'preferences.expected.md'),
     await captureStableAria(settings, '[data-plugin-panel]', scaffold.workspaceCwd, {
-      replacements: [[BUNDLE, '{{bundle}}']],
+      replacements: [[BUNDLE, '{{bundle}}'], [bundleVersion, '{{version}}']],
     }), MODE)
   expect(calls).toEqual([])
   await reasoning.locator('[data-disclosure-row]').first().click()

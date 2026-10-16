@@ -1112,3 +1112,10 @@ it.each([
     expect(await adapter.listModels('deepseek')).toEqual([])
   } else await expect(adapter.listModels('deepseek')).rejects.toBe(error)
 })
+
+it('resolves the exact pi-ai image budget for screenshot coordinates', () => {
+  const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, requestImageMaxBytes: 50_000 } })
+  expect(adapter.imageRequestTarget('deepseek', 'deepseek-flash', { ...IMAGE_REF, width: 1000, height: 1000 }))
+    .toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+  expect(() => adapter.imageRequestTarget('missing', 'deepseek-flash', IMAGE_REF)).toThrow('does not own provider')
+})

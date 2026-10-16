@@ -6,6 +6,7 @@
     "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
   },
   "files": [
+    "src/access.ts",
     "src/index.ts",
     "src/remote-error-codes.ts",
     "src/stream-protocol.ts",
@@ -27,6 +28,9 @@
     },
     {
       "path": "../../client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "../remote-access/tsconfig.host.json"
     },
     {
       "path": "../../host/webserver"

@@ -1,4 +1,4 @@
-/** Plugin peer checks retain exact mismatches and never inherit exemption entries. */
+/** Plugin dsh requirement checks prefer engines.dsh, retain exact mismatches, and never inherit exemption entries. */
 
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -71,14 +71,14 @@ describe('plugin compatibility', () => {
     })).toEqual({
       ...identity,
       runtimeVersion: runtime,
-      peers: { '@deepseek-ai/dsh-session': '>=0.2.0', '@deepseek-ai/dsh-tools': '<0.1.0' },
+      requirements: { '@deepseek-ai/dsh-session': '>=0.2.0', '@deepseek-ai/dsh-tools': '<0.1.0' },
       exempted: false,
     })
   })
 
   it.each(['^0.2.0', '>=0.1.7', 'broken', '', ' ', 'workspace:>=0.2.0', 'file:../dsh', 'npm:dsh@*'])(
     'fails closed for an incompatible or malformed range %j', (range) => {
-      expect(check({ '@deepseek-ai/dsh': range })?.peers).toEqual({ '@deepseek-ai/dsh': range })
+      expect(check({ '@deepseek-ai/dsh': range })?.requirements).toEqual({ '@deepseek-ai/dsh': range })
     },
   )
 
@@ -128,6 +128,53 @@ describe('plugin compatibility', () => {
   })
 })
 
+describe('engines.dsh', () => {
+  const failingPeers = { '@deepseek-ai/dsh': '^0.2.0' }
+  const passingPeers = { '@deepseek-ai/dsh': '*' }
+  function engines(dsh: unknown, peerDependencies: object = {}) {
+    return evaluatePluginCompatibility({ ...identity, engines: { dsh }, peerDependencies }, {}, runtime)
+  }
+
+  it.each(['^0.1.0', '>=0.1.7-alpha.0', '0.1.x', runtime])('decides alone when satisfied by %s, ignoring failing peers', (range) => {
+    expect(engines(range, failingPeers)).toBeUndefined()
+  })
+
+  it('decides alone when unsatisfied, ignoring passing peers', () => {
+    expect(engines('^0.2.0', passingPeers)).toEqual({
+      ...identity, runtimeVersion: runtime, requirements: { 'engines.dsh': '^0.2.0' }, exempted: false,
+    })
+  })
+
+  it.each(['', ' ', 'broken', 'workspace:^', 'workspace:*', 'workspace:~'])('treats %j as an unmet range', (range) => {
+    expect(engines(range, passingPeers)?.requirements).toEqual({ 'engines.dsh': range })
+  })
+
+  it.each([null, [], 'bad', 1, false, undefined])('rejects malformed engines: %j', (value) => {
+    expect(() => evaluatePluginCompatibility({ ...identity, engines: value }, {}, runtime)).toThrow('Plugin manifest engines must be an object')
+  })
+
+  it.each([null, [], {}, 1, false, undefined])('rejects a non-string engines.dsh: %j', (value) => {
+    expect(() => engines(value, passingPeers)).toThrow('Plugin manifest engines.dsh must be a string')
+  })
+
+  it('falls back to peers when engines has no own dsh member', () => {
+    const inherited = Object.create({ dsh: '*' }) as object
+    for (const value of [{}, { node: '>=99' }, inherited]) {
+      expect(evaluatePluginCompatibility({ ...identity, engines: value, peerDependencies: failingPeers }, {}, runtime)?.requirements)
+        .toEqual(failingPeers)
+      expect(evaluatePluginCompatibility({ ...identity, engines: value, peerDependencies: passingPeers }, {}, runtime)).toBeUndefined()
+    }
+    expect(evaluatePluginCompatibility(Object.create({ engines: { dsh: '^0.2.0' } }) as object, {}, runtime)).toBeUndefined()
+  })
+
+  it('applies exact-version exemptions to an engines mismatch', () => {
+    const manifest = { ...identity, engines: { dsh: '^0.2.0' } }
+    expect(evaluatePluginCompatibility(manifest, { '@example/plugin@2.0.0': [runtime] }, runtime)).toMatchObject({
+      requirements: { 'engines.dsh': '^0.2.0' }, exempted: true,
+    })
+  })
+})
+
 describe('exact-version exemptions', () => {
   const exemptions = { '@example/plugin@2.0.0': [runtime] }
 
@@ -164,10 +211,10 @@ describe('compatibility warning', () => {
   it.each([false, true])('retains mismatch details and risk when exemption status is %s', (exempted) => {
     expect(pluginCompatibilityWarning({
       ...identity, runtimeVersion: runtime,
-      peers: { '@deepseek-ai/dsh': '^0.2.0', '@deepseek-ai/dsh-session': 'broken' }, exempted,
+      requirements: { '@deepseek-ai/dsh': '^0.2.0', '@deepseek-ai/dsh-session': 'broken' }, exempted,
     })).toBe(
       'Plugin @example/plugin@2.0.0 is incompatible with dsh 0.1.7-alpha.1: '
-      + 'peerDependencies {"@deepseek-ai/dsh":"^0.2.0","@deepseek-ai/dsh-session":"broken"}. '
+      + 'requirements {"@deepseek-ai/dsh":"^0.2.0","@deepseek-ai/dsh-session":"broken"}. '
       + 'Running it may cause crashes or data loss. '
       + 'Update the plugin or install a plugin version compatible with this dsh runtime. '
       + 'To accept this risk explicitly, grant the exact-version exemption for @example/plugin@2.0.0 on dsh 0.1.7-alpha.1 '

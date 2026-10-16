@@ -9,7 +9,10 @@ export const inject = ['llm']
 export function apply(ctx: Context): void {
   const connection = resolveAdapterOptions({})
   ctx.on('llm/stream', (options, next) => {
-    serialize(options, connection, options.messages, new Map(), () => undefined)
+    const request = serialize(options, connection, options.messages, new Map(), () => undefined)
+    if (request.messages.some(message => message.content.some(block => block.type === 'text' && block.text.length === 0))) {
+      throw new Error('Messages history contains an empty text block')
+    }
     return next()
   })
 }

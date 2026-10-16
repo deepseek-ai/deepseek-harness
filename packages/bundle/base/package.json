@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-base",
   "description": "The shared dsh core as a profile bundle: the first patch layer of base-backed profiles, inserting core rows over the empty profile root",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-alpha.4",
   "publishConfig": {
     "access": "public"
   },
@@ -58,6 +58,7 @@
     "@deepseek-ai/dsh-goal": "workspace:*",
     "@deepseek-ai/dsh-goal-round-driver": "workspace:*",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
     "@deepseek-ai/dsh-llm-deepseek-account": "workspace:*",

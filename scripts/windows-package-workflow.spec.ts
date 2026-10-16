@@ -1,10 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { relative, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
-import { desktopTargetBuildPaths } from '../apps/desktop/scripts/desktop-build-paths.mjs'
 
 const root = resolve(import.meta.dirname, '..')
 const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows-package.yml'), 'utf8')) as {
@@ -60,15 +59,24 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
-  expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual(['build_version', 'preset', 'signing'])
-  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('unsigned')
-  expect(workflow.on.workflow_dispatch!.inputs.build_version!.description).toContain('prefix must match checkout')
+  expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
+    'build_version', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+  ])
+  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
+  expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
+  expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
+  expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
+  expect(workflow.on.workflow_dispatch!.inputs.update_channel!.default).toBe('nightly')
+  expect(job.env.PACKAGE_VERSION_MODE).toBe('${{ inputs.version_mode }}')
+  expect(job.env.PACKAGE_SOURCE_REF).toBe('${{ inputs.source_ref }}')
+  expect(job.env.DSH_DESKTOP_UPDATE_CHANNEL).toBe('${{ inputs.update_channel }}')
   expect(job.env.DSH_PACKAGING_PRESET).toBe('${{ inputs.preset }}')
   expect(job.env.PACKAGE_SIGNING).toBe('${{ inputs.signing }}')
-  expect(job.steps.find(step => step.id === 'checkout')!.with).toMatchObject({ clean: true, 'persist-credentials': false })
+  expect(job.steps.find(step => step.id === 'checkout')!.with).toMatchObject({ clean: true, 'persist-credentials': false, ref: '${{ inputs.source_ref }}' })
   expect(job.steps.find(step => step.uses?.startsWith('pnpm/action-setup@'))?.with?.dest)
     .toBe('${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}')
 })
@@ -94,8 +102,8 @@ it('retains failure diagnostics and uploads only the selected successful install
   expect(uploads).toHaveLength(3)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({ path: 'apps/desktop/.desktop-build/packaging-runs/', 'include-hidden-files': true })
-  for (const [mode, directory] of [['unsigned', desktopTargetBuildPaths('win-x64').unsignedArtifacts], ['signed', desktopTargetBuildPaths('win-x64').artifacts]]) {
+  for (const mode of ['unsigned', 'signed']) {
     const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: `${relative(root, directory!).replaceAll('\\', '/')}/*.exe`, 'if-no-files-found': 'error' })
+    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error' })
   }
 })

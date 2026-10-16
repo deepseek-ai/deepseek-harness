@@ -37,6 +37,8 @@ Factory `children` 仍是普通全局 Slots 且必须与 `SlotMap` 匹配，而�
 
 每个已注册组件都会收到由五个框架 share 组合而成的 props：运行时 share（父级 render 调用点的 `owner`，加上会话标准工具包与全局席位）、child render share（静态缩窄到已声明 children 的 `renderSlot`）、Factory render share（`renderFactorySlot`）、store share（已声明 handle 的 selector 钩子与移除 draft 的 actions），以及业务 share（从 `inject` 推导）。组件引用推导出的 props 别名；它们绝不在本地重新定义任何 share 的类型。
 
+以 `useName(key, selector?, equal?)` 调用的开放键标准钩子也接受 `useName(key, member)`：第二个参数为字符串时，钩子不经 selector，直接读取 `KeyedStandardSource` 解析器为 `(key, member)` 返回的 source。在该 source 存活期间，解析器对相同参数返回同一个 source 对象。
+
 ### Store 席位
 
 register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 推断状态 schema，`actions` 是完整的 draft-transform 写入集合。组件经 selector 钩子读取、经烘焙回调写入；`defineStore` 的引擎实现位于运行时包，并满足这里导出的 `DefineStore` 约定。

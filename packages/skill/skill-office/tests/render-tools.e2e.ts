@@ -123,6 +123,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the op
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
       expect(commands).toMatch(/\sconvert\b/u)
       expect(commands).not.toMatch(/\srender\b/u)
+      expect(commands).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)
     },

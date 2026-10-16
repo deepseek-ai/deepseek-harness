@@ -36,6 +36,7 @@ Resume, fork, subagent, ACP, webhook, and SDK sessions all persist through one e
 
 ## Related
 
+- [Cleanup dependency lifetimes](../../proposed/architecture/2026-10-09-cordis-cleanup-dependency-lifetimes.md) proposes retaining final events emitted during graceful cleanup, tightening this decision's permitted root-disposal tail loss while preserving handle ownership and storage format.
 - [Session persistence as an abstract service](../../../../packages/session/session-persistence/README.md) — the seam this reshapes; its interface list reflects the handle API.
 - [Persistence export() and pre-release trims](../../archived/simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the retired cold blank probe.
 - [Retain ignorable external session events](2026-08-30-retain-ignorable-external-session-events.md) — the read-side refusal contract, now shared through `storage-contract` helpers.

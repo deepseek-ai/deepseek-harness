@@ -28,7 +28,7 @@ import type { QuotaNoticeInjected } from '@deepseek-ai/dsh-client-ui-chat/client
 import type { PerformanceUsageRowInjected } from '../src/client/settings/PerformanceUsageRow.tsx'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 import { ActivityPill, UsagePill } from '../src/client/chat/StatsPills.tsx'
-import { createFlowMotion } from '../src/client/chat/flow-motion.ts'
+import { createFlowMotion, type InputFoldDriver } from '../src/client/chat/flow-motion.ts'
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
 import { UserContent } from '../src/client/chat/UserContent.tsx'
 
@@ -376,10 +376,11 @@ describe('Chat apply wiring', () => {
     type UseGroupAction = ReturnType<ChatFlowInjected['hooks']['groupAction']>
     type UseGroupHeaderAction = ReturnType<ChatFlowInjected['hooks']['groupHeaderAction']>
     const standard = { sessionId: SID } as Parameters<ChatFlowInjected['hooks']['groupAction']>[0]
-    const reserveFirst = vi.fn<(px: number) => void>()
-    const reserveSecond = vi.fn<(px: number) => void>()
-    const first = createFlowMotion(reserveFirst, () => {})
-    const second = createFlowMotion(reserveSecond, () => {})
+    // Each viewport asks only its own driver for a batch; null keeps the rows on CSS transitions.
+    const driverFirst = vi.fn<() => InputFoldDriver | null>(() => null)
+    const driverSecond = vi.fn<() => InputFoldDriver | null>(() => null)
+    const first = createFlowMotion(driverFirst, () => {})
+    const second = createFlowMotion(driverSecond, () => {})
     const useFirst = spec.inject.hooks.groupAction(standard, { motion: first })
     const useSecond = spec.inject.hooks.groupAction(standard, { motion: second })
     const useFirstHeader = spec.inject.hooks.groupHeaderAction(standard, { motion: first })
@@ -422,13 +423,13 @@ describe('Chat apply wiring', () => {
       expect(first.foldActive()).toBe(true)
       expect(second.foldActive()).toBe(false)
       await act(async () => { await Promise.resolve() })
-      expect(reserveFirst).toHaveBeenCalledExactlyOnceWith(80)
-      expect(reserveSecond).not.toHaveBeenCalled()
+      expect(driverFirst).toHaveBeenCalledTimes(1)
+      expect(driverSecond).not.toHaveBeenCalled()
       view.rerender(rows(true, true))
       expect(second.foldActive()).toBe(true)
       await act(async () => { await Promise.resolve() })
-      expect(reserveFirst).toHaveBeenCalledExactlyOnceWith(80)
-      expect(reserveSecond).toHaveBeenCalledExactlyOnceWith(90)
+      expect(driverFirst).toHaveBeenCalledTimes(1)
+      expect(driverSecond).toHaveBeenCalledTimes(1)
       const finished = new Event('transitionend', { bubbles: true })
       Object.defineProperty(finished, 'propertyName', { value: 'height' })
       act(() => { firstRow.dispatchEvent(finished) })

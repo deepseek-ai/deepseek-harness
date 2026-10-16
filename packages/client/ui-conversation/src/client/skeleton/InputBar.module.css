@@ -202,6 +202,11 @@
   content: none;
 }
 
+/* A selected command chip stands in for the caret until the next key. */
+.input[data-composer-chip-selected] {
+  caret-color: transparent;
+}
+
 .input[data-composer-composing] + .placeholder {
   visibility: hidden;
 }

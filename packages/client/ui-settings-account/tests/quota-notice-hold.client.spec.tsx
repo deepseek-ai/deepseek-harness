@@ -64,6 +64,7 @@ function sectionOperations(account: AccountSnapshot, pages: PlatformPages): Acco
     },
     openPlatformPage: pages.open,
     refreshAccount: async () => {},
+    avatarFailed: () => {},
     bonusNoticeShown: () => {}, bonusNoticeDismissed: () => {},
     hasRunningAccountTasks: async () => false,
     contactUs: () => {}, showLogin: () => {}, setOnboarding: () => {},
@@ -119,7 +120,7 @@ async function bench() {
   runtime.ctx.uiSession.provide = (next) => { descriptor ??= next; return provide(next) }
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
   if (descriptor === undefined) throw new Error('ui-chat did not provide its standard source')
-  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: undefined, failed: false })
+  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: undefined, avatar: undefined, failed: false })
   const account = {
     getSnapshot: () => accountSnapshot.getSnapshot(),
     subscribe: (listener: () => void) => accountSnapshot.subscribe(listener),
@@ -160,6 +161,7 @@ async function bench() {
     name: 'shell.overlay', id: 'desktop-onboarding', locale: 'settings.account',
     inject: (): DesktopOnboardingInjected => ({
       hooks: { onboarding, account },
+      setVisible: () => {},
       openPlatformPage: pages.open,
       update: async () => true, complete: async () => true, retry: async () => true,
     }),
@@ -365,7 +367,7 @@ describe('shared Platform page ownership', () => {
     await act(async () => { screen.getByRole('button', { name: en.quotaTopUp }).click() })
     expect(b.platform.open).toHaveBeenCalledOnce()
 
-    act(() => { b.account.set({ view: { ...storedView, status: 'signed-out' }, details: undefined, failed: false }) })
+    act(() => { b.account.set({ view: { ...storedView, status: 'signed-out' }, details: undefined, avatar: undefined, failed: false }) })
     expect(b.platform.close).toHaveBeenCalledOnce()
     expect(screen.queryByRole('button', { name: en.backToHarness })).toBeNull()
 

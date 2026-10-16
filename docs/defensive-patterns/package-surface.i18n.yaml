@@ -23,3 +23,6 @@
 /package-surface-rules/a-new-resolve-hook-is-refused-outright:
   en: b420ae3e228432d5
   zh: 0c49c4a9c3a5262c
+/package-surface-rules/package-modules-do-not-await-at-module-scope:
+  en: 29a58b3f804be042
+  zh: 8a83a21366dac897

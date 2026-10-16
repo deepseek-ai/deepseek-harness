@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。
+在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。Node 将 `/client` 解析为供程序化 Cordis 组合使用的独立 ESM bundle `lib/client.node.js`；浏览器通过逻辑 URL `/plugins/.../client.js` 使用 `lib/client.browser.js` loader factory。两个 bundle 使用相同的注册表实现，且与 Host 包根入口分离。
 
 ### 最小设置
 
@@ -45,9 +45,13 @@ kind: "package-reference"
 
 生成产物在 Loader 组合中通过 [loader](../loader/README.zh.md) 注册；其他所有者直接调用 `ctx.typert.register(contribution)`，并获得撤销它的同一资源释放函数。重复的包与 face 组合键、schema 键、调用 id 或端点会在提交任何内容之前拒绝整个批次。
 
+Harness 离线集成在各自的 profile Context 中通过 `ctx.typert.remotes.register(contribution)` 注册普通 `TYPERT_REMOTE` 贡献。`$mount(contribution)` 已执行该注册，因此在同一个注册表中先注册再挂载同一贡献会因重复而失败。离线元数据所有权应与建立实际连接及挂载的 Context 分离。独立离线消费方也可以直接读取 `TYPERT_REMOTE.methods`，无需任何 Registry。注册表状态归所属 Context 与进程所有，不跨进程共享；注册和查询都不会打开连接。
+
 ### Lookup 与 Context 提供方
 
 Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host 对象与作用域 Context。`registerHost()` 安装 Host wire 声明及其 wire 到 Context 的 resolver，`configureHost()` 只替换该 resolver。`registerClient()` 为同一个 merge-declared kind 安装双向 Client adapter。Host 到 Client 的事件源显式携带领域 identity，而不从 Context 反向投影。
+
+`ctx.typert.resources` 保存 `TypertResourceMap` 中每个资源种类的默认 wire 字段。拥有该种类的领域以 `register(kind, { field })` 登记，登记是调用方 fiber 的 Cordis effect；同一种类重复登记即抛错，登记内置的无身份资源种类 `global` 同样抛错。`get(kind)` 读取一个种类的声明，`entries()` 按登记顺序列出全部已登记的 `{ kind, field }`。lookup provider 与 Host Context adapter 可经 `resource` 声明其 wire 身份所属的资源种类，配置的 resolver 保留该声明。Gateway 解析非 owner 调用的资源时读取这三者。
 
 -----
 
@@ -69,6 +73,7 @@ Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host �
 - `ctx.typert.remotes`——在调用方 fiber 中挂载的、由消费方选中的贡献。
 - `ctx.typert.lookups`——lookup 提供方，以及按键配置的组合方解析器覆盖。
 - `ctx.typert.contexts`——按作用域键配置的 Host Context 提供方与 Client Context 绑定器。
+- `ctx.typert.resources`——每个资源种类的默认 wire 字段。
 
 每个子注册表都会向已订阅的监听器发布 `TypertRegistryChange` 事件；抛异常的监听器会被记录日志，且不会阻止后续监听器。
 

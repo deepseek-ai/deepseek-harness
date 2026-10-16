@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { makeTranslate, RemoteError, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate, RemoteError, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
   SessionListState, SessionSummary, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -94,6 +94,7 @@ function props(
     useSessionRetainInfo: unused,
     useWorkspaces: unused,
     useResource: unused,
+    ...allowAllAccess,
     useProjection: unused,
     useConversation: unused,
     useInput: unused,

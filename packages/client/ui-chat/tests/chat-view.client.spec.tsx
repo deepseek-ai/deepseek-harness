@@ -27,7 +27,7 @@ import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controlle
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -479,6 +479,7 @@ function makeHarness(
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
     ),
     useWorkspaces: emptyWorkspaces(),
+    ...allowAllAccess,
     useProjection: (key: string) => {
       const inbox = useTestSession(snapshot => snapshot.testInbox)
       return key === 'inbox' ? inbox : outlineValue
@@ -2357,6 +2358,7 @@ describe('ChatView', () => {
   it('renders every terminal failure inline with neutral quota copy and no transient notice', () => {
     const h = makeHarness({ nodes: [
       user(1, 'try'), turnError(2, 'AUTH'), turnError(3), turnError(4, 'QUOTA'), turnError(5, 'ACCOUNT_QUOTA'),
+      turnError(6, 'INTERRUPTED'),
     ] })
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
@@ -2365,6 +2367,7 @@ describe('ChatView', () => {
       '本轮运行失败plugin exploded',
       '本轮运行失败当前请求的额度已用尽QUOTA',
       '本轮运行失败当前请求的额度已用尽ACCOUNT_QUOTA',
+      '任务已停止DSH 进程在本轮完成前退出（例如被强制结束、崩溃或关闭超时），重新启动后本轮已中止。未完成的工具调用结果未知。',
     ])
     // The transient notice is the frame-wide host's job; the failure row keeps
     // neither a recharge affordance nor a toast of its own.
@@ -3257,6 +3260,23 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: /用量/ })).toBeTruthy()
   })
 
+  it('summarizes an interrupted turn as stopped, without elapsed time, and keeps it open', () => {
+    const answer: AssistantMessageNode = {
+      kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
+    }
+    const h = makeHarness({ chat: chatSnapshotFixture({
+      nodes: [user(1, 'hi'), answer, turnError(3, 'INTERRUPTED')],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 20_000 }]]),
+      turnEnds: new Map([[1, 3]]),
+      turnEndReasons: new Map([[1, { kind: 'interrupted' }]]),
+    }) })
+    const view = render(<h.ChatView {...h.props} />)
+    const control = turnProcessControl(view.container)
+    expect(control?.textContent).toBe('已停止')
+    expect(control?.disabled).toBe(true)
+    expect(view.getByText('任务已停止')).toBeTruthy()
+  })
+
   it('withholds the usage-details trigger when turn usage is outside the window', () => {
     const settled: AssistantMessageNode = {
       kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1, blocks: [{ kind: 'text', text: 'answer' }],
@@ -3374,6 +3394,17 @@ describe('ChatView', () => {
     expect(buttons[0]!.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(buttons[0]!)
     expect(h.forkAt).not.toHaveBeenCalled()
+  })
+
+  it('omits the Turn Tail branch action when the Session access snapshot excludes session/fork', () => {
+    const h = makeHarness({ nodes: [user(1, 'question'), assistant(2, 'answer')], turnEnds: new Map([[1, 3]]) })
+    const useAccess = vi.fn((endpoint: string) => endpoint !== 'session/fork')
+    // Chat Node renderers read the harness's standard props object, so the override goes there.
+    Object.assign(h.props, { useAccess })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.getAllByRole('button', { name: '复制' }).length).toBeGreaterThan(0)
+    expect(view.queryByRole('button', { name: '在新对话中分支' })).toBeNull()
+    expect(useAccess).toHaveBeenCalledWith('session/fork')
   })
 
   it('renders assistant Markdown across history, streaming, final, and interrupted states while user text stays literal', () => {
