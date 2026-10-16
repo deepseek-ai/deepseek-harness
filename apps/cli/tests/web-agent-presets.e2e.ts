@@ -713,7 +713,7 @@ describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surfac
         })
         try {
           for (const product of installed) {
-            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'prompt'])
+            expect(toolParameterNames(productCtx, handle.agent, toolName(product))).toEqual(['cwd', 'description', 'name', 'prompt'])
           }
         } finally { await handle.dispose() }
         expect(spawn).not.toHaveBeenCalled()
