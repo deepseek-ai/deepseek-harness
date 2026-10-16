@@ -1244,6 +1244,7 @@ describe('out-of-process delegation boundary', () => {
     if (schema === undefined) throw new Error('remote delegation tool schema is missing')
     appendHeader(session, [schema])
     const args = {
+      name: 'remote-inspector',
       description: 'remote boundary',
       prompt: 'Inspect the child runtime permission boundary.',
     }

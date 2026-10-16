@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` adds the global control tools for continuable children: `send_message` steers between a parent and child or between siblings, `interrupt_agent` stops a descendant’s current turn while keeping its inbox and descendants intact, and the separately loadable `list-agents` plugin discovers agents by id and description. Parents and continuable children inherit the same tool definitions and ordering.
+`dsh-tool-subagent-control` adds the global control tools for continuable children: `send_message` steers between a parent and child or between siblings, `interrupt_agent` stops a descendant’s current turn while keeping its inbox and descendants intact, and the separately loadable `list-agents` plugin discovers agents by name and description. Parents and continuable children inherit the same tool definitions and ordering.
 
 ## Table of Contents
 
@@ -148,7 +148,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-One line per descendant in stable order: `<id> [<status>] parent=<id> depth=<n> — <label>`. A continuable child’s list starts with `<id> [<status>] — your parent`, then `<id> [<status>] — sibling: <label>` rows. Unknown modes or unreadable catalogs produce `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion. `(no subagents)` means no row survived the projection.
+One line per descendant in stable order: `<name> [<status>] parent=<name> depth=<n> — <label>`. A continuable child’s list starts with `<name> [<status>] — your parent`, then `<name> [<status>] — sibling: <label>` rows. Unknown modes or unreadable catalogs produce `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion. `(no subagents)` means no row survived the projection.
 
 #### Token effect
 

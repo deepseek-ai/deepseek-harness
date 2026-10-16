@@ -69,18 +69,18 @@ describe('Codex provider public Loader composition', () => {
       tools: [
         {
           name: 'subagent_codex',
-          parameterNames: ['cwd', 'description', 'prompt'],
-          required: ['description', 'prompt'],
+          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          required: ['name', 'description', 'prompt'],
         },
         {
           name: 'subagent_codex_primary',
-          parameterNames: ['cwd', 'description', 'prompt'],
-          required: ['description', 'prompt'],
+          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          required: ['name', 'description', 'prompt'],
         },
         {
           name: 'subagent_codex_secondary',
-          parameterNames: ['cwd', 'description', 'prompt'],
-          required: ['description', 'prompt'],
+          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          required: ['name', 'description', 'prompt'],
         },
       ],
       jobTools: ['job_kill', 'job_list', 'job_output'],

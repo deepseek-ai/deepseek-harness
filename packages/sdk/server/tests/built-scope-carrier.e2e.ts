@@ -69,6 +69,7 @@ try {
   });
   const run = await ctx.subagents.startActivation({
     provider: "built-local",
+    name: "scope-child",
     childId: SessionId("built-child"),
     label: "built scope carrier",
     delivery: "caller",
