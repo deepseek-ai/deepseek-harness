@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
-import { desktopPublicationFailure } from '../scripts/desktop-publication-failure.ts'
+import { DesktopCosOperationError, desktopPublicationFailure } from '../scripts/desktop-publication-failure.ts'
 import { DesktopPublishError } from '../scripts/desktop-publish.ts'
 
 it('preserves actionable validation and filesystem diagnostics', () => {
@@ -33,4 +33,14 @@ it('prints rollback usage through the real CLI before any audit or remote operat
   const diagnostic = z.object({ code: z.string(), message: z.string() }).parse(JSON.parse(result.stderr))
   expect(diagnostic.code).toBe('validation')
   expect(diagnostic.message).toContain('Usage: rollback-desktop-channel.ts')
+})
+
+it('omits malformed provider receipt fields and never copies raw errors into COS diagnostics', () => {
+  const error = new DesktopCosOperationError('PutObject', { code: 'AccessDenied', statusCode: 'fixture-secret',
+    RequestId: 'Authorization: fixture-secret', body: 'fixture-secret', message: 'fixture-secret' })
+  const failure = desktopPublicationFailure(error, 'publication')
+  expect(failure).toMatchObject({ code: 'AccessDenied', operation: 'PutObject' })
+  expect(failure).not.toHaveProperty('requestId')
+  expect(failure).not.toHaveProperty('httpStatus')
+  expect(JSON.stringify(failure)).not.toContain('fixture-secret')
 })

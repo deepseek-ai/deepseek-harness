@@ -71,22 +71,36 @@ export function pinHostClock(): MockInstance<typeof Date.now> {
 }
 
 /**
- * Anchor browser `Date.now()` to the fixture day while native timers keep running.
- * Pair with {@link pinHostClock} for live messages or `seedSession`'s `createdAt`
- * for seeded history. The offset advances across navigation and reload.
+ * Pin a scenario page's calendar to the shared fixture day, advancing with real
+ * time. Pair it with {@link pinHostClock} for a scenario that stamps its own
+ * message times, and with `seedSession`'s `createdAt` for a seeded one.
  *
- * Install before navigation. The page owns the override; closing it releases it.
- * Playwright's clock also replaces timers and derives elapsed time from the
- * test process's wall clock, which {@link pinHostClock} may have changed.
- * @param page - page whose message timestamps use the fixture day.
- * @returns completion of the initialization-script registration.
+ * Only the page's `Date` reads the fixture day; native timers and
+ * `requestAnimationFrame` keep their real scheduling. Playwright's
+ * `page.clock` is not used: its server records clock state with the Vitest
+ * worker's `Date.now`, which {@link pinHostClock} replaces, so after a
+ * navigation the page clock replays the gap between the real and fixture days
+ * and hands the resulting negative delay to native `setTimeout`. The browser
+ * truncates that delay to a 32-bit integer, and in about half of the dates the
+ * result is a positive delay of weeks that stops every page timer. The `Date`
+ * override is installed for every later document and on the current one, and
+ * stays until the page closes.
+ * @param page - page whose calendar is pinned.
  */
 export async function pinBrowserClock(page: Page): Promise<void> {
-  const offset = WEB_FIXTURE_TIME - await page.evaluate(() => Date.now())
-  await page.addInitScript((offset: number) => {
-    const nativeNow = Date.now
-    Date.now = () => nativeNow() + offset
-  }, offset)
+  // The worker's `new Date()` keeps the real clock even when `Date.now` is pinned.
+  const offset = WEB_FIXTURE_TIME - new Date().getTime()
+  const install = (offset: number): void => {
+    const NativeDate = Date
+    const now = (): number => NativeDate.now() + offset
+    globalThis.Date = new Proxy(NativeDate, {
+      construct: (target, args, newTarget): Date => Reflect.construct(target, args.length === 0 ? [now()] : args, newTarget) as Date,
+      apply: () => new NativeDate(now()).toString(),
+      get: (target, property, receiver): unknown => property === 'now' ? now : Reflect.get(target, property, receiver),
+    })
+  }
+  await page.addInitScript(install, offset)
+  await page.evaluate(install, offset)
 }
 
 /**

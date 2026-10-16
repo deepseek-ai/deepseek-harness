@@ -5986,6 +5986,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-tool':
         specifier: workspace:*
         version: link:../ui-tool
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:*
+        version: link:../../boot/plugin-manager
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session

@@ -1,0 +1,8 @@
+{
+  "phase": "publication",
+  "code": "AccessDenied",
+  "message": "COS PutObject: AccessDenied. Check name/cos:PutObject permission and explicit deny rules for the selected bucket/object. Publication stopped; reconcile remote state before retrying.",
+  "operation": "PutObject",
+  "requestId": "fixture-request",
+  "httpStatus": 403
+}

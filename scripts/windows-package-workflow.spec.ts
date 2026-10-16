@@ -66,7 +66,7 @@ it('routes manual packaging to the dedicated runner with explicit preset and sig
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
     'build_version', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
-  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('unsigned')
+  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
   expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
   expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
