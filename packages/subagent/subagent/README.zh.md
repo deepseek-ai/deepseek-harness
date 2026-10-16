@@ -42,7 +42,7 @@ kind: "package-reference"
     toolName: subagent
 ```
 
-工具立即返回子会话 ID，后台 activation 结算后父级收到完成通知。仅挂载服务本身不会启用委派。
+工具要求唯一的 agent 名字，并立即返回该名字。后台 activation 结束时，父级收到完成通知。只挂载服务不会启用委派。
 
 ### 委派设置
 
@@ -56,9 +56,12 @@ kind: "package-reference"
 
 容量耗尽时，新建或冷恢复以 `ACTIVATION_LIMIT_REACHED` 拒绝（浏览器消息返回 `subagent/delivery-unavailable`）：等待子代理完成，或继续使用现有代理。接纳不会排队，避免等待后代的父代理又等待自己占用的名额。名额仅存在于当前进程，不限制累计 Session 历史或 token 用量。
 
+<a id="local-and-external-children"></a>
 ### 本地与外部子级
 
-`startActivation({ provider, label, request, signal, delivery })` 返回 `{ childId, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息并支持冷恢复；外部子级只暴露一次执行，拒绝继续输入。`request.agentOptions` 覆盖后端支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 让工作流等待结果，不发送父级通知，也不附加初始返回指导。本地父级投递需要持久化，调用方投递可以使用临时本地会话；冷恢复需要持久化与 Session 查询服务。
+`startActivation({ name, provider, label, request, signal, delivery })` 返回 `{ childId, name, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息，支持冷恢复；外部子级只执行一次，拒绝继续执行。`request.agentOptions` 覆盖受支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 允许 workflow 等待结果，不发送父级通知或初始返回指引。本地 parent 交付要求持久化；caller 交付可使用临时本地会话。冷恢复要求持久化和 Session query。
+
+agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。`SubagentNames` 在异步准备前预留名字，释放失败且未发布的启动，并将成功分配作为 `subagent/named` 记录在根 Session 中。`subagentNames` 投影在结束和重启后保留分配，排除分叉继承的事件。`nameOf()` 和 `resolveName()` 在名字与稳定 Session id 之间转换，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
 
 ### 子级 preset
 

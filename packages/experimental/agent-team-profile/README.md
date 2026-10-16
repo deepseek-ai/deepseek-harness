@@ -42,7 +42,7 @@ Enable Agent Teams on the Web or Desktop Plugins page to activate both tools and
 dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ```
 
-In an existing profile’s `package.json`, keep `@deepseek-ai/dsh-experimental-agent-team-profile` in `dsh.profile.bundles` and remove the separate `@deepseek-ai/dsh-experimental-agent-team-web-profile` entry. User patches targeting `ui-agent-team` still apply. A user patch that sets a removed Team key keeps that Team row from activating; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) lists the removed keys and tools.
+In an existing profile’s `package.json`, keep `@deepseek-ai/dsh-experimental-agent-team-profile` in `dsh.profile.bundles` and remove the separate `@deepseek-ai/dsh-experimental-agent-team-web-profile` entry. User patches targeting `ui-agent-team` still apply. A user patch that sets a removed Team key keeps that Team row from activating; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) lists the removed keys and tools.
 
 ### What you get
 

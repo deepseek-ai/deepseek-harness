@@ -1,8 +1,8 @@
 /**
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
- * wording. Every delegation starts a managed activation and returns its child
- * id; the subagent runtime owns result delivery and resource cleanup.
+ * wording. Every delegation starts a managed activation and returns its
+ * name; the subagent runtime owns result delivery and resource cleanup.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -212,12 +212,17 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ' This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes.'
+          + ' This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes.'
           + (subagentProvider.prepareContinuable !== undefined
             ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
           + choiceDescription,
         parameters: {
+          name: {
+            type: 'string',
+            required: true,
+            description: 'Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish.',
+          },
           cwd: {
             type: 'string',
             description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -267,10 +272,10 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
             additionalProperties: false,
             properties: {
               kind: { type: 'string', required: true, const: 'activation' },
-              subagentId: { type: 'string', required: true },
+              name: { type: 'string', required: true },
             },
           },
-          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -327,14 +332,15 @@ export async function apply(ctx: Context, config: Config, session?: Session): Pr
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 
-          const started = await runtimeCtx.subagents.startActivation({
+          await runtimeCtx.subagents.startActivation({
+            name: args.name,
             provider: config.provider,
             label: args.description,
             request,
             signal: exec.signal,
             delivery: 'parent',
           })
-          return { kind: 'activation' as const, subagentId: started.childId }
+          return { kind: 'activation' as const, name: args.name }
         },
       })
       const disposeTool = runtimeCtx.effect(() => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 // Web e2e scenario: the composer's independent Stop interrupts a running
 // continuable child. The child holds its model turn open through a replay
 // hang entry; the browser proves Send and Stop coexist, the parent-offline
@@ -148,7 +149,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     if (root === undefined) throw new Error('fresh workspace did not publish its parent Agent')
     parent = root
     // The child's first model call claims the primary override and holds.
-    const started = await scaffold.ctx.subagents.startActivation({
+    const started = await scaffold.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       delivery: 'parent',
       provider: 'spawn',
       label: LABEL,
@@ -378,7 +379,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
+    expect(userTexts[1]).toMatch(/^Your name is .+Your parent agent name is .+send_message\(\{ name: /)
     expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
     const imageMessage = events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'image'))

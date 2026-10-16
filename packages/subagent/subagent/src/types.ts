@@ -29,6 +29,8 @@ export function SubagentRunId(id: string): SubagentRunId {
 
 /** One managed child execution and its result delivery policy. */
 export interface SubagentActivationSpec {
+  /** Immutable name, unique across the parent's whole subagent tree. */
+  readonly name: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -45,6 +47,8 @@ export interface SubagentActivationSpec {
 
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 export interface SubagentActivation {
+  /** Immutable name used by model-facing collaboration tools. */
+  readonly name: string
   /** Stable identity of the child. */
   readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */

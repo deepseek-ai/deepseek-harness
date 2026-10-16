@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -386,7 +387,7 @@ describe('in-process structured output', () => {
       name: 'start_descendant', description: 'Start delegated work', parameters: {},
       async execute(_args, exec): Promise<ContentBlock[]> {
         if (exec.agent === undefined) throw new Error('expected the structured parent')
-        descendant = await ctx.subagents.startActivation({
+        descendant = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
           provider: 'spawn', label: 'Nested work', signal: testToolSignal, delivery: 'parent',
           request: {
             parent: exec.agent, prompt: [{ type: 'text', text: 'Work until released' }],
@@ -450,7 +451,7 @@ describe('in-process structured output', () => {
       name: 'delegate_answer', description: 'Delegate answer computation', parameters: {},
       async execute(_args, exec): Promise<ContentBlock[]> {
         if (exec.agent === undefined) throw new Error('expected the structured parent')
-        await ctx.subagents.startActivation({
+        await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
           provider: 'delayed-answer', label: 'Compute answer', signal: testToolSignal, delivery: 'parent',
           request: { parent: exec.agent, prompt: [{ type: 'text', text: 'Compute the answer' }] },
         })

@@ -2,16 +2,17 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { TeamTaskId } from '@deepseek-ai/dsh-experimental-agent-team'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { TeamTaskId, type TeamTaskView } from '@deepseek-ai/dsh-experimental-agent-team'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agents', 'agentTeams', 'tools', 'systemPrompt']
+export const inject = ['agents', 'agentTeams', 'subagents', 'tools', 'systemPrompt']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -23,13 +24,13 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use agent ids with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent ids as task owners. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts by default; descendants scope discovers deeper agents for task assignment but does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
 const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.'
 
@@ -43,7 +44,7 @@ const TASK_VIEW_SCHEMA = {
     subject: { type: 'string', required: true },
     description: { type: 'string', required: true },
     status: { type: 'string', required: true, enum: ['pending', 'in_progress', 'completed', 'deleted'] },
-    ownerId: { type: 'string' },
+    ownerName: { type: 'string' },
     blockedBy: { type: 'array', required: true, items: { type: 'string' } },
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
@@ -94,6 +95,12 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
   }
 }
 
+/** Project durable task ownership to the names used by collaboration tools. */
+function namedTask(ctx: Context, caller: Agent, task: TeamTaskView) {
+  const { ownerId, ...view } = task
+  return { ...view, ...ownerId === undefined ? {} : { ownerName: ctx.subagents.nameOf(caller, ownerId) } }
+}
+
 /** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
   /* v8 ignore next 2 -- Team tools are registered only in an exact Agent scope, so discovery supplies this carrier. */
@@ -120,8 +127,8 @@ function install(agent: Agent, ctx: Context): () => void {
       text: () => {
         const { role, root } = ctx.agentTeams.membership(agent)
         return role === 'lead'
-          ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
-          : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
+          ? 'You are the Team Lead. Your name is lead.'
+          : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(agent, root.id))}.`
       },
     }))
 
@@ -173,12 +180,13 @@ function install(agent: Agent, ctx: Context): () => void {
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
-        return await ctx.agentTeams.createTask(callingAgent(exec.agent, 'team_task_create'), {
+        const caller = callingAgent(exec.agent, 'team_task_create')
+        return namedTask(ctx, caller, await ctx.agentTeams.createTask(caller, {
           subject: args.subject,
           description: args.description,
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        })
+        }))
       },
     })))
 
@@ -191,7 +199,7 @@ function install(agent: Agent, ctx: Context): () => void {
           enum: ['pending', 'in_progress', 'completed'],
           description: 'Optional exact status filter.',
         },
-        owner: { type: 'string', description: 'Optional exact ownerId filter; use unowned for tasks without an owner.' },
+        owner: { type: 'string', description: 'Optional exact ownerName filter; use unowned for tasks without an owner.' },
         ready: { type: 'boolean', description: 'Optional readiness filter.' },
         cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
@@ -199,9 +207,10 @@ function install(agent: Agent, ctx: Context): () => void {
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
       execute(args, exec) {
         const status = args.status
-        const filtered = ctx.agentTeams.listTasks(callingAgent(exec.agent, 'team_task_list')).filter(task =>
+        const caller = callingAgent(exec.agent, 'team_task_list')
+        const filtered = ctx.agentTeams.listTasks(caller).map(task => namedTask(ctx, caller, task)).filter(task =>
           (status === undefined || task.status === status)
-          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerId === undefined : task.ownerId === args.owner))
+          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
           && (args.ready === undefined || task.ready === args.ready))
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
@@ -221,11 +230,9 @@ function install(agent: Agent, ctx: Context): () => void {
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
-      async execute(args, exec) {
-        return Promise.resolve(ctx.agentTeams.getTask(
-          callingAgent(exec.agent, 'team_task_get'),
-          TeamTaskId(args.task_id),
-        ))
+      execute(args, exec) {
+        const caller = callingAgent(exec.agent, 'team_task_get')
+        return Promise.resolve(namedTask(ctx, caller, ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))))
       },
     })))
 
@@ -245,11 +252,17 @@ function install(agent: Agent, ctx: Context): () => void {
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Agent id of the Lead or a continuable descendant for Lead-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Agent name of the Lead or a continuable descendant for Lead-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
-        return await ctx.agentTeams.updateTask(callingAgent(exec.agent, 'team_task_update'), {
+        const caller = callingAgent(exec.agent, 'team_task_update')
+        // Team authorizes historical members that predate subagent catalogs.
+        const legacyId = args.owner?.startsWith('legacy:') ? SessionId(args.owner.slice('legacy:'.length)) : undefined
+        const owner = args.owner === undefined ? undefined
+          : legacyId !== undefined && ctx.subagents.nameOf(caller, legacyId) === args.owner ? legacyId
+            : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+        return namedTask(ctx, caller, await ctx.agentTeams.updateTask(caller, {
           taskId: TeamTaskId(args.task_id),
           expectedRevision: args.expected_revision,
           action: args.action,
@@ -257,8 +270,8 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.description === undefined ? {} : { description: args.description },
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-          ...args.owner === undefined ? {} : { owner: SessionId(args.owner) },
-        })
+          ...owner === undefined ? {} : { owner },
+        }))
       },
     })))
   } catch (error: unknown) {

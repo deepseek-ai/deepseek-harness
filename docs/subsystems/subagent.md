@@ -29,6 +29,8 @@ interface SubagentCapabilities {
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec {
+  /** Immutable name, unique across the parent's whole subagent tree. */
+  readonly name: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -47,6 +49,8 @@ interface SubagentActivationSpec {
 ```ts type-equiv
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 interface SubagentActivation {
+  /** Immutable name used by model-facing collaboration tools. */
+  readonly name: string
   /** Stable identity of the child. */
   readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */
@@ -392,6 +396,26 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 
 
+## Agent names
+
+Names are unique in one live subagent tree; the root is `lead`. The root Session owns immutable assignments and the projection excludes inherited facts. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
+
+```ts type-equiv
+/** One immutable name assigned in the root Session before child publication. */
+interface SubagentNameData {
+  readonly name: string
+  readonly id: SessionId
+}
+```
+
+```ts type-equiv
+/** Root-owned name assignments, excluding fork-inherited events. */
+interface SubagentNamesState {
+  readonly inheritedEventCount: SessionLogOffset
+  readonly entries: readonly SubagentNameData[]
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -443,6 +467,24 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
  * @returns activation with a message id only for local children.
  */
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
+
+/**
+ * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
+ * @param caller - exact live Agent selecting the tree.
+ * @param id - target identity; omission selects the caller.
+ * @returns lead, the immutable assigned name, or a legacy address.
+ */
+nameOf(caller: Agent, id: SessionId = caller.id): string
+
+/**
+ * Resolve a tree-wide name without granting authority to act on its Agent.
+ * @param caller - exact live Agent selecting the tree.
+ * @param name - a name returned by creation or discovery.
+ * @param signal - cancellation during historical discovery.
+ * @returns the durable Session identity for the consuming operation to authorize.
+ * @throws when the name is absent or the caller's live tree is unavailable.
+ */
+resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
 
 /**
  * Join progressing descendants without cancelling them. Idle descendants whose

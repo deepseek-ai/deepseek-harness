@@ -211,7 +211,7 @@ describe('web e2e: Agent Teams panel', () => {
     const provider = 'team-descendant-fixture'
     scaffold.ctx.effect(() => scaffold.ctx.llm.registerAdapter([provider], new MockAdapter(['hang', 'hang'])))
     const branch = await scaffold.ctx.subagents.startActivation({
-      provider: 'spawn', label: 'Branch reviewer', delivery: 'caller', signal: new AbortController().signal,
+      name: 'branch-reviewer', provider: 'spawn', label: 'Branch reviewer', delivery: 'caller', signal: new AbortController().signal,
       request: {
         parent: root, prompt: [{ type: 'text', text: 'Review the branch.' }],
         agentOptions: { provider, model: 'fixture' },
@@ -224,7 +224,7 @@ describe('web e2e: Agent Teams panel', () => {
       return agent!
     })
     const leaf = await scaffold.ctx.subagents.startActivation({
-      provider: 'spawn', label: 'Nested reviewer', delivery: 'caller', signal: new AbortController().signal,
+      name: 'nested-reviewer', provider: 'spawn', label: 'Nested reviewer', delivery: 'caller', signal: new AbortController().signal,
       request: { parent, prompt: [{ type: 'text', text: 'Review nested changes.' }] },
     })
     onTestFinished(() => leaf.dispose())

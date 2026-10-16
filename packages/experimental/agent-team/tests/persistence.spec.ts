@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -117,7 +118,7 @@ for (const backend of backends) {
 
       const first = await stack(backend, storageRoot, [textResponse('initial teammate answer')])
       const firstLead = await first.ctx.agentLoop.create(rootId, { provider: 'mock', model: 'mock' })
-      const started = await first.ctx.subagents.startActivation({
+      const started = await first.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
         provider: 'spawn',
         label: 'restart worker',
         request: { prompt: [{ type: 'text', text: 'finish before restart' }], parent: firstLead },

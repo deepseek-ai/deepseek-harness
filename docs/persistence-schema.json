@@ -15908,6 +15908,81 @@
       }
     },
     {
+      "key": "event:subagent/named",
+      "kind": "event",
+      "event": "subagent/named",
+      "surface": false,
+      "digest": "273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "id",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "subagent/named"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:system/message",
       "kind": "event",
       "event": "system/message",
@@ -22997,6 +23072,11 @@
       "sources": []
     },
     {
+      "digest": "273f07aea05d56ffbb8b43508bcfb4a20cce230819feadb3fe740bceb8b12ca6",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "2765e9119edf5816ac1ab4c95c5ee32c90403f3742962eff11544f7752d59d2e",
       "names": [],
       "sources": []
@@ -25072,6 +25152,15 @@
       ]
     },
     {
+      "digest": "b0b7b7f4d127101c49bfd0128e6f37c4627ebbc8baddf5b2e9edff1dac8c84b8",
+      "names": [
+        "packages/subagent/subagent/src/names.ts#SubagentNameData"
+      ],
+      "sources": [
+        "packages/subagent/subagent/src/names.ts:15"
+      ]
+    },
+    {
       "digest": "b158f3ff6923714807c0d73882f0b05dc87f8fa85c9e90814852d48bbc866081",
       "names": [
         "packages/core/session/src/types.ts#RequestContext"
@@ -26114,6 +26203,11 @@
     },
     {
       "digest": "fd0d91a1f9dd2efb8959bdf5e07f8f0a98b1cdfa38ce8d4732ebde0b44c3abd4",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "fdca5e24e7a0bb1af1f3536b8c85787ca1dbca2802f632bf4a5347a2ba62fdb1",
       "names": [],
       "sources": []
     },

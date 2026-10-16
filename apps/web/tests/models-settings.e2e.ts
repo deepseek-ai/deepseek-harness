@@ -6,10 +6,11 @@
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
 // provider status. The customized-settings fold writes its curated fields —
-// the endpoint, and a declared route's own name and protocol — as merge
-// patches against the stored profile. Zero model calls: configuration is pure
-// settings/credentials/llm-domain traffic, so there is no fixture and a
-// stray stream would fail loud because the adapter registry is empty. The provider under test is
+// the endpoint, a declared route's own name and protocol, and the reasoning
+// levels of its models — as merge patches against the stored profile. Zero
+// model calls: configuration is pure settings/credentials/llm-domain traffic,
+// so there is no fixture and a stray stream would fail loud because the
+// adapter registry is empty. The provider under test is
 // minimax-cn so a developer's real ANTHROPIC/OPENAI environment keys can
 // never shadow the derived reference. The deletion dialog distinguishes a
 // reference-free profile from a page-managed key before the credential and
@@ -300,23 +301,29 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await custom.getByLabel('Provider ID').fill('acme-gateway')
     await custom.getByLabel('显示名称').fill('Acme Gateway')
     await custom.getByLabel('API 地址').fill('https://gateway.acme.example/v1')
-    // No reasoning effort on a provider card at all: effort is a per-model
-    // capability, the models under one provider disagree about it, and a
-    // switch in the composer already records provider+model+effort together.
+    // No provider-scoped reasoning control: effort is a per-model capability
+    // and the models under one provider disagree about it, so each model row
+    // declares its own levels instead.
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await custom.getByRole('button', { name: '添加模型', exact: true }).click()
     await custom.getByLabel('模型 ID 1').fill('acme-large')
     await custom.getByRole('button', { name: '模型选项 1' }).click()
     expect(await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
+    // The switch seeds off, low, medium, and high rows; this route serves no medium.
+    const reasoning = custom.getByRole('group', { name: '推理等级 1' })
+    await reasoning.getByRole('switch', { name: '推理等级 1' }).click()
+    await reasoning.getByRole('button', { name: '删除档位 medium', exact: true }).click()
     await custom.getByRole('button', { name: '创建提供商', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('acme-gateway:')
+    expect(document).toContain('reasoningEfforts:')
     await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
       inputModalities: ['text', 'image'],
+      reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] },
     })
 
     // The tag follows the adapter's installed catalog: this route is in no
@@ -345,6 +352,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await name.inputValue()).toBe('Acme Gateway')
     await dialog.getByRole('button', { name: '模型选项 1' }).click()
     expect(await dialog.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
+    // The stored levels come back as rows beside the values they send.
+    const reasoning = dialog.getByRole('group', { name: '推理等级 1' })
+    expect(await reasoning.getByRole('combobox').evaluateAll(selects => selects.map(select => (select as HTMLSelectElement).value)))
+      .toEqual(['off', 'low', 'high'])
+    expect(await reasoning.getByLabel('high API 参数值').inputValue()).toBe('high')
     await assertModelInputLayout(page, dialog)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DECLARED_EDIT_EXPECTED, snapshot, MODE)
@@ -352,6 +364,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await protocol.selectOption('anthropic-messages')
     await name.fill('Acme 网关')
     await dialog.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).uncheck()
+    // A gateway with its own spelling for the top level.
+    await reasoning.getByLabel('high API 参数值').fill('deep')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await expect.poll(async () => dialog.getByLabel('API 协议').count(), { timeout: 10_000 }).toBe(0)
     // The adapter re-resolved the route under the new protocol and re-registered
@@ -365,8 +379,11 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('api: anthropic-messages')
     expect(document).toContain('displayName: Acme 网关')
+    expect(document).toContain('high: deep')
+    // The level keeps its id and name; only its wire spelling changed.
     await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
       inputModalities: ['text'],
+      reasoning: { efforts: [{ id: 'off' }, { id: 'low' }, { id: 'high', name: 'High' }] },
     })
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

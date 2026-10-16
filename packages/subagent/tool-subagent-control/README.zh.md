@@ -45,15 +45,15 @@ kind: "package-reference"
 
 ### send_message
 
-向 `agent_id` 中的 Session id 发消息。确切在线的 Agent 可联系直接可继续子级；驻留的可继续子级还可联系直接父级或可继续同级。同级投递使用共同在线父级的权限，并保留实际发送方。工作中的目标通过 Steer 在最近步骤边界接收消息；不活跃的子级或同级会启动或恢复轮次。成功返回收件箱接受标识（`messageId`），而非回复。不支持的目标、不可用的父级、未知子级、缺失描述符或被拒绝的准入均返回错误。
+向 agent 的 `name` 发消息。确切在线的 Agent 可联系直接可继续子级；驻留的可继续子级还可联系直接父级或可继续同级。同级投递使用共同在线父级的权限，并保留实际发送方。工作中的目标通过 Steer 在最近步骤边界接收消息；不活跃的子级或同级会启动或恢复轮次。成功返回收件箱接受标识（`messageId`），而非回复。不支持的目标、不可用的父级、未知名字、缺失描述符或被拒绝的准入均返回错误。
 
 ### interrupt_agent
 
-`agent_id` 使用 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
+`name` 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
 
 ### list_agents
 
-按 id 和描述列出代理。`children`（默认）从父级目录列出直接可继续子级；对于父级在线的可继续子代理，先列父级及可继续同级。`descendants` 只按稳定前序列出可达后代，附带直接父级 id 和深度。在线状态为 `running` 或 `inactive`。外部条目无需读取子 Session 即被省略；可读的一次性子级用于遍历，但不输出行。未知模式和无法读取的子级目录只在 `descendants` 范围产生诊断。普通 Session 分叉不是目录条目。
+按稳定前序列出全部可达的可继续后代，每行带直接父级名字 和深度。父级在线的可继续子代理先看到父级及可继续同级。在线状态为 `running` 或 `inactive`。外部条目无需读取子 Session 即被省略；可读的一次性子级用于遍历，但不输出行。未知模式和无法读取的子级目录产生诊断。普通 Session 分叉不是目录条目。
 
 -----
 
@@ -67,15 +67,15 @@ kind: "package-reference"
 
 ### 设计理念
 
-这些工具是 `ctx.subagents.sendMessage()`、`interrupt()` 和列表投影的薄适配层；驻留、冷恢复和授权属于服务。工具使用确切在线的调用 Agent（`exec.agent`）作为发送方和权限凭据，并将 `agent_id` 转为品牌化 Session id。
+工具先通过 `ctx.subagents.resolveName()` 解析名字，再调用 `sendMessage()` 或 `interrupt()`。驻留、冷恢复和授权属于服务。工具以确切在线的调用 Agent（`exec.agent`）作为发送方和权限凭据。
 
 ### 投递与信号所有权
 
-工具转发执行信号，它只在收件箱接受前控制准入。已接受的消息不能通过此工具取消。每条消息以 `Agent <sender-id> sent a message:` 开头，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`，使用父级权限的同级投递也一样。归属信息不授予权限。
+工具转发执行信号，它只在收件箱接受前控制准入。已接受的消息不能通过此工具取消。每条消息以 `Agent <sender-name> sent a message:` 开头，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`，使用父级权限的同级投递也一样。归属信息不授予权限。
 
 ### 列表投影
 
-`list_agents` 无游标读取调用方目录，并通过在线 Agent 注册表细化状态。在 `children` 范围，可继续调用方的在线父级目录提供父级和同级行。后代遍历保留目录顺序；未知模式附带诊断并继续遍历，无法读取的目录则停止该分支。可达目录之外的后代无法被发现。
+`list_agents` 无游标遍历调用方目录，并通过在线 Agent 注册表细化状态。可继续调用方的在线父级目录提供父级和同级行。后代遍历保留目录顺序；未知模式附带诊断并继续遍历，无法读取的目录则停止该分支。可达目录之外的后代无法被发现。
 
 ### 源码地图
 
@@ -106,7 +106,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的[模式](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接收 `agent_id` 和 `message`；`interrupt_agent` 接收 `agent_id`；`list_agents` 接收可选 `scope`。地址统一为 Session id；描述用于展示，可以重复。
+生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接收 `name` 与 `message`；`interrupt_agent` 接收 `name`；`list_agents` 无参数。根名为 `lead`；描述可以重复。旧的无名 agent 使用稳定的 `legacy:<session-id>` 地址。
 
 #### Token 影响
 
@@ -120,7 +120,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `interrupt requested for agent <agent_id>`。未授权的调用方——self、sibling、陈旧或非 ancestor——会成为指明拒绝原因的出错结果；目标不存在或已结算仍渲染接受行。
+接受后返回 `interrupt requested for agent <name>`。未知名字或未授权调用方（自身、同级、过期或非祖先）返回错误；已知且已结束的目标仍返回接受提示。
 
 #### Token 影响
 
@@ -134,11 +134,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受后返回 `message delivered to agent <agent_id>`；规范输出携带已接受的 `messageId`。目标不在调用方支持的父级、子级或同级路由内，或准入被拒绝时，返回错误结果。
+接受后返回 `message delivered to agent <name>`；规范输出携带已接受的 `messageId`。目标不在调用方支持的父级、子级或同级路由内，或准入被拒绝时，返回错误结果。
 
 #### Token 影响
 
-每次调用一条简短确认；目标回复不通过此调用返回。子级使用 `list_agents` 提供的父级和同级 id 发送后续消息。
+每次调用一条简短确认；目标回复不通过此调用返回。子级使用 `list_agents` 提供的父级和同级名字 发送后续消息。
 
 #### KV Cache 影响
 
@@ -148,11 +148,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-每行按稳定顺序显示 `<id> [<status>] — <label>`。可继续子级的 `children` 列表先显示 `<id> [<status>] — your parent`，再显示 `<id> [<status>] — sibling: <label>`。`descendants` 不列父级或同级，并在破折号前添加 ` parent=<id> depth=<n>`；未知模式或无法读取的目录输出 `<id> [diagnostic: <reason>]`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
+每个后代按稳定顺序显示一行：`<id> [<status>] parent=<id> depth=<n> — <label>`。可继续子级的列表先显示 `<id> [<status>] — your parent`，再显示 `<id> [<status>] — sibling: <label>`。未知模式或无法读取的目录输出 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
 
 #### Token 影响
 
-随列表行数线性增长，包含 `children` 范围的父级和同级行。没有游标或上限。
+随列表行数线性增长，包含父级和同级行。没有游标或上限。
 
 #### KV Cache 影响
 
@@ -166,7 +166,7 @@ kind: "package-reference"
 这些限制说明控制工具无法观察或引导什么；它们是当前包约束。
 
 - **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
-- **消息要求在线谱系**——每个发送方可联系直接可继续子级。驻留的可继续子级在父级在线时还可联系直接父级和可继续同级。更深的后代与无关树不是消息目标；只有子级和同级投递支持冷激活。
+- **消息要求在线谱系**——每个发送方可联系直接可继续子级。驻留的可继续子级在父级在线时还可联系直接父级和可继续同级。更深的后代可被中断，但不能直接接收消息；无关树不是消息目标；只有子级和同级投递支持冷激活。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `inactive` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 

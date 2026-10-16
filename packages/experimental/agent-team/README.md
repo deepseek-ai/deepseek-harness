@@ -49,23 +49,23 @@ For example, ask the model to start a subagent to review the diff and track its 
 |---|---|---|
 | `maxTasks` | `256` | Maximum non-deleted tasks on the board |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) lists the replacements.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) lists the replacements.
 
 ### Teammates
 
-Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions are display text and may repeat.
+Ask the Lead to start a subagent with a unique `name` and a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned name addresses the teammate; descriptions may repeat.
 
 Every root agent leads its own Team, and every live subagent below it, at any depth, receives Team tools. The roster lists the Lead, its direct continuable children, and historical `team/member` records. The Web panel combines these per-Session rosters to include discovered descendants at every depth.
 
 ### Messages between teammates
 
-Members use standard `send_message` with Session ids: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
+Members use standard `send_message` with agent names: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
 
 ### Shared task board
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by Session id to itself, a continuable descendant at any depth, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
+A member claims a task to start work, completes it, releases it, or reopens it. The Lead can reassign a task by agent name to itself, a continuable descendant at any depth, or an active historical member. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
@@ -161,7 +161,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [tool-agent-team package](../tool-agent-team/README.md) — the task and wait tools, policy, and identity every member receives.
 - [Subagent runtime](../../subagent/subagent/README.md) — continuable children, messaging, interruption, and lifecycle that teammates use.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — why teammates are subagents and what Team keeps.
-- [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
+- [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
 - [Experimental package reference](../AGENTS.md) — placement, publication, and dependency isolation.
 
 -----
@@ -173,7 +173,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model sees Team state through task-tool results; coordination events never enter the conversation. Task views identify their owner through `ownerId`. Failures surface as tool errors with the `TeamError` message, including the current revision for stale updates.
+The model sees Team state through task-tool results; coordination events never enter the conversation. Model-facing task views identify their owner through `ownerName`; host views retain `ownerId`. Failures surface as tool errors with the `TeamError` message, including the current revision for stale updates.
 
 #### Token effect
 

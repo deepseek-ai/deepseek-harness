@@ -209,8 +209,8 @@ class GrepOutput(TypedDict):
     matches: list[GrepOutputMatches]
 
 class InterruptAgentArgs(TypedDict):
-    # The id of an agent created under you: your direct child or a deeper descendant.
-    agent_id: str
+    # The name of an agent created under you: your direct child or a deeper descendant.
+    name: str
     # Additional keys beyond those declared are allowed.
 
 class InterruptAgentOutput(TypedDict):
@@ -267,19 +267,14 @@ class JobOutputOutput(TypedDict):
     text: str
     job: JobOutputOutputJob
 
-class ListAgentsArgs(TypedDict):
-    # children (default) lists your parent, continuable siblings, and direct children; each accepts send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.
-    scope: NotRequired[Literal["children", "descendants"]]
-    # Additional keys beyond those declared are allowed.
-
 class ListAgentsOutput1(TypedDict):
     kind: Literal["parent"]
-    id: str
+    name: str
     status: Literal["running", "inactive"]
 
 class ListAgentsOutput2(TypedDict):
     kind: Literal["child", "sibling"]
-    id: str
+    name: str
     label: str
     status: Literal["running", "inactive"]
     parent: NotRequired[str]
@@ -287,7 +282,7 @@ class ListAgentsOutput2(TypedDict):
 
 class ListAgentsOutput3(TypedDict):
     kind: Literal["diagnostic"]
-    id: str
+    name: str
     reason: Literal["corrupt", "unsupported", "unavailable"]
     parent: NotRequired[str]
     depth: NotRequired[float]
@@ -336,8 +331,8 @@ class ReadImageOutput(TypedDict):
     image: ReadImageOutputImage
 
 class SendMessageArgs(TypedDict):
-    # The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.
-    agent_id: str
+    # The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.
+    name: str
     # The message to deliver to the agent.
     message: str
     # Additional keys beyond those declared are allowed.
@@ -369,6 +364,8 @@ class SkillOutput(TypedDict):
     content: str
 
 class SubagentArgs(TypedDict):
+    # Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish.
+    name: str
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.
@@ -379,9 +376,11 @@ class SubagentArgs(TypedDict):
 
 class SubagentOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
+    name: str
 
 class SubagentForkArgs(TypedDict):
+    # Unique name across this agent tree. Start with a lower-case letter; use only lower-case letters, digits, underscores, or hyphens. lead and unowned are reserved. Names remain taken after agents finish.
+    name: str
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.
@@ -392,7 +391,7 @@ class SubagentForkArgs(TypedDict):
 
 class SubagentForkOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
+    name: str
 
 class TodoWriteArgsTodos(TypedDict):
     # What the task is — a short imperative line.
@@ -538,8 +537,8 @@ class Tools(Protocol):
         """List your background jobs (running and finished) with their ids, kinds, and statuses."""
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
-    async def list_agents(self, args: ListAgentsArgs) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
-        """List agents you can message: subagents you started and, when you are a subagent, your parent and your continuable siblings. Rows carry ids, descriptions, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+    async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
+        """List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry names, descriptions, and status; descendant rows also carry parent names and depth. You can message your parent, continuable siblings, and direct children. You can interrupt deeper descendants but cannot message them directly. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:
@@ -549,9 +548,9 @@ class Tools(Protocol):
     async def skill(self, args: SkillArgs) -> SkillOutput:
         """Load the full instructions for a skill. Call it before acting on a task that names or clearly matches a skill in the session skill catalog."""
     async def subagent(self, args: SubagentArgs) -> SubagentOutput:
-        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
+        """Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def subagent_fork(self, args: SubagentForkArgs) -> SubagentForkOutput:
-        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
+        """Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes."""
     async def todo_write(self, args: TodoWriteArgs) -> TodoWriteOutput:
         """Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done."""
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:

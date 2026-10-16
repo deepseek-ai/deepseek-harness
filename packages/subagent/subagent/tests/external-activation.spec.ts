@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External execution ownership, result delivery, and process cleanup. */
 
@@ -26,7 +27,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   const controller = new AbortController()
   return {
     ctx, parent, controller,
-    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
+    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
       request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
     }),
@@ -102,7 +103,7 @@ describe('external subagent activations', () => {
         }
       })
       try {
-        await expect(fixture.ctx.subagents.startActivation({
+        await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
           provider: 'external', label: 'Unpublished work', signal: fixture.controller.signal, delivery: 'parent',
           request: { parent, prompt: [{ type: 'text', text: 'Must not publish' }] },
         })).rejects.toMatchObject({ code: change === 'drain' ? 'DRAINING' : 'UNAUTHORIZED' })
@@ -365,7 +366,7 @@ it('records external membership at creation without publishing settlement update
 it('refuses a reserved Session id for an external provider before dispatch', async () => {
   const start = vi.fn()
   const fixture = await setup(start)
-  await expect(fixture.ctx.subagents.startActivation({
+  await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
     signal: fixture.controller.signal, request: { parent: fixture.parent, prompt: [] },
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })

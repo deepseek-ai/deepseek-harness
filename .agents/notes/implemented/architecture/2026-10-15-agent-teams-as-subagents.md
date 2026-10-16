@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-10-15-agent-teams-as-subagents.zh.md)
 
+The name-free model interface below is superseded by [tree-wide agent names](2026-10-16-tree-wide-agent-names.md). Session identity, lineage authority, and Team reuse remain current.
+
 ## Problem
 
 Teammates already use the subagent runtime for creation, Session identity, catalog membership, capacity, cold resume, settlement, and interruption. A separate Team roster duplicates identity, provisioning recovery, and teardown. Team-scoped messaging and control tools shadow the standard subagent tools, forcing profiles to disable ordinary delegation and making fork tool schemas diverge from their parent.
@@ -18,7 +20,7 @@ Every root Agent leads the Team identified by its Session id; every live subagen
 
 Task ownership uses `ownerId`, and reassignment accepts a Session id. Team persists only task changes. Messages use the target Agent inbox; historical `team/message/*` records remain readable but are never delivered or acknowledged.
 
-This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
+This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
 
 ## Alternatives considered
 

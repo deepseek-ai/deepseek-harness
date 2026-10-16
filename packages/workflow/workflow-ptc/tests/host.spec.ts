@@ -197,6 +197,7 @@ describe('workflow runtime outcomes', () => {
     })
     const activation = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
       childId: SessionId('ready-child'),
+      name: 'workflow-child',
       result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
       dispose: () => { disposing.resolve(undefined); return released.promise },
     })
@@ -212,7 +213,7 @@ describe('workflow runtime outcomes', () => {
       const { parent: delegatedParent, ...request } = delegation.request
       expect(delegatedParent).toBe(parent)
       expect({ ...delegation, request }).toEqual({
-        provider: 'stub', label: 'host-test child 1', delivery: 'caller',
+        provider: 'stub', name: `workflow-${run.id}-1`, label: 'host-test child 1', delivery: 'caller',
         request: {
           cwd: ctx.workingDirectory.get(parent.session),
           prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
@@ -278,6 +279,7 @@ describe('workflow runtime outcomes', () => {
     })
     const child: SubagentActivation = {
       childId: SessionId('late-child'),
+      name: 'workflow-child',
       result: Promise.resolve({ output: [], stopReason: 'aborted' }),
       dispose: disposed,
     }
@@ -305,7 +307,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('output-pending'), result: childResult.promise, dispose: disposed,
+      childId: SessionId('output-pending'), name: 'workflow-child', result: childResult.promise, dispose: disposed,
     })
     const handle = start()
     let settled = false

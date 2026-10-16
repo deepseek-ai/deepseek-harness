@@ -40,7 +40,7 @@ The plugin takes no configuration; mount it beside the Team domain as in the [ag
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
-A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
+A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
 
 Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned id addresses it.
 
@@ -52,7 +52,7 @@ The five tools cover two capabilities; the standard subagent tools cover the thi
 - **Wait for teammates** — `wait_agent` waits for the next task, member status, or inbox change after the call starts.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerId` results use Session ids. Descriptions are display text and may repeat. Any member can use the board; only the Lead reassigns tasks. Updates enforce ownership and revision checks, rejecting stale edits.
+Task `owner` arguments and `ownerName` results use agent names; the root is `lead`. Descriptions may repeat. Any member can use the board; only the Lead reassigns tasks. Updates enforce ownership and revision checks, rejecting stale edits.
 
 ### What success and failure look like
 
@@ -104,7 +104,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
-- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, and interruption by Session id.
+- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, and interruption by agent name.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team) — every tool schema the model receives.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — model-facing, scoping, and tool-family decisions.
 
@@ -122,13 +122,13 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use agent ids with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent ids as task owners. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts by default; descendants scope discovers deeper agents for task assignment but does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
 ```
 
 #### Token effect
@@ -143,7 +143,7 @@ The text is identical for the Lead and every descendant and does not change whil
 
 #### What the model sees
 
-Required `team:identity` runtime context states `You are the Team Lead. Your agent id is "<lead id>".` for a root and `You are a teammate in the Team led by agent "<lead id>".` for a subagent. It follows current membership, survives optional-context suppression, and is restored after compaction. An ordinary fork of a teammate is a new root and receives the Lead statement.
+Required `team:identity` runtime context states `You are the Team Lead. Your name is lead.` for a root and `Your name is "<name>". You are a teammate in the Team led by "lead".` for a subagent. It follows current membership, survives optional-context suppression, and is restored after compaction. An ordinary fork of a teammate is a new root and receives the Lead statement.
 
 #### Token effect
 

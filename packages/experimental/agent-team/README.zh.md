@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-agent-team` 将代理及其子代理组成共享持久任务板的 Team。标准 subagent 工具负责创建队友并按 id 发消息。Team 增加比较并设置的任务所有权、进度等待和 Web 面板成员列表。模型工具由 `dsh-experimental-tool-agent-team` 提供。该包为实验性功能，成员共享同一工作树。
+`dsh-experimental-agent-team` 将代理及其子代理组成共享持久任务板的 Team。标准 subagent 工具负责创建队友并按名字发消息。Team 增加比较并设置的任务所有权、进度等待和 Web 面板成员列表。模型工具由 `dsh-experimental-tool-agent-team` 提供。该包为实验性功能，成员共享同一工作树。
 
 ## 目录
 
@@ -49,23 +49,23 @@ kind: "package-reference"
 |---|---|---|
 | `maxTasks` | `256` | 任务板上最多的未删除任务数 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。设置 `maxMembers`、`maxMessageBytes` 或 `disposalTimeoutMs` 的配置行不会激活，dsh 会在启动警告中指出该键；[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.zh.md)列出替代方式。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。设置 `maxMembers`、`maxMessageBytes` 或 `disposalTimeoutMs` 的配置行不会激活，dsh 会在启动警告中指出该键；[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出替代方式。
 
 ### Teammate
 
-让 Lead 使用 `description` 描述工作并启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的 Session id 用于寻址队友；描述用于展示，可以重复。
+让 Lead 使用唯一的 `name` 和工作 `description` 启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的名字用于寻址队友；描述可以重复。
 
 每个根代理领导自己的 Team，其下任意深度的每个在线子代理都收到 Team 工具。每个会话的成员列表包含 Lead、直接可继续子代理和历史 `team/member` 记录。Web 面板合并这些会话列表，显示所有已发现的后代。
 
 ### teammate 之间的消息
 
-成员使用标准 `send_message` 按 Session id 发消息：Lead 联系直接子级，驻留的可继续子级联系父级和可继续同级。Steer 投递到目标收件箱，并可冷恢复子级或同级。Team 不存储消息；已接受消息遵循普通 Agent 持久化。
+成员使用标准 `send_message` 按 agent 名字 发消息：Lead 联系直接子级，驻留的可继续子级联系父级和可继续同级。Steer 投递到目标收件箱，并可冷恢复子级或同级。Team 不存储消息；已接受消息遵循普通 Agent 持久化。
 
 ### 共享任务板
 
 任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有其全部依赖完成后，任务才可 claim。
 
-成员认领任务后开始工作，可以完成、释放或重新打开任务。Lead 可按 Session id 将任务重新分配给自身、任意深度的可继续后代或活跃的历史成员。其他成员自行认领任务。每次变更都使用比较并设置，防止过期更新覆盖新工作。
+成员认领任务后开始工作，可以完成、释放或重新打开任务。Lead 可按 agent 名字 将任务重新分配给自身、任意深度的可继续后代或活跃的历史成员。其他成员自行认领任务。每次变更都使用比较并设置，防止过期更新覆盖新工作。
 
 当两个 in-progress 任务计划触及重叠路径时，文件提示会产生警告——它们绝不阻止任何操作。已删除任务保留在历史中，但从活动列表中消失。
 
@@ -161,7 +161,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 - [tool-agent-team 包](../tool-agent-team/README.zh.md)——每个成员获得的任务与等待工具、策略和身份。
 - [Subagent 运行时](../../subagent/subagent/README.zh.md)——teammate 使用的可继续子级、消息、中断与生命周期。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——为何 teammate 是subagent，以及 Team 保留了什么。
-- [升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
+- [升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
 - [实验包参考](../AGENTS.md)——位置、公开发布与依赖隔离。
 
 -----
@@ -173,7 +173,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 
 #### 模型看到什么
 
-模型通过任务工具结果查看 Team 状态；协调事件不进入对话。任务视图通过 `ownerId` 标识负责人。失败以携带 `TeamError` 消息的工具错误显示，过期更新错误包含当前修订。
+模型通过任务工具结果查看 Team 状态；协调事件不进入对话。面向模型的任务视图通过 `ownerName` 标识负责人；宿主视图保留 `ownerId`。失败以携带 `TeamError` 消息的工具错误显示，过期更新错误包含当前修订。
 
 #### Token 影响
 

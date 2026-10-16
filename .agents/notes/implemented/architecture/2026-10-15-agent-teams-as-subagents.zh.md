@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-10-15-agent-teams-as-subagents.md) | 中文
 
+下述不使用名字的模型接口已被[树内唯一 agent 名字](2026-10-16-tree-wide-agent-names.zh.md)取代。Session 身份、谱系权限和 Team 复用决策仍然有效。
+
 ## Problem
 
 队友已经使用子代理运行时完成创建、Session 身份、目录成员关系、容量、冷恢复、结算和中断。独立 Team 成员列表重复了身份、创建恢复和释放职责。Team 作用域内的消息及控制工具覆盖标准子代理工具，迫使 profile 禁用普通委派，并使分叉工具模式偏离父级。
@@ -18,7 +20,7 @@ Status: implemented
 
 任务所有权使用 `ownerId`，重新分配接受 Session id。Team 只持久化任务变更。消息使用目标 Agent 收件箱；历史 `team/message/*` 记录仍可读取，但不会被投递或确认。
 
-本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-alpha.3/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
+本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
 
 ## Alternatives considered
 

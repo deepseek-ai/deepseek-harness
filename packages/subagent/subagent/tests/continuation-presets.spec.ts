@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 /** Independent spawn presets and compatibility of persisted child compositions. */
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
@@ -80,6 +81,7 @@ function parkParent(ctx: Context, parent: Agent): void {
 function startSpec(parent: Agent, agentPreset?: string, provider = 'separate') {
   return {
     provider,
+    name: `child-${randomUUID()}`,
     label: 'preset work',
     delivery: 'parent' as const,
     request: {

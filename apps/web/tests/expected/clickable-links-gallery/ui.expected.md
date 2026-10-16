@@ -9,7 +9,7 @@
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
-- button "Wrote files, called tools, searched code, etc." [expanded]
+- button "Wrote files, ran commands, called tools, etc." [expanded]
 - button "Write site/report.html 1KB +1 -0":
   - text: Write
   - button "site/report.html"
@@ -65,10 +65,16 @@
 - button "Inspect"
 - button "Glob **/*.css"
 - button "Bash List the built site"
-- button "Failed Bash Run the lint gate" [expanded]
+- button "Failed Bash Run the lint gate exit code 1" [expanded]
 - text: Failed site pnpm run lint exit code 1
 - button "Copy"
 - text: "style.css: unexpected hex literal"
+- button "Inspect"
+- button "Failed Bash Check every generated stylesheet and component theme against the shared design tokens, inspect the application pages for inconsistent colors, and report all remaining lint failures before publishing the production build exit code 1"
+- button "Failed Bash Build the site no exit code" [expanded]
+- text: Failed site pnpm run build no exit code
+- button "Copy"
+- text: (no output) [timed out after {{duration}}]
 - button "Inspect"
 - button "Search clickable link styles, produced files ui" [expanded]
 - paragraph:

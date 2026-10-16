@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /**
  * A preset-mounted Schedule tool reaches a delegated child, and the Host
@@ -93,7 +94,7 @@ function toolResultTexts(agent: Agent): string[] {
 describe('a delegated child under a preset that mounts the Schedule tools', () => {
   it('sees schedule_create and is refused with subagent_session without storing a task', async () => {
     const { ctx, parent, dispatched } = await setupScheduleHost()
-    const run = await ctx.subagents.startActivation({
+    const run = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: 'spawn',
       label: 'child task',
       delivery: 'caller',

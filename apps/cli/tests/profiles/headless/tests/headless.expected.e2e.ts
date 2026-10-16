@@ -1041,8 +1041,8 @@ describe('headless stream-json snapshots', () => {
         "checkedRoster": true,
         "deliveredMessages": 0,
         "identities": [
-          "You are a teammate in the Team led by agent "<lead>".",
-          "You are a teammate in the Team led by agent "<lead>".",
+          "Your name is "implementer". You are a teammate in the Team led by "lead".",
+          "Your name is "researcher". You are a teammate in the Team led by "lead".",
         ],
         "queuedMessages": 0,
         "sessions": 4,

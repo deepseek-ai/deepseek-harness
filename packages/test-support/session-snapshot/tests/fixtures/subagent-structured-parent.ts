@@ -28,7 +28,7 @@ export function apply(ctx: Context): void {
         return next()
       })
       try {
-        const activation = await ctx.subagents.startActivation({
+        const activation = await ctx.subagents.startActivation({ name: 'structured-child',
           provider: 'spawn', label: 'Structured answer', delivery: 'parent', signal: exec.signal,
           request: {
             parent, prompt: [{ type: 'text', text: 'Submit answer 41 through structured_output.' }],

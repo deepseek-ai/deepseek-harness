@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 /** SDK task completion retains live failures that have no durable terminal outcome. */
 import { Context } from '@deepseek-ai/cordis'
@@ -64,7 +65,7 @@ describe('SDK session/wait with parked child input', () => {
       let owner = parent
       let child = parent
       for (let level = 0; level < depth; level++) {
-        const started = await ctx.subagents.startActivation({
+        const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
           provider: 'local-test', label: 'interruptible child', delivery: 'caller', signal: new AbortController().signal,
           request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
         })
@@ -116,7 +117,7 @@ describe('SDK session/wait failures', () => {
         prepareContinuable: () => Promise.resolve({}),
       })
       const warnings = vi.spyOn(ctx.logger, 'warn')
-      const child = await ctx.subagents.startActivation({
+      const child = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
         provider: 'local-test', label: 'child failure', delivery: 'caller', signal: new AbortController().signal,
         request: { parent, prompt: [{ type: 'text', text: 'delegated task' }] },
       })

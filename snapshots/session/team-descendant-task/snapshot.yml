@@ -7,3 +7,5 @@ header:
   class: team-targets
   systemPromptSource: team-targets
   toolSchemasSource: team-targets
+replay:
+  override: true
