@@ -99,7 +99,7 @@ export class SubagentNames {
     throw new SubagentError(`agent name "${name}" was not found; use list_agents to discover available names`, 'AGENT_NAME_NOT_FOUND')
   }
 
-  /** Rebuild once per live root; concurrent readers adopt the first completed index. */
+  /** Cache complete catalog traversals; concurrent readers adopt the first completed index. */
   private async index(root: Agent, signal?: AbortSignal): Promise<Map<string, NameEntry>> {
     signal?.throwIfAborted()
     const existing = this.trees.get(root)

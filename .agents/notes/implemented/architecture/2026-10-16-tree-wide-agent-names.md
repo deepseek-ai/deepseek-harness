@@ -20,7 +20,7 @@ This supersedes the name-free interface in [Agent Teams as subagents](2026-10-15
 
 **Recyclable names.** Reuse could redirect queued or delayed work after the original agent settles. Retaining assignments keeps recipient identity stable.
 
-**Separate root assignment events.** Catalogs already record child creation, and cold recovery already reads the descriptor. Keeping names in those records avoids another event, projection, and publication step. The cost is one catalog traversal per live root; unreadable historical branches prevent initialization because uniqueness cannot be established.
+**Separate root assignment events.** Catalogs already record child creation, and cold recovery already reads the descriptor. Keeping names in those records avoids another event, projection, and publication step. The cost is catalog traversal before a live root has a complete cached index; unreadable historical branches prevent initialization because uniqueness cannot be established.
 
 ## Consequences
 

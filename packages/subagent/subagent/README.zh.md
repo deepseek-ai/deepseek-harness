@@ -61,7 +61,7 @@ kind: "package-reference"
 
 `startActivation({ name, provider, label, request, signal, delivery })` 返回 `{ childId, name, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息，支持冷恢复；外部子级只执行一次，拒绝继续执行。`request.agentOptions` 覆盖受支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 允许 workflow 等待结果，不发送父级通知或初始返回指引。本地 parent 交付要求持久化；caller 交付可使用临时本地会话。冷恢复要求持久化和 Session query。
 
-agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。每个父级 catalog 记录其子级名字，包括采用 caller 交付的外部执行；本地子级 descriptor 携带相同名字供恢复使用。根级运行时索引在异步准备前预留名字，释放失败且未发布的启动，并在执行结束后保留已提交分配。每个在线根从 catalog 重建一次索引，排除继承条目；不可读分支会阻止初始化。`nameOf(agent)` 读取 Agent 自身名字，`resolveName()` 解析树内名字，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
+agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。每个父级 catalog 记录其子级名字，包括采用 caller 交付的外部执行；本地子级 descriptor 携带相同名字供恢复使用。根级运行时索引在异步准备前预留名字，释放失败且未发布的启动，并在执行结束后保留已提交分配。索引从 catalog 初始化，排除继承条目，并为在线根缓存完整结果；不可读分支会阻止初始化。`nameOf(agent)` 读取 Agent 自身名字，`resolveName()` 解析树内名字，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
 
 ### 子级 preset
 
