@@ -119,12 +119,7 @@ interface IdentityState {
   identity?: SubagentIdentityProjection | undefined
 }
 
-// The cast bridges only the optional-label arm: Zod's optional output
-// includes explicit `undefined`, which exactOptionalPropertyTypes excludes
-// from the public interface. The no-value state itself is the serializable
-// `null` arm — never `undefined` — so every registry read and push frame
-// survives JSON.stringify losslessly.
-const identityValueSchema = z.discriminatedUnion('mode', [
+const identityValueSchema: z.ZodType<SubagentIdentityProjection> = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('one-shot'),
     name: subagentNameSchema.optional(),
@@ -137,7 +132,12 @@ const identityValueSchema = z.discriminatedUnion('mode', [
     label: z.string(),
     seq: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
   }).strict(),
-]) as unknown as z.ZodType<SubagentIdentityProjection>
+]).transform(({ name, ...identity }): SubagentIdentityProjection => {
+  const named = name === undefined ? {} : { name }
+  if (identity.mode === 'continuable') return { ...identity, ...named }
+  const { label, ...oneShot } = identity
+  return { ...oneShot, ...named, ...label === undefined ? {} : { label } }
+})
 
 const identitySchema = identityValueSchema.nullable()
 

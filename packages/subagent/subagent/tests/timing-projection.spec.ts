@@ -35,7 +35,9 @@ describe('subagent timing projection', () => {
       data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', ...label === undefined ? {} : { label } },
     } as SessionEvent
     const state = subagentIdentityProjectionDefinition.apply(subagentIdentityProjectionDefinition.init(), descriptor)
-    expect(subagentIdentityProjectionDefinition.wire.view(state)).toEqual({ mode: 'one-shot', seq: 1, ...label === undefined ? {} : { label } })
+    const view = subagentIdentityProjectionDefinition.wire.view(state)
+    expect(view).toEqual({ mode: 'one-shot', seq: 1, ...label === undefined ? {} : { label } })
+    expect(subagentIdentityProjectionDefinition.wire.viewSchema.parse(JSON.parse(JSON.stringify(view)))).toEqual(view)
   })
 
   it('registers with the optional session projection registry', async () => {
