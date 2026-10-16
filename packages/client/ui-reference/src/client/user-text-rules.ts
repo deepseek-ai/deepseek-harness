@@ -1,4 +1,7 @@
-/** Forward file and folder recognition in original text, without Facts or discovery. */
+/**
+ * Forward file and folder mention candidates in original text, without Facts or discovery.
+ * The node components decide whether a candidate names an existing path.
+ */
 import type { UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 interface PathReferenceData {
@@ -13,6 +16,15 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
+/**
+ * Decode the path a complete `@path` or `@"quoted path"` mention names.
+ * @param mention - mention spelling starting with `@`, without trailing sentence punctuation.
+ * @returns the path that file and folder nodes carry.
+ */
+export function mentionPath(mention: string): string {
+  return mention.slice(1).replace(/^"|"$/gu, '')
+}
+
 function nextPath(text: string, from: number, folder: boolean) {
   const tokens = /(?<!\S)(@"[^"\n]+"|@[^\s]+)/gu
   tokens.lastIndex = from
@@ -20,7 +32,7 @@ function nextPath(text: string, from: number, folder: boolean) {
     const token = match[0]
     const raw = token.startsWith('@"') ? token : token.replace(/[.,;:!?，。；：！？]+$/u, '')
     if (raw.length <= 1) continue
-    const path = raw.slice(1).replace(/^"|"$/gu, '')
+    const path = mentionPath(raw)
     if (path.endsWith('/') !== folder) continue
     const label = path.split(/[\\/]/u).filter(Boolean).at(-1) ?? raw.slice(1)
     return { start: match.index, end: match.index + raw.length, data: { path, label } }

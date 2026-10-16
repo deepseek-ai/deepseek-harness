@@ -150,6 +150,7 @@
     "apps/web/tests/markdown-file-links.e2e.ts",
     "apps/web/tests/user-text-secret-mask.e2e.ts",
     "apps/web/tests/reference-composer.e2e.ts",
+    "apps/web/tests/mention-path-presence.e2e.ts",
     "apps/web/tests/markdown-wide-table.e2e.ts",
     "apps/web/tests/thinking-markdown.e2e.ts",
     "apps/web/tests/math-rendering.e2e.ts",

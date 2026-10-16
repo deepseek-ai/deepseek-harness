@@ -49,6 +49,8 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
   const openFile = actions.openFile ?? (() => { throw new Error('This fixture has no file navigation action') })
   const openSkill = actions.openSkill ?? (() => { throw new Error('This fixture has no skill navigation action') })
   const t = makeTranslate(referenceZh, commonZh)
+  // Composition units treat every path mention as Host-confirmed; ui-reference owns presence coverage.
+  const usePathPresence = () => 'present' as const
   const renderSlot: UserTextProps['renderSlot'] = (name: string, input: object, options?: { fallback?: ReactNode }) => {
     if (name !== 'conversation.user.text.node') throw new Error(`Unexpected UserText Slot: ${name}`)
     const owner = input as UserTextNodeOwnerProps & { node: UserTextNode }
@@ -56,8 +58,8 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
       // The production components only read these owner, action and locale seats in these units.
       case 'text': return createElement(PlainUserText, owner as ComponentProps<typeof PlainUserText>)
       case 'session': return createElement(SessionReference, owner as ComponentProps<typeof SessionReference>)
-      case 'file': return createElement(FileReference, { ...owner, openFile, t } as ComponentProps<typeof FileReference>)
-      case 'folder': return createElement(FolderReference, owner as ComponentProps<typeof FolderReference>)
+      case 'file': return createElement(FileReference, { ...owner, openFile, usePathPresence, t } as ComponentProps<typeof FileReference>)
+      case 'folder': return createElement(FolderReference, { ...owner, usePathPresence } as ComponentProps<typeof FolderReference>)
       case 'skill': return createElement(SkillReference, { ...owner, openSkill } as ComponentProps<typeof SkillReference>)
       case 'command': return createElement(GoalCommandReference, owner as ComponentProps<typeof GoalCommandReference>)
       default: return options?.fallback ?? null
