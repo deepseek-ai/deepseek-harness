@@ -14,6 +14,7 @@ import {
   establishExternalCatalogChild,
   establishCatalogChild,
   liveCatalogEntries,
+  catalogNames,
   subagentCatalogProjectionDefinition,
 } from '../src/catalog.ts'
 import type { SubagentCatalogState } from '../src/catalog.ts'
@@ -59,9 +60,9 @@ describe('subagent catalog projection', () => {
     try {
       await ctx.plugin(SessionStore)
       const parent = ctx.sessions.create(header.id)
-      expect(() => liveCatalogEntries(undefined, parent)).toThrow('requires the subagentCatalog projection')
+      expect(() => liveCatalogEntries(undefined, parent)).toThrow('require the subagentCatalog projection')
       await ctx.plugin(SessionProjectionRegistry)
-      expect(() => liveCatalogEntries(ctx.sessionProjections, parent)).toThrow('requires the subagentCatalog projection')
+      expect(() => liveCatalogEntries(ctx.sessionProjections, parent)).toThrow('require the subagentCatalog projection')
     } finally {
       await ctx.fiber.dispose()
     }
@@ -87,6 +88,16 @@ describe('subagent catalog projection', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+
+  it('folds root name registrations without adding direct children', () => {
+    const state = fold([{
+      type: 'subagent/catalog', seq: SessionSeq(0), time: 0,
+      data: { version: 3, kind: 'name', childId: SessionId('grandchild'), name: 'writer' },
+    }])
+    expect([...catalogNames(state, header.id)]).toEqual([['writer', 'grandchild']])
+    expect(subagentCatalogProjectionDefinition.wire.view(state)).toEqual([])
+    expect(subagentCatalogProjectionDefinition.stateSchema.parse(state)).toEqual(state)
   })
 
   it('preserves a field-free historical descriptor when establishing its catalog', async () => {

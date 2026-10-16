@@ -417,7 +417,7 @@ export class SubagentManager {
     // but the service is also callable outside a turn.
     const releaseHold = this.holdOwnership(parent, childId)
     try {
-      using reservation = await this.names.reserve(parent, spec.name, spec.signal, childId)
+      using reservation = this.names.reserve(parent, spec.name, spec.signal, childId)
       this.assertAdmitting(parent)
       const cwd = await this.resolveDirectory(request, spec.signal)
       const prepared = await this.host.prepareContinuable(spec.provider, {
@@ -508,7 +508,7 @@ export class SubagentManager {
     const releaseHold = this.holdOwnership(parent, pendingId)
     let activation: Activation | undefined
     try {
-      using reservation = await this.names.reserve(parent, spec.name, spec.signal)
+      using reservation = this.names.reserve(parent, spec.name, spec.signal)
       this.assertAdmitting(parent)
       const cwd = await this.resolveDirectory(spec.request, spec.signal)
       activation = await this.materialize({
@@ -586,7 +586,8 @@ export class SubagentManager {
       )
     }
     if (resident !== undefined && targetId !== sender.id
-      && this.catalogOf(resident.parent.session).some(child => child.id === targetId && child.mode === 'continuable')) {
+      && this.catalogOf(resident.parent.session).some(child => child.id === targetId && child.mode === 'continuable'
+        && (child.name === undefined || this.names.isRegistered(resident.parent, child.name, child.id)))) {
       const message = createAgentMessage(sender, content, this.names.nameOf(sender))
       return this.deliverToChild(resident.parent, targetId, [...message.content], {
         signal: options.signal,
@@ -1381,6 +1382,9 @@ export class SubagentManager {
         `subagent "${childId}" has no supported continuation state and cannot be resumed; choose a different target`,
         'NOT_RESUMABLE',
       )
+    }
+    if (descriptor.name !== undefined && !this.names.isRegistered(parent, descriptor.name, childId)) {
+      throw new SubagentError(`subagent "${childId}" did not complete name registration and cannot be resumed`, 'NOT_RESUMABLE')
     }
     let activation: Activation
     try {

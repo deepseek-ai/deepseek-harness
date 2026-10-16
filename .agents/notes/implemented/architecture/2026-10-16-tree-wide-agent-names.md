@@ -10,7 +10,7 @@ Session ids identify executions durably but make model coordination difficult to
 
 ## Decision
 
-Keep Session ids for persistence and authorization. Model tools accept immutable names unique throughout one agent tree. Existing parent catalog records carry each successful assignment; local child descriptors carry their own names. A root-scoped runtime index rebuilds from these catalogs, excluding fork-inherited facts. The manager reserves names before asynchronous preparation and releases failed unpublished reservations. Committed names remain taken after settlement so delayed messages cannot reach a different agent.
+Keep Session ids for persistence and authorization. Model tools accept immutable names unique throughout one agent tree. The root catalog records all committed assignments: a named direct-child fact or a name-only descendant fact. The existing catalog projection owns both, while its wire view remains direct-child discovery. Local descriptors carry each child’s own name. Only pending reservations live in a root-scoped runtime Set; committed names survive settlement and restart.
 
 This supersedes the name-free interface in [Agent Teams as subagents](2026-10-15-agent-teams-as-subagents.md). Its lineage authority and shared subagent lifecycle remain unchanged. Resolution never grants messaging, interruption, or task-assignment authority. Older unnamed descendants receive stable `legacy:<session-id>` addresses; Team assignment also accepts such addresses for active historical members.
 
@@ -20,7 +20,7 @@ This supersedes the name-free interface in [Agent Teams as subagents](2026-10-15
 
 **Recyclable names.** Reuse could redirect queued or delayed work after the original agent settles. Retaining assignments keeps recipient identity stable.
 
-**Separate root assignment events.** Catalogs already record child creation, and cold recovery already reads the descriptor. Keeping names in those records avoids another event, projection, and publication step. The cost is catalog traversal before a live root has a complete cached index; unreadable historical branches prevent initialization because uniqueness cannot be established.
+**Separate root assignment events.** A catalog variant expresses registration without another event type or projection. Root registration avoids a traversal of historical descendants for ordinary name checks. Its cost is a second synchronous append for nested children: the parent discovery fact may survive a failed root registration. Discovery and cold resume check the root assignment before accepting such named children.
 
 ## Consequences
 
@@ -28,4 +28,4 @@ Creation requires a name and rejects duplicates before dispatch. Independent roo
 
 ## Testing
 
-Name tests exercise concurrent duplicate rejection, failed-start release, nested-tree uniqueness, independent roots, catalog reconstruction, unreadable historical branches, repeated child identities, invalid durable assignments, and legacy lookup. Recorded Headless and SDK sessions cover creation, messages, listing, and completion notices; Team tests preserve historical assignment without granting message authority.
+Name tests exercise concurrent duplicate rejection, failed-start release, nested-tree uniqueness, independent roots, root registration recovery, failed second writes, unavailable historical branches, repeated child identities, invalid durable assignments, and legacy lookup. Recorded Headless and SDK sessions cover creation, messages, listing, and completion notices; Team tests preserve historical assignment without granting message authority.

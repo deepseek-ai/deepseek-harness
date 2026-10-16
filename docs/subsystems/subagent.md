@@ -380,9 +380,9 @@ interface SubagentProvider {
 
 The model-facing `list_agents` adapter reports current activity as `running` or `inactive`. These values do not describe task completion or guarantee that `send_message` will succeed.
 
-`SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
+`SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Named descendant rows require matching root registrations, read through ancestor observations. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
 
-`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
+`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable child catalog is observed, with additional ancestor reads for named rows; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
@@ -398,7 +398,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent names
 
-Names are unique in one live subagent tree; the root is `lead`. Parent catalogs retain immutable assignments; local descriptors carry each child’s own name. A runtime index shares reservations across the tree and rebuilds from catalogs. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
+Names are unique in one live subagent tree; the root is `lead`. The root catalog retains immutable assignments; local descriptors carry each child’s own name. A runtime Set shares pending reservations across the tree. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -537,9 +537,10 @@ async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void
 /**
  * Read the parent's durable direct-child catalog without loading or resuming an Agent.
  * The service owns and releases the live-preferred Session observation.
+ * Named rows require matching root catalog registrations, observed through ancestry.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
+ * @returns committed catalog children in parent event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
  */
@@ -553,7 +554,7 @@ listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<Subagent
  * produce unsupported diagnostics. Unreadable child catalogs produce corrupt
  * or unavailable diagnostics and stop only that branch. Root read failures,
  * missing services or projections, and cancellation reject the whole listing.
- * Each catalog is observed once and released before the next read. No Agent
+ * Named rows require additional ancestor reads to verify root registration. No Agent
  * is loaded or resumed; Sessions absent from reachable catalogs are omitted.
  * @param rootSessionId - session whose catalog starts descendant discovery.
  * @param signal - cancellation forwarded to and checked around each catalog read.

@@ -24,4 +24,4 @@ description: "Agent Teams 使用标准 subagent 工具与唯一 agent 名字；T
 2. 将 `spawn_teammate({ name, description, prompt, context })` 改为 `subagent({ name, description, prompt })`，需要继承会话历史时使用 `subagent_fork`。选择唯一的小写名字，只含字母、数字、下划线或连字符，并以字母开头。`lead` 和 `unowned` 为保留名。重名在创建前失败。
 3. 使用 `send_message({ name, message })` 与 `interrupt_agent({ name })`。通过 `list_agents` 发现父级和同级名字。
 4. 向任务 `owner` 字段传成员名字，读取工具结果中的 `ownerName`。根 agent 使用 `lead`。
-5. 将移除的服务调用改为 `ctx.subagents.startActivation()`、`sendMessage()`、`interrupt()` 与 `listChildren()`。向 `startActivation()` 提供 `name`；宿主控制 API 仍使用 Session id。重启后创建子级要求后代 catalog 可读；先恢复不可用分支，再重试。启动启用 Team 的 profile，确认子级描述出现在 Team 面板，并且按名字发送的消息能够到达。
+5. 将移除的服务调用改为 `ctx.subagents.startActivation()`、`sendMessage()`、`interrupt()` 与 `listChildren()`。向 `startActivation()` 提供 `name`；宿主控制 API 仍使用 Session id。创建与普通名字查找要求根 catalog 可读。根登记失败不会留下可用的命名子级；可使用相同名字和新 child id 重试创建。启动启用 Team 的 profile，确认子级描述出现在 Team 面板，并且按名字发送的消息能够到达。

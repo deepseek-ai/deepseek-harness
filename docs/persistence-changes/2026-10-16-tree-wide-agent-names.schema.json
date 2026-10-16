@@ -6,7 +6,7 @@
       "kind": "event",
       "event": "subagent/catalog",
       "surface": false,
-      "digest": "8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3",
+      "digest": "c97a3640f72bd16b03b788c27630c9423483175b3da4e4e2f22c215c0756d789",
       "schema": {
         "root": 0,
         "nodes": [
@@ -20,7 +20,7 @@
               },
               {
                 "name": "ignorable",
-                "type": 17,
+                "type": 20,
                 "optional": true
               },
               {
@@ -35,7 +35,7 @@
               },
               {
                 "name": "type",
-                "type": 18,
+                "type": 21,
                 "optional": false
               }
             ],
@@ -49,7 +49,8 @@
               9,
               12,
               14,
-              15
+              15,
+              17
             ]
           },
           {
@@ -303,6 +304,40 @@
           {
             "kind": "literal",
             "value": "unknown"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "childId",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "kind",
+                "type": 18,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "version",
+                "type": 19,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "name"
+          },
+          {
+            "kind": "literal",
+            "value": 3
           },
           {
             "kind": "literal",

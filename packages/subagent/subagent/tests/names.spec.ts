@@ -33,7 +33,7 @@ describe('tree-wide agent names', () => {
     expect(names.nameOf(parent)).toBe('lead')
     expect(await names.resolve(other, 'lead')).toBe(other.id)
     for (const root of [parent, other]) {
-      using reservation = await names.reserve(root, 'reviewer', signal)
+      using reservation = names.reserve(root, 'reviewer', signal)
       reservation.commit(SessionId('child'), () => { establishExternalCatalogChild(root.session, SessionId('child'), 'Review', 'reviewer') })
       expect(await names.resolve(root, 'reviewer')).toBe('child')
     }
@@ -43,12 +43,12 @@ describe('tree-wide agent names', () => {
     'rejects invalid name %j without writing a creation record', async (name) => {
       const { parent, names } = await setup()
       const seq = parent.session.seq
-      await expect(names.reserve(parent, name, signal)).rejects.toMatchObject({ code: 'INVALID_AGENT_NAME' })
+      expect(() => names.reserve(parent, name, signal)).toThrow(expect.objectContaining({ code: 'INVALID_AGENT_NAME' }))
       expect(parent.session.seq).toBe(seq)
     },
   )
 
-  it('rebuilds nested assignments from catalogs and reads the child name from its descriptor', async () => {
+  it('reads nested assignments from the root catalog and reads the child name from its descriptor', async () => {
     const { ctx, parent, names } = await setup()
     const session = ctx.sessions.create(SessionId('nested'), { meta: { origin: 'subagent', parentSession: parent.id } })
     const nested = { ...parent, id: session.id, session }
@@ -56,21 +56,21 @@ describe('tree-wide agent names', () => {
     const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'Review', name: 'reviewer' })
     session.append('subagent/descriptor', descriptor)
     {
-      using reservation = await names.reserve(parent, 'reviewer', signal, session.id)
+      using reservation = names.reserve(parent, 'reviewer', signal, session.id)
       await expect(names.resolve(parent, 'reviewer')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
-      await expect(names.reserve(nested, 'reviewer', signal)).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
+      expect(() => names.reserve(nested, 'reviewer', signal)).toThrow(expect.objectContaining({ code: 'DUPLICATE_AGENT_NAME' }))
       reservation.commit(session.id, () => { establishCatalogChild(parent.session, session.header, descriptor) })
     }
     {
-      using reservation = await names.reserve(nested, 'writer', signal)
+      using reservation = names.reserve(nested, 'writer', signal)
       reservation.commit(SessionId('external'), () => { establishExternalCatalogChild(session, SessionId('external'), 'Write', 'writer') })
     }
     expect(names.nameOf(nested)).toBe('reviewer')
     const restored = new SubagentNames(ctx)
     expect(await restored.resolve(nested, 'writer')).toBe('external')
     expect(await restored.resolve(parent, 'reviewer')).toBe(session.id)
-    await expect(restored.reserve(parent, 'writer', signal)).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
-    await expect(restored.reserve(parent, 'another', signal, session.id)).rejects.toMatchObject({ code: 'DUPLICATE_CHILD' })
+    expect(() => restored.reserve(parent, 'writer', signal)).toThrow(expect.objectContaining({ code: 'DUPLICATE_AGENT_NAME' }))
+    expect(() => restored.reserve(parent, 'another', signal, session.id)).toThrow(expect.objectContaining({ code: 'DUPLICATE_CHILD' }))
   })
 
   it('releases failed startup reservations and refuses a concurrent duplicate before provider dispatch', async () => {
@@ -143,27 +143,47 @@ describe('tree-wide agent names', () => {
     expect(names.nameOf(agent)).toBe('legacy:old-child')
   })
 
-  it('does not initialize a partial index when a historical branch cannot be read', async () => {
+  it('traverses unnamed legacy catalogs with cycles and external leaves', async () => {
     const { ctx, parent, names } = await setup()
-    parent.session.append('subagent/catalog', { version: 0, childId: SessionId('missing'), childCreatedAt: 0, mode: 'continuable', label: 'Missing', name: 'reviewer' })
-    await expect(names.reserve(parent, 'writer', signal)).rejects.toThrow()
-    const restored = ctx.sessions.create(SessionId('missing'), { meta: { origin: 'subagent', parentSession: parent.id } })
-    establishExternalCatalogChild(restored, SessionId('writer-child'), 'Write', 'writer')
-    await expect(names.reserve(parent, 'writer', signal)).rejects.toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
-    expect(await names.resolve(parent, 'writer')).toBe('writer-child')
+    const child = ctx.sessions.create(SessionId('old'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    establishCatalogChild(parent.session, child.header, { mode: 'continuable', label: 'Old' })
+    establishCatalogChild(child, parent.session.header, { mode: 'continuable', label: 'Cycle' })
+    child.append('subagent/catalog', { version: 2, childId: SessionId('remote'), childCreatedAt: 0, mode: 'external' })
+    expect(await names.resolve(parent, 'legacy:remote')).toBe('remote')
+    await expect(names.resolve(parent, 'legacy:missing')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
   })
 
-  it.each(['name', 'identity'])('rejects duplicate cataloged %s when rebuilding', async (duplicate) => {
+  it.each(['missing', 'cycle'] as const)('rejects named discovery with %s ancestry', async (kind) => {
+    const { ctx } = await setup()
+    const session = ctx.sessions.create(SessionId('orphan'), {
+      meta: { origin: 'subagent', ...kind === 'cycle' ? { parentSession: SessionId('orphan') } : {} },
+    })
+    establishExternalCatalogChild(session, SessionId('remote'), 'Task', 'writer')
+    await expect(ctx.subagents.listChildren(session.id)).rejects.toMatchObject({ code: 'AGENT_TREE_UNAVAILABLE' })
+  })
+
+  it('checks root names without reading an unavailable historical branch', async () => {
+    const { ctx, parent, names } = await setup()
+    parent.session.append('subagent/catalog', { version: 0, childId: SessionId('missing'), childCreatedAt: 0, mode: 'continuable', label: 'Missing', name: 'reviewer' })
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    using _reservation = names.reserve(parent, 'writer', signal)
+    expect(await names.resolve(parent, 'reviewer')).toBe('missing')
+    await expect(names.resolve(parent, 'writer')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+    expect(observe).not.toHaveBeenCalled()
+    observe.mockRestore()
+  })
+
+  it.each(['name', 'identity', 'root'])('rejects duplicate cataloged %s when rebuilding', async (duplicate) => {
     const { parent, names } = await setup()
     establishExternalCatalogChild(parent.session, SessionId('first'), 'Review', 'reviewer')
-    establishExternalCatalogChild(parent.session, SessionId(duplicate === 'identity' ? 'first' : 'second'), 'Write', duplicate === 'name' ? 'reviewer' : 'writer')
-    await expect(names.reserve(parent, 'another', signal)).rejects.toMatchObject({ code: 'CORRUPT_AGENT_NAMES' })
+    establishExternalCatalogChild(parent.session, duplicate === 'root' ? parent.id : SessionId(duplicate === 'identity' ? 'first' : 'second'), 'Write', duplicate === 'name' ? 'reviewer' : 'writer')
+    expect(() => names.reserve(parent, 'another', signal)).toThrow(expect.objectContaining({ code: 'CORRUPT_AGENT_NAMES' }))
   })
 
   it('refuses publication after ancestor replacement and releases the uncommitted name', async () => {
     const { ctx, parent, names } = await setup()
     {
-      using reservation = await names.reserve(parent, 'reviewer', signal)
+      using reservation = names.reserve(parent, 'reviewer', signal)
       const get = ctx.agents.get.bind(ctx.agents)
       const lookup = vi.spyOn(ctx.agents, 'get').mockImplementation(id => id === parent.id ? { ...parent } : get(id))
       const publish = vi.fn()
@@ -171,34 +191,28 @@ describe('tree-wide agent names', () => {
       expect(publish).not.toHaveBeenCalled()
       lookup.mockRestore()
     }
-    using retry = await names.reserve(parent, 'reviewer', signal)
+    using retry = names.reserve(parent, 'reviewer', signal)
     expect(() => { retry.commit(SessionId('child'), () => { throw new Error('append failed') }) }).toThrow('append failed')
   })
 
-  it.each(['reserve', 'publish'] as const)('rejects an ancestry change during %s', async (phase) => {
+  it('rejects an ancestry change before publication', async () => {
     const { ctx, parent, names } = await setup()
     const otherRoot = await externalTestParent(ctx)
     const session = ctx.sessions.create(SessionId('nested'), { meta: { origin: 'subagent', parentSession: parent.id } })
     const child = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(child, undefined))
-    const pending = names.reserve(child, 'reviewer', signal)
-    const reservation = phase === 'publish' ? await pending : undefined
+    using reservation = names.reserve(child, 'reviewer', signal)
     const replacement = { ...parent, session: Session.create(parent.id, undefined, {
       ...parent.session.header, origin: 'subagent', parentSession: otherRoot.id,
     }) }
     const get = ctx.agents.get.bind(ctx.agents)
     const lookup = vi.spyOn(ctx.agents, 'get').mockImplementation(id => id === parent.id ? replacement : get(id))
     try {
-      if (reservation === undefined) {
-        await expect(pending).rejects.toMatchObject({ code: 'AGENT_TREE_UNAVAILABLE' })
-      } else {
-        const publish = vi.fn()
-        expect(() => { reservation.commit(SessionId('child'), publish) })
-          .toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
-        expect(publish).not.toHaveBeenCalled()
-      }
+      const publish = vi.fn()
+      expect(() => { reservation.commit(SessionId('child'), publish) })
+        .toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
+      expect(publish).not.toHaveBeenCalled()
     } finally {
-      reservation?.[Symbol.dispose]()
       lookup.mockRestore()
     }
   })
@@ -212,7 +226,7 @@ describe('tree-wide agent names', () => {
     const agent = { ...parent, id: fork.id, session: fork }
     onTestFinished(ctx.agents.enter(agent, undefined))
     expect(names.nameOf(agent)).toBe('lead')
-    using reservation = await names.reserve(agent, 'reviewer', signal)
+    using reservation = names.reserve(agent, 'reviewer', signal)
     reservation.commit(SessionId('new'), () => { establishExternalCatalogChild(fork, SessionId('new'), 'Review', 'reviewer') })
     expect(await names.resolve(agent, 'reviewer')).toBe('new')
   })
@@ -222,7 +236,7 @@ describe('tree-wide agent names', () => {
     const session = ctx.sessions.create(SessionId('orphan'), { meta: { origin: 'subagent' } })
     const child = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(child, undefined))
-    await expect(names.reserve(child, 'writer', signal)).rejects.toMatchObject({ code: 'AGENT_TREE_UNAVAILABLE' })
+    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
   })
 
   it('rejects stale callers, detached children, and a missing identity projection', async () => {
@@ -232,7 +246,7 @@ describe('tree-wide agent names', () => {
     const child = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(child, undefined))
     expect(names.nameOf(child)).toBe('legacy:orphan')
-    await expect(names.reserve(child, 'writer', signal)).rejects.toMatchObject({ code: 'AGENT_TREE_UNAVAILABLE' })
+    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
     const nestedSession = ctx.sessions.create(SessionId('nested'), { meta: { origin: 'subagent', parentSession: parent.id } })
     const nested = { ...parent, id: nestedSession.id, session: nestedSession }
     onTestFinished(ctx.agents.enter(nested, undefined))

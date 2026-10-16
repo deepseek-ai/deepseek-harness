@@ -721,6 +721,44 @@ describe('SubagentRuntime.startActivation', () => {
     expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toEqual([])
   })
 
+  it('releases a name after root registration fails and excludes the unfinished child from discovery and resume', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const { ctx, parent } = await setupWith(new GatedAdapter([
+      { chunks: textResponse('parent done'), gate: release.promise },
+      { chunks: textResponse('retry done') },
+      { chunks: textResponse('notice received') },
+    ]))
+    const nested = await ctx.subagents.startActivation({ ...startSpec(parent), name: 'reviewer', delivery: 'parent' })
+    const child = ctx.agents.get(nested.childId)!
+    const failedId = SessionId('unfinished-grandchild')
+    const append = vi.spyOn(parent.session, 'append').mockImplementationOnce(() => { throw new Error('root registration failed') })
+    try {
+      await expect(ctx.subagents.startActivation({
+        ...startSpec(child), name: 'writer', childId: failedId, delivery: 'parent',
+      })).rejects.toThrow('root registration failed')
+      expect(append.mock.calls[0]).toEqual(['subagent/catalog', { version: 3, kind: 'name', childId: failedId, name: 'writer' }])
+      append.mockRestore()
+      expect(ctx.agents.get(failedId)).toBeUndefined()
+      expect(child.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toMatchObject([
+        { data: { childId: failedId, name: 'writer' } },
+      ])
+      expect(await ctx.subagents.listChildren(child.id)).toEqual([])
+      await expect(ctx.subagents.resolveName(parent, 'writer')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+      await expect(queuePrompt(ctx, child, failedId, message('resume unfinished child'))).rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+
+      const retry = await ctx.subagents.startActivation({ ...startSpec(child), name: 'writer', delivery: 'caller' })
+      await retry.result
+      expect(await ctx.subagents.resolveName(parent, 'writer')).toBe(retry.childId)
+      expect((await ctx.subagents.listChildren(child.id)).map(entry => entry.id)).toEqual([retry.childId])
+      expect((await ctx.subagents.listChildren(parent.id)).map(entry => entry.id)).toEqual([nested.childId])
+      await expect(queuePrompt(ctx, child, failedId, message('resume old attempt'))).rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+    } finally {
+      append.mockRestore()
+      release.resolve(undefined)
+      await nested.result
+    }
+  })
+
   it('preserves prompt admission failure when Activation disposal also fails', async () => {
     const { ctx, parent } = await setup([textResponse('unused')])
     const childId = SessionId('00000000-0000-4000-8000-000000000322')
@@ -1048,8 +1086,8 @@ describe('direct-child Queue residency routing', () => {
     const restored = new SubagentNames(ctx)
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
     const reservations = await Promise.allSettled([
-      restored.reserve(parent, 'next', new AbortController().signal),
-      restored.reserve(parent, 'next', new AbortController().signal),
+      Promise.resolve().then(() => restored.reserve(parent, 'next', new AbortController().signal)),
+      Promise.resolve().then(() => restored.reserve(parent, 'next', new AbortController().signal)),
     ])
     try {
       expect(reservations.filter(result => result.status === 'fulfilled')).toHaveLength(1)
@@ -1058,7 +1096,7 @@ describe('direct-child Queue residency routing', () => {
       for (const result of rejected) expect(result.reason).toMatchObject({ code: 'DUPLICATE_AGENT_NAME' })
       expect(await restored.resolve(parent, started.name)).toBe(started.childId)
       const reads = observe.mock.calls.length
-      expect(reads).toBe(2)
+      expect(reads).toBe(0)
       expect(await restored.resolve(parent, started.name)).toBe(started.childId)
       expect(observe).toHaveBeenCalledTimes(reads)
     } finally {

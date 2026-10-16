@@ -1,67 +1,66 @@
-/** Root-scoped name reservations reconstructed from parent-owned catalogs.
+/** Root-scoped temporary reservations over committed catalog names.
  * @module @deepseek-ai/dsh-subagent/names
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { liveCatalogEntries } from './catalog.ts'
+import { catalogNames, liveCatalogEntries, liveCatalogState } from './catalog.ts'
 import { subagentNameSchema } from './descriptor.ts'
 import { SubagentError } from './error.ts'
 import { listChildren } from './list-children.ts'
 
-interface NameEntry {
-  readonly id: SessionId | undefined
-  readonly committed: boolean
-}
-
-/** Committed identities and unpublished reservations shared by one live root. */
+/** Pending names share the exact live root's lifetime; committed names belong to its catalog. */
 export class SubagentNames {
-  private readonly trees = new WeakMap<Agent, Map<string, NameEntry>>()
+  private readonly pending = new WeakMap<Agent, Set<string>>()
 
   /** @param ctx - subagent service context with live Agents and Session projections. */
   constructor(private readonly ctx: Context) {}
 
   /**
-   * Reserve a name and any known local identity before child preparation.
+   * Reserve synchronously before child preparation. Publication writes the parent fact,
+   * then the root registration without awaiting; only the latter commits a nested child.
+   * A failed second append can leave a parent fact but releases the pending name.
    * @param parent - exact live spawning Agent.
    * @param name - explicit lower-case name; lead and unowned are reserved.
-   * @param signal - cancellation while rebuilding historical assignments.
+   * @param signal - cancellation before reservation or publication.
    * @param id - reserved local identity, when the provider does not allocate it.
    * @returns a catalog publication operation and unpublished-reservation release.
    * @throws when the name or identity is taken, invalid, or cannot be checked.
    */
-  async reserve(parent: Agent, name: string, signal: AbortSignal, id?: SessionId): Promise<{
+  reserve(parent: Agent, name: string, signal: AbortSignal, id?: SessionId): {
     commit(id: SessionId, publish: () => void): void
     [Symbol.dispose](): void
-  }> {
+  } {
     if (!subagentNameSchema.safeParse(name).success) {
       throw new SubagentError('agent name must start with a lower-case letter and contain only lower-case letters, digits, underscores, or hyphens; lead and unowned are reserved', 'INVALID_AGENT_NAME')
     }
     const root = this.rootOf(parent)
-    const names = await this.index(root, signal)
     signal.throwIfAborted()
-    if (this.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
-    if (names.has(name)) {
+    const names = this.committed(root)
+    const pending = this.pending.get(root) ?? new Set<string>()
+    this.pending.set(root, pending)
+    if (names.has(name) || pending.has(name)) {
       throw new SubagentError(`agent name "${name}" is already in use in this tree; choose another name`, 'DUPLICATE_AGENT_NAME')
     }
     const checkId = (candidate: SessionId): void => {
-      for (const [other, value] of names) {
-        if (other !== name && value.id === candidate) throw new SubagentError(`subagent "${candidate}" already exists`, 'DUPLICATE_CHILD')
+      for (const value of this.committed(root).values()) {
+        if (value === candidate) throw new SubagentError(`subagent "${candidate}" already exists`, 'DUPLICATE_CHILD')
       }
     }
     if (id !== undefined) checkId(id)
-    names.set(name, { id, committed: false })
-    let committed = false
+    pending.add(name)
     return {
       commit: (childId, publish) => {
+        signal.throwIfAborted()
         if (this.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
         checkId(childId)
         publish()
-        names.set(name, { id: childId, committed: true })
-        committed = true
+        if (parent !== root) {
+          root.session.append('subagent/catalog', { version: 3, kind: 'name', childId, name })
+        }
       },
-      [Symbol.dispose]: () => { if (!committed) names.delete(name) },
+      [Symbol.dispose]: () => { pending.delete(name) },
     }
   }
 
@@ -86,48 +85,43 @@ export class SubagentNames {
    * Resolve a name without granting messaging, interruption, or assignment authority.
    * @param caller - exact live Agent selecting the tree.
    * @param name - assigned name or an older child's legacy address.
-   * @param signal - cancellation while rebuilding historical assignments.
+   * @param signal - cancellation during lookup, including historical legacy traversal.
    * @returns the durable identity for the consuming operation to authorize.
-   * @throws when the name is absent or historical catalogs cannot be read.
+   * @throws when the name is absent, the root catalog is invalid, or legacy traversal fails.
    */
   async resolve(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
     signal?.throwIfAborted()
     const root = this.rootOf(caller)
     if (name === 'lead') return root.id
-    const entry = (await this.index(root, signal)).get(name)
-    if (entry?.committed && entry.id !== undefined) return entry.id
+    const id = this.committed(root).get(name)
+    if (id !== undefined) return id
+    if (name.startsWith('legacy:')) {
+      const pending = [...liveCatalogEntries(this.ctx.get('sessionProjections'), root.session)]
+      const visited = new Set<SessionId>([root.id])
+      for (const entry of pending) {
+        signal?.throwIfAborted()
+        if (visited.has(entry.id)) continue
+        visited.add(entry.id)
+        if (entry.name === undefined && name === `legacy:${entry.id}`) return entry.id
+        if (entry.mode !== 'external') pending.push(...await listChildren(this.ctx, entry.id, signal))
+      }
+    }
     throw new SubagentError(`agent name "${name}" was not found; use list_agents to discover available names`, 'AGENT_NAME_NOT_FOUND')
   }
 
-  /** Cache complete catalog traversals; concurrent readers adopt the first completed index. */
-  private async index(root: Agent, signal?: AbortSignal): Promise<Map<string, NameEntry>> {
-    signal?.throwIfAborted()
-    const existing = this.trees.get(root)
-    if (existing !== undefined) return existing
-    const names = new Map<string, NameEntry>([['lead', { id: root.id, committed: true }]])
-    const ids = new Set<SessionId>([root.id])
-    const pending = [...liveCatalogEntries(this.ctx.get('sessionProjections'), root.session)]
-    for (const entry of pending) {
-      signal?.throwIfAborted()
-      const name = entry.name ?? `legacy:${entry.id}`
-      if (names.get(name)?.id === entry.id) continue
-      if (names.has(name) || ids.has(entry.id)) {
-        throw new SubagentError('duplicate cataloged agent name or identity; restore valid subagent catalogs', 'CORRUPT_AGENT_NAMES')
-      }
-      names.set(name, { id: entry.id, committed: true })
-      ids.add(entry.id)
-      if (entry.mode !== 'external') {
-        const live = this.ctx.get('sessions')?.get(entry.id)
-        pending.push(...(live === undefined
-          ? await listChildren(this.ctx, entry.id, signal)
-          : liveCatalogEntries(this.ctx.get('sessionProjections'), live)))
-      }
-    }
-    signal?.throwIfAborted()
-    this.rootOf(root)
-    const shared = this.trees.get(root) ?? names
-    this.trees.set(root, shared)
-    return shared
+  /**
+   * Check whether a named child reached creation commit, without changing lineage authority.
+   * @param caller - exact live Agent selecting the tree.
+   * @param name - name copied from the child's descriptor or parent catalog.
+   * @param id - child identity paired with that name.
+   * @returns whether the root catalog records that assignment.
+   */
+  isRegistered(caller: Agent, name: string, id: SessionId): boolean {
+    return this.committed(this.rootOf(caller)).get(name) === id
+  }
+
+  private committed(root: Agent): ReadonlyMap<string, SessionId> {
+    return new Map([['lead', root.id], ...catalogNames(liveCatalogState(this.ctx.get('sessionProjections'), root.session), root.id)])
   }
 
   /** Resolve only uninterrupted live subagent ancestry, never a fork's inherited parent. */

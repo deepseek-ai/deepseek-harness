@@ -1,5 +1,5 @@
 /**
- * Parent-owned durable subagent catalog events and their chunked projection.
+ * Durable child discovery and root name registrations in one catalog projection.
  *
  * @module @deepseek-ai/dsh-subagent/catalog
  */
@@ -26,8 +26,8 @@ type KnownCatalogMode =
   | { readonly mode: 'one-shot'; readonly label?: string }
   | { readonly mode: 'continuable'; readonly label: string }
 
-/** Parent catalog v0 records local modes, v1 adds unknown children, and v2 records external executions. */
-export type SubagentCatalogEvent =
+/** Child discovery records: v0 local modes, v1 unknown children, and v2 external executions. */
+type CatalogChildEvent =
   & {
     /** Immutable tree-wide name; absent in older catalogs. */
     readonly name?: string
@@ -39,10 +39,18 @@ export type SubagentCatalogEvent =
     | { readonly version: 2; readonly mode: 'external'; readonly label?: string }
   )
 
+/** Catalog v3 registers a descendant name in the tree root without adding a direct child. */
+export type SubagentCatalogEvent = CatalogChildEvent | {
+  readonly version: 3
+  readonly kind: 'name'
+  readonly childId: SessionId
+  readonly name: string
+}
+
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
-     * A direct child's identity and available discovery fields.
+     * Direct-child discovery or a root-owned descendant name registration.
      * @param data - versioned parent-owned catalog entry.
      */
     'subagent/catalog': SubagentCatalogEvent
@@ -79,6 +87,7 @@ const eventDataSchema = z.union([
   externalCatalogSchema,
   continuableCatalogSchema,
   unknownCatalogSchema,
+  z.object({ version: z.literal(3), kind: z.literal('name'), childId: sessionIdSchema, name: subagentNameSchema }).strict(),
 ]) as z.ZodType<SubagentCatalogEvent>
 const viewSchema = z.array(z.union([
   oneShotCatalogSchema.omit({ version: true, childId: true, childCreatedAt: true }).extend({
@@ -117,6 +126,7 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 function subagentCatalogEntries(state: SubagentCatalogState): SubagentCatalogEntry[] {
   const entries: SubagentCatalogEntry[] = []
   for (const data of iterateChunkedList(state.head)) {
+    if (data.version === 3) continue
     const { version: _version, childId, childCreatedAt, ...descriptor } = data
     entries.push({ id: childId, createdAt: childCreatedAt, ...descriptor })
   }
@@ -132,7 +142,7 @@ export const subagentCatalogProjectionDefinition = {
     if (event.type !== 'subagent/catalog' || event.seq < state.inheritedEventCount) return state
     return { ...state, head: appendChunkedList(state.head, eventDataSchema.parse(event.data)) }
   },
-  stateVersion: 7,
+  stateVersion: 8,
   wire: { viewSchema, view: subagentCatalogEntries },
 } satisfies ProjectionDefinition<'subagentCatalog', SubagentCatalogState>
 
@@ -189,9 +199,40 @@ export function liveCatalogEntries(
   projections: SessionProjectionRegistry | undefined,
   parent: Session,
 ): SubagentCatalogEntry[] {
-  const state = projections?.stateOf(parent, 'subagentCatalog')
-  if (state === undefined) {
-    throw new SubagentError('subagent sibling messaging requires the subagentCatalog projection', 'CONTINUATION_UNAVAILABLE')
+  return subagentCatalogEntries(liveCatalogState(projections, parent))
+}
+
+/**
+ * Read committed tree names from the root catalog, including its named direct children.
+ * @param state - root Session's own catalog state.
+ * @param rootId - root identity reserved for lead.
+ * @returns immutable name-to-child assignments; incomplete descendant rows live only in their parent.
+ * @throws {SubagentError} when persisted names or child identities conflict.
+ */
+export function catalogNames(state: SubagentCatalogState, rootId: SessionId): ReadonlyMap<string, SessionId> {
+  const names = new Map<string, SessionId>()
+  const ids = new Set<SessionId>([rootId])
+  for (const entry of iterateChunkedList(state.head)) {
+    if (entry.name === undefined || names.get(entry.name) === entry.childId) continue
+    if (names.has(entry.name) || ids.has(entry.childId)) {
+      throw new SubagentError('duplicate cataloged agent name or identity; restore the root catalog', 'CORRUPT_AGENT_NAMES')
+    }
+    names.set(entry.name, entry.childId)
+    ids.add(entry.childId)
   }
-  return subagentCatalogEntries(state)
+  return names
+}
+
+/**
+ * Read one live Session's catalog fold, including root name registrations.
+ * @param projections - registry owning the catalog projection.
+ * @param session - exact live Session to read.
+ * @returns catalog state for the Session's own suffix.
+ */
+export function liveCatalogState(projections: SessionProjectionRegistry | undefined, session: Session): SubagentCatalogState {
+  const state = projections?.stateOf(session, 'subagentCatalog')
+  if (state === undefined) {
+    throw new SubagentError('subagent naming and discovery require the subagentCatalog projection', 'CONTINUATION_UNAVAILABLE')
+  }
+  return state
 }

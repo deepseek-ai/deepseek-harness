@@ -3065,14 +3065,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>',
-        description: 'Read the parent\'s durable direct-child catalog without loading or resuming an Agent. The service owns and releases the live-preferred Session observation.',
+        description: 'Read the parent\'s durable direct-child catalog without loading or resuming an Agent. The service owns and releases the live-preferred Session observation. Named rows require matching root catalog registrations, observed through ancestry.',
         parameters: [{ name: 'parentSessionId', description: 'parent whose direct children are requested.' }, { name: 'signal', description: 'cancellation forwarded to the Session query.' }],
-        returns: 'catalog children in parent event order.',
+        returns: 'committed catalog children in parent event order.',
         throws: ['{@link SubagentError} when query or catalog projection is unavailable.', 'SessionQueryError when the parent cannot be read or the query is cancelled.'],
       },
       {
         signature: 'listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>',
-        description: 'Recursively list reachable parent catalogs in stable pre-order, preserving each catalog\'s event order. Each row carries its catalog parent and depth; external children are leaves; one-shot and unknown-mode children remain traversal nodes. Unknown modes produce unsupported diagnostics. Unreadable child catalogs produce corrupt or unavailable diagnostics and stop only that branch. Root read failures, missing services or projections, and cancellation reject the whole listing. Each catalog is observed once and released before the next read. No Agent is loaded or resumed; Sessions absent from reachable catalogs are omitted.',
+        description: 'Recursively list reachable parent catalogs in stable pre-order, preserving each catalog\'s event order. Each row carries its catalog parent and depth; external children are leaves; one-shot and unknown-mode children remain traversal nodes. Unknown modes produce unsupported diagnostics. Unreadable child catalogs produce corrupt or unavailable diagnostics and stop only that branch. Root read failures, missing services or projections, and cancellation reject the whole listing. Named rows require additional ancestor reads to verify root registration. No Agent is loaded or resumed; Sessions absent from reachable catalogs are omitted.',
         parameters: [{ name: 'rootSessionId', description: 'session whose catalog starts descendant discovery.' }, { name: 'signal', description: 'cancellation forwarded to and checked around each catalog read.' }],
         returns: 'children and branch diagnostics in parent-catalog pre-order.',
         throws: ['{@link SubagentError} when listing dependencies are unavailable or the caller cancels.', 'SessionQueryError when the root catalog cannot be read.'],

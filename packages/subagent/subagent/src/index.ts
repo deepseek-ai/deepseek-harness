@@ -418,9 +418,10 @@ export class SubagentRuntime extends TypertRemoteService {
   /**
    * Read the parent's durable direct-child catalog without loading or resuming an Agent.
    * The service owns and releases the live-preferred Session observation.
+   * Named rows require matching root catalog registrations, observed through ancestry.
    * @param parentSessionId - parent whose direct children are requested.
    * @param signal - cancellation forwarded to the Session query.
-   * @returns catalog children in parent event order.
+   * @returns committed catalog children in parent event order.
    * @throws {@link SubagentError} when query or catalog projection is unavailable.
    * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
    */
@@ -436,7 +437,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * produce unsupported diagnostics. Unreadable child catalogs produce corrupt
    * or unavailable diagnostics and stop only that branch. Root read failures,
    * missing services or projections, and cancellation reject the whole listing.
-   * Each catalog is observed once and released before the next read. No Agent
+   * Named rows require additional ancestor reads to verify root registration. No Agent
    * is loaded or resumed; Sessions absent from reachable catalogs are omitted.
    * @param rootSessionId - session whose catalog starts descendant discovery.
    * @param signal - cancellation forwarded to and checked around each catalog read.

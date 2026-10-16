@@ -9,7 +9,7 @@ English | [中文](2026-10-16-tree-wide-agent-names.zh.md)
 
 ## Summary
 
-Stores immutable tree-wide agent names in existing subagent catalog and descriptor records.
+Stores immutable tree-wide agent names in existing subagent catalog and descriptor records, with catalog v3 registering descendant names at the root.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ baseline: false
 changes:
   - root: "event:subagent/catalog"
     previous: "2026-09-19-external-subagent-catalog"
-    after: "8521c4e8b3ddb8a7835fe8e707061bf4a9a52b9e4c2e98e5fc5fef2ac4998ff3"
+    after: "c97a3640f72bd16b03b788c27630c9423483175b3da4e4e2f22c215c0756d789"
     decision: same-version
   - root: "event:subagent/descriptor"
     previous: "2026-09-11-initial"
@@ -39,12 +39,12 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-New readers accept earlier field-free catalogs and descriptors and expose stable legacy addresses. Older catalog readers reject the added name field through their strict event schema; older descriptor readers reject the unknown field and cannot cold-resume that child. Neither reader silently assigns a different identity. Session ids, event discriminators, and writer format remain unchanged. Existing projection checkpoints are invalidated by their state-version increments. Names remain reserved after settlement; external caller-delivered executions now also publish catalog entries.
+New readers accept earlier unnamed catalog and descriptor records. Older catalog readers reject added name fields and the v3 name-registration variant through strict schemas; older descriptor readers reject unknown name fields. The catalog version discriminator prevents registration rows from being interpreted as direct children. Session ids, event types, and the Session writer format remain unchanged. Catalog projection checkpoints are invalidated by a state-version increment. Root registrations retain names after settlement; failed registration may leave a parent discovery fact, which named discovery and cold resume exclude.
 
 <a id="verification"></a>
 ## Verification
 
-Focused catalog, descriptor, continuation, and Team tests passed. The names and continuation tests exercised concurrent catalog reconstruction, cold name recovery, unreadable historical branches, failed-start release, fork isolation, and repeated child-id rejection; names.ts reached 100% statement, branch, function, and line coverage.
+Focused subagent and Team tests exercise concurrent reservation, root-only lookup with unavailable historical branches, root registration failure after parent publication, retry with a fresh child id, discovery filtering, cold-resume refusal, fork isolation, and repeated child-id rejection. Catalog tests check the new variant, checkpoint parsing, and exclusion from direct-child views; Team projection tests exclude name-only rows.
 
 <a id="dev-note"></a>
 ## Dev Note
