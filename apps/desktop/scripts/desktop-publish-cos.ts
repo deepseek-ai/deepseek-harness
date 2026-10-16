@@ -7,6 +7,7 @@ import { createDesktopCos, DESKTOP_COS_REGION, type DesktopCosCredentials } from
 import { cosOperation } from './cos-operation.ts'
 import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
 import { desktopArtifactDigest, type DesktopPublishTransport } from './desktop-publish.ts'
+import { DesktopCosOperationError } from './desktop-publication-failure.ts'
 
 function missing(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'NoSuchKey'
@@ -14,6 +15,7 @@ function missing(error: unknown): boolean {
 
 /**
  * Create a bounded COS transport restricted to the validated plan's object keys.
+ * Administrators must keep bucket versioning absent; publication does not query bucket configuration.
  * @param plan Destination and exact object inventory; arbitrary keys are rejected.
  * @param credentials Credentials for this deployment only.
  * @param createClient Client factory; absent uses the shared production client, tests supply a loopback client.
@@ -51,7 +53,7 @@ export function desktopPublishCos(
         return { size, sha512: sha512.digest('base64'), ...(channel ? { contents: Buffer.concat(chunks).toString('utf8') } : {}) }
       } catch (error) {
         if (missing(error)) return null
-        throw error
+        throw new DesktopCosOperationError('GetObject', error)
       } finally { output.destroy() }
     },
     async put(artifact, digest, forbidOverwrite) {
@@ -62,13 +64,6 @@ export function desktopPublishCos(
       const actual = await desktopArtifactDigest(artifact)
       if (actual.size !== digest.size || actual.sha512 !== digest.sha512) throw new Error('desktop publish: local input changed')
       const cos = client()
-      // COS overwrite prevention requires versioning to be absent, not enabled or suspended.
-      if (forbidOverwrite) {
-        const state = await cosOperation(cos, 30_000, () => cos.getBucketVersioning({ Bucket: plan.bucket, Region: DESKTOP_COS_REGION }))
-        if (state.statusCode !== 200 || state.VersioningConfiguration.Status !== undefined) {
-          throw new Error('desktop publish: immutable objects require bucket versioning to be disabled')
-        }
-      }
       const md5 = createHash('md5')
       const bytes = artifact.contents === undefined ? createReadStream(artifact.path) : [Buffer.from(artifact.contents)]
       for await (const chunk of bytes) md5.update(chunk)
@@ -78,6 +73,8 @@ export function desktopPublishCos(
           ...address, Body: body, ContentLength: digest.size, ContentType: artifact.contentType,
           Headers: { 'Content-MD5': md5.digest('base64'), ...(forbidOverwrite ? { 'x-cos-forbid-overwrite': 'true' } : {}) },
         }))
+      } catch (error) {
+        throw new DesktopCosOperationError('PutObject', error)
       } finally { body.destroy() }
     },
   }

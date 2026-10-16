@@ -10,7 +10,7 @@ on:
         default: test
         required: true
       skip_notarization:
-        description: '跳过公证和 stapling：仅限内部调试，不可用于发布或自动更新'
+        description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
         type: boolean
         default: false
         required: true

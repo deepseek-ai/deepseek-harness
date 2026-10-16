@@ -18,6 +18,16 @@ it('routes the exact successful attempt to its registered machine', () => {
     .toMatchObject({ runId: '42', attempt: '2', runnerLabel: 'dsh-mini', preset: 'test' })
 })
 
+it.each(['test', 'production'])('explains how to rebuild debugging packages for %s', (preset) => {
+  for (const [qualification, remedy] of [['unsigned', 'signing=signed'], ['unnotarized', '取消勾选“跳过公证”']]) {
+    const f = fixture()
+    f.source.preset = preset
+    f.source.qualification = qualification!
+    expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow(remedy)
+    expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow('重跑当前发布任务无效')
+  }
+})
+
 it.each(['attempt', 'repository', 'commit', 'mode', 'runner', 'workflow'] as const)('rejects mismatched %s evidence', (field) => {
   const f = fixture()
   if (field === 'attempt') f.source.attempt = '1'

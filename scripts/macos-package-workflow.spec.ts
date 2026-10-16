@@ -34,7 +34,7 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
 it('defaults to notarization and labels the explicit debugging option', () => {
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { skip_notarization: {
     type: 'boolean', default: false,
-    description: '跳过公证和 stapling：仅限内部调试，不可用于发布或自动更新',
+    description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选',
   } } })
   const steps = workflow.jobs.package!.steps
   expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)

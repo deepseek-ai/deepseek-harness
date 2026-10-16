@@ -14,6 +14,7 @@ import { publishDesktopRelease } from './desktop-publish.ts'
 import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { desktopPublicationSummary } from './desktop-publication-summary.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
+import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
   sourceRef: z.string(), channel: z.enum(['nightly', 'latest']),
@@ -36,7 +37,9 @@ export async function prepareDesktopPublication(env: NodeJS.ProcessEnv, verifySi
     || source.preset !== route.preset) {
     throw new Error('desktop publish: local package differs from the routed request')
   }
-  if (source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) throw new Error('desktop publish: debugging artifacts cannot be published')
+  const diagnostic = desktopPublishQualificationError(source.qualification)
+  if (diagnostic) throw new Error(diagnostic)
+  if (source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) throw new Error('desktop publish: package qualification does not match its platform')
   const config = await readDesktopPublishConfig(env.DSH_PACKAGING_CONFIG_DIR!, source.preset)
   const directory = retainedDesktopPath(root, route.runId, route.attempt)
   const environment = source.preset === 'test'

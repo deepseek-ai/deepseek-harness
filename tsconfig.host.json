@@ -161,6 +161,7 @@
     "apps/web/tests/queue-image.e2e.ts",
     "apps/web/tests/skill-invocation-policy.e2e.ts",
     "apps/web/tests/skill-user-invoke.e2e.ts",
+    "apps/web/tests/skill-menu-plugin-change.e2e.ts",
     "apps/web/tests/permission-policy-context.e2e.ts",
     "apps/web/tests/access-confirmation.e2e.ts",
     "apps/web/tests/agent-preset-selection.e2e.ts",
