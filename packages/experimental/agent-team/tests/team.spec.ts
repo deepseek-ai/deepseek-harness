@@ -117,6 +117,13 @@ describe('Team identity and membership', () => {
     stateOfSpy.mockRestore()
   })
 
+  it('propagates unavailable runtime errors while resolving membership', async () => {
+    const { ctx, lead } = await setup([])
+    const failure = new Error('runtime unavailable')
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
+    expect(() => ctx.agentTeams.tryMembership(lead)).toThrow(failure)
+  })
+
   it('rejects task limits that are not positive safe integers and removed configuration keys', async () => {
     for (const value of [0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       await expect(setup([], { maxTasks: value })).rejects.toThrow()
@@ -145,6 +152,12 @@ describe('Team identity and membership', () => {
     expect(describe(unnamed)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
     expect(describe(grandchild)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
     expect(durable(lead).children).toEqual([{ id: named.id, description: 'alpha responsibility' }, { id: unnamed.id, description: 'shared responsibility' }])
+
+    ctx.subagents.interrupt(named.id, { kind: 'ancestor', agent: lead })
+    await waitNoAgent(ctx, named.id)
+    expect(describe(grandchild)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
+    const task = await ctx.agentTeams.createTask(grandchild, { subject: 'still active', description: 'creator offline' })
+    expect(ctx.agentTeams.listTasks(lead).map(row => row.id)).toContain(task.id)
 
     const impostor = { ...lead } as Agent
     expect(ctx.agentTeams.tryMembership(impostor)).toBeUndefined()

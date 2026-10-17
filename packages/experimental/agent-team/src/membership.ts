@@ -1,16 +1,16 @@
-/** Team membership derived from live subagent lineage and durable Session ids. */
+/** Team membership derived from runtime Team ownership and durable Session ids. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-subagent'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import type { TeamState } from './projection.ts'
 import { TeamId } from './types.ts'
 
 /** Caller identity inside one implicit Team. */
 export interface TeamMembership {
-  /** Exact live Lead: the root of the caller's live subagent lineage. */
+  /** Exact live Lead: the root of the caller's runtime Team ownership. */
   readonly root: Agent
   readonly id: TeamId
   readonly role: 'lead' | 'teammate'
@@ -58,22 +58,18 @@ export class TeamMembers {
   /**
    * Resolve a caller without throwing for scoped installation and lifecycle observers.
    * Every root Agent leads its own Team; every subagent below it, at any
-   * depth, is a teammate of that root while its lineage remains live.
+   * depth, is a teammate while that runtime root remains live.
    * @param agent - candidate exact live Agent.
-   * @returns Team membership, or undefined for stale identities and children whose parent left the registry.
+   * @returns Team membership, or undefined for stale identities and agents without an active Team owner.
    */
   tryMembership(agent: Agent): TeamMembership | undefined {
     if (this.ctx.agents.get(agent.id) !== agent) return undefined
-    let root = agent
-    const seen = new Set<SessionId>()
-    while (this.isSubagent(root)) {
-      seen.add(root.id)
-      const parentId = root.session.header.parentSession
-      const parent = parentId === undefined ? undefined : this.ctx.agents.get(parentId)
-      // A continuation can briefly outlive its parent during child-first teardown;
-      // do not reinterpret that durable child as a new implicit root Team.
-      if (parent === undefined || seen.has(parent.id)) return undefined
-      root = parent
+    let root: Agent
+    try {
+      root = this.ctx.subagents.rootOf(agent)
+    } catch (error) {
+      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') return undefined
+      throw error
     }
     if (root === agent) return { root, id: TeamId(root.id), role: 'lead' }
     return { root, id: TeamId(root.id), role: 'teammate' }
@@ -91,9 +87,4 @@ export class TeamMembers {
       && this.tryMembership(agent)?.id === id)
   }
 
-  /** Whether a Session's own log identifies it as a subagent child. */
-  private isSubagent(agent: Agent): boolean {
-    const identity = this.ctx.sessionProjections.stateOf(agent.session, 'subagent')?.identity
-    return identity !== undefined && agent.session.isOwnSeq(identity.seq)
-  }
 }

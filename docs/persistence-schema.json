@@ -24075,7 +24075,7 @@
       "digest": "6e52dd55a1d48954ed5464ec46fe34d9eb65f709baabc9561e7a279910b0c406",
       "names": [],
       "sources": [
-        "packages/preset/agent-preset-registry/src/session.ts:31"
+        "packages/preset/agent-preset-registry/src/session.ts:30"
       ]
     },
     {

@@ -27,8 +27,8 @@
   en: 49891ca9be5ac123
   zh: 49891ca9be5ac123
 /session-persistence-event-catalog/events/agent-preset/agent-preset-selected-log-only:
-  en: 9eb4e8ec6b503d83
-  zh: 6d96288a30d92b81
+  en: 50a6b116a29bc6b0
+  zh: 7fce128060557296
 /session-persistence-event-catalog/events/approval:
   en: 9d2ec4c4c3664b9f
   zh: 9d2ec4c4c3664b9f
@@ -1398,8 +1398,8 @@
   en: a3de6a6fe9672c7a
   zh: a357481e27b3b81f
 /session-persistence-event-catalog/resolved-persistence-types/agentpreset:
-  en: 1afbe8196f161601
-  zh: a320a36a8928817c
+  en: 1282a0b3d5fa8d4d
+  zh: aa533aea643dbefb
 /session-persistence-event-catalog/resolved-persistence-types/allowedmodels:
   en: 6178321110ceb69d
   zh: 0a9d94cab9d57487

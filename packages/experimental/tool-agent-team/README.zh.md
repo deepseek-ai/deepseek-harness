@@ -122,7 +122,7 @@ member scope 上的一个 `team:policy` 段落和一个必需的 `team:identity`
 ##### Team 策略
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other member whose branch supports continuation. Descriptions explain responsibilities and may repeat.
+Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other listed member with running or inactive status. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 

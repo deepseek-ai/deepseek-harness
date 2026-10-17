@@ -666,13 +666,22 @@ async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRo
   expect(full).toContain('session_event_search')
 }
 
-/** Require the nested member's message to reach the Lead before recording or replay succeeds. */
+/** Require cross-tree communication and target-only restoration with an offline creator. */
 function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
   const leaf = parseSessionLog(logs[2]!.content)
   const results = leaf.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
   expect(results).toHaveLength(2)
   expect(results.every(result => result.isError === false)).toBe(true)
+  const rootResults = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(rootResults.map(result => ({ id: result.toolCallId, error: result.isError, content: result.content })))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'root-resume-leaf', error: false })]))
+  const branch = parseSessionLog(logs[1]!.content)
+  expect(branch.filter(event => event.type === 'turn/start')).toHaveLength(1)
+  expect(branch.some(event => event.type === 'session/end-seed')).toBe(false)
+  expect(leaf.filter(event => event.type === 'turn/start')).toHaveLength(2)
+  expect(leaf.some(event => event.type === 'assistant/message'
+    && event.data.message.content.some(block => block.type === 'text' && block.text === 'LEAF_RESUMED'))).toBe(true)
   const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'agent-message' ? [{
       sender: event.data.source.senderSessionId,

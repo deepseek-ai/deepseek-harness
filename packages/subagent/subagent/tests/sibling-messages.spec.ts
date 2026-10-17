@@ -58,7 +58,7 @@ afterEach(async () => {
 })
 
 /** Boot persistence, the Agent loop, one spawn provider, and the routed model. */
-async function setup(replies: Record<string, Reply[]>) {
+async function setup(replies: Record<string, Reply[]>, maxActiveSubagents = 16) {
   const ctx = new Context()
   disposers.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
@@ -68,7 +68,7 @@ async function setup(replies: Record<string, Reply[]>) {
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
-  await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentRuntime, { maxActiveSubagents })
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   const adapter = new RoutedAdapter(new Map(Object.entries(replies)))
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -138,7 +138,7 @@ describe('subagent sibling messages', () => {
   })
 
   it('keeps unrelated parents outside sibling delivery even when descriptions match', async () => {
-    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'] })
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const other = await ctx.agentLoop.create(SessionId('other-parent'), { provider: 'mock', model: 'mock' })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
@@ -202,18 +202,18 @@ describe('tree-wide messages', () => {
     await expect(ctx.subagents.sendMessage(sender, a, [], { signal })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('restores an inactive branch under its original parent to reach a cold descendant', async () => {
+  it('restores only the target within Team capacity while its creator remains offline', async () => {
     const { ctx, parent, adapter } = await setup({
-      a: ['hang'], branch: ['hang', textResponse('branch ack')], leaf: [textResponse('first'), textResponse('reply')],
-    })
-    const a = await start(ctx, parent, 'a')
-    const sender = await running(ctx, a)
+      a: ['hang'], branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')],
+    }, 2)
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
     await settled(ctx, leafId)
     ctx.subagents.interrupt(branchId, { kind: 'ancestor', agent: parent })
     await settled(ctx, branchId)
+    const a = await start(ctx, parent, 'a')
+    const sender = await running(ctx, a)
     const resumed: Array<{ id: SessionId; parent: SessionId | undefined }> = []
     ctx.on('agent/created', ({ agent }) => { resumed.push({ id: agent.id, parent: agent.session.header.parentSession }) })
 
@@ -224,18 +224,19 @@ describe('tree-wide messages', () => {
     expect(textOf(delivered)).toBe(`Agent ${a} sent a message: cold cousin`)
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     await settled(ctx, branchId)
-    expect(resumed).toEqual([{ id: branchId, parent: parent.id }, { id: leafId, parent: branchId }])
+    expect(resumed).toEqual([{ id: leafId, parent: branchId }])
+    expect(ctx.agents.get(branchId)).toBeUndefined()
     expect(adapter.routed.filter(request => request.sessionId === leafId)).toHaveLength(2)
     const branchMessages = await storedUserMessages(ctx, branchId)
     expect(branchMessages.some(event => textOf(event).includes('cold cousin'))).toBe(false)
   })
 
   it('rechecks the sender after asynchronous target discovery', async () => {
-    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'] })
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
-    const target = await running(ctx, b)
+    await settled(ctx, b)
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     let stale = false
     const get = ctx.agents.get.bind(ctx.agents)
@@ -248,56 +249,36 @@ describe('tree-wide messages', () => {
     try {
       await expect(ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'rejected' }], { signal }))
         .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-      expect(target.inbox.nextStep).toHaveLength(0)
+      expect(ctx.agents.get(b)).toBeUndefined()
     } finally {
       registry.mockRestore()
       query.mockRestore()
     }
   })
-  it.each([[false, false], [true, false], [false, true]])('releases only newly restored ancestors when the target cannot resume (resident=%s, cleanup failure=%s)', async (resident, failCleanup) => {
-    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('first')] })
+  it('leaves the offline creator untouched when target history cannot be read', async () => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('done')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
     await settled(ctx, leafId)
-    if (!resident) {
-      ctx.subagents.interrupt(branchId, { kind: 'ancestor', agent: parent })
-      await settled(ctx, branchId)
-    }
-    const warnings: string[] = []
-    ctx.logger.warn = (message: string) => { warnings.push(message) }
-    if (failCleanup) ctx.on('subagent/start', ({ id }) => {
-      if (id !== branchId) return
-      const handle = requireLocalActivation(managerState(ctx).resident.get(id)!).handle
-      const dispose = handle.dispose.bind(handle)
-      handle.dispose = async () => {
-        await dispose()
-        throw new Error('ancestor cleanup report failed')
-      }
-    })
+    ctx.subagents.interrupt(branchId, { kind: 'ancestor', agent: parent })
+    await settled(ctx, branchId)
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
-    let leafReads = 0
-    const query = vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(async (...args) => {
-      if (args[0] === leafId && ++leafReads === 2) throw new Error('target storage unavailable')
+    vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(async (...args) => {
+      if (args[0] === leafId) throw new Error('target storage unavailable')
       return observe(...args)
     })
-    try {
-      await expect(ctx.subagents.sendMessage(parent, leafId, [{ type: 'text', text: 'rejected' }], { signal }))
-        .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
-      expect(ctx.agents.get(leafId)).toBeUndefined()
-      expect(ctx.agents.get(branchId)).toBe(resident ? branch : undefined)
-      if (failCleanup) expect(warnings.join(' ')).toContain('ancestor restoration rollback failed')
-    } finally {
-      query.mockRestore()
-    }
+    await expect(ctx.subagents.sendMessage(parent, leafId, [], { signal })).rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+    expect(ctx.agents.get(branchId)).toBeUndefined()
+    expect(ctx.agents.get(leafId)).toBeUndefined()
   })
 
   it('requires the parent catalog to attest every target edge', async () => {
-    const { ctx, parent } = await setup({ branch: ['hang'], leaf: ['hang'] })
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('done')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
-    const leaf = await running(ctx, leafId)
+    await settled(ctx, leafId)
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     const query = vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(async (...args) => {
       const result = await observe(...args)
@@ -309,18 +290,18 @@ describe('tree-wide messages', () => {
     try {
       await expect(ctx.subagents.sendMessage(parent, leafId, [{ type: 'text', text: 'rejected' }], { signal }))
         .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-      expect(leaf.inbox.nextStep).toHaveLength(0)
+      expect(ctx.agents.get(leafId)).toBeUndefined()
     } finally {
       query.mockRestore()
     }
   })
 
   it('rejects a replaced root after asynchronous target discovery', async () => {
-    const { ctx, parent } = await setup({ a: ['hang'], b: ['hang'] })
+    const { ctx, parent } = await setup({ a: ['hang'], b: [textResponse('done'), textResponse('reply')] })
     const a = await start(ctx, parent, 'a')
     const sender = await running(ctx, a)
     const b = await start(ctx, parent, 'b')
-    const target = await running(ctx, b)
+    await settled(ctx, b)
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     let replaced = false
     const replacement = new Proxy(parent, {})
@@ -334,15 +315,15 @@ describe('tree-wide messages', () => {
     try {
       await expect(ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'rejected' }], { signal }))
         .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-      expect(target.inbox.nextStep).toHaveLength(0)
+      expect(ctx.agents.get(b)).toBeUndefined()
     } finally {
       registry.mockRestore()
       query.mockRestore()
     }
   })
 
-  it.each([false, true])('waits for a closing ancestor before restoring it (cleanup failure=%s)', async (failCleanup) => {
-    const { ctx, parent } = await setup({ branch: ['hang', textResponse('ack')], leaf: [textResponse('first'), textResponse('reply')] })
+  it.each([false, true])('restores the target while its creator is still closing (cleanup failure=%s)', async (failCleanup) => {
+    const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
     const leafId = await start(ctx, branch, 'leaf')
@@ -362,16 +343,10 @@ describe('tree-wide messages', () => {
     let delivery: Promise<unknown> | undefined
     try {
       await entered.promise
-      const waiting = vi.spyOn(activation.closing!, 'then')
       delivery = ctx.subagents.sendMessage(parent, leafId, [{ type: 'text', text: 'after close' }], { signal })
-      await vi.waitFor(() => { expect(waiting).toHaveBeenCalled() })
-      waiting.mockRestore()
-      let unlocked = false
-      const access = managerState(ctx).locks.run(branchId, async () => { unlocked = true })
-      await vi.waitFor(() => { expect(unlocked).toBe(true) })
-      await access
-      release.resolve(undefined)
       await delivery
+      expect(ctx.agents.get(branchId)).toBe(branch)
+      release.resolve(undefined)
       const messages = await storedUserMessages(ctx, leafId)
       expect(messages.some(message => textOf(message) === `Agent ${parent.id} sent a message: after close`)).toBe(true)
       await settled(ctx, branchId)
@@ -381,5 +356,4 @@ describe('tree-wide messages', () => {
       await delivery
     }
   })
-
 })

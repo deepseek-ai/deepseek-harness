@@ -253,7 +253,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const schema = ctx.tools.schemas().find(candidate => candidate.name === 'list_agents')
     // Completion reaches the parent through its notice; listing is discovery,
     // so its inactive status must not send the model looking for a result.
-    expect(schema?.description).toContain('You will be notified when a direct child finishes')
+    expect(schema?.description).toContain('While you remain active, you will be notified when a direct child finishes')
     expect(schema?.description).toContain('inactive means it is not currently working')
     // The enum is the closed vocabulary the model renders, so pin it rather than
     // scanning prose that legitimately reads "not to poll for completion".
@@ -312,11 +312,10 @@ describe('dsh-tool-subagent-control/list-agents', () => {
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
-    // The branch finishes its own turn but stays resident waiting on the
-    // grandchild it owns: the live-registry `idle` status.
+    // The creation tree remains discoverable after the intermediate instance finishes.
     releaseChild.resolve(undefined)
     await vi.waitFor(() => {
-      expect(ctx.agents.get(started.childId)?.status).toBe('idle')
+      expect(ctx.agents.get(started.childId)).toBeUndefined()
     }, { timeout: 5_000 })
 
     const result = await callTool(ctx, 'list_agents', {}, parent)

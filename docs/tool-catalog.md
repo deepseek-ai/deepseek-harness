@@ -2126,7 +2126,7 @@ The registered delegation name is the load-time `toolName` config (default `suba
 
 ### `interrupt_agent`
 
-Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.
+Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.
 
 ```json
 {
@@ -2147,7 +2147,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `list_agents`
 
-List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
+List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
 
 ```json
 {

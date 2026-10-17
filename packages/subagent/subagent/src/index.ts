@@ -150,16 +150,16 @@ declare module '@deepseek-ai/cordis' {
     /**
      * A provider established a published child. For in-process providers,
      * `ctx.agents.get(info.id)` resolves during this notification.
-     * Scope-filtered dispatch keys the carrier by the delegating parent, so a
-     * parent-scoped listener observes only its own delegations. Paired with
+     * Scope-filtered dispatch keys the carrier by the Team root, so a
+     * root-scoped listener observes all Team activations. Paired with
      * `subagent/end`.
      * @param info - the provider and published child identity.
      * @mode emit
      */
     'subagent/start'(this: Scoped<SubagentRuntime>, info: SubagentRunInfo): void
     /**
-     * A published child settled. Scope-filtered dispatch uses the same delegating
-     * parent carrier as `subagent/start`, so the lifecycle pair reaches the
+     * A published child settled. Scope-filtered dispatch uses the same Team-root
+     * carrier as `subagent/start`, so the lifecycle pair reaches the
      * same scoped audience.
      * @param info - the run identity and terminal outcome.
      * @mode emit
@@ -288,17 +288,17 @@ export class SubagentRuntime extends TypertRemoteService {
    * Resolve the root shared by an Agent and its teammates.
    * @param caller - exact live Agent whose subagent ancestry selects the tree.
    * @returns the live root; ordinary Session forks lead independent trees.
-   * @throws when the caller or its live ancestry is unavailable.
+   * @throws when the caller or its runtime Team owner is unavailable.
    */
   rootOf(caller: Agent): Agent {
     return this.requireManager().rootOf(caller)
   }
 
   /**
-   * Join progressing descendants without cancelling them. Idle descendants whose
-   * inboxes require a later wake stay resident and do not delay host completion.
-   * @param parent - the exact parent whose descendant work is observed.
-   * @returns whether work was joined; hosts recheck parent idle after true.
+   * Join progressing Team work for its root. Idle members with parked input
+   * stay resident without delaying host completion. Ordinary members return false.
+   * @param parent - exact live Agent; only the Team root joins member work.
+   * @returns whether work was joined; hosts recheck root idle after true.
    */
   async waitForChildren(parent: Agent): Promise<boolean> {
     return this.manager?.waitForChildren(parent) ?? false
@@ -307,8 +307,8 @@ export class SubagentRuntime extends TypertRemoteService {
   /**
    * Steer one model-authored message to another member of the same subagent tree.
    * A running target receives it at its next step; an idle target starts a turn.
-   * Cold targets and their continuable ancestors resume under their recorded
-   * parents. Sender identity is rechecked before inbox acceptance; cancellation
+   * A cold target resumes under its runtime Team root without restoring
+   * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
    * stops only pre-acceptance work and never retracts an accepted message.
    * @param sender - exact live root or resident continuable Agent originating the message.
    * @param targetId - another root or continuable member's durable Session id.
@@ -371,13 +371,11 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Close subagent admission below exact live parent Agents, stop only their
-   * visible descendant Activations synchronously, then await admitted scoped
-   * materializations and release those forests child-first. The scoped cutoff
-   * lasts until each exact parent leaves the registry; unrelated parent trees
-   * remain live.
-   * @param parents - exact host-owned parent Agents entering teardown.
-   * @returns once every retained descendant activation released its execution handle.
+   * Close admission and stop all instances in the selected Teams, then await
+   * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
+   * until each exact root leaves the registry; unrelated Teams remain live.
+   * @param parents - exact live Team roots entering teardown.
+   * @returns once all admitted startup and member cleanup have settled.
    * @throws an aggregate error after all branches settle when any failed.
    */
   async drainDescendants(parents: readonly Agent[]): Promise<void> {
@@ -389,7 +387,7 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /**
    * Release selected resident direct children of one exact live
-   * parent. Other children of the same parent remain admitted and resident.
+   * parent. Every unselected member, including their descendants, stays resident.
    * Absent targets and a manager-less composition are accepted no-ops.
    * @param parent - exact live direct parent authorizing the selected release.
    * @param childIds - durable direct-child ids to release when resident.

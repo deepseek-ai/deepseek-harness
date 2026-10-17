@@ -21,8 +21,8 @@
   en: 4a52c81317ec9001
   zh: ebd9f1ba920da50a
 /deepseek-ai-dsh-tool-subagent-control/use-this-package/send-message:
-  en: 41c6daa1032f8b00
-  zh: 4c97fba0cc219fda
+  en: d49274c955c540b8
+  zh: d6bece8efc944ac1
 /deepseek-ai-dsh-tool-subagent-control/use-this-package/interrupt-agent:
   en: 4ccd504f8886d8b0
   zh: 480ab8cba905ac02
@@ -36,8 +36,8 @@
   en: 18102f0d2d227c32
   zh: 0fa0350be29f9353
 /deepseek-ai-dsh-tool-subagent-control/understand-the-implementation/delivery-and-signal-ownership:
-  en: 8abf66a06bdffae3
-  zh: 97f63d7dc05672a1
+  en: 0f56ed14a185d4c9
+  zh: 676bb9484e3f45d4
 /deepseek-ai-dsh-tool-subagent-control/understand-the-implementation/listing-projection:
   en: ee3136b09f0c9ef2
   zh: 5cbe189bb857fdc7
@@ -99,8 +99,8 @@
   en: 4a629edb36a17e32
   zh: 5a7539cfbf404c54
 /deepseek-ai-dsh-tool-subagent-control/known-limitations-and-deferred-work:
-  en: ae88df703efcfa3c
-  zh: 025b705f4fc9a70d
+  en: b553b0941e229f7d
+  zh: 580d085b9416efa2
 /deepseek-ai-dsh-tool-subagent-control/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

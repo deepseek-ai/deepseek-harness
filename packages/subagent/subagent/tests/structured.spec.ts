@@ -373,11 +373,9 @@ describe('in-process structured output', () => {
     expect((await run.result).stopReason).toBe('aborted')
   })
 
-  it('keeps descendant messages and completion notices before accepting the final structured result', async () => {
+  it('accepts a final structured result without waiting for descendants', async () => {
     const { ctx, parent } = await setup([
       toolCallResponse('spawn-child', 'start_descendant', {}),
-      toolCallResponse('too-early', STRUCTURED_OUTPUT_TOOL, { answer: 1 }),
-      toolCallResponse('finish-child', 'finish_descendant', {}),
       toolCallResponse('final-capture', STRUCTURED_OUTPUT_TOOL, { answer: 42 }),
     ])
     ctx.llm.registerAdapter(['descendant'], new MockAdapter(['hang']))
@@ -396,33 +394,14 @@ describe('in-process structured output', () => {
         return [{ type: 'text', text: 'Child accepted' }]
       },
     }))
-    ctx.tools.register(defineContentToolFixture({
-      name: 'finish_descendant', description: 'Return delegated work', parameters: {},
-      async execute(_args, exec): Promise<ContentBlock[]> {
-        if (descendant === undefined || exec.agent === undefined) throw new Error('expected resident child and parent')
-        const sender = ctx.agents.get(descendant.childId)
-        if (sender === undefined) throw new Error('expected a resident descendant')
-        await ctx.subagents.sendMessage(sender, exec.agent.id, [{ type: 'text', text: 'Descendant result reached parent' }], {
-          signal: testToolSignal,
-        })
-        await descendant.dispose()
-        return [{ type: 'text', text: 'Child released' }]
-      },
-    }))
     const activation = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
     try {
       await expect(activation.result).resolves.toMatchObject({ stopReason: 'completed', structured: { answer: 42 } })
       const events = activation.localAgent.session.snapshotEvents()
-      const captures = events.filter(event => event.type === 'tool/result')
-        .map(event => event.data.message)
-        .filter(block => block.toolCallId === 'too-early' || block.toolCallId === 'final-capture')
-      expect(captures).toHaveLength(2)
-      expect(captures[0]?.isError).toBe(true)
-      expect(JSON.stringify(captures[0]?.content)).toContain('Wait for all delegated child tasks to finish')
-      expect(captures[1]?.isError).not.toBe(true)
-      const messages = events.filter(event => event.type === 'user/message')
-      expect(JSON.stringify(messages)).toContain('Descendant result reached parent')
-      expect(messages.some(event => event.data.source.kind === 'subagent-settled')).toBe(true)
+      const capture = events.filter(event => event.type === 'tool/result').find(event => event.data.message.toolCallId === 'final-capture')
+      expect(capture?.data.message.isError).not.toBe(true)
+      expect(ctx.agents.get(activation.childId)).toBeUndefined()
+      expect(ctx.agents.get(descendant!.childId)?.status).toBe('running')
     } finally {
       await descendant?.dispose()
       await activation.dispose()

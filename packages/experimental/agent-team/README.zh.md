@@ -114,7 +114,7 @@ kind: "package-reference"
 
 ### Team 身份与成员关系
 
-自身日志不含子代理描述符的根 Agent 领导以其 Session id 标识的 Team。`tryMembership()` 沿在线注册表中的 `parentSession` 查找根；父级缺失时，子代理不属于任何 Team。普通分叉最多携带继承的描述符，因此领导新的 Team。成员身份仅记录根、Team id 和角色。
+自身日志不含子代理描述符的根 Agent 领导以其 Session id 标识的 Team。`tryMembership()` 使用 `subagents.rootOf()` 和 Agent 注册表的运行时所有权；中间创建者可以离线。普通分叉最多携带继承的描述符，因此领导新的 Team。成员身份仅记录根、Team id 和角色。
 
 ### Roster
 
@@ -197,7 +197,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 - **成员列表覆盖直接可继续子级**——更深的后代共享任务和等待，但不显示成员行；它们可按自身 id 认领任务。
 
 - **通信限定在一棵树内**——成员不能向无关 Team 发消息；只有祖先能中断后代。
-- **成员关系需要 live 谱系**——parent Agent 未加载的 subagent 不属于任何 Team，因此其 Team 调用以 `TEAM_NOT_MEMBER` 失败。
+- **成员关系需要在线 Team 根**——中间创建者完成或释放后，成员保留 Team 身份；根缺失时不再属于活动 Team。
 - **不会自动释放 owner**——成员不活动、interrupt、进程退出与工作失败都不会释放任务 owner。
 - **历史排队消息保持未投递**——没有对应投递记录的 `team/message/queued` 记录仍可在 Lead 日志中读取，但不会有成员收到它们。
 

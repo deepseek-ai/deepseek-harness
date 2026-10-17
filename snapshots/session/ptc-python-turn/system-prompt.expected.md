@@ -526,7 +526,7 @@ class Tools(Protocol):
     async def grep(self, args: GrepArgs) -> GrepOutput:
         """Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns up to 250 matches; a larger result reports where the complete match list was saved."""
     async def interrupt_agent(self, args: InterruptAgentArgs) -> InterruptAgentOutput:
-        """Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running."""
+        """Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running."""
     async def job_kill(self, args: JobKillArgs) -> JobKillOutput:
         """Request cancellation of a running background job."""
     async def job_list(self, args: dict[str, Any]) -> list[JobListOutput]:
@@ -534,7 +534,7 @@ class Tools(Protocol):
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
     async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
-        """List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+        """List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:

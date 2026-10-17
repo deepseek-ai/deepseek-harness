@@ -45,7 +45,7 @@ This package takes no configuration: the root plugin provides `send_message` and
 
 ### send_message
 
-Sends a message to another Team member by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Cold ancestors resume under their recorded parents without receiving the target’s message. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+Sends a message to another Team member by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
@@ -71,7 +71,7 @@ Thin adapters over `ctx.subagents.sendMessage()`, `interrupt()`, and the list pr
 
 ### Delivery and signal ownership
 
-The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the target’s actual parent still owns restoration and disposal.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the Team root owns runtime instances and capacity.
 
 ### Listing projection
 
@@ -166,7 +166,7 @@ Append-only; each result follows the reusable request prefix.
 These limits define what the control tools cannot observe or steer; they are current package constraints.
 
 - **A delivered message has no independent result** — acceptance returns only its inbox `messageId`; later target work lands in that target's durable Session and is never collected through this tool. A reply is another explicitly addressed `send_message`, not this call's result.
-- **Messaging requires a live sender tree** — the root and the sender’s ancestors must remain live. Cold targets and their continuable ancestors can resume within that tree; each restored activation consumes the shared capacity. Unrelated trees and external or one-shot targets cannot receive messages.
+- **Messaging requires a live Team root** — intermediate creators may be offline. Only the target resumes, consuming one shared capacity slot. Unrelated trees and external or one-shot targets cannot receive messages.
 - **Listing is a snapshot, not a delivery promise** — it may race publication, disposal, or a later message, and another process may activate a child this process reports as `inactive`; cross-process accuracy requires a shared lease. `interrupt_agent` performs the authoritative live-lineage check itself, so discovery staleness cannot grant authority.
 - **No pagination or deletion** — the complete stably ordered set is returned, and persisted children remain listed for as long as their sessions remain in persistence; a service-level bound or delete operation is a later product decision.
 

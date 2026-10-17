@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-08-27-adjacent-agent-steer-messaging.md) | 中文
 
-邻接消息和发现范围已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
+邻接消息、发现范围和父子生命周期限制已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
 
 ## 问题
 

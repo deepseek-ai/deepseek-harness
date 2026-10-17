@@ -198,15 +198,14 @@ Source: [`packages/core/agent/src/types.ts:96`](../packages/core/agent/src/types
  * The session's agent preset was chosen after creation, while the session
  * was still blank. Log-only: it records the composition later turns ran
  * under, so a resumed or forked session rebuilds the same one instead of
- * the header's creation-time value. In a child Session, an occurrence
- * before its first own `subagent/descriptor` marks an independent spawn
- * selection that cold resume restores instead of joining the parent's
- * composition (`dsh-subagent` README, "Restoring child composition").
+ * the header's creation-time value. Subagent restoration reads this saved
+ * selection independently of its creator (`dsh-subagent` README,
+ * "Restoring child composition").
  */
 'agent-preset/selected': { agentPreset: string }
 ```
 
-Source: [`packages/preset/agent-preset-registry/src/session.ts:31`](../packages/preset/agent-preset-registry/src/session.ts)
+Source: [`packages/preset/agent-preset-registry/src/session.ts:30`](../packages/preset/agent-preset-registry/src/session.ts)
 
 ### `approval/*`
 
@@ -5773,7 +5772,7 @@ Sources: [`packages/plan/plan-mode/src/index.ts:52`](../packages/plan/plan-mode/
 
 SHA-256: `6e52dd55a1d48954ed5464ec46fe34d9eb65f709baabc9561e7a279910b0c406`
 
-Sources: [`packages/preset/agent-preset-registry/src/session.ts:31`](../packages/preset/agent-preset-registry/src/session.ts)
+Sources: [`packages/preset/agent-preset-registry/src/session.ts:30`](../packages/preset/agent-preset-registry/src/session.ts)
 
 | Property | Presence | Type |
 |---|---|---|

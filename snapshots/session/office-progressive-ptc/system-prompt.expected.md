@@ -91,7 +91,7 @@ interface ToolArgsMap {
     /** One glob filter for which files to search (e.g. "*.ts", "*.{js,jsx}"). Not a list; negation is not supported. */
     include?: string;
   } & Record<string, JsonValue>;
-  /** Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running. */
+  /** Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running. */
   interrupt_agent: {
     /** The id of an agent created under you: your direct child or a deeper descendant. */
     agent_id: string;
@@ -114,7 +114,7 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {

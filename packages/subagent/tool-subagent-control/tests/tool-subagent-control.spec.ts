@@ -326,7 +326,7 @@ describe('dsh-tool-subagent-control', () => {
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('not a continuable member of this Team')
+    expect(text(result)).toContain('not a member of this Team')
   })
 
   it('fails loud when invoked without a calling agent', async () => {

@@ -12,7 +12,7 @@ import { SubagentError } from './error.ts'
 import type { StructuredAttachment } from './structured.ts'
 import type { SubagentResult, SubagentRun } from './types.ts'
 
-/** Process-local slots shared through uninterrupted continuable parent links. */
+/** Process-local capacity shared by every member of a Team. */
 export class ActivationPool {
   private readonly slots = new Set<symbol>()
 
@@ -40,29 +40,18 @@ export class ActivationPool {
  * The manager owns admission, execution handles, and resource release.
  */
 interface ActivationBase {
-  /** Shared capacity for this Activation and all its managed descendants. */
-  readonly pool: ActivationPool
   /** Return this epoch's slot after its handle has finished disposal. */
   readonly releaseSlot: () => void
   /** The durable child this Activation is an epoch of. */
   readonly childId: SessionId
-  readonly parent: Agent
+  /** Exact live Team root owning this instance and its shared capacity. */
+  readonly root: Agent
+  /** Verified creation ancestors, from Team root to direct creator. */
+  readonly ancestors: readonly SessionId[]
   readonly delivery: 'parent' | 'caller'
   readonly result: PromiseWithResolvers<SubagentResult>
   /** Published synchronously before teardown; subsequent callers share this transaction. */
   closing: Promise<void> | undefined
-  /**
-   * Exact live Agent ancestry observed when this Activation materialized.
-   * Weak membership preserves host-scope identity across an intermediate
-   * ancestor leaving the registry without retaining that ancestor's runtime.
-   */
-  readonly ancestry: WeakSet<Agent>
-  /**
-   * Session ids of the child Activations this one owns. Because one Session has
-   * at most one live Activation, the id identifies the live child without
-   * another runtime-incarnation reference. Non-empty blocks settlement.
-   */
-  readonly ownedChildren: Set<SessionId>
   /** The lifecycle observer that emits this epoch's start and terminal edges. */
   readonly observer: ActivationObserver
   /**
@@ -82,7 +71,7 @@ export type ActivationResource =
     readonly structured: StructuredAttachment | undefined
     /** Latest live failure not superseded by a later committed turn ending. */
     failureAt: SessionLogOffset | undefined
-    /** Renewed when local settlement must recheck input or owned children. */
+    /** Renewed when local settlement must recheck input. */
     poke: PromiseWithResolvers<void>
   }
   | {

@@ -54,7 +54,7 @@ export interface SubagentActivation {
    * Teardown failures are reported by dispose() without replacing a captured result.
    */
   readonly result: Promise<SubagentResult>
-  /** Stop and release this activation and its owned descendants; rejects on teardown failure. */
+  /** Stop and release only this activation; rejects on teardown failure. */
   dispose(): Promise<void>
 }
 

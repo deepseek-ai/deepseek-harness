@@ -508,11 +508,11 @@ describe('continuable activation capacity', () => {
 describe('SubagentRuntime.startActivation', () => {
   it('returns both identities at inbox acceptance, without waiting for the turn or the log', async () => {
     const { ctx, parent, adapter } = await setup([textResponse('first answer')])
-    const enqueued: { id: MessageId; loggedYet: boolean }[] = []
+    const enqueued: { id: MessageId; loggedYet: boolean; requestedYet: boolean }[] = []
     ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       // Acceptance is the boundary `startActivation` resolves at, so observe
       // the log state exactly there rather than after later microtasks.
-      enqueued.push({ id: message.id, loggedYet: hasUserText(agent.session.snapshotEvents(), 'child task') })
+      enqueued.push({ id: message.id, loggedYet: hasUserText(agent.session.snapshotEvents(), 'child task'), requestedYet: adapter.requests.length > 0 })
     })
 
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -520,8 +520,7 @@ describe('SubagentRuntime.startActivation', () => {
     expect(started.childId).toMatch(/[0-9a-f-]{36}/)
     // The returned id is exactly the accepted inbox message's id, and nothing
     // was logged or requested to earn it.
-    expect(enqueued).toEqual([{ id: started.messageId, loggedYet: false }])
-    expect(adapter.requests).toEqual([])
+    expect(enqueued).toEqual([{ id: started.messageId, loggedYet: false, requestedYet: false }])
 
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
@@ -871,6 +870,21 @@ describe('continuable image Queue prompts', () => {
     },
   }
 
+  it('checks the Team root model before accepting an image from a member', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const sender = ctx.agents.get(started.childId)!
+    const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo').mockResolvedValue({ inputModalities: ['text'] } as never)
+    try {
+      await expect(ctx.subagents.sendMessage(sender, parent.id, [imageBlock], { signal: testSignal }))
+        .rejects.toMatchObject({ code: 'MODEL_DOES_NOT_SUPPORT_IMAGES' })
+      expect(parent.inbox.nextStep).toHaveLength(0)
+    } finally {
+      resolve.mockRestore()
+      await started.dispose()
+    }
+  })
+
   it('refuses an image follow-up when the child model declines image input, leaving no partial message', async () => {
     const { ctx, parent } = await setup([textResponse('child work')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -1076,74 +1090,37 @@ describe('direct-child Queue residency routing', () => {
     expect(userTexts(loaded.events)).toEqual(['child task', 'continue without provider'])
   })
 
-  it('wakes a waiting Activation instead of cold-resuming it', async () => {
-    const releaseGrandchild = Promise.withResolvers<undefined>()
+  it('cold-resumes a finished creator while its child keeps the same instance', async () => {
+    const releaseCreator = Promise.withResolvers<undefined>()
+    const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
-      // The child delegates, then finishes its own turn while the grandchild runs.
-      { chunks: textResponse('child done') },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
-      { chunks: textResponse('woken') },
+      { chunks: textResponse('creator done'), gate: releaseCreator.promise },
+      { chunks: textResponse('leaf'), gate: releaseLeaf.promise },
+      { chunks: textResponse('creator resumed') },
     ])
     const { ctx, parent } = await setupWith(adapter)
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    // The child starts its own continuable grandchild, then goes quiescent.
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-    await vi.waitFor(() => { expect(adapter.requests.length).toBeGreaterThanOrEqual(2) })
-    await vi.waitFor(() => {
-      expect(child.status).toBe('idle')
-      expect(ctx.agents.get(started.childId)).toBe(child)
-    }, { timeout: 5_000 })
-    // Waiting retains the handle: the same Agent is still live.
-    expect(ctx.agents.get(started.childId)).toBe(child)
-
-    await queuePrompt(ctx, parent, started.childId, message('while waiting'))
-    // Woken back to running on the SAME Activation.
-    expect(ctx.agents.get(started.childId)).toBe(child)
-
-    releaseGrandchild.resolve(undefined)
-    await waitNoActivation(ctx, grandchild.childId)
-    await waitNoActivation(ctx, started.childId)
-    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    // This child is itself a parent, so its grandchild's settlement notice is
-    // an ordinary later user message in its log.
-    expect(userTexts(loaded.events).slice(0, 2)).toEqual(['child task', 'while waiting'])
-    expect(userTexts(loaded.events).slice(2).join('\n')).toContain('finished and will do no further work')
-  })
-
-  it('holds one ownership edge per child: a followup under an existing hold is a no-op re-hold', async () => {
-    const releaseGrandchild = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([
-      { chunks: textResponse('child done') },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
-      { chunks: textResponse('extra delivery') },
-    ])
-    const { ctx, parent } = await setupWith(adapter)
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    // startActivation held the child→grandchild ownership edge; a followup
-    // from the same managed parent to the same child re-holds it as a no-op,
-    // and its failure-path release must not drop the established edge.
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-    const aborted = AbortSignal.abort(new Error('followup abandoned'))
-    await expect(queuePrompt(ctx, child, grandchild.childId, message('while owned'), aborted))
-      .rejects.toThrow('followup abandoned')
-    // The edge survives the released duplicate hold: the grandchild delivery
-    // still completes and settles normally.
-    await expect(queuePrompt(ctx, child, grandchild.childId, message('after release')))
-      .resolves.toBeTypeOf('string')
-
-    releaseGrandchild.resolve(undefined)
-    await waitNoActivation(ctx, grandchild.childId)
-    await waitNoActivation(ctx, started.childId)
+    parkParent(ctx, parent)
+    const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    const first = ctx.agents.get(creator.childId)!
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(first), delivery: 'parent' })
+    const leafAgent = ctx.agents.get(leaf.childId)!
+    try {
+      releaseCreator.resolve(undefined)
+      await waitNoActivation(ctx, creator.childId)
+      await queuePrompt(ctx, parent, creator.childId, message('again'))
+      expect(ctx.agents.get(creator.childId)).not.toBe(first)
+      expect(ctx.agents.get(leaf.childId)).toBe(leafAgent)
+      await waitNoActivation(ctx, creator.childId)
+      releaseLeaf.resolve(undefined)
+      await waitNoActivation(ctx, leaf.childId)
+      expect(ctx.agents.get(creator.childId)).toBeUndefined()
+      const loaded = await loadStoredSession(ctx.sessionPersistence, creator.childId)
+      expect(userTexts(loaded.events)).toEqual(['child task', 'again'])
+    } finally {
+      releaseCreator.resolve(undefined)
+      releaseLeaf.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
   })
 
   it('rejects a parent that is not the durable direct parent', async () => {
@@ -1153,7 +1130,23 @@ describe('direct-child Queue residency routing', () => {
     const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
 
     await expect(queuePrompt(ctx, stranger, started.childId, message('mine now')))
-      .rejects.toThrow(/belongs to another parent session/)
+      .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+  })
+
+  it('requires direct creation ancestry for host prompts even within one Team', async () => {
+    const { ctx, parent } = await setup(['hang', 'hang', 'hang'])
+    const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const second = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const creator = ctx.agents.get(second.childId)!
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(creator), delivery: 'caller' })
+    try {
+      await expect(queuePrompt(ctx, ctx.agents.get(first.childId)!, leaf.childId, message('wrong creator')))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+      await expect(queuePrompt(ctx, creator, parent.id, message('wrong direction')))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    } finally {
+      await Promise.all([first.dispose(), second.dispose(), leaf.dispose()])
+    }
   })
 
   it('reports an unresumable child whose persisted log has no supported descriptor', async () => {
@@ -1286,34 +1279,36 @@ describe('continuable human steering delivery', () => {
 })
 
 describe('continuable child ownership', () => {
-  it('keeps a parent Activation waiting until its child completes disposal', async () => {
-    const releaseGrandchild = Promise.withResolvers<undefined>()
+  it('releases a finished creator while its child remains owned by the Team root', async () => {
+    const releaseCreator = Promise.withResolvers<undefined>()
+    const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
-      { chunks: textResponse('child done') },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
+      { chunks: textResponse('creator done'), gate: releaseCreator.promise },
+      { chunks: textResponse('leaf'), gate: releaseLeaf.promise },
     ])
     const { ctx, parent } = await setupWith(adapter)
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    expect(ctx.agents.roots()).toEqual([parent])
-    expect(ctx.agents.isOwnedBy(child.id, parent)).toBe(true)
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-
-    await vi.waitFor(() => {
-      expect(child.status).toBe('idle')
-      expect(ctx.agents.get(started.childId)).toBe(child)
-    }, { timeout: 5_000 })
-    // Child-first: the parent handle is retained while the grandchild is live.
-    expect(ctx.agents.get(started.childId)).toBe(child)
-    expect(ctx.agents.get(grandchild.childId)).toBeDefined()
-
-    releaseGrandchild.resolve(undefined)
-    await waitNoActivation(ctx, grandchild.childId)
-    await waitNoActivation(ctx, started.childId)
+    parkParent(ctx, parent)
+    const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    const child = ctx.agents.get(creator.childId)!
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
+    try {
+      releaseCreator.resolve(undefined)
+      await waitNoActivation(ctx, creator.childId)
+      const leafAgent = ctx.agents.get(leaf.childId)!
+      expect(leafAgent.session.header.parentSession).toBe(creator.childId)
+      expect(ctx.agents.isOwnedBy(leaf.childId, parent)).toBe(true)
+      expect(ctx.agents.isOwnedBy(leaf.childId, child)).toBe(false)
+      await expect(ctx.subagents.waitForChildren(leafAgent)).resolves.toBe(false)
+      await expect(ctx.subagents.sendMessage(leafAgent, parent.id, message('still here'), { signal: testSignal }))
+        .resolves.toBeTypeOf('string')
+      releaseLeaf.resolve(undefined)
+      await waitNoActivation(ctx, leaf.childId)
+      expect(ctx.agents.get(creator.childId)).toBeUndefined()
+    } finally {
+      releaseCreator.resolve(undefined)
+      releaseLeaf.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
   })
 
   it('does not add a top-level parent to the waiting graph', async () => {
@@ -1575,10 +1570,10 @@ describe('continuable durability and teardown', () => {
     }, { timeout: 5_000 })
   })
 
-  it('disposes every live Activation forest child-first on manager teardown', async () => {
+  it('disposes every Team instance on manager teardown', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
-      { chunks: textResponse('child done') },
+      { chunks: textResponse('child done'), gate: hold.promise },
       { chunks: textResponse('grandchild'), gate: hold.promise },
     ])
     const { ctx, parent } = await setupWith(adapter)
@@ -1598,10 +1593,7 @@ describe('continuable durability and teardown', () => {
     hold.resolve(undefined)
     await drained
 
-    // Child-first: the grandchild's disposal precedes its parent's.
-    expect(disposals.indexOf(grandchild.childId)).toBeGreaterThanOrEqual(0)
-    expect(disposals.indexOf(grandchild.childId))
-      .toBeLessThan(disposals.indexOf(started.childId))
+    expect(new Set(disposals)).toEqual(new Set([started.childId, grandchild.childId]))
     // Durable sessions survive process-local teardown.
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(loaded.meta.id).toBe(started.childId)
@@ -1665,36 +1657,19 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it('retains a continuable root while draining only its descendants', async () => {
-    const releaseChild = Promise.withResolvers<undefined>()
-    const releaseGrandchild = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([
-      { chunks: textResponse('child'), gate: releaseChild.promise },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
-    ])
-    const { ctx, parent } = await setupWith(adapter)
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
-    const child = ctx.agents.get(started.childId)!
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
-    const cancellations: SessionId[] = []
-    const grandchildAgent = ctx.agents.get(grandchild.childId)!
-    observeCancel(grandchildAgent, () => { cancellations.push(grandchildAgent.id) })
-
-    const drained = ctx.subagents.drainDescendants([child])
-
-    expect(cancellations).toEqual([grandchild.childId])
-    expect(ctx.agents.get(started.childId)).toBe(child)
-    releaseGrandchild.resolve(undefined)
-    await drained
-    expect(ctx.agents.get(grandchild.childId)).toBeUndefined()
-    expect(ctx.agents.get(started.childId)).toBe(child)
-    await expect(ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' }))
-      .rejects.toMatchObject({ code: 'DRAINING' })
-
-    releaseChild.resolve(undefined)
-    await waitNoActivation(ctx, started.childId)
+  it('does not drain a Team when only an ordinary member closes', async () => {
+    const { ctx, parent } = await setup(['hang', 'hang'])
+    const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const child = ctx.agents.get(creator.childId)!
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'caller' })
+    const leafAgent = ctx.agents.get(leaf.childId)!
+    await ctx.subagents.drainDescendants([child])
+    expect(ctx.agents.get(leaf.childId)).toBe(leafAgent)
+    await creator.dispose()
+    expect(ctx.agents.get(creator.childId)).toBeUndefined()
+    expect(ctx.agents.get(leaf.childId)).toBe(leafAgent)
+    await ctx.subagents.drainDescendants([parent])
+    expect(ctx.agents.get(leaf.childId)).toBeUndefined()
   })
 
   it('releases only selected direct children', async () => {
@@ -1725,10 +1700,11 @@ describe('continuable durability and teardown', () => {
     expect(cancel).toHaveBeenCalledWith({ kind: 'parent' })
     expect(ctx.agents.get(sibling.childId)).toBe(siblingAgent)
     releaseTarget.resolve(undefined)
-    releaseGrandchild.resolve(undefined)
     await drained
     expect(ctx.agents.get(target.childId)).toBeUndefined()
-    expect(ctx.agents.get(grandchild.childId)).toBeUndefined()
+    expect(ctx.agents.get(grandchild.childId)).toBeDefined()
+    releaseGrandchild.resolve(undefined)
+    await waitNoActivation(ctx, grandchild.childId)
     expect(ctx.agents.get(sibling.childId)).toBe(siblingAgent)
     releaseSibling.resolve(undefined)
     await waitNoActivation(ctx, sibling.childId)
@@ -1786,7 +1762,7 @@ describe('continuable durability and teardown', () => {
       .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('finds scoped descendants after an intermediate host Agent leaves the registry', async () => {
+  it('drains the Team after an intermediate creator leaves the registry', async () => {
     const releaseIntermediate = Promise.withResolvers<undefined>()
     const releaseDescendant = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -1795,13 +1771,8 @@ describe('continuable durability and teardown', () => {
     ])
     const { ctx, parent } = await setupWith(adapter)
     try {
-      const handle = await ctx.agents.create({
-        sessionId: SessionId('intermediate-host-agent'),
-        meta: { origin: 'subagent', parentSession: parent.id },
-        agentOptions: { provider: 'mock', model: 'mock' },
-      })
-      const intermediate = handle.agent
-      intermediate.followup(createUserMessage({ content: message('host task'), source: { kind: 'user' } }))
+      const handle = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+      const intermediate = ctx.agents.get(handle.childId)!
       await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
       const descendant = await ctx.subagents.startActivation({ ...startSpec(intermediate), delivery: 'parent' })
       await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -2793,7 +2764,7 @@ describe('continuable adjacent-Agent delivery', () => {
       signal: testSignal,
     })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
-      message: `agent "${childId}" is not a resident continuable child`,
+      message: 'agent has no active Team owner',
     })
 
     await handle.dispose()
@@ -2841,7 +2812,7 @@ describe('continuable adjacent-Agent delivery', () => {
     })
   })
 
-  it.each(['absent', 'replaced'] as const)('rejects child-to-parent delivery when the direct parent is %s', async (state) => {
+  it.each(['absent', 'replaced'] as const)('rejects delivery when the Team root is %s', async (state) => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
@@ -2860,14 +2831,14 @@ describe('continuable adjacent-Agent delivery', () => {
 
     await expect(ctx.subagents.sendMessage(child, parent.id, message('cannot arrive'), {
       signal: testSignal,
-    })).rejects.toMatchObject({ code: 'PARENT_UNAVAILABLE' })
+    })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
 
     getSpy.mockRestore()
     releaseChild.resolve(undefined)
     await waitNoActivation(ctx, started.childId)
   })
 
-  it('translates direct-parent Steer rejection into an availability error', async () => {
+  it('propagates the Team root inbox rejection', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
@@ -2884,7 +2855,7 @@ describe('continuable adjacent-Agent delivery', () => {
 
     await expect(ctx.subagents.sendMessage(child, parent.id, message('cannot arrive'), {
       signal: testSignal,
-    })).rejects.toMatchObject({ code: 'PARENT_UNAVAILABLE', cause: rejection })
+    })).rejects.toBe(rejection)
 
     releaseChild.resolve(undefined)
     await waitNoActivation(ctx, started.childId)
@@ -3077,11 +3048,9 @@ describe('continuable settlement delivery', () => {
 
   it('reports accepted work cancelled before any turn could open as stopped', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
-    const releaseGrandchild = Promise.withResolvers<undefined>()
     const releaseMaintenance = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('the answer'), gate: releaseChild.promise },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
     ])
     const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
@@ -3090,20 +3059,18 @@ describe('continuable settlement delivery', () => {
       expect(live).toBeDefined()
       return live!
     })
-    // A descendant keeps the child resident once its own turn closes, so the
-    // maintenance phase below is reachable without racing settlement.
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-    await vi.waitFor(() => { expect(ctx.agents.get(grandchild.childId)).toBeDefined() })
+    const lock = await holdChildLock(ctx, child.id)
     releaseChild.resolve(undefined)
-    await vi.waitFor(() => { expect(child.status).toBe('idle') })
+    await child.whenIdle()
 
     // Context maintenance folds into `idle` and defers waking work, so this
     // delivery is accepted with no turn to claim it.
     const maintaining = child.runMaintenance(async () => { await releaseMaintenance.promise })
+    lock.release()
+    await lock.held
     await queuePrompt(ctx, parent, started.childId, message('never runs'))
     const drained = drainManager(ctx)
     releaseMaintenance.resolve(undefined)
-    releaseGrandchild.resolve(undefined)
     await maintaining
     await drained
 
@@ -3190,75 +3157,9 @@ describe('continuable settlement delivery', () => {
       .toEqual(new Set([first.childId, second.childId]))
   })
 
-  it('holds a maintaining parent live until it can read the notice', async () => {
-    const releaseFirst = Promise.withResolvers<undefined>()
-    const releaseSecond = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([
-      { chunks: textResponse('outer') },
-      { chunks: textResponse('first inner'), gate: releaseFirst.promise },
-      { chunks: textResponse('second inner'), gate: releaseSecond.promise },
-      { chunks: textResponse('outer reacts') },
-      { chunks: textResponse('root reacts') },
-    ])
-    const { ctx, parent } = await setupWith(adapter)
-    const outer = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const middle = await vi.waitFor(() => {
-      const live = ctx.agents.get(outer.childId)
-      expect(live).toBeDefined()
-      return live!
-    })
-    const first = await ctx.subagents.startActivation({ ...startSpec(middle), delivery: 'parent' })
-    const second = await ctx.subagents.startActivation({ ...startSpec(middle), delivery: 'parent' })
-    await vi.waitFor(() => { expect(middle.status).toBe('idle') })
 
-    // `whenIdle()` follows maintenance and the deferred wake it releases, so
-    // neither settlement notice can be mistaken for completed idle work.
-    const maintaining = Promise.withResolvers<undefined>()
-    const maintenance = middle.runMaintenance(async () => { await maintaining.promise })
-    releaseFirst.resolve(undefined)
-    await waitNoActivation(ctx, first.childId)
-    releaseSecond.resolve(undefined)
-    await waitNoActivation(ctx, second.childId)
-    expect(ctx.agents.get(outer.childId)).toBe(middle)
 
-    maintaining.resolve(undefined)
-    await maintenance
-    await vi.waitFor(() => { expect(settlementNotices(middle)).toHaveLength(2) })
-    expect(settlementNotices(middle).map(entry => entry.sender))
-      .toEqual([first.childId, second.childId])
-    await waitNoActivation(ctx, outer.childId)
-  })
 
-  it('delivers before releasing the ownership that lets the parent settle', async () => {
-    const releaseChild = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([
-      { chunks: textResponse('outer') },
-      { chunks: textResponse('inner'), gate: releaseChild.promise },
-      { chunks: textResponse('outer reacts') },
-    ])
-    const { ctx, parent } = await setupWith(adapter)
-    const outer = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const middle = await vi.waitFor(() => {
-      const live = ctx.agents.get(outer.childId)
-      expect(live).toBeDefined()
-      return live!
-    })
-    const inner = await ctx.subagents.startActivation({ ...startSpec(middle), delivery: 'parent' })
-    await vi.waitFor(() => { expect(middle.status).toBe('idle') })
-
-    let ownedAtDelivery: SessionId[] | undefined
-    ctx.on('agent/inbox/inserted', ({ agent, message }) => {
-      if (agent !== middle || message.source.kind !== 'subagent-settled') return
-      ownedAtDelivery = [...managerState(ctx).resident.get(middle.id)!.ownedChildren]
-    })
-
-    releaseChild.resolve(undefined)
-    await waitNoActivation(ctx, inner.childId)
-    // Still owned at delivery: the parent is structurally unable to settle in
-    // the window the notice crosses, rather than winning a race against it.
-    expect(ownedAtDelivery).toEqual([inner.childId])
-    await waitNoActivation(ctx, outer.childId)
-  })
 
   it('does not wake a parent whose own teardown already began', async () => {
     const hold = Promise.withResolvers<undefined>()
@@ -3528,6 +3429,27 @@ describe('continuable errors', () => {
     void child
   })
 
+  it('rejects delegation from an unregistered instance and input to a closing startup', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    const unmanaged = await ctx.agents.create({
+      parentAgent: parent, sessionId: SessionId('unmanaged'),
+      meta: { parentSession: parent.id, origin: 'subagent' },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    await expect(ctx.subagents.startActivation({ ...startSpec(unmanaged.agent), delivery: 'caller' }))
+      .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    await unmanaged.dispose()
+    const drains: Promise<void>[] = []
+    const detach = ctx.on('subagent/start', ({ id }) => { drains.push(ctx.subagents.drainChildren(parent, [id])) })
+    try {
+      await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' }))
+        .rejects.toMatchObject({ code: 'ACTIVATION_CLOSING' })
+    } finally {
+      detach()
+      await Promise.all(drains)
+    }
+  })
+
   it('rejects establishing a child under a parent whose disposal already began', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('child'), gate: hold.promise }])
@@ -3547,7 +3469,7 @@ describe('continuable errors', () => {
     await drained
   })
 
-  it.each([1, 2])('disposes a local activation only after pending startup at depth %s rolls back', async (depth) => {
+  it.each([1, 2])('closes the Team only after pending startup at depth %s rolls back', async (depth) => {
     const { ctx, parent } = await setup(Array.from({ length: depth }, () => 'hang' as const))
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const child = ctx.agents.get(started.childId)!
@@ -3581,19 +3503,18 @@ describe('continuable errors', () => {
       starting = ctx.subagents.startActivation({ ...startSpec(owner, 'external'), delivery: 'caller' })
         .catch((error: unknown) => error)
       const signal = await entered.promise
-      disposal = started.dispose()
+      disposal = ctx.subagents.drainDescendants([parent])
       const disposed = vi.fn()
       void disposal.then(disposed, disposed)
       expect(signal.aborted).toBe(true)
       await expect(ctx.subagents.startActivation({ ...startSpec(child), delivery: 'caller' }))
-        .rejects.toMatchObject({ code: 'ACTIVATION_CLOSING' })
+        .rejects.toMatchObject({ code: 'DRAINING' })
       releaseStartup.resolve(undefined)
       await cleaning.promise
       expect(disposed).not.toHaveBeenCalled()
-      expect(ctx.agents.get(child.id)).toBe(child)
       releaseCleanup.resolve(undefined)
       await disposal
-      await expect(starting).resolves.toMatchObject({ name: 'AbortError' })
+      await expect(starting).resolves.toMatchObject({ code: 'DRAINING' })
       expect(ctx.agents.get(child.id)).toBeUndefined()
       expect(ctx.agents.get(owner.id)).toBeUndefined()
       expect(ctx.agents.get(parent.id)).toBe(parent)
@@ -3609,7 +3530,7 @@ describe('continuable errors', () => {
   it('reports a failing branch after every branch settles, without pinning the rest', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
-      { chunks: textResponse('child done') },
+      { chunks: textResponse('child done'), gate: hold.promise },
       { chunks: textResponse('grandchild'), gate: hold.promise },
     ])
     const { ctx, parent } = await setupWith(adapter)
@@ -3653,8 +3574,7 @@ describe('continuable errors', () => {
       expect(found).toBeDefined()
       return found!
     })
-    // The would-be parent's disposal is already open at the entry hold, so the
-    // establishment rejects before any grandchild resource exists.
+    // Closing the creator rejects new delegation before allocating a child.
     const before = new Set(ctx.agents.list().map(agent => agent.id))
     const disposal = outer.dispose()
 
@@ -3689,7 +3609,7 @@ describe('continuable errors', () => {
 
     try {
       await expect(ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' }))
-        .rejects.toMatchObject(event === 'agent/created' ? { name: 'AbortError' } : { code: 'ACTIVATION_CLOSING' })
+        .rejects.toMatchObject({ code: 'ACTIVATION_CLOSING' })
       await vi.waitFor(() => {
         expect(ctx.agents.list().map(agent => agent.id).filter(id => !before.has(id))).toEqual([])
       })
@@ -3700,7 +3620,7 @@ describe('continuable errors', () => {
     }
   })
 
-  it('releases the parent hold when a cold delivery fails, so the parent can settle', async () => {
+  it('allows a sender to settle after a cold delivery fails', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child done'), gate: release.promise },
@@ -3713,8 +3633,6 @@ describe('continuable errors', () => {
       return found!
     })
 
-    // The failed delivery to a missing child must give back the hold it put on
-    // the delivering parent; a leaked hold would pin the parent in `waiting`.
     await expect(queuePrompt(ctx, child, SessionId('no-such-child'), message('hello')))
       .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
 
@@ -3722,32 +3640,7 @@ describe('continuable errors', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it('follows up on an already-owned running grandchild without a duplicate hold', async () => {
-    const releaseGrandchild = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([
-      { chunks: textResponse('child done') },
-      { chunks: textResponse('grandchild'), gate: releaseGrandchild.promise },
-      { chunks: textResponse('follow-up answer') },
-    ])
-    const { ctx, parent } = await setupWith(adapter)
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    const grandchild = await ctx.subagents.startActivation({ ...startSpec(child), delivery: 'parent' })
-    await vi.waitFor(() => { expect(adapter.requests.length).toBeGreaterThanOrEqual(2) })
 
-    // The delivering parent already owns this running child, so the entry hold
-    // is a no-op and the delivery is accepted as ordinary inbox work.
-    const accepted = await queuePrompt(ctx, child, grandchild.childId, message('one more'))
-    expect(accepted).toBeTypeOf('string')
-
-    releaseGrandchild.resolve(undefined)
-    await waitNoActivation(ctx, grandchild.childId)
-    await waitNoActivation(ctx, started.childId)
-  })
 
   it('reapplies the descriptor model route and reasoning effort on cold resume', async () => {
     const effort = ReasoningEffortId('high')

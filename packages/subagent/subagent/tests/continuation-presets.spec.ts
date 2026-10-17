@@ -37,7 +37,7 @@ afterEach(async () => {
 })
 
 /** Real preset mounts, Agent lifecycle, and persistence with a scripted model. */
-async function setup() {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [textResponse('done'), textResponse('continued'), textResponse('done again')]) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-continuation-presets-'))
   roots.push(root)
   const ctx = new Context()
@@ -61,7 +61,7 @@ async function setup() {
   await ctx.plugin(SubagentRuntime)
   const spawn = await ctx.plugin(SubagentSpawn, { providerName: 'separate' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  const adapter = new MockAdapter([textResponse('done'), textResponse('continued'), textResponse('done again')])
+  const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({
     sessionId: SessionId('parent'),
@@ -195,6 +195,29 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
+  it('restores a nested target with its own preset while its creator remains offline', async () => {
+    const { ctx, parent, adapter } = await setup(['hang', textResponse('leaf'), textResponse('continued')])
+    parkParent(ctx, parent)
+    const creator = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))
+    const branch = ctx.agents.get(creator.childId)!
+    const leaf = await ctx.subagents.startActivation(startSpec(branch))
+    await settled(ctx, leaf.childId)
+    await creator.dispose()
+    const restored: SessionId[] = []
+    ctx.on('agent/created', ({ agent }) => { restored.push(agent.id) })
+
+    await ctx.subagents.sendMessage(parent, leaf.childId, [{ type: 'text', text: 'continue' }], {
+      signal: new AbortController().signal,
+    })
+    await settled(ctx, leaf.childId)
+
+    expect(restored).toEqual([leaf.childId])
+    expect(adapter.requests.filter(request => request.sessionId === leaf.childId)
+      .map(request => request.tools?.map(tool => tool.name))).toEqual([['reviewing_only'], ['reviewing_only']])
+    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
+    expect(ctx.agents.get(creator.childId)).toBeUndefined()
+  })
+
   it('restores the latest projected selection when it differs from the creation header', async () => {
     const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
@@ -216,7 +239,7 @@ describe('continuable child presets', () => {
       .toEqual([['reviewing_only'], ['reviewing_only']])
   })
 
-  it.each([undefined, 'coding'])('restores historical children with header preset %s through the current parent', async (agentPreset) => {
+  it.each([undefined, 'coding'])('restores historical children from their own header preset %s', async (agentPreset) => {
     const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const childId = SessionId('historical-child')
@@ -233,10 +256,14 @@ describe('continuable child presets', () => {
         child.session.append('subagent/descriptor', snapshotSubagentDescriptor({
           mode: 'continuable', provider: 'separate', label: 'historical',
           agentProvider: 'mock', agentModel: 'mock', persona: 'Historical child persona.',
-          toolFilter: { deny: ['reviewing_only'] },
+          toolFilter: { allow: [] },
         }))
         ctx.agentPresets.composeFrom(childCtx, parent.ctx)
       },
+    })
+    parent.session.append('subagent/catalog', {
+      version: 0, childId, childCreatedAt: historical.agent.session.header.createdAt,
+      mode: 'continuable', label: 'historical',
     })
     await historical.dispose()
     await ctx.agentPresets.recompose(parent.ctx, 'reviewing')
@@ -250,7 +277,7 @@ describe('continuable child presets', () => {
       .toContain('Historical child persona.')
   })
 
-  it('keeps an empty-history fork on the parent composition when its own selection follows the descriptor', async () => {
+  it('restores a fork from its own later preset selection', async () => {
     const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
     const stopSelecting = ctx.on('agent/created', async ({ agent, source }) => {
@@ -269,10 +296,10 @@ describe('continuable child presets', () => {
     await continueChild(ctx, parent, started.childId)
     await settled(ctx, started.childId)
     expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
-      .toEqual([['reviewing_only'], ['preset_only']])
+      .toEqual([['reviewing_only'], ['reviewing_only']])
   })
 
-  it('ignores inherited selections when resuming a fork whose parent still owns a retired preset generation', async () => {
+  it('rejects a retired preset on resume even while the creator still retains its generation', async () => {
     const { ctx, parent, adapter, unregister } = await setup()
     await ctx.agentPresets.select(parent, 'reviewing')
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent work' }], source: { kind: 'user' } }))
@@ -283,11 +310,11 @@ describe('continuable child presets', () => {
     expect(created.events.slice(0, created.inheritedEventCount).some(event => event.type === 'agent-preset/selected')).toBe(true)
     expect(created.events.slice(created.inheritedEventCount).some(event => event.type === 'agent-preset/selected')).toBe(false)
     await unregister.get('reviewing')!()
-
-    await continueChild(ctx, parent, started.childId)
-    await settled(ctx, started.childId)
-    expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
-      .toEqual([['reviewing_only'], ['reviewing_only'], ['reviewing_only']])
+    await expect(continueChild(ctx, parent, started.childId)).rejects.toMatchObject({
+      code: 'NOT_RESUMABLE', cause: { code: 'agent-preset/not-found' },
+    })
+    expect(adapter.requests).toHaveLength(2)
+    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
   it.each(['missing', 'broken'] as const)('refuses an independent cold resume when its preset is %s', async (failure) => {
@@ -311,7 +338,7 @@ describe('continuable child presets', () => {
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
   })
 
-  it('refuses independent restoration when the preset projection is unavailable', async () => {
+  it('refuses restoration when a recorded preset selection cannot be projected', async () => {
     const { ctx, parent, adapter, presets } = await setup()
     parkParent(ctx, parent)
     const started = await ctx.subagents.startActivation(startSpec(parent, 'reviewing'))

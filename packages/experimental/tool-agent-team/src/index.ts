@@ -23,7 +23,7 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other member whose branch supports continuation. Descriptions explain responsibilities and may repeat.
+const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other listed member with running or inactive status. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 

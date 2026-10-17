@@ -114,7 +114,7 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Team identity and membership
 
-A root Agent whose own log carries no subagent descriptor leads the Team identified by its Session id. `tryMembership()` walks `parentSession` through the live registry; a missing parent leaves the subagent without membership. An ordinary fork carries at most an inherited descriptor, so it leads a new Team. Membership records only the root, Team id, and role.
+A root Agent whose own log carries no subagent descriptor leads the Team identified by its Session id. `tryMembership()` uses `subagents.rootOf()` and the Agent registry’s runtime ownership; intermediate creators may be offline. An ordinary fork carries at most an inherited descriptor, so it leads a new Team. Membership records only the root, Team id, and role.
 
 ### Roster
 
@@ -197,7 +197,7 @@ These limits describe what a team cannot do yet or what needs special operationa
 - **Roster covers direct continuable children** — deeper descendants share tasks and waits but have no roster row; they can claim tasks under their own ids.
 
 - **Communication stays within one tree** — members cannot message unrelated Teams; only ancestors can interrupt descendants.
-- **Membership needs a live lineage** — a subagent whose parent Agent is not loaded is outside every Team, so its Team calls fail with `TEAM_NOT_MEMBER`.
+- **Membership needs a live Team root** — members keep their Team role when an intermediate creator finishes or is released; a missing root leaves them without an active Team.
 - **No automatic ownership release** — inactivity, interruption, process exit, and failed work do not release a task owner.
 - **Historical queued messages stay undelivered** — `team/message/queued` records without a matching delivery remain readable in the Lead log, but no member receives them.
 

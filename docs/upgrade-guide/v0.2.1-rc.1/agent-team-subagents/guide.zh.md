@@ -16,6 +16,8 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 - Team profile 不再禁用 subagent 工具。Team 只增加任务工具、`wait_agent` 和协作提示。
 - `agent-team` 拒绝 `maxMembers`、`maxMessageBytes` 和 `disposalTimeoutMs`；`tool-agent-team` 拒绝 `interrupt`、`freshProvider` 和 `forkProvider`。
 - `ctx.agentTeams` 移除 `spawnTeammate()`、`sendMessage()`、`interrupt()` 和 `listMembers()`。任务视图以 `ownerId` 取代 `ownerName`；包括 Lead 在内，任务所有者均使用 Session id。
+- 创建关系保持不变，运行实例统一归 Team 根管理。成员完成或释放时不再等待或释放其后代。消息只恢复收件人，离线的创建者保持离线。宿主在根关闭时关闭整个 Team；成员需要其他任务的结果时须显式等待。
+- 冷恢复使用目标保存的 preset 和权限策略，不加入创建者当前 preset 代际。已保存的 preset 缺失时拒绝恢复；没有保存 preset 的历史目标使用宿主组装，并应用记录的 descriptor 覆盖。`subagent/start` 与 `subagent/end` 通过 Team 根作用域派发。
 - 历史 Team 名册和邮箱记录仍可读取。其中的名字仅作为历史数据，不用于解析消息收件人或任务所有者。Subagent catalog 载荷不变。
 
 ## 迁移
