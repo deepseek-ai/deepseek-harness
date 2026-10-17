@@ -204,6 +204,7 @@ def main():
                 if own_input["recentActivity"]["externalInputMonitoring"] == "listening":
                     sender = root / "activity-input"
                     subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
+                    b.call("activate", {"appHandle": app_b})
                     before_text = json.loads(state.read_text())["text"]
                     subprocess.run([str(sender), str(fixture.pid)], check=True, timeout=5)
                     deadline = time.monotonic() + 5
