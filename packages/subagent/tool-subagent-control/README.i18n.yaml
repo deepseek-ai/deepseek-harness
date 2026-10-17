@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/tool-subagent-control/README.md
 /:
-  en: 5413b8e52a0c8e3d
-  zh: 9b6d0385209ff9bb
+  en: 2ed769ff79f88a4b
+  zh: 73fcdc6c2ec4334c
 /deepseek-ai-dsh-tool-subagent-control:
   en: 465d36925c792167
   zh: 269cac314f638827
 /deepseek-ai-dsh-tool-subagent-control/summary:
-  en: 88dd9d4496c6cce5
-  zh: 305851fdb3d9a204
+  en: 1d6743670da08ce9
+  zh: 80b5aa7c3277f012
 /deepseek-ai-dsh-tool-subagent-control/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-subagent-control/use-this-package:
-  en: 27c5bbe682f0b72b
-  zh: b16aeb2c43f3692e
+  en: 8b2e49621394d15d
+  zh: eb235870eac36532
 /deepseek-ai-dsh-tool-subagent-control/use-this-package/minimal-configuration:
-  en: 4a52c81317ec9001
-  zh: ebd9f1ba920da50a
+  en: 4b4bf179ea0f1ecb
+  zh: f5cee3cb40710ace
 /deepseek-ai-dsh-tool-subagent-control/use-this-package/send-message:
   en: d49274c955c540b8
   zh: d6bece8efc944ac1
@@ -42,11 +42,11 @@
   en: ee3136b09f0c9ef2
   zh: 5cbe189bb857fdc7
 /deepseek-ai-dsh-tool-subagent-control/understand-the-implementation/source-map:
-  en: db4a6499e5344cb1
-  zh: 7ecff8d2ac204449
+  en: f067eb86a86d623c
+  zh: 44691d9f2c0cfee9
 /deepseek-ai-dsh-tool-subagent-control/further-exploration:
-  en: df2bf39d0ffffd43
-  zh: 4cd02551f7433c90
+  en: 3d7732f704f4c6eb
+  zh: 824876825a8b9a71
 /deepseek-ai-dsh-tool-subagent-control/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90

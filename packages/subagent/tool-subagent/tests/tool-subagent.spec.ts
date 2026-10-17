@@ -263,7 +263,7 @@ describe('dsh-tool-subagent', () => {
       model: 'child-model',
     })
     expect(ctx.tools.schemas(modelSelectionSetupAgent(ctx)).find(schema => schema.name === 'subagent')?.description)
-      .toContain('this provider\'s route defaults')
+      .toContain('this backend\'s route defaults')
     expect(seen?.agentOptions).toEqual({
       provider: 'alpha',
       model: 'child-model',
@@ -510,7 +510,7 @@ describe('dsh-tool-subagent', () => {
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')!
     expect(schema.description).toContain('inherits this conversation')
     expect(schema.description).not.toContain('does not see this conversation')
-    expect(schema.description).not.toContain('can prevent provider-side reuse of the inherited conversation prefix')
+    expect(schema.description).not.toContain('Inspect options with `list_subagent_models`')
     const props = (schema.parameters as { properties: Record<string, { description: string }> }).properties
     expect(props['prompt']!.description).toContain('completed turns')
   })
@@ -726,7 +726,7 @@ describe('dsh-tool-subagent local activation', () => {
       { description: 'continuable work', prompt: 'dig in' },
       { agent: parent },
     )
-    expect(started.isError).toBe(false)
+    expect(started.isError, text(started)).toBe(false)
     const match = /^started subagent (\S+)$/.exec(text(started))
     expect(match).not.toBeNull()
     const [, childId] = match!
@@ -794,7 +794,7 @@ describe('dsh-tool-subagent local activation', () => {
     const [failed, succeeded] = await Promise.all([cancelledResult, survivingResult])
     expect(preparationCount).toBe(2)
     expect(failed.isError).toBe(true)
-    expect(succeeded.isError).toBe(false)
+    expect(succeeded.isError, text(succeeded)).toBe(false)
     expect(cancelledChildId).toBeDefined()
     expect(survivingChildId).toBeDefined()
     expect(ctx.agents.get(cancelledChildId!)).toBeUndefined()

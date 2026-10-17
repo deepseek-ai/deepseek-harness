@@ -61,8 +61,8 @@
         enabled: true
         appVersion: !!js process.env.DSH_CLIENT_VERSION
 
-    # Host-owned opt-in sampled when a new Web session receives its preset
-    # delegation tools. The Plugins page edits this settings namespace.
+    # Host-owned authorization sampled at Agent creation. The Plugins page
+    # edits this settings namespace independently of the selected preset.
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -553,9 +553,6 @@
 # chooses is which delegation TOOLS its agent sees, below.
 
 - id: tool-subagent-control
-  disabled: true
-
-- id: tool-subagent-list-agents
   disabled: true
 
 - id: tool-subagent

@@ -1,5 +1,5 @@
 ---
-description: "供用户与维护者在组合或调试可继续子级控制功能时使用的全局 send_message、interrupt_agent 与 list_agents 工具。"
+description: "供用户与维护者在组合或调试可继续子级控制功能时使用的共享消息、中断与子级发现工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让代理按 Session id发现和联系 Team 中的所有成员。`interrupt_agent` 只停止调用方的后代，并保留其收件箱与子级。可单独加载的 `list-agents` 插件列出整棵树，包含描述、父级 id、深度和活动状态。所有成员继承相同的工具定义与顺序。
+`dsh-tool-subagent-control` 让代理按 Session id发现和联系 Team 中的所有成员。`interrupt_agent` 只停止调用方的后代，并保留其收件箱与子级。`list_agents` 列出整棵树，包含描述、父级 id、深度和活动状态。一个插件实例注册全部三个工具。所有成员继承相同的工具定义与顺序。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在模型需要对可继续子级发消息、中断或列出的任何组合中挂载本包。根插件只需要 subagent 服务；列表工具是独立插件，部署方可以省略。
+每个工具作用域挂载本包一次。它要求 `tools`、`subagents` 和 `agents`。
 
 ### 最小配置
 
-先加载 subagent 服务、一个后端、委派工具与本包。加上独立的列表插件即可公开全部三个工具：
+在所需服务可用后，加载 subagent 服务、一个后端、委派工具与本包，即可公开全部三个控制和发现工具：
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -38,10 +38,9 @@ kind: "package-reference"
   config:
     provider: spawn
 - name: '@deepseek-ai/dsh-tool-subagent-control'
-- name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 ```
 
-本包不接收任何配置：根插件提供 `send_message` 与 `interrupt_agent`，列表插件提供 `list_agents`。
+本包不接收任何配置。主入口一起注册 `send_message`、`interrupt_agent` 和 `list_agents`；现有工具限制可以隐藏单个工具。
 
 ### send_message
 
@@ -81,7 +80,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `send_message` 与 `interrupt_agent` 注册 |
+| [`src/index.ts`](src/index.ts) | 统一注册全部三个工具 |
 | [`src/list-agents.ts`](src/list-agents.ts) | 全 Team 发现与活动投影 |
 
 </details>
@@ -95,7 +94,7 @@ kind: "package-reference"
 
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——可继续子级、Activation、inbox、中断与后续消息权限。
 - [dsh-tool-subagent](../tool-subagent/README.zh.md)——启动可继续子级的委派工具。
-- [生成工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)——三个工具的 schema。
+- [生成工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)——工具 schema。
 
 -----
 
