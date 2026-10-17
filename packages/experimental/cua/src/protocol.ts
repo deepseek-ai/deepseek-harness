@@ -86,7 +86,7 @@ export const RecentActivityResult = z.object({
   lookbackMs: z.number().int().positive(),
   externalInputMonitoring: z.enum(['listening', 'unavailable', 'secure-input']),
   events: z.array(z.object({
-    source: z.enum(['other-agent', 'external-input']), windowId: id.nullable(),
+    source: z.enum(['agent', 'external-input']), windowId: id.nullable(),
     ageMs: z.number().int().nonnegative(), operation: z.string().min(1),
   })).max(2),
 })

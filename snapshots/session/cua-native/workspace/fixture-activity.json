@@ -3,7 +3,7 @@
   "externalInputMonitoring": "listening",
   "events": [
     {
-      "source": "other-agent",
+      "source": "agent",
       "windowId": 7,
       "ageMs": 12000,
       "operation": "click"

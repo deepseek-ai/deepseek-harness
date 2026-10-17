@@ -18,7 +18,10 @@ import Foundation
     }
 
     func start() {
-        guard tap == nil else { return }
+        if let tap {
+            if !CGEvent.tapIsEnabled(tap: tap) { CGEvent.tapEnable(tap: tap, enable: true) }
+            return
+        }
         let types: [CGEventType] = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel, .keyDown]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
         guard let created = CGEvent.tapCreate(tap: .cgAnnotatedSessionEventTap, place: .tailAppendEventTap,
@@ -65,10 +68,14 @@ import Foundation
             operation = type == .scrollWheel ? "scroll" : "click"
             let rawWindow = event.getIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent)
             if let id = UInt32(exactly: rawWindow), id > 0,
-               (try? NativePlatform.ownedWindow(pid, id)) != nil { windowID = id }
+               Self.windowOwner(id) == pid { windowID = id }
             else { windowID = nil }
         default: return
         }
         activity.record(ActivityTarget(process: process, windowID: windowID), owner: nil, operation: operation)
+    }
+
+    static func windowOwner(_ id: UInt32) -> Int32? {
+        NativePlatform.windows(allLayers: true).first { $0.windowID == id }?.pid
     }
 }

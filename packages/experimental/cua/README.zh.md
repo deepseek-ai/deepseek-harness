@@ -29,7 +29,7 @@ kind: "package-library"
 
 单窗口任务直接使用 App 方法。`getApp` 读取初始辅助功能状态；需要指定窗口时使用 `getWindows` 和 `getWindow`。重新读取一个应用或窗口范围会替换其中的元素编号，不使其他窗口的快照失效。键盘输入跟随应用焦点。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
-观察方法会输出并返回结果。使用 `void await app.getAXState()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。截图返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。 macOS 的近期活动提示会通过文字输出保留，即使设置了 `emit:false`；提示不阻止操作，来源与监听限制见 [macOS 提供方](../cua-macos/README.zh.md)。
+观察方法会输出并返回结果。使用 `void await app.getAXState()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。截图返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。macOS 的近期活动提示会通过文字输出保留，即使设置了 `emit:false`；提示不阻止操作，来源与监听限制见 [macOS 提供方](../cua-macos/README.zh.md)。
 
 `tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 

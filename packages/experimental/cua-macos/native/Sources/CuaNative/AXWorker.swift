@@ -127,13 +127,15 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
-    func activityTarget(_ params: RequestParameters) throws -> ActivityTarget {
-        let handle = try params.string("appHandle")
-        let identity = try validateIdentity(handle)
-        let window = try params.optionalWindowID()
-        let snapshotID = try params.optionalString("snapshotId")
-        let scope = try snapshotID.map { try snapshot(handle, $0).scope.windowID }
-        return ActivityTarget(process: identity, windowID: window ?? scope ?? nil)
+    /// Advisory lookup leaves target validation and error ordering to the requested operation.
+    func activityTarget(_ params: RequestParameters) -> ActivityTarget? {
+        guard !closed, let handle = params.values["appHandle"]?.string,
+              case .running(let identity)? = targets[handle] else { return nil }
+        let window = params.values["windowId"]?.number.flatMap(UInt32.init(exactly:))
+        let scope = snapshots.values.first {
+            $0.scope.appHandle == handle && $0.id == params.values["snapshotId"]?.string
+        }
+        return ActivityTarget(process: identity, windowID: window ?? scope?.scope.windowID)
     }
     private func acquire(_ identity: ProcessIdentity) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {

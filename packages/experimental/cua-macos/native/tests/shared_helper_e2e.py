@@ -120,6 +120,13 @@ def main():
         root = Path(temporary)
         helper = root / "helper"
         shutil.copy2(args.helper.resolve(strict=True), helper)
+        proxy_helper = root / "proxy-helper"
+        shutil.copy2(helper, proxy_helper)
+        proxy = subprocess.run([str(proxy_helper), "--recent-activity-window-ms", "1001"],
+                               input=json.dumps({"id": "proxy", "method": "getCapabilities", "params": {}}) + "\n",
+                               capture_output=True, text=True, timeout=35)
+        assert proxy.returncode == 0, (proxy.returncode, proxy.stderr)
+        assert "result" in json.loads(proxy.stdout), proxy.stdout
         key = hashlib.sha256(helper.read_bytes()).hexdigest()
         runtime = root / "r"
         socket_path = runtime / (key + ".sock")
@@ -206,10 +213,10 @@ def main():
                 assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
                 events = after["recentActivity"]["events"]
                 assert after["recentActivity"]["lookbackMs"] == 60000, after
-                assert any(event["source"] == "other-agent" and event["operation"] == "click"
+                assert any(event["source"] == "agent" and event["operation"] == "click"
                            and event["windowId"] == window for event in events), events
                 own = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                assert not any(event["source"] == "other-agent" for event in own["recentActivity"]["events"]), own
+                assert not any(event["source"] == "agent" for event in own["recentActivity"]["events"]), own
 
 
                 text_field = next(element for element in own["elements"] if element["role"] == "AXTextField")

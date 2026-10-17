@@ -170,7 +170,7 @@ import Darwin
         if request.method == "screenshot" { try capture.requireAvailable() }
         let target: ActivityTarget?
         if params.contains("appHandle"), request.method != "launchApp" {
-            target = try await worker.activityTarget(params)
+            target = await worker.activityTarget(params)
             if let target { activity.watch(target, owner: owner); inputMonitor.start() }
         } else { target = nil }
         let observes = ["getState", "screenshot", "listWindows"].contains(request.method)

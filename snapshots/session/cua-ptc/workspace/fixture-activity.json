@@ -1,0 +1,18 @@
+{
+  "lookbackMs": 60000,
+  "externalInputMonitoring": "listening",
+  "events": [
+    {
+      "source": "agent",
+      "windowId": 7,
+      "ageMs": 12000,
+      "operation": "click"
+    },
+    {
+      "source": "external-input",
+      "windowId": null,
+      "ageMs": 4000,
+      "operation": "keyboard"
+    }
+  ]
+}

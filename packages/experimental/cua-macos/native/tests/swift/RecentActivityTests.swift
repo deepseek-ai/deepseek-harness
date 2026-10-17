@@ -19,7 +19,7 @@ import Testing
     history.record(second, owner: b, operation: "scroll")
     #expect(history.report(first, owner: b, monitoring: "listening")["events"] == .array([]))
     #expect(history.report(first, owner: a, monitoring: "listening")["events"] == .array([
-        .object(["source": .string("other-agent"), "windowId": .number(10), "ageMs": .number(0), "operation": .string("click")]),
+        .object(["source": .string("agent"), "windowId": .number(10), "ageMs": .number(0), "operation": .string("click")]),
     ]))
     time += 6
     history.record(first, owner: a, operation: "setValue")
@@ -47,7 +47,7 @@ import Testing
     let report = history.report(target, owner: a, monitoring: "unavailable")
     #expect(report["externalInputMonitoring"] == .string("unavailable"))
     #expect(report["events"] == .array([
-        .object(["source": .string("other-agent"), "windowId": .number(10), "ageMs": .number(0), "operation": .string("click")]),
+        .object(["source": .string("agent"), "windowId": .number(10), "ageMs": .number(0), "operation": .string("click")]),
         .object(["source": .string("external-input"), "windowId": .null, "ageMs": .number(0), "operation": .string("keyboard")]),
     ]))
     history.disconnect(b)
@@ -70,7 +70,6 @@ import Testing
     #expect(history.report(old, owner: owner, monitoring: "listening")["events"] == .array([]))
     history.record(old, owner: nil, operation: "click")
     #expect(history.report(new, owner: owner, monitoring: "listening")["events"] == .array([]))
-    #expect(history.report(old, owner: UUID(), monitoring: "listening") == .null)
 }
 
 @Test @MainActor func externalInputExcludesHelperEventsAndKeepsUnknownWindowsAtAppScope() throws {
@@ -93,8 +92,6 @@ import Testing
     #expect(history.report(target, owner: owner, monitoring: "listening")["events"] == .array([
         .object(["source": .string("external-input"), "windowId": .null, "ageMs": .number(0), "operation": .string("keyboard")]),
     ]))
-    monitor.receive(.tapDisabledByTimeout, event: event)
-    #expect(monitor.status != "listening")
 }
 
 @Test @MainActor func preservesIntegerMillisecondConfiguration() {

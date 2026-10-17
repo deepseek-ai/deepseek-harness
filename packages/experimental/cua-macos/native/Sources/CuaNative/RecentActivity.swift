@@ -39,7 +39,7 @@ struct ActivityTarget: Hashable, Sendable {
     }
     func report(_ target: ActivityTarget, owner: UUID, monitoring: String) -> JSONValue {
         prune()
-        guard let client = clients[owner] else { return .null }
+        guard let client = clients[owner] else { preconditionFailure("Activity reports require a connected client") }
         let timestamp = now()
         let matching = records.filter {
             $0.owner != owner && $0.target.process == target.process &&
@@ -52,7 +52,7 @@ struct ActivityTarget: Hashable, Sendable {
             "lookbackMs": .number((client.lookback * 1000).rounded()),
             "externalInputMonitoring": .string(monitoring),
             "events": .array(recent.map { record in .object([
-                "source": .string(record.owner == nil ? "external-input" : "other-agent"),
+                "source": .string(record.owner == nil ? "external-input" : "agent"),
                 "windowId": record.target.windowID.map { .number(Double($0)) } ?? .null,
                 "ageMs": .number(max(0, (timestamp - record.time) * 1000).rounded(.down)),
                 "operation": .string(record.operation),

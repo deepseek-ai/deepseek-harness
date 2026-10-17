@@ -58,7 +58,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && value.recentActivity !== undefined) {
       const activity = RecentActivityResult.parse(value.recentActivity)
       if (activity.events.length > 0 || activity.externalInputMonitoring !== 'listening') {
-        await sink?.text(`Recent activity (advisory only): ${JSON.stringify(activity)}`)
+        await sink?.text(`Recent activity (advisory only): ${JSON.stringify({ appHandle: params.appHandle, ...activity })}`)
       }
     }
     return value

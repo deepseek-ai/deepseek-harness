@@ -55,7 +55,7 @@ describe('recent activity advisories', () => {
   const recentActivity = {
     lookbackMs: 60_000, externalInputMonitoring: 'listening',
     events: [
-      { source: 'other-agent', windowId: 23, ageMs: 12000, operation: 'click' },
+      { source: 'agent', windowId: 23, ageMs: 12000, operation: 'click' },
       { source: 'external-input', windowId: null, ageMs: 4000, operation: 'keyboard' },
     ],
   }
@@ -66,7 +66,7 @@ describe('recent activity advisories', () => {
     f.sink.text.mockClear()
     f.dispatch.mockResolvedValueOnce(state({ recentActivity }))
     expect(await app.getAXState({ emit: false })).toBe('Changed tree')
-    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify(recentActivity)}`]])
+    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify({ appHandle: 'app-17', ...recentActivity })}`]])
     f.dispatch.mockClear()
     f.dispatch.mockResolvedValueOnce({ ...delivered, recentActivity })
     expect(await app.typeText('hello')).toEqual({ ...delivered, recentActivity })
@@ -80,7 +80,7 @@ describe('recent activity advisories', () => {
     const report = { ...recentActivity, externalInputMonitoring, events: [] }
     f.dispatch.mockResolvedValueOnce(screenshot({ recentActivity: report }))
     await app.getScreenshot({ emit: false })
-    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify(report)}`]])
+    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify({ appHandle: 'app-17', ...report })}`]])
     expect(f.sink.image).not.toHaveBeenCalled()
   })
 
