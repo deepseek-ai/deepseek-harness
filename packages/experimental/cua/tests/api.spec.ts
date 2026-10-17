@@ -107,6 +107,32 @@ describe('recent activity advisories', () => {
     f.dispatch.mockResolvedValueOnce('invalid')
     await expect(app.getAXState()).rejects.toThrow()
   })
+
+  it('identifies the affected app when another app emits no activity', async () => {
+    const f = fixture()
+    const first = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce({ ...selected, appHandle: 'app-18', pid: 18 })
+    f.dispatch.mockResolvedValueOnce(state({ appHandle: 'app-18', pid: 18, windows: [] }))
+    const second = await f.api.getApp('Other editor')
+    const keyboard = { ...recentActivity, events: [recentActivity.events[1]!] }
+    const quiet = { ...recentActivity, events: [] }
+    f.sink.text.mockClear()
+    f.dispatch.mockResolvedValueOnce(state({ recentActivity: quiet }))
+    f.dispatch.mockResolvedValueOnce(state({ appHandle: 'app-18', pid: 18, windows: [], recentActivity: keyboard }))
+    await first.getAXState({ emit: false })
+    await second.getAXState({ emit: false })
+    expect(f.sink.text.mock.calls).toEqual([[
+      `Recent activity (advisory only): ${JSON.stringify({ appHandle: 'app-18', ...keyboard })}`,
+    ]])
+    f.sink.text.mockClear()
+    f.dispatch.mockResolvedValueOnce(state({ recentActivity: keyboard }))
+    f.dispatch.mockResolvedValueOnce(state({ appHandle: 'app-18', pid: 18, windows: [], recentActivity: quiet }))
+    await first.getAXState({ emit: false })
+    await second.getAXState({ emit: false })
+    expect(f.sink.text.mock.calls).toEqual([[
+      `Recent activity (advisory only): ${JSON.stringify({ appHandle: 'app-17', ...keyboard })}`,
+    ]])
+  })
 })
 
 describe('application discovery', () => {

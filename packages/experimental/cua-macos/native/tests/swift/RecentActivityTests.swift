@@ -102,3 +102,12 @@ import Testing
     history.watch(target, owner: owner)
     #expect(history.report(target, owner: owner, monitoring: "listening")["lookbackMs"] == .number(1001))
 }
+
+@Test func advisoryLookupDoesNotValidateAnOperationTarget() async throws {
+    let worker = AXWorker(cancellation: CancellationLatch(), axTimeout: 1, textEventInterval: 0)
+    let request = try NativeRequest(data: Data("{\"id\":\"lookup\",\"method\":\"click\",\"params\":{\"appHandle\":\"missing\",\"snapshotId\":\"expired\",\"elementIndex\":0}}".utf8))
+    let params = try RequestParameters(request)
+    #expect(await worker.activityTarget(params) == nil)
+    await worker.shutdown()
+    #expect(await worker.activityTarget(params) == nil)
+}

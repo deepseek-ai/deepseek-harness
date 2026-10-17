@@ -76,6 +76,8 @@ import Foundation
     }
 
     static func windowOwner(_ id: UInt32) -> Int32? {
-        NativePlatform.windows(allLayers: true).first { $0.windowID == id }?.pid
+        guard let rows = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+              let row = rows.first, (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id else { return nil }
+        return (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
     }
 }
