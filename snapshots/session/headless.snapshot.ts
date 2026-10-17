@@ -666,6 +666,24 @@ async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRo
   expect(full).toContain('session_event_search')
 }
 
+/** Require the nested member's message to reach the Lead before recording or replay succeeds. */
+function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(3)
+  const leaf = parseSessionLog(logs[2]!.content)
+  const results = leaf.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(2)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'agent-message' ? [{
+      sender: event.data.source.senderSessionId,
+      text: event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join(''),
+    }] : [])
+  expect(deliveries).toEqual([{
+    sender: logs[2]!.header.id,
+    text: expect.stringContaining('The nested reviewer can see and contact the Lead.'),
+  }])
+}
+
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
 function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
@@ -1351,6 +1369,7 @@ describe('headless recorded-session snapshots', () => {
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'team-tree-messages') verifyTeamTreeMessage(actualLogs)
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

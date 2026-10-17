@@ -268,12 +268,12 @@ class JobOutputOutput(TypedDict):
     job: JobOutputOutputJob
 
 class ListAgentsOutput1(TypedDict):
-    kind: Literal["parent"]
+    kind: Literal["root"]
     id: str
     status: Literal["running", "inactive"]
 
 class ListAgentsOutput2(TypedDict):
-    kind: Literal["child", "sibling"]
+    kind: Literal["child"]
     id: str
     label: str
     status: Literal["running", "inactive"]
