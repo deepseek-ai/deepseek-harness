@@ -206,12 +206,11 @@ Tool results append to Session history. Changing plugin configuration or tool pr
 
 ## Known Limitations and Deferred Work
 
-- External monitoring covers only input delivered through the observed session event stream. PID-directed background input and AX-only automation may bypass it. Monitoring depends on macOS Input Monitoring or Accessibility access; unavailable and secure-input states are reported without blocking existing operations. Absence of an activity record does not guarantee inactivity.
-
 The queue orders individual native requests. Holding an app object does not reserve its application across a Session; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) grants no cross-call ownership. Capture RPCs that never return occupy the single capture slot; creating new app objects does not reset that system connection.
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- External monitoring covers only input delivered through the observed session event stream. PID-directed background input and AX-only automation may bypass it. Monitoring depends on macOS Input Monitoring or Accessibility access; unavailable and secure-input states are reported without blocking existing operations. Absence of an activity record does not guarantee inactivity.
 - Only the macOS native implementation is provided. Windows support is in development; this package remains in `experimental` until that support is complete, then moves to the `computer-use` group. Browser tabs, AX diffs, unassociated system panels and accessory-only apps are unsupported.
 - Coordinates use the returned screenshot pixels, including the title bar; `relative: true` selects integer thousandths. Native point conversion is Host-owned. Window movement, application changes and other desktop users can race observations and input.
 - macOS Stage Manager can reduce background window bounds and screenshots to thumbnails. Full-window observation and coordinate input in this state are not guaranteed; model guidance requires explaining foreground needs and avoiding repeated focus reclamation.

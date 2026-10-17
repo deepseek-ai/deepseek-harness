@@ -76,7 +76,10 @@ import Foundation
     }
 
     static func windowOwner(_ id: UInt32) -> Int32? {
-        guard let rows = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+        // WindowServer expects unboxed window IDs, not CFNumber objects.
+        var identifier = UnsafeRawPointer(bitPattern: UInt(id))
+        let identifiers = CFArrayCreate(kCFAllocatorDefault, &identifier, 1, nil)
+        guard let rows = CGWindowListCreateDescriptionFromArray(identifiers) as? [[String: Any]],
               let row = rows.first, (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id else { return nil }
         return (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
     }

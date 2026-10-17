@@ -206,12 +206,11 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 ## 已知限制与后续工作
 
-- 外部输入监听只覆盖经过所监听 session 事件流的输入，PID 定向后台输入和仅通过 AX 执行的自动化可能不可见。监听依赖 macOS 的输入监控或辅助功能权限；不可用或安全输入状态会明确反馈，且不阻止原有操作。没有活动记录不保证无人操作。
-
 队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 外部输入监听只覆盖经过所监听 session 事件流的输入，PID 定向后台输入和仅通过 AX 执行的自动化可能不可见。监听依赖 macOS 的输入监控或辅助功能权限；不可用或安全输入状态会明确反馈，且不阻止原有操作。没有活动记录不保证无人操作。
 - 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用千分比整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
