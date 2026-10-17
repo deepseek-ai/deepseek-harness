@@ -129,7 +129,8 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     expect(await changes.getByRole('list').count()).toBe(0)
     expect(await changes.locator('svg').evaluate(icon => icon.innerHTML))
       .toBe(await card.locator('svg').evaluate(icon => icon.innerHTML))
-    expect(await changes.evaluate(element => element.getBoundingClientRect().height)).toBe(62)
+    await expect.poll(() => changes.evaluate(element => element.isConnected
+      ? element.getBoundingClientRect().height : undefined), { timeout: 10_000 }).toBe(62)
     const appearance = await page.evaluate(() => {
       const previous = document.body.getAttribute('data-ds-dark-theme')
       try {

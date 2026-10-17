@@ -15,9 +15,11 @@ const wallet = z.object({
   currency: z.enum(['CNY', 'USD']), balance: z.string().regex(decimal),
 })
 const summary = z.object({ normal_wallets: z.array(wallet), bonus_wallets: z.array(wallet) })
+// Protocol responses are JSON-decoded; metadata keeps any JSON value without field validation.
+const bonusMetadata = z.custom<Exclude<AccountBonusNotification['campaign'], undefined>>().optional()
 const bonus = z.object({
-  order_id: z.uuid(), campaign: z.string(), amount: z.string().regex(decimal),
-  currency: z.enum(['CNY', 'USD']), granted_at: z.string(), expires_at: z.string(), msg: z.string(),
+  campaign: bonusMetadata, amount: bonusMetadata, currency: bonusMetadata, granted_at: bonusMetadata,
+  order_id: z.string(), title: z.string().nullish().transform(value => value ?? undefined), expires_at: z.string().nullish().transform(value => value ?? ''), msg: z.string(),
 })
 // The shared response reader already unwraps biz_data, so the payload is the bonus list itself.
 const unnotified = z.array(bonus)
@@ -97,8 +99,12 @@ export async function readUnnotifiedBonuses(origin: string, token: string,
   signal: AbortSignal, headers: Record<string, string>): Promise<readonly AccountBonusNotification[]> {
   const parsed = accountPayload(unnotified, await requestUnnotifiedBonuses(origin, token, signal, headers), 'bonus')
   return parsed.map(row => ({
-    orderId: row.order_id as AccountBonusOrderId, campaign: row.campaign, amount: row.amount,
-    currency: row.currency, grantedAt: row.granted_at, expiresAt: row.expires_at, message: row.msg,
+    ...(row.campaign === undefined ? {} : { campaign: row.campaign }),
+    ...(row.amount === undefined ? {} : { amount: row.amount }),
+    ...(row.currency === undefined ? {} : { currency: row.currency }),
+    ...(row.granted_at === undefined ? {} : { grantedAt: row.granted_at }),
+    orderId: row.order_id as AccountBonusOrderId, expiresAt: row.expires_at, message: row.msg,
+    ...(row.title === undefined ? {} : { title: row.title }),
   }))
 }
 

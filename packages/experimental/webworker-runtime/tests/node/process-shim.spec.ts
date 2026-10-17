@@ -16,6 +16,19 @@ afterEach(() => {
 })
 
 describe('process shim', () => {
+  it('supplies the Node global alias in a worker-like environment', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'global')
+    try {
+      Reflect.deleteProperty(globalThis, 'global')
+      const shim = installProcessGlobal({ cwd: '/dsh', env: {} })
+      expect(globalThis.global).toBe(globalThis)
+      expect(globalThis.global.process).toBe(shim)
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(globalThis, 'global')
+      else Object.defineProperty(globalThis, 'global', original)
+    }
+  })
+
   it('publishes cwd, env, and the Node release its internal modules follow', () => {
     const shim = installProcessGlobal({ cwd: '/dsh', env: { DSH_HOME: '/dsh/home' } })
     expect(shim.cwd()).toBe('/dsh')

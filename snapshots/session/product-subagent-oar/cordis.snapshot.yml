@@ -1,0 +1,43 @@
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+              - id: deepseek-v4-pro
+
+- insert:
+    - id: experimental-subagent-oar-codex
+      name: '@deepseek-ai/dsh-experimental-subagent-oar'
+      config:
+        runtime: codex
+        providerName: oar-codex
+        launchArgs:
+          - -c
+          - sandbox_mode="workspace-write"
+    - id: experimental-subagent-oar-claude
+      name: '@deepseek-ai/dsh-experimental-subagent-oar'
+      config:
+        runtime: claude
+        providerName: oar-claude
+        launchArgs:
+          - --permission-mode
+          - dontAsk
+          - --permission-prompts
+          - none
+    - id: tool-subagent-oar
+      name: '@deepseek-ai/dsh-experimental-tool-subagent-oar'
+      config:
+        providers:
+          codex: oar-codex
+          claude: oar-claude

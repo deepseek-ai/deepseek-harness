@@ -36,7 +36,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'schedule_list', 'schedule_update', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
       'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',
       'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',
-      'str_replace_editor', 'subagent', 'team_task_create',
+      'str_replace_editor', 'subagent', 'subagent_oar', 'team_task_create',
       'team_task_get', 'team_task_list', 'team_task_update', 'terminal_close', 'terminal_list',
       'terminal_open', 'terminal_read', 'terminal_send', 'terminal_signal', 'todo_write',
       'update_goal', 'wait_agent', 'web_fetch', 'web_search', 'workflow', 'working_directory', 'write',

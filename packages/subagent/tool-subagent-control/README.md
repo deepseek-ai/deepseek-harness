@@ -1,5 +1,5 @@
 ---
-description: "Global send_message, interrupt_agent, and list_agents tools for users and maintainers composing or debugging continuable-child control."
+description: "Shared messaging, interruption, and child discovery tools for users and maintainers composing or debugging continuable-child control."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` adds the global control tools for continuable children: `send_message` steers between a direct parent and child, `interrupt_agent` stops a child's current turn while keeping its inbox and descendants intact, and `list_agents` (from the separately loadable `list-agents` plugin) lists continuable children by durable id and label. Parents and continuable children inherit the same `send_message` definition and ordering, so model communication adds no child-only tool schema. No tool's presence decides whether a delegation tool starts continuable work.
+`dsh-tool-subagent-control` lets agents message and interrupt subagents and list continuable children. One plugin instance registers all three tools for a scope shared by multiple delegation backends. Parents and continuable children inherit the same messaging definition and ordering. Tool presence does not select the delegation lifecycle.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package in any composition with continuable children the model should message, interrupt, or list. The root plugin needs only the subagent service; the list tool is a separate plugin a deployment can omit.
+Mount this package once per tool scope. It requires `tools`, `subagents`, and `agents`.
 
 ### Minimal configuration
 
-Load the subagent service, a backend, the delegation tool, and this package. Adding the separate list plugin exposes all three tools:
+With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all three control and discovery tools:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -38,10 +38,9 @@ Load the subagent service, a backend, the delegation tool, and this package. Add
   config:
     provider: spawn
 - name: '@deepseek-ai/dsh-tool-subagent-control'
-- name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 ```
 
-This package takes no configuration: the root plugin provides `send_message` and `interrupt_agent`, and the list plugin provides `list_agents`.
+This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, and `list_agents` together; existing tool restrictions can hide individual tools.
 
 ### send_message
 
@@ -81,7 +80,7 @@ The tool forwards its execution signal, which owns admission only until inbox ac
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `send_message` and `interrupt_agent` registration |
+| [`src/index.ts`](src/index.ts) | Shared registration of all three tools |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` registration: direct-child discovery and status refinement |
 
 </details>
@@ -95,7 +94,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — continuable children, activations, inbox, interrupt, and follow-up authority.
 - [dsh-tool-subagent](../tool-subagent/README.md) — the delegation tool that starts continuable children.
-- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) — the three tool schemas.
+- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) — the tool schemas.
 
 -----
 
@@ -106,7 +105,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` takes no parameters.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `agent_id` and `message`; `interrupt_agent` takes `agent_id`; `list_agents` accepts an optional `scope`.
 
 #### Token effect
 

@@ -79,7 +79,7 @@ export interface ProcessShim {
 }
 
 /**
- * Publish `globalThis.process`.
+ * Publish `globalThis.process` and Node's `global` alias for the worker lifetime.
  *
  * `versions.node` names the Node release the Worker's `node-addon-require-builtin` internals follow, so Cordis's
  * `ModuleLoader.fromInternal()` reaches them the way it reaches Node's; `execArgv` stays empty, without
@@ -144,6 +144,7 @@ export function installProcessGlobal(options: ProcessShimOptions): ProcessShim {
     uptime: () => (performance.now() - start) / 1000,
     exit: (code?: number) => { console.warn(`webworker process: exit(${String(code ?? 0)}) requested; the worker keeps running`) },
   }
+  globalThis.global = globalThis
   ;(globalThis as { process?: unknown }).process = shim
   return shim
 }

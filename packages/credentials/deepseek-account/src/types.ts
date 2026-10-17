@@ -1,6 +1,7 @@
 /** Client-supplied request identity and client-safe account state; credentials never cross this projection. */
 import type {} from '@deepseek-ai/cordis'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Identity of the requesting UI for one account operation; the Host derives Platform request headers from it. */
 export interface AccountClientMetadata {
@@ -65,14 +66,15 @@ export interface AccountDetails {
 export type AccountBonusOrderId = Branded<'AccountBonusOrderId'>
 /** One granted bonus Platform has not yet recorded as displayed; copy is server-authored. */
 export interface AccountBonusNotification {
+  /** Server-localized plain-text title; absent responses use the localized bonus title. */
+  readonly title?: string
   readonly orderId: AccountBonusOrderId
-  readonly campaign: string
-  /** Granted decimal amount, preserving server precision; never the remaining balance. */
-  readonly amount: string
-  readonly currency: 'CNY' | 'USD'
-  /** Grant time as supplied by Platform. */
-  readonly grantedAt: string
-  /** Expiry as supplied by Platform. */
+  /** Optional Platform metadata, forwarded without validation. */
+  readonly campaign?: JsonValue
+  readonly amount?: JsonValue
+  readonly currency?: JsonValue
+  readonly grantedAt?: JsonValue
+  /** Platform expiry timestamp; an empty string means the notice never expires. */
   readonly expiresAt: string
   /** Server-localized plain text ready for display. */
   readonly message: string

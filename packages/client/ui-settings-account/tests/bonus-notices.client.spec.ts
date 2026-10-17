@@ -22,10 +22,6 @@ function batch(accountId: string, orderId: string, expiresAt = '2099-01-01T00:00
     accountId: accountId as AccountUserId,
     bonuses: [{
       orderId: orderId as AccountBonusOrderId,
-      campaign: 'dsh_login_bonus',
-      amount: '5.00',
-      currency: 'CNY',
-      grantedAt: '2026-09-21T12:00:00Z',
       expiresAt,
       message: 'Server copy 5.00',
     }],
@@ -35,13 +31,14 @@ function batch(accountId: string, orderId: string, expiresAt = '2099-01-01T00:00
 function setup() {
   const read = vi.fn(async (): Promise<AccountBonusBatch | null> => null)
   const acknowledge = vi.fn(async (): Promise<boolean> => true)
+  const stacks: (readonly BonusNotice[])[] = []
   const published: (BonusNotice | null)[] = []
   const controller = createBonusNoticeController({
-    ...TIMING, read, acknowledge, publish: (notice) => { published.push(notice) },
+    ...TIMING, read, acknowledge, publish: (notices) => { stacks.push(notices); published.push(notices[0] ?? null) },
   })
   /** @returns the most recently published notice. */
   const latest = (): BonusNotice | null | undefined => published.at(-1)
-  return { controller, read, acknowledge, published, latest }
+  return { controller, read, acknowledge, published, latest, stacks }
 }
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
@@ -168,9 +165,9 @@ it('refreshes the copy of the order already on screen when a read offers it agai
   controller.begin()
   await vi.waitFor(() => { expect(latest()).toMatchObject({ orderId: 'order-1', message: 'Server copy 5.00' }) })
   // The same order arrives with new copy: its card updates in place instead of being replaced.
-  read.mockResolvedValue({ ...batch('account-a', 'order-1'), bonuses: [{ ...batch('account-a', 'order-1').bonuses[0]!, message: 'Updated copy' }] })
+  read.mockResolvedValue({ ...batch('account-a', 'order-1'), bonuses: [{ ...batch('account-a', 'order-1').bonuses[0]!, title: 'Updated title', message: 'Updated copy' }] })
   await controller.refresh()
-  expect(latest()).toMatchObject({ orderId: 'order-1', message: 'Updated copy' })
+  expect(latest()).toMatchObject({ orderId: 'order-1', title: 'Updated title', message: 'Updated copy' })
   controller.end()
 })
 
@@ -522,5 +519,94 @@ it('does not record a display when the award expired before the card could rende
   // The card refuses to render an expired award, so no display is reported.
   controller.shown('order-1' as AccountBonusOrderId)
   expect(acknowledge).not.toHaveBeenCalled()
+  controller.end()
+})
+
+it('displays and acknowledges a notice without expiration', async () => {
+  const { controller, read, acknowledge, latest } = setup()
+  read.mockResolvedValue(batch('account-a', 'order-1', ''))
+  controller.begin()
+  await vi.waitFor(() => { expect(latest()).toMatchObject({ orderId: 'order-1', expiresAt: '' }) })
+  controller.shown('order-1' as AccountBonusOrderId)
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenCalledWith('account-a', 'order-1') })
+  controller.end()
+})
+
+it('publishes every live notice and only acknowledges the foreground as dismissals advance the stack', async () => {
+  const { controller, read, acknowledge, stacks } = setup()
+  const bonuses = ['first', 'second', 'third'].flatMap(id => batch('account-a', id, '').bonuses)
+  read.mockResolvedValue({ accountId: 'account-a' as AccountUserId, bonuses })
+  controller.begin()
+  await vi.waitFor(() => { expect(stacks.at(-1)).toEqual(bonuses) })
+  controller.shown('second' as AccountBonusOrderId)
+  controller.dismiss('third' as AccountBonusOrderId)
+  expect(acknowledge).not.toHaveBeenCalled()
+  expect(stacks.at(-1)).toEqual(bonuses)
+  controller.shown('first' as AccountBonusOrderId)
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenCalledExactlyOnceWith('account-a', 'first') })
+  controller.dismiss('first' as AccountBonusOrderId)
+  expect(stacks.at(-1)).toEqual(bonuses.slice(1))
+  expect(acknowledge).toHaveBeenCalledTimes(1)
+  controller.shown('second' as AccountBonusOrderId)
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenLastCalledWith('account-a', 'second') })
+  controller.dismiss('second' as AccountBonusOrderId)
+  expect(stacks.at(-1)).toEqual(bonuses.slice(2))
+  controller.dismiss('third' as AccountBonusOrderId)
+  expect(stacks.at(-1)).toEqual([])
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenLastCalledWith('account-a', 'third') })
+  controller.end()
+})
+
+it('drops queued notices that expire before promotion without acknowledging them', async () => {
+  const { controller, read, acknowledge, stacks } = setup()
+  read.mockResolvedValue({ accountId: 'account-a' as AccountUserId, bonuses: [
+    ...batch('account-a', 'first', '').bonuses,
+    ...batch('account-a', 'expired', '2099-01-01T00:00:00Z').bonuses,
+    ...batch('account-a', 'last', '').bonuses,
+  ] })
+  controller.begin()
+  await vi.waitFor(() => { expect(stacks.at(-1)).toHaveLength(3) })
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2100-01-01T00:00:00Z'))
+  controller.dismiss('first' as AccountBonusOrderId)
+  expect(stacks.at(-1)?.map(notice => notice.orderId)).toEqual(['last'])
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenCalledExactlyOnceWith('account-a', 'first') })
+  controller.end()
+})
+
+it('publishes a title-only refresh without acknowledging the same card twice', async () => {
+  const { controller, read, acknowledge, latest } = setup()
+  read.mockResolvedValue(batch('account-a', 'first', ''))
+  controller.begin()
+  await vi.waitFor(() => { expect(latest()?.orderId).toBe('first') })
+  controller.shown('first' as AccountBonusOrderId)
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenCalledTimes(1) })
+  read.mockResolvedValue({ accountId: 'account-a' as AccountUserId,
+    bonuses: batch('account-a', 'first', '').bonuses.map(notice => ({ ...notice, title: 'Updated title' })) })
+  await controller.refresh()
+  expect(latest()?.title).toBe('Updated title')
+  controller.shown('first' as AccountBonusOrderId)
+  expect(acknowledge).toHaveBeenCalledTimes(1)
+  controller.end()
+})
+
+it('does not read or acknowledge when refreshed outside an active account lifecycle', async () => {
+  const { controller, read, acknowledge } = setup()
+  await controller.refresh()
+  expect(read).not.toHaveBeenCalled()
+  expect(acknowledge).not.toHaveBeenCalled()
+})
+
+it('closes the visible notice when the preceding card expires before its display callback', async () => {
+  const { controller, read, acknowledge, stacks } = setup()
+  read.mockResolvedValue({ accountId: 'account-a' as AccountUserId, bonuses: [
+    ...batch('account-a', 'first', '2099-01-01T00:00:00Z').bonuses,
+    ...batch('account-a', 'second', '').bonuses,
+  ] })
+  controller.begin()
+  await vi.waitFor(() => { expect(stacks.at(-1)).toHaveLength(2) })
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2100-01-01T00:00:00Z'))
+  controller.dismiss('second' as AccountBonusOrderId)
+  expect(stacks.at(-1)).toEqual([])
+  await vi.waitFor(() => { expect(acknowledge).toHaveBeenCalledExactlyOnceWith('account-a', 'second') })
   controller.end()
 })

@@ -22045,7 +22045,7 @@
       "kind": "event",
       "event": "web/deepseek-search-llm-request",
       "surface": false,
-      "digest": "cf6e3aaf1e2de6480aa0157730a41b9a492108a55304100b0f7e112711dd4331",
+      "digest": "0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52",
       "schema": {
         "root": 0,
         "nodes": [
@@ -22059,7 +22059,7 @@
               },
               {
                 "name": "ignorable",
-                "type": 15,
+                "type": 17,
                 "optional": true
               },
               {
@@ -22074,7 +22074,7 @@
               },
               {
                 "name": "type",
-                "type": 16,
+                "type": 18,
                 "optional": false
               }
             ],
@@ -22124,8 +22124,13 @@
                 "optional": false
               },
               {
-                "name": "tools",
+                "name": "thinking",
                 "type": 11,
+                "optional": true
+              },
+              {
+                "name": "tools",
+                "type": 13,
                 "optional": false
               }
             ],
@@ -22196,10 +22201,25 @@
             "value": "user"
           },
           {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "type",
+                "type": 12,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "disabled"
+          },
+          {
             "kind": "tuple",
             "elements": [
               {
-                "type": 12,
+                "type": 14,
                 "optional": false,
                 "rest": false
               }
@@ -22215,12 +22235,12 @@
               },
               {
                 "name": "name",
-                "type": 13,
+                "type": 15,
                 "optional": false
               },
               {
                 "name": "type",
-                "type": 14,
+                "type": 16,
                 "optional": false
               }
             ],
@@ -22534,6 +22554,11 @@
       ]
     },
     {
+      "digest": "0b9b8facbe2c19773b3fb0ecc824ccbcc603d41b8f18069faa3807d449572fce",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1",
       "names": [],
       "sources": [
@@ -22556,6 +22581,11 @@
           }
         ]
       },
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52",
       "names": [],
       "sources": []
     },
@@ -22968,15 +22998,6 @@
       "sources": []
     },
     {
-      "digest": "2517ba143a271508d3ca35126d5aca8f7f1facf5aaddce4adf011832042fa2b9",
-      "names": [
-        "packages/web/web-search-deepseek/src/provider.ts#DeepSeekSearchLlmRequest"
-      ],
-      "sources": [
-        "packages/web/web-search-deepseek/src/provider.ts:55"
-      ]
-    },
-    {
       "digest": "254dce209e735f9cb6f6b7aec0354712b1611759ec02af4d35a96f2081e666f6",
       "names": [],
       "sources": []
@@ -23228,6 +23249,13 @@
       "digest": "37cbc9cf06d494cfe5c67f078af1605eacb8e4c2c853e9e26455b73de0ee7ccf",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "37ff65426bcf130f045d3a59ef2a4648eb170cd30280cbd024108a2e9b4401d1",
+      "names": [],
+      "sources": [
+        "packages/web/web-search-deepseek/src/provider.ts:82"
+      ]
     },
     {
       "digest": "383cf73ae4748e5beb281ae74857ba1ffb92ae01075b9fbf51af78b666007a8f",
@@ -24580,13 +24608,6 @@
       "sources": []
     },
     {
-      "digest": "930a6567a10bb62ddd157bd8abdf4b182810c8c3b49d91309b3b009a5fed9731",
-      "names": [],
-      "sources": [
-        "packages/web/web-search-deepseek/src/provider.ts:61"
-      ]
-    },
-    {
       "digest": "930c1cd289def119d443e19dd90008916bf035f0a4d23e07241e7f050f2b89b7",
       "names": [
         "packages/interaction/user-approval/src/types.ts#ApprovalOutcome"
@@ -24739,6 +24760,13 @@
       "digest": "9b4fd974c124c83743efe030ba4e1250e087505f3f74588716a521fb8d453267",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "9c001ecb5e1d3c3894410db2a1e383842e5f8454fb52182338686158abc1b3ee",
+      "names": [],
+      "sources": [
+        "packages/web/web-search-deepseek/src/provider.ts:61"
+      ]
     },
     {
       "digest": "9d80129e13edfb6feb03ed327e6085c6ef60b97ad074244b2f5fd4667424a6a4",
@@ -24986,6 +25014,15 @@
       "digest": "aba175fb20ffc71112c55efe70458ff5d7dbfb83501892b4ba8d077f0ea5d7ba",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "abd6ca62a5ab166553848324a23fef90eed7f59c8021bd63e7ea5bc6fd666b0c",
+      "names": [
+        "packages/web/web-search-deepseek/src/provider.ts#DeepSeekSearchLlmRequest"
+      ],
+      "sources": [
+        "packages/web/web-search-deepseek/src/provider.ts:55"
+      ]
     },
     {
       "digest": "ad0c38a0adb82a94c925456df41586d9b5f9202fca18593eae2213d4445b4585",
@@ -25477,11 +25514,6 @@
       "sources": [
         "packages/core/tools/src/types.ts:21"
       ]
-    },
-    {
-      "digest": "cf6e3aaf1e2de6480aa0157730a41b9a492108a55304100b0f7e112711dd4331",
-      "names": [],
-      "sources": []
     },
     {
       "digest": "cffcdc19881ab61ec0a9ce18743996f7ac44ac8889f34dfac36ae745574aa22f",

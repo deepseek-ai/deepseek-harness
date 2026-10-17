@@ -67,7 +67,7 @@ native → host-src ─┬─ host-check ─────────────
 | `dev:web` ([`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)), `dev:desktop` (`apps/desktop/scripts/dev.ts`) | `build:artifacts` | None before launch; after `dev:web` launches, its `tsc -b tsconfig.client.json --watch` keeps checking the Client aggregate root program |
 | Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Host package compilation beside the bundle-free Typert pass (`compile-referenced-projects.ts host-contracts`), without any bundle | None |
 | CI node 24 / snapshots and artifacts (`check:ci:consumers`), windows node 24 / build & observational (`check:ci:windows-blocking`) | `build` | Yes, the two required lanes |
-| CI node-compat 22.19 | `build:artifacts` (through run-gates) | None |
+| CI node-compat 24.9 | `build:artifacts` (through run-gates) | None |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | None |
 | PR rehearsals in `e2e.yml` and `release.yml` | `pnpm run build:artifacts --profile official` | None |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | None |

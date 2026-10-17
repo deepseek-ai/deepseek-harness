@@ -34,6 +34,8 @@ let setupAgentCounter = 0
 /** Test-only opt-in translated to the real Host setting and Session path. */
 type SetupConfig = tool.Config & {
   withModelSelection?: boolean
+  /** Host setting sampled by a `withModelSelection` setup; defaults to enabled. */
+  hostSelectionEnabled?: boolean
   parentAgentOptions?: AgentOptions
 }
 
@@ -48,13 +50,13 @@ const TEST_ALLOWED_MODELS = [
 
 export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Config> = {}): Promise<Context> {
   const ctx = ownContext(new Context())
-  const { withModelSelection, parentAgentOptions, ...config } = toolConfig
+  const { withModelSelection, hostSelectionEnabled = true, parentAgentOptions, ...config } = toolConfig
+  await mountAgentLoopTestDependencies(ctx)
   if (withModelSelection === true) {
     await ctx.plugin(SubagentModelSelectionConfig, {
-      enabled: true,
+      enabled: hostSelectionEnabled,
       allowedModels: TEST_ALLOWED_MODELS,
     })
-    await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -63,9 +65,9 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     const handle = await ctx.agents.create({
       sessionId: SessionId(`model-selection-setup-${++setupAgentCounter}`),
       ...parentAgentOptions !== undefined ? { agentOptions: parentAgentOptions } : {},
-      setup: async (agentCtx, agent) => {
+      setup: async (agentCtx) => {
         const fiber = agentCtx.inject(tool.inject, (runtimeCtx) => {
-          return tool.apply(runtimeCtx, { ...config, modelSelectionSettings: true }, agent.session)
+          return tool.apply(runtimeCtx, { ...config, modelSelection: true, modelDiscovery: true })
         })
         await fiber.await()
       },
@@ -73,14 +75,13 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     setupAgents.set(ctx, handle.agent)
     return ctx
   }
-  await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
   setupProviders.set(ctx, provider)
   await ctx.plugin(tool, config)
-  const handle = await ctx.agents.create({ sessionId: SessionId(`tool-setup-${++setupAgentCounter}`) })
+  const handle = await ctx.agents.create({ sessionId: SessionId(`tool-setup-${++setupAgentCounter}`), ...parentAgentOptions === undefined ? {} : { agentOptions: parentAgentOptions } })
   setupAgents.set(ctx, handle.agent)
   return ctx
 }

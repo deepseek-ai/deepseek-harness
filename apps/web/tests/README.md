@@ -20,9 +20,13 @@ State-sensitive cases use Workspace, admission, attachment, and model-stream bar
 
 [Idle-submission handoff](idle-submission-handoff.e2e.ts) waits up to the scaffold's 30-second turn-completion budget for Host frames and browser placement. Vitest owns scaffold teardown so a replay-consumption error does not replace the failed scenario assertion.
 
-Plugin-manager switches wait up to `PLUGIN_TOGGLE_SETTLE_MS` (10 seconds) for the Host's profile write and the store's follow-up inventory read, the two steps that republish `aria-checked`; that constant's JSDoc records the measured chain.
+Plugin-manager and HMR lifecycle switches wait up to `PLUGIN_TOGGLE_SETTLE_MS` (10 seconds) for the Host's profile write and the store's follow-up inventory read, the two steps that republish `aria-checked`; that constant's JSDoc records the measured chain.
 
 Explicit scrolling uses `scrollIntoView` from `support.ts`: it resolves the locator again when its old element detaches and checks connection in the same browser task as native scrolling. Scenarios retain their visibility and geometry assertions after scrolling.
+
+[The snapshot after closing a sidebar pane](shortcuts-panels.e2e.ts) moves the pointer outside the controls and waits for hover tooltips to close before capture. Keyboard focus remains on the pane.
+
+[The same-origin terminal case](sidebar-terminal.e2e.ts) waits for the UI-triggered Host close operation before checking process termination. It also checks the first window's process, saved bindings and layout after reload.
 
 ## These are Host-face tests
 

@@ -136,7 +136,7 @@ export interface ZstdFrameDecoder {
 }
 
 /**
- * Select the shared private decoder when the running Node 22/24/26 shape is
+ * Select the shared private decoder when the running Node 24/26 shape is
  * compatible, otherwise preserve correctness with the public one-shot API.
  * @returns a synchronous decoder with an implementation-independent lifecycle.
  */

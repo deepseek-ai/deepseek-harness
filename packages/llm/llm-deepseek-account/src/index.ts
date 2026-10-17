@@ -75,7 +75,8 @@ export function apply(ctx: Context, config: Config): void {
     token: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
     now: () => Date.now(),
-    info: (message) => { console.info(LOG_TAG, message) },
+    // ACP reserves stdout for protocol messages, including during successful catalog loads.
+    info: (message) => { console.error(LOG_TAG, message) },
     warn: (message) => { console.warn(LOG_TAG, message) },
   })
   let loggedListing: ModelListing | undefined
