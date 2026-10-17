@@ -30,10 +30,11 @@ function fixture() {
     async *[Symbol.asyncIterator]() {
       for (;;) {
         if (failure !== undefined) throw failure
-        if (closed) return
+        // A queued item still arrives after close, as an item the stream yielded just before disposal does.
         const next = queue.shift()
-        if (next === undefined) { await new Promise<void>((resolve) => { wake = resolve }); continue }
-        yield { value: next, accept: () => { accepted++ } }
+        if (next !== undefined) { yield { value: next, accept: () => { accepted++ } }; continue }
+        if (closed) return
+        await new Promise<void>((resolve) => { wake = resolve })
       }
     },
     dispose: vi.fn(async () => { closed = true; wake?.() }),
@@ -62,10 +63,13 @@ function fixture() {
     connection, follow, cancel, start, open: windowOpen, streams, options: () => options,
     snapshot: () => connection.state.getSnapshot(),
     get stream() { return streams.at(-1)! },
-    async publish(view: View) {
-      const target = accepted + 1
+    deliver(view: View) {
       queue.push(view)
       wake?.()
+    },
+    async publish(view: View) {
+      const target = accepted + 1
+      this.deliver(view)
       await vi.waitFor(() => { expect(accepted).toBe(target) })
     },
     failOnClose(error: Error) { failure = error },
@@ -74,6 +78,9 @@ function fixture() {
 }
 
 const settle = async (b: ReturnType<typeof fixture>) => { await vi.waitFor(() => { expect(b.snapshot().busy).toBe(false) }) }
+// Every fixture step settles through microtasks, so one macrotask lets a pending reopen or start finish.
+const drain = () => new Promise<void>((resolve) => { setTimeout(resolve, 0) })
+const SECOND = 'op-2' as CliOperationId
 
 it('mirrors the Host view through the plugin stream', async () => {
   const b = fixture()
@@ -111,7 +118,6 @@ it('reports no notice for an unmapped kind or an unsuccessful outcome', async ()
   b.connection.start(b.start)
   await settle(b)
   await b.publish({ ...OUT, result: { id: OP, kind: 'check', outcome: 'succeeded' } })
-  const SECOND = 'op-2' as CliOperationId
   b.connection.start(async () => ({ ok: true, value: SECOND }))
   await settle(b)
   await b.publish({ ...OUT, result: { id: SECOND, kind: 'connect', outcome: 'failed', failure: { command: 'login', exitCode: 1 } } })
@@ -176,6 +182,28 @@ it('reports nothing after disposal and marks the page stopped when the stream fa
   await vi.waitFor(() => { expect(c.snapshot()).toMatchObject({ linked: false, stopped: true }) })
 })
 
+it('opens no link for a start that answers after disposal', async () => {
+  const b = fixture()
+  const answer = Promise.withResolvers<RemoteResult<CliOperationId>>()
+  b.connection.start(() => answer.promise)
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/device' }) })
+  await b.connection.dispose()
+  answer.resolve({ ok: true, value: OP })
+  await settle(b)
+  expect(b.open).not.toHaveBeenCalled()
+})
+
+it('ignores a Host view the stream yields after disposal', async () => {
+  const b = fixture()
+  await b.publish(OUT)
+  b.connection.start(b.start)
+  await settle(b)
+  b.deliver({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/late' }) })
+  await b.connection.dispose()
+  expect(b.open).not.toHaveBeenCalled()
+  expect(b.snapshot().view).toEqual(OUT)
+})
+
 it('reopens a stopped Host stream on retry and ignores retry while the stream runs', async () => {
   const b = fixture()
   b.connection.actions.retry()
@@ -192,4 +220,28 @@ it('reopens a stopped Host stream on retry and ignores retry while the stream ru
   await b.connection.dispose()
   b.connection.actions.retry()
   expect(b.streams).toHaveLength(2)
+})
+
+it('opens no stream for a retry that disposal overtakes', async () => {
+  const b = fixture()
+  await b.publish(OUT)
+  b.fail(new Error('gone'))
+  await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
+  b.connection.actions.retry()
+  await b.connection.dispose()
+  await drain()
+  expect(b.streams).toHaveLength(1)
+})
+
+it('reopens one stream for repeated retries and closes that stream on disposal', async () => {
+  const b = fixture()
+  await b.publish(OUT)
+  b.fail(new Error('gone'))
+  await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
+  b.connection.actions.retry()
+  b.connection.actions.retry()
+  await drain()
+  expect(b.streams).toHaveLength(2)
+  await b.connection.dispose()
+  expect(b.stream.dispose).toHaveBeenCalled()
 })

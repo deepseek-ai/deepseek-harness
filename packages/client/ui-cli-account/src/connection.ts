@@ -87,7 +87,9 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
    */
   start(call: () => Promise<RemoteResult<CliOperationId>>): void {
     void this.run(async () => {
-      this.started = await settle(call())
+      const id = await settle(call())
+      if (this.disposed) return
+      this.started = id
       const current = this.state.getSnapshot().view
       if (current !== undefined) this.follow(current)
     })
@@ -105,8 +107,11 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
     openAuthorizationPage(this.state.getSnapshot().view?.operation?.authorizationUrl)
   }
 
-  /** Reopen the Host stream after it stopped; ignored while it runs or after disposal. */
+  /** Reopen the Host stream after it stopped; ignored while it runs, while a reopen is pending, or after disposal. */
   retry(): void {
+    if (this.disposed || !this.state.getSnapshot().stopped) return
+    // Clearing `stopped` before the reopen awaits claims it, so a second retry finds nothing to reopen.
+    this.patch({ view: undefined, stopped: false })
     void this.reopen()
   }
 
@@ -116,7 +121,8 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
   }
 
   /**
-   * Stop observing the Host and report nothing more; Host-owned operations keep running.
+   * Stop observing the Host; afterwards the page opens no link, reports nothing more, and a pending retry opens no
+   * stream. Host-owned operations keep running.
    * @returns after the stream closes.
    */
   async dispose(): Promise<void> {
@@ -137,6 +143,8 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
   private async observe(stream: RemoteStream<View>): Promise<void> {
     try {
       for await (const item of stream) {
+        // An item the stream yielded just before disposal must not reach the disposed page.
+        if (this.disposed) return
         this.patch({ view: item.value, linked: true })
         this.follow(item.value)
         item.accept()
@@ -148,11 +156,9 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
   }
 
   private async reopen(): Promise<void> {
-    if (this.disposed || !this.state.getSnapshot().stopped) return
     await this.stream.dispose()
     await this.observing
-    this.patch({ view: undefined, stopped: false })
-    this.subscribe()
+    if (!this.disposed) this.subscribe()
   }
 
   /** Open each new link of this browser's operation once, and report how the operation ended. */
