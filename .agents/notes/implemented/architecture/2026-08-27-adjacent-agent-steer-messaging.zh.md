@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-08-27-adjacent-agent-steer-messaging.md) | 中文
 
+邻接消息和发现范围已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
+
 ## 问题
 
 可继续 Agent 最初使用方向专属的模型控制。parent 调用 `send_message({ subagent_id, message })`，委托给 FIFO `followup` 服务操作。child 则获得 child 作用域的 `report({ output })` 工具、`tool:report` 系统提示词 section，以及由部署选择的静默或唤醒投递。两个工具用不同 schema、服务路径、来源与调度描述同一个相邻 Agent 操作。

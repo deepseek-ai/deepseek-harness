@@ -1,5 +1,5 @@
 {"type":"session","version":4,"id":"{{session:2}}","createdAt":1783951000000,"cwd":"{{cwd}}","parentSession":"{{session:1}}","isSeeded":false,"origin":"subagent","delegationDepth":1}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"branch child 1","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","name":"workflow-{{workflow:1}}-1","label":"branch child 1","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
 {"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}
@@ -16,7 +16,7 @@
 {"type":"assistant/message","data":{"turn":1,"step":1,"message":{"role":"assistant","content":[{"type":"tool-call","id":"desc-2-1","name":"workflow","arguments":"{\"meta\":{\"name\":\"leaf\",\"description\":\"Create the nested reviewer.\"},\"script\":\"return await agent(\\\"Reply LEAF_READY.\\\");\"}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-flash"},"id":"{{message:18}}"},"stream":[{"type":"chunk","time":1792056641572,"chunk":{"type":"block-start","index":0,"blockType":"tool-call"}},{"type":"chunk","time":1792056641572,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"desc-2-1","name":"workflow","arguments":"{\"meta\":{\"name\":\"leaf\",\"description\":\"Create the nested reviewer.\"},\"script\":\"return await agent(\\\"Reply LEAF_READY.\\\");\"}"}}},{"type":"chunk","time":1792056641572,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}]},"surfaceOp":"append"}
 {"type":"tool/call","data":{"turn":1,"step":1,"callId":"desc-2-1","name":"workflow","arguments":"{\"meta\":{\"name\":\"leaf\",\"description\":\"Create the nested reviewer.\"},\"script\":\"return await agent(\\\"Reply LEAF_READY.\\\");\"}"}}
 {"type":"tool-workflow/run-start","data":{"runId":"{{workflow:2}}","name":"leaf"}}
-{"type":"subagent/catalog","data":{"version":0,"childId":"{{session:3}}","childCreatedAt":1792056641664,"mode":"continuable","label":"leaf child 1"}}
+{"type":"subagent/catalog","data":{"version":0,"childId":"{{session:3}}","childCreatedAt":1792056641664,"mode":"continuable","label":"leaf child 1","name":"workflow-{{workflow:2}}-1"}}
 {"type":"tool-workflow/agent-start","data":{"runId":"{{workflow:2}}","seq":1,"label":"Reply LEAF_READY.","childId":"{{session:3}}"}}
 {"type":"tool-workflow/agent-end","data":{"runId":"{{workflow:2}}","seq":1,"outcome":"completed"}}
 {"type":"tool-workflow/run-end","data":{"runId":"{{workflow:2}}","stopReason":"completed"}}

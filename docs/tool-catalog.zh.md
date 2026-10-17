@@ -580,19 +580,19 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
 
 ### `run_code`
 
-针对可用工具执行 TypeScript 程序。接受两个必填参数：`description`，简要说明该程序做什么；以及 `code`，要执行的程序。请根据系统提示词中的声明，以 `await tools.name(args)` 形式调用工具。请筛选程序输出。含图片的子工具结果会在运行结束后附加。
+针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，要执行的程序；以及 `description`，简要说明该程序做什么。请根据系统提示词中的声明，以 `await tools.name(args)` 形式调用工具。请筛选程序输出。含图片的子工具结果会在运行结束后附加。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "description": {
-      "type": "string",
-      "description": "Clear, concise description of what this program does in active voice, 5-10 words (shown in the UI). Provide `description` before `code` in the arguments. Examples: \"Count TODO markers across packages\"; \"Read failing test and its fixture\"; \"Rename config key in every cordis.yml\"."
-    },
     "code": {
       "type": "string",
       "description": "The TypeScript program to execute, following this tool's execution instructions."
+    },
+    "description": {
+      "type": "string",
+      "description": "Clear, concise description of what this program does in active voice, 5-10 words (shown in the UI). Examples: \"Count TODO markers across packages\"; \"Read failing test and its fixture\"; \"Rename config key in every cordis.yml\"."
     },
     "timeoutMs": {
       "type": "number",
@@ -612,8 +612,8 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
     }
   },
   "required": [
-    "description",
-    "code"
+    "code",
+    "description"
   ]
 }
 ```
@@ -2158,7 +2158,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `list_agents`
 
-列出全部可达的可继续后代；如果调用方是可继续子代理，还列出父代理和可继续同级。行包含名字、描述和状态；后代行还包含父级名字和深度。可以向父代理、可继续同级和直接子级发送消息，可以中断更深后代，但不能直接向其发送消息。running 表示正在工作；inactive 表示当前没有工作。直属子代理结束时会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整个 Team：根代理及所有可达的可继续后代，包括调用方。行包含名字、描述和状态；后代行包含父级名字和相对根的深度。可以向分支支持继续执行的其他 Team 成员发送消息，只能中断自己的后代。running 表示正在工作；inactive 表示当前没有工作。直属子代理结束时会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2179,7 +2179,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "name": {
       "type": "string",
-      "description": "The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
+      "description": "The name of another member of your Team, as shown by list_agents."
     },
     "message": {
       "type": "string",

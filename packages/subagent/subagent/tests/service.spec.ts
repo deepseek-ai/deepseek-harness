@@ -308,16 +308,23 @@ describe('SubagentRuntime', () => {
     expect(runIds[0]).toBe(runIds[1])
   })
 
-  it('mints distinct lifecycle identities when provider and child ids repeat', async () => {
+  it('mints distinct lifecycle identities when provider and child ids repeat across roots', async () => {
     const { ctx, subagents } = await service()
-    subagents.registerProvider(new StubProvider('reused'))
+    subagents.registerProvider({
+      name: 'reused', capabilities: NO_CAPS, inheritsParentContext: false,
+      start: async () => ({
+        id: SessionId('reused-child'),
+        result: Promise.resolve({ output: [], stopReason: 'completed' }),
+        async dispose() {},
+      }),
+    })
     const runIds: string[] = []
     ctx.on('subagent/start', info => void runIds.push(info.runId))
 
     const first = await start(subagents, 'reused', baseRequest())
     await first.result
     await first.dispose()
-    const second = await start(subagents, 'reused', baseRequest())
+    const second = await start(subagents, 'reused', baseRequest({ parent: fakeParent('parent-2') }))
     await Promise.all([first.result, second.result])
 
     expect(runIds).toHaveLength(2)
@@ -465,8 +472,8 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
     }
     expect(foldSubagentDescriptor([event(minimal)])).toEqual(minimal)
-    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work' })]))
-      .toEqual({ ...minimal, label: 'child work' })
+    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work', name: 'worker' })]))
+      .toEqual({ ...minimal, label: 'child work', name: 'worker' })
     expect(snapshotSubagentDescriptor({
       mode: 'continuable', provider: 'spawn', label: 'child',
     })).toEqual({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'child' })
@@ -522,6 +529,7 @@ describe('subagent descriptors', () => {
   })
 
   it.each([
+    ['invalid name', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', name: 'lead' }, 'Invalid input'],
     ['string payload', 'invalid', 'payload must be an object'],
     ['null payload', null, 'payload must be an object'],
     ['array payload', [], 'payload must be an object'],

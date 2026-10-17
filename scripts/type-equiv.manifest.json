@@ -2481,16 +2481,6 @@
       "doc": "docs/subsystems/boot.md",
       "symbol": "PendingModule",
       "source": "packages/boot/hmr/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/subagent.md",
-      "symbol": "SubagentNameData",
-      "source": "packages/subagent/subagent/src/names.ts"
-    },
-    {
-      "doc": "docs/subsystems/subagent.md",
-      "symbol": "SubagentNamesState",
-      "source": "packages/subagent/subagent/src/names.ts"
     }
   ]
 }

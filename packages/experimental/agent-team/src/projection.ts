@@ -250,7 +250,7 @@ function parseCurrentTeamEvent(event: TeamSessionEvent): TeamSessionEvent {
 
 /** Add one continuable catalog child of the projected Lead, excluding fork-inherited facts. */
 function applyCatalogEvent(state: TeamProjectionState, event: SessionEvent<'subagent/catalog'>): TeamProjectionState {
-  if (event.seq < state.inheritedEventCount || event.data.mode !== 'continuable') return state
+  if (event.seq < state.inheritedEventCount || event.data.version === 3 || event.data.mode !== 'continuable') return state
   const child = parsePersisted(event.type, continuableCatalogEventSchema, event.data)
   return { ...state, children: [...state.children, { id: child.childId, description: child.label }] }
 }

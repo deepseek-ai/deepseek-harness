@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` adds the global control tools for continuable children: `send_message` steers between a parent and child or between siblings, `interrupt_agent` stops a descendant’s current turn while keeping its inbox and descendants intact, and the separately loadable `list-agents` plugin discovers agents by name and description. Parents and continuable children inherit the same tool definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message every member of their Team by name. `interrupt_agent` stops only the caller’s descendants, retaining their inboxes and children. The separately loadable `list-agents` plugin lists the whole tree with descriptions, parent names, depth, and activity. All members inherit the same tool definitions and ordering.
 
 ## Table of Contents
 
@@ -45,7 +45,7 @@ This package takes no configuration: the root plugin provides `send_message` and
 
 ### send_message
 
-Sends a message to the agent `name`. Any exact live Agent may target its direct continuable child; a resident continuable child may also target its direct parent or continuable siblings. Sibling delivery uses the shared live parent’s authority and preserves the actual sender. A working target receives the message at its nearest step boundary through Steer; an inactive child or sibling starts or resumes a turn. Success returns inbox acceptance (`messageId`), never a reply. An unsupported target, unavailable parent, unknown name, missing descriptor, or rejected admission returns an error.
+Sends a message to another Team member by `name`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Cold ancestors resume under their recorded parents without receiving the target’s message. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown names, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
@@ -53,7 +53,7 @@ Sends a message to the agent `name`. Any exact live Agent may target its direct 
 
 ### list_agents
 
-Lists all reachable continuable descendants in stable pre-order, with each row’s direct parent name and depth. A continuable subagent with a live parent first sees that parent and its continuable siblings. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children are traversal nodes but not output rows. Unknown modes and unreadable child catalogs produce diagnostics. Ordinary Session forks are not catalog entries.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate Teams.
 
 -----
 
@@ -71,18 +71,18 @@ Thin adapters resolve names through `ctx.subagents.resolveName()` before calling
 
 ### Delivery and signal ownership
 
-The tool forwards its execution signal, which owns admission only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`, including sibling delivery under the parent’s authority. Attribution never grants authority.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the target’s actual parent still owns restoration and disposal.
 
 ### Listing projection
 
-`list_agents` traverses the caller’s catalogs without a cursor and refines status through the live Agent registry. A continuable caller’s live parent catalog supplies the parent and sibling rows. Descendant traversal preserves catalog order; unknown modes remain traversable with diagnostics, while unreadable catalogs stop that branch. Descendants absent from reachable catalogs cannot be discovered.
+`list_agents` resolves the caller’s live root and traverses its catalogs without a cursor, refining activity through the live Agent registry. Unknown modes remain traversable with diagnostics; unreadable catalogs stop that branch. Sessions absent from reachable catalogs cannot be discovered.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `send_message` and `interrupt_agent` registration |
-| [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` registration: parent, sibling, and child discovery and status refinement |
+| [`src/list-agents.ts`](src/list-agents.ts) | Whole-Team discovery and activity projection |
 
 </details>
 
@@ -134,11 +134,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <name>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s supported parent, child, and sibling routes, or rejected admission, produces an errored result.
+`message delivered to agent <name>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s Team or rejected admission produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; the target’s response never returns through this call. Children use parent and sibling names from `list_agents` for follow-up messages.
+One short acknowledgement per call; replies arrive as separately addressed messages. Use names from `list_agents` for follow-ups across the Team.
 
 #### KV Cache effect
 
@@ -148,11 +148,11 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-One line per descendant in stable order: `<name> [<status>] parent=<name> depth=<n> — <label>`. A continuable child’s list starts with `<name> [<status>] — your parent`, then `<name> [<status>] — sibling: <label>` rows. Unknown modes or unreadable catalogs produce `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion. `(no subagents)` means no row survived the projection.
+The first row is `<name> [<status>] — team lead`. Each continuable descendant follows as `<name> [<status>] parent=<name> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion.
 
 #### Token effect
 
-Grows linearly with the listed rows, including parent and siblings. There is no cursor or cap.
+Grows linearly with the whole Team’s listed rows. There is no cursor or cap.
 
 #### KV Cache effect
 
@@ -166,7 +166,7 @@ Append-only; each result follows the reusable request prefix.
 These limits define what the control tools cannot observe or steer; they are current package constraints.
 
 - **A delivered message has no independent result** — acceptance returns only its inbox `messageId`; later target work lands in that target's durable Session and is never collected through this tool. A reply is another explicitly addressed `send_message`, not this call's result.
-- **Messaging requires live lineage** — every sender may target a direct continuable child. A resident continuable child may also target its direct parent and continuable siblings while their parent is live. Deeper descendants can be interrupted but cannot receive direct messages; unrelated trees are not message targets; only child and sibling delivery supports cold activation.
+- **Messaging requires a live sender tree** — the root and the sender’s ancestors must remain live. Cold targets and their continuable ancestors can resume within that tree; each restored activation consumes the shared capacity. Unrelated trees and external or one-shot targets cannot receive messages.
 - **Listing is a snapshot, not a delivery promise** — it may race publication, disposal, or a later message, and another process may activate a child this process reports as `inactive`; cross-process accuracy requires a shared lease. `interrupt_agent` performs the authoritative live-lineage check itself, so discovery staleness cannot grant authority.
 - **No pagination or deletion** — the complete stably ordered set is returned, and persisted children remain listed for as long as their sessions remain in persistence; a service-level bound or delete operation is a later product decision.
 

@@ -61,7 +61,7 @@ kind: "package-reference"
 
 `startActivation({ name, provider, label, request, signal, delivery })` 返回 `{ childId, name, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息，支持冷恢复；外部子级只执行一次，拒绝继续执行。`request.agentOptions` 覆盖受支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 允许 workflow 等待结果，不发送父级通知或初始返回指引。本地 parent 交付要求持久化；caller 交付可使用临时本地会话。冷恢复要求持久化和 Session query。
 
-agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。`SubagentNames` 在异步准备前预留名字，释放失败且未发布的启动，并将成功分配作为 `subagent/named` 记录在根 Session 中。`subagentNames` 投影在结束和重启后保留分配，排除分叉继承的事件。`nameOf()` 和 `resolveName()` 在名字与稳定 Session id 之间转换，不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址。
+agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建时必须以小写字母开头，后续只能包含小写字母、数字、下划线或连字符；`lead` 和 `unowned` 为保留名。根 catalog 记录已提交名字；本地子级 descriptor 携带自身名字供恢复使用。根级 Set 在异步准备前预留名字，并在创建返回或失败时释放预留。已提交名字在执行结束后仍被占用。普通名字检查只读取根 catalog，排除继承条目；无关的不可读分支不阻止创建或解析。`nameOf(agent)` 读取 Agent 自身 descriptor，`resolveName()` 不授予操作权限。旧的无名后代使用 `legacy:<session-id>` 地址，通过历史 catalog 解析。
 
 ### 子级 preset
 
@@ -69,7 +69,7 @@ agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建
 
 ### 消息、中断与发现
 
-每个确切在线 Agent 都可以对直接可继续 child 使用 `sendMessage()`；驻留的可继续 child 还可以按 Session id 向直接 parent 或该 parent 的其他可继续 child 发消息。同级投递使用共同在线 parent 的权限，并保留实际发送方的 id。描述用于展示，可以重复。正在工作的目标通过 Steer 在最近 step 接收 Agent 消息；空闲目标启动轮次，且直接 child 和同级均可冷恢复。parent 也可以随时中断正在运行的后代或列举自己的子级。浏览器发出的继续执行 prompt 会独立选择 Queue 或 Steer，并且可以携带图片部分：Host 先通过附件存储完成整批图片的准入与持久化，子级 inbox 才接受这条消息；当子级声明的模型不接受图片输入时拒绝投递。 直接子级发现读取 parent 自有的 `subagentCatalog` projection。`listChildren(parentSessionId, signal?)` 持有一次优先实时来源的 Session 观察，异步返回目录，不读取子级日志。它转发取消信号，并在物化后释放观察。物化以 O(D) 时间保留 D 条事实的父日志事件顺序。外部条目是叶节点，不需要观察子 Session。后代发现按父事件顺序递归读取子级目录，每个可达 Session 观察一次。无法读取目录的分支会被跳过，并返回诊断；两条路径都不加载或恢复子级 Agent。
+`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。冷目标及其可继续祖先按记录的父级恢复；消息保留实际发送者。`rootOf()` 解析调用方的在线根。中断仍要求祖先权限。浏览器提示词独立选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。直接子级发现通过 `listChildren(parentSessionId, signal?)` 读取 `subagentCatalog`，持有并释放优先在线的 Session observation。递归发现保留目录顺序，观察每个可达目录及验证名称登记所需的祖先，跳过外部叶子，并报告不可读分支而不激活 Agent。
 
 ### 失败与恢复
 
@@ -99,8 +99,8 @@ agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建
 | [`src/index.ts`](src/index.ts) | 服务入口：提供方注册表、启动与继续 API、生命周期事件 |
 | [`src/manager.ts`](src/manager.ts) | 统一管理启动、消息准入、冷恢复、父子所有权、结算与释放 |
 | [`src/activation.ts`](src/activation.ts) | 执行期记录、容量槽、子级锁与本地输出捕获 |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | 相邻 Agent 消息、返回指引与结算通知 |
-| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 与 Steer 适配器，以及标准相邻 Agent 消息标记 |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Team 成员消息、返回指引与结算通知 |
+| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 与 Steer 适配器，以及标准Team 成员消息标记 |
 | [`src/structured.ts`](src/structured.ts) | Activation 局部结构化捕获与保护 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |
@@ -123,7 +123,7 @@ agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建
 
 本地 Agent 发生失败且后续没有成功提交 `turn/end` 时，会在所拥有的后代结束后以 `error` 结算。未认领的输入不会使该失败 activation 一直驻留。后续成功提交的轮次结束记录会取代实时失败，提供恢复后的结果。
 
-本地创建成功后，无论结果交付给谁，都会向父 Session 追加 `subagent/catalog` 事实。外部创建仅在使用 `delivery: 'parent'` 时追加目录事实；调用方拥有的外部执行保留调用方自己的成员记录。外部条目以 `mode: 'external'` 标记没有本地 Session 的子级。目录仅在创建时记录一次成员关系，不携带执行状态。完整结果交给调用方或父级完成通知。投影排除继承事实。直接列表读取一个父级投影，因此已完成的本地工作流子级仍可被发现、打开或继续。Catalog 载荷 v0 记录本地模式，v1 还接受未知模式，v2 记录外部执行，读取器支持三版。历史迁移在 descriptor 不可用时根据可读子 header 追加 v1 `subagent/catalog`；本地创建保留 v0。其 `mode: 'unknown'` 投影让子会话保持可见，但不表示支持继续执行；已有完整条目仍具有权威性。
+本地与外部创建均向父 Session 追加直接子级 `subagent/catalog` 事实，不受结果交付方式影响。父级不是根时，紧接着同步向根 catalog 追加 `{ version: 3, kind: 'name', childId, name }` 登记，以此提交创建。根的直接子级事实已经登记名字，无需第二次追加。根登记失败会释放名字并清理 activation；descriptor 或父级事实可以残留，但 `listChildren()` 与冷恢复要求其中的名字/id 匹配根登记。原始 catalog 投影保留这些事实供历史检查。登记后，即使执行或通知失败，名字仍被占用。两次 Session 追加不具备原子性，持久化 flush 仍是独立步骤。已有 catalog 投影折叠两种记录，其 wire 视图只包含直接子级。第 0–2 版保留本地、未知和外部子级含义。历史无名子级的发现与继续执行保留原有行为。
 
 <a id="restoring-child-composition"></a>
 ### 恢复子级组装
@@ -136,7 +136,7 @@ agent 名字不可变，在整棵 agent 树内唯一；根名为 `lead`。创建
 
 - **管理器拥有已接受工作**——未发布的失败会回滚；已发布句柄取消对应 activation，并等待子级优先释放。
 - **注册受 effect 作用域约束**——移除提供方会阻止新启动，但绝不撤销已接受的运行。
-- **Agent 消息权限来自在线谱系**——`sendMessage()` 要求确切在线 sender；每个 sender 都可以指定直接可继续 child。驻留的可继续 sender 还可以向直接 parent 发消息，或使用共同在线 parent 的权限向可继续同级发消息。
+- **Agent 消息权限由树决定**——确切在线发送者和目标必须属于同一个根。冷投递在恢复祖先之前验证可继续描述符和父级目录。最终收件箱准入重新检查发送者与目标父级；恢复失败会释放新建激活。
 - **描述符仅进日志**——它是会话事件，不进入模型历史，并跨压缩（compaction）保留；写入器记录解析后的子级提供方、模型与推理强度，用于冷恢复。历史 one-shot 描述符仍可读取。
 - **本 runtime 为子代理回答归档准入**（[接缝](../../workspace/workspace/README.zh.md)）——`workspace/session-activity` 把回合中的在线子代理子孙作为 `subagent` 族报告：按本包记录的持久化血缘查找（带 subagent 来源的 `parentSession`，任意深度，从不包括 fork），组合了 Session query 服务时经一次活会话 observation 从各 child 的描述符取名称，否则只报 id；`workspace/session-stop` 以父级原因逐个取消它们，一个拒绝取消的 child 只记日志，其兄弟仍会停止。父级自身的回合、它的任务以及已归档血缘的步骤门禁归 API Session Controller。
 
@@ -206,7 +206,7 @@ You are a delegated subagent: your permission scope was fixed when you were star
 
 - **后代读取串行执行**——每个可达目录（包括一次性子级）都需要一次观察。冷 Session 缺少有效的 prepared 观察时需要读取完整日志；大型冷会话树可能累积存储延迟。
 - **外部子级执行一次**——ACP、DSH SDK、Codex 与 Claude Code 没有本地子 Session，也不接受后续输入。释放后仍可发现父级拥有的执行记录。
-- **消息限于父级、子级和同级**——目标使用 Session id。驻留的可继续 child 在 parent 在线时可以联系直接 parent 和可继续同级；更深的后代与无关树不是消息目标。浏览器提示使用独立的人类 Queue 或 Steer 控制路径。
+- **消息限定在一棵树内**——目标使用 Session id，必须是根或可继续成员。冷祖先占用激活容量。浏览器提示词保留独立的人类 Queue 或 Steer 控制路径。
 - **child 到 parent 的投递要求直接 parent 保持在线**——服务没有持久 parent mailbox；parent 缺失时会拒绝消息，而非接受无法唤醒的工作。
 - **取消收敛期间存在唤醒缺口**——中断信号发出后、Agent 进入 idle 前被接受的后续消息会保持排队，直到另一条唤醒发送到达。
 - **待处理的注入上下文会保留 Activation**——settlement 会保守地把每个 Inbox occurrence 都视为未完成。Agent 进入 idle 后停放的上下文会让 child 及其在线祖先继续驻留，直到唤醒投递将其 claim、queue 变更将其移除，或 manager teardown 将其丢弃。宿主完成检查等待活动工作、待创建子级与资源清理，但不会等待仅包含空闲停放 Inbox 的子树；它既不结算这些 activation 的结果，也不丢弃其消息。

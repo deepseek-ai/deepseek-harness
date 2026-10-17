@@ -129,6 +129,18 @@ describe('restoreReleasedV4Artifact', () => {
       data: { ...data, mode: 'one-shot' } }]), known)).toThrow('duplicate catalog child')
   })
 
+  it('accepts catalog name registrations without child discovery fields and validates their identities', () => {
+    const known = new Set([...KNOWN, 'subagent/catalog'])
+    const data = { version: 3, kind: 'name', name: 'writer', childId: 'grandchild' }
+    const event = { type: 'subagent/catalog', seq: 0, time: 1, data }
+    const valid = artifact([event])
+    expect(restoreReleasedV4Artifact(valid, known)).toBe(valid)
+    for (const invalid of [{ ...data, kind: 'child' }, { ...data, name: null }, { ...data, childId: 1 }]) {
+      expect(() => restoreReleasedV4Artifact(artifact([{ ...event, data: invalid }]), known)).toThrow('requires a name registration')
+    }
+    expect(() => restoreReleasedV4Artifact(artifact([event, { ...event, seq: 1 }]), known)).toThrow('duplicate catalog child')
+  })
+
   it('validates only the envelope in physical mode', () => {
     const unknown = conversation()
     unknown.splice(2, 0, { type: 'campaign/unknown', seq: 0, time: 1, data: { x: 1 } })

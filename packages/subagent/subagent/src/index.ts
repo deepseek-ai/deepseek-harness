@@ -14,7 +14,7 @@
  * `startActivation` establishes every child under the activation manager, which
  * owns execution, result delivery, and resource release. Local providers seed
  * resumable Agents; external providers return a single execution handle.
- * `sendMessage` steers between adjacent local Agents without exposing
+ * `sendMessage` steers between local Agents in one Team without exposing
  * whether a child is resident. Discovery combines real child Sessions with
  * parent-owned records for external executions.
  * Direct discovery reads parent catalogs; descendants recursively read reachable
@@ -75,7 +75,6 @@ import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
-import { subagentNamesProjectionDefinition } from './names.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
@@ -228,7 +227,6 @@ export class SubagentRuntime extends TypertRemoteService {
     })
     ctx.inject(['sessionProjections'], (projectionCtx) => {
       projectionCtx.sessionProjections.register(subagentCatalogProjectionDefinition)
-      projectionCtx.sessionProjections.register(subagentNamesProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
     })
@@ -287,13 +285,12 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
-   * @param caller - exact live Agent selecting the tree.
-   * @param id - target identity; omission selects the caller.
+   * Read an Agent's own descriptor-backed name, retaining legacy addresses for older children.
+   * @param agent - exact live Agent whose name is requested.
    * @returns lead, the immutable assigned name, or a legacy address.
    */
-  nameOf(caller: Agent, id: SessionId = caller.id): string {
-    return this.requireManager().names.nameOf(caller, id)
+  nameOf(agent: Agent): string {
+    return this.requireManager().names.nameOf(agent)
   }
 
   /**
@@ -309,6 +306,16 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
+   * Resolve the root shared by an Agent and its teammates.
+   * @param caller - exact live Agent whose subagent ancestry selects the tree.
+   * @returns the live root; ordinary Session forks lead independent trees.
+   * @throws when the caller or its live ancestry is unavailable.
+   */
+  rootOf(caller: Agent): Agent {
+    return this.requireManager().rootOf(caller)
+  }
+
+  /**
    * Join progressing descendants without cancelling them. Idle descendants whose
    * inboxes require a later wake stay resident and do not delay host completion.
    * @param parent - the exact parent whose descendant work is observed.
@@ -319,18 +326,17 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Steer one model-authored message to the sender's direct parent, direct
-   * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
-   * an idle target starts a turn, and an absent direct child cold-resumes from
-   * persistence. The service derives durable sender attribution from the exact
-   * live sender. Caller cancellation stops only pre-acceptance work.
-   * @param sender - exact live Agent authorizing and originating the message.
-   * @param targetId - durable direct-parent, direct-child, or sibling session id.
+   * Steer one model-authored message to another member of the same subagent tree.
+   * A running target receives it at its next step; an idle target starts a turn.
+   * Cold targets and their continuable ancestors resume under their recorded
+   * parents. Sender identity is rechecked before inbox acceptance; cancellation
+   * stops only pre-acceptance work and never retracts an accepted message.
+   * @param sender - exact live root or resident continuable Agent originating the message.
+   * @param targetId - another root or continuable member's durable Session id.
    * @param content - model-authored content to deliver.
    * @param options - caller cancellation before inbox acceptance.
    * @returns the accepted message's inbox id.
-   * @throws when continuation services are unavailable, adjacency is rejected,
-   *   or the message was not admitted.
+   * @throws when the target is outside the tree, cannot resume, or rejects input.
    */
   async sendMessage(
     sender: Agent,
@@ -421,9 +427,10 @@ export class SubagentRuntime extends TypertRemoteService {
   /**
    * Read the parent's durable direct-child catalog without loading or resuming an Agent.
    * The service owns and releases the live-preferred Session observation.
+   * Named rows require matching root catalog registrations, observed through ancestry.
    * @param parentSessionId - parent whose direct children are requested.
    * @param signal - cancellation forwarded to the Session query.
-   * @returns catalog children in parent event order.
+   * @returns committed catalog children in parent event order.
    * @throws {@link SubagentError} when query or catalog projection is unavailable.
    * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
    */
@@ -439,7 +446,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * produce unsupported diagnostics. Unreadable child catalogs produce corrupt
    * or unavailable diagnostics and stop only that branch. Root read failures,
    * missing services or projections, and cancellation reject the whole listing.
-   * Each catalog is observed once and released before the next read. No Agent
+   * Named rows require additional ancestor reads to verify root registration. No Agent
    * is loaded or resumed; Sessions absent from reachable catalogs are omitted.
    * @param rootSessionId - session whose catalog starts descendant discovery.
    * @param signal - cancellation forwarded to and checked around each catalog read.

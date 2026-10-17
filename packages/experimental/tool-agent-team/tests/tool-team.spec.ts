@@ -321,7 +321,7 @@ describe('dsh-tool-team', () => {
       timedOut: false,
       noProgress: {
         reason: 'no-active-peer',
-        message: 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.',
+        message: 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.',
       },
     })
     for (const timeout_ms of [9_999, 3_600_001, Number.MAX_SAFE_INTEGER + 1]) {
@@ -368,7 +368,7 @@ describe('dsh-tool-team', () => {
       expected_revision: task.revision,
       action: 'claim',
     })
-    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: ctx.subagents.nameOf(lead, childId) })
+    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: ctx.subagents.nameOf(ctx.agents.get(childId)!) })
     const stale = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id,
       expected_revision: task.revision,
@@ -448,7 +448,7 @@ describe('dsh-tool-team', () => {
       task_id: first.id,
       expected_revision: dependency.revision,
       action: 'reassign',
-      owner: ctx.subagents.nameOf(lead, childId),
+      owner: ctx.subagents.nameOf(ctx.agents.get(childId)!),
     })).isError).toBe(true)
 
     const wait = execute(ctx, lead, 'wait_agent', {})
@@ -466,13 +466,31 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it('reassigns by a historical member address without granting message authority', async () => {
+  it('retains a settled task owner’s catalog name and rejects its legacy alias', async () => {
+    const { ctx, lead } = await setup([textResponse('done')])
+    const id = await spawn(ctx, lead, 'reviewer', 'review')
+    await waitNoAgent(ctx, id)
+    const [entry] = await ctx.subagents.listChildren(lead.id)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Review history' })
+    const updated = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: entry!.name,
+    })
+    expect(JSON.parse(text(updated))).toMatchObject({ ownerName: entry!.name })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {}))))
+      .toMatchObject({ tasks: [{ ownerName: entry!.name }] })
+    expect((await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: 2, action: 'reassign', owner: `legacy:${id}`,
+    })).isError).toBe(true)
+  })
+
+  it.each([false, true])('reassigns historical members without message authority (cataloged: %s)', async (cataloged) => {
     const { ctx, lead } = await setup([])
     const id = SessionId('historical-worker')
     for (const phase of ['provisioning', 'active'] as const) lead.session.append('team/member', {
       version: 2, teamId: TeamId(lead.id),
       member: { id, name: 'old-name', description: 'historical member', provider: 'spawn', context: 'fresh', phase },
     })
+    if (cataloged) lead.session.append('subagent/catalog', { version: 0, childId: id, childCreatedAt: 1, mode: 'continuable', label: 'Old child' })
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Review history' })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_update', {
       task_id: created.id, expected_revision: created.revision, action: 'reassign', owner: 'legacy:historical-worker',

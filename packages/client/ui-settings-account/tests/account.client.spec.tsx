@@ -612,7 +612,7 @@ it('paints the bonus notice under the open settings panel and reports its displa
   let snapshot: AccountSnapshot = operations.hooks.account.getSnapshot()
   const view = render(await accountMenu(operations, () => snapshot, true))
   expect(screen.queryByRole('status')).toBeNull()
-  snapshot = { ...snapshot, notice }
+  snapshot = { ...snapshot, notices: [notice] }
   view.rerender(await accountMenu(operations, () => snapshot, true))
   // The settings overlay is translucent, so the card paints underneath it instead of waiting for the exit.
   await vi.waitFor(() => { expect(screen.getByRole('status').textContent).toBe(`${en.bonusNoticeTitle}${notice.message}`) })
@@ -717,7 +717,7 @@ it.each(['desktopOnboardingVisible', 'onboarding'] as const)('defers bonus displ
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const operations = operationsOf({ status: 'credential-stored', attempt: null })
   const notice = { orderId: 'order-onboarding' as BonusNotice['orderId'], message: 'Awarded 5.00', expiresAt: '2099-01-01T00:00:00Z' }
-  let snapshot: AccountSnapshot = { ...operations.hooks.account.getSnapshot(), notice, [field]: true }
+  let snapshot: AccountSnapshot = { ...operations.hooks.account.getSnapshot(), notices: [notice], [field]: true }
   const view = render(await accountMenu(operations, () => snapshot, false))
   expect(screen.queryByText(notice.message)).toBeNull()
   expect(operations.bonusNoticeShown).not.toHaveBeenCalled()

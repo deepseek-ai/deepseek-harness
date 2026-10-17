@@ -97,7 +97,7 @@ class StubProvider implements SubagentProvider {
     }
     if (request.signal.aborted) throw new Error('child start aborted before publication')
     return {
-      id: SessionId(`stub-child-${index}`),
+      id: SessionId(`${this.name}-child-${index}`),
       result: terminal.promise,
       dispose: () => {
         controlled.disposeCalls += 1

@@ -1,11 +1,14 @@
 /**
  * Direct-child and recursive descendant discovery from parent-owned catalogs.
- * Each catalog read releases its Session observation before the next branch.
+ * Named descendants are checked against the root registration through ancestor observations.
  * @module @deepseek-ai/dsh-subagent
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
+import { catalogNames, subagentCatalogProjectionDefinition } from './catalog.ts'
+import type { SubagentCatalogState } from './catalog.ts'
 import type { SubagentListEntry } from './control-types.ts'
 import { SubagentError } from './error.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
@@ -25,7 +28,7 @@ export type SubagentDescendantListEntry = SubagentListEntry & {
  * @param ctx - context carrying the Session query service.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session observation.
- * @returns direct-child rows in parent catalog event order.
+ * @returns committed direct-child rows in parent catalog event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  */
 export async function listChildren(
@@ -50,7 +53,28 @@ export async function listChildren(
       'SUBAGENT_CONTROL_PROJECTIONS_UNAVAILABLE',
     )
   }
-  return entries
+  if (parent.header.origin !== 'subagent' || !entries.some(entry => entry.name !== undefined)) return entries
+  const names = await rootNames(query, parent, new Set(), signal)
+  return entries.filter(entry => entry.name === undefined || names.get(entry.name) === entry.id)
+}
+
+/** Follow only ancestry; unrelated historical branches cannot block named discovery. */
+async function rootNames(
+  query: SessionQueryEngine,
+  source: SessionObservation,
+  seen: Set<SessionId>,
+  signal?: AbortSignal,
+): Promise<ReadonlyMap<string, SessionId>> {
+  seen.add(source.header.id)
+  if (source.header.origin === 'subagent') {
+    const id = source.header.parentSession
+    if (id === undefined || seen.has(id)) throw new SubagentError('subagent discovery requires an intact parent tree', 'AGENT_TREE_UNAVAILABLE')
+    using parent = await query.observeSession(id, { ...signal === undefined ? {} : { signal } })
+    return await rootNames(query, parent, seen, signal)
+  }
+  let state: SubagentCatalogState = subagentCatalogProjectionDefinition.init(source.header, source.inheritedEventCount)
+  for (const event of source.events) state = subagentCatalogProjectionDefinition.apply(state, event)
+  return catalogNames(state, source.header.id)
 }
 
 /**
@@ -102,13 +126,15 @@ export async function listDescendants(
       const code = error instanceof Error && 'code' in error ? error.code : undefined
       result.push({
         kind: 'diagnostic', id: entry.id, parentId, depth,
+        ...entry.name === undefined ? {} : { name: entry.name },
         reason: code === 'SESSION_QUERY_CORRUPT_SESSION' || code === 'SESSION_QUERY_SOURCE_CONFLICT'
           ? 'corrupt' : 'unavailable',
       })
       continue
     }
     if (entry.mode === 'unknown') {
-      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth, reason: 'unsupported' })
+      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth,
+        ...entry.name === undefined ? {} : { name: entry.name }, reason: 'unsupported' })
     } else {
       const { createdAt: _createdAt, ...identity } = entry
       result.push({

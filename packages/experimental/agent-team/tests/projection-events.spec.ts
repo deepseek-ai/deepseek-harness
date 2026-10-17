@@ -455,6 +455,14 @@ describe('Agent Teams projection events', () => {
     expect(teamProjectionView(teamProjectionDefinition.apply(projected, catalog('second', 4, 'writer')))).not.toBe(view)
   })
 
+  it('does not turn a root name registration into a direct teammate', () => {
+    const state = project(ROOT, [{
+      type: 'subagent/catalog', seq: SessionSeq(0), time: 0,
+      data: { version: 3, kind: 'name', childId: CHILD, name: 'writer' },
+    }])
+    expect(teamProjectionView(state).members).toEqual([{ id: ROOT, role: 'lead', phase: 'active' }])
+  })
+
   it('publishes one catalog row when a historical member has the same id', () => {
     const state = project(ROOT, [
       event('team/member', { version: 2, teamId: TEAM, member: member() }, SessionSeq(0)),

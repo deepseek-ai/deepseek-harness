@@ -380,9 +380,9 @@ interface SubagentProvider {
 
 The model-facing `list_agents` adapter reports current activity as `running` or `inactive`. These values do not describe task completion or guarantee that `send_message` will succeed.
 
-`SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
+`SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Named descendant rows require matching root registrations, read through ancestor observations. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
 
-`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
+`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable child catalog is observed, with additional ancestor reads for named rows; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
@@ -398,23 +398,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent names
 
-Names are unique in one live subagent tree; the root is `lead`. The root Session owns immutable assignments and the projection excludes inherited facts. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
-
-```ts type-equiv
-/** One immutable name assigned in the root Session before child publication. */
-interface SubagentNameData {
-  readonly name: string
-  readonly id: SessionId
-}
-```
-
-```ts type-equiv
-/** Root-owned name assignments, excluding fork-inherited events. */
-interface SubagentNamesState {
-  readonly inheritedEventCount: SessionLogOffset
-  readonly entries: readonly SubagentNameData[]
-}
-```
+Names are unique in one live subagent tree; the root is `lead`. The root catalog retains immutable assignments; local descriptors carry each child’s own name. A runtime Set shares pending reservations across the tree. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -469,12 +453,11 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Read a model-facing name in the caller's tree, retaining legacy addresses for older unnamed children.
- * @param caller - exact live Agent selecting the tree.
- * @param id - target identity; omission selects the caller.
+ * Read an Agent's own descriptor-backed name, retaining legacy addresses for older children.
+ * @param agent - exact live Agent whose name is requested.
  * @returns lead, the immutable assigned name, or a legacy address.
  */
-nameOf(caller: Agent, id: SessionId = caller.id): string
+nameOf(agent: Agent): string
 
 /**
  * Resolve a tree-wide name without granting authority to act on its Agent.
@@ -487,6 +470,14 @@ nameOf(caller: Agent, id: SessionId = caller.id): string
 resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
 
 /**
+ * Resolve the root shared by an Agent and its teammates.
+ * @param caller - exact live Agent whose subagent ancestry selects the tree.
+ * @returns the live root; ordinary Session forks lead independent trees.
+ * @throws when the caller or its live ancestry is unavailable.
+ */
+rootOf(caller: Agent): Agent
+
+/**
  * Join progressing descendants without cancelling them. Idle descendants whose
  * inboxes require a later wake stay resident and do not delay host completion.
  * @param parent - the exact parent whose descendant work is observed.
@@ -495,18 +486,17 @@ resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionI
 async waitForChildren(parent: Agent): Promise<boolean>
 
 /**
- * Steer one model-authored message to the sender's direct parent, direct
- * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
- * an idle target starts a turn, and an absent direct child cold-resumes from
- * persistence. The service derives durable sender attribution from the exact
- * live sender. Caller cancellation stops only pre-acceptance work.
- * @param sender - exact live Agent authorizing and originating the message.
- * @param targetId - durable direct-parent, direct-child, or sibling session id.
+ * Steer one model-authored message to another member of the same subagent tree.
+ * A running target receives it at its next step; an idle target starts a turn.
+ * Cold targets and their continuable ancestors resume under their recorded
+ * parents. Sender identity is rechecked before inbox acceptance; cancellation
+ * stops only pre-acceptance work and never retracts an accepted message.
+ * @param sender - exact live root or resident continuable Agent originating the message.
+ * @param targetId - another root or continuable member's durable Session id.
  * @param content - model-authored content to deliver.
  * @param options - caller cancellation before inbox acceptance.
  * @returns the accepted message's inbox id.
- * @throws when continuation services are unavailable, adjacency is rejected,
- *   or the message was not admitted.
+ * @throws when the target is outside the tree, cannot resume, or rejects input.
  */
 async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>
 
@@ -554,9 +544,10 @@ async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void
 /**
  * Read the parent's durable direct-child catalog without loading or resuming an Agent.
  * The service owns and releases the live-preferred Session observation.
+ * Named rows require matching root catalog registrations, observed through ancestry.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
+ * @returns committed catalog children in parent event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
  */
@@ -570,7 +561,7 @@ listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<Subagent
  * produce unsupported diagnostics. Unreadable child catalogs produce corrupt
  * or unavailable diagnostics and stop only that branch. Root read failures,
  * missing services or projections, and cancellation reject the whole listing.
- * Each catalog is observed once and released before the next read. No Agent
+ * Named rows require additional ancestor reads to verify root registration. No Agent
  * is loaded or resumed; Sessions absent from reachable catalogs are omitted.
  * @param rootSessionId - session whose catalog starts descendant discovery.
  * @param signal - cancellation forwarded to and checked around each catalog read.

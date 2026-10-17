@@ -245,7 +245,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry names, descriptions, and status; descendant rows also carry parent names and depth. You can message your parent, continuable siblings, and direct children. You can interrupt deeper descendants but cannot message them directly. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status; descendant rows carry parent names and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -406,7 +406,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The name of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
+            "description": "The name of another member of your Team, as shown by list_agents."
           },
           "message": {
             "type": "string",

@@ -2,7 +2,7 @@
 
 import { isAbsolute } from 'node:path'
 import { SessionFormatError, SessionFormatUnsupportedMigrationError, isSessionFormatJsonObject, sessionFormatCount } from '@deepseek-ai/dsh-session-format'
-import type { SessionFormatArtifact, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
 import { assertV4DeveloperData } from './developer.ts'
 import { assertV4LifecycleRelationships } from './relationships.ts'
 import { assertV4MessageSources } from './message-sources.ts'
@@ -120,7 +120,15 @@ export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, k
       throw new SessionFormatError('current-generation delivery marker names the wrong Session')
     }
     if (event.type === 'subagent/catalog' && event.seq >= artifact.inheritedEventCount) {
-      const fact = catalogFact(event.data)
+      let fact: SessionFormatJsonObject
+      if (isSessionFormatJsonObject(event.data) && event.data['version'] === 3) {
+        fact = event.data
+        if (fact['kind'] !== 'name' || typeof fact['name'] !== 'string' || typeof fact['childId'] !== 'string') {
+          throw new SessionFormatError('subagent/catalog v3 requires a name registration')
+        }
+      } else {
+        fact = catalogFact(event.data)
+      }
       const id = fact['childId'] as string
       if (ids.has(id)) throw new SessionFormatError(`duplicate catalog child ${id}`)
       ids.add(id)

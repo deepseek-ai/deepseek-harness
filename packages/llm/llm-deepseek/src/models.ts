@@ -6,7 +6,7 @@ import type { DeepSeekCatalogModel } from './types.ts'
 export const DEFAULT_MODELS: DeepSeekCatalogModel[] = [
   {
     id: 'deepseek-flash',
-    name: 'DeepSeek-V4.1-Flash',
+    name: 'DeepSeek-V4.1-Flash-1017',
     contextWindow: DEFAULT_CONTEXT_WINDOW,
     inputModalities: ['text', 'image'],
     systemPromptUpdate: 'in-history',

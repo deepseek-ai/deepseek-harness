@@ -13,13 +13,13 @@ describe('session snapshot identity redaction', () => {
   it('preserves workflow child ordinals and explicit names while redacting generated run identities', () => {
     const source = [
       { type: 'session', id: parentId },
-      { type: 'subagent/named', data: { id: childId, name: `workflow-${runId}-1` } },
-      { type: 'subagent/named', data: { id: otherId, name: `workflow-${runId}-2` } },
-      { type: 'subagent/named', data: { name: 'researcher' } },
-      { type: 'subagent/named', data: { name: `researcher-${proseUuid}` } },
+      { type: 'subagent/catalog', data: { id: childId, name: `workflow-${runId}-1` } },
+      { type: 'subagent/descriptor', data: { name: `workflow-${runId}-2` } },
+      { type: 'subagent/catalog', data: { name: 'researcher' } },
+      { type: 'subagent/catalog', data: { name: `researcher-${proseUuid}` } },
       { type: 'example', data: { name: `workflow-${proseUuid}-1` } },
-      { type: 'subagent/named', data: {} },
-      { type: 'subagent/named' },
+      { type: 'subagent/catalog', data: {} },
+      { type: 'subagent/catalog' },
     ].map(record => JSON.stringify(record)).join('\n')
     const [output] = redactSessionSnapshotIds([source])
     expect(output).toContain('"name":"workflow-{{workflow:1}}-1"')

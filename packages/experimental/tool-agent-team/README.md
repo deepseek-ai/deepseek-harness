@@ -40,7 +40,7 @@ The plugin takes no configuration; mount it beside the Team domain as in the [ag
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
-A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
+A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
 
 Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned id addresses it.
 
@@ -122,13 +122,13 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent name to contact any other member whose branch supports continuation. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents includes the root and all reachable continuable descendants, with parent names and depth; discovery does not grant assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first to wake a required inactive member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
 ```
 
 #### Token effect
@@ -157,7 +157,7 @@ Identity arrives in a runtime-context snapshot after the request prefix, so a `s
 
 #### What the model sees
 
-Every Team member receives the same five schemas, listed in the [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team). Results are compact JSON task views, task pages, or wait values. When no other member is running, `wait_agent` returns `noProgress` with reason `no-active-peer` and the message `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.` Lead-only `reassign` is enforced at execution, not by a different schema.
+Every Team member receives the same five schemas, listed in the [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team). Results are compact JSON task views, task pages, or wait values. When no other member is running, `wait_agent` returns `noProgress` with reason `no-active-peer` and the message `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.` Lead-only `reassign` is enforced at execution, not by a different schema.
 
 #### Token effect
 

@@ -24,15 +24,15 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent name to contact any other member whose branch supports continuation. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant direct messaging authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, continuable descendants at any depth, or active historical members. list_agents includes the root and all reachable continuable descendants, with parent names and depth; discovery does not grant assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first to wake a required inactive member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
-const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.'
+const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.'
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -95,10 +95,28 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
   }
 }
 
-/** Project durable task ownership to the names used by collaboration tools. */
-function namedTask(ctx: Context, caller: Agent, task: TeamTaskView) {
-  const { ownerId, ...view } = task
-  return { ...view, ...ownerId === undefined ? {} : { ownerName: ctx.subagents.nameOf(caller, ownerId) } }
+type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
+
+/** Project task owners from live descriptors or the Team’s direct-child catalog. */
+async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<NamedTaskView[]> {
+  const { root } = ctx.agentTeams.membership(caller)
+  const names = new Map<SessionId, string>([[root.id, 'lead']])
+  const missing = new Set<SessionId>()
+  for (const { ownerId } of tasks) {
+    if (ownerId === undefined || names.has(ownerId)) continue
+    const agent = ctx.agents.get(ownerId)
+    if (agent === undefined) missing.add(ownerId)
+    else names.set(ownerId, ctx.subagents.nameOf(agent))
+  }
+  if (missing.size > 0) {
+    for (const entry of await ctx.subagents.listChildren(root.id, signal)) {
+      names.set(entry.id, entry.name ?? `legacy:${entry.id}`)
+    }
+  }
+  return tasks.map(({ ownerId, ...view }) => ({
+    ...view,
+    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
+  }))
 }
 
 /** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
@@ -128,7 +146,7 @@ function install(agent: Agent, ctx: Context): () => void {
         const { role, root } = ctx.agentTeams.membership(agent)
         return role === 'lead'
           ? 'You are the Team Lead. Your name is lead.'
-          : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(agent, root.id))}.`
+          : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(root))}.`
       },
     }))
 
@@ -181,12 +199,13 @@ function install(agent: Agent, ctx: Context): () => void {
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_create')
-        return namedTask(ctx, caller, await ctx.agentTeams.createTask(caller, {
+        const task = await ctx.agentTeams.createTask(caller, {
           subject: args.subject,
           description: args.description,
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        }))
+        })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -205,10 +224,10 @@ function install(agent: Agent, ctx: Context): () => void {
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      execute(args, exec) {
+      async execute(args, exec) {
         const status = args.status
         const caller = callingAgent(exec.agent, 'team_task_list')
-        const filtered = ctx.agentTeams.listTasks(caller).map(task => namedTask(ctx, caller, task)).filter(task =>
+        const filtered = (await namedTasks(ctx, caller, ctx.agentTeams.listTasks(caller), exec.signal)).filter(task =>
           (status === undefined || task.status === status)
           && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
           && (args.ready === undefined || task.ready === args.ready))
@@ -230,9 +249,10 @@ function install(agent: Agent, ctx: Context): () => void {
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
-      execute(args, exec) {
+      async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_get')
-        return Promise.resolve(namedTask(ctx, caller, ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))))
+        const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -259,10 +279,12 @@ function install(agent: Agent, ctx: Context): () => void {
         const caller = callingAgent(exec.agent, 'team_task_update')
         // Team authorizes historical members that predate subagent catalogs.
         const legacyId = args.owner?.startsWith('legacy:') ? SessionId(args.owner.slice('legacy:'.length)) : undefined
+        const { root } = ctx.agentTeams.membership(caller)
+        const historical = legacyId !== undefined && legacyId !== root.id
+          && !(await ctx.subagents.listChildren(root.id, exec.signal)).some(entry => entry.id === legacyId && entry.name !== undefined)
         const owner = args.owner === undefined ? undefined
-          : legacyId !== undefined && ctx.subagents.nameOf(caller, legacyId) === args.owner ? legacyId
-            : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
-        return namedTask(ctx, caller, await ctx.agentTeams.updateTask(caller, {
+          : historical ? legacyId : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+        const task = await ctx.agentTeams.updateTask(caller, {
           taskId: TeamTaskId(args.task_id),
           expectedRevision: args.expected_revision,
           action: args.action,
@@ -271,7 +293,8 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
           ...owner === undefined ? {} : { owner },
-        }))
+        })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
   } catch (error: unknown) {

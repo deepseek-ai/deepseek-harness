@@ -149,7 +149,7 @@ describe('external subagent activations', () => {
     await expect(waiting).resolves.toBe(true)
     await activation.dispose()
     expect(backend.dispose).toHaveBeenCalledTimes(1)
-    expect(fixture.records()).toEqual([])
+    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name, mode: 'external' }])
     expect(fixture.parent.inbox.nextTurn).toEqual([])
   })
 
@@ -286,7 +286,7 @@ describe('external subagent activations', () => {
     backend.result.resolve(failed)
     await expect(activation.result).resolves.toEqual(failed)
     await activation.dispose()
-    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{ id: activation.childId, mode: 'external' }] : [])
+    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name, mode: 'external' }])
     if (delivery === 'caller') {
       expect(fixture.parent.inbox.nextTurn).toEqual([])
     } else {
@@ -318,9 +318,9 @@ describe('external subagent activations', () => {
     expect((error as Error).message).not.toContain('/private/path')
     await expect(activation.result).resolves.toEqual(completed)
     expect(activation.dispose()).toBe(disposal)
-    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{
-      id: activation.childId, mode: 'external',
-    }] : [])
+    expect(fixture.records()).toMatchObject([{
+      id: activation.childId, name: activation.name, mode: 'external',
+    }])
     expect(ended).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ stopReason: 'error' }))
     if (delivery === 'parent') {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
