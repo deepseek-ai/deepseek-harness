@@ -56,9 +56,11 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
     view: undefined, linked: false, stopped: false, busy: false, notice: undefined,
   })
 
-  /** The operation this browser started; only its links open a window here. */
-  private started: CliOperationId | undefined
-  private readonly opened = new Set<string>()
+  /**
+   * The operation the page's latest start returned, with the links already opened for it; only its links open a window
+   * here. It lasts until the stream delivers its result; each start attempt drops it first.
+   */
+  private started: { readonly id: CliOperationId; readonly opened: Set<string> } | undefined
   private seq = 0
   private disposed = false
   private stream!: RemoteStream<View>
@@ -81,15 +83,17 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
   }
 
   /**
-   * Start an operation through the plugin's Remote; a click while another action is pending is ignored,
-   * and a rejected start reports the `action-failed` notice.
+   * Start an operation through the plugin's Remote; a click while another action is pending is ignored.
+   * The page then follows the returned operation in place of any earlier one; a rejected start leaves it following
+   * none and reports the `action-failed` notice.
    * @param call - the plugin's Remote start method.
    */
   start(call: () => Promise<RemoteResult<CliOperationId>>): void {
     void this.run(async () => {
+      this.started = undefined
       const id = await settle(call())
       if (this.disposed) return
-      this.started = id
+      this.started = { id, opened: new Set() }
       const current = this.state.getSnapshot().view
       if (current !== undefined) this.follow(current)
     })
@@ -161,16 +165,17 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
     if (!this.disposed) this.subscribe()
   }
 
-  /** Open each new link of this browser's operation once, and report how the operation ended. */
+  /** Open each new link of the followed operation once, and report how it ended when the view carries its result. */
   private follow(view: View): void {
-    const operation = view.operation
-    if (operation !== undefined && operation.id === this.started && operation.authorizationUrl !== undefined
-      && !this.opened.has(operation.authorizationUrl)) {
-      this.opened.add(operation.authorizationUrl)
-      openAuthorizationPage(operation.authorizationUrl)
+    const started = this.started
+    if (started === undefined) return
+    const url = view.operation?.id === started.id ? view.operation.authorizationUrl : undefined
+    if (url !== undefined && !started.opened.has(url)) {
+      started.opened.add(url)
+      openAuthorizationPage(url)
     }
     const result = view.result
-    if (result === undefined || result.id !== this.started) return
+    if (result?.id !== started.id) return
     this.started = undefined
     const notice = result.outcome === 'succeeded' ? this.options.notices[result.kind as KindOf<View>] : undefined
     if (notice !== undefined) this.notify(notice)

@@ -140,6 +140,45 @@ it('opens a link reported before the start answered, never a foreign operation, 
   expect(b.open).toHaveBeenCalledOnce()
 })
 
+it('opens a link again when a later operation this browser started offers the same link', async () => {
+  const b = fixture()
+  const device = 'https://example.com/device'
+  b.connection.start(b.start)
+  await settle(b)
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: device, cancellable: true }) })
+  await b.publish({ ...OUT, result: { id: OP, kind: 'connect', outcome: 'cancelled' } })
+  b.connection.start(async () => ({ ok: true, value: SECOND }))
+  await settle(b)
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: device, id: SECOND }) })
+  expect(b.open.mock.calls).toEqual([[device, '_blank', 'noopener,noreferrer'], [device, '_blank', 'noopener,noreferrer']])
+})
+
+it('keeps following its operation when another operation\'s result arrives after the start', async () => {
+  const b = fixture()
+  b.connection.start(b.start)
+  await settle(b)
+  await b.publish({ ...OUT, result: { id: 'other' as CliOperationId, kind: 'connect', outcome: 'succeeded' } })
+  expect(b.snapshot().notice).toBeUndefined()
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/device' }) })
+  await b.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
+  expect(b.open).toHaveBeenCalledOnce()
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected' })
+})
+
+it('follows no operation after a rejected start', async () => {
+  const b = fixture()
+  b.connection.start(b.start)
+  await settle(b)
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/a' }) })
+  b.connection.start(async () => ({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }) as never)
+  await settle(b)
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'action-failed' })
+  await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/b' }) })
+  await b.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
+  expect(b.open.mock.calls).toEqual([['https://example.com/a', '_blank', 'noopener,noreferrer']])
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'action-failed' })
+})
+
 it('cancels only an operation the Host marks cancellable', async () => {
   const b = fixture()
   b.connection.actions.cancel()

@@ -37,7 +37,7 @@ kind: "package-library"
 
 ### 连接镜像
 
-`new CliAccountConnection(ctx, { name, follow, cancel, notices })` 通过 `ctx.remote.$stream` 打开插件的 `follow` 流，并发布快照，包含 Host 视图、流是否在推送或已停止、是否有页面操作未完成，以及最新提示。`start(call)` 一次只运行一个 Remote 启动调用，有调用未完成时忽略点击；启动或取消被拒绝时只报告一次 `action-failed` 提示。本浏览器发起的操作的每个新链接只在新窗口中打开一次，且只打开 HTTPS 链接。本浏览器发起的操作成功时，报告 `notices` 为其类型映射的提示。流永久失败时快照标记为已停止，`retry()` 会重新打开一次，无论调用多少次。`dispose()` 关闭流；此后连接不再打开链接、不再报告提示，也不会为未完成的重试打开流，而 Host 持有的操作继续运行。`actions` 为插件的 face 绑定了 `cancel`、`openAuthorization`、`retry` 和 `dismissNotice`。
+`new CliAccountConnection(ctx, { name, follow, cancel, notices })` 通过 `ctx.remote.$stream` 打开插件的 `follow` 流，并发布快照，包含 Host 视图、流是否在推送或已停止、是否有页面操作未完成，以及最新提示。`start(call)` 一次只运行一个 Remote 启动调用，有调用未完成时忽略点击；启动或取消被拒绝时只报告一次 `action-failed` 提示。页面跟随其最近一次启动调用返回的操作，从调用返回起，直到流送达该操作的结果；每次发起启动都会先放下之前跟随的操作，因此启动被拒绝时不跟随任何操作。被跟随的操作提供的每个链接只在新窗口中打开一次，且只打开 HTTPS 链接；后续操作提供同一链接时会再次打开。被跟随的操作成功时，报告 `notices` 为其类型映射的提示；如果该结果在流送达之前就被后续操作取代，则不报告任何提示。流永久失败时快照标记为已停止，`retry()` 会重新打开一次，无论调用多少次。`dispose()` 关闭流；此后连接不再打开链接、不再报告提示，也不会为未完成的重试打开流，而 Host 持有的操作继续运行。`actions` 为插件的 face 绑定了 `cancel`、`openAuthorization`、`retry` 和 `dismissNotice`。
 
 ### 共用字典键
 
