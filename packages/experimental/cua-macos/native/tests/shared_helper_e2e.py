@@ -232,13 +232,13 @@ def main():
                     focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
                     text_field = next(element for element in focused["elements"] if element["role"] == "AXTextField")
                     b.call("click", {"appHandle": app_b, "snapshotId": focused["snapshotId"], "elementIndex": text_field["index"]})
-                    before_text = json.loads(state.read_text())["text"]
+                    before_keys = json.loads(state.read_text())["keyEventCount"]
                     with external_input(sender, fixture.pid):
                         deadline = time.monotonic() + 5
                         while True:
                             observed_input = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                             events = observed_input["recentActivity"]["events"]
-                            if (json.loads(state.read_text())["text"] != before_text and
+                            if (json.loads(state.read_text())["keyEventCount"] > before_keys and
                                     any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)):
                                 break
                             assert time.monotonic() < deadline, ("External input was not observed", events, state.read_text())

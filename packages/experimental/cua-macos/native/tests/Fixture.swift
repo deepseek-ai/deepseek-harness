@@ -74,6 +74,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     var count = 0
     var secondaryCount = 0
     var selectedFile = ""
+    var keyEventCount = 0
+    var keyMonitor: Any?
 
     init(statePath: String, rowCount: Int = 35, alternateHover: Bool = false) {
         self.statePath = statePath; self.rowCount = rowCount; self.alternateHover = alternateHover
@@ -156,9 +158,17 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             if position != self.lastCursor { self.cursorChanges += 1; self.lastCursor = position }
             self.persist()
         }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.keyEventCount += 1
+            self?.persist()
+            return event
+        }
         persist()
         print("READY")
         fflush(stdout)
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
     }
     @objc func increment() { count += 1; countLabel.stringValue = "Count: \(count)"; persist() }
     @objc func cycleOverlay() {
@@ -209,7 +219,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             ? CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(overlayID)) as? [[String: Any]] : nil
         let overlayOnScreen = overlayRows?.contains { ($0[kCGWindowIsOnscreen as String] as? Bool) == true } ?? false
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
-            "rowCount": rowCount, "primaryWindowId": window.windowNumber,
+            "rowCount": rowCount, "primaryWindowId": window.windowNumber, "keyEventCount": keyEventCount,
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
