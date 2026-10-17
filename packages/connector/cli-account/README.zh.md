@@ -60,7 +60,7 @@ const account = new Account({
 
 ### 命令、链接与失败
 
-不等待用户的命令使用插件的 `commandTimeoutMs`，其中包括查找可执行文件的时间；以 `awaitsUser` 运行的命令最多等待 10 分钟。执行器最多保留 1 MiB 的 stdout 和最后 4 KiB 的 stderr，并在进程退出后才结束。`offer(url)` 只接受 HTTPS、不含用户信息、主机属于插件 `authorizationHosts` 或其子域名的 URL，并返回是否接受了该链接。失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。
+不等待用户的命令使用插件的 `commandTimeoutMs`，其中包括查找可执行文件的时间；以 `awaitsUser` 运行的命令最多等待 10 分钟。执行器最多保留 1 MiB 的 stdout 和最后 4 KiB 的 stderr，两者都按 UTF-8 字节计算，末尾部分在字符边界处截断，并在进程退出后才结束。`onLine` 在命令写出时逐行接收输出：与 Node 的 `readline` 一样，`\n`、`\r\n` 和单独的 `\r` 都会结束一行，因此 CLI 在链接行之后用 `\r` 重绘的进度提示不会拖住该链接。未结束的剩余部分在退出时送达，超过所在流上限的行会被整行跳过，而不是被截断。`offer(url)` 只接受 HTTPS、不含用户信息、主机属于插件 `authorizationHosts` 或其子域名的 URL，并返回是否接受了该链接。失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。
 
 ### 共用配置
 

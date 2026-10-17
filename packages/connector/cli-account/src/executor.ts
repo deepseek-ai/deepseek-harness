@@ -23,9 +23,9 @@ export interface CliCommandExecutorOptions {
 /** One command that ran to exit; a nonzero exit is the caller's to interpret. */
 export interface CliCommandResult {
   readonly exitCode: number | null
-  /** At most 1 MiB of stdout. */
+  /** At most 1 MiB of stdout, in UTF-8 bytes. */
   readonly stdout: string
-  /** The last 4 KiB of stderr. */
+  /** The last 4 KiB of stderr, in UTF-8 bytes, cut at a character boundary. */
   readonly stderr: string
 }
 
@@ -33,13 +33,88 @@ export interface CliCommandResult {
 export interface CliRunOptions {
   /** Whether the command waits for the user in a browser; it then gets a fixed 10-minute deadline instead of the command deadline. */
   readonly awaitsUser?: boolean
-  /** Receives each complete output line, without its line terminator, as the command writes it. */
+  /**
+   * Receives each output line, without its terminator, as the command writes it, and the unterminated rest at exit.
+   * `\n`, `\r\n`, and a lone `\r` each end a line, so a line the CLI redraws with `\r` arrives when written. A line
+   * longer than its stream's limit, 1 MiB for stdout and 4 KiB for stderr in UTF-8 bytes, is skipped.
+   */
   readonly onLine?: (stream: 'stdout' | 'stderr', line: string) => void
 }
 
 interface StreamText { text: string; overflowed: boolean }
 
-/** Drain one pipe, report complete lines, and keep the head up to `maxBytes` or, for a tail, the last `maxBytes`. */
+/** Incremental line splitting over decoded text whose buffer never holds more than `maxBytes` UTF-8 bytes. */
+interface LineSplitter {
+  push(text: string): void
+  end(): void
+}
+
+/**
+ * Split text into lines at `\n`, `\r\n`, or a lone `\r`, as Node's `readline` does, and skip a line longer than
+ * `maxBytes` UTF-8 bytes whole, so a truncated link or JSON line never reaches the observer.
+ */
+function splitLines(maxBytes: number, emit: (line: string) => void): LineSplitter {
+  let line = ''
+  let bytes = 0
+  let skipping = false
+  let afterCarriageReturn = false
+  const append = (piece: string): void => {
+    if (skipping) return
+    bytes += Buffer.byteLength(piece)
+    if (bytes > maxBytes) {
+      skipping = true
+      line = ''
+    } else {
+      line += piece
+    }
+  }
+  const finish = (): void => {
+    if (!skipping) emit(line)
+    line = ''
+    bytes = 0
+    skipping = false
+  }
+  return {
+    push(text) {
+      let start = 0
+      for (const match of text.matchAll(/\r\n|\r|\n/gu)) {
+        // The `\n` of a `\r\n` pair split across two reads ends no second line.
+        if (afterCarriageReturn && match.index === 0 && match[0] === '\n') {
+          start = 1
+          continue
+        }
+        append(text.slice(start, match.index))
+        finish()
+        start = match.index + match[0].length
+      }
+      afterCarriageReturn = text.endsWith('\r')
+      append(text.slice(start))
+    },
+    end() {
+      if (line !== '') emit(line)
+    },
+  }
+}
+
+/**
+ * The longest suffix of `text` that fits in `maxBytes` UTF-8 bytes, cut at a character boundary.
+ * @param text - decoded text, which holds no partial character.
+ * @param maxBytes - the byte limit, at least 4 so a whole character always fits.
+ * @returns `text` itself when it fits.
+ */
+function utf8Tail(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, 'utf8')
+  if (bytes.length <= maxBytes) return text
+  let start = bytes.length - maxBytes
+  // UTF-8 continuation bytes are 0b10xxxxxx; the first other byte starts a character.
+  while ((bytes.readUInt8(start) & 0xc0) === 0x80) start++
+  return bytes.toString('utf8', start)
+}
+
+/**
+ * Drain one pipe, report its lines when observed, and keep the head up to `maxBytes` or, for a tail, the last
+ * `maxBytes`, counted in UTF-8 bytes.
+ */
 async function readStream(
   stream: Readable | undefined, name: 'stdout' | 'stderr', maxBytes: number, keep: 'head' | 'tail',
   onLine: CliRunOptions['onLine'],
@@ -47,21 +122,20 @@ async function readStream(
   const result: StreamText = { text: '', overflowed: false }
   /* v8 ignore next -- pipe-mode stdio always yields both streams. */
   if (stream === undefined) return result
-  let pending = ''
+  const lines = onLine === undefined ? undefined : splitLines(maxBytes, (line) => { onLine(name, line) })
+  let headBytes = 0
   stream.setEncoding('utf8')
   for await (const chunk of stream as AsyncIterable<string>) {
-    pending += chunk
-    const lines = pending.split('\n')
-    pending = lines.pop() as string
-    for (const line of lines) onLine?.(name, line.replace(/\r$/u, ''))
+    lines?.push(chunk)
     if (keep === 'tail') {
-      result.text = (result.text + chunk).slice(-maxBytes)
+      result.text = utf8Tail(result.text + chunk, maxBytes)
     } else if (!result.overflowed) {
-      if (Buffer.byteLength(result.text) + Buffer.byteLength(chunk) > maxBytes) result.overflowed = true
+      headBytes += Buffer.byteLength(chunk)
+      if (headBytes > maxBytes) result.overflowed = true
       else result.text += chunk
     }
   }
-  if (pending !== '') onLine?.(name, pending)
+  lines?.end()
   return result
 }
 

@@ -5,9 +5,19 @@ import { Context } from '@deepseek-ai/cordis'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
-import { PROGRAM, createBinDir, ScriptedSubprocess } from './harness.ts'
+import { PROGRAM, createBinDir, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 const MAX_OUTPUT_BYTES = 1_048_576
+const STDERR_TAIL_BYTES = 4096
+
+/** Write each chunk but the last as its own read, then finish the command with the last one on stderr. */
+async function writeStderr(process: ScriptedProcess, chunks: readonly string[]): Promise<void> {
+  for (const chunk of chunks.slice(0, -1)) {
+    process.write('stderr', chunk)
+    await vi.waitFor(() => { expect(process.stderr.readableLength).toBe(0) })
+  }
+  process.reply({ stderr: chunks.at(-1) as string })
+}
 
 describe('CliCommandExecutor', () => {
   let ctx: Context
@@ -79,17 +89,66 @@ describe('CliCommandExecutor', () => {
     }
 
     const result = await executor().run(['auth', 'login'], AbortSignal.timeout(5_000), {
-      onLine: (stream, line) => { lines.push(`${stream}:${line.slice(0, 40)}`) },
+      onLine: (stream, line) => { lines.push(`${stream}:${line}`) },
     })
 
     expect(result.exitCode).toBe(3)
     expect(result.stdout).toBe('one\ntwo')
-    expect(result.stderr).toHaveLength(4096)
-    // Each stream keeps its own order; the two pipes interleave in any order.
+    expect(result.stderr).toBe('e'.repeat(STDERR_TAIL_BYTES))
+    // Each stream keeps its own order; the two pipes interleave in any order. The final 5000-byte stderr line
+    // exceeds the stderr limit and is skipped.
     expect(lines.filter(line => line.startsWith('stdout:'))).toEqual(['stdout:one', 'stdout:two'])
     expect(lines.filter(line => line.startsWith('stderr:'))).toEqual([
-      'stderr:Open this link:', 'stderr:  https://example.com/authorize?code=1', 'stderr:partial', `stderr:${'e'.repeat(40)}`,
+      'stderr:Open this link:', 'stderr:  https://example.com/authorize?code=1', 'stderr:partial',
     ])
+  })
+
+  it('ends a line at a lone carriage return, so a line the CLI redraws arrives while the command runs', async () => {
+    const lines: string[] = []
+    let login!: ScriptedProcess
+    subprocess.respond = (process) => { login = process }
+    const running = executor().run(['auth', 'login'], AbortSignal.timeout(5_000), {
+      onLine: (stream, line) => { lines.push(`${stream}:${line}`) },
+    })
+    await vi.waitFor(() => { expect(login).toBeDefined() })
+
+    login.write('stdout', 'https://example.com/device\r')
+    await vi.waitFor(() => { expect(lines).toEqual(['stdout:https://example.com/device']) })
+    // The `\n` completing the `\r\n` split across two reads ends no second line.
+    login.write('stdout', '\nwaiting 1\rwaiting 2\r\nauthorized')
+    login.reply({})
+    await running
+
+    expect(lines).toEqual(['stdout:https://example.com/device', 'stdout:waiting 1', 'stdout:waiting 2', 'stdout:authorized'])
+  })
+
+  it('skips each line longer than its stream limit and reports the lines around it', async () => {
+    const lines: string[] = []
+    subprocess.respond = process => writeStderr(process, [
+      `${'e'.repeat(STDERR_TAIL_BYTES)}\n${'e'.repeat(STDERR_TAIL_BYTES + 1)}`,
+      `e\n${'e'.repeat(3000)}`,
+      `${'e'.repeat(3000)}\nhttps://example.com/device\n${'汉'.repeat(1365)}\n${'汉'.repeat(1366)}`,
+    ])
+
+    await executor().run(['auth', 'login'], AbortSignal.timeout(5_000), {
+      onLine: (stream, line) => { lines.push(`${stream}:${String(Buffer.byteLength(line))}:${line.slice(0, 3)}`) },
+    })
+
+    expect(lines).toEqual(['stderr:4096:eee', 'stderr:26:htt', 'stderr:4095:汉汉汉'])
+  })
+
+  it.each([
+    ['three-byte characters in one read', ['汉'.repeat(5000)], '汉'.repeat(1365)],
+    ['three-byte characters across reads', ['汉'.repeat(2000), '汉'.repeat(3000)], '汉'.repeat(1365)],
+    ['surrogate pairs', [`${'😀'.repeat(3000)}x`], `${'😀'.repeat(1023)}x`],
+    ['an exact fit', [`a${'é'.repeat(2048)}`], 'é'.repeat(2048)],
+  ])('keeps the last 4 KiB of stderr by UTF-8 bytes, cut at a character boundary: %s', async (_name, chunks, tail) => {
+    subprocess.respond = process => writeStderr(process, chunks)
+
+    const result = await executor().run(['auth', 'status'], AbortSignal.timeout(5_000))
+
+    expect(result.stderr).toBe(tail)
+    expect(Buffer.byteLength(result.stderr)).toBeLessThanOrEqual(STDERR_TAIL_BYTES)
   })
 
   it.each(['lookup', 'process'] as const)('applies the command deadline during %s', async (phase) => {
