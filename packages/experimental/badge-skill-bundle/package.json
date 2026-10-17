@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-badge-skill-bundle",
   "description": "Let agents add a “powered by dsh” badge to documents, pull requests, and other outputs.",
-  "version": "0.2.1-rc.1",
+  "version": "0.2.1-rc.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

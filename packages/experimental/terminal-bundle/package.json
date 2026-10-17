@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-terminal-bundle",
   "description": "Keep shell processes alive across tool calls.",
-  "version": "0.2.1-rc.1",
+  "version": "0.2.1-rc.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

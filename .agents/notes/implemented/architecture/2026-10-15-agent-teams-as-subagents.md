@@ -20,7 +20,7 @@ Every root Agent leads the Team identified by its Session id; every live subagen
 
 Task ownership uses `ownerId`, and reassignment accepts a Session id. Team persists only task changes. Messages use the target Agent inbox; historical `team/message/*` records remain readable but are never delivered or acknowledged.
 
-This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
+This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
 
 ## Alternatives considered
 

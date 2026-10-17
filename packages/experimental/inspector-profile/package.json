@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-inspector-profile",
   "description": "Optional Web bundle for raw Session logs and Chat node inspection",
-  "version": "0.2.1-rc.1",
+  "version": "0.2.1-rc.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

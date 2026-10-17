@@ -68,6 +68,7 @@ kind: "package-group"
 | [`ui-jobs/`](ui-jobs/README.zh.md) | 列出本会话的后台任务，并提供按需展开的流式输出面板 | — |
 | [`ui-schedule/`](ui-schedule/README.zh.md) | 在只读标题栏目录中列出当前会话中生效的提醒 | — |
 | [`ui-model-selection/`](ui-model-selection/README.zh.md) | 在对话界面中提供模型选择 | — |
+| [`ui-deepseek-model-label-1017/`](ui-deepseek-model-label-1017/README.zh.md) | 为官方 DeepSeek Flash 模型名称添加临时的 1017 角标 | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.zh.md) | 配置默认权限并切换当前会话的访问模式 | — |
 | [`ui-plan/`](ui-plan/README.zh.md) | 展示生效中的 plan mode 状态及其退出控件 | — |
 | [`ui-settings-plugins/`](ui-settings-plugins/README.zh.md) | 负责「内置插件」设置分区壳及其标签页扩展点 | — |

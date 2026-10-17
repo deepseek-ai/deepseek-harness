@@ -28,7 +28,7 @@ describe('without a listing', () => {
   it('offers the bundled catalog', () => {
     const catalog = resolve(undefined)
     expect(catalog.offered.map(model => [model.id, model.name, model.contextWindow])).toEqual([
-      ['deepseek-flash', 'DeepSeek-V4.1-Flash-1017', 1_000_000], ['deepseek-v4-pro', 'DeepSeek-V4-Pro', 1_000_000],
+      ['deepseek-flash', 'DeepSeek-V4.1-Flash', 1_000_000], ['deepseek-v4-pro', 'DeepSeek-V4-Pro', 1_000_000],
     ])
     expect(catalog.resolution).toEqual(catalog.offered)
     expect(catalog.refusals.size).toBe(0)

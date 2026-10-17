@@ -1,0 +1,24 @@
+- button "返回插件": 插件
+- heading "网页搜索" [level=3]
+- paragraph: 设置 DeepSeek 的搜索提供方。
+- text: 启用新版 Web 搜索 API
+- switch "启用新版 Web 搜索 API" [checked]
+- paragraph:
+  - text: 默认关闭，搜索通过 DeepSeek Messages 完成。新版 Web 搜索 API 功能与计费详见
+  - link "网页搜索与抓取指南":
+    - /url: https://api-docs.deepseek.com/zh-cn/guides/search
+- text: API Key 未配置密钥；仅使用 DeepSeek 账号模型的对话可以通过默认接口地址搜索。
+- textbox "API Key"
+- paragraph: 不写入设置文件。留空表示保持当前密钥。
+- text: Search / Fetch API 基础地址 已覆盖
+- button "恢复默认"
+- textbox "Search / Fetch API 基础地址":
+  - /placeholder: ""
+  - text: https://search-api.test/api/v1/tools
+- paragraph: 填写含 API 前缀的地址，例如 https://api.deepseek.com/v1/tools；程序追加 /search 或 /fetch，留空恢复默认。
+- text: 每次搜索结果数
+- textbox "每次搜索结果数":
+  - /placeholder: ""
+  - text: "10"
+- paragraph: 每个查询返回的结果条数，须为 1–50 的整数，默认 10；不控制搜索调用次数。web_search 保留的来源数不超过其自身的结果上限。
+- button "保存" [disabled]

@@ -461,7 +461,9 @@
     # resolves and validates every destination, and pins every actual connection.
     # Search is a full auxiliary model request with server-side retrieval, so this
     # shipped DeepSeek route gets 60s while the provider-neutral tool default
-    # remains 30s.
+    # remains 30s. The DeepSeek Search and Fetch APIs register as
+    # deepseek-search-api and deepseek-fetch-api with the same credential; the Web
+    # search settings switch selects both in place of these defaults.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
@@ -470,6 +472,11 @@
 
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+
+    - id: web-deepseek-api
+      name: '@deepseek-ai/dsh-web-deepseek-api'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
 
