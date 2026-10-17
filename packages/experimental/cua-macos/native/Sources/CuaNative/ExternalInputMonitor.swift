@@ -52,8 +52,8 @@ import Foundation
         }
         guard event.getIntegerValueField(.eventSourceUnixProcessID) != Int64(getpid()) else { return }
         let rawPID = event.getIntegerValueField(.eventTargetUnixProcessID)
-        guard let pid = Int32(exactly: rawPID), pid > 0, let process = activity.trackedProcess(pid),
-              (try? NativePlatform.identity(pid)) == process else { return }
+        guard let pid = Int32(exactly: rawPID), pid > 0, let process = try? NativePlatform.identity(pid),
+              activity.isTracked(process) else { return }
         let operation: String
         let windowID: UInt32?
         switch type {

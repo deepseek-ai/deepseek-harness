@@ -51,6 +51,64 @@ function screenshot(overrides: Record<string, JsonValue> = {}): JsonValue {
   return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels', ...overrides }
 }
 
+describe('recent activity advisories', () => {
+  const recentActivity = {
+    lookbackMs: 60_000, externalInputMonitoring: 'listening',
+    events: [
+      { source: 'other-agent', windowId: 23, ageMs: 12000, operation: 'click' },
+      { source: 'external-input', windowId: null, ageMs: 4000, operation: 'keyboard' },
+    ],
+  }
+
+  it('emits advisory history even with observations suppressed and still dispatches input once', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.sink.text.mockClear()
+    f.dispatch.mockResolvedValueOnce(state({ recentActivity }))
+    expect(await app.getAXState({ emit: false })).toBe('Changed tree')
+    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify(recentActivity)}`]])
+    f.dispatch.mockClear()
+    f.dispatch.mockResolvedValueOnce({ ...delivered, recentActivity })
+    expect(await app.typeText('hello')).toEqual({ ...delivered, recentActivity })
+    expect(f.dispatch.mock.calls).toEqual([[{ method: 'typeText', params: { appHandle: 'app-17', text: 'hello' } }]])
+  })
+
+  it.each(['unavailable', 'secure-input'])('reports %s monitoring without inventing activity', async (externalInputMonitoring) => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.sink.text.mockClear()
+    const report = { ...recentActivity, externalInputMonitoring, events: [] }
+    f.dispatch.mockResolvedValueOnce(screenshot({ recentActivity: report }))
+    await app.getScreenshot({ emit: false })
+    expect(f.sink.text.mock.calls).toEqual([[`Recent activity (advisory only): ${JSON.stringify(report)}`]])
+    expect(f.sink.image).not.toHaveBeenCalled()
+  })
+
+  it('keeps an empty listening report quiet and works without an output sink', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.sink.text.mockClear()
+    f.dispatch.mockResolvedValueOnce(state({ recentActivity: { ...recentActivity, events: [] } }))
+    await app.getAXState({ emit: false })
+    expect(f.sink.text).not.toHaveBeenCalled()
+    const silent = fixture(false)
+    const other = await silent.api.getApp('Editor')
+    silent.dispatch.mockResolvedValueOnce({ ...delivered, recentActivity })
+    expect(await other.typeText('hello')).toEqual({ ...delivered, recentActivity })
+  })
+
+  it('rejects malformed activity metadata at the native response boundary', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce(state({ recentActivity: { ...recentActivity, lookbackMs: -1 } }))
+    await expect(app.getAXState()).rejects.toThrow()
+    f.dispatch.mockResolvedValueOnce(null)
+    await expect(app.getAXState()).rejects.toThrow()
+    f.dispatch.mockResolvedValueOnce('invalid')
+    await expect(app.getAXState()).rejects.toThrow()
+  })
+})
+
 describe('application discovery', () => {
   it('reports permissions and discovers both bundle and PID selectors without activating an app', async () => {
     const f = fixture()

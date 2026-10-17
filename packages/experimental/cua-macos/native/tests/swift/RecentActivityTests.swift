@@ -53,7 +53,7 @@ import Testing
     history.disconnect(b)
     #expect(history.report(target, owner: a, monitoring: "listening")["events"] == report["events"])
     history.disconnect(a)
-    #expect(history.trackedProcess(42) == nil)
+    #expect(!history.isTracked(app))
     history.connect(a, lookback: 60)
     history.watch(target, owner: a)
     #expect(history.report(target, owner: a, monitoring: "listening")["events"] == .array([]))

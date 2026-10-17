@@ -21,7 +21,7 @@ export type CuaScreenshot = Pick<z.output<typeof ScreenshotResult>, 'mimeType' |
 export interface CuaObservationSink {
   /**
    * Emit text.
-   * @param value - observed application state.
+   * @param value - observed application state or advisory activity metadata.
    */
   text(value: string): void | Promise<void>
   /**
@@ -30,7 +30,7 @@ export interface CuaObservationSink {
    */
   image(screenshot: CuaScreenshot): void | Promise<void>
 }
-/** Observations emit by default. Returned values are unaffected by this option. */
+/** Observations emit by default; activity advisories always emit when a sink exists. Returned values are unaffected. */
 export interface CuaObservationOptions { emit?: boolean }
 /** Full observations of the requested content; each read replaces this surface's indices. */
 export interface CuaAxOptions extends CuaObservationOptions {

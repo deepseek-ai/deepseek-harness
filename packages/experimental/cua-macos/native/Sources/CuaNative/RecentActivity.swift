@@ -28,12 +28,12 @@ struct ActivityTarget: Hashable, Sendable {
     func connect(_ owner: UUID, lookback: Double) { clients[owner] = Client(lookback: lookback) }
     func disconnect(_ owner: UUID) { clients.removeValue(forKey: owner); prune() }
     func watch(_ target: ActivityTarget, owner: UUID) { clients[owner]?.processes.insert(target.process) }
-    func trackedProcess(_ pid: Int32) -> ProcessIdentity? {
-        clients.values.lazy.flatMap(\.processes).first { $0.pid == pid }
+    func isTracked(_ process: ProcessIdentity) -> Bool {
+        clients.values.contains { $0.processes.contains(process) }
     }
     func record(_ target: ActivityTarget, owner: UUID?, operation: String) {
         prune()
-        guard clients.values.contains(where: { $0.processes.contains(target.process) }) else { return }
+        guard isTracked(target.process) else { return }
         records.removeAll { $0.target == target && $0.owner == owner }
         records.append(Record(target: target, owner: owner, operation: operation, time: now()))
     }

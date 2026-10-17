@@ -187,6 +187,13 @@ def main():
                     time.sleep(0.025)
                 after = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 assert f"Count: {before + 1}" in after["tree"], "A retained handle did not observe B's input"
+                events = after["recentActivity"]["events"]
+                assert after["recentActivity"]["lookbackMs"] == 60000, after
+                assert any(event["source"] == "other-agent" and event["operation"] == "click"
+                           and event["windowId"] == window for event in events), events
+                own = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                assert not any(event["source"] == "other-agent" for event in own["recentActivity"]["events"]), own
+
 
                 def capture(pair):
                     client, handle = pair
