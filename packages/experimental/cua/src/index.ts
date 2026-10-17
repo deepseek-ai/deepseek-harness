@@ -40,6 +40,8 @@ export interface CuaConfig {
   buildTimeoutMs: number
   /** Deadline for one native operation, including capture and AX traversal. */
   timeoutMs: number
+  /** Lookback in milliseconds for macOS activity advisories; does not reserve applications. */
+  recentActivityWindowMs: number
   /** Maximum time to connect to or start the shared native helper. */
   connectTimeoutMs: number
   /** Screenshot deadline including time queued behind other native operations. */
@@ -79,6 +81,7 @@ export const CuaConfig = Schema.object({
   helperPath: Schema.string(),
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
+  recentActivityWindowMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(60_000),
   connectTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
   screenshotTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),
   axTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
@@ -153,7 +156,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
     maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
-    textEventIntervalMs: config.textEventIntervalMs,
+    textEventIntervalMs: config.textEventIntervalMs, recentActivityWindowMs: config.recentActivityWindowMs,
   }
   const entryId = ctx.fiber.entry?.options.id
   ctx.inject(['settings'], scope => scope.effect(() => scope.settings.configure({ auto: false }, ctx.fiber)))

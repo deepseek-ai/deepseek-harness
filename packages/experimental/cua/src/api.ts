@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, RecentActivityResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -47,14 +47,21 @@ function keyChord(chord: string): { key: string; modifiers: string[] } {
 /**
  * Create app/window objects using the caller's authorized dispatcher.
  * @param dispatch - Current tool authority; rejects propagate without retries.
- * @param sink - Optional text/image output; emit false suppresses this sink only.
+ * @param sink - Optional text/image output; emit false suppresses observations, but activity advisories still emit.
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
 export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
-  const call = (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
+  const call = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => {
     const request = Request.safeParse({ method, params })
     if (!request.success) throw new Error(`${method} ${requestIssueMessage(request.error.issues)}`)
-    return dispatch(request.data)
+    const value = await dispatch(request.data)
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && value.recentActivity !== undefined) {
+      const activity = RecentActivityResult.parse(value.recentActivity)
+      if (activity.events.length > 0 || activity.externalInputMonitoring !== 'listening') {
+        await sink?.text(`Recent activity (advisory only): ${JSON.stringify(activity)}`)
+      }
+    }
+    return value
   }
   const action = async (method: CuaOperation['method'], params: Record<string, JsonValue>) => ActionResult.parse(await call(method, params))
   async function emit(value: object, options?: CuaObservationOptions): Promise<void> {

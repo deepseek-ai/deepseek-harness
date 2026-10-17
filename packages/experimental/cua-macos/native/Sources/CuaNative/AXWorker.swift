@@ -127,6 +127,14 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
+    func activityTarget(_ params: RequestParameters) throws -> ActivityTarget {
+        let handle = try params.string("appHandle")
+        let identity = try validateIdentity(handle)
+        let window = try params.optionalWindowID()
+        let snapshotID = try params.optionalString("snapshotId")
+        let scope = try snapshotID.map { try snapshot(handle, $0).scope.windowID }
+        return ActivityTarget(process: identity, windowID: window ?? scope ?? nil)
+    }
     private func acquire(_ identity: ProcessIdentity) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }

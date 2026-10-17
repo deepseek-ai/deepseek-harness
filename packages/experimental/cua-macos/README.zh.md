@@ -42,6 +42,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
+| `recentActivityWindowMs` | `60000` | 近期活动提示的回看时长，单位为毫秒；不预留或阻止操作应用。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
@@ -52,6 +53,8 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。组合键的节奏独立。 |
+
+应用观察、截图和成功的输入回复包含 `recentActivity`：配置时长内另一个已连接 Agent 最近发起的相关操作，以及最近检测到的外部输入。应用级记录也适用于其各个窗口。外部输入可能来自人或自动化程序；两类来源都不能证明界面已改变或仍在使用。共享 helper 在已授权应用被访问后开始被动监听，只记录输入类别和时间，并排除自身输入事件。键盘事件只归属到应用；鼠标事件只有在确认窗口归属后才标明窗口。输入监听不可用和安全输入状态会明确反馈。这些提示不阻止操作；没有活动记录不代表无人操作。对象 API 即使设置 `emit:false` 也会输出活动提示。
 
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。例如，`getApp` 返回 `listWindows`、`getState` 和输入操作所需的 `appHandle`。
 
@@ -183,6 +186,8 @@ App and Window methods:
 - drag(from: [x, y], to: [x, y], options?: { mouseButton?: "left" | "right" | "middle", modifiers?: Array<"command" | "control" | "option" | "shift" | "fn">, relative?: boolean }) -> action result
 
 Raw operation tools use { method, params }, including params: {} for parameterless methods. getApp selects without activating the app. Keep applications in the background for observation and routine input. Do not activate or raise an app during initialization, before each action, or merely because another app is foreground. Prefer advertised AX actions. If a window is hidden or minimized, try app.show() or window.show() and read fresh state. show requests unhide and unminimize without activation, raising or switching Spaces; it chooses the explicit, focused, main or sole AX window. A null windowId means no window was selected for restoration. foregroundChanged compares the front app and top window before and after the request; null means unavailable, and delayed focus changes remain possible. If restoration is unsupported or the window remains unusable, including another Space or Stage Manager, explain the needed foreground step, use app.activate() or an advertised raise action, and read fresh state. Completing the task takes priority when foreground access is necessary. Avoid repeated activation when the user switches away; continue background-capable steps and report what requires foreground access. Applications may still change focus in response to input.
+
+Recent activity is advisory history, not a lock, reservation, or instruction to stop. You may continue operating an application even when recentActivity reports another actor. Use the task and current UI to decide whether to re-observe or coordinate with the user. other-agent means another connected Agent attempted an operation; external-input means detected input outside this helper and may come from a person, another Agent, or other automation. Neither confirms a successful change or continued use. A null windowId means application-level activity whose window is unknown. The host configures the lookback (default one minute). Monitoring begins when an authorized application is accessed; missing activity does not prove nobody acted. unavailable or secure-input means external input observation is incomplete; do not infer inactivity. Activity advisories are emitted even with emit:false.
 
 Await operations sequentially. After input, read fresh state to verify the effect. A successful action means dispatched, not verified completion. Cancellation may leave partial effects; never retry uncertain input without observing. STALE_APP requires getApp again; STALE_SNAPSHOT requires getState again. Absolute coordinate input requires a fresh screenshot of that window. Relative input can use a successful AX observation or screenshot. SCREENSHOT_REQUIRED means capture a fresh screenshot before using pixel coordinates. For click and hover, coordinate targets must be [x, y], for example hover([650, 400], {relative:true}). A bare number such as hover(650) is always an AX element index. The relative option applies only to coordinate targets, not AX indices. Window resizing since the latest observation rejects coordinate input; movement alone preserves window-local coordinates. WINDOW_CHANGED requires fresh state before any retry; use an advertised AX action or explicitly restore the window before screenshot or coordinate input, then observe again. PERMISSION_DENIED requires the user to grant macOS Accessibility or Screen Recording access in System Settings. After granting access, observe fresh state before continuing; do not automatically replay prior input.
 

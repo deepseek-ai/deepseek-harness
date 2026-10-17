@@ -17,6 +17,7 @@ enum SharedHelperProxy {
             "axTimeoutMs": .number(Double(configuration.axTimeoutSeconds) * 1000), "textEventIntervalMs": .number(configuration.textEventIntervalSeconds * 1000),
             "screenshotTimeoutMs": .number(configuration.screenshotTimeoutSeconds * 1000), "timeoutMs": .number(configuration.timeoutSeconds * 1000),
             "graceMs": .number(configuration.shutdownGraceSeconds * 1000),
+            "recentActivityWindowMs": .number(configuration.recentActivityWindowSeconds * 1000),
         ])])
         try channel.write(JSONEncoder().encode(hello) + Data([10]), timeout: configuration.timeoutSeconds)
         let frames = Frames(channel: channel, limit: configuration.maxResponseBytes)

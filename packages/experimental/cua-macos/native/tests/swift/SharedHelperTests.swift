@@ -10,7 +10,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     var config: [String: JSONValue] = [
         "maxRequestBytes": .number(4096), "maxResponseBytes": .number(8192), "axTimeoutMs": .number(250),
         "textEventIntervalMs": .number(0.5), "screenshotTimeoutMs": .number(2000),
-        "timeoutMs": .number(8000), "graceMs": .number(500),
+        "recentActivityWindowMs": .number(45000), "timeoutMs": .number(8000), "graceMs": .number(500),
     ]
     config.merge(overrides) { _, value in value }
     return try JSONEncoder().encode(JSONValue.object([
@@ -26,6 +26,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     #expect(configuration.textEventIntervalSeconds == 0.0005)
     #expect(configuration.screenshotTimeoutSeconds == 2)
     #expect(configuration.timeoutSeconds == 8)
+    #expect(configuration.recentActivityWindowSeconds == 45)
     #expect(configuration.shutdownGraceSeconds == 0.5)
     #expect(throws: NativeFailure.self) {
         try HelperConfiguration(hello: hello(), runtimeKey: String(repeating: "b", count: 64))
@@ -36,7 +37,8 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     ("maxRequestBytes", JSONValue.number(1023)), ("maxResponseBytes", .number(1.5)),
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
-    ("unexpected", .bool(true)),
+    ("recentActivityWindowMs", .number(0)), ("recentActivityWindowMs", .number(1.5)),
+    ("recentActivityWindowMs", .number(2147483648)), ("unexpected", .bool(true)),
 ])
 func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throws {
     #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: hello(overrides: [name: value]), runtimeKey: runtimeKey) }

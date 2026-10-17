@@ -81,6 +81,17 @@ export const NativeResourceParameters = {
 /** Executor-only continuation after application consent; absent from the model Request union. */
 export const NativeOnlyOperations = [operation('launchApp', app)] as const
 
+/** Recent input attempts are advisory; external sources and actual application effects are unverified. */
+export const RecentActivityResult = z.object({
+  lookbackMs: z.number().int().positive(),
+  externalInputMonitoring: z.enum(['listening', 'unavailable', 'secure-input']),
+  events: z.array(z.object({
+    source: z.enum(['other-agent', 'external-input']), windowId: id.nullable(),
+    ageMs: z.number().int().nonnegative(), operation: z.string().min(1),
+  })).max(2),
+})
+const recentActivity = { recentActivity: RecentActivityResult.optional() }
+
 /** Process identity returned only after a successful app selection. */
 export const AppResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle), pid, name: z.string(), bundleId: z.string().optional(),
@@ -101,12 +112,12 @@ export const StateResult = z.object({
   pid, windowId: id.nullable(),
   focusedWindowId: id.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
-  tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
+  tree: z.string(), windows: WindowsResult, truncated: z.boolean(), ...recentActivity,
 })
 /** Original native PNG and window-point geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
-  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }), coordinateSpace: z.literal('window-points'),
+  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }), coordinateSpace: z.literal('window-points'), ...recentActivity,
 })
 /** Encoded model-request image; default input coordinates use these pixel dimensions. */
 export const ScreenshotResult = NativeScreenshotResult.extend({
@@ -119,7 +130,7 @@ export const CapabilitiesResult = z.object({
   methods: z.array(z.string()), coordinateSpace: z.literal('screenshot-pixels'), browser: z.literal(false),
 })
 /** An action has reached native dispatch; application state was not verified. */
-export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.literal(false) })
+export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.literal(false), ...recentActivity })
 /** Hover reports whether the selected route moved the user's system pointer. */
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */

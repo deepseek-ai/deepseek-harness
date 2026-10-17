@@ -22,6 +22,7 @@ struct HelperConfiguration: Sendable {
     var textEventIntervalSeconds: Double = 0.00025
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
+    var recentActivityWindowSeconds: Double = 60
     init(arguments: [String]) throws {
         var index = 0
         while index < arguments.count {
@@ -43,6 +44,11 @@ struct HelperConfiguration: Sendable {
             case "--shutdown-grace-ms":
                 guard let value = Double(text), value.isFinite, value > 0 else { throw RequestParameters.invalid("Shutdown grace must be positive") }
                 shutdownGraceSeconds = value / 1000
+            case "--recent-activity-window-ms":
+                guard let value = Double(text), value.isFinite, value.rounded() == value, (1...2147483647).contains(value) else {
+                    throw RequestParameters.invalid("Recent activity window must be an integer from 1 to 2147483647 milliseconds")
+                }
+                recentActivityWindowSeconds = value / 1000
             case "--timeout-ms", "--screenshot-timeout-ms":
                 guard let value = Double(text), value.isFinite, value > 0 else { throw RequestParameters.invalid("Operation timeout must be positive") }
                 if key == "--timeout-ms" { timeoutSeconds = value / 1000 }
@@ -58,7 +64,7 @@ struct HelperConfiguration: Sendable {
         guard let fields = decoded.object, Set(fields.keys) == ["type", "protocol", "runtimeKey", "config"],
               fields["type"] == .string("hello"), fields["protocol"] == .number(1),
               fields["runtimeKey"] == .string(runtimeKey), let config = fields["config"]?.object,
-              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
+              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs", "recentActivityWindowMs"] else {
             throw NativeFailure(code: "NATIVE_PROTOCOL", message: "Expected shared helper protocol 1 hello for this runtime")
         }
         func number(_ name: String) throws -> String {
@@ -73,7 +79,7 @@ struct HelperConfiguration: Sendable {
             "--max-request-bytes", number("maxRequestBytes"), "--max-response-bytes", number("maxResponseBytes"),
             "--ax-timeout-ms", number("axTimeoutMs"), "--text-event-interval-ms", number("textEventIntervalMs"),
             "--screenshot-timeout-ms", number("screenshotTimeoutMs"), "--timeout-ms", number("timeoutMs"),
-            "--shutdown-grace-ms", number("graceMs"),
+            "--shutdown-grace-ms", number("graceMs"), "--recent-activity-window-ms", number("recentActivityWindowMs"),
         ])
     }
 }

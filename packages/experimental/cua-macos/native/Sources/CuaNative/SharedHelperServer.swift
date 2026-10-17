@@ -75,6 +75,8 @@ final class NativeSignals {
     private let lifetime: SharedHelperLifetime
     private let scheduler = RequestScheduler()
     private let capture = WindowCapture()
+    private let activity = RecentActivity()
+    private lazy var inputMonitor = ExternalInputMonitor(activity: activity)
     private let instanceID = UUID().uuidString
     private var connections: [UUID: RequestCoordinator] = [:]
     private var startupDeadline: NativeDeadline?
@@ -157,7 +159,7 @@ final class NativeSignals {
         catch { channel.shutdown(); disconnected(id); return }
         let lifetime = self.lifetime
         let coordinator = RequestCoordinator(configuration: configuration, capture: capture, channel: channel, cancellation: cancellation,
-            scheduler: scheduler, writer: writer, onClose: { [weak self] in
+            scheduler: scheduler, writer: writer, activity: activity, inputMonitor: inputMonitor, owner: id, onClose: { [weak self] in
                 channel.shutdown()
                 self?.disconnected(id)
             }, onFatal: { [weak self] _, grace in
@@ -171,6 +173,7 @@ final class NativeSignals {
 
     private func disconnected(_ id: UUID) {
         connections.removeValue(forKey: id)
+        activity.disconnect(id)
         lifetime.remove(id)
         exitIfEmpty()
     }
@@ -179,6 +182,7 @@ final class NativeSignals {
 
     private func exitIfEmpty() {
         guard let status = lifetime.exitStatusIfEmpty() else { return }
+        inputMonitor.stop()
         listener.shutdown()
         unlink(options.socketPath)
         unlink(options.readyPath)

@@ -14,6 +14,9 @@ import Darwin
     private let writer: JSONLWriter
     private let channel: SharedSocket
     private let scheduler: RequestScheduler
+    private let activity: RecentActivity
+    private let inputMonitor: ExternalInputMonitor
+    private let owner: UUID
     private let onClose: @MainActor @Sendable () -> Void
     private let onFatal: @Sendable (NativeFailure, Double) -> Void
     private var deadline: NativeDeadline?
@@ -28,6 +31,7 @@ import Darwin
 
     init(configuration: HelperConfiguration, capture: WindowCapture, channel: SharedSocket,
          cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter,
+         activity: RecentActivity, inputMonitor: ExternalInputMonitor, owner: UUID,
          onClose: @escaping @MainActor @Sendable () -> Void,
          onFatal: @escaping @Sendable (NativeFailure, Double) -> Void) {
         self.configuration = configuration
@@ -35,6 +39,10 @@ import Darwin
         self.cancellation = cancellation
         self.channel = channel
         self.scheduler = scheduler
+        self.activity = activity
+        self.inputMonitor = inputMonitor
+        self.owner = owner
+        activity.connect(owner, lookback: configuration.recentActivityWindowSeconds)
         self.onClose = onClose
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
@@ -160,6 +168,14 @@ import Darwin
     private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         if request.method == "screenshot" { try capture.requireAvailable() }
+        let target: ActivityTarget?
+        if params.contains("appHandle"), request.method != "launchApp" {
+            target = try await worker.activityTarget(params)
+            if let target { activity.watch(target, owner: owner); inputMonitor.start() }
+        } else { target = nil }
+        let observes = ["getState", "screenshot", "listWindows"].contains(request.method)
+        // Attempts may have partial effects even when the operation later fails or is cancelled.
+        if let target, !observes { activity.record(target, owner: owner, operation: request.method) }
         let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
@@ -198,6 +214,10 @@ import Darwin
                 let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
                 result = try await worker.finishLaunch(plan, pid: pid)
             }
+        }
+        if let target, var fields = result.object {
+            fields["recentActivity"] = activity.report(target, owner: owner, monitoring: inputMonitor.status)
+            return .object(fields)
         }
         return result
     }
