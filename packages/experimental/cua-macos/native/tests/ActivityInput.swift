@@ -22,3 +22,6 @@ if arguments.count == 4 {
 }
 down.post(tap: .cgSessionEventTap)
 up.post(tap: .cgSessionEventTap)
+print("POSTED")
+fflush(stdout)
+_ = readLine()

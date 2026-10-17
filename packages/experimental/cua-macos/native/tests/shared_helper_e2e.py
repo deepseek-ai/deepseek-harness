@@ -5,6 +5,7 @@ Accessibility/Screen Recording grants are required unless --without-desktop is s
 """
 import argparse
 import concurrent.futures
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
@@ -92,6 +93,22 @@ def wait_released(path, pid, timeout=10):
             pass
         time.sleep(0.02)
     raise AssertionError(f"Owned shared helper {pid} or its version lock did not exit")
+
+
+@contextmanager
+def external_input(sender, pid, *point):
+    process = subprocess.Popen([str(sender), str(pid), *map(str, point)], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, text=True)
+    try:
+        assert line(process).strip() == "POSTED", "External input sender failed"
+        yield
+        process.stdin.write("observed\n")
+        process.stdin.flush()
+        assert process.wait(timeout=5) == 0
+    finally:
+        stop(process)
+        process.stdin.close()
+        process.stdout.close()
 
 
 def main():
@@ -205,30 +222,31 @@ def main():
                     sender = root / "activity-input"
                     subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
                     b.call("activate", {"appHandle": app_b})
+                    b.call("click", {"appHandle": app_b, "snapshotId": own["snapshotId"], "elementIndex": text_field["index"]})
                     before_text = json.loads(state.read_text())["text"]
-                    subprocess.run([str(sender), str(fixture.pid)], check=True, timeout=5)
-                    deadline = time.monotonic() + 5
-                    while True:
-                        observed_input = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                        events = observed_input["recentActivity"]["events"]
-                        if (json.loads(state.read_text())["text"] != before_text and
-                                any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)):
-                            break
-                        assert time.monotonic() < deadline, ("External input was not observed", events, state.read_text())
-                        time.sleep(0.025)
+                    with external_input(sender, fixture.pid):
+                        deadline = time.monotonic() + 5
+                        while True:
+                            observed_input = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                            events = observed_input["recentActivity"]["events"]
+                            if (json.loads(state.read_text())["text"] != before_text and
+                                    any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)):
+                                break
+                            assert time.monotonic() < deadline, ("External input was not observed", events, state.read_text())
+                            time.sleep(0.025)
                     x, y, width, height = button["bounds"]
                     before_count = json.loads(state.read_text())["count"]
-                    subprocess.run([str(sender), str(fixture.pid), str(x + width / 2), str(y + height / 2)], check=True, timeout=5)
-                    deadline = time.monotonic() + 5
-                    while True:
-                        clicked = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
-                        events = clicked["recentActivity"]["events"]
-                        if (json.loads(state.read_text())["count"] == before_count + 1 and
-                                any(event["source"] == "external-input" and event["operation"] == "click"
-                                    and event["windowId"] == window for event in events)):
-                            break
-                        assert time.monotonic() < deadline, ("External click was not assigned to its window", events, state.read_text())
-                        time.sleep(0.025)
+                    with external_input(sender, fixture.pid, x + width / 2, y + height / 2):
+                        deadline = time.monotonic() + 5
+                        while True:
+                            clicked = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                            events = clicked["recentActivity"]["events"]
+                            if (json.loads(state.read_text())["count"] == before_count + 1 and
+                                    any(event["source"] == "external-input" and event["operation"] == "click"
+                                        and event["windowId"] == window for event in events)):
+                                break
+                            assert time.monotonic() < deadline, ("External click was not assigned to its window", events, state.read_text())
+                            time.sleep(0.025)
                     print("PASS: external keyboard/window input and helper-input exclusion")
                 else:
                     print("SKIP external event delivery:", own_input["recentActivity"]["externalInputMonitoring"])

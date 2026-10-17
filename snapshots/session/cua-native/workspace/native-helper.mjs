@@ -221,7 +221,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
   }
   return (requestId, method, params) => {
     const result = call(requestId, method, params)
+    const windowId = params.windowId ?? [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)?.windowId
     return activity && result && !Array.isArray(result) && params.appHandle && method !== 'getApp'
-      ? { ...result, recentActivity: activity } : result
+      ? { ...result, recentActivity: { ...activity, events: activity.events.filter(event =>
+        windowId == null || event.windowId === null || event.windowId === windowId) } } : result
   }
 }
