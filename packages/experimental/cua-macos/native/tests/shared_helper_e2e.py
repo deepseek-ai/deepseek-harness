@@ -216,7 +216,20 @@ def main():
                             break
                         assert time.monotonic() < deadline, ("External input was not observed", events, state.read_text())
                         time.sleep(0.025)
-                    print("PASS: external keyboard input and helper-input exclusion")
+                    x, y, width, height = button["bounds"]
+                    before_count = json.loads(state.read_text())["count"]
+                    subprocess.run([str(sender), str(fixture.pid), str(x + width / 2), str(y + height / 2)], check=True, timeout=5)
+                    deadline = time.monotonic() + 5
+                    while True:
+                        clicked = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                        events = clicked["recentActivity"]["events"]
+                        if (json.loads(state.read_text())["count"] == before_count + 1 and
+                                any(event["source"] == "external-input" and event["operation"] == "click"
+                                    and event["windowId"] == window for event in events)):
+                            break
+                        assert time.monotonic() < deadline, ("External click was not assigned to its window", events, state.read_text())
+                        time.sleep(0.025)
+                    print("PASS: external keyboard/window input and helper-input exclusion")
                 else:
                     print("SKIP external event delivery:", own_input["recentActivity"]["externalInputMonitoring"])
 
