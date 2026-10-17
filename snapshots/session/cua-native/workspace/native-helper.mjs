@@ -116,6 +116,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
+  const activityConfig = new URL('./fixture-activity.json', import.meta.url)
+  const activity = existsSync(activityConfig) ? JSON.parse(readFileSync(activityConfig, 'utf8')) : undefined
   const snapshots = new Map()
   const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag', 'screenshot']
   let acquired = false
@@ -217,5 +219,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
     return { dispatched: true, verified: false }
   }
-  return call
+  return (requestId, method, params) => {
+    const result = call(requestId, method, params)
+    return activity && result && !Array.isArray(result) && params.appHandle && method !== 'getApp'
+      ? { ...result, recentActivity: activity } : result
+  }
 }

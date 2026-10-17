@@ -176,6 +176,7 @@ import Darwin
         let observes = ["getState", "screenshot", "listWindows"].contains(request.method)
         // Attempts may have partial effects even when the operation later fails or is cancelled.
         if let target, !observes { activity.record(target, owner: owner, operation: request.method) }
+        defer { if let target, !observes { activity.record(target, owner: owner, operation: request.method) } }
         let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
