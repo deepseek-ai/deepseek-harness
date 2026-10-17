@@ -20,7 +20,7 @@ Status: implemented
 
 任务所有权使用 `ownerId`，重新分配接受 Session id。Team 只持久化任务变更。消息使用目标 Agent 收件箱；历史 `team/message/*` 记录仍可读取，但不会被投递或确认。
 
-本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
+本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
 
 ## Alternatives considered
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
   "description": "Extensible Sidebar previews for Office documents, spreadsheets, Markdown, code, images, PDF, HTML, and plain text",
-  "version": "0.2.1-alpha.4",
+  "version": "0.2.1-rc.1",
   "publishConfig": {
     "access": "public"
   },

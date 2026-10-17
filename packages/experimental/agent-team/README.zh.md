@@ -49,7 +49,7 @@ kind: "package-reference"
 |---|---|---|
 | `maxTasks` | `256` | 任务板上最多的未删除任务数 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。设置 `maxMembers`、`maxMessageBytes` 或 `disposalTimeoutMs` 的配置行不会激活，dsh 会在启动警告中指出该键；[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出替代方式。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-agent-team)是每个受支持字段及其 JSDoc 的穷尽式真源。设置 `maxMembers`、`maxMessageBytes` 或 `disposalTimeoutMs` 的配置行不会激活，dsh 会在启动警告中指出该键；[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)列出替代方式。
 
 ### Teammate
 
@@ -161,7 +161,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 - [tool-agent-team 包](../tool-agent-team/README.zh.md)——每个成员获得的任务与等待工具、策略和身份。
 - [Subagent 运行时](../../subagent/subagent/README.zh.md)——teammate 使用的可继续子级、消息、中断与生命周期。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——为何 teammate 是subagent，以及 Team 保留了什么。
-- [升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
+- [升级指南](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
 - [实验包参考](../AGENTS.md)——位置、公开发布与依赖隔离。
 
 -----

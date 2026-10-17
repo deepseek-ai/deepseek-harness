@@ -6,6 +6,8 @@ All vendored packages use the **`@deepseek-ai` scope** (`cordis` → `@deepseek-
 
 This file covers the manifest, the local-modification log, and the procedure for **updating** an existing vendored package. To **add a new** one, see the cookbook guide: [docs/cookbook/adding-a-vendored-package.md](../docs/cookbook/adding-a-vendored-package.md).
 
+The proposed [Cordis rc.11 upgrade plan](cordis-rc11-upgrade-plan.md) records the package scope, PR dependencies and intended disposition of the local modifications.
+
 ## Manifest
 
 Upstream workspace: `cordis-workspace` (local checkout: `~/repos/cordis-workspace`).

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-plugin-market-bundle",
   "description": "Experimental custom plugin markets: a Discover tab that browses and installs bundles from plugin market indexes",
-  "version": "0.2.1-alpha.4",
+  "version": "0.2.1-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

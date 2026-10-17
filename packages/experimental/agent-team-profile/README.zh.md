@@ -42,7 +42,7 @@ profile 必须已经包含 `@deepseek-ai/dsh-base`，本层依赖其中的 Subag
 dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ```
 
-已有 profile 的 `package.json` 中，`dsh.profile.bundles` 应只保留 `@deepseek-ai/dsh-experimental-agent-team-profile`，删除独立的 `@deepseek-ai/dsh-experimental-agent-team-web-profile` 条目。用户 patch 中的 `ui-agent-team` 配置仍然有效。设置已移除 Team 键的用户 patch 会使对应 Team 配置行无法激活；[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出已移除的键与工具。
+已有 profile 的 `package.json` 中，`dsh.profile.bundles` 应只保留 `@deepseek-ai/dsh-experimental-agent-team-profile`，删除独立的 `@deepseek-ai/dsh-experimental-agent-team-web-profile` 条目。用户 patch 中的 `ui-agent-team` 配置仍然有效。设置已移除 Team 键的用户 patch 会使对应 Team 配置行无法激活；[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)列出已移除的键与工具。
 
 ### 获得的功能
 
