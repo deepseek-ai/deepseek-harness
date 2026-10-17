@@ -399,7 +399,7 @@ interface ToolOutputMap {
     };
   };
   list_agents: ({
-    kind: "parent";
+    kind: "root";
     name: string;
     status: "running" | "inactive";
   } | {
