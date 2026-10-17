@@ -937,7 +937,7 @@ Source: [`packages/core/session/src/types.ts:300`](../packages/core/session/src/
 'subagent/catalog': SubagentCatalogEvent
 ```
 
-Source: [`packages/subagent/subagent/src/catalog.ts:45`](../packages/subagent/subagent/src/catalog.ts)
+Source: [`packages/subagent/subagent/src/catalog.ts:44`](../packages/subagent/subagent/src/catalog.ts)
 
 <a id="subagentdescriptor--log-only"></a>
 
@@ -4827,7 +4827,7 @@ One of:
 
 SHA-256: `f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87`
 
-Sources: [`packages/subagent/subagent/src/catalog.ts:29`](../packages/subagent/subagent/src/catalog.ts)
+Sources: [`packages/subagent/subagent/src/catalog.ts:28`](../packages/subagent/subagent/src/catalog.ts)
 
 One of:
 

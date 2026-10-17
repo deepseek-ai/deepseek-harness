@@ -207,8 +207,8 @@
   en: 9630752e97ddbfbc
   zh: 9630752e97ddbfbc
 /session-persistence-event-catalog/events/subagent/subagent-catalog-log-only:
-  en: 0ef7504e93df1ac0
-  zh: d8bf76a1b1e7c362
+  en: e6ce4b5a98ff2f52
+  zh: 9a8e112754679aef
 /session-persistence-event-catalog/events/subagent/subagent-descriptor-log-only:
   en: f5d53639dc5afdfc
   zh: 8c553e7397d08832
@@ -1227,8 +1227,8 @@
   en: 6a9cc39c2df1b476
   zh: 697ea4d14d77f59c
 /session-persistence-event-catalog/resolved-persistence-types/subagentcatalogevent:
-  en: 4da876322ab7a590
-  zh: 67992071915ab925
+  en: 725539dcd5c335ed
+  zh: 5ca08d3667f84ff9
 /session-persistence-event-catalog/resolved-persistence-types/subagentdescriptordata:
   en: c56821e57987ae9e
   zh: 0364f59a472d51da

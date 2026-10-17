@@ -939,7 +939,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'subagent/catalog': SubagentCatalogEvent
 ```
 
-来源：[`packages/subagent/subagent/src/catalog.ts:45`](../packages/subagent/subagent/src/catalog.ts)
+来源：[`packages/subagent/subagent/src/catalog.ts:44`](../packages/subagent/subagent/src/catalog.ts)
 
 <a id="subagentdescriptor--log-only"></a>
 
@@ -4829,7 +4829,7 @@ SHA-256: `47e9095591ae36e7c39ee62553097772f2bfa16304536a72dbbc3f691f605180`
 
 SHA-256: `f731ffe80810b0289b3e694d8f40af6f01865c02a622ee457be90ca808b66e87`
 
-来源：[`packages/subagent/subagent/src/catalog.ts:29`](../packages/subagent/subagent/src/catalog.ts)
+来源：[`packages/subagent/subagent/src/catalog.ts:28`](../packages/subagent/subagent/src/catalog.ts)
 
 以下类型之一：
 
