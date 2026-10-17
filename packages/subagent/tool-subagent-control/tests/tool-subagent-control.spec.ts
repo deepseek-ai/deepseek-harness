@@ -120,7 +120,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(schemas[0]!.description).not.toContain('job id')
     expect(schemas[0]!.description).toContain('receives it at its next step')
     expect(props.agent_id).toMatchObject({
-      description: 'The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.',
+      description: 'The agent id of another member of your Team, as shown by list_agents.',
     })
   })
 
@@ -309,7 +309,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('unavailable')
   })
 
-  it('rejects a caller that is not the child\'s durable direct parent', async () => {
+  it('rejects a caller outside the child\'s Team', async () => {
     const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
@@ -326,7 +326,7 @@ describe('dsh-tool-subagent-control', () => {
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('another parent session')
+    expect(text(result)).toContain('not a continuable member of this Team')
   })
 
   it('fails loud when invoked without a calling agent', async () => {

@@ -3018,6 +3018,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'activation with a message id only for local children.',
       },
       {
+        signature: 'rootOf(caller: Agent): Agent',
+        description: 'Resolve the root shared by an Agent and its teammates.',
+        parameters: [{ name: 'caller', description: 'exact live Agent whose subagent ancestry selects the tree.' }],
+        returns: 'the live root; ordinary Session forks lead independent trees.',
+        throws: ['when the caller or its live ancestry is unavailable.'],
+      },
+      {
         signature: 'async waitForChildren(parent: Agent): Promise<boolean>',
         description: 'Join progressing descendants without cancelling them. Idle descendants whose inboxes require a later wake stay resident and do not delay host completion.',
         parameters: [{ name: 'parent', description: 'the exact parent whose descendant work is observed.' }],
@@ -3025,10 +3032,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>',
-        description: 'Steer one model-authored message to the sender\'s direct parent, direct continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary; an idle target starts a turn, and an absent direct child cold-resumes from persistence. The service derives durable sender attribution from the exact live sender. Caller cancellation stops only pre-acceptance work.',
-        parameters: [{ name: 'sender', description: 'exact live Agent authorizing and originating the message.' }, { name: 'targetId', description: 'durable direct-parent, direct-child, or sibling session id.' }, { name: 'content', description: 'model-authored content to deliver.' }, { name: 'options', description: 'caller cancellation before inbox acceptance.' }],
+        description: 'Steer one model-authored message to another member of the same subagent tree. A running target receives it at its next step; an idle target starts a turn. Cold targets and their continuable ancestors resume under their recorded parents. Sender identity is rechecked before inbox acceptance; cancellation stops only pre-acceptance work and never retracts an accepted message.',
+        parameters: [{ name: 'sender', description: 'exact live root or resident continuable Agent originating the message.' }, { name: 'targetId', description: 'another root or continuable member\'s durable Session id.' }, { name: 'content', description: 'model-authored content to deliver.' }, { name: 'options', description: 'caller cancellation before inbox acceptance.' }],
         returns: 'the accepted message\'s inbox id.',
-        throws: ['when continuation services are unavailable, adjacency is rejected, or the message was not admitted.'],
+        throws: ['when the target is outside the tree, cannot resume, or rejects input.'],
       },
       {
         signature: 'interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void',
@@ -7857,7 +7864,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async waitForChildren(parent: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentIn /* …truncated — full shape in source */',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    async waitForChildren(parent: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentSendMessageOptions',

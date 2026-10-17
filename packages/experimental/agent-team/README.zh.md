@@ -59,7 +59,7 @@ kind: "package-reference"
 
 ### teammate 之间的消息
 
-成员使用标准 `send_message` 按 Session id 发消息：Lead 联系直接子级，驻留的可继续子级联系父级和可继续同级。Steer 投递到目标收件箱，并可冷恢复子级或同级。Team 不存储消息；已接受消息遵循普通 Agent 持久化。
+成员使用标准 `list_agents` 发现整个 Team，通过 `send_message` 按 Session id联系任意其他成员。子代理运行时负责路由、发送者归属与冷恢复。Team 不存储消息；已接受的消息遵循普通 Agent 持久化。
 
 ### 共享任务板
 
@@ -194,7 +194,9 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 - **实验原型，无稳定性承诺**——本包公开发布，但孵化期间约定仍可自由变更。
 - **单进程、共享 checkout**——成员共享 cwd，修改立即可见；本包不提供 worktree、远端成员、merge 或文件锁。
 - **write scope 仅作提示**——Bash、formatter、代码生成器与直接外部写入可以绕过文件版本检查；Lead 必须协调 owner 并检查最终 diff。
-- **成员列表覆盖直接可继续子级**——更深的后代共享任务和等待，但不显示成员行；它们可按自身 id 认领任务，并且只能联系直接父级、子级和可继续同级。
+- **成员列表覆盖直接可继续子级**——更深的后代共享任务和等待，但不显示成员行；它们可按自身 id 认领任务。
+
+- **通信限定在一棵树内**——成员不能向无关 Team 发消息；只有祖先能中断后代。
 - **成员关系需要 live 谱系**——parent Agent 未加载的 subagent 不属于任何 Team，因此其 Team 调用以 `TEAM_NOT_MEMBER` 失败。
 - **不会自动释放 owner**——成员不活动、interrupt、进程退出与工作失败都不会释放任务 owner。
 - **历史排队消息保持未投递**——没有对应投递记录的 `team/message/queued` 记录仍可在 Lead 日志中读取，但不会有成员收到它们。

@@ -34,7 +34,7 @@ export function apply(ctx: Context): void {
       agent_id: {
         type: 'string',
         required: true,
-        description: 'The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.',
+        description: 'The agent id of another member of your Team, as shown by list_agents.',
       },
       message: {
         type: 'string',

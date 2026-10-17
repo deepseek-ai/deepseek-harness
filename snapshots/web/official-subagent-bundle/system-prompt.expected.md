@@ -153,7 +153,7 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry ids, descriptions, and status; descendant rows also carry parent ids and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
   /** Declare existing files as final deliverables for the user. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
   present: {
@@ -268,7 +268,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer. */
   send_message: {
-    /** The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child. */
+    /** The agent id of another member of your Team, as shown by list_agents. */
     agent_id: string;
     /** The message to deliver to the agent. */
     message: string;
@@ -493,11 +493,11 @@ interface ToolOutputMap {
     };
   };
   list_agents: ({
-    kind: "parent";
+    kind: "root";
     id: string;
     status: "running" | "inactive";
   } | {
-    kind: "child" | "sibling";
+    kind: "child";
     id: string;
     label: string;
     status: "running" | "inactive";

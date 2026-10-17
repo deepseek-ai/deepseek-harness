@@ -320,7 +320,7 @@ describe('dsh-tool-team', () => {
       timedOut: false,
       noProgress: {
         reason: 'no-active-peer',
-        message: 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.',
+        message: 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.',
       },
     })
     for (const timeout_ms of [9_999, 3_600_001, Number.MAX_SAFE_INTEGER + 1]) {

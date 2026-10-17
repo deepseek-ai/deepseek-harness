@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-10-15-agent-teams-as-subagents.zh.md)
 
+The adjacency and discovery restrictions below are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md); the remaining decisions stay active.
+
 ## Problem
 
 Teammates already use the subagent runtime for creation, Session identity, catalog membership, capacity, cold resume, settlement, and interruption. A separate Team roster duplicates identity, provisioning recovery, and teardown. Team-scoped messaging and control tools shadow the standard subagent tools, forcing profiles to disable ordinary delegation and making fork tool schemas diverge from their parent.

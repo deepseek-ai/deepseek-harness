@@ -2153,7 +2153,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `list_agents`
 
-列出全部可达的可继续后代；如果调用方是可继续子代理，还列出父代理和可继续同级。行包含 id、描述和状态；后代行还包含父级 id 和深度。可以向父代理、可继续同级和直接子级发送消息，更深后代只接受 interrupt_agent。running 表示正在工作；inactive 表示当前没有工作。直属子代理结束时会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整个 Team：根代理和所有可达的可继续后代，包括调用方自身。行包含 id、描述和状态；后代行包含父级 id 和相对根的深度。可以向分支支持继续执行的任意其他 Team 成员发送消息；只能中断自己的后代。running 表示正在工作；inactive 表示当前没有工作。直属子代理结束时会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2174,7 +2174,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child."
+      "description": "The agent id of another member of your Team, as shown by list_agents."
     },
     "message": {
       "type": "string",

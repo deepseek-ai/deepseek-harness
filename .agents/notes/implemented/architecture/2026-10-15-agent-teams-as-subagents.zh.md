@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-10-15-agent-teams-as-subagents.md) | 中文
 
+邻接消息和发现范围已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
+
 ## Problem
 
 队友已经使用子代理运行时完成创建、Session 身份、目录成员关系、容量、冷恢复、结算和中断。独立 Team 成员列表重复了身份、创建恢复和释放职责。Team 作用域内的消息及控制工具覆盖标准子代理工具，迫使 profile 禁用普通委派，并使分叉工具模式偏离父级。

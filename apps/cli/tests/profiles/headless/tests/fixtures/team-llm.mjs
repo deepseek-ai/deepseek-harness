@@ -66,7 +66,7 @@ function researcher(messages) {
   if (!names.includes('list_agents')) return toolChunks([{ name: 'list_agents', args: {} }])
   const sibling = messages.filter(message => message.role === 'tool')
     .flatMap(message => message.content.filter(block => block.type === 'text').flatMap(block => block.text.split('\n')))
-    .find(line => line.endsWith('— sibling: Own deterministic implementation.'))?.split(' ')[0]
+    .find(line => line.endsWith('— Own deterministic implementation.'))?.split(' ')[0]
   if (sibling === undefined) throw new Error('list_agents did not expose the implementation sibling')
   if (!names.includes('team_task_create')) {
     return toolChunks([{ name: 'team_task_create', args: {

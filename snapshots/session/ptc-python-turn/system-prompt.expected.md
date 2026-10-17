@@ -331,7 +331,7 @@ class ReadImageOutput(TypedDict):
     image: ReadImageOutputImage
 
 class SendMessageArgs(TypedDict):
-    # The agent id of your direct continuable child, or your direct parent or continuable sibling when you are a resident continuable child.
+    # The agent id of another member of your Team, as shown by list_agents.
     agent_id: str
     # The message to deliver to the agent.
     message: str
@@ -534,7 +534,7 @@ class Tools(Protocol):
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
     async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
-        """List all your reachable continuable descendants and, when you are a continuable subagent, your parent and continuable siblings. Rows carry ids, descriptions, and status; descendant rows also carry parent ids and depth. You can message your parent, continuable siblings, and direct children. Deeper descendants accept only interrupt_agent. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+        """List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member whose branch supports continuation. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. You will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:
