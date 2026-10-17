@@ -45,7 +45,10 @@ export interface CliAccountRuntimeOptions<Account, Kind extends string, Phase ex
   readonly check: Kind
   /** The plugin phases in which `cancel` stops an operation; the runtime's own phases are never cancellable. */
   readonly cancellable: readonly Phase[]
-  /** Hosts whose HTTPS links, and their subdomains' links, may reach the page. */
+  /**
+   * Hosts whose HTTPS links, and their subdomains' links, may reach the page. Write each in lowercase ASCII, with an
+   * internationalized domain name in punycode: the runtime compares them with the URL's normalized `hostname`.
+   */
   readonly authorizationHosts: readonly string[]
   /**
    * Keep only safe, allowlisted facts from a command result; it never sees exception messages.

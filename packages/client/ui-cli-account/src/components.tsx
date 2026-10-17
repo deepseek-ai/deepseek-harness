@@ -130,7 +130,7 @@ export interface CliAccountBadgeProps {
 /**
  * The account tag beside a plugin bundle's title.
  * @param props - the open detail page's subject, the plugin's package, its phase, and its translator.
- * @returns the tag on the enabled bundle's page once the phase settles, or null.
+ * @returns the tag once the phase settles on the page of the enabled plugin bundle or of one of its rows, or null.
  */
 export function CliAccountBadge({ t, subject, packageName, phase }: CliAccountBadgeProps): ReactNode {
   if (subject.kind === 'item' || subject.pkg.name !== packageName || !subject.pkg.enabled || phase === 'checking') return null

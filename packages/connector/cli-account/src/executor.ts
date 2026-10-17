@@ -1,4 +1,7 @@
-/** Bounded execution of one CLI program on the private Shell PATH, with subprocess lifetime ownership. */
+/**
+ * Bounded execution of one CLI program on the private Shell PATH through a Host subprocess runtime, with subprocess
+ * lifetime ownership.
+ */
 
 import { homedir } from 'node:os'
 import type { Readable } from 'node:stream'
@@ -139,7 +142,11 @@ async function readStream(
   return result
 }
 
-/** Runs one plugin's CLI program and owns each command until its process exits. */
+/**
+ * Runs one plugin's CLI program and owns each command until its process exits. Its subprocess runtime must run on the
+ * Host (`runsOnHost`): the Shell environment adds the private PATH only for a Host runtime, so on another runtime the
+ * program would resolve against that runtime's own PATH.
+ */
 export class CliCommandExecutor {
   private readonly lifetime = new AbortController()
   private readonly running = new Set<Promise<CliCommandResult>>()
@@ -156,8 +163,9 @@ export class CliCommandExecutor {
    * @param signal - caller cancellation; an abort rejects with its reason after the process exits.
    * @param options - the deadline choice and an observer for output lines.
    * @returns the exit code, the stdout head, and the stderr tail.
-   * @throws after disposal; otherwise, with a message naming the command, when the deadline elapses,
-   *   the process ends by a signal, or stdout exceeds 1 MiB.
+   * @throws after disposal; with the subprocess runtime's error when executable lookup fails, such as
+   *   `SubprocessExecutableNotFoundError`, or the process cannot spawn; with what `onLine` throws; otherwise, with a
+   *   message naming the command, when the deadline elapses, the process ends by a signal, or stdout exceeds 1 MiB.
    */
   async run(args: readonly string[], signal: AbortSignal, options: CliRunOptions = {}): Promise<CliCommandResult> {
     this.lifetime.signal.throwIfAborted()

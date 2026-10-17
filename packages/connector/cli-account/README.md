@@ -27,7 +27,7 @@ CLI app plugins such as Feishu and WeCom use this library to run their vendor CL
 
 ### When to use it
 
-Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin's Plugins page mirrors the view with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
+Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The executor requires a subprocess runtime that runs on the Host (`runsOnHost`), because the Shell environment adds the private PATH only there; on another runtime the program would resolve against that runtime's own PATH. The plugin's Plugins page mirrors the view with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
 
 ### Entry point
 
@@ -60,7 +60,11 @@ const account = new Account({
 
 ### Commands, links, and failures
 
-A command that does not wait for the user gets the plugin's `commandTimeoutMs`, including executable lookup; a command run with `awaitsUser` waits up to 10 minutes. The executor keeps at most 1 MiB of stdout and the last 4 KiB of stderr, both counted in UTF-8 bytes and the tail cut at a character boundary, and settles only after the process exits. `onLine` receives each line as the command writes it: `\n`, `\r\n`, and a lone `\r` each end a line, as in Node's `readline`, so a spinner the CLI redraws with `\r` after a link line does not hold the link back. The unterminated rest arrives at exit, and a line longer than its stream's limit is skipped whole rather than truncated. `offer(url)` accepts only an HTTPS URL without credentials on one of the plugin's `authorizationHosts` or their subdomains, and returns whether it accepted the link. A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials.
+A command that does not wait for the user gets the plugin's `commandTimeoutMs`, including executable lookup; a command run with `awaitsUser` waits up to 10 minutes. The executor keeps at most 1 MiB of stdout and the last 4 KiB of stderr, both counted in UTF-8 bytes and the tail cut at a character boundary, and settles only after the process exits. `onLine` receives each line as the command writes it: `\n`, `\r\n`, and a lone `\r` each end a line, as in Node's `readline`, so a spinner the CLI redraws with `\r` after a link line does not hold the link back. The unterminated rest arrives at exit, and a line longer than its stream's limit is skipped whole rather than truncated. A command rejects instead of returning its exit code when executable lookup or spawning fails, the deadline elapses, the process ends by a signal, or stdout exceeds 1 MiB; the plugin's classification then sees a null exit code.
+
+`offer(url)` accepts only an HTTPS URL without credentials on one of the plugin's `authorizationHosts` or their subdomains, and returns whether it accepted the link. Write each host in lowercase ASCII, with an internationalized domain name in punycode, because the runtime compares it with the URL's normalized host name.
+
+A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials.
 
 ### Shared config
 

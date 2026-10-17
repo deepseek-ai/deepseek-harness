@@ -25,7 +25,10 @@ export interface CliOperation<Kind extends string, Phase extends string> {
 export interface CliCommandFailure<Command extends string = string> {
   /** The plugin's identifier for the command, not its native arguments. */
   readonly command: Command
-  /** The observed exit code; null when the command produced no exit, as when lookup or spawn failed. */
+  /**
+   * The observed exit code; null when running the command yielded none: executable lookup or spawn failed, the deadline
+   * elapsed, the process ended by a signal, its stdout exceeded 1 MiB, or the plugin's `onLine` observer threw.
+   */
   readonly exitCode: number | null
 }
 
