@@ -222,7 +222,9 @@ def main():
                     sender = root / "activity-input"
                     subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
                     b.call("activate", {"appHandle": app_b})
-                    b.call("click", {"appHandle": app_b, "snapshotId": own["snapshotId"], "elementIndex": text_field["index"]})
+                    focused = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                    text_field = next(element for element in focused["elements"] if element["role"] == "AXTextField")
+                    b.call("click", {"appHandle": app_b, "snapshotId": focused["snapshotId"], "elementIndex": text_field["index"]})
                     before_text = json.loads(state.read_text())["text"]
                     with external_input(sender, fixture.pid):
                         deadline = time.monotonic() + 5
