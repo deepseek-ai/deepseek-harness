@@ -1,6 +1,6 @@
 /** Built bridge imports and retained objects from a project outside the Harness installation. */
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,6 +39,8 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
     let closeFixture: (() => Promise<void>) | undefined
     try {
       const helperPath = await installNativeFixture(cwd)
+      await writeFile(join(cwd, 'fixture-activity.json'), JSON.stringify({ lookbackMs: 60_000, externalInputMonitoring: 'listening',
+        events: [{ source: 'external-input', windowId: null, ageMs: 4000, operation: 'keyboard' }] }))
       closeFixture = await startFixtureHost(helperPath)
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(FileSystem)
@@ -86,6 +88,8 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       const second = await run('await win.getAXState({emit:false}); await win.click(0); await win.getAXState({emit:false});', 'second')
       expect(second.error).toBeUndefined()
       expect(second.value).toContain('Count: 2')
+      expect(second.logs.join('\n')).toContain('Recent activity (advisory only):')
+      expect(second.logs.join('\n')).toContain('external-input')
       expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState'])
     } finally {
       try { await ctx.fiber.dispose() } finally {

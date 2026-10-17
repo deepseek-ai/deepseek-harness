@@ -195,6 +195,30 @@ def main():
                 assert not any(event["source"] == "other-agent" for event in own["recentActivity"]["events"]), own
 
 
+                text_field = next(element for element in own["elements"] if element["role"] == "AXTextField")
+                b.call("click", {"appHandle": app_b, "snapshotId": own["snapshotId"], "elementIndex": text_field["index"]})
+                b.call("typeText", {"appHandle": app_b, "text": "own"})
+                own_input = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                assert not any(event["source"] == "external-input" and event["operation"] == "keyboard"
+                               for event in own_input["recentActivity"]["events"]), own_input
+                if own_input["recentActivity"]["externalInputMonitoring"] == "listening":
+                    sender = root / "activity-input"
+                    subprocess.run(["xcrun", "swiftc", str(ROOT / "tests/ActivityInput.swift"), "-o", str(sender)], check=True)
+                    before_text = json.loads(state.read_text())["text"]
+                    subprocess.run([str(sender), str(fixture.pid)], check=True, timeout=5)
+                    deadline = time.monotonic() + 5
+                    while True:
+                        observed_input = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                        events = observed_input["recentActivity"]["events"]
+                        if (json.loads(state.read_text())["text"] != before_text and
+                                any(event["source"] == "external-input" and event["operation"] == "keyboard" for event in events)):
+                            break
+                        assert time.monotonic() < deadline, ("External input was not observed", events, state.read_text())
+                        time.sleep(0.025)
+                    print("PASS: external keyboard input and helper-input exclusion")
+                else:
+                    print("SKIP external event delivery:", own_input["recentActivity"]["externalInputMonitoring"])
+
                 def capture(pair):
                     client, handle = pair
                     result = client.call("screenshot", {"appHandle": handle, "windowId": window})
