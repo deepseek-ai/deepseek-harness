@@ -49,7 +49,7 @@ struct ActivityTarget: Hashable, Sendable {
         // One latest record per source bounds model output independently of input frequency.
         let recent = [matching.last { $0.owner != nil }, matching.last { $0.owner == nil }].compactMap { $0 }
         return .object([
-            "lookbackMs": .number(client.lookback * 1000),
+            "lookbackMs": .number((client.lookback * 1000).rounded()),
             "externalInputMonitoring": .string(monitoring),
             "events": .array(recent.map { record in .object([
                 "source": .string(record.owner == nil ? "external-input" : "other-agent"),

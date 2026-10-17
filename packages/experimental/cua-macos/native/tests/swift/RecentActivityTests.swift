@@ -96,3 +96,12 @@ import Testing
     monitor.receive(.tapDisabledByTimeout, event: event)
     #expect(monitor.status != "listening")
 }
+
+@Test @MainActor func preservesIntegerMillisecondConfiguration() {
+    let history = RecentActivity(now: { 1 })
+    let owner = UUID()
+    let target = ActivityTarget(process: ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0), windowID: nil)
+    history.connect(owner, lookback: 1.001)
+    history.watch(target, owner: owner)
+    #expect(history.report(target, owner: owner, monitoring: "listening")["lookbackMs"] == .number(1001))
+}
