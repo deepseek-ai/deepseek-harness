@@ -24,7 +24,7 @@ This supersedes the name-free interface in [Agent Teams as subagents](2026-10-15
 
 ## Consequences
 
-Creation requires a name and rejects duplicates before dispatch. Independent roots can reuse names. Tool results, initial child guidance, message prefixes, and settlement notices use names. Internal Session and task-owner ids stay stable. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) lists changed tool arguments and results.
+Creation requires a name and rejects duplicates before dispatch. Independent roots can reuse names. Tool results, initial child guidance, message prefixes, and settlement notices use names. Internal Session and task-owner ids stay stable. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.md) lists changed tool arguments and results.
 
 ## Testing
 

@@ -151,7 +151,7 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('# tools["my-mcp.tool"](args: dict[str, Any]) -> str')
     expect(text).toContain('# tools["class"](args: dict[str, Any]) -> str')
     // Fixed instruction lines the model relies on.
-    expect(text).toContain('and `code`, the program to execute')
+    expect(text).toContain('and `description`, a short summary of what the program does')
     // The binding boundary: `tools`/`ToolCallError` are bound, the TypedDicts
     // are not. Both halves are pinned — dropping either one turns a correct
     // contract into a wrong one (a model that reads only "STATIC STUB" would
@@ -166,11 +166,11 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('tools: Tools')
   })
 
-  it('lists the required description before the program', () => {
+  it('lists the program before its description', () => {
     const text = renderToolsSdkPy([bash])
     expect(text).toContain('`code`')
     expect(text).toContain('`description`')
-    expect(text).toContain('two required arguments: `description`, a short summary of what the program does, and `code`')
+    expect(text).toContain('two required arguments: `code`')
   })
 
   it('renders required as plain fields and optional as NotRequired, with per-field description comments', () => {

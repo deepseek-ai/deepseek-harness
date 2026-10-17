@@ -470,6 +470,14 @@ nameOf(agent: Agent): string
 resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
 
 /**
+ * Resolve the root shared by an Agent and its teammates.
+ * @param caller - exact live Agent whose subagent ancestry selects the tree.
+ * @returns the live root; ordinary Session forks lead independent trees.
+ * @throws when the caller or its live ancestry is unavailable.
+ */
+rootOf(caller: Agent): Agent
+
+/**
  * Join progressing descendants without cancelling them. Idle descendants whose
  * inboxes require a later wake stay resident and do not delay host completion.
  * @param parent - the exact parent whose descendant work is observed.
@@ -478,18 +486,17 @@ resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionI
 async waitForChildren(parent: Agent): Promise<boolean>
 
 /**
- * Steer one model-authored message to the sender's direct parent, direct
- * continuable child, or continuable sibling under their shared live parent. A running target admits it at the nearest step boundary;
- * an idle target starts a turn, and an absent direct child cold-resumes from
- * persistence. The service derives durable sender attribution from the exact
- * live sender. Caller cancellation stops only pre-acceptance work.
- * @param sender - exact live Agent authorizing and originating the message.
- * @param targetId - durable direct-parent, direct-child, or sibling session id.
+ * Steer one model-authored message to another member of the same subagent tree.
+ * A running target receives it at its next step; an idle target starts a turn.
+ * Cold targets and their continuable ancestors resume under their recorded
+ * parents. Sender identity is rechecked before inbox acceptance; cancellation
+ * stops only pre-acceptance work and never retracts an accepted message.
+ * @param sender - exact live root or resident continuable Agent originating the message.
+ * @param targetId - another root or continuable member's durable Session id.
  * @param content - model-authored content to deliver.
  * @param options - caller cancellation before inbox acceptance.
  * @returns the accepted message's inbox id.
- * @throws when continuation services are unavailable, adjacency is rejected,
- *   or the message was not admitted.
+ * @throws when the target is outside the tree, cannot resume, or rejects input.
  */
 async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>
 

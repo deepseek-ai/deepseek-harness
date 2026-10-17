@@ -15,8 +15,8 @@ import css from './AccountSection.module.css'
 
 /** Safe account snapshot shared by the settings page and launcher. */
 export interface AccountSnapshot {
-  /** Server-authored bonus notice awaiting display, absent when none is available. */
-  notice?: BonusNotice
+  /** Server-authored notices in front-to-back order, absent when none are available. */
+  notices?: readonly BonusNotice[]
 
   /** Latest Host state, absent until the stream responds. */
   view: AccountView | undefined

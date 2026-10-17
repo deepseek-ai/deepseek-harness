@@ -121,7 +121,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${started.name} [inactive] parent=lead depth=1 — workflow child`)
+    expect(text(result)).toBe(`lead [inactive] — team lead\n${started.name} [inactive] parent=lead depth=1 — workflow child`)
   })
 
   it('omits external leaves without diagnostics', async () => {
@@ -132,7 +132,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('(no subagents)')
+    expect(text(result)).toBe('lead [inactive] — team lead')
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -145,16 +145,16 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     }
     expect(Object.keys(parameters.properties ?? {})).toEqual([])
     expect(parameters.required ?? []).toEqual([])
-    expect(schemas[0]?.description).toContain('You can message your parent, continuable siblings, and direct children')
-    expect(schemas[0]?.description).toContain('Deeper descendants accept only interrupt_agent')
+    expect(schemas[0]?.description).toContain('You can message any other Team member')
+    expect(schemas[0]?.description).toContain('You can interrupt only your own descendants')
   })
 
-  it('renders the empty result as (no subagents)', async () => {
+  it('renders the Lead when the tree has no children', async () => {
     const { ctx, parent } = await setup([])
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe('(no subagents)')
+    expect(text(result)).toBe('lead [inactive] — team lead')
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -210,7 +210,8 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${started.name} [inactive] parent=lead depth=1 — real child\n`
+      'lead [inactive] — team lead\n'
+      + `${started.name} [inactive] parent=lead depth=1 — real child\n`
       + 'legacy:running-child [running] parent=lead depth=1 — still working\n'
       + 'legacy:waiting-child [inactive] parent=lead depth=1 — waiting on descendants',
     )
@@ -243,7 +244,8 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${started.name} [inactive] parent=lead depth=1 — summarize the doc\n`
+      'lead [inactive] — team lead\n'
+      + `${started.name} [inactive] parent=lead depth=1 — summarize the doc\n`
       + 'legacy:historical-one-shot [diagnostic: unavailable] parent=lead depth=1',
     )
   })
@@ -313,7 +315,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
     // The branch finishes its own turn but stays resident waiting on the
-    // grandchild it owns: the live-registry `idle` status.
+    // grandchild it owns: the live-registry 'idle' status.
     releaseChild.resolve(undefined)
     await vi.waitFor(() => {
       expect(ctx.agents.get(started.childId)?.status).toBe('idle')
@@ -322,9 +324,12 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${started.name} [inactive] parent=lead depth=1 — waiting branch\n`
+      'lead [inactive] — team lead\n'
+      + `${started.name} [inactive] parent=lead depth=1 — waiting branch\n`
       + `${grandchild.name} [running] parent=${started.name} depth=2 — nested leaf`,
     )
+
+    expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(grandchild.childId)))).toBe(text(result))
 
     releaseGrandchild.resolve(undefined)
     await waitNoActivation(ctx, grandchild.childId)
@@ -367,12 +372,13 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'legacy:deep-leaf [inactive] parent=legacy:one-shot-mid depth=2 — deep leaf\n'
+      'lead [inactive] — team lead\n'
+      + 'legacy:deep-leaf [inactive] parent=legacy:one-shot-mid depth=2 — deep leaf\n'
       + 'legacy:broken-node [diagnostic: unavailable] parent=lead depth=1',
     )
   })
 
-  it('shows each continuable child its parent and siblings by name with their descriptions', async () => {
+  it('shows the same complete Team from the root and each branch', async () => {
     const release = Promise.withResolvers<undefined>()
     const releaseDelta = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -395,38 +401,18 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const delta = await start('delta task')
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
-    const fromAlpha = await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha))
-    expect(fromAlpha.isError).toBe(false)
-    expect(text(fromAlpha)).toBe([
-      'lead [inactive] — your parent',
-      'beta [inactive] — sibling: beta task',
-      'gamma [inactive] — sibling: gamma task',
-      'delta [running] — sibling: delta task',
-    ].join('\n'))
-    const fromDelta = await callTool(ctx, 'list_agents', {}, ctx.agents.get(delta))
-    expect(text(fromDelta)).toBe([
-      'lead [inactive] — your parent',
-      'alpha [running] — sibling: alpha task',
-      'beta [inactive] — sibling: beta task',
-      'gamma [inactive] — sibling: gamma task',
-    ].join('\n'))
-    const fromParent = await callTool(ctx, 'list_agents', {}, parent)
-    expect(text(fromParent)).toBe([
+    const expected = [
+      'lead [inactive] — team lead',
       'alpha [running] parent=lead depth=1 — alpha task',
       'beta [inactive] parent=lead depth=1 — beta task',
       'gamma [inactive] parent=lead depth=1 — gamma task',
       'delta [running] parent=lead depth=1 — delta task',
-    ].join('\n'))
-
-    const entries = await ctx.subagents.listChildren(parent.id)
-    const legacy = vi.spyOn(ctx.subagents, 'listChildren').mockResolvedValue(entries.map(({ name: _name, ...entry }) => entry))
-    expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha))))
-      .toContain(`legacy:${beta} [inactive] — sibling: beta task`)
-    legacy.mockRestore()
-
-    const catalog = vi.spyOn(ctx.subagents, 'listChildren').mockResolvedValue([])
-    expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(alpha)))).toBe('(no subagents)')
-    catalog.mockRestore()
+    ].join('\n')
+    for (const caller of [parent, ctx.agents.get(alpha), ctx.agents.get(delta)]) {
+      const result = await callTool(ctx, 'list_agents', {}, caller)
+      expect(result.isError).toBe(false)
+      expect(text(result)).toBe(expected)
+    }
 
     release.resolve(undefined)
     releaseDelta.resolve(undefined)

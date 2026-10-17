@@ -49,7 +49,7 @@ For example, ask the model to start a subagent to review the diff and track its 
 |---|---|---|
 | `maxTasks` | `256` | Maximum non-deleted tasks on the board |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) lists the replacements.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-agent-team) is the exhaustive source for every accepted field and its JSDoc. A row that sets `maxMembers`, `maxMessageBytes`, or `disposalTimeoutMs` does not activate, and dsh names the key in its startup warning; the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.md) lists the replacements.
 
 ### Teammates
 
@@ -59,7 +59,7 @@ Every root agent leads its own Team, and every live subagent below it, at any de
 
 ### Messages between teammates
 
-Members use standard `send_message` with agent names: the Lead reaches direct children, and resident continuable children reach their parent and continuable siblings. Steer delivers into the target inbox and can cold-resume children or siblings. Team stores no messages; accepted messages follow ordinary Agent persistence.
+Members use standard `list_agents` to discover the whole Team and `send_message` to contact any other member by name. The subagent runtime owns routing, sender attribution, and cold restoration. Team stores no messages; accepted messages follow ordinary Agent persistence.
 
 ### Shared task board
 
@@ -161,7 +161,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [tool-agent-team package](../tool-agent-team/README.md) — the task and wait tools, policy, and identity every member receives.
 - [Subagent runtime](../../subagent/subagent/README.md) — continuable children, messaging, interruption, and lifecycle that teammates use.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — why teammates are subagents and what Team keeps.
-- [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
+- [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
 - [Experimental package reference](../AGENTS.md) — placement, publication, and dependency isolation.
 
 -----
@@ -194,7 +194,9 @@ These limits describe what a team cannot do yet or what needs special operationa
 - **Experimental prototype with no stability promise** — the package is public, but its contracts can change freely while it incubates.
 - **One process and one shared checkout** — members share cwd and observe edits immediately; this package provides no worktree, remote member, merge, or filesystem lock.
 - **Advisory write scopes** — Bash, formatters, code generators, and direct external writers can bypass filesystem version checks; Leads must coordinate ownership and review the final diff.
-- **Roster covers direct continuable children** — deeper descendants share tasks and waits but have no roster row; they can claim tasks under their own ids and message only their direct parent, children, and continuable siblings.
+- **Roster covers direct continuable children** — deeper descendants share tasks and waits but have no roster row; they can claim tasks under their own ids.
+
+- **Communication stays within one tree** — members cannot message unrelated Teams; only ancestors can interrupt descendants.
 - **Membership needs a live lineage** — a subagent whose parent Agent is not loaded is outside every Team, so its Team calls fail with `TEAM_NOT_MEMBER`.
 - **No automatic ownership release** — inactivity, interruption, process exit, and failed work do not release a task owner.
 - **Historical queued messages stay undelivered** — `team/message/queued` records without a matching delivery remain readable in the Lead log, but no member receives them.

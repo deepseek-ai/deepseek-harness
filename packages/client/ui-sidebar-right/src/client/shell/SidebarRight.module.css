@@ -38,11 +38,17 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Hidden docked items sit past the frame's right edge. Unclipped, they widen
+     the frame's scrollable overflow, and a caret reveal (PageUp in a text field
+     outside macOS) scrolls the `overflow: hidden` frame sideways. `clip` keeps
+     that overflow here without making the panel a scroll container, and does
+     not clip fixed floating children, whose containing block is the viewport. */
+  overflow: clip;
   pointer-events: none;
 }
 
-/* Only docked Grid items slide. Their common ancestor remains untransformed,
-   unclipped and without a stacking context, so fixed floating children escape. */
+/* Only docked Grid items slide. Their common ancestor remains untransformed
+   and without a stacking context, so fixed floating children escape. */
 .panel :global([data-dockkit-host='dock']),
 .panel :global([data-dockkit-empty]),
 .panel :global([data-dockkit-divider]) {

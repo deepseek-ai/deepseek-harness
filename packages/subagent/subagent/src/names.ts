@@ -35,7 +35,7 @@ export class SubagentNames {
     if (!subagentNameSchema.safeParse(name).success) {
       throw new SubagentError('agent name must start with a lower-case letter and contain only lower-case letters, digits, underscores, or hyphens; lead and unowned are reserved', 'INVALID_AGENT_NAME')
     }
-    const root = this.rootOf(parent)
+    const root = this.ctx.subagents.rootOf(parent)
     signal.throwIfAborted()
     const names = this.committed(root)
     const pending = this.pending.get(root) ?? new Set<string>()
@@ -53,7 +53,7 @@ export class SubagentNames {
     return {
       commit: (childId, publish) => {
         signal.throwIfAborted()
-        if (this.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
+        if (this.ctx.subagents.rootOf(parent) !== root) throw new SubagentError('agent tree changed during creation', 'AGENT_TREE_UNAVAILABLE')
         checkId(childId)
         publish()
         if (parent !== root) {
@@ -91,7 +91,7 @@ export class SubagentNames {
    */
   async resolve(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
     signal?.throwIfAborted()
-    const root = this.rootOf(caller)
+    const root = this.ctx.subagents.rootOf(caller)
     if (name === 'lead') return root.id
     const id = this.committed(root).get(name)
     if (id !== undefined) return id
@@ -117,29 +117,11 @@ export class SubagentNames {
    * @returns whether the root catalog records that assignment.
    */
   isRegistered(caller: Agent, name: string, id: SessionId): boolean {
-    return this.committed(this.rootOf(caller)).get(name) === id
+    return this.committed(this.ctx.subagents.rootOf(caller)).get(name) === id
   }
 
   private committed(root: Agent): ReadonlyMap<string, SessionId> {
     return new Map([['lead', root.id], ...catalogNames(liveCatalogState(this.ctx.get('sessionProjections'), root.session), root.id)])
   }
 
-  /** Resolve only uninterrupted live subagent ancestry, never a fork's inherited parent. */
-  private rootOf(caller: Agent): Agent {
-    if (this.ctx.agents.get(caller.id) !== caller) {
-      throw new SubagentError('agent naming requires the exact live caller', 'UNAUTHORIZED')
-    }
-    let root = caller
-    const seen = new Set<SessionId>()
-    while (root.session.header.origin === 'subagent') {
-      const parentId = root.session.header.parentSession
-      const parent = parentId === undefined ? undefined : this.ctx.agents.get(parentId)
-      seen.add(root.id)
-      if (parent === undefined || seen.has(parent.id)) {
-        throw new SubagentError('agent naming requires the live parent tree', 'AGENT_TREE_UNAVAILABLE')
-      }
-      root = parent
-    }
-    return root
-  }
 }

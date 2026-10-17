@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 提供可继续子级的全局控制工具：`send_message` 在父子或同级间发送 Steer 消息，`interrupt_agent` 停止后代当前轮次并保留收件箱和后代，可单独加载的 `list-agents` 插件按名称和描述发现代理。父级与可继续子级继承相同的工具定义和顺序。
+`dsh-tool-subagent-control` 让代理按名字发现和联系 Team 中的所有成员。`interrupt_agent` 只停止调用方的后代，并保留其收件箱与子级。可单独加载的 `list-agents` 插件列出整棵树，包含描述、父级名字、深度和活动状态。所有成员继承相同的工具定义与顺序。
 
 ## 目录
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### send_message
 
-向 agent 的 `name` 发消息。确切在线的 Agent 可联系直接可继续子级；驻留的可继续子级还可联系直接父级或可继续同级。同级投递使用共同在线父级的权限，并保留实际发送方。工作中的目标通过 Steer 在最近步骤边界接收消息；不活跃的子级或同级会启动或恢复轮次。成功返回收件箱接受标识（`messageId`），而非回复。不支持的目标、不可用的父级、未知名字、缺失描述符或被拒绝的准入均返回错误。
+通过 `name` 向另一个 Team 成员发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。冷祖先按记录的父级恢复，不接收发给目标的消息。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知名字、不可用历史和被拒绝的输入都会返回错误。
 
 ### interrupt_agent
 
@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出全部可达的可继续后代，每行带直接父级名字 和深度。父级在线的可继续子代理先看到父级及可继续同级。在线状态为 `running` 或 `inactive`。外部条目无需读取子 Session 即被省略；可读的一次性子级用于遍历，但不输出行。未知模式和无法读取的子级目录产生诊断。普通 Session 分叉不是目录条目。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级名字与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉领导独立 Team。
 
 -----
 
@@ -71,18 +71,18 @@ kind: "package-reference"
 
 ### 投递与信号所有权
 
-工具转发执行信号，它只在收件箱接受前控制准入。已接受的消息不能通过此工具取消。每条消息以 `Agent <sender-name> sent a message:` 开头，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`，使用父级权限的同级投递也一样。归属信息不授予权限。
+执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-name> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；目标的实际父级仍负责恢复和释放。
 
 ### 列表投影
 
-`list_agents` 无游标遍历调用方目录，并通过在线 Agent 注册表细化状态。可继续调用方的在线父级目录提供父级和同级行。后代遍历保留目录顺序；未知模式附带诊断并继续遍历，无法读取的目录则停止该分支。可达目录之外的后代无法被发现。
+`list_agents` 解析调用方的在线根，从根开始无游标遍历目录，并通过在线 Agent 注册表细化活动状态。未知模式附带诊断并继续遍历；不可读目录停止对应分支。可达目录之外的 Session 无法被发现。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `send_message` 与 `interrupt_agent` 注册 |
-| [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：父级、同级与子级发现及状态细化 |
+| [`src/list-agents.ts`](src/list-agents.ts) | 全 Team 发现与活动投影 |
 
 </details>
 
@@ -134,11 +134,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受后返回 `message delivered to agent <name>`；规范输出携带已接受的 `messageId`。目标不在调用方支持的父级、子级或同级路由内，或准入被拒绝时，返回错误结果。
+接受时返回 `message delivered to agent <name>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 Team 或输入被拒绝时，返回错误结果。
 
 #### Token 影响
 
-每次调用一条简短确认；目标回复不通过此调用返回。子级使用 `list_agents` 提供的父级和同级名字 发送后续消息。
+每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的名字向 Team 内成员发送后续消息。
 
 #### KV Cache 影响
 
@@ -148,11 +148,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-每个后代按稳定顺序显示一行：`<name> [<status>] parent=<name> depth=<n> — <label>`。可继续子级的列表先显示 `<name> [<status>] — your parent`，再显示 `<name> [<status>] — sibling: <label>`。未知模式或无法读取的目录输出 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不代表任务完成。`(no subagents)` 表示投影未留下任何行。
+首行为 `<name> [<status>] — team lead`。各可继续后代随后显示为 `<name> [<status>] parent=<name> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不表示任务完成。
 
 #### Token 影响
 
-随列表行数线性增长，包含父级和同级行。没有游标或上限。
+随整个 Team 列出的行数线性增长。没有游标或上限。
 
 #### KV Cache 影响
 
@@ -166,7 +166,7 @@ kind: "package-reference"
 这些限制说明控制工具无法观察或引导什么；它们是当前包约束。
 
 - **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
-- **消息要求在线谱系**——每个发送方可联系直接可继续子级。驻留的可继续子级在父级在线时还可联系直接父级和可继续同级。更深的后代与无关树不是消息目标；只有子级和同级投递支持冷激活。
+- **发消息要求调用方树在线**——根和发送者的祖先必须保持在线。冷目标及其可继续祖先可以在该树内恢复；每次恢复占用共享容量。无关树、外部目标和一次性目标不能接收消息。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `inactive` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 

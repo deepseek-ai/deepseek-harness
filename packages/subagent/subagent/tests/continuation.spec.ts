@@ -2865,7 +2865,7 @@ describe('continuable adjacent-Agent delivery', () => {
       signal: testSignal,
     })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
-      message: `agent "${childId}" is not a resident continuable child and cannot send to parent "${parent.id}"`,
+      message: `agent "${childId}" is not a resident continuable child`,
     })
 
     await handle.dispose()

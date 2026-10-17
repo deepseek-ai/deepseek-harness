@@ -254,7 +254,7 @@ describe('tree-wide agent names', () => {
     const session = ctx.sessions.create(SessionId('orphan'), { meta: { origin: 'subagent' } })
     const child = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(child, undefined))
-    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
+    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
   })
 
   it('rejects stale callers, detached children, and a missing identity projection', async () => {
@@ -264,7 +264,7 @@ describe('tree-wide agent names', () => {
     const child = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(child, undefined))
     expect(names.nameOf(child)).toBe('legacy:orphan')
-    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'AGENT_TREE_UNAVAILABLE' }))
+    expect(() => names.reserve(child, 'writer', signal)).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     const nestedSession = ctx.sessions.create(SessionId('nested'), { meta: { origin: 'subagent', parentSession: parent.id } })
     const nested = { ...parent, id: nestedSession.id, session: nestedSession }
     onTestFinished(ctx.agents.enter(nested, undefined))

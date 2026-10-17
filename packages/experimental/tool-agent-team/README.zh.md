@@ -40,7 +40,7 @@ kind: "package-reference"
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
-设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
+设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
 
 让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的 id 用于寻址。
 
@@ -122,13 +122,13 @@ member scope 上的一个 `team:policy` 段落和一个必需的 `team:identity`
 ##### Team 策略
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use agent names with send_message to reach your direct continuable children or, as a continuable subagent, your parent and continuable siblings. Descriptions explain responsibilities and may repeat.
+Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent name to contact any other member whose branch supports continuation. Descriptions explain responsibilities and may repeat.
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents shows direct contacts and all reachable continuable descendants; discovery does not grant message or assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first for an inactive direct contact, or coordinate through its parent for a deeper member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+Use agent names as task owners; the root agent is named lead. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents includes the root and all reachable continuable descendants, with parent names and depth; discovery does not grant assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first to wake a required inactive member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
 ```
 
 #### Token 影响
@@ -157,7 +157,7 @@ Use agent names as task owners; the root agent is named lead. The Lead can reass
 
 #### 模型看到什么
 
-每个 Team 成员都收到相同的五个 schema，列在[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)中。结果是紧凑 JSON 任务视图、任务分页或等待值。当没有其他成员 running 时，`wait_agent` 返回 reason 为 `no-active-peer` 的 `noProgress` 以及消息 `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive direct contact before waiting again; coordinate deeper members through their parent.`。仅限 Lead 的 `reassign` 在执行时落实，而不是通过不同的 schema。
+每个 Team 成员都收到相同的五个 schema，列在[生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)中。结果是紧凑 JSON 任务视图、任务分页或等待值。当没有其他成员 running 时，`wait_agent` 返回 reason 为 `no-active-peer` 的 `noProgress` 以及消息 `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.`。仅限 Lead 的 `reassign` 在执行时落实，而不是通过不同的 schema。
 
 #### Token 影响
 

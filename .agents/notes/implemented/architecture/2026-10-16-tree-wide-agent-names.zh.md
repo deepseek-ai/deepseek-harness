@@ -24,7 +24,7 @@ Session id 提供持久执行身份，但模型协作时难以阅读。描述可
 
 ## 影响
 
-创建必须提供名字，分发前拒绝重名。独立根可以复用名字。工具结果、子级初始指引、消息前缀与结束通知使用名字。内部 Session 和任务负责人 id 保持稳定。[升级指南](../../../../docs/upgrade-guide/v0.2.1-alpha.4/agent-team-subagents/guide.zh.md)列出变化的工具参数与结果。
+创建必须提供名字，分发前拒绝重名。独立根可以复用名字。工具结果、子级初始指引、消息前缀与结束通知使用名字。内部 Session 和任务负责人 id 保持稳定。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.1/agent-team-subagents/guide.zh.md)列出变化的工具参数与结果。
 
 ## 测试
 
