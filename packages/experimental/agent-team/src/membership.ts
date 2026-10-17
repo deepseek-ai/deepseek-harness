@@ -16,23 +16,6 @@ export interface TeamMembership {
   readonly role: 'lead' | 'teammate'
 }
 
-/**
- * Resolve one member Session id for task assignment.
- * @param root - exact live Team Lead.
- * @param state - current Team state.
- * @param target - member Session id.
- * @returns the member's durable id.
- */
-export function resolveMember(root: Agent, state: TeamState, target: SessionId): SessionId {
-  if (target === root.id) return root.id
-  const child = state.children.find(candidate => candidate.id === target)
-  if (child !== undefined) return child.id
-  const member = state.members.find(candidate => candidate.phase === 'active'
-    && candidate.id === target)
-  if (member === undefined) throw new TeamError(`teammate "${target}" not found`, 'TEAM_MEMBER_NOT_FOUND')
-  return member.id
-}
-
 /** Resolves Team membership from the live Agent registry. */
 export class TeamMembers {
   /**
@@ -41,6 +24,23 @@ export class TeamMembers {
   constructor(
     private readonly ctx: Context,
   ) {}
+
+  /**
+   * Resolve a task assignee from the Lead's current catalog or historical roster.
+   * @param root - exact live Team Lead.
+   * @param state - current Team state, read in the same synchronous transaction.
+   * @param target - member Session id.
+   * @returns the member's durable id.
+   */
+  resolveMember(root: Agent, state: TeamState, target: SessionId): SessionId {
+    if (target === root.id) return root.id
+    const catalog = this.ctx.sessionProjections.snapshot(root.session, ['subagentCatalog']).values.subagentCatalog
+    if (catalog === undefined) throw new Error('Subagent catalog projection is not registered')
+    if (catalog.some(child => child.mode === 'continuable' && child.id === target)) return target
+    const member = state.members.find(candidate => candidate.phase === 'active' && candidate.id === target)
+    if (member === undefined) throw new TeamError(`teammate "${target}" not found`, 'TEAM_MEMBER_NOT_FOUND')
+    return member.id
+  }
 
   /**
    * Resolve one exact live Agent's Team role.

@@ -108,7 +108,7 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 | [`src/membership.ts`](src/membership.ts) | Lead and teammate resolution through the live Agent registry, and task-assignee lookup |
 | [`src/task-board.ts`](src/task-board.ts) | Task CAS commands, DAG validation, and derived views |
 | [`src/journal.ts`](src/journal.ts) | Serialized Lead-log transactions and commit notification |
-| [`src/projection.ts`](src/projection.ts) | Strict replay projection of the Lead’s continuable children and Team events, publishing the `agentTeam` client view |
+| [`src/projection.ts`](src/projection.ts) | Strict replay of historical roster, tasks, and mailbox records, publishing the `agentTeam` client view |
 | [`src/task-view.ts`](src/task-view.ts) | Pure task readiness and write-overlap derivation shared by the task board and client view |
 | [`src/activity.ts`](src/activity.ts) | One-shot change waiters and disposal release |
 
@@ -118,7 +118,7 @@ A root Agent whose own log carries no subagent descriptor leads the Team identif
 
 ### Roster
 
-The projection folds the Lead’s own `subagent/catalog` facts into rows keyed by child id, using the catalog label as description. Continuable children are included; inherited facts and other modes are skipped. Descriptions need not be unique. Historical `team/member` records retain their phases and descriptions and add only ids absent from the catalog. Team writes no membership records.
+Task assignment reads the Lead’s existing `subagentCatalog` projection, which excludes inherited catalog facts. Only continuable children and active historical members are assignable. Team retains historical `team/member` records but neither copies nor parses current child catalog records.
 
 ### Messages and historical mailbox
 
@@ -136,7 +136,7 @@ Tasks are complete versioned snapshots; every mutation carries `expectedRevision
 
 Task mutations append `team/task` to the exact live Lead Session and flush before reporting success or waking waiters. Team events are log-only: they never enter the conversation surface, so derived model history is untouched by coordination records. Session event `seq` and `time` own ordering and timing; snapshots do not duplicate them. Teammate ids and descriptions live in the Lead's `subagent/catalog`, which the subagent runtime writes.
 
-Mailbox projection and checkpoint admission preserve every decoded JSON field of accepted content outside the locally declared validators, including an own `__proto__` key. Local field checks cover `text`, `reasoning`, `image`, and `tool-call`; accepted unknown tags remain opaque. Team projection cache version 5 rebuilds checkpoints from earlier cache versions from the Session log; the Session format version is unchanged.
+Mailbox projection and checkpoint admission preserve every decoded JSON field of accepted content outside the locally declared validators, including an own `__proto__` key. Local field checks cover `text`, `reasoning`, `image`, and `tool-call`; accepted unknown tags remain opaque. Team projection cache version 6 rebuilds checkpoints from earlier cache versions from the Session log; the Session format version is unchanged.
 
 ### Disposal
 
@@ -144,9 +144,9 @@ Unloading the service releases current waits and unregisters the projection. Tea
 
 ### Browser projection
 
-The `agentTeam` Session projection publishes the Lead Session's roster rows with their phases and errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` Session projection publishes the Lead and historical roster rows with their phases and errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
-The [Web UI](../client-ui-agent-team/README.md) reads the shared Session projections and overlays activity from Session status. Task creation and updates belong to Team agents through the service and model tools. The `./client` export supplies browser-safe roster, task, and projection types.
+The [Web UI](../client-ui-agent-team/README.md) combines the Lead’s `subagentCatalog` and `agentTeam` projections and overlays activity from Session status. Task creation and updates belong to Team agents through the service and model tools. The `./client` export supplies browser-safe roster, task, and projection types.
 
 </details>
 

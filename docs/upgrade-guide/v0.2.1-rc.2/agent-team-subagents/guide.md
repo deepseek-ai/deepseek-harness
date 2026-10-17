@@ -20,6 +20,8 @@ The experimental Agent Teams plugins share agent creation, discovery, messaging,
 - Cold resume uses the target’s saved preset and permission policies. It does not join the creator’s current preset generation. Missing saved presets reject restoration; historical targets without a saved preset use host composition with their recorded descriptor overrides. `subagent/start` and `subagent/end` dispatch through the Team root’s scope.
 - Historical Team roster and mailbox records remain readable. Names in those records are historical data and do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
 
+- `agentTeam.members` carries the Lead and historical members. Browser consumers combine it with continuable `subagentCatalog` entries, preferring catalog entries for duplicate ids.
+
 ## Migration
 
 1. Remove the obsolete configuration keys and any patch rows that disable subagent tools solely for Team support.

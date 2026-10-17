@@ -6,7 +6,7 @@
 
 ## 身份与 roster
 
-`TeamId` 为根 `SessionId` 添加品牌；`TeamTaskId` 使用 `task-<n>`。`TeamMessageId` 仅供历史邮箱记录保留。Team 不写成员记录：视图包含 Lead、以 `id` 和 `description` 构成 `TeamChild` 的直接可继续子级，以及历史成员。描述可以重复；id 用于寻址成员。
+`TeamId` 为根 `SessionId` 添加品牌；`TeamTaskId` 使用 `task-<n>`。`TeamMessageId` 仅供历史邮箱记录保留。Team 不写成员记录：浏览器将 `agentTeam` 中的 Lead 和历史成员与 `subagentCatalog` 中的直接可继续子级组合。描述可以重复；id 用于寻址成员。
 
 ```ts type-equiv
 /** Historical roster value written by earlier Team builds on every teammate lifecycle change. */
@@ -75,12 +75,12 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-Lead Session 通过 `SessionProjectionMap.agentTeam` 发布 roster 行与未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久记录。成员活动来自 Session 状态；模型标签来自各成员的 `modelSelection` 投影。
+Lead Session 通过 `SessionProjectionMap.agentTeam` 发布 Lead、历史 roster 行与未删除任务视图。浏览器将这些行与 `subagentCatalog` 中的可继续条目组合，重复 id 优先使用目录条目。`failure` 在最后有效状态旁报告被拒绝的持久 Team 记录。成员活动来自 Session 状态；模型标签来自各成员的 `modelSelection` 投影。
 
 ```ts type-equiv
 /**
  * One roster row published through the `agentTeam` Session projection: the
- * Lead, each continuable direct child of the Lead, and each historical roster member.
+ * Lead and each historical roster member. Current children come from `subagentCatalog`.
  */
 interface TeamMemberProjection {
   readonly id: SessionId
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影回放根的可继续目录子级、历史成员、任务和历史邮箱。Team 记录按 `TeamId` 选取；继承的目录事实被跳过。描述不参与身份校验。Session 事件的 `seq` 和 `time` 负责顺序与时间。调用方获得成员和任务视图，不获得待投递邮件。[包 README](../../packages/experimental/agent-team/README.zh.md)定义操作、授权和限制。
+`agentTeam` 投影回放按 `TeamId` 选取的历史成员、任务和历史邮箱记录。独立的 `subagentCatalog` 投影负责子级发现，并跳过继承的目录事实。描述不参与身份校验。Session 事件的 `seq` 和 `time` 负责顺序与时间。调用方获得成员和任务视图，不获得待投递邮件。[包 README](../../packages/experimental/agent-team/README.zh.md)定义操作、授权和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

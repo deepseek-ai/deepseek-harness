@@ -134,13 +134,19 @@ for (const backend of backends) {
         resumeSessionId: rootId,
         agentOptions: { provider: 'mock', model: 'mock' },
       })
-      expect(second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values['agentTeam']).toMatchObject({
+      const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
+      expect(projections.agentTeam).toMatchObject({
         members: [
           { id: rootId, role: 'lead', phase: 'active' },
-          { id: started.childId, description: 'restart worker', role: 'teammate', phase: 'active' },
         ],
         tasks: [{ id: created.id, subject: 'carry over' }],
       })
+      expect(projections.subagentCatalog).toMatchObject([
+        { id: started.childId, mode: 'continuable', label: 'restart worker' },
+      ])
+      await expect(second.ctx.agentTeams.updateTask(rootHandle.agent, {
+        taskId: created.id, expectedRevision: 1, action: 'reassign', owner: started.childId,
+      })).resolves.toMatchObject({ ownerId: started.childId })
       expect(second.adapter.requests).toEqual([])
       await rootHandle.dispose()
       await second.dispose()
@@ -183,7 +189,8 @@ for (const backend of backends) {
         members: [{ ...historical, phase: 'active' }],
         pendingMessages: [message],
       })
-      expect(second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values['agentTeam']).toMatchObject({
+      const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
+      expect(projections.agentTeam).toMatchObject({
         members: [
           { id: rootId, role: 'lead' },
           { id: childId, description: 'historical mailbox target', role: 'teammate', phase: 'active' },

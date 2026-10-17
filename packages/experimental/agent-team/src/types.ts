@@ -57,12 +57,6 @@ export interface TeamMemberSnapshot {
   readonly error?: string
 }
 
-/** A continuable direct child of the Lead, read from the Lead's subagent catalog. */
-export interface TeamChild {
-  readonly id: SessionId
-  readonly description: string
-}
-
 /** Durable task lifecycle. */
 export type TeamTaskStatus = 'pending' | 'in_progress' | 'completed' | 'deleted'
 
@@ -94,7 +88,7 @@ export interface TeamTaskView {
 
 /**
  * One roster row published through the `agentTeam` Session projection: the
- * Lead, each continuable direct child of the Lead, and each historical roster member.
+ * Lead and each historical roster member. Current children come from `subagentCatalog`.
  */
 export interface TeamMemberProjection {
   readonly id: SessionId

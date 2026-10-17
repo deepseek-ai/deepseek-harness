@@ -435,42 +435,33 @@ describe('Agent Teams projection events', () => {
     expect(isEmptyState(projectTeam(ROOT, [inherited]))).toBe(true)
   })
 
-  it('projects own continuable catalog children as teammates and skips inherited children', () => {
-    const records: SessionEvent[] = [
-      catalog('inherited', 0, 'inherited-name'),
-      catalog('plain', 1),
-      catalog('named', 2, 'reviewer'),
-      event('team/task', { version: 2, teamId: TEAM, task: task({ status: 'in_progress', revision: 1, ownerId: SessionId('named') }) }, SessionSeq(3)),
-    ]
-    const projected = project(ROOT, records, 1)
-    expect(teamState(projected).children).toEqual([{ id: SessionId('plain'), description: 'plain task' }, { id: SessionId('named'), description: 'reviewer' }])
-    expect(teamProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(projected)))).toEqual(projected)
-    const view = teamProjectionView(projected)
-    expect(view.members).toEqual([
-      { id: ROOT, role: 'lead', phase: 'active' },
-      { id: SessionId('plain'), description: 'plain task', role: 'teammate', phase: 'active' },
-      { id: SessionId('named'), description: 'reviewer', role: 'teammate', phase: 'active' },
-    ])
-    expect(view.tasks[0]).toMatchObject({ ownerId: SessionId('named') })
-    expect(teamProjectionView(teamProjectionDefinition.apply(projected, catalog('second', 4, 'writer')))).not.toBe(view)
+  it('leaves subagent catalog events to their owning projection', () => {
+    const state = project(ROOT, [])
+    const next = teamProjectionDefinition.apply(state, catalog('child', 0))
+    expect(next).toBe(state)
+    expect(teamProjectionView(next).members).toEqual([{ id: ROOT, role: 'lead', phase: 'active' }])
   })
 
-  it('publishes one catalog row when a historical member has the same id', () => {
-    const state = project(ROOT, [
-      event('team/member', { version: 2, teamId: TEAM, member: member() }, SessionSeq(0)),
-      catalog(CHILD, 1, 'current responsibility'),
-    ])
-    expect(teamProjectionView(state).members).toEqual([
-      { id: ROOT, role: 'lead', phase: 'active' },
-      { id: CHILD, description: 'current responsibility', role: 'teammate', phase: 'active' },
-    ])
-  })
-
-  it('allows repeated descriptions and rejects malformed continuable catalog payloads', () => {
-    expect(project(ROOT, [catalog('a', 0, 'dup'), catalog('b', 1, 'dup')]).failure)
-      .toBeUndefined()
-    const malformed = JSON.parse(JSON.stringify({ ...catalog('a', 0, 'x'), data: { version: 0, mode: 'continuable', childId: 'a' } })) as SessionEvent<'subagent/catalog'>
-    expect(project(ROOT, [malformed]).failure).toMatch(/subagent\/catalog payload is invalid/)
+  it('rebuilds version-5 checkpoints without retaining their copied catalog', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    ctx.effect(() => ctx.sessionProjections.register(teamProjectionDefinition))
+    const events = [catalog('child', 0), event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(1))]
+    const oldState = {
+      ...project(ROOT, events), inheritedEventCount: 0,
+      children: [{ id: SessionId('child'), description: 'child task' }],
+    }
+    const restored = ctx.sessionProjections.restore(
+      { agentTeam: { ver: 5, seq: SessionSeq(1), val: oldState } },
+      events, SessionLogOffset(0),
+      { version: SESSION_FORMAT_VERSION, id: ROOT, createdAt: 0, isSeeded: false },
+      SessionLogOffset(0),
+    )
+    const state = teamProjectionDefinition.stateSchema.parse(restored.checkpoint['agentTeam']!.val)
+    expect(state.tasks).toEqual([task()])
+    expect(state).not.toHaveProperty('children')
+    expect(state).not.toHaveProperty('inheritedEventCount')
   })
 
   describe('copy-on-write state and client view', () => {

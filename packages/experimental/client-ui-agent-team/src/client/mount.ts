@@ -23,8 +23,8 @@ export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale']
 
 /**
  * Register the Team locale dictionaries and the conversation-header action.
- * The panel reads the Lead Session's `agentTeam` projection from the shared
- * Session store; this registration performs no Team RPC.
+ * The panel combines the Lead Session's `agentTeam` and `subagentCatalog`
+ * projections in the shared Session store; this registration performs no Team RPC.
  * @param ctx - Client Context carrying the injected navigation, locale, slot, and Session services.
  */
 export function registerAgentTeamUi(ctx: ClientContext): void {

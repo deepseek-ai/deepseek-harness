@@ -64,7 +64,7 @@ function bench(options: {
   for (const [id, running] of Object.entries(options.running ?? {}) as [SessionId, boolean][]) byId[id] = summary(id, running)
   const sessions = createSnapshotStore<SessionListState>({
     ids: Object.keys(byId) as SessionId[], byId, phase: 'ready',
-    projectionsBySession: options.projections ?? { [SESSION]: { state: 'ready', error: null, values: { agentTeam: team } } },
+    projectionsBySession: options.projections ?? { [SESSION]: { state: 'ready', error: null, values: { subagentCatalog: [], agentTeam: team } } },
   })
   const statuses = createSnapshotStore<SessionStatusSnapshot>(options.statuses ?? new Map())
   const session = createSnapshotStore<SessionSnapshot>({
@@ -120,10 +120,51 @@ function setProjectionSnapshot(
 }
 
 function setProjection(sessions: ReturnType<typeof bench>['sessions'], sessionId: SessionId, value: TeamProjection): void {
-  setProjectionSnapshot(sessions, sessionId, { state: 'ready', error: null, values: { agentTeam: value } })
+  setProjectionSnapshot(sessions, sessionId, { state: 'ready', error: null, values: { subagentCatalog: [], agentTeam: value } })
 }
 
 describe('TeamAction', () => {
+  it('composes cached children with historical members and follows catalog updates and reconnects', () => {
+    const b = bench({ projections: { [SESSION]: { state: 'idle', error: null, values: {
+      agentTeam: { members: [lead, { ...worker, phase: 'failed', error: 'old failure' }], tasks: [{ ...task, ownerId: WORKER }] },
+      subagentCatalog: [
+        { id: WORKER, createdAt: 0, mode: 'continuable', label: 'current responsibility' },
+        { id: 'one-shot' as SessionId, createdAt: 0, mode: 'one-shot', label: 'hidden one-shot' },
+      ],
+    } } } })
+    render(<TeamAction {...b.props} />)
+    openPanel()
+    expect(screen.getByRole('heading', { name: '成员2' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^current responsibility/u })).toBeTruthy()
+    expect(screen.queryByText('old failure')).toBeNull()
+    expect(screen.queryByText('hidden one-shot')).toBeNull()
+    const values = b.sessions.getSnapshot().projectionsBySession[SESSION]!.values
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values: {
+      ...values,
+      subagentCatalog: [...values.subagentCatalog!, {
+        id: 'new-child' as SessionId, createdAt: 1, mode: 'continuable', label: 'new responsibility',
+      }],
+    } })
+    expect(screen.getByRole('heading', { name: '成员3' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^new responsibility/u })).toBeTruthy()
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: {} })
+    expect(screen.queryByText('new responsibility')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values })
+    expect(screen.getByRole('heading', { name: '成员2' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^current responsibility/u })).toBeTruthy()
+  })
+
+  it('waits for the catalog before presenting a complete Team roster', () => {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeam: team } } } })
+    render(<TeamAction {...b.props} />)
+    openPanel()
+    expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
+    setProjection(b.sessions, SESSION, team)
+    expect(screen.getByRole('button', { name: /^worker/u })).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('renders the Lead projection and applies later projection frames without any user action', async () => {
     const b = bench()
     render(<TeamAction {...b.props} />)
@@ -150,7 +191,7 @@ describe('TeamAction', () => {
       projections: {
         [SESSION]: {
           state: 'ready', error: null,
-          values: { agentTeam: team, modelSelection: { lastUsed: null, next: { provider: 'p', model: 'lead-model' } } },
+          values: { subagentCatalog: [], agentTeam: team, modelSelection: { lastUsed: null, next: { provider: 'p', model: 'lead-model' } } },
         },
         [WORKER]: {
           state: 'ready', error: null,
@@ -194,7 +235,7 @@ describe('TeamAction', () => {
     expect(screen.getByRole('status').textContent).toBe(zh.loading)
     act(() => { b.session.set({ ...b.session.getSnapshot(), openState: 'open' }) })
     expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
-    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { agentTeam: team } })
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { subagentCatalog: [], agentTeam: team } })
     expect(screen.getByText('Implement runtime')).toBeTruthy()
     expect(screen.queryByRole('status')).toBeNull()
     setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: {} })
@@ -215,6 +256,7 @@ describe('TeamAction', () => {
   it('shows the member id when no description is available', () => {
     const { description: _description, ...member } = worker
     const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
+      subagentCatalog: [],
       agentTeam: { members: [lead, member], tasks: [] },
     } } } })
     render(<TeamAction {...b.props} {...b.injected} />)
@@ -244,7 +286,7 @@ describe('TeamAction', () => {
     expect(screen.getByRole('status').textContent).toBe(zh.loading)
     act(() => { b.sessions.set({
       ...b.sessions.getSnapshot(), phase: 'ready',
-      projectionsBySession: { [SESSION]: { state: 'idle', error: null, values: { agentTeam: team } } },
+      projectionsBySession: { [SESSION]: { state: 'idle', error: null, values: { subagentCatalog: [], agentTeam: team } } },
     }) })
     expect(screen.getByText('Implement runtime')).toBeTruthy()
     expect(screen.queryByRole('status')).toBeNull()
@@ -266,7 +308,7 @@ describe('TeamAction', () => {
         byId: { ...current.byId, ['unrelated' as SessionId]: summary('unrelated' as SessionId, true) },
         projectionsBySession: {
           ...projectionsBySession,
-          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { agentTeam: { members: [], tasks: [] } } },
+          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { subagentCatalog: [], agentTeam: { members: [], tasks: [] } } },
         },
       })
       b.statuses.set(new Map([['unrelated' as SessionId, { running: true, pendingInteraction: undefined, completionUnread: false }]]))
@@ -292,7 +334,7 @@ describe('TeamAction', () => {
 
   it('surfaces a Team projection failure beside the last valid state', () => {
     const b = bench({
-      projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeam: { ...team, failure: 'revision is not contiguous' } } } },
+      projections: { [SESSION]: { state: 'ready', error: null, values: { subagentCatalog: [], agentTeam: { ...team, failure: 'revision is not contiguous' } } } },
     })
     render(<TeamAction {...b.props} />)
     openPanel()
@@ -307,6 +349,7 @@ describe('TeamAction', () => {
         [SESSION]: {
           state: 'ready', error: null,
           values: {
+            subagentCatalog: [],
             agentTeam: {
               members: [
                 lead,

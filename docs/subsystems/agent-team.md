@@ -6,7 +6,7 @@ Types shared by the experimental implicit-root Team domain, model tools, and hos
 
 ## Identity and roster
 
-`TeamId` brands the root `SessionId`; `TeamTaskId` uses `task-<n>`. `TeamMessageId` remains only for historical mailbox records. Team writes no roster records: the view includes the Lead, its direct continuable children as `TeamChild` values with `id` and `description`, and historical members. Descriptions may repeat; ids address members.
+`TeamId` brands the root `SessionId`; `TeamTaskId` uses `task-<n>`. `TeamMessageId` remains only for historical mailbox records. Team writes no roster records: the browser combines the Lead and historical members from `agentTeam` with direct continuable children from `subagentCatalog`. Descriptions may repeat; ids address members.
 
 ```ts type-equiv
 /** Historical roster value written by earlier Team builds on every teammate lifecycle change. */
@@ -75,12 +75,12 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-The Lead Session publishes `SessionProjectionMap.agentTeam` with roster rows and non-deleted task views. `failure` reports a rejected persisted record beside the last valid state. Member activity comes from Session status; model labels come from each member's `modelSelection` projection.
+The Lead Session publishes `SessionProjectionMap.agentTeam` with the Lead, historical roster rows, and non-deleted task views. The browser combines these rows with continuable entries from `subagentCatalog`, preferring the catalog for duplicate ids. `failure` reports a rejected persisted Team record beside the last valid state. Member activity comes from Session status; model labels come from each member’s `modelSelection` projection.
 
 ```ts type-equiv
 /**
  * One roster row published through the `agentTeam` Session projection: the
- * Lead, each continuable direct child of the Lead, and each historical roster member.
+ * Lead and each historical roster member. Current children come from `subagentCatalog`.
  */
 interface TeamMemberProjection {
   readonly id: SessionId
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays the root’s continuable catalog children, historical roster, tasks, and historical mailbox. Team records are selected by `TeamId`; inherited catalog facts are skipped. Descriptions do not participate in identity checks. Session event `seq` and `time` own ordering and timing. Callers receive roster and task views, not pending mail. The [package README](../../packages/experimental/agent-team/README.md) defines operations, authorization, and limits.
+The `agentTeam` projection replays historical roster, tasks, and historical mailbox records selected by `TeamId`. The separate `subagentCatalog` projection owns child discovery and skips inherited catalog facts. Descriptions do not participate in identity checks. Session event `seq` and `time` own ordering and timing. Callers receive roster and task views, not pending mail. The [package README](../../packages/experimental/agent-team/README.md) defines operations, authorization, and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

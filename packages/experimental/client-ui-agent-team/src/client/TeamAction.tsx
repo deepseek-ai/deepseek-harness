@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
@@ -191,10 +191,24 @@ export function TeamAction({
   })
   const positioned = position !== null
   const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
-  const team = useSessions((state) => {
-    const rootId = teamRootId(sessionId, parentId, state.byId)
-    return rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam
-  })
+  const rootId = useSessions(state => teamRootId(sessionId, parentId, state.byId))
+  const board = useSessions(state => rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam)
+  const catalog = useSessions(state => rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.subagentCatalog)
+  const team = useMemo(() => {
+    if (board === undefined || catalog === undefined) return undefined
+    const members = new Map<SessionId, TeamMemberProjection>(
+      board.members.filter(member => member.role === 'lead').map(member => [member.id, member]),
+    )
+    for (const child of catalog) {
+      if (child.mode === 'continuable') {
+        members.set(child.id, { id: child.id, description: child.label, role: 'teammate', phase: 'active' })
+      }
+    }
+    for (const member of board.members) {
+      if (!members.has(member.id)) members.set(member.id, member)
+    }
+    return { ...board, members: [...members.values()] }
+  }, [board, catalog])
   const opening = useSession(snapshot => snapshot.openState === 'loading')
   const listing = useSessions(state => state.phase === 'pending')
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)

@@ -20,6 +20,8 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 - 冷恢复使用目标保存的 preset 和权限策略，不加入创建者当前 preset 代际。已保存的 preset 缺失时拒绝恢复；没有保存 preset 的历史目标使用宿主组装，并应用记录的 descriptor 覆盖。`subagent/start` 与 `subagent/end` 通过 Team 根作用域派发。
 - 历史 Team 名册和邮箱记录仍可读取。其中的名字仅作为历史数据，不用于解析消息收件人或任务所有者。Subagent catalog 载荷不变。
 
+- `agentTeam.members` 携带 Lead 和历史成员。浏览器消费者将其与可继续的 `subagentCatalog` 条目组合，重复 id 优先使用目录条目。
+
 ## 迁移
 
 1. 删除废弃配置键，以及仅为支持 Team 而禁用 subagent 工具的 patch 行。

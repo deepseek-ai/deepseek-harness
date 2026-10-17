@@ -108,7 +108,7 @@ kind: "package-reference"
 | [`src/membership.ts`](src/membership.ts) | 通过 live Agent registry 解析 Lead 与 teammate，以及查找任务分配对象 |
 | [`src/task-board.ts`](src/task-board.ts) | 任务 CAS 命令、DAG 校验与派生视图 |
 | [`src/journal.ts`](src/journal.ts) | 串行化的 Lead 日志事务与提交通知 |
-| [`src/projection.ts`](src/projection.ts) | 严格回放 Lead 的可继续子级和 Team 事件，发布 `agentTeam` 客户端视图 |
+| [`src/projection.ts`](src/projection.ts) | 严格回放历史成员、任务和邮箱记录，发布 `agentTeam` 客户端视图 |
 | [`src/task-view.ts`](src/task-view.ts) | 任务板与客户端视图共用的纯任务就绪性和写入重叠推导 |
 | [`src/activity.ts`](src/activity.ts) | 一次性变更等待者与 dispose（资源释放）时的等待解除 |
 
@@ -118,7 +118,7 @@ kind: "package-reference"
 
 ### Roster
 
-投影将 Lead 自有的 `subagent/catalog` 事实转为按子级 id 标识的行，目录标签作为描述。可继续子级被纳入；继承的事实和其他模式被跳过。描述不要求唯一。历史 `team/member` 记录保留阶段和描述，仅补充目录中不存在的 id。Team 不写入成员记录。
+任务指派读取 Lead 已有的 `subagentCatalog` 投影，该投影排除继承的目录事实。只有可继续子级和 active 历史成员可被指派。Team 保留历史 `team/member` 记录，但不复制或解析当前子级目录记录。
 
 ### 消息与历史 mailbox
 
@@ -136,7 +136,7 @@ Team 不发送消息。`send_message` 的路由、Steer 投递、冷恢复和发
 
 任务变更将 `team/task` 追加到精确的 live Lead 会话，并在报告成功或唤醒等待者之前 flush。Team 事件仅存在于日志：它们从不进入会话表面，因此派生模型历史不受协作记录影响。顺序与时间由会话事件的 `seq` 与 `time` 负责，快照不重复保存。teammate id 与描述保存在 Lead 的 `subagent/catalog` 中，由 subagent 运行时写入。
 
-Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内容中全部已解码 JSON 字段，包括自有 `__proto__` 键。本地字段检查覆盖 `text`、`reasoning`、`image` 和 `tool-call`；获准的未知标签保持不透明。Team 投影缓存版本 5 从 Session 日志重建较早缓存版本的 checkpoint；Session 格式版本保持不变。
+Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内容中全部已解码 JSON 字段，包括自有 `__proto__` 键。本地字段检查覆盖 `text`、`reasoning`、`image` 和 `tool-call`；获准的未知标签保持不透明。Team 投影缓存版本 6 从 Session 日志重建较早缓存版本的 checkpoint；Session 格式版本保持不变。
 
 ### Dispose
 
@@ -144,9 +144,9 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 
 ### 浏览器投影
 
-`agentTeam` Session 投影发布 Lead Session 的 roster 行（含 phase 与错误）、未删除任务视图，以及最后有效状态旁的 `failure`。其 `apply` 只替换被触及的集合；仅邮箱的变化保留客户端视图引用，不产生 frame。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection) 定义传输类型。
+`agentTeam` Session 投影发布 Lead 与历史 roster 行（含 phase 与错误）、未删除任务视图，以及最后有效状态旁的 `failure`。其 `apply` 只替换被触及的集合；仅邮箱的变化保留客户端视图引用，不产生 frame。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection) 定义传输类型。
 
-[Web UI](../client-ui-agent-team/README.zh.md) 读取共享 Session 投影，并从 Session 状态叠加活动信息。任务创建与更新由 Team agent 通过服务和模型工具完成。`./client` 导出可供浏览器使用的 roster、任务与投影类型。
+[Web UI](../client-ui-agent-team/README.zh.md) 组合 Lead 的 `subagentCatalog` 与 `agentTeam` 投影，并从 Session 状态叠加活动信息。任务创建与更新由 Team agent 通过服务和模型工具完成。`./client` 导出可供浏览器使用的 roster、任务与投影类型。
 
 </details>
 

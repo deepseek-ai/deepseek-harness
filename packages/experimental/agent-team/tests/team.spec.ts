@@ -15,7 +15,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import TeamService, { TeamError, TeamId, TeamTaskId } from '../src/index.ts'
-import { resolveMember } from '../src/membership.ts'
+import { TeamMembers } from '../src/membership.ts'
 import { emptyTeamState, teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamProjectionState } from '../src/projection.ts'
 import { TestSessionQuery } from './test-session-query.ts'
@@ -151,7 +151,6 @@ describe('Team identity and membership', () => {
     expect(describe(named)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
     expect(describe(unnamed)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
     expect(describe(grandchild)).toEqual({ root: lead.id, id: TeamId(lead.id), role: 'teammate' })
-    expect(durable(lead).children).toEqual([{ id: named.id, description: 'alpha responsibility' }, { id: unnamed.id, description: 'shared responsibility' }])
 
     ctx.subagents.interrupt(named.id, { kind: 'ancestor', agent: lead })
     await waitNoAgent(ctx, named.id)
@@ -184,26 +183,39 @@ describe('Team identity and membership', () => {
       id: TeamId(handle.agent.id),
       role: 'lead',
     })
-    expect(durable(handle.agent)).toMatchObject({ children: [], members: [], tasks: [] })
+    expect(durable(handle.agent)).toMatchObject({ members: [], tasks: [] })
+    const task = await ctx.agentTeams.createTask(handle.agent, { subject: 'fork task', description: 'independent' })
+    await expect(ctx.agentTeams.updateTask(handle.agent, {
+      taskId: task.id, expectedRevision: 1, action: 'reassign', owner: alpha,
+    })).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
     await handle.dispose()
   })
 
   it('resolves task assignees only by id, including historical members', async () => {
-    const { lead } = await setup([])
+    const { ctx, lead } = await setup([])
+    const members = new TeamMembers(ctx)
+    lead.session.append('subagent/catalog', {
+      version: 0, childId: SessionId('named-child'), childCreatedAt: 0, mode: 'continuable', label: 'reviewer',
+    })
+    lead.session.append('subagent/catalog', {
+      version: 0, childId: SessionId('one-shot-child'), childCreatedAt: 0, mode: 'one-shot',
+    })
     const state = {
-      ...emptyTeamState(lead.id, SessionLogOffset(0)),
-      children: [{ id: SessionId('named-child'), description: 'reviewer' }],
+      ...emptyTeamState(lead.id),
       members: [
         { id: SessionId('old-child'), name: 'legacy', description: 'd', provider: 'spawn', context: 'fresh' as const, phase: 'active' as const },
         { id: SessionId('failed-child'), name: 'broken', description: 'd', provider: 'spawn', context: 'fresh' as const, phase: 'failed' as const },
       ],
     }
     for (const id of [lead.id, SessionId('named-child'), SessionId('old-child')]) {
-      expect(resolveMember(lead, state, id)).toBe(id)
+      expect(members.resolveMember(lead, state, id)).toBe(id)
     }
-    for (const alias of ['lead', 'reviewer', 'legacy', 'broken', 'failed-child']) {
-      expect(() => resolveMember(lead, state, SessionId(alias))).toThrow(expect.objectContaining({ code: 'TEAM_MEMBER_NOT_FOUND' }))
+    for (const alias of ['lead', 'reviewer', 'legacy', 'broken', 'failed-child', 'one-shot-child']) {
+      expect(() => members.resolveMember(lead, state, SessionId(alias))).toThrow(expect.objectContaining({ code: 'TEAM_MEMBER_NOT_FOUND' }))
     }
+    vi.spyOn(ctx.sessionProjections, 'snapshot').mockReturnValue({ asOfSeq: -1, values: {} })
+    expect(() => members.resolveMember(lead, state, SessionId('named-child')))
+      .toThrow('Subagent catalog projection is not registered')
   })
 
   it('constructs with the default task limit and serializes concurrent task commits', async () => {

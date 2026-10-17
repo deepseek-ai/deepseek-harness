@@ -71,7 +71,7 @@ export class TeamService extends Service {
     this.activity = new TeamActivity()
     this.journal = new TeamJournal(ctx, (root) => { this.activity.notify(TeamId(root.id)) })
     this.members = new TeamMembers(ctx)
-    this.tasks = new TeamTaskBoard(this.journal, maxTasks)
+    this.tasks = new TeamTaskBoard(this.journal, maxTasks, this.members)
 
     const notifyMember = ({ agent }: { agent: Agent }): void => {
       const membership = this.members.tryMembership(agent)
