@@ -96,8 +96,8 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 服务入口：提供方注册表、启动与继续 API、生命周期事件 |
 | [`src/manager.ts`](src/manager.ts) | 统一管理启动、消息准入、冷恢复、父子所有权、结算与释放 |
 | [`src/activation.ts`](src/activation.ts) | 执行期记录、容量槽、子级锁与本地输出捕获 |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | 相邻 Agent 消息、返回指引与结算通知 |
-| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 与 Steer 适配器，以及标准相邻 Agent 消息标记 |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Team 成员消息、返回指引与结算通知 |
+| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 与 Steer 适配器，以及标准Team 成员消息标记 |
 | [`src/structured.ts`](src/structured.ts) | Activation 局部结构化捕获与保护 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |

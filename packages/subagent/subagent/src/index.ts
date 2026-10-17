@@ -14,7 +14,7 @@
  * `startActivation` establishes every child under the activation manager, which
  * owns execution, result delivery, and resource release. Local providers seed
  * resumable Agents; external providers return a single execution handle.
- * `sendMessage` steers between adjacent local Agents without exposing
+ * `sendMessage` steers between local Agents in one Team without exposing
  * whether a child is resident. Discovery combines real child Sessions with
  * parent-owned records for external executions.
  * Direct discovery reads parent catalogs; descendants recursively read reachable

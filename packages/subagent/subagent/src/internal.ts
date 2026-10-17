@@ -11,11 +11,11 @@ import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type SubagentRuntime from './index.ts'
 import type { SubagentDelivery } from './control-types.ts'
 
-/** Process-stable identity carried only by the standard adjacent-Agent messaging tool. */
+/** Process-stable identity carried only by the standard Team messaging tool. */
 export const adjacentAgentSendMessageTool = Symbol.for('dsh.subagent.adjacentAgentSendMessageTool')
 
 /**
- * Mark the standard adjacent-Agent messaging tool without changing its model-visible schema.
+ * Mark the standard Team messaging tool without changing its model-visible schema.
  * @param definition - the standard `send_message` definition.
  * @returns the same definition with its internal identity installed.
  */
@@ -25,7 +25,7 @@ export function markAdjacentAgentSendMessageTool(definition: ToolDefinition): To
 }
 
 /**
- * Test whether one visible definition is the standard adjacent-Agent messaging tool.
+ * Test whether one visible definition is the standard Team messaging tool.
  * @param definition - the scope-resolved `send_message` candidate.
  * @returns whether the definition carries the internal standard-tool identity.
  */

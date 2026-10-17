@@ -96,8 +96,8 @@ This section explains how the service is built and where the observable behavior
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
 | [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, parent ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Adjacent-Agent messages, return guidance, and settlement notices |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard adjacent-Agent messaging markers |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Team messages, return guidance, and settlement notices |
+| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard Team messaging markers |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
