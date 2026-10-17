@@ -537,7 +537,7 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
 
 /**
  * Deliver one browser-authored message to a continuable child through the
- * exact live direct parent, retaining the caller-minted request identity and
+ * live Team root under its durable creation address, retaining the caller-minted request identity and
  * validated browser zone on the accepted message. Success identifies the
  * message the child's inbox accepted; later execution is independent of this
  * call. Queue delivery targets a later turn; steer delivery targets the
@@ -549,7 +549,7 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  * @param signal - carrier cancellation, owning the call until inbox acceptance.
  * @returns the accepted message's inbox identity.
  * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
- *   `subagent/invalid-time-zone`, `subagent/parent-unavailable`,
+ *   `subagent/invalid-time-zone`,
  *   `subagent/not-resumable`, `subagent/unauthorized`,
  *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
  */
@@ -614,7 +614,7 @@ A published child settled. Scope-filtered dispatch uses the same Team-root carri
  * A published child settled. Scope-filtered dispatch uses the same Team-root
  * carrier as `subagent/start`, so the lifecycle pair reaches the
  * same scoped audience.
- * @param info - the run identity and terminal outcome.
+ * @param info - run identity, durable direct creator `parentSessionId`, and terminal outcome.
  * @mode emit
  */
 'subagent/end'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void
@@ -671,7 +671,7 @@ A provider established a published child. For in-process providers, `ctx.agents.
  * Scope-filtered dispatch keys the carrier by the Team root, so a
  * root-scoped listener observes all Team activations. Paired with
  * `subagent/end`.
- * @param info - the provider and published child identity.
+ * @param info - provider, child identity, and durable direct creator `parentSessionId`.
  * @mode emit
  */
 'subagent/start'(this: Scoped<SubagentRuntime>, info: SubagentRunInfo): void

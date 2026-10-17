@@ -98,7 +98,7 @@ async function settled(ctx: Context, childId: SessionId) {
 
 function continueChild(ctx: Context, parent: Agent, childId: SessionId) {
   return queueHostSubagentPrompt(
-    ctx.subagents, parent, childId,
+    ctx.subagents, parent.id, childId,
     [{ type: 'text', text: 'continue' }], { kind: 'user' }, new AbortController().signal,
   )
 }

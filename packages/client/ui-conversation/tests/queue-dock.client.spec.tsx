@@ -687,7 +687,6 @@ describe('QueueDock', () => {
           childSessionId: SID,
           mode: 'continuable' as const,
         },
-        parentAvailable: false,
       },
     }
     const source = liveSession(snap)
@@ -710,7 +709,6 @@ describe('QueueDock', () => {
           childSessionId: SID,
           mode: 'one-shot' as const,
         },
-        parentAvailable: true,
       },
     }
     const source = liveSession(snap)

@@ -1,6 +1,6 @@
 version: 1
 scenario: team-tree-messages
-profile: headless
+profile: sdk
 composition: team-targets
 recording: authored
 header:

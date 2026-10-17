@@ -4,7 +4,6 @@
  * @module @deepseek-ai/dsh-subagent/internal
  */
 
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
@@ -44,7 +43,7 @@ export const deliverSubagentPrompt = Symbol.for('dsh.subagent.deliverPrompt')
 /** Runtime face required by the host-only prompt adapters. */
 export interface HostPromptDeliverer {
   [deliverSubagentPrompt](
-    parent: Agent,
+    parentSessionId: SessionId,
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
@@ -56,7 +55,7 @@ export interface HostPromptDeliverer {
 /**
  * Queue one host-protocol message without exposing another Service operation.
  * @param runtime - subagent runtime owning continuation residency.
- * @param parent - exact live direct parent authorizing delivery.
+ * @param parentSessionId - durable direct creator authorizing delivery.
  * @param childId - durable direct-child session id.
  * @param content - host-authored content to deliver.
  * @param source - durable host-protocol source descriptor.
@@ -65,14 +64,14 @@ export interface HostPromptDeliverer {
  */
 export function queueHostSubagentPrompt(
   runtime: SubagentRuntime,
-  parent: Agent,
+  parentSessionId: SessionId,
   childId: SessionId,
   content: ContentBlock[],
   source: MessageSource,
   signal: AbortSignal,
 ): Promise<MessageId> {
   return (runtime as unknown as HostPromptDeliverer)[deliverSubagentPrompt](
-    parent,
+    parentSessionId,
     childId,
     content,
     source,

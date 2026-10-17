@@ -153,7 +153,7 @@ declare module '@deepseek-ai/cordis' {
      * Scope-filtered dispatch keys the carrier by the Team root, so a
      * root-scoped listener observes all Team activations. Paired with
      * `subagent/end`.
-     * @param info - the provider and published child identity.
+     * @param info - provider, child identity, and durable direct creator `parentSessionId`.
      * @mode emit
      */
     'subagent/start'(this: Scoped<SubagentRuntime>, info: SubagentRunInfo): void
@@ -161,7 +161,7 @@ declare module '@deepseek-ai/cordis' {
      * A published child settled. Scope-filtered dispatch uses the same Team-root
      * carrier as `subagent/start`, so the lifecycle pair reaches the
      * same scoped audience.
-     * @param info - the run identity and terminal outcome.
+     * @param info - run identity, durable direct creator `parentSessionId`, and terminal outcome.
      * @mode emit
      */
     'subagent/end'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void
@@ -217,7 +217,7 @@ export class SubagentRuntime extends TypertRemoteService {
           return provider.start(request)
         },
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
-        observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
+        observeActivation: (provider, childId, root, parentSessionId) => this.observeActivation(provider, childId, root, parentSessionId),
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
       childCtx.effect(() => () => {
@@ -330,7 +330,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * Deliver one host-protocol message to a direct continuable child.
    * Symbol-keyed so host adapters can preserve their own source descriptors without
    * widening the public Service Definition or impersonating an Agent sender.
-   * @param parent - exact live direct parent authorizing delivery.
+   * @param parentSessionId - durable direct creator authorizing delivery.
    * @param childId - durable direct-child session id.
    * @param content - host-authored content to deliver.
    * @param source - durable host-protocol source descriptor.
@@ -339,7 +339,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @returns the accepted message's inbox id.
    */
   private [deliverSubagentPrompt](
-    parent: Agent,
+    parentSessionId: SessionId,
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
@@ -347,8 +347,8 @@ export class SubagentRuntime extends TypertRemoteService {
     delivery: SubagentDelivery,
   ): Promise<MessageId> {
     return delivery === 'steer'
-      ? this.requireManager().steerPrompt(parent, childId, content, source, signal)
-      : this.requireManager().queuePrompt(parent, childId, content, source, signal)
+      ? this.requireManager().steerPrompt(parentSessionId, childId, content, source, signal)
+      : this.requireManager().queuePrompt(parentSessionId, childId, content, source, signal)
   }
 
   /**
@@ -436,7 +436,7 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /**
    * Deliver one browser-authored message to a continuable child through the
-   * exact live direct parent, retaining the caller-minted request identity and
+   * live Team root under its durable creation address, retaining the caller-minted request identity and
    * validated browser zone on the accepted message. Success identifies the
    * message the child's inbox accepted; later execution is independent of this
    * call. Queue delivery targets a later turn; steer delivery targets the
@@ -448,7 +448,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
    * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
-   *   `subagent/invalid-time-zone`, `subagent/parent-unavailable`,
+   *   `subagent/invalid-time-zone`,
    *   `subagent/not-resumable`, `subagent/unauthorized`,
    *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
    */
@@ -464,14 +464,6 @@ export class SubagentRuntime extends TypertRemoteService {
         'subagent/invalid-time-zone',
         'clientTimeZone must be UTC or a valid IANA Area/Location name',
         { value: clientTimeZone },
-      )
-    }
-    const parent = this.ctx.get('agents')?.get(parentSessionId)
-    if (parent === undefined) {
-      throw new RemoteError(
-        'subagent/parent-unavailable',
-        `parent session "${parentSessionId}" is not live`,
-        { parentSessionId },
       )
     }
     const principal = principalOf(this.ctx.invocation)
@@ -494,7 +486,7 @@ export class SubagentRuntime extends TypertRemoteService {
       }
       return {
         messageId: await this[deliverSubagentPrompt](
-          parent,
+          parentSessionId,
           childSessionId,
           content,
           source,
@@ -630,9 +622,10 @@ export class SubagentRuntime extends TypertRemoteService {
   private observeActivation(
     provider: string,
     childId: SessionId,
-    parent: Agent,
+    root: Agent,
+    parentSessionId: SessionId,
   ): ActivationObserver {
-    return createActivationObserver(this.emitLifecycle, provider, childId, parent)
+    return createActivationObserver(this.emitLifecycle, provider, childId, root, parentSessionId)
   }
 
   /** Reject the first requested capability that the provider lacks. */

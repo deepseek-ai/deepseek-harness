@@ -66,7 +66,7 @@ kind: "package-reference"
 
 ### 消息、中断与发现
 
-`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 Team 根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。中断仍要求祖先权限。浏览器提示词独立选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。直接子级发现通过 `listChildren(parentSessionId, signal?)` 读取 `subagentCatalog`，持有并释放优先在线的 Session observation。递归发现保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。
+`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 Team 根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。中断仍要求祖先权限。浏览器提示词校验持久化的直接创建者地址，并要求 Team 根在线；创建者可以离线。提示词选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。直接子级发现通过 `listChildren(parentSessionId, signal?)` 读取 `subagentCatalog`，持有并释放优先在线的 Session observation。递归发现保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。
 
 ### 失败与恢复
 
@@ -203,13 +203,11 @@ You are a delegated subagent: your permission scope was fixed when you were star
 
 - **后代读取串行执行**——每个可达目录（包括一次性子级）都需要一次观察。冷 Session 缺少有效的 prepared 观察时需要读取完整日志；大型冷会话树可能累积存储延迟。
 - **外部子级执行一次**——ACP、DSH SDK、Codex 与 Claude Code 没有本地子 Session，也不接受后续输入。释放后仍可发现父级拥有的执行记录。
-- **消息限定在一棵树内**——目标使用 Session id，必须是根或可继续成员。冷祖先占用激活容量。浏览器提示词保留独立的人类 Queue 或 Steer 控制路径。
-- **child 到 parent 的投递要求直接 parent 保持在线**——服务没有持久 parent mailbox；parent 缺失时会拒绝消息，而非接受无法唤醒的工作。
+- **消息限定在一棵树内**——目标使用 Session id，必须是根或可继续成员。仅恢复的目标占用激活容量。浏览器提示词保留独立的人类 Queue 或 Steer 控制路径。
 - **取消收敛期间存在唤醒缺口**——中断信号发出后、Agent 进入 idle 前被接受的后续消息会保持排队，直到另一条唤醒发送到达。
 - **待处理的注入上下文会保留 Activation**——settlement 会保守地把每个 Inbox occurrence 都视为未完成。Agent 进入 idle 后停放的上下文会让 child 及其在线祖先继续驻留，直到唤醒投递将其 claim、queue 变更将其移除，或 manager teardown 将其丢弃。宿主完成检查等待活动工作、待创建子级与资源清理，但不会等待仅包含空闲停放 Inbox 的子树；它既不结算这些 activation 的结果，也不丢弃其消息。
 - **驻留仅限进程内**——Activation inbox 与所有权图不会在两个 harness 进程之间协调；对单个持久化存储的并发访问需要持久化邮箱与跨进程租约协议。
 - **不回放已接受但未记录的消息**——崩溃可能丢失从未写入子会话日志、已被接受的提示词；丢失的消息不会自动回放。
-- **没有持久化 parent mailbox**——child 到 parent 的消息要求驻留的可继续 child 与在线直接 parent，提供的是接受标识，不保证恰好一次投递。
 - **生命周期事件只供观察**——影响运行的 `subagent/end` 延续或决策接口仍需等待具体消费方。
 
 <a id="dev-note"></a>

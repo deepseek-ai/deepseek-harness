@@ -33,19 +33,13 @@ export type {
 /** Required services for subagent presentation and navigation. */
 export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight']
 
-/** Claim the composer for one-shot history or an unavailable continuation owner. */
+/** Claim the composer when the child mode does not allow follow-ups. */
 function selectReadOnlySubagent(owner: ComposerChainProps): SubagentReadOnlyMatch | null {
   const subagent = owner.session?.subagent
   if (subagent === undefined || subagent === null) return null
   if (subagent.address.mode === 'unknown') return { reason: 'unknown' }
   if (subagent.address.mode === 'one-shot') return { reason: 'one-shot' }
-  // Until a Host summary establishes parent availability, keep the normal
-  // disabled composer instead of claiming that the parent is offline.
-  if (subagent.parentAvailable !== false) return null
-  // A RUNNING parent-offline continuable child keeps the default composer:
-  // its input is disabled there, but the same primary Stop stays available so
-  // the child can be interrupted. Once it stops, this takeover returns.
-  return owner.session?.running === true ? null : { reason: 'parent-unavailable' }
+  return null
 }
 
 /**

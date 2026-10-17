@@ -60,7 +60,7 @@ interface SubagentHost {
   /** Resolve one provider's detached continuable-creation contribution. */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /** Build the lifecycle observer for one Activation residency epoch. */
-  observeActivation(provider: string, childId: SessionId, parent: Agent): ActivationObserver
+  observeActivation(provider: string, childId: SessionId, root: Agent, parentSessionId: SessionId): ActivationObserver
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
@@ -516,8 +516,8 @@ export class SubagentManager {
     })
   }
 
-  /** Verify durable creation edges without activating any ancestor. */
-  private async ancestorsOf(root: Agent, source: SessionObservation, signal: AbortSignal): Promise<SessionId[]> {
+  /** Resolve the live owner through verified creation edges without activating ancestors. */
+  private async teamOf(source: SessionObservation, signal: AbortSignal, root?: Agent): Promise<Pick<MaterializeBase, 'root' | 'ancestors'>> {
     const ancestors: SessionId[] = []
     const seen = new Set<SessionId>([source.header.id])
     let { header, projections, inheritedEventCount } = source
@@ -525,20 +525,28 @@ export class SubagentManager {
       signal.throwIfAborted()
       const parentId = header.parentSession
       const identity = projections?.values.subagent
-      if (parentId === undefined || seen.has(parentId) || identity == null || identity.seq < inheritedEventCount) break
+      if (parentId === undefined || identity == null || identity.seq < inheritedEventCount) break
+      if (seen.has(parentId)) throw new SubagentError('cyclic subagent creation ancestry', 'UNAUTHORIZED')
       seen.add(parentId)
       using parent = await this.observeContinuation(parentId, signal)
-      if (!parent.projections?.values.subagentCatalog?.some(entry => entry.id === header.id)) break
+      if (!parent.projections?.values.subagentCatalog?.some(entry => entry.id === header.id)) {
+        throw new SubagentError('subagent is absent from its creator catalog', 'UNAUTHORIZED')
+      }
       ancestors.unshift(parentId)
-      if (parentId === root.id) return ancestors
+      if (parentId === root?.id) return { root, ancestors }
       ;({ header, projections, inheritedEventCount } = parent)
+    }
+    if (root === undefined && ancestors.length > 0 && header.origin !== 'subagent') {
+      const owner = this.ctx.agents.roots().find(agent => agent.id === header.id)
+      if (owner === undefined) throw new SubagentError('Team root is not live', 'CONTINUATION_UNAVAILABLE')
+      return { root: owner, ancestors }
     }
     throw new SubagentError(`agent "${source.header.id}" is not a member of this Team`, 'UNAUTHORIZED')
   }
 
   /**
    * Queue one human-authored prompt as a distinct direct-child turn.
-   * @param parent - exact live direct parent authorizing delivery.
+   * @param parentSessionId - durable direct creator authorizing delivery.
    * @param childId - durable direct-child session id.
    * @param content - model-visible prompt blocks.
    * @param source - durable attribution for the human prompt.
@@ -546,18 +554,18 @@ export class SubagentManager {
    * @returns the accepted durable message id.
    */
   async queuePrompt(
-    parent: Agent,
+    parentSessionId: SessionId,
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
     signal: AbortSignal,
   ): Promise<MessageId> {
-    return this.deliverFromParent(parent, childId, content, { source, signal, delivery: 'queue' })
+    return this.deliverFromParent(parentSessionId, childId, content, { source, signal, delivery: 'queue' })
   }
 
   /**
    * Steer one host-authored prompt to a direct continuable child.
-   * @param parent - exact live direct parent authorizing delivery.
+   * @param parentSessionId - durable direct creator authorizing delivery.
    * @param childId - durable direct-child session id.
    * @param content - model-visible prompt blocks.
    * @param source - durable attribution for the host prompt.
@@ -565,13 +573,13 @@ export class SubagentManager {
    * @returns the accepted durable message id.
    */
   async steerPrompt(
-    parent: Agent,
+    parentSessionId: SessionId,
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
     signal: AbortSignal,
   ): Promise<MessageId> {
-    return this.deliverFromParent(parent, childId, content, { source, signal, delivery: 'steer' })
+    return this.deliverFromParent(parentSessionId, childId, content, { source, signal, delivery: 'steer' })
   }
 
   /** Admit local input synchronously before any teardown can begin. */
@@ -804,7 +812,7 @@ export class SubagentManager {
 
       resource = { kind: 'local', handle, outputStart: handle.agent.session.seq, structured, failureAt: undefined, poke: Promise.withResolvers<void>() }
     }
-    const observer = this.host.observeActivation(provider, childId, root)
+    const observer = this.host.observeActivation(provider, childId, root, inputs.ancestors.at(-1) as SessionId)
 
     const activation: Activation = {
       releaseSlot,
@@ -1059,13 +1067,28 @@ export class SubagentManager {
   }
 
   /** Preserve direct-parent authorization for human host prompts. */
-  private deliverFromParent(parent: Agent, childId: SessionId, content: ContentBlock[], options: ChildDeliveryOptions): Promise<MessageId> {
-    const root = this.rootOf(parent)
+  private async deliverFromParent(
+    parentSessionId: SessionId, childId: SessionId, content: ContentBlock[], options: ChildDeliveryOptions,
+  ): Promise<MessageId> {
+    options.signal.throwIfAborted()
+    const resident = this.resident.get(childId)
+    const creator = this.ctx.agents.get(parentSessionId)
+    let root: Agent
+    if (resident !== undefined) {
+      root = resident.root
+    } else if (creator !== undefined) {
+      root = this.rootOf(creator)
+    } else {
+      using source = await this.observeContinuation(childId, options.signal)
+      if (source.header.parentSession !== parentSessionId) {
+        throw new SubagentError(`subagent "${childId}" belongs to another parent session`, 'UNAUTHORIZED')
+      }
+      ;({ root } = await this.teamOf(source, options.signal))
+    }
     return this.deliverToMember(root, childId, content, {
       ...options,
       authorize: (activation) => {
-        this.assertAdmitting(parent)
-        if (activation?.ancestors.at(-1) !== parent.id) {
+        if (activation?.ancestors.at(-1) !== parentSessionId) {
           throw new SubagentError(`subagent "${childId}" belongs to another parent session`, 'UNAUTHORIZED')
         }
       },
@@ -1133,7 +1156,7 @@ export class SubagentManager {
           'NOT_RESUMABLE',
         )
       }
-      const ancestors = await this.ancestorsOf(root, source, signal)
+      const { ancestors } = await this.teamOf(source, signal, root)
       let activation: Activation
       try {
         const projectedPreset = source.projections?.values.agentPreset

@@ -80,7 +80,7 @@ async function startLifecycleFixture(
   const provider = ctx.subagents.getProvider(providerName)
   if (provider?.start === undefined) throw new Error('missing lifecycle fixture provider')
   const run = await provider.start({ ...request, cwd: request.cwd ?? process.cwd() })
-  const identity = { runId: SubagentRunId(randomUUID()), provider: providerName, id: run.id, local }
+  const identity = { runId: SubagentRunId(randomUUID()), provider: providerName, id: run.id, parentSessionId: request.parent.id, local }
   const carrier = scopeTarget(ctx.subagents, request.parent)
   ctx.emit(carrier, 'subagent/start', identity)
   void run.result.then(
@@ -94,7 +94,7 @@ async function startLifecycleFixture(
 async function settleSubagent(
   ctx: Context,
   parent: Agent,
-  info: Omit<SubagentRunEndInfo, 'runId' | 'local'> & { localAgent?: Agent },
+  info: Omit<SubagentRunEndInfo, 'runId' | 'local' | 'parentSessionId'> & { localAgent?: Agent },
   beforeSettle?: () => Promise<void>,
 ): Promise<void> {
   const result = Promise.withResolvers<SubagentResult>()
@@ -130,6 +130,41 @@ async function settleSubagent(
 }
 
 describe('HarnessSdkJsonRpcServer', () => {
+  it('reports a nested child creator after disposal when lifecycle dispatch belongs to the Team root', async () => {
+    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-nested-creator-'))
+    const ctx = await makeHarness(storageDir)
+    const transport = new FakeTransport()
+    const server = new HarnessSdkJsonRpcServer(ctx, transport)
+    try {
+      const root = await ctx.agents.create({ sessionId: SessionId('root'), meta: { cwd: storageDir } })
+      const creator = await ctx.agents.create({
+        sessionId: SessionId('creator'), parentAgent: root.agent,
+        meta: { cwd: storageDir, parentSession: root.agent.id, origin: 'subagent' },
+      })
+      const child = await ctx.agents.create({
+        sessionId: SessionId('leaf'), parentAgent: root.agent,
+        meta: { cwd: storageDir, parentSession: creator.agent.id, origin: 'subagent' },
+      })
+      await creator.dispose()
+      await child.dispose()
+      ctx.emit(scopeTarget(ctx.subagents, root.agent), 'subagent/end', {
+        runId: SubagentRunId(randomUUID()), provider: 'spawn', id: child.agent.id,
+        parentSessionId: creator.agent.id, local: true, stopReason: 'completed',
+      })
+      expect(transport.notifications.filter(n => n.params?.childSessionId === 'leaf')).toEqual([
+        { method: 'subagent.started', params: { parentSessionId: 'creator', childSessionId: 'leaf' } },
+        { method: 'subagent.finished', params: {
+          provider: 'spawn', agentId: 'leaf', parentSessionId: 'creator', childSessionId: 'leaf',
+          status: 'ok', stopReason: 'completed',
+        } },
+      ])
+    } finally {
+      await server.shutdown()
+      await ctx.fiber.dispose()
+      await rm(storageDir, { recursive: true, force: true })
+    }
+  })
+
   it('waits only for an existing SDK-owned session and includes a child-triggered root turn', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-wait-'))
     const ctx = await makeHarness(storageDir)

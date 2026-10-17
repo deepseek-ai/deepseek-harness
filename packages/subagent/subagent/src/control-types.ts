@@ -135,8 +135,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** A browser-supplied zone is neither UTC nor a canonical IANA name. */
     'subagent/invalid-time-zone': { readonly value: string }
-    /** No live Agent carries the addressed parent session. */
-    'subagent/parent-unavailable': { readonly parentSessionId: SessionId }
     /** The addressed child cannot take a continuation. */
     'subagent/not-resumable': { readonly childSessionId: SessionId }
     /** The claimed parent does not own the addressed child. */

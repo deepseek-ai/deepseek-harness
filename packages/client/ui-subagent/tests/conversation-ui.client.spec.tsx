@@ -30,7 +30,7 @@ type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentC
   ? Omit<Entry, 'createdAt'> & { activity: 'running' | 'inactive' }
   : never
 
-type CatalogFixture = { entries: readonly CatalogFixtureEntry[]; parentAvailable: boolean; state: SessionListState['projectionsBySession'][SessionId]['state']; error: SessionListState['projectionsBySession'][SessionId]['error'] }
+type CatalogFixture = { entries: readonly CatalogFixtureEntry[]; state: SessionListState['projectionsBySession'][SessionId]['state']; error: SessionListState['projectionsBySession'][SessionId]['error'] }
 
 function catalog(over: Partial<CatalogFixture> = {}): CatalogFixture {
   return {
@@ -44,7 +44,6 @@ function catalog(over: Partial<CatalogFixture> = {}): CatalogFixture {
         label: 'reviewer', activity: 'inactive',
       },
     ],
-    parentAvailable: true,
     state: 'ready',
     error: null,
     ...over,
@@ -1219,11 +1218,6 @@ describe('SubagentHeaderLineage', () => {
 })
 
 describe('SubagentReadOnlyComposer', () => {
-  it('explains the exact missing-parent recovery path', () => {
-    render(<SubagentReadOnlyComposer matched={{ reason: 'parent-unavailable' }} t={t} />)
-    expect(screen.getByRole('status').textContent).toContain('父会话当前不在线')
-  })
-
   it('keeps an unknown child read-only until its descriptor is available', () => {
     render(<SubagentReadOnlyComposer matched={{ reason: 'unknown' }} t={t} />)
     expect(screen.getByRole('status').textContent).toContain('读取子会话后才能确定是否可继续')

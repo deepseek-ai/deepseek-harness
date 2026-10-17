@@ -90,27 +90,29 @@ export function createLifecycleEmitter(
  * @param emit - the contained lifecycle emitter.
  * @param provider - the provider name recorded in the durable descriptor.
  * @param childId - the durable child session id.
- * @param parent - the exact live Team root keying scoped dispatch.
+ * @param root - the exact live Team root keying scoped dispatch.
+ * @param parentSessionId - durable direct creator retained through disposal.
  * @returns the observer whose edges this epoch publishes.
  */
 export function createActivationObserver(
   emit: LifecycleEmitter,
   provider: string,
   childId: SessionId,
-  parent: Agent,
+  root: Agent,
+  parentSessionId: SessionId,
 ): ActivationObserver {
-  const identity = { runId: SubagentRunId(randomUUID()), provider, id: childId, local: false }
+  const identity = { runId: SubagentRunId(randomUUID()), provider, id: childId, parentSessionId, local: false }
   return {
     start: (child?: Agent): void => {
       identity.local = child !== undefined
-      emit('subagent/start', identity, parent)
+      emit('subagent/start', identity, root)
     },
     settle: ({ stopReason, output }: SubagentResult): void => {
       emit('subagent/end', {
         ...identity,
         stopReason,
         ...output.length === 0 ? {} : { lastAssistantMessage: output },
-      }, parent)
+      }, root)
     },
   }
 }

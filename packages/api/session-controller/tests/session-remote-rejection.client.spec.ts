@@ -35,7 +35,6 @@ describe('Session over a rejecting Remote face', () => {
   it('propagates the rejection from a subagent continuation prompt and interrupt', async () => {
     const session = new Session(SID, rejecting('assembly fault'), {
       address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
-      parentAvailable: true,
     })
     await expect(session.prompt([{ type: 'text', text: 'x' }], 'queue')).rejects.toThrow('assembly fault')
     await expect(session.cancel()).rejects.toThrow('assembly fault')

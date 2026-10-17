@@ -194,7 +194,7 @@ describe('subagent prompt Remote', () => {
     await expect(subagents.prompt(promptRequest('Asia/Shanghai'), signal))
       .resolves.toEqual({ messageId: 'm-1' })
     expect(delivery).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'idle' }),
+      PARENT,
       CHILD,
       [{ type: 'text', text: 'continue' }],
       { kind: 'user', rpcId: REQUEST_ID, clientTimeZone: 'Asia/Shanghai' },
@@ -253,14 +253,11 @@ describe('subagent prompt Remote', () => {
     }
   })
 
-  it('refuses delivery when the exact parent Agent is not live', async () => {
+  it('passes the durable creator address without requiring its Agent', async () => {
     const { subagents } = await bench()
-    const delivery = promptDelivery(subagents)
-
-    await expect(subagents.prompt(promptRequest(), signal)).rejects.toMatchObject({
-      code: 'subagent/parent-unavailable', details: { parentSessionId: PARENT },
-    })
-    expect(delivery).not.toHaveBeenCalled()
+    const delivery = promptDelivery(subagents).mockResolvedValue('m-offline-creator' as MessageId)
+    await expect(subagents.prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-offline-creator' })
+    expect(delivery.mock.calls[0]?.[0]).toBe(PARENT)
   })
 
   it('maps each admission failure onto its stable code and hides the rest', async () => {

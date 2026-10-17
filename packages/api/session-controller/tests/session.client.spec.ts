@@ -474,7 +474,7 @@ describe('prompt and cancel errors', () => {
   const CHILD = { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' } as const
 
   it('routes an addressed child through non-activating history, continuation prompt, and interrupt only', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
     const steered = await session.prompt([{ type: 'text', text: '现在处理' }], 'steer')
@@ -510,11 +510,11 @@ describe('prompt and cancel errors', () => {
     expect(mock.log.requests('session/cancel')).toEqual([])
     // A successful interrupt leaves no stop error behind.
     expect(session.getSnapshot().promptError).toBeNull()
-    expect(session.getSnapshot().subagent).toEqual({ address: CHILD, parentAvailable: true })
+    expect(session.getSnapshot().subagent).toEqual({ address: CHILD })
   })
 
   it('sends an addressed child continuation under its echo request id and retires a refused echo', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const accepted = session.beginSubmission({ mode: 'queue', text: '继续', attachments: [] })
     await session.prompt([{ type: 'text', text: '继续' }], 'queue', undefined, accepted.requestId)
@@ -527,7 +527,7 @@ describe('prompt and cancel errors', () => {
   })
 
   it('forwards continuation image parts to the subagent prompt Remote unstripped', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
     const content = [
       { type: 'text' as const, text: '看这张图' },
@@ -549,7 +549,7 @@ describe('prompt and cancel errors', () => {
   })
 
   it('lands an interrupt business failure in promptError with op=stop', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     mock.remote.subagents.interruptByParent.mockResolvedValue(err(new RemoteError('subagent/unauthorized', 'nope', { childSessionId: SID })))
     await session.open()
     const cancelled = await session.cancel()
@@ -560,7 +560,7 @@ describe('prompt and cancel errors', () => {
   })
 
   it('rejects staged files instead of dropping them from subagent continuations', async ({ mock, start }) => {
-    const session = await sessionBench(mock, start, SID, { address: CHILD, parentAvailable: true })
+    const session = await sessionBench(mock, start, SID, { address: CHILD })
     await session.open()
 
     const prompted = await session.prompt([

@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The experimental Agent Teams plugins share agent creation, discovery, messaging, and interruption with subagents. Start a teammate with `subagent` or `subagent_fork`, describe its responsibility with `description`, and use its returned agent id for messages and task assignment. Descriptions may repeat and never identify a recipient.
+The experimental Agent Teams plugins use standard subagent tools and Session ids. Descriptions label responsibilities; repeated descriptions never identify recipients.
 
 - `spawn_teammate` and the Team-scoped `send_message`, `list_agents`, and `interrupt_agent` are removed. The standard control tools use `agent_id`, not `target`. Members of one root tree can message each other across branches by id; interruption remains ancestor-only.
 - `list_agents` takes no arguments and lists the entire Team, including the root and caller. Remove scripted `scope` arguments. The root row uses `kind: root`; descendant rows use `kind: child`, with parent ids and root-relative depth. Update consumers that expect `parent` or `sibling` rows. Discovery does not grant task-assignment authority.
@@ -17,8 +17,8 @@ The experimental Agent Teams plugins share agent creation, discovery, messaging,
 - `agent-team` rejects `maxMembers`, `maxMessageBytes`, and `disposalTimeoutMs`; `tool-agent-team` rejects `interrupt`, `freshProvider`, and `forkProvider`.
 - `ctx.agentTeams` removes `spawnTeammate()`, `sendMessage()`, `interrupt()`, and `listMembers()`. Task views expose `ownerId` instead of `ownerName`; task ownership uses Session ids, including the Lead's id.
 - Creation ancestry remains unchanged, but runtime instances share Team-root ownership. A member finishing or being released no longer waits for or disposes its descendants. Messages restore only their target; offline creators stay offline. Hosts close the whole Team when its root closes, and members explicitly wait for work they need.
-- Cold resume uses the target’s saved preset and permission policies. It does not join the creator’s current preset generation. Missing saved presets reject restoration; historical targets without a saved preset use host composition with their recorded descriptor overrides. `subagent/start` and `subagent/end` dispatch through the Team root’s scope.
-- Historical Team roster and mailbox records remain readable. Names in those records are historical data and do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
+- Cold resume uses the target’s saved preset and permission policies. It does not join the creator’s current preset generation. Missing saved presets reject restoration; historical targets without a saved preset use host composition with their recorded descriptor overrides. `subagent/start` and `subagent/end` dispatch through the Team root’s scope and carry the direct creator in `parentSessionId`; SDK completion notifications retain that creator. Browser continuation requires the root, not the creator, to remain online; root unavailability uses `subagent/delivery-unavailable` instead of `subagent/parent-unavailable`.
+- Historical Team roster and mailbox records remain readable. Historical names do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
 
 - `agentTeam.members` carries the Lead and historical members. Browser consumers combine it with continuable `subagentCatalog` entries, preferring catalog entries for duplicate ids.
 

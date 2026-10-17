@@ -20,8 +20,8 @@
     - button "Edit queued message"
     - button "Remove queued message"
     - button "Steer queued message"
-- textbox "Parent session offline; sending is unavailable but you can still stop the run" [disabled]
-- button "Add files or run commands" [disabled]
-- 'button "Access mode, current: Custom" [disabled]': Custom
+- textbox "Cmd/Ctrl+Enter steers all queued messages"
+- button "Add files or run commands"
+- 'button "Access mode, current: Custom"': Custom
 - button "Stop generating"
 - button "Send message" [disabled]

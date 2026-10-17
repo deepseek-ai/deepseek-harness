@@ -1,7 +1,7 @@
 // Web e2e scenario: the composer's independent Stop interrupts a running
 // continuable child. The child holds its model turn open through a replay
-// hang entry; the browser proves Send and Stop coexist, the parent-offline
-// disabled-Send-with-Stop composer, the subagents/interruptByParent
+// hang entry; the browser proves Send and Stop coexist regardless of the
+// creator's list availability, the subagents/interruptByParent
 // (never session.cancel) transport, the parked follow-up, and the FIFO resume
 // on a waking send.
 //
@@ -188,7 +188,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     if (failures.length > 1) throw new AggregateError(failures, 'subagent interrupt UI teardown failed')
   })
 
-  it('interrupts the live child through the parent-offline composer', async () => {
+  it('queues and interrupts the live child despite its creator being listed offline', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-interrupt-offline'))
     // The parent is unavailable in the Session list while the child stays live.
     const pattern = '**/api/session/list'
@@ -211,30 +211,21 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
       await page.getByRole('button', { name: /1 subagent/ }).click()
       await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
-      const input = page.getByRole('textbox', {
-        name: 'Parent session offline; sending is unavailable but you can still stop the run',
-      })
+      const input = page.locator('[data-composer-input]').first()
       await input.waitFor({ timeout: 15_000 })
       await page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /)
         .waitFor({ timeout: 15_000 })
-      expect(await input.isDisabled()).toBe(true)
+      expect(await input.isDisabled()).toBe(false)
       const stop = page.getByRole('button', { name: 'Stop generating' })
       expect(await stop.count()).toBe(1)
       expect(await stop.isEnabled()).toBe(true)
-      const send = page.getByRole('button', { name: 'Send message' })
-      expect(await send.count()).toBe(1)
-      expect(await send.isDisabled()).toBe(true)
-      // Keep the continuable Activation resident after this first abort. The
-      // direct setup queue also proves the ordinary row controls remain
-      // available while this parent-offline composer cannot submit new input.
-      await scaffold.ctx.subagents.prompt({
-        requestId: 'interrupt-ui-rearm' as SubagentPromptRequestId,
-        parentSessionId: parent.id,
-        childSessionId: childId,
-        mode: 'continuable',
-        delivery: 'queue',
-        content: [{ type: 'text', text: REARM }],
-      }, new AbortController().signal)
+      const promptResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === '/api/subagents/prompt')
+      await input.fill(REARM)
+      const send = page.getByRole('button', { name: 'Queue message' })
+      expect(await send.isEnabled()).toBe(true)
+      await send.click()
+      expect(((await (await promptResponse).json()) as { result: { ok: boolean } }).result).toMatchObject({ ok: true })
       await page.getByRole('button', { name: 'Edit queued message' }).waitFor({ timeout: 15_000 })
       expect(await page.getByRole('button', { name: 'Remove queued message' }).count()).toBe(1)
       expect(await page.getByRole('button', { name: 'Steer queued message' }).count()).toBe(1)
@@ -256,7 +247,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       await expect.poll(() => scaffold.ctx.agents.get(childId)?.status, { timeout: 15_000 }).toBe('idle')
 
       // Wake the parked setup message only after cancellation converges. A
-      // second hang keeps the parent-available case independent from this stop.
+      // second hang keeps the next interrupt case independent from this stop.
       await scaffold.ctx.subagents.prompt({
         requestId: 'interrupt-ui-rearm-wake' as SubagentPromptRequestId,
         parentSessionId: parent.id,
@@ -274,7 +265,6 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
 
   it('interrupts through subagents/interruptByParent, parks the follow-up, and resumes it FIFO', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-interrupt-flow'))
-    // A new connection reloads the truthful parent-availability hint.
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })

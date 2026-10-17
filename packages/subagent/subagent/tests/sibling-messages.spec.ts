@@ -158,7 +158,11 @@ describe('tree-wide messages', () => {
     const { ctx, parent } = await setup({})
     expect(ctx.subagents.rootOf(parent)).toBe(parent)
     expect(() => ctx.subagents.rootOf({ ...parent })).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
-    const fork = ctx.sessions.create(SessionId('ordinary-fork'), { meta: { parentSession: parent.id } })
+    const source = ctx.sessions.create(SessionId('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    source.append('turn/start', { turn: 1 })
+    source.append('subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label: 'source' })
+    source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const fork = ctx.sessions.fork(source, undefined, SessionId('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }
     onTestFinished(ctx.agents.enter(caller, undefined))
     expect(ctx.subagents.rootOf(caller)).toBe(caller)
@@ -273,7 +277,7 @@ describe('tree-wide messages', () => {
     expect(ctx.agents.get(leafId)).toBeUndefined()
   })
 
-  it('requires the parent catalog to attest every target edge', async () => {
+  it.each(['missing', 'cyclic'] as const)('rejects %s creation evidence before restoring a target', async (evidence) => {
     const { ctx, parent } = await setup({ branch: ['hang'], leaf: [textResponse('done')] })
     const branchId = await start(ctx, parent, 'branch')
     const branch = await running(ctx, branchId)
@@ -284,7 +288,9 @@ describe('tree-wide messages', () => {
       const result = await observe(...args)
       return args[0] !== branchId ? result : {
         ...result,
-        projections: { ...result.projections!, values: { ...result.projections!.values, subagentCatalog: [] } },
+        ...evidence === 'cyclic'
+          ? { header: { ...result.header, parentSession: leafId } }
+          : { projections: { ...result.projections!, values: { ...result.projections!.values, subagentCatalog: [] } } },
       }
     })
     try {

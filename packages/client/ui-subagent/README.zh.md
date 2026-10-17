@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 续接对话
 
-确切 parent 存活时，可继续 child 保留普通输入 chrome：child 运行期间输入和 Send 保持可用，因为每条后续消息都会进入 child 的 FIFO inbox，而独立的 Stop 经由 `subagents/interruptByParent` 路由。确切 parent 不可用且 child 未在运行的可继续 child 会选用说明恢复路径的只读编辑器；此类 child 仍在运行期间，selector 会让位给普通编辑器——输入区与 Send 被禁用，但独立的 Stop 保持可用。
+可继续 child 保留普通输入和独立 Stop 操作，不受创建者在线状态影响。提示词经由 `subagents/prompt` 路由，由运行时校验创建地址和在线 Team 根；失败使用普通提示词错误反馈。Stop 经由 `subagents/interruptByParent` 路由。
 
 ### `@` 引用 source
 
@@ -67,7 +67,7 @@ kind: "package-reference"
 
 ### 编辑器选举
 
-one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 parent 不可用且 child 未在运行时选用只读编辑器；否则普通编辑器的会话会经 `subagents/prompt` 路由提示词。本包绝不接收宿主上下文，也不调用面向模型的工具。
+one-shot 和模式未知的 child 选用只读编辑器。可继续 child 经由 `subagents/prompt` 路由提示词。本包绝不接收宿主上下文，也不调用面向模型的工具。
 
 模式未知的目录项仍可见、可点击，没有标签时显示子会话 id。读取子历史并确认受支持模式前，输入区保持只读；读取失败在该子会话中报告。
 

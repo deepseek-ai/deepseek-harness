@@ -1235,6 +1235,10 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       if (ordered.length > 1 && assertions.dshSdkChild === undefined) {
         expect(observedMethods.has('subagent.started')).toBe(true)
         expect(observedMethods.has('subagent.finished')).toBe(true)
+        for (const notification of notifications.filter(item => item.method === 'subagent.finished')) {
+          const child = ordered.find(log => log.header.id === notification.params.childSessionId)
+          expect(notification.params.parentSessionId).toBe(child?.header.parentSession)
+        }
       }
     })
   }

@@ -157,7 +157,7 @@ function queuePrompt(
   content: ContentBlock[],
   signal: AbortSignal = testSignal,
 ) {
-  return subagentManager(ctx).queuePrompt(parent, childId, content, { kind: 'user' }, signal)
+  return subagentManager(ctx).queuePrompt(parent.id, childId, content, { kind: 'user' }, signal)
 }
 
 function humanPrompt(
@@ -1279,6 +1279,56 @@ describe('continuable human steering delivery', () => {
 })
 
 describe('continuable child ownership', () => {
+  it.each(['queue', 'steer'] as const)('delivers human %s to a resident and cold child after its creator exits', async (delivery) => {
+    const releaseCreator = Promise.withResolvers<undefined>()
+    const releaseLeaf = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('creator done'), gate: releaseCreator.promise },
+      { chunks: textResponse('leaf'), gate: releaseLeaf.promise },
+      { chunks: textResponse('resident follow-up') },
+      { chunks: textResponse('cold follow-up') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    const starts: SubagentRunInfo[] = []
+    const ends: SubagentRunEndInfo[] = []
+    ctx.on('subagent/start', info => void starts.push(info))
+    ctx.on('subagent/end', info => void ends.push(info))
+    parkParent(ctx, parent)
+    const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    const creatorAgent = ctx.agents.get(creator.childId)!
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(creatorAgent), delivery: 'parent' })
+    try {
+      releaseCreator.resolve(undefined)
+      await waitNoActivation(ctx, creator.childId)
+      await humanPrompt(ctx, creatorAgent, leaf.childId, 'resident follow-up', delivery)
+      releaseLeaf.resolve(undefined)
+      await waitNoActivation(ctx, leaf.childId)
+      await humanPrompt(ctx, creatorAgent, leaf.childId, 'cold follow-up', delivery)
+      await waitNoActivation(ctx, leaf.childId)
+      expect(ctx.agents.get(creator.childId)).toBeUndefined()
+      const loaded = await loadStoredSession(ctx.sessionPersistence, leaf.childId)
+      expect(loaded.meta.parentSession).toBe(creator.childId)
+      expect(starts.filter(info => info.id === leaf.childId).map(info => info.parentSessionId)).toEqual([creator.childId, creator.childId])
+      expect(ends.filter(info => info.id === leaf.childId).map(info => info.parentSessionId)).toEqual([creator.childId, creator.childId])
+      expect(hasUserText(loaded.events, 'resident follow-up')).toBe(true)
+      expect(hasUserText(loaded.events, 'cold follow-up')).toBe(true)
+      await expect(subagentManager(ctx).queuePrompt(SessionId('wrong-creator'), leaf.childId, message('rejected'), { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+      const roots = vi.spyOn(ctx.agents, 'roots').mockReturnValueOnce([])
+      try {
+        await expect(humanPrompt(ctx, creatorAgent, leaf.childId, 'root offline', delivery))
+          .rejects.toMatchObject({ code: 'subagent/delivery-unavailable' })
+        expect(ctx.agents.get(leaf.childId)).toBeUndefined()
+      } finally {
+        roots.mockRestore()
+      }
+    } finally {
+      releaseCreator.resolve(undefined)
+      releaseLeaf.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('releases a finished creator while its child remains owned by the Team root', async () => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
@@ -3411,22 +3461,6 @@ describe('continuable errors', () => {
       .rejects.toThrow(SubagentError)
     expect(ctx.agents.get(started.childId)).toBe(child)
     hold.resolve(undefined)
-  })
-
-  it('rejects a parent that is no longer the live registry entry', async () => {
-    const { ctx, parent } = await setup([textResponse('first')])
-    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    // A stale parent reference: same id, not the exact live entry.
-    const stale = { ...parent, id: parent.id } as Agent
-
-    await expect(queuePrompt(ctx, stale, started.childId, message('stale')))
-      .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-    void child
   })
 
   it('rejects delegation from an unregistered instance and input to a closing startup', async () => {

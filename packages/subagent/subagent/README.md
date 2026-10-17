@@ -66,7 +66,7 @@ In-process spawn accepts an independent `agentPreset`; fork and external backend
 
 ### Messaging, interrupting, and discovering
 
-`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the Team root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts independently select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
+`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the Team root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts validate the durable direct-creator address and require a live Team root; the creator may be offline. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
 
 ### Failure and recovery
 
@@ -203,13 +203,11 @@ These limits define when the seam is a poor fit or needs special operational car
 
 - **Descendant reads are sequential** — each reachable catalog, including one-shot children, takes one observation. A cold Session without a valid prepared observation requires a full-log read; large cold trees can accumulate storage latency.
 - **External children execute once** — ACP, DSH SDK, Codex, and Claude Code have no local child Session and accept no follow-up input. Their parent-owned records remain discoverable after disposal.
-- **Messaging stays within one tree** — targets use Session ids and must be the root or continuable members. Cold ancestors consume activation capacity. Browser prompts retain their separate human Queue-or-Steer control path.
-- **A direct parent must remain live for child-to-parent delivery** — the service has no durable parent mailbox; a missing parent rejects the message instead of accepting work it cannot wake.
+- **Messaging stays within one tree** — targets use Session ids and must be the root or continuable members. Only the restored target consumes activation capacity. Browser prompts retain their separate human Queue-or-Steer control path.
 - **Wake gap during cancellation convergence** — a follow-up accepted after an interrupt signal but before the Agent becomes idle stays queued until another waking send.
 - **Pending injected context retains an Activation** — settlement conservatively treats every Inbox occurrence as unfinished. Context parked after the Agent becomes idle keeps the child and its live ancestors resident until a waking delivery claims it, a queue mutation removes it, or manager teardown discards it. Host completion joins active work, pending child creation, and resource cleanup, but does not wait for a subtree containing only idle parked inboxes; it neither completes those activation results nor discards their messages.
 - **Process-local residency** — the Activation inbox and ownership graph do not coordinate two harness processes; concurrent access to one persistence store needs a durable mailbox and cross-process lease protocol.
 - **No replay of accepted-but-unlogged messages** — a crash can lose an accepted prompt that never reached the child's session log; the lost message is not replayed automatically.
-- **No durable parent mailbox** — child-to-parent messages require a resident continuable child and live direct parent, and provide acceptance identity rather than exactly-once delivery.
 - **Lifecycle events are observe-only** — a run-affecting `subagent/end` continuation or decision API waits for a concrete consumer.
 
 <a id="dev-note"></a>

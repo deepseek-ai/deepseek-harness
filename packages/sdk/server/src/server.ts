@@ -11,10 +11,8 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
-import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
@@ -57,11 +55,6 @@ async function durablePromptContent(ctx: Context, blocks: SessionPromptParams['c
   return blocks.map(block => encodedImage(block)
     ? { type: 'image', attachment: refs[next++] as ImageAttachmentRef }
     : block)
-}
-
-/** Recover the delegating parent from the service-owned scoped carrier. */
-function subagentParentOf(carrier: Scoped<SubagentRuntime>): Agent {
-  return carrierKeyOf(carrier) as Agent
 }
 
 /** Deployment-specific status mapping for SDK turn and subagent outcomes. */
@@ -126,8 +119,7 @@ export class HarnessSdkJsonRpcServer {
       }
       this.transport.notify('subagent.started', payload)
     }))
-    this.disposers.push(ctx.on('subagent/end', function (this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo) {
-      const parent = subagentParentOf(this)
+    this.disposers.push(ctx.on('subagent/end', (info: SubagentRunEndInfo) => {
       // This protocol reports only in-process child sessions. The service
       // snapshots the provider name and local flag through child disposal;
       // matching ids or parent lineage alone never establishes locality.
@@ -135,7 +127,7 @@ export class HarnessSdkJsonRpcServer {
       const payload: SubagentFinishedNotification = {
         provider: info.provider,
         agentId: String(info.id),
-        parentSessionId: String(parent.session.id),
+        parentSessionId: String(info.parentSessionId),
         childSessionId: String(info.id),
         status: successStatus(info.stopReason, serverOptions),
         stopReason: info.stopReason,
