@@ -375,6 +375,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Projects the credential-reference seam onto the generated Remote namespace: batch fan-out, view projection, and refusal mapping live here, not on the seam Definition.',
   },
   {
+    key: 'dingtalk',
+    pkg: 'dingtalk-cli',
+    title: 'DingTalk dws account Remote',
+    mode: 'service',
+    consumers: ['client-ui-dingtalk'],
+    note: 'Prepares the pinned dws release, runs one Host-owned dws account check, sign-in, or sign-out at a time, and streams the account view to the Plugins page.',
+  },
+  {
     key: 'settingsController',
     pkg: 'api-settings-controller',
     title: 'Host settings-surface Remote controller',

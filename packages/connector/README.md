@@ -25,6 +25,8 @@ Each application plugin in this group is installed into a profile to use one thi
 | Package | Role | ctx key |
 |---|---|---|
 | [`cli-account/`](cli-account/README.md) | Runs a vendor CLI by its absolute path, gives the model that path in runtime context, and runs one Host-owned account operation at a time for CLI app plugins | — |
+| [`dingtalk/`](dingtalk/README.md) | Bundles the DingTalk plugin: the `dws` Host row and its Plugins page row | — |
+| [`dingtalk-cli/`](dingtalk-cli/README.md) | Downloads the pinned official `dws` and its skills, puts `dws` on the private Shell PATH, registers its skill, and runs the account operations the Plugins page drives | `ctx.dingtalk`; registers on `ctx.skills` and `ctx.shellEnv` |
 
 -----
 

@@ -875,6 +875,26 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-dingtalk-cli -->
+<a id="deepseek-aidsh-dingtalk-cli"></a>
+
+## `@deepseek-ai/dsh-dingtalk-cli`
+
+- `inject`: `skills` · `subprocess` · `shellEnv`
+- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
+- `source`: [`packages/connector/dingtalk-cli/src/index.ts:32`](../packages/connector/dingtalk-cli/src/index.ts)
+
+```ts config-catalog
+/** Where dws and its skills come from and how long a command that does not wait for the user may run. */
+export interface Config extends CliAccountConfig {
+  /** Directory holding the upstream skills laid out as `multi/` in the release's `dws-skills.zip`; when set, they are not downloaded. */
+  skillsDir?: string
+  /** Release download prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>`. */
+  releaseUrls: string[]
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-dingtalk-cli -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-agent-team -->
 <a id="deepseek-aidsh-experimental-agent-team"></a>
 
@@ -4983,6 +5003,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
 | `@deepseek-ai/dsh-cua-bundle` | — | [`packages/experimental/cua-bundle/src/index.ts`](../packages/experimental/cua-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
+| `@deepseek-ai/dsh-dingtalk` | — | [`packages/connector/dingtalk/src/index.ts`](../packages/connector/dingtalk/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |

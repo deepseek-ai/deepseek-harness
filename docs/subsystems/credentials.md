@@ -367,6 +367,51 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
+<a id="ctxdingtalk--dingtalk"></a>
+
+### `ctx.dingtalk` — `Dingtalk`
+
+Registers the CLI and its skill, and owns the account operations the Plugins page drives.
+
+```ts cordis-catalog
+/**
+ * Check the account again without changing it; installs dws and its skills first while either is missing.
+ * @returns the operation identity.
+ * @throws while another operation runs.
+ */
+@Remote check(): CliOperationId
+
+/**
+ * Sign in through the browser authorization page that dws serves to this computer.
+ * @returns the operation identity.
+ * @throws while another operation runs.
+ */
+@Remote signIn(): CliOperationId
+
+/**
+ * Sign the current account out, which also signs it out of the user's own terminal.
+ * @returns the operation identity.
+ * @throws while another operation runs.
+ */
+@Remote signOut(): CliOperationId
+
+/**
+ * Cancel a sign-in while it waits for the user's authorization, and wait for its command to exit.
+ * @param id - the operation to cancel; a finished one or another step is ignored.
+ * @returns after the operation settles, or at once when nothing is cancelled.
+ */
+@Remote cancel(id: CliOperationId): Promise<void>
+
+/**
+ * Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.
+ * @param signal - the Client's observation lifetime.
+ * @returns the current view, then each changed view.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<DingtalkState>
+```
+
+Source: [`packages/connector/dingtalk-cli/src/index.ts`](../../packages/connector/dingtalk-cli/src/index.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events
