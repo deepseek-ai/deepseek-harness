@@ -237,6 +237,7 @@
     "tests/conversation-view-tabs.e2e.ts",
     "tests/window-drag-coverage.e2e.ts",
     "tests/complex-history.perf.ts",
+    "tests/dingtalk-connection.e2e.ts",
     "tests/pwsh-terminal.e2e.ts",
     "tests/workflow-run.e2e.ts"
   ],
