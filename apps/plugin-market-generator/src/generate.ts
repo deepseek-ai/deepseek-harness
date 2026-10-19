@@ -6,7 +6,7 @@ import semver from 'semver'
 import { cacheKey, gitRefs, npmPackument, npmTarball, withGitObjects, type FetchLimits, type GitObjects, type GitTransports } from './fetchers.ts'
 import { readJsonFile, writeIfChanged, type PackageFiles } from './files.ts'
 import { GENERATED_ICON, readDisplayMetadata, type Display, type IconFile } from './metadata.ts'
-import { dshRange, findBundlePackages, isBundle, readManifest, type Manifest } from './packages.ts'
+import { dshRange, findBundlePackages, isBundle, isPrivate, readManifest, type Manifest } from './packages.ts'
 import type { Source } from './sources.ts'
 
 /** One generated version, in the field order of the format. */
@@ -59,7 +59,7 @@ interface Release {
 /** Base URL only used to validate relative icon references. */
 const VALIDATION_URL = 'https://index.invalid/index.json'
 /** Part of every cache key; change it when the way entries are derived changes, so cached results are rebuilt. */
-const CACHE_VERSION = 7
+const CACHE_VERSION = 8
 
 /** Why the index format rejects these plugins, or undefined when it accepts them. */
 function invalid(plugins: unknown): string | undefined {
@@ -154,8 +154,8 @@ async function readDisplay(
 }
 
 /**
- * Read every non-deprecated bundle version from the registry document, and the display fields from the tarball of the
- * highest one, through a cache keyed by the listed versions.
+ * Read every bundle version from the registry document that is neither deprecated nor private, and the display fields
+ * from the tarball of the highest one, through a cache keyed by the listed versions.
  */
 async function readNpm(source: Extract<Source, { kind: 'npm' }>, options: GenerateOptions, cache: Cache): Promise<GeneratedEntry[]> {
   const packument = await npmPackument(options.registry, source.name, options.limits)
@@ -164,12 +164,12 @@ async function readNpm(source: Extract<Source, { kind: 'npm' }>, options: Genera
   const releases = Object.entries(packument.versions ?? {}).flatMap(([version, manifest]) => {
     const published = packument.time?.[version]
     const deprecated = typeof manifest.deprecated === 'string' && manifest.deprecated !== ''
-    if (deprecated || !isBundle(manifest) || typeof published !== 'string') return []
+    if (deprecated || isPrivate(manifest) || !isBundle(manifest) || typeof published !== 'string') return []
     return releaseOf(source.name, manifest, version, Math.floor(Date.parse(published) / 1000), npmSource, warn) ?? []
   })
   const highest = entryOf(source.name, releases).versions[0]?.version
   if (highest === undefined) {
-    warn('no published version declares dsh.bundle')
+    warn('no published version that is neither deprecated nor private declares dsh.bundle')
     return []
   }
   const file = cache.file('npm', options.registry, options.inlineIconBytes, source.name, releases.map(release => release.version.version).sort())
@@ -261,7 +261,7 @@ async function readGit(source: Extract<Source, { kind: 'git' }>, options: Genera
       const files = await objects.tree(commit, path)
       const manifest = await readManifest(files, '')
       const gitSource = { type: 'git', url: source.url, commit, ...path === '' ? {} : { path } }
-      release = isBundle(manifest) && typeof manifest?.name === 'string' && typeof manifest.version === 'string'
+      release = isBundle(manifest) && !isPrivate(manifest) && typeof manifest?.name === 'string' && typeof manifest.version === 'string'
         ? releaseOf(manifest.name, manifest, manifest.version, await objects.committed(commit), gitSource, warn) ?? null : null
     } catch (error) {
       warn(`${commit}:${path} skipped: ${(error as Error).message}`)
@@ -284,16 +284,19 @@ async function readGit(source: Extract<Source, { kind: 'git' }>, options: Genera
   }
 }
 
-/** Names of the bundle packages on the default branch, by package directory. */
+/** Names of the bundle packages on the default branch that are not private, by package directory. */
 async function headPackages(files: PackageFiles, warn: (message: string) => void): Promise<{ path: string; name: string }[]> {
   const paths = await findBundlePackages(files, warn)
   if (paths.length === 0) warn('no package declares dsh.bundle')
   const packages: { path: string; name: string }[] = []
+  let privates = 0
   for (const path of paths) {
-    const name = (await readManifest(files.within(path), ''))?.name
-    if (typeof name === 'string') packages.push({ path, name })
+    const manifest = await readManifest(files.within(path), '')
+    if (isPrivate(manifest)) privates++
+    else if (typeof manifest?.name === 'string') packages.push({ path, name: manifest.name })
     else warn(`${posix.join(path, 'package.json')} has no name`)
   }
+  if (privates > 0 && privates === paths.length) warn('every package that declares dsh.bundle is private')
   return packages
 }
 

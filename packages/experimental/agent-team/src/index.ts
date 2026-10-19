@@ -47,8 +47,9 @@ export class TeamService extends Service {
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
   })
 
-  private readonly journal: TeamJournal
-  private readonly tasks: TeamTaskBoard
+  private readonly maxTasks: number
+  private journal!: TeamJournal
+  private tasks!: TeamTaskBoard
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'agentTeams')
@@ -60,18 +61,20 @@ export class TeamService extends Service {
         )
       }
     }
-    const maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
+    this.maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
+  }
 
-    this.journal = new TeamJournal(ctx, (root) => {
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
+    this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => {
       for (const agent of ctx.agents.list()) {
         if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) {
           emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
         }
       }
     })
-    this.tasks = new TeamTaskBoard(ctx, this.journal, maxTasks)
-
-    ctx.effect(() => ctx.root.sessionProjections.register(teamProjectionDefinition), 'agentTeams.runtimeLifecycle()')
+    this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
   }
 
   /**

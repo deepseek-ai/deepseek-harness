@@ -9,7 +9,7 @@
 编写来源列表，每行一个条目。生成器忽略空行和以 `#` 开头的行。
 
 ```text
-# npm packages: every non-deprecated bundle version is listed
+# npm packages: every bundle version that is neither deprecated nor private is listed
 @scope/dsh-example
 dsh-another-plugin
 # Git repositories: release tags and the default branch are listed
@@ -43,9 +43,9 @@ pnpm --filter @deepseek-ai/dsh-plugin-market-generator start \
 
 ## 列出的内容
 
-每个包成为一个插件，带有一个或多个版本。只有 `package.json` 声明了 `dsh.bundle`、且其 `patch` 是一个文件路径或文件路径列表的版本才会列出。
+每个包成为一个插件，带有一个或多个版本。只有 `package.json` 声明了 `dsh.bundle`、其 `patch` 是一个文件路径或文件路径列表、且没有设置 `"private": true` 的版本才会列出。默认分支上的 `package.json` 设置了 `"private": true` 的 Git 包不会列出，它在各个标签上的版本也不列出。
 
-- **npm 包**：注册表文档中未弃用、声明了组合包（bundle）且有发布时间的每个版本。版本只取自注册表文档；生成器只下载最高列出版本的 tarball，用于读取展示字段。该 tarball 的 `package.json` 必须与所请求的包名和版本一致。
+- **npm 包**：注册表文档中未弃用、未设为私有、声明了组合包（bundle）且有发布时间的每个版本。版本只取自注册表文档；生成器只下载最高列出版本的 tarball，用于读取展示字段。该 tarball 的 `package.json` 必须与所请求的包名和版本一致。
 - **Git 仓库**：生成器按以下顺序在默认分支上查找组合包：
   1. 根 `package.json` 声明了 `dsh.bundle`：仅使用根包；
   2. `package.json` 的 `workspaces` 或 `pnpm-workspace.yaml` 的 `packages` 匹配到声明了 `dsh.bundle` 的包：使用这些包。每个 glob 段可以是字面名称、含 `*` 的名称或 `**`；生成器忽略否定 glob，并报告未匹配任何内容的 glob；

@@ -593,7 +593,7 @@ describe('web e2e: long Chat scroll contract', () => {
       const artifactRoot = fileURLToPath(new URL('../../../.artifacts/screenshots/visible-fold/', import.meta.url))
       await mkdir(artifactRoot, { recursive: true })
       const evidence = await mkdtemp(join(artifactRoot, `${scenario.name}-`))
-      const controlledClock = scenario.name === 'content-growth-during-fold' || scenario.name === 'cancel-all-during-fold'
+      const controlledClock = !scenario.reduced
       await withScrollWorld({
         failureShot: `visible-fold-${scenario.name}`,
         controlledClock,
@@ -760,17 +760,19 @@ describe('web e2e: long Chat scroll contract', () => {
         try {
           settled = world.scaffold.whenTurnSettled(30_000)
           if (controlledClock) {
-            // Advance every animation frame so the race cannot miss the intermediate fold height.
+            // Sample each animation frame, including when the CI browser misses real-time frames.
             await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000))
             try {
               await page.getByRole('button', { name: 'Send message', exact: true }).evaluate((button) => {
                 if (!(button instanceof HTMLButtonElement)) throw new Error('Send control is not a button')
                 button.click()
               })
-              await expect.poll(async () => {
-                await page.clock.runFor(16)
-                return page.locator('[data-fold-race-applied]').count()
-              }, { timeout: 10_000 }).toBe(1)
+              if (scenario.name === 'content-growth-during-fold' || scenario.name === 'cancel-all-during-fold') {
+                await expect.poll(async () => {
+                  await page.clock.runFor(16)
+                  return page.locator('[data-fold-race-applied]').count()
+                }, { timeout: 10_000 }).toBe(1)
+              }
               await expect.poll(async () => {
                 await page.clock.runFor(16)
                 return page.locator('[data-chat-motion="collapse"]').count()

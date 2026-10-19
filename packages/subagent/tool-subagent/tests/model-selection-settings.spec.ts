@@ -82,7 +82,8 @@ let policySessionCounter = 0
 /** Observe settings through the policy captured by a fresh top-level Agent. */
 async function capturePolicy(ctx: Context) {
   const { agent } = await ctx.agents.create({ sessionId: SessionId(`settings-policy-${++policySessionCounter}`) })
-  return subagentModelSelectionPolicy(ctx.sessionProjections, agent.session)
+  const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+  return subagentModelSelectionPolicy(policy, agent.session)
 }
 
 describe('SubagentModelSelectionConfig', () => {
@@ -118,7 +119,7 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
 
     selectionConfigs.set(ctx, await liveConfig(ctx, SubagentModelSelectionConfig))
-    ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
     // File-written invalid settings reject Agent creation even without delegation tools.
     await selectionConfigs.get(ctx)!.update({ allowedModels: [...ALLOWED_MODELS, ...ALLOWED_MODELS] })
@@ -136,13 +137,14 @@ describe('SubagentModelSelectionConfig', () => {
 
     const invalid = Session.create(SessionId('empty-policy'))
     invalid.append('subagent/model-selection-policy', { allowedModels: [] })
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, invalid)).toThrow('requires at least one route')
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(() => subagentModelSelectionPolicy(policy, invalid)).toThrow('requires at least one route')
 
     const malformed = Session.create(SessionId('malformed-policy'))
     malformed.append('subagent/model-selection-policy', {
       allowedModels: [{ provider: 1, model: 'fast-model' }],
     } as never)
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, malformed))
+    expect(() => subagentModelSelectionPolicy(policy, malformed))
       .toThrow('requires non-empty provider and model ids')
     await ctx.fiber.dispose()
   })
@@ -151,14 +153,15 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot()
     const disabled = await createAgent(ctx, 'disabled')
     expect(selectable(ctx, disabled)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, disabled.session)).toBeUndefined()
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, disabled.session)).toBeUndefined()
 
     await selectionConfigs.get(ctx)!.update({
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
     const enabled = await createAgent(ctx, 'enabled')
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, enabled.session)).toEqual(ALLOWED_MODELS)
+    expect(subagentModelSelectionPolicy(policy, enabled.session)).toEqual(ALLOWED_MODELS)
     expect(selectable(ctx, enabled)).toBe(true)
     expect(selectable(ctx, disabled)).toBe(true)
 
@@ -210,8 +213,9 @@ describe('SubagentModelSelectionConfig', () => {
     const preset = modelSelectionPresets.get(ctx)!
     bindScopeParent(scopeOf(joining.agent.ctx)!, scopeOf(preset.ctx)!)
     ctx.emit(scopeTarget({}, scopeOf(preset.ctx)), 'tools/change')
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, joining.agent.session)).toBeUndefined()
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, disabled.session)).toBeUndefined()
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, joining.agent.session)).toBeUndefined()
+    expect(subagentModelSelectionPolicy(policy, disabled.session)).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -226,8 +230,9 @@ describe('SubagentModelSelectionConfig', () => {
     const outside = await ctx.agents.create({ sessionId: SessionId('existing-outside') })
     await selectionConfigs.get(ctx)!.update({ enabled: false })
     await preset.ctx.plugin(tool, { provider: 'spawn', modelSelection: true, modelDiscovery: true })
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, inside.agent.session)).toEqual(ALLOWED_MODELS)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, outside.agent.session)).toEqual(ALLOWED_MODELS)
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, inside.agent.session)).toEqual(ALLOWED_MODELS)
+    expect(subagentModelSelectionPolicy(policy, outside.agent.session)).toEqual(ALLOWED_MODELS)
     await ctx.fiber.dispose()
   })
 
@@ -377,7 +382,8 @@ describe('SubagentModelSelectionConfig', () => {
       meta: { parentSession: parent.id, origin: 'subagent' },
     })
     expect(selectable(ctx, child)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, child.session)).toEqual(ALLOWED_MODELS)
+    const policy = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    expect(subagentModelSelectionPolicy(policy, child.session)).toEqual(ALLOWED_MODELS)
 
     const orphan = await createAgent(ctx, 'orphan', {
       meta: { parentSession: SessionId('missing-parent'), origin: 'subagent' },
@@ -396,11 +402,11 @@ describe('SubagentModelSelectionConfig', () => {
     })
     const resumedEmpty = await createAgent(ctx, 'resumed-empty', { seed: [] })
     expect(selectable(ctx, resumedEmpty)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedEmpty.session)).toBeUndefined()
+    expect(subagentModelSelectionPolicy(policy, resumedEmpty.session)).toBeUndefined()
 
     const resumedDisabled = await createAgent(ctx, 'resumed-disabled', { seed: oldSeed.snapshotEvents() })
     expect(selectable(ctx, resumedDisabled)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedDisabled.session)).toBeUndefined()
+    expect(subagentModelSelectionPolicy(policy, resumedDisabled.session)).toBeUndefined()
     await ctx.fiber.dispose()
   })
 

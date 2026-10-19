@@ -28,7 +28,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
@@ -125,14 +125,6 @@ const sandboxModeStateSchema = zod.union([
   zod.literal('danger-full-access'),
 ]).nullable()
 
-type SandboxModeState = zod.infer<typeof sandboxModeStateSchema>
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Last logged sandbox-mode override, or null before one (deployment default applies at resolve time). */
-    sandboxMode: SandboxModeState
-  }
-}
-
 /**
  * The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment
  * default mode, fallback workspace root, and current request-time policy
@@ -157,6 +149,8 @@ export class SandboxPolicyService extends Service {
   readonly workspaceRoot: string
   /** The frozen extra writable directories shared by every resolved policy, or `undefined` for none. */
   readonly additionalWritableRoots: readonly string[] | undefined
+  private sandboxModeProjectionHandle!: ProjectionHandle<SandboxMode | null>
+
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sandboxPolicy')
     // schemastery (static Config) already filled `mode`; the cast records that
@@ -165,8 +159,11 @@ export class SandboxPolicyService extends Service {
     this.defaultMode = config.mode as SandboxMode
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
     this.additionalWritableRoots = resolveAdditionalWritableRoots(config.additionalWritableRoots)
+  }
 
-    ctx.sessionProjections.register({
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    this.sandboxModeProjectionHandle = await ctx.sessionProjections.register({
       key: 'sandboxMode',
       stateVersion: 1,
       stateSchema: sandboxModeStateSchema,
@@ -213,7 +210,7 @@ export class SandboxPolicyService extends Service {
    * @returns the last logged mode, or `undefined` without one.
    */
   overrideOf(session: Session): SandboxMode | undefined {
-    return this.ctx.sessionProjections.stateOf(session, 'sandboxMode') ?? undefined
+    return this.sandboxModeProjectionHandle.stateOf(session) ?? undefined
   }
 }
 

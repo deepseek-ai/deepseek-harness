@@ -8,6 +8,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
+import type { Config as toolConfig } from '../src/index.ts'
 import * as tool from '../src/index.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 
@@ -32,7 +33,7 @@ const setupProviders = new WeakMap<Context, Awaited<ReturnType<typeof mock.mount
 let setupAgentCounter = 0
 
 /** Test-only opt-in translated to the real Host setting and Session path. */
-type SetupConfig = tool.Config & {
+type SetupConfig = toolConfig & {
   withModelSelection?: boolean
   /** Host setting sampled by a `withModelSelection` setup; defaults to enabled. */
   hostSelectionEnabled?: boolean

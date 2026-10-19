@@ -952,6 +952,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       const actualContext = contextOf(ordered, cwd)
       if (scenario.name === 'minimal-image-compaction') {
         const events = results.flatMap(result => result.events)
+        const failures = events.filter(event => event.type === 'turn/end' && event.data.reason.kind === 'error')
+        expect(failures, 'minimal profile completes its checkpointed turn').toEqual([])
         const image = events.find(event => event.type === 'tool/result')
         expect(image).toMatchObject({ data: { message: {
           toolCallId: 'minimal-image-read',

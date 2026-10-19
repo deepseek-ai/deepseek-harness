@@ -145,6 +145,7 @@ function providerWording(inheritsConversation: boolean): { description: string; 
  * Standing preset choices are validated for each Agent before its tool is installed.
  * @param ctx - Context that owns the registrations.
  * @param config - delegation-tool configuration.
+ * @returns when the plugin is ready.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   for (const field of ['persona', 'toolFilter']) {
@@ -162,7 +163,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionEnabled = config.modelSelection === true
-  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+  const subagentModelSelectionProjectionHandle = await ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
     presets.assertProvider(subagentProvider)
@@ -192,7 +193,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const initialProvider = ctx.subagents.getProvider(config.provider)
   if (initialProvider !== undefined) assertSubagentProviderConfiguration(initialProvider)
 
-  if (config.modelDiscovery === true) registerListSubagentModels(ctx)
+  if (config.modelDiscovery === true) registerListSubagentModels(ctx, subagentModelSelectionProjectionHandle)
 
   const install = (runtimeCtx: Context): void => {
     // Load order and HMR replacement can change provider availability while
@@ -272,7 +273,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             throw new Error('subagent tool requires a calling agent (exec.agent was undefined)')
           }
 
-          const routes = subagentModelSelectionPolicy(runtimeCtx.sessionProjections, parent.session)
+          const routes = subagentModelSelectionPolicy(subagentModelSelectionProjectionHandle, parent.session)
           const modelSelectionPolicy = routes === undefined ? undefined : { routes }
           const agentPreset = presets.resolve(args as PresetSelectionRequest)
           const modelRequest = args as DelegationModelRequest

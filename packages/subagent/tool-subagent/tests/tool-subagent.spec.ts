@@ -18,6 +18,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
 import * as mock from './scripted-provider.ts'
+import type { Config as toolConfig } from '../src/index.ts'
 import * as tool from '../src/index.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -617,7 +618,7 @@ describe('dsh-tool-subagent', () => {
       .rejects.toThrow()
   })
 
-  it('validates maxDepth when apply() is invoked directly without Schemastery', async () => {
+  it('validates maxDepth during initialization without Schemastery', async () => {
     const ctx = await projectedContext()
     await expect(tool.apply(ctx, {
       provider: 'unused',
@@ -816,7 +817,7 @@ describe('dsh-tool-subagent local activation', () => {
 
 describe('depth budget configuration', () => {
   /** Mount the tool over a request-capturing provider with full capabilities. */
-  async function captureSetup(config: Omit<tool.Config, 'provider'> = {}) {
+  async function captureSetup(config: Omit<toolConfig, 'provider'> = {}) {
     const requests: SubagentStartRequest[] = []
     const ctx = await projectedContext()
     await mountWorkingDirectoryFixture(ctx)

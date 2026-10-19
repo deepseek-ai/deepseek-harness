@@ -49,15 +49,21 @@ export class SubagentModelSelectionConfig extends Service {
 
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'subagentModelSelection')
-    ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
-    ctx.on('agent/created', ({ agent }) => {
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    const policyReady = ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
+    ctx.on('agent/created', async ({ agent }) => {
+      const policy = await policyReady
+      ctx.fiber.assertActive()
       const target = agent.session
-      if (subagentModelSelectionPolicy(ctx.sessionProjections, target) !== undefined) return
+      if (subagentModelSelectionPolicy(policy, target) !== undefined) return
       let allowedModels: AllowedModelRoute[] | undefined
       const parentId = target.header.origin === 'subagent' ? target.header.parentSession : undefined
       if (parentId !== undefined) {
         const parent = ctx.sessions.get(parentId)
-        if (parent !== undefined) allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, parent)
+        if (parent !== undefined) allowedModels = subagentModelSelectionPolicy(policy, parent)
       } else if (target.firstLiveSeq === 0
         // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
         && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed') {
@@ -66,6 +72,7 @@ export class SubagentModelSelectionConfig extends Service {
       }
       if (allowedModels !== undefined) target.append('subagent/model-selection-policy', { allowedModels })
     })
+    await policyReady
   }
 
   /**

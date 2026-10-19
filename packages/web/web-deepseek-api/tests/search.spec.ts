@@ -6,6 +6,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import {
   DeepSeekSearchApiProvider,
   DEEPSEEK_WEB_API_BASE_URL,
@@ -158,6 +159,7 @@ describe('Search API triggering question', () => {
     vi.stubGlobal('fetch', fetchMock)
     const ctx = new Context()
     try {
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api' })
       await ctx.plugin(webApiPlugin, { apiKey: 'ds-key', ...config })
@@ -239,6 +241,7 @@ describe('Search API account route', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: 'deepseek-search-api' })
       ctx.provide('deepseekAccount', {

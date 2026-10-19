@@ -43,6 +43,18 @@ function supervisor(failure?: string) {
   return { run, stages }
 }
 
+it.each([undefined, '2'])('uses bounded Windows packing while retaining signing and smoke (workers=%s)', async (workers) => {
+  const { run, stages } = supervisor()
+  const settings = workers === undefined ? environment : { ...environment, DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: workers }
+  await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), settings, run)
+  const packs = stages.filter(stage => stage.startsWith('run release:pack'))
+  expect(packs).toHaveLength(2)
+  for (const stage of packs) expect(stage).toContain(`--concurrency ${workers ?? '4'}`)
+  expect(stages).toContain('preflight:windows-signing')
+  expect(stages).toContain('run sign:primary-runtime --dsh')
+  expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts')
+})
+
 it('requires one signing preflight before building, then records only the complete release', async () => {
   const { run, stages } = supervisor()
   await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run)

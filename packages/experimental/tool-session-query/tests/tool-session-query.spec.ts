@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ToolCallId, HarnessError , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { MAX_TIMER_DELAY_MS, TimeoutReason } from '@deepseek-ai/dsh-timeout'
@@ -15,7 +15,6 @@ import SessionStore, {
   type SessionId as SessionIdValue,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SessionQueryEngine, {
   SessionQueryError,
   SessionSearchCursor,
@@ -31,6 +30,7 @@ import SessionQueryEngine, {
 } from '@deepseek-ai/dsh-session-query'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import type { Config as ToolSessionQueryConfig } from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -207,12 +207,12 @@ interface Mounted {
   call(name: string, args: unknown, options?: { agent?: Agent; signal?: AbortSignal }): Promise<ToolExecutionResult>
 }
 
-function registerTurnBoundary(ctx: Context): void {
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+async function registerTurnBoundary(ctx: Context): Promise<void> {
+  await ctx.plugin(AgentRegistry)
 }
 
 async function mount(
-  config: ToolSessionQuery.Config = {},
+  config: ToolSessionQueryConfig = {},
   callerCwd: string | null = '/work',
   enforceTimeout = false,
 ): Promise<Mounted> {
@@ -220,7 +220,7 @@ async function mount(
   activeContexts.push(ctx)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  registerTurnBoundary(ctx)
+  await registerTurnBoundary(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   if (enforceTimeout) await ctx.plugin(TimeoutPolicy)
@@ -1652,7 +1652,7 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
     expect(text(result)).toContain('Result cap reached')
   })
 
-  it('rejects current-session search without the turnBoundary fold', async () => {
+  it('rejects current-session search before any step has started', async () => {
     const ctx = new Context()
     activeContexts.push(ctx)
     await ctx.plugin(SessionStore)
@@ -1660,6 +1660,7 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(FakeQuery)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolSessionQuery)
     const session = createSession(ctx, 'no-boundary-caller', '/work')
     const result = await ctx.tools.execute({
@@ -1669,7 +1670,8 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
       signal: new AbortController().signal,
       agent: fakeAgent(session),
     })
-    expect(errorCode(result)).toBe('SESSION_QUERY_TOOL_NO_CURRENT_STEP')
+    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeDefined()
+    expect(errorCode(result)).toBe('SESSION_QUERY_INVALID_FILTER')
   })
 
   it('preserves base results when a title read fails, annotates the code, and logs the full error', async () => {

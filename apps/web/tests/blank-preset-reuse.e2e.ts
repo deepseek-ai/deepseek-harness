@@ -69,10 +69,11 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   function liveComposition(sessionId: SessionId) {
     const agent = scaffold.ctx.agents.get(sessionId)
     if (agent === undefined) return undefined
+    const projections = scaffold.ctx.sessionProjections.snapshot(agent.session).values
     return {
       mounted: scaffold.ctx.agentPresets.composedPreset(agent.ctx),
-      projected: scaffold.ctx.sessionProjections.stateOf(agent.session, 'agentPreset'),
-      plan: scaffold.ctx.sessionProjections.stateOf(agent.session, 'plan'),
+      projected: projections.agentPreset,
+      plan: projections.plan,
     }
   }
 

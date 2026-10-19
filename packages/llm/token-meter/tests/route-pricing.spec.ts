@@ -1,5 +1,5 @@
 import { imageOffloadProjection } from '@deepseek-ai/dsh-compaction-image-offload/projection'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
   LlmRuntime, LlmAdapter, createMessage, createToolResultMessage, createUserMessage, projectFilesToText, ToolCallId,
@@ -76,6 +76,7 @@ interface Harness {
 
 async function harness(pricing: (model: string) => LlmImageRequestPricing | undefined): Promise<Harness> {
   const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   new SessionProjectionRegistry(ctx)
   ctx.provide('attachments', {
     fileHostPath: (ref: FileAttachmentRef) => `/host/${ref.name}`,
@@ -85,7 +86,8 @@ async function harness(pricing: (model: string) => LlmImageRequestPricing | unde
   } as never)
   const llm = new LlmRuntime(ctx)
   llm.registerAdapter(['mock'], new PricingAdapter(pricing))
-  const meter = new TokenMeter(ctx)
+  await ctx.plugin(TokenMeter)
+  const meter = ctx.tokenMeter
   return { ctx, meter, session: Session.create(SessionId('route-priced'), undefined, undefined, undefined, [imageOffloadProjection]) }
 }
 

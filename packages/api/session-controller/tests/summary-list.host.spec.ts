@@ -42,7 +42,7 @@ async function opening(
   sessionId: SessionId,
 ): Promise<Extract<SessionFollowFrame, { type: 'snapshot' }>> {
   const abort = new AbortController()
-  const iterator = remote(ctx).follow({ address: { kind: 'session', sessionId } }, abort.signal)[Symbol.asyncIterator]()
+  const iterator = (await remote(ctx)).follow({ address: { kind: 'session', sessionId } }, abort.signal)[Symbol.asyncIterator]()
   const first = await iterator.next()
   abort.abort()
   await iterator.return?.()
@@ -62,7 +62,7 @@ async function harness(): Promise<{ ctx: Context; sessionContext: Context }> {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
   ctx.provide('tools', { register: () => () => {} } as never)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   await ctx.plugin({ name: turnOutlineName, inject: turnOutlineInject, apply: turnOutlineApply })
   await ctx.plugin({ name: sessionStatsName, inject: sessionStatsInject, apply: sessionStatsApply })
   await ctx.plugin({
@@ -74,8 +74,7 @@ async function harness(): Promise<{ ctx: Context; sessionContext: Context }> {
   // Build the remote (and with it the list owner that registers
   // `sessionListMetadata`) before any Session exists, so every registered unit
   // seeds a cell at `session/created`.
-  remote(ctx)
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await remote(ctx)
   return { ctx, sessionContext: ctx }
 }
 
@@ -100,7 +99,7 @@ describe('session.list summary payload', () => {
 
     expect([...ctx.sessionProjections.summaryKeys()]).not.toContain('turnOutline')
 
-    const response = await remote(ctx).list({})
+    const response = await (await remote(ctx)).list({})
     if (!response.ok) throw new Error('unreachable')
     const row = response.value.items.find(item => item.sessionId === id)
     const served = Object.keys(row?.projections?.values ?? {})
@@ -134,7 +133,7 @@ describe('session.list summary payload', () => {
     const { id } = seedSession(ctx)
     // Two consecutive pulls: a refresh must not reintroduce a dropped unit.
     for (const attempt of [0, 1]) {
-      const response = await remote(ctx).list({})
+      const response = await (await remote(ctx)).list({})
       if (!response.ok) throw new Error('unreachable')
       const row = response.value.items.find(item => item.sessionId === id)
       expect(row?.projections?.values, `attempt ${String(attempt)}`).not.toHaveProperty('turnOutline')

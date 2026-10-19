@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, {
   Session,
@@ -65,17 +65,17 @@ describe('permission preset fold', () => {
   it('folds the latest preset selection and steps over unrelated events', async () => {
     const ctx = await mounted()
     const session = freshSession('sess-fold')
-    const presetOf = () => ctx.sessionProjections.stateOf(session, 'permissions')?.preset ?? null
-    expect(presetOf()).toBeNull()
+    const presetOf = () => ctx.sessionProjections.checkpoint(session).permissions?.val
+    expect(presetOf()).toMatchObject({ preset: null })
     session.append('permission/preset', { preset: 'danger-full-access' })
     session.append('permission/preset', { preset: 'workspace-write' })
-    expect(presetOf()).toBe('workspace-write')
+    expect(presetOf()).toMatchObject({ preset: 'workspace-write' })
     // The knob fold steps over non-preset events to the latest selection.
     session.append('sandbox/mode', { mode: 'read-only' })
-    expect(presetOf()).toBe('workspace-write')
+    expect(presetOf()).toMatchObject({ preset: 'workspace-write' })
 
     const seeded = Session.create(SessionId('sess-fold-seeded'), [])
-    expect(ctx.sessionProjections.stateOf(seeded, 'permissions')?.seeded).toBe(true)
+    expect(ctx.sessionProjections.checkpoint(seeded).permissions?.val).toMatchObject({ seeded: true })
   })
 })
 
@@ -83,13 +83,6 @@ describe('PermissionPresetService', () => {
   it('does not activate without the required projection registry', async () => {
     const ctx = await mounted({ projection: false })
     expect(ctx.get('permissionPresets')).toBeUndefined()
-  })
-
-  it('fails when the permissions projection key is absent', async () => {
-    const ctx = await mounted()
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-    expect(() => ctx.permissionPresets.current(freshSession('missing-permission-projection-key')))
-      .toThrow('permission: permissions session projection is not registered')
   })
 
   it('advertises the preset table in declaration order and resolves bundles', async () => {

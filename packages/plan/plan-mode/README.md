@@ -82,7 +82,7 @@ Plan mode is a product package, not a capability seam: there is no swappable bac
 
 ### Durable state and step-boundary appends
 
-The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next accepted in-turn pre-step — the only append point while an agent runs — and an append failure cannot block the turn. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the registered `plan` projection; the first dependent access fails explicitly when the registry or key is absent.
+The package persists one log-only whole-value event, `plan/mode`, and the last logged value is the state. A mode change appends immediately when no turn is open; during an open turn it stays pending until the next accepted in-turn pre-step — the only append point while an agent runs — and an append failure cannot block the turn. The `set`/`get` service methods and their exact return states live in [`src/index.ts`](src/index.ts) and read the retained `plan` projection handle, acquired during activation.
 
 ### The `/plan` command
 
@@ -94,7 +94,9 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### Session projection unit
 
-When `ctx.sessionProjections` is composed, the package registers the `plan` unit through optional injection. The unit turns logged `/plan` command runs into a candidate target, commits the logged state on `plan/mode`, and derives `{ active, pending }` for `view`, where `pending` is true only while an unsettled or successful selection differs from the logged state — a pure replay quantity recoverable from the log alone. The key merges into `SessionProjectionMap` from [`src/types.ts`](src/types.ts); the framework drives the unit, and unloading the plugin fiber unregisters the key. Plan-mode reads require this unit and the `turnBoundary` unit, and fail explicitly if the registry or either key is absent.
+The package requires `ctx.sessionProjections` and awaits registration of the `plan` unit during activation. Its prompt section is registered before that wait. Agent prompt assembly fails explicitly while the reader is unavailable, so a restored plan cannot run without its guidance. Callers must await plugin activation before running an agent.
+
+The unit turns logged `/plan` command runs into a candidate target, commits the logged state on `plan/mode`, and derives `{ active, pending }` for `view`, where `pending` is true only while an unsettled or successful selection differs from the logged state — a pure replay quantity recoverable from the log alone. The key merges into `SessionProjectionMap` from [`src/types.ts`](src/types.ts); the framework drives the unit, and unloading the plugin fiber unregisters the key. State reads use the retained handle and remain available after unregistration.
 
 ### Source map
 

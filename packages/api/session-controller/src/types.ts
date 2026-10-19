@@ -14,14 +14,6 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Host state persisted for cold Session list summaries. */
-    sessionListMetadata: SessionListMetadata
-    /** Host state for the boot-constant image-limit view. */
-    imageLimits: null
-    /** Durable model selection already used by a request and still pending for a later request. */
-    modelSelection: ModelSelectionProjectionState
-  }
   interface SessionProjectionMap {
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata

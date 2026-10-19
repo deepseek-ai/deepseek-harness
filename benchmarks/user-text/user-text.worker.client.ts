@@ -82,7 +82,7 @@ const FACTS: Readonly<Partial<UserTextFacts>> = { sessionLabels: ['会话一'], 
 const KIB = 1024
 /** Exercise each workload's code paths before measuring sub-millisecond baseline evaluations. */
 const WARMUP_PAIRS = 10
-/** Batch every single-document workload to limit noise in its shortest evaluation intervals. */
+/** Base batch size; half-sized scaling inputs use twice as many evaluations. */
 const SINGLE_DOCUMENT_EVALUATIONS = 20
 const PROSE = '帮我看看这个函数为什么慢，顺便把 README 也更新一下。The quick brown fox jumps over the lazy dog, 1234 times. '
 const CODE = 'const value = await fetch(`https://api.example.com/v1/items?id=${id}`); if (!value.ok) throw new Error("bad: " + value.status);\n'
@@ -160,22 +160,32 @@ interface Workload {
   readonly id: string
   readonly group: UserTextWorkloadGroup
   readonly texts: readonly string[]
+  /** Scaling pairs process the same total keys or characters per sample, including their GC cost. */
+  readonly evaluationsPerSample: number
 }
 
 /** Named fixed workloads; adversarial inputs appear at two sizes so their scaling is observable. */
 function workloads(): readonly Workload[] {
   return [
-    { id: 'typical-messages', group: 'unmatched', texts: messages(5_000) },
+    { id: 'typical-messages', group: 'unmatched', texts: messages(5_000), evaluationsPerSample: 1 },
     ...Object.entries({ prose: PROSE, code: CODE, base64: BASE64, markdown: MARKDOWN, log: LOG, json: JSON_LINES, shell: SHELL })
-      .map(([name, unit]): Workload => ({ id: `${name}-256k`, group: 'unmatched', texts: [fill(unit, 256 * KIB)] })),
+      .map(([name, unit]): Workload => ({
+        id: `${name}-256k`, group: 'unmatched', texts: [fill(unit, 256 * KIB)], evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS,
+      })),
     ...Object.entries(CREDENTIALS).map(([name, credential]): Workload => ({
-      id: `messages-with-${name}`, group: 'matched', texts: credentialMessages(5_000, credential),
+      id: `messages-with-${name}`, group: 'matched', texts: credentialMessages(5_000, credential), evaluationsPerSample: 1,
     })),
-    { id: 'env-keys-1000', group: 'matched', texts: [envFile(1_000)] },
-    { id: 'env-keys-2000', group: 'matched', texts: [envFile(2_000)] },
+    { id: 'env-keys-1000', group: 'matched', texts: [envFile(1_000)], evaluationsPerSample: 2 * SINGLE_DOCUMENT_EVALUATIONS },
+    { id: 'env-keys-2000', group: 'matched', texts: [envFile(2_000)], evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS },
     ...Object.entries(ADVERSARIAL_UNITS).flatMap(([name, unit]): Workload[] => [
-      { id: `adversarial-${name}-64k`, group: 'adversarial', texts: [fill(unit, 64 * KIB)] },
-      { id: `adversarial-${name}-128k`, group: 'adversarial', texts: [fill(unit, 128 * KIB)] },
+      {
+        id: `adversarial-${name}-64k`, group: 'adversarial', texts: [fill(unit, 64 * KIB)],
+        evaluationsPerSample: 2 * SINGLE_DOCUMENT_EVALUATIONS,
+      },
+      {
+        id: `adversarial-${name}-128k`, group: 'adversarial', texts: [fill(unit, 128 * KIB)],
+        evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS,
+      },
     ]),
   ]
 }
@@ -364,8 +374,7 @@ async function allocations(): Promise<UserTextAllocationReport> {
 
 async function timings(attempts: number): Promise<UserTextTimeReport> {
   const results: UserTextWorkloadTiming[] = []
-  for (const { id, group, texts } of workloads()) {
-    const evaluationsPerSample = texts.length === 1 ? SINGLE_DOCUMENT_EVALUATIONS : 1
+  for (const { id, group, texts, evaluationsPerSample } of workloads()) {
     const { base, secret, samples } = await measure(texts, attempts, evaluationsPerSample)
     results.push({
       id,

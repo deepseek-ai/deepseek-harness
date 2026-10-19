@@ -55,6 +55,9 @@ async function main(): Promise<void> {
     await running?.shutdown.shutdown(0)
     await send({ type: 'shutdown-complete' })
     if (process.connected) process.disconnect()
+    // A handle a disposed plugin left open would otherwise keep the Host alive past the shell's graceful
+    // deadline; a startup failure keeps its own diagnostic exit.
+    if (running !== undefined) process.exit()
   })()
   process.on('message', (message: unknown) => {
     if (typeof message !== 'object' || message === null || !('type' in message)) return

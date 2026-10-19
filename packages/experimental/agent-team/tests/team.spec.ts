@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -72,17 +72,6 @@ function content(text: string) {
   return [{ type: 'text' as const, text }]
 }
 
-interface TeamServiceInternals {
-  readonly journal: {
-    state(root: Agent): unknown
-  }
-}
-
-/** White-box access follows the runtime owners so coverage does not widen the service API. */
-function teamInternals(ctx: Context): TeamServiceInternals {
-  return ctx.agentTeams as unknown as TeamServiceInternals
-}
-
 /** Start one teammate: a continuable child of the Lead. */
 async function spawn(ctx: Context, lead: Agent, description: string | undefined, provider = 'spawn'): Promise<SessionId> {
   const started = await ctx.subagents.startActivation({
@@ -108,19 +97,21 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
-  it('rejects missing and failed authoritative Team projections', async () => {
-    const first = await setup([])
-    const journal = teamInternals(first.ctx).journal
-    const stateOf = first.ctx.sessionProjections.stateOf.bind(first.ctx.sessionProjections)
-    const stateOfSpy = vi.spyOn(first.ctx.sessionProjections, 'stateOf').mockImplementation((session, key) => (
-      key === 'agentTeam' ? undefined : stateOf(session, key)
-    ))
-    expect(() => journal.state(first.lead)).toThrow('Agent Teams projection is not registered')
-    stateOfSpy.mockImplementation((session, key) => key === 'agentTeam'
-      ? { ...teamProjectionDefinition.init(session.header, SessionLogOffset(0)), failure: 'failed Team projection' }
-      : stateOf(session, key))
-    expect(() => journal.state(first.lead)).toThrow('failed Team projection')
-    stateOfSpy.mockRestore()
+  it('rejects reads and mutations after a Team projection fails', async () => {
+    const { ctx, lead } = await setup([])
+    lead.session.append('team/task', {
+      version: 2,
+      teamId: TeamId(lead.id),
+      task: {
+        id: TeamTaskId('task-1'), revision: 2, subject: 'invalid', description: 'missing initial revision',
+        status: 'pending', blockedBy: [], writeScopes: [],
+      },
+    })
+    expect(() => ctx.agentTeams.listTasks(lead)).toThrow('must begin at revision 1')
+    const eventCount = lead.session.snapshotEvents().length
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'blocked', description: 'blocked' }))
+      .rejects.toThrow('must begin at revision 1')
+    expect(lead.session.snapshotEvents()).toHaveLength(eventCount)
   })
 
   it('propagates unavailable subagent runtime errors', async () => {
@@ -212,7 +203,11 @@ describe('Tree-owned task boards', () => {
   it('constructs with the default task limit and serializes concurrent task commits', async () => {
     const { ctx, lead, teamFiber } = await setup([])
     await teamFiber.dispose()
-    const direct = new TeamService(ctx)
+    class DirectTeamService extends TeamService {
+      initialize(): Promise<void> { return this[Service.init]() }
+    }
+    const direct = new DirectTeamService(ctx)
+    await direct.initialize()
     const [first, second] = await Promise.all([
       direct.createTask(lead, { subject: 'one', description: 'one' }),
       direct.createTask(lead, { subject: 'two', description: 'two' }),

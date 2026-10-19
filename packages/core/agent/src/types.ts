@@ -56,25 +56,13 @@ export interface InboxWireState {
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Pending agent input reconstructed from durable inbox splices. */
-    inbox: InboxState
-  }
   interface SessionProjectionMap {
     /** Pending agent input reconstructed from durable inbox splices. */
     inbox: InboxWireState
   }
 }
 
-/**
- * Turn and step boundaries folded from one agent session log.
- *
- * Reader contract: the key is registered by `dsh-agent-loop` and absent
- * otherwise. Without agent-loop no turn events exist, so readers treat an
- * absent key as "no open turn / no boundaries" — capability absence, not a
- * corrupt state. A reader whose behavior has no safe fallback for that
- * absence (the step-open decision, for example) may fail loud instead.
- */
+/** Turn and step positions recorded in a Session. */
 export interface TurnBoundaryProjection {
   /** Seq of the open turn's `turn/start`, or null between turns. */
   readonly openTurnStartSeq: OptionalSessionSeq

@@ -148,6 +148,7 @@ it('waits for SystemPrompt and ToolRuntime before reserving the provider', async
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(BrowserUse)
+  await ctx.plugin(Projections)
   await ctx.plugin(Agents)
   provideWorkingDirectoryFixture(ctx)
   const tools = ctx.plugin(Tools)

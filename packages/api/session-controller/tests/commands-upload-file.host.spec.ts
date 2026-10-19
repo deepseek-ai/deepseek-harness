@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -35,6 +36,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
@@ -321,13 +323,10 @@ describe('Session file uploads', () => {
       new AbortController().signal,
     )
     await first.controller.prompt(promptRequest([{ type: 'file', receiptId: observed.receiptId }]), USER_SOURCE)
-    first.ctx.emit('session/event', first.agent.session, {
-      type: 'user/message',
-      data: createUserMessage({
-        content: [{ type: 'text', text: 'extension event' }],
-        source: { kind: 'user', rpcId: 1 } as never,
-      }),
-    } as never)
+    first.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'extension event' }],
+      source: { kind: 'user', rpcId: 1 } as never,
+    }), { surfaceOp: 'append' })
     expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual(observed.file)
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'observed' }],

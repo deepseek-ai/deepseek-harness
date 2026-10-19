@@ -61,6 +61,7 @@ describe('dsh-sdk-minimal bundle', () => {
       ['persistent-bash', '@deepseek-ai/dsh-tool-bash-persistent'],
       ['persistent-pwsh', '@deepseek-ai/dsh-tool-pwsh-persistent'],
       ['sessions', '@deepseek-ai/dsh-session-persistence-jsonl'],
+      ['session-checkpoint-policy', '@deepseek-ai/dsh-session-checkpoint-policy'],
     ])
     expect(rows.find(row => row.id === 'sdk-app-startup')?.config).toEqual({ profile: 'sdk-minimal' })
     expect(rows.find(row => row.id === 'sdk-jsonrpc-server')).toMatchObject({

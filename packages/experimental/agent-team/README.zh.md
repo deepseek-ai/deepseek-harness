@@ -132,17 +132,19 @@ subagent 服务通过 `subagents.rootOf()` 解析当前在线调用者的根。�
 
 ### 持久性模型
 
+`Service.init` 等待 `agentTeam` 投影注册完成后才发布服务就绪状态。日志持有返回的 handle，通过 `stateOf(session)` 读取任务状态；调用者使用 Team 服务，不另行注册 reader。
+
 任务修改向当前在线根 Session 追加 `team/task`，并在发出等待信号前刷盘。任务记录仅保留在日志中；信号不是消息，也不是持久化事件。等待工具通过普通工具流水线记录结果。不重写已提交任务或历史载荷代次。
 
 邮箱投影和检查点接纳保留本地声明校验器之外的已解码 JSON 字段，包括自身的 `__proto__` 键。历史载荷代次保持不变；投影缓存版本变化时从 Session 日志重建。
 
 ### Dispose
 
-卸载服务会注销投影。Team 不拥有 Agent：队友仍由 subagent 运行时管理，容量、收尾和拆除均由后者负责。
+卸载服务会注销投影。保留的 handle 仍可读取，并在已获准工作收尾期间按需折叠 Session 事件。Team 不拥有 Agent：队友仍由 subagent 运行时管理，容量、收尾和拆除均由后者负责。
 
 ### 浏览器投影
 
-`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段为解码兼容性保留，不授予运行时权限。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段为解码兼容性保留，不授予运行时权限。投影失败后，后续 Team 读取和修改均报错，不再追加 Team 事件。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
 [Web UI](../client-ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签复用 Session 和目录数据，缺失时使用 id。
 

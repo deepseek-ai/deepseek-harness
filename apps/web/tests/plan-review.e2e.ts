@@ -87,6 +87,13 @@ describe('web e2e: plan review takeover round trip', () => {
     // waitFor is race-free.
     const card = page.locator('[data-plan-review-key]')
     await card.waitFor({ timeout: MODE === 'record' ? 120_000 : 30_000 })
+    const firstHeader = sessionEvents.find(event => event.type === 'request/header')
+    const firstPrompt = sessionEvents.find(event => event.type === 'system/message')
+    expect(firstHeader?.data.header.tools?.map(tool => tool.name)).toContain('exit_plan_mode')
+    expect(firstPrompt?.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+      .toContain('You are in plan mode.')
+    const clock = sessionEvents.find(event => event.type === 'user/message' && event.data.source.kind === 'time-context')
+    expect(clock?.seq).toBeLessThan(firstHeader!.seq)
     // The plan-review request must NOT land on the generic question flow.
     expect(await page.locator('[data-question-key]').count()).toBe(0)
     await expect.poll(() => card.getByText('Plan review').count(), { timeout: 10_000 }).toBeGreaterThan(0)

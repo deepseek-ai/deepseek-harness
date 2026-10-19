@@ -15,7 +15,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -34,6 +34,7 @@ import { establishCatalogChild, establishExternalCatalogChild } from './catalog.
 import { SubagentError } from './error.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { ActivationObserver } from './lifecycle.ts'
+import type { SubagentIdentityProjection } from './projection-types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
@@ -56,6 +57,8 @@ type ChildDeliveryOptions = {
 
 /** Package-private hooks supplied by the owning service. */
 interface SubagentHost {
+  /** Read the current descriptor identity through the service-owned projection. */
+  identityOf(session: Session): SubagentIdentityProjection | undefined
   startExternal(name: string, request: ResolvedSubagentStartRequest): Promise<SubagentRun>
   /** Resolve one provider's detached continuable-creation contribution. */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
@@ -478,7 +481,7 @@ export class SubagentManager {
     if (this.ctx.agents.get(caller.id) !== caller) {
       throw new SubagentError('Team membership requires the exact live caller', 'UNAUTHORIZED')
     }
-    const identity = this.ctx.get('sessionProjections')?.stateOf(caller.session, 'subagent')?.identity
+    const identity = this.host.identityOf(caller.session)
     const delegated = caller.session.header.origin === 'subagent' || identity != null && caller.session.isOwnSeq(identity.seq)
     const root = this.ctx.agents.roots().find(root =>
       root === caller && !delegated || this.ctx.agents.isOwnedBy(caller.id, root),

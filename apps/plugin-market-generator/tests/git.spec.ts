@@ -76,6 +76,7 @@ it('lists Git versions from release tags and the default branch by reading objec
     '.gitattributes': '* filter=marker\n',
     'packages/a/package.json': bundle('@s/a', '1.0.0'),
     'packages/b/package.json': bundle('@s/b', '0.9.0'),
+    'packages/e/package.json': bundle('@s/e', '1.0.0'),
   })
   const first = repo.commit(1790000000)
   repo.git(['tag', 'v1.0.0'])
@@ -96,6 +97,8 @@ it('lists Git versions from release tags and the default branch by reading objec
     'packages/a/icon.svg': '<svg/>',
     'packages/b/package.json': bundle('@s/b', '2.0.0', { keywords: ['head'] }),
     'packages/d/package.json': JSON.stringify({ ...JSON.parse(bundle('@s/d', '0.1.0')), peerDependencies: { '@deepseek-ai/dsh': 'workspace:>=1' } }),
+    // A package that turns private on the default branch is not listed, not even at its earlier public tag.
+    'packages/e/package.json': bundle('@s/e', '1.0.1', { private: true }),
   })
   const head = repo.commit(1790000300)
   repo.git(['tag', 'v2.0.0'])
@@ -131,7 +134,7 @@ it('lists Git versions from release tags and the default branch by reading objec
   expect(updated.index.plugins[1]).not.toHaveProperty('metadata')
 })
 
-it('reads a root package, reports repositories without one, and refuses transports that are not allowed', GIT_TEST, async () => {
+it('reads a root package, reports repositories without a public one, and refuses transports that are not allowed', GIT_TEST, async () => {
   const repo = repository()
   gitHome(repo.dir)
   const warnings: string[] = []
@@ -149,12 +152,20 @@ it('reads a root package, reports repositories without one, and refuses transpor
   repo.write({ 'package.json': JSON.stringify({ version: '1.0.0', dsh: { bundle: { patch: 'p.yml' } } }) })
   repo.commit(1790000100)
   expect(await run()).toEqual([[], []])
+  // A private package is not listed, and a release tag on a private manifest lists no version.
+  repo.write({ 'package.json': bundle('dsh-root', '0.9.0', { private: true }) })
+  repo.commit(1790000150)
+  repo.git(['tag', 'v0.9.0'])
+  expect(await run()).toEqual([[], []])
   repo.write({ 'package.json': bundle('dsh-root', '1.0.0') })
   const commit = repo.commit(1790000200)
   expect(await run()).toEqual([[{
     name: 'dsh-root', title: 'dsh-root', versions: [{ version: '1.0.0', publishTimestamp: 1790000200, source: { type: 'git', url: REPOSITORY, commit } }],
   }], []])
-  expect(warnings).toEqual([`${REPOSITORY}: ${REPOSITORY}: no HEAD commit`, expect.stringContaining('not allowed') as string, `${REPOSITORY}: no package declares dsh.bundle`, `${REPOSITORY}: package.json has no name`])
+  expect(warnings).toEqual([
+    `${REPOSITORY}: ${REPOSITORY}: no HEAD commit`, expect.stringContaining('not allowed') as string, `${REPOSITORY}: no package declares dsh.bundle`,
+    `${REPOSITORY}: package.json has no name`, `${REPOSITORY}: every package that declares dsh.bundle is private`,
+  ])
 })
 
 it('skips a release tag it cannot read, refuses oversized manifests, and ignores Git overrides from the environment', GIT_TEST, async () => {

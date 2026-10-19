@@ -23574,7 +23574,7 @@
         "packages/workflow/workflow/src/types.ts#WorkflowRunId"
       ],
       "sources": [
-        "packages/api/session-controller/src/types.ts:414",
+        "packages/api/session-controller/src/types.ts:406",
         "packages/attachment/attachment/src/brand.ts:6",
         "packages/compaction/compaction/src/brand.ts:4",
         "packages/core/session/src/types.ts:21",
@@ -24096,7 +24096,7 @@
       "digest": "6dacb1584f2bfbe209dc6b6f578d51da6d55595f64d0e63c727c98f359278def",
       "names": [],
       "sources": [
-        "packages/api/session-controller/src/types.ts:423"
+        "packages/api/session-controller/src/types.ts:415"
       ]
     },
     {
@@ -24518,7 +24518,7 @@
       "digest": "8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad",
       "names": [],
       "sources": [
-        "packages/interaction/permission-presets/src/index.ts:59"
+        "packages/interaction/permission-presets/src/index.ts:52"
       ]
     },
     {
@@ -25916,7 +25916,7 @@
         "packages/api/session-controller/src/types.ts#ModelSelection"
       ],
       "sources": [
-        "packages/api/session-controller/src/types.ts:106"
+        "packages/api/session-controller/src/types.ts:98"
       ]
     },
     {
@@ -26079,7 +26079,7 @@
       "digest": "fa106c5b33b657e8ef16e8cbf39f3b7d44e5cbcdf4f9303d9db6410f28951e42",
       "names": [],
       "sources": [
-        "packages/core/agent/src/types.ts:96"
+        "packages/core/agent/src/types.ts:84"
       ]
     },
     {

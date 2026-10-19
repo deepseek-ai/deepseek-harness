@@ -279,10 +279,10 @@ describe('the sandbox/mode session kit', () => {
   it('the sandboxMode projection folds to the last switch, or null without one', async () => {
     const ctx = await mounted()
     const session = Session.create(SessionId('sess-fold'))
-    expect(ctx.sessionProjections.stateOf(session, 'sandboxMode')).toBeNull()
+    expect(ctx.sessionProjections.checkpoint(session).sandboxMode?.val).toBeNull()
     setSandboxMode(session, 'workspace-write')
     setSandboxMode(session, 'read-only')
-    expect(ctx.sessionProjections.stateOf(session, 'sandboxMode')).toBe('read-only')
+    expect(ctx.sessionProjections.checkpoint(session).sandboxMode?.val).toBe('read-only')
   })
 
   it('setSandboxMode appends exactly one sandbox/mode event per switch', () => {

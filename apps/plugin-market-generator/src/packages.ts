@@ -15,6 +15,7 @@ export interface Manifest {
   readonly repository?: unknown
   readonly keywords?: unknown
   readonly deprecated?: unknown
+  readonly private?: unknown
   readonly workspaces?: unknown
   readonly exports?: unknown
   readonly engines?: unknown
@@ -61,6 +62,15 @@ export function isBundle(manifest: Manifest | undefined): boolean {
   const bundle = manifest?.dsh?.bundle
   if (!isObject(bundle)) return false
   return typeof bundle.patch === 'string' || (Array.isArray(bundle.patch) && bundle.patch.every(file => typeof file === 'string'))
+}
+
+/**
+ * Whether a manifest sets `"private": true`, which keeps its package or version out of an index.
+ * @param manifest - parsed manifest, or undefined for a directory without one.
+ * @returns true only when `private` is the boolean `true`.
+ */
+export function isPrivate(manifest: Manifest | undefined): boolean {
+  return manifest?.private === true
 }
 
 /** Whether installation reads `range` as a SemVer range; an empty range and other `workspace:` ranges never match. */
