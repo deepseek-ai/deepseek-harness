@@ -1,11 +1,6 @@
----
-name: plugin-artwork
-description: Use when drawing, revising, or reviewing the icon of a plugin or bundle shown in Plugin Manager; covers the subject, proportions, color, lettering, transparency, SVG export, and visual review. Not for toolbar or action icons.
----
-
 # Plugin artwork
 
-Draw an icon that is recognizable at row size and belongs beside the icons of installed DSH plugins. The display checklist in the `cordis-plugin-development` skill's host-plugin reference owns manifest exports, accepted formats, size limits, and installed-display checks.
+Draw an icon that is recognizable at row size and belongs beside the icons of installed DSH plugins. The display checklist in `references/host-plugin.md` owns manifest exports, accepted formats, size limits, and installed-display checks.
 
 ## Establish the subject
 

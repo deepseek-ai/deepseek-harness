@@ -1,6 +1,6 @@
 ---
 name: cordis-plugin-development
-description: Use when designing, reviewing, adding, enabling, disabling, installing, configuring, or debugging a plugin, bundle, feature, page, panel, tool, or MCP connection in the current Harness profile, including a shipped plugin that is disabled by default, and for any visual object, decoration, or widget request that names no other destination, which means an installed UI plugin rendered in the Harness Web UI.
+description: Use when designing, reviewing, adding, enabling, disabling, installing, configuring, or debugging a plugin, bundle, plugin icon, feature, page, panel, tool, or MCP connection in the current Harness profile, including a shipped plugin that is disabled by default, and for any visual object, decoration, or widget request that names no other destination, which means an installed UI plugin rendered in the Harness Web UI.
 ---
 
 # Persistent Harness plugins
@@ -43,6 +43,7 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Web UI: Client manifest, module loader, slot registration | `references/ui-plugin.md` |
 | Connecting an MCP server through a configuration-only bundle | `references/mcp-bundle.md` |
 | Page/panel design checks and verification without browser control | `references/verification.md` |
+| Drawing an icon | `references/artwork.md` |
 | UI plugin template, including display resources | `templates/decoration/package.json`, `templates/decoration/cordis.patch.yml`, `templates/decoration/index.js`, `templates/decoration/client.js`, `templates/decoration/locale/en.json`, `templates/decoration/icon.svg` |
 | MCP bundle template, including display resources | `templates/mcp/package.json`, `templates/mcp/cordis.patch.yml`, `templates/mcp/locale/en.json`, `templates/mcp/icon.svg` |
 | Loader patch dialect and the list of installable plugin packages | the `cordis-composition-reference` skill |

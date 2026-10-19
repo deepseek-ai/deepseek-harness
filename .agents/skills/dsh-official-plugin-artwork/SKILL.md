@@ -1,11 +1,11 @@
 ---
 name: dsh-official-plugin-artwork
-description: Draw and review official DeepSeek Harness plugin icons and optional feature previews, including experimental plugins. Use for package artwork and PluginArtwork glyphs; covers official references and palettes, feature previews, package metadata gates, and designer review, and links the shared drawing rules of plugin-artwork. Not for toolbar or action icons.
+description: Draw and review official DeepSeek Harness plugin icons and optional feature previews, including experimental plugins. Use for package artwork and PluginArtwork glyphs; covers official references and palettes, feature previews, package metadata gates, and designer review, and links the shared drawing rules that Creator mode ships. Not for toolbar or action icons.
 ---
 
 # Official plugin artwork
 
-Read and follow [plugin artwork](../../../packages/preset/agent-preset/skills/plugin-artwork/SKILL.md) first; Creator mode ships it for all plugins, and it owns the subject, drawing, and export rules. Its Review section describes Creator bundles installed through Plugin Manager; for official plugins, follow its comparison step and replace its other steps with [Review and verify](#review-and-verify) below. Official and official experimental plugins share one visual language; the UI label communicates experimental status. This guidance does not replace designer approval.
+Read and follow [plugin artwork](../../../packages/preset/agent-preset/skills/cordis-plugin-development/references/artwork.md) first; Creator mode ships it in the `cordis-plugin-development` skill, and it owns the subject, drawing, and export rules. Its Review section describes Creator bundles installed through Plugin Manager; for official plugins, follow its comparison step and replace its other steps with [Review and verify](#review-and-verify) below. Official and official experimental plugins share one visual language; the UI label communicates experimental status. This guidance does not replace designer approval.
 
 ## Optional feature previews
 
@@ -25,4 +25,4 @@ Before drawing a larger image for the top of an official bundle's detail documen
 1. Before polishing uncertain geometry, show a few numbered alternatives and keep their numbers through designer review and apply the chosen one; existing files and generated drafts do not establish approval. Keep comparison artifacts in a gitignored directory, not the product package.
 2. Run `pnpm run verify-package-meta` for [package metadata and SVG artwork](../../../scripts/verify-package-meta.ts), `pnpm run constraints` for the canonical package payload, and `pnpm run verify-official-bundle-catalog`. Regenerate a stale catalog with `pnpm run gen-official-bundle-catalog`, never by hand. Structural checks do not replace visual review.
 3. Build affected artifacts and inspect the real page through `dsh web`. Batch approved refinements before restarting a metadata-caching Host, then verify the entry and nested component rows in both themes.
-4. Follow the repository's UI testing policy and [record-browser-gif](../record-browser-gif/SKILL.md) for a GUI PR. Obtain designer approval before landing new glyphs. Record reusable drawing principles in [plugin artwork](../../../packages/preset/agent-preset/skills/plugin-artwork/SKILL.md), not the history of rejected drafts.
+4. Follow the repository's UI testing policy and [record-browser-gif](../record-browser-gif/SKILL.md) for a GUI PR. Obtain designer approval before landing new glyphs. Record reusable drawing principles in [plugin artwork](../../../packages/preset/agent-preset/skills/cordis-plugin-development/references/artwork.md), not the history of rejected drafts.
