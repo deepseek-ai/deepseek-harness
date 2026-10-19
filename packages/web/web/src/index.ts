@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-web
  */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, Service, type Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {
   WebFetchProvider,
@@ -49,14 +49,16 @@ interface Selection<P> {
 /**
  * Config for the web seam. `searchProvider` / `fetchProvider` pin which provider
  * wins for each capability; both are optional (a single registered usable
- * provider auto-selects). Operational overrides such as environment variables
- * must feed these same fields rather than introduce a hidden priority chain.
+ * provider auto-selects). Each operation reads the current value, so a settings
+ * change applies to the next search or fetch without remounting the service.
+ * Operational overrides such as environment variables must feed these same
+ * fields rather than introduce a hidden priority chain.
  */
 export interface WebRuntimeConfig {
   /** Explicit search provider id. Omitted = auto-select when exactly one usable. */
-  readonly searchProvider?: string
+  readonly searchProvider: Volatile<string | undefined>
   /** Explicit fetch provider id. Omitted = auto-select when exactly one usable. */
-  readonly fetchProvider?: string
+  readonly fetchProvider: Volatile<string | undefined>
 }
 
 /**
@@ -77,20 +79,20 @@ export class WebRuntime extends Service {
    * `$DSH_WEB_SEARCH_PROVIDER` / `$DSH_WEB_FETCH_PROVIDER` are equivalent to
    * `searchProvider` / `fetchProvider` and are NOT a hidden priority chain.
    */
-  static Config: z<WebRuntimeConfig> = z.object({
-    searchProvider: z.string(),
-    fetchProvider: z.string(),
+  static Config = z.object({
+    searchProvider: z.string().volatile(),
+    fetchProvider: z.string().volatile(),
   })
 
   private searchProviders = new Map<string, WebSearchProvider>()
   private fetchProviders = new Map<string, WebFetchProvider>()
-  private readonly searchProviderId: string | undefined
-  private readonly fetchProviderId: string | undefined
+  private readonly searchProviderEnv: string | undefined
+  private readonly fetchProviderEnv: string | undefined
 
-  constructor(ctx: Context, config: WebRuntimeConfig = {}) {
+  constructor(ctx: Context, private readonly config: WebRuntimeConfig) {
     super(ctx, 'web')
-    this.searchProviderId = config.searchProvider ?? process.env.DSH_WEB_SEARCH_PROVIDER
-    this.fetchProviderId = config.fetchProvider ?? process.env.DSH_WEB_FETCH_PROVIDER
+    this.searchProviderEnv = process.env.DSH_WEB_SEARCH_PROVIDER
+    this.fetchProviderEnv = process.env.DSH_WEB_FETCH_PROVIDER
   }
 
   /**
@@ -138,9 +140,10 @@ export class WebRuntime extends Service {
    * @returns the provider's results, capped to `request.maxResults`.
    */
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+    const configuredId = this.config.searchProvider.get() ?? this.searchProviderEnv
     const provider = resolveProvider({
       providers: this.searchProviders,
-      ...this.searchProviderId !== undefined ? { configuredId: this.searchProviderId } : {},
+      ...configuredId !== undefined ? { configuredId } : {},
     })
     const result = await provider.search(request, signal)
     return capSources(result, request.maxResults)
@@ -155,9 +158,10 @@ export class WebRuntime extends Service {
    * @returns the retrieval outcome; non-2xx responses resolve descriptively.
    */
   async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {
+    const configuredId = this.config.fetchProvider.get() ?? this.fetchProviderEnv
     const provider = resolveProvider({
       providers: this.fetchProviders,
-      ...this.fetchProviderId !== undefined ? { configuredId: this.fetchProviderId } : {},
+      ...configuredId !== undefined ? { configuredId } : {},
     })
     return provider.fetch(request, signal)
   }

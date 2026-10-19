@@ -49,17 +49,25 @@ async function setup(config: Omit<tool.Config, 'provider'>, providerConfig: Part
 const args = { description: 'review task', prompt: 'Review this change.' }
 
 describe('spawn preset selection', () => {
-  it('advertises configured ids and forwards a model selection without child composition overrides', async () => {
+  it.each([false, true])('selects presets with modelSelection=%s and enforces route authorization', async (modelSelection) => {
     const { ctx, onStart } = await setup({
       allowedAgentPresets: ['writer', 'reviewer'],
+      modelSelection,
     })
     const schema = ctx.tools.schemas().find(schema => schema.name === 'subagent')
     expect(JSON.stringify(schema)).toContain('agent_preset')
     expect(JSON.stringify(schema)).toContain('reviewer persona')
+    expect(schema?.parameters.properties).toHaveProperty('agent_preset')
+    expect(Object.hasOwn(schema!.parameters.properties!, 'model')).toBe(modelSelection)
     expect((await callSubagent(ctx, { ...args, agent_preset: 'reviewer' })).isError).not.toBe(true)
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({
       agentPreset: 'reviewer',
     }))
+    const rejected = await callSubagent(ctx, {
+      ...args, agent_preset: 'reviewer', provider: 'unapproved', model: 'unapproved',
+    })
+    expect(rejected.isError).toBe(true)
+    expect(onStart).toHaveBeenCalledTimes(1)
   })
 
   it('uses a default without exposing a model selector', async () => {

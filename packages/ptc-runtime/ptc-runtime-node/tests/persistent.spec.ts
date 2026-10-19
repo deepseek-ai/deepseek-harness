@@ -24,6 +24,17 @@ function bindings(value: PtcBindingFunction) {
 }
 
 describe('persistent Node REPL', () => {
+  it('keeps a snapshot of caller-owned root arrays and rejects changed grants', async () => {
+    const { run, runtime, owner, cwd } = await setup()
+    const roots = [cwd]
+    const policy = { mode: 'danger-full-access' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
+    expect((await run('var retained = 7; retained', { sandboxPolicy: policy })).value).toBe(7)
+    expect((await run('retained', { sandboxPolicy: { ...policy, additionalWritableRoots: [cwd, cwd] } })).value).toBe(7)
+    roots[0] = tmpdir()
+    await expect(run('retained', { sandboxPolicy: policy })).rejects.toThrow('release the retained environment')
+    await runtime.release(owner)
+    expect((await run('typeof retained', { sandboxPolicy: policy })).value).toBe('undefined')
+  })
   it.each([
     'function f() {', '(', '[', '`unfinished',
     'const x = await Promise.resolve(1); return x',

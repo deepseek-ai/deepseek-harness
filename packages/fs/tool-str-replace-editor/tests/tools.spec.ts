@@ -76,13 +76,11 @@ async function setup(
   contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (options.sandboxMode === undefined) {
     await ctx.plugin(LocalFileSystem, { cwd: root })
   } else {
-    // SandboxPolicy declares the registry as a required injection; mount it
-    // before the policy activates.
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicy, { mode: options.sandboxMode, workspaceRoot: root })
     await ctx.plugin(SandboxedFileSystem, { cwd: root })
   }
@@ -616,6 +614,7 @@ describe('tool-str-replace-editor', () => {
     contexts.push(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: root })
     Object.defineProperty(ctx.fs, 'sandboxMode', { value: 'read-only' })

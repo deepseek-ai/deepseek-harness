@@ -43,8 +43,8 @@ async function remote<T>(
 }
 
 /** POST one generated Session Remote unary through the API Gateway carrier. */
-function sessionRemote<T>(scaffold: WebScaffold, method: string, request: unknown): Promise<RpcResult<T>> {
-  return remote<T>(scaffold, `session/${method}`, { request })
+async function sessionRemote<T>(scaffold: WebScaffold, method: string, request: unknown): Promise<RpcResult<T>> {
+  return await remote<T>(scaffold, `session/${method}`, { request })
 }
 
 /** Poll a synchronous condition (hook-safe; expect.poll is test-body only). */

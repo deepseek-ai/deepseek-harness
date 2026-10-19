@@ -1,3 +1,4 @@
+import { subagentCatalogProjectionDefinition } from '../src/catalog.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -49,6 +50,7 @@ async function setup(
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
+  if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
@@ -191,6 +193,7 @@ describe('SubagentRuntime.listChildren', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQuery)
     await mountWorkingDirectoryFixture(ctx)
+    if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SubagentRuntime)
     const ancestor = ctx.sessions.create(SessionId('catalog-ancestor'))
     ancestor.append('turn/start', { turn: 1 })
@@ -221,6 +224,7 @@ describe('SubagentRuntime.listChildren', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(TestSessionQuery)
     await mountWorkingDirectoryFixture(ctx)
+    if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SubagentRuntime)
     const parent = ctx.sessions.create(SessionId('chunk-parent'))
     for (let index = 0; index < 1_001; index += 1) {
@@ -235,7 +239,8 @@ describe('SubagentRuntime.listChildren', () => {
       })
     }
     const listSessions = vi.spyOn(ctx.sessionQuery, 'listSessions')
-    const state = ctx.sessionProjections.stateOf(parent, 'subagentCatalog')
+    const projection = await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
+    const state = projection.stateOf(parent)
     const chunkLengths: number[] = []
     for (let chunk = state?.head; chunk !== undefined; chunk = chunk.previous) {
       chunkLengths.push(chunk.values.length)
@@ -253,6 +258,7 @@ describe('SubagentRuntime.listChildren', () => {
     const withoutProjection = new Context()
     await withoutProjection.plugin(SessionStore)
     await mountWorkingDirectoryFixture(withoutProjection)
+    await withoutProjection.plugin(SessionProjectionRegistry)
     await withoutProjection.plugin(SubagentRuntime)
     const parent = withoutProjection.sessions.create(SessionId('parent'))
     await expect(withoutProjection.subagents.listChildren(parent.id)).rejects.toMatchObject({
@@ -441,6 +447,7 @@ describe('SubagentRuntime.listDescendants', () => {
   it('fails before reading when the Session store or query service is absent', async () => {
     const ctx = new Context()
     await mountWorkingDirectoryFixture(ctx)
+    if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SubagentRuntime)
     await expect(ctx.subagents.listDescendants(SessionId('root'))).rejects.toMatchObject({ code: 'SUBAGENT_CONTROL_SESSION_STORE_UNAVAILABLE' })
     await ctx.plugin(SessionStore)

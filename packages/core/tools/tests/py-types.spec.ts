@@ -151,7 +151,7 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('# tools["my-mcp.tool"](args: dict[str, Any]) -> str')
     expect(text).toContain('# tools["class"](args: dict[str, Any]) -> str')
     // Fixed instruction lines the model relies on.
-    expect(text).toContain('and `code`, the program to execute')
+    expect(text).toContain('and `description`, a short summary of what the program does')
     // The binding boundary: `tools`/`ToolCallError` are bound, the TypedDicts
     // are not. Both halves are pinned — dropping either one turns a correct
     // contract into a wrong one (a model that reads only "STATIC STUB" would
@@ -166,11 +166,11 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('tools: Tools')
   })
 
-  it('lists the required description before the program', () => {
+  it('lists the program before its description', () => {
     const text = renderToolsSdkPy([bash])
     expect(text).toContain('`code`')
     expect(text).toContain('`description`')
-    expect(text).toContain('two required arguments: `description`, a short summary of what the program does, and `code`')
+    expect(text).toContain('two required arguments: `code`')
   })
 
   it('renders required as plain fields and optional as NotRequired, with per-field description comments', () => {
@@ -477,7 +477,7 @@ describe('renderToolsSdkPy', () => {
     // ZWNJ carries `XID_Continue` and not `XID_Start`, so the predicate splits
     // on position: bare in a tail, subscripted at a head. Both verdicts are
     // stable across the supported engines — the property arrives in Unicode
-    // 15.1 and the floor (Node 22.19.0, Unicode 16.0) is past it.
+    // 15.1 and the supported engines use Unicode 16.0 or newer.
     //
     // The interpreter side is where this one skews, and it is the same skew the
     // docstring's four other characters record, reached in a tail position
@@ -540,10 +540,8 @@ describe('renderToolsSdkPy', () => {
     // Unlike the other Unicode cases in this file, the table row is recent:
     // U+A7DC and the U+019B uppercase mapping to it both arrive in Unicode
     // 16.0 (`DerivedAge.txt`; CPython 3.12.13's 15.0.0 has neither). The
-    // engines floor sits exactly there with no margin — Node 22.19.0 reports
-    // Unicode 16.0 (ICU 77.1) and maps U+019B to U+A7DC, measured — so an
-    // engine below the floor fails here as a renderer regression whose real
-    // cause is the table version.
+    // supported engines include that mapping. An older Unicode table fails
+    // here as a renderer regression whose cause is the table version.
     const text = renderToolsSdkPy([
       {
         name: 'ƛ',

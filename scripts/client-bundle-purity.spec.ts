@@ -234,6 +234,17 @@ describe('client bundle purity gate', () => {
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
   })
 
+  it('inlines the browser-safe Timer entry while sharing Cordis through the module table', () => {
+    const timer = '@deepseek-ai/cordis-plugin-timer'
+    expect(resolveId(timer)).toBeNull()
+    expect(() => resolveId(`${timer}/src/index.ts`)).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/cordis-plugin-hmr')).toThrow(/purity/)
+    const config = clientConfigs(packageDir('extensions/cordis-client-runner'))[0]
+    const deps = config?.deps as { neverBundle: (specifier: string) => boolean }
+    expect(deps.neverBundle(timer)).toBe(false)
+    expect(deps.neverBundle('@deepseek-ai/cordis')).toBe(true)
+  })
+
   it('lets exact generated Remote contributions inline without admitting their package implementation', () => {
     expect(resolveId('@deepseek-ai/dsh-goal/remote')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-goal')).toThrow(/purity/)

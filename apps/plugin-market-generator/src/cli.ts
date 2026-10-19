@@ -3,10 +3,10 @@
  *
  * Usage: plugin-market-generator --input <list> --output <index.json> --title <text> [options]
  *
- * The list holds one npm package name or https Git repository URL per line. The generator lists every non-deprecated
- * npm bundle version, and the versions at Git release tags and the default branch, never runs package code, and writes
- * a validated format-1 index. Unchanged releases and commits are read from the cache directory, and the index file is
- * rewritten only when its content changes.
+ * The list holds one npm package name or https Git repository URL per line. The generator lists every npm bundle
+ * version that is neither deprecated nor private, and the versions at Git release tags and the default branch of
+ * packages that are not private, never runs package code, and writes a validated format-1 index. Unchanged releases
+ * and commits are read from the cache directory, and the index file is rewritten only when its content changes.
  */
 import { existsSync, lstatSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

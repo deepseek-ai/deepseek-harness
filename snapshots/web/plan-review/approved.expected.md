@@ -9,6 +9,10 @@
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"
+- paragraph:
+  - text: Since the user has explicitly asked me not to read or write any files and to go straight to planning, I'll proceed with
+  - code: exit_plan_mode
+  - text: .
 - paragraph: DONE
 - 'button "Open plan: Add `--greeting` flag to CLI"': "Add `--greeting` flag to CLI Plan · Markdown Open"
 - button "Copy"

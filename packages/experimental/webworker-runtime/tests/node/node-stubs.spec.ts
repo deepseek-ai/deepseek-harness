@@ -26,6 +26,7 @@ import * as libreofficeKit from '../../src/node/external_packages/libreoffice-ki
 import * as execa from '../../src/node/external_packages/execa.ts'
 import * as got from '../../src/node/external_packages/got.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
+import * as piCodingAgent from '../../src/node/external_packages/pi-coding-agent.ts'
 import * as ripgrep from '../../src/node/external_packages/ripgrep.ts'
 import * as ws from '../../src/node/external_packages/ws.ts'
 import { REPLACED_EXTERNAL_PACKAGES } from '../../src/node/external_packages/replaced-externals.ts'
@@ -53,6 +54,16 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node-pty', nodePty, ['spawn', 'open']],
   ['execa', execa, ['execa']],
   ['got', got.default, ['post']],
+  ['@earendil-works/pi-coding-agent', piCodingAgent, [
+    'getAgentDir', 'initTheme', 'createAgentSessionServices', 'createAgentSessionFromServices',
+    'createBashToolDefinition', 'createMcpExtension', 'defineTool', 'resolveCliModel',
+  ]],
+  ['@earendil-works/pi-coding-agent', { create: piCodingAgent.ModelRuntime.create }, ['create']],
+  ['@earendil-works/pi-coding-agent', { create: piCodingAgent.SettingsManager.create }, ['create']],
+  ['@earendil-works/pi-coding-agent', {
+    create: piCodingAgent.SessionManager.create, open: piCodingAgent.SessionManager.open,
+    inMemory: piCodingAgent.SessionManager.inMemory, list: piCodingAgent.SessionManager.list,
+  }, ['create', 'open', 'inMemory', 'list']],
   ['@deepseek-ai/pi-ai', piAi, [
     'createProvider', 'createModels', 'openAICompletionsApi', 'openAIResponsesApi', 'anthropicMessagesApi',
     'isContextOverflow', 'getSupportedThinkingLevels', 'builtinModels',
@@ -66,6 +77,9 @@ const CONSTRUCTED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node:worker_threads', workerThreads, ['Worker']],
   ['node:perf_hooks', perfHooks, ['PerformanceObserver']],
   ['ws', ws, ['WebSocket']],
+  ['@earendil-works/pi-coding-agent', piCodingAgent, [
+    'ModelRegistry', 'ProjectTrustStore', 'ModelRuntime', 'SettingsManager', 'SessionManager',
+  ]],
 ]
 
 describe('not-implemented stubs', () => {
@@ -109,7 +123,9 @@ describe('not-implemented stubs', () => {
   })
 
   it('keeps the CommonJS interop marker and a default export on every replaced module', () => {
-    for (const namespace of [dnsPromises, net, sqlite, vm, workerThreads, childProcess, stream, ws, nodePty, piAi, os, perfHooks, got]) {
+    for (const namespace of [
+      dnsPromises, net, sqlite, vm, workerThreads, childProcess, stream, ws, nodePty, piAi, piCodingAgent, os, perfHooks, got,
+    ]) {
       const holder = namespace as { __esModule?: unknown; default?: unknown }
       expect(holder.__esModule).toBe(true)
       expect(holder.default).toBeDefined()
@@ -133,6 +149,14 @@ describe('constructible-but-inert fakes', () => {
 })
 
 describe('replaced external packages', () => {
+  it('refuses Pi agent creation with the Node platform code', () => {
+    quiet()
+    expect(() => piCodingAgent.createAgentSessionServices()).toThrow(expect.objectContaining({
+      code: PLATFORM_UNAVAILABLE,
+      message: 'web-preview: @earendil-works/pi-coding-agent.createAgentSessionServices is not available in the worker host',
+    }))
+  })
+
   it('reports Office conversion as unavailable without creating a Node worker', async () => {
     quiet()
     await expect(libreofficeKit.createConverter()).rejects.toMatchObject({

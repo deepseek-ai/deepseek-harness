@@ -457,31 +457,31 @@ describe('mode-aware wire contribution', () => {
     const sdk = assembly.sections.find(section => section.name === 'tools:sdk')
     expect(sdk?.text).toContain('class Tools(Protocol):')
     expect(sdk?.text).toContain('async def echo(self, args:')
-    expect(sdk?.text).toContain('and `code`, the program to execute')
+    expect(sdk?.text).toContain('and `description`, a short summary of what the program does')
     expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
     expect(assembly.tools[0]?.description).toContain('Execute a Python program')
   })
 
-  it.each(['typescript', 'python'])('requests description before code for a %s runtime', async (language) => {
+  it.each(['typescript', 'python'])('lists code before description for a %s runtime', async (language) => {
     const { ctx, systemPrompt } = await setup({ mode: 'ptc', runtime: { language } })
     try {
       const parameters = ctx.tools.get(RUN_CODE_NAME)!.parameters
       expect(Object.keys(parameters.properties as Record<string, unknown>).slice(0, 2))
-        .toEqual(['description', 'code'])
-      expect(parameters).toHaveProperty('required', ['description', 'code'])
+        .toEqual(['code', 'description'])
+      expect(parameters).toHaveProperty('required', ['code', 'description'])
       expect(parameters).toHaveProperty('properties.description.description',
-        expect.stringContaining('Provide `description` before `code` in the arguments.'))
+        expect.not.stringContaining('Provide `description` before `code`'))
       const assembly = await systemPrompt.assemble()
       expect(assembly.tools.find(tool => tool.name === RUN_CODE_NAME)?.parameters).toEqual(parameters)
       expect(assembly.tools.find(tool => tool.name === RUN_CODE_NAME)?.description)
-        .toContain('arguments: `description`, a short summary of what the program does, and `code`')
+        .toContain('arguments: `code`')
 
       // defineTool validates its captured static schema, independently of the runtime parameters getter.
       const rejected = await ctx.tools.execute({
         signal: testToolSignal, callId: ToolCallId('argument-order'), name: RUN_CODE_NAME, arguments: {},
       })
       expect(rejected).toHaveProperty('error.message',
-        'invalid arguments: missing required property "description"; missing required property "code"')
+        'invalid arguments: missing required property "code"; missing required property "description"')
     } finally {
       await ctx.fiber.dispose()
     }
@@ -493,13 +493,29 @@ describe('mode-aware wire contribution', () => {
     const assembly = await systemPrompt.assemble()
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a TypeScript program')
-    expect(runCodeSchema?.description).toContain('`code`, the program to execute')
+    expect(runCodeSchema?.description).toContain('`code`, the BODY of an async function')
     // Both required arguments are named here, not only in the parameter
     // schema: prose that describes the call as "pass the program" is what
     // leads a model to emit `{code}` alone and fail INVALID_ARGS.
     expect(runCodeSchema?.description).toContain('`description`')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
-    expect(codeParam.description).toBe("The TypeScript program to execute, following this tool's execution instructions.")
+    expect(codeParam.description).toBe('The program: the body of an async TypeScript function.')
+  })
+
+  it('keeps REPL instructions while ordering code before description', async () => {
+    const { ctx, runtime, systemPrompt } = await setup({ mode: 'ptc' })
+    Object.defineProperty(runtime, 'programFormat', { value: 'repl' })
+    try {
+      const assembly = await systemPrompt.assemble()
+      const schema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)!
+      expect(schema.parameters).toHaveProperty('required', ['code', 'description'])
+      expect(schema.description).not.toContain('BODY of an async function')
+      expect(schema.description).toContain('`code`, the program to execute')
+      expect(assembly.sections.find(section => section.name === 'tools:sdk')?.text)
+        .not.toContain('the body of an async TypeScript function')
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('emits a Python-flavored run_code schema under a python runtime (matches the SDK language)', async () => {

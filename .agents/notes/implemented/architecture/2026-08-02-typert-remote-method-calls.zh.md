@@ -207,17 +207,9 @@ Client Program
 
 `remote-client` 是 Host Program 的第二个 emitter，不是第三个 Program，也不是 Client 本地 face。它不包含 Host Cordis merge、Service class、Context class 或实现代码，不进入 Host 本地 reflection registry。
 
-Host lib 构建负责完成严格 Host 分析并产出 Host 本地 artifact 与 Remote 消费端 artifact；Client lib 随后消费 Remote DTS。完整顺序为：
+仅源码的 Host 分析在包编译之前写出 Host 本地 artifact 与 Remote 消费端 artifact。[生成顺序决策](../process/2026-10-18-source-first-metadata-builds.zh.md)负责生成位置及其取舍；[开发指南](../../../../docs/development.zh.md#typescript-project-layout)负责命令序列。
 
-```text
-Host lib build
-→ 生成 typert.host.{js,d.ts}
-→ 生成各业务包 lib/typert.remote-client.{js,d.ts,d.ts.map}
-→ 完成 Client lib 和 typert.client 产物
-→ Vite 构建 Web
-```
-
-顶层 `build` 运行 `scripts/build.ts` 中的步骤图，先完成 Host bundle 与 Remote artifact，再启动 Client TypeScript 编译。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建，其 Host 部分 `build:lib:host` 供 vendor 发布 workflow 使用。`typecheck` 与 Host 编译并行，经 `scripts/generate-typert.ts` 写出 Remote artifact，再启动 Client TypeScript 编译。一次干净构建不能依赖上次残留的 `.d.ts`。
+顶层 `build`、仅生成声明的 `typecheck` 与串行 `build:lib` 都在包编译之前准备元数据。`build:lib` 仍是 `build:bench` 使用的完整串行 lib 构建；其 Host 部分 `build:lib:host` 供 vendor 发布 workflow 使用，并保留 aggregate 检查。一次干净构建不能依赖上次残留的 `.d.ts`。
 
 即使主要输入是源文件，需要通过编译器解析消费方 surface 的仓库门禁也有相同的前置条件。公共 `typecheck`、`lint` 和 `doc-typecheck` 命令会先执行 Host 约定 pass。门禁调度器仅可在显式的 Typert 约定依赖或完整构建依赖完成后使用对应的 `*:contracts-ready` 变体，使并行 lane 既不会读取缺失的声明，也不会针对同一输出并发运行多个生成器。
 

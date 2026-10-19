@@ -10,6 +10,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
@@ -60,6 +61,7 @@ async function loadComposition(
     "  name: '@deepseek-ai/dsh-session'",
     '- id: agents',
     "  name: '@deepseek-ai/dsh-agent'",
+    "- name: '@deepseek-ai/dsh-session-projection'",
     '- id: deepseek-llm-api-extensions',
     "  name: '@deepseek-ai/dsh-deepseek-llm-api-extensions'",
     '- id: session-log-deepseek',
@@ -94,6 +96,7 @@ async function loadComposition(
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
+    ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-deepseek-llm-api-extensions', DeepSeekLlmApiExtensionRegistry],
     ['@deepseek-ai/dsh-session-log-deepseek', SessionLogDeepSeek],
     ['@deepseek-ai/dsh-plugin-package-inventory-deepseek', DeepSeekPluginPackageInventory],

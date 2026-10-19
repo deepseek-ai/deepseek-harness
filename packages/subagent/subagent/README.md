@@ -31,7 +31,7 @@ This package is the contract every delegation setup shares. You enable it by mou
 
 ### Enabling delegation
 
-Mount the service with a provider and the delegation tool. The provider registers under its configured name; each tool row selects one provider. A minimal setup:
+Mount the service with `@deepseek-ai/dsh-session-projection`, a provider, and the delegation tool; the service waits for the projection registry before initializing. The provider registers under its configured name; each tool row selects one provider. A minimal setup:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'

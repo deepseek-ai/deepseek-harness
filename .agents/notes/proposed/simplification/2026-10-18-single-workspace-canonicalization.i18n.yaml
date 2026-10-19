@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-18-single-workspace-canonicalization.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-10-18-single-workspace-canonicalization.md
+/agent-note-canonicalize-each-sandbox-workspace-once:
+  en: d9beb1e7a988d598
+  zh: 9ff16ea850cb3d57
+/agent-note-canonicalize-each-sandbox-workspace-once/problem:
+  en: 04219da3d9301a2d
+  zh: 92a399597d315cba
+/agent-note-canonicalize-each-sandbox-workspace-once/proposal:
+  en: d5017ea68bf366ea
+  zh: 6aa157b402d4d8d0
+/agent-note-canonicalize-each-sandbox-workspace-once/alternatives-considered:
+  en: f73a3a3a1a90fb16
+  zh: 3ec1d23f24436e26
+/agent-note-canonicalize-each-sandbox-workspace-once/acceptance-criteria:
+  en: 0a2aa37511fa5574
+  zh: 15258e58b498d944
+/agent-note-canonicalize-each-sandbox-workspace-once/risks:
+  en: 1fdb53b7c48b1f8d
+  zh: 999debc230df8d39

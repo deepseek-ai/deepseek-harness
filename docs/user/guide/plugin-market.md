@@ -97,7 +97,7 @@ Run it from a DSH checkout:
 pnpm --filter @deepseek-ai/dsh-plugin-market-generator start --input plugins.txt --output site/index.json --title "Team plugins"
 ```
 
-For an npm package, the index lists every version that is not deprecated and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
+For an npm package, the index lists every version that is neither deprecated nor private and declares `dsh.bundle`. For a Git repository, it finds the bundle packages on the default branch whose `package.json` does not set `"private": true` and lists their versions at `vX.Y.Z`, `X.Y.Z`, and `<name>@X.Y.Z` tags, plus each package's version on the default branch. Titles, descriptions, icons, authors, and homepages come from each plugin's highest version. Paths are relative to the directory where you run pnpm.
 
 The generator only downloads and reads files; it never installs packages or runs their code. It keeps a cache in `.plugin-market-cache` next to the list, so a repeated run downloads only new versions and commits. Publish the output directory, `index.json` together with its `icons/` directory, as described above.
 

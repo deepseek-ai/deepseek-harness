@@ -67,6 +67,8 @@ The installer embeds `DSH_DESKTOP_UPDATE_CHANNEL` (`nightly` by default, or `lat
 
 ## Configuration and local builds
 
+Unsigned macOS and Windows packages use the same localized **DSH Local Build** label and version/commit badge as local Web builds. Signed packages keep official branding, including test deployments and macOS builds that skip notarization. Native application and installer names are unchanged.
+
 Set `DSH_PACKAGING_CONFIG_DIR` to the absolute machine configuration directory and `DSH_PACKAGING_PRESET` to `test` or `production` for local Windows commands. The loader reads `presets/<preset>.env`; signed commands additionally read `secrets/windows-signing.env`. Relative certificate and SignTool paths resolve beside the file declaring them. Public presets reject credentials, and the signing file cannot override public settings. Missing configuration fails without falling back to `.env.windows`; commands without a preset retain the existing dotenv behavior. Unsigned and preparation-only presets never read the signing file. Cache maintenance also reads only public preset settings. Test signed packages also require the existing download origin and release ID, but no upload credentials. Local preset commands with `--build-version auto` number from local artifacts only; Actions uses its run number and attempt.
 
 Both manual packaging workflows accept `test_release_id`. Blank uses the machine preset; a nonblank value must contain 32 lowercase hexadecimal characters and requires the test preset. The loader applies it through `PACKAGE_TEST_RELEASE_ID` without changing the preset file. Keep the same value for successive upgrade tests on that platform. Rotating the default affects future builds only: installed clients retain their original update address, and old objects remain accessible until separately removed. A random prefix reduces discoverability but does not authenticate downloads.
@@ -185,7 +187,7 @@ Mac packaging reads three tuning fields from `.env.macos`:
 | `DSH_DESKTOP_MACOS_DOWNLOAD_PROXY` | Empty | HTTP/HTTPS proxy origin for Electron, runtime assets, pnpm installation and builder downloads. |
 | `DSH_DESKTOP_MACOS_NOTARIZATION_PROXY` | Empty | HTTP proxy origin for Apple tools through temporary system proxy settings. |
 
-The proxy fields are independent and reject URL credentials, paths, queries and fragments. Empty values preserve inherited networking. An explicit download proxy replaces child-process proxy variables and bypasses local hosts only; it does not change system settings. Windows and standalone `release:pack` retain their existing concurrency defaults. Company proxy addresses belong in the ignored local file; see internal documentation for addresses.
+The proxy fields are independent and reject URL credentials, paths, queries and fragments. Empty values preserve inherited networking. An explicit download proxy replaces child-process proxy variables and bypasses local hosts only; it does not change system settings. Company proxy addresses belong in the ignored local file; see internal documentation for addresses.
 
 Apple tooling uses the active macOS network service's HTTP/HTTPS proxies. Configured notarization routing checks proxy reachability, saves that service's settings, enables the proxy around both artifact lanes, and restores the saved settings after both lanes settle. An originally disabled proxy with an empty server and port zero is restored by disabling it; the temporary server and port may remain stored but inactive. Directory-only builds apply it to App notarization after the signed directory build. This temporarily affects other applications and requires permission to change system proxies; PAC, auto-discovery, SOCKS and authenticated proxy configurations must be disabled first. Packaging and recovery acquire the same per-user POSIX file lock before reading recovery data or changing proxies; process exit releases ownership, while the lock file remains in place. The lock loads `@deepseek-ai/node-addon-system/flock` at first use rather than at script start, so `check:package` and the packaging entry load on a checkout that has not built `native/system`; when the host addon binary or the entry's JavaScript is missing at lock time, the loader runs `pnpm run build:native-system` and `pnpm --dir native/system run build:ts` before locking, so recovery works on such a checkout as well. This prevents overlapping proxy transactions across checkouts; other users and network-setting tools must not change these settings concurrently. SIGINT/SIGTERM wait for active work before restoration. After forced termination or a restoration error, stop any remaining notarization processes and run `pnpm --dir apps/desktop run restore:mac-proxy`; the saved record remains until restoration succeeds. Configuration checks validate URL syntax without changing system settings or contacting the proxy.
 
@@ -206,7 +208,7 @@ To inspect or troubleshoot the prepared host-target resources without invoking e
 pnpm run prepare:desktop
 ```
 
-This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the official build and preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
+This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the build selected by its signing mode and all preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
 
 <a id="local-official-bundles-from-a-loopback-registry"></a>
 
@@ -271,6 +273,8 @@ An unpacked artifact contains Electron, the materialized dsh production tree, pn
 <a id="verification"></a>
 
 ## Installation and release verification
+
+Windows lists the installed application by product name without a version suffix; the version remains in the separate version field. Desktop's `package.json` `author.name` supplies the installer publisher and executable company name, independently of the signing certificate. Windows and macOS retain product-name copyright text. Installation or upgrade with a rebuilt installer applies the new metadata; existing installations retain their previous values until then.
 
 Keep the generated installer, its version and packaging records together. Review signatures and runtime checks before installation, then follow the [installed-update qualification procedure](../tests/installed-update/README.md) for installed launch and upgrade evidence. The [Desktop test record](../tests/README.md) owns verification limits; a successful workflow alone does not establish production preset, new-workstation or installed-upgrade acceptance.
 

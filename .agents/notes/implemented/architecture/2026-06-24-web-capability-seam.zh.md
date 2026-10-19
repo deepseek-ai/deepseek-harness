@@ -60,6 +60,7 @@ flowchart LR
   exa["@deepseek-ai/dsh-web-search-exa"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
   perplexity["@deepseek-ai/dsh-web-search-perplexity"] -->|registerSearchProvider| web
   deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web
+  deepseekApi["@deepseek-ai/dsh-web-deepseek-api"] -->|registerSearchProvider / registerFetchProvider| web
   fetchLocal["@deepseek-ai/dsh-web-fetch-http"] -->|registerFetchProvider| web
   toolWeb["@deepseek-ai/dsh-tool-web"] -->|search/fetch| web
   toolWeb -->|ctx.tools.register| webSearch["tool: web_search"]
@@ -150,6 +151,8 @@ interface WebRuntime {
 ```
 
 运维覆盖走同一条显式选择路径：`DSH_WEB_SEARCH_PROVIDER=perplexity` 等同于配置 `searchProvider: perplexity`，而非 `dsh-tool-web` 内部的隐式优先级链。
+
+每次搜索或抓取在执行时读取配置的 id，因此保存的设置变更无需重新挂载 `dsh-web` 即对下一次操作选择另一个提供方。网页搜索设置页的开关借此把两种能力同时切换到 [DeepSeek Search 与 Fetch API](../feature/2026-10-15-deepseek-search-fetch-api.zh.md)。
 
 `ctx.web.search()` 和 `ctx.web.fetch()` 在执行时按上述选择规则解析提供方。如果选定的能力不可用，它们抛出带有结构化代码的 `WebError`，如 `WEB_PROVIDER_UNAVAILABLE`、`WEB_PROVIDER_CONFIGURED_MISSING`、`WEB_PROVIDER_CONFIGURED_UNAVAILABLE` 或 `WEB_PROVIDER_AMBIGUOUS`。如果未显式配置提供方且不存在可用提供方，执行错误是通用的 `WEB_PROVIDER_UNAVAILABLE` 情况；刻意不提供对每个不可用提供方的诊断汇总。
 

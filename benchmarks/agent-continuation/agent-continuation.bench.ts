@@ -14,8 +14,12 @@ import { WORKLOAD } from './workload.ts'
 
 const ATTEMPTS = 5
 const WORKER_TIMEOUT_MS = 60_000
-/** M4 Pro / Node 24.19 baseline expectations, before shared CI scaling and variance headroom. */
-const EXPECTED_MS = { 'profile-continuation': 1_700 } as const
+/** Checkpoint-enabled two-CPU hosted runs have an upper observed median of 5,432.567 ms. */
+const EXPECTED_PROFILE_CONTINUATION_CI_MS = 5_500
+/** Apply variance headroom and round up to a whole second; the baseline is already a CI measurement. */
+const PROFILE_CONTINUATION_BUDGET_MS = Math.ceil(
+  EXPECTED_PROFILE_CONTINUATION_CI_MS * PERFORMANCE_BUDGET_HEADROOM / 1_000,
+) * 1_000
 /** Standard two-CPU hosted CI baseline request-history median is 582.304 ms. */
 const EXPECTED_BASELINE_REQUEST_CI_MS = 600
 const BASELINE_REQUEST_BUDGET_MS = Math.ceil(EXPECTED_BASELINE_REQUEST_CI_MS * PERFORMANCE_BUDGET_HEADROOM)
@@ -54,7 +58,7 @@ const CASES: Readonly<Record<Scenario, BenchmarkCase>> = {
   },
 }
 
-type Scenario = 'request-history' | 'catalog' | 'tool-continuation' | keyof typeof EXPECTED_MS
+type Scenario = 'request-history' | 'catalog' | 'tool-continuation' | 'profile-continuation'
 type Report = ContinuationReport | CatalogReport | ProfileReport
 
 function workerName(scenario: Scenario): string {
@@ -80,6 +84,24 @@ function median(values: readonly number[]): number {
 function expectTotalWithinBudget(value: number, budget: number): void {
   expect(value).toBeLessThanOrEqual(budget)
 }
+
+describe('checkpoint-enabled SDK-minimal hosted calibration', () => {
+  it('accepts the recorded checkpoint-enabled workload above the buffered-write budget', () => {
+    const recordedMedian = median([4_182.691, 5_946.326875, 5_581.127338, 5_432.567004, 4_362.941759])
+
+    expect(recordedMedian).toBe(5_432.567004)
+    expect(() => expectTotalWithinBudget(recordedMedian, 4_250)).toThrow()
+    expectTotalWithinBudget(recordedMedian, PROFILE_CONTINUATION_BUDGET_MS)
+    expect(PROFILE_CONTINUATION_BUDGET_MS).toBe(7_000)
+  })
+
+  it('rejects a material SDK-minimal profile slowdown', () => {
+    const regressionMedian = median([7_600, 7_900, 8_000, 7_700, 7_800])
+
+    expect(regressionMedian).toBe(7_800)
+    expect(() => expectTotalWithinBudget(regressionMedian, PROFILE_CONTINUATION_BUDGET_MS)).toThrow()
+  })
+})
 
 describe('standard hosted catalog calibration', () => {
   it('accepts the recorded two-CPU samples that exceed the historical budget', () => {
@@ -187,7 +209,7 @@ describe('continuing tool-heavy Sessions with large histories', () => {
       const totalMs = samples.map(sample => sample.totalMs)
       const budgetMs = scenario === 'request-history' ? REQUEST_HISTORY_BUDGET_MS
         : scenario === 'catalog' ? CATALOG_BUDGET_MS
-          : scenario === 'tool-continuation' ? TOOL_CONTINUATION_BUDGET_MS : ciTimeBudget(EXPECTED_MS[scenario])
+          : scenario === 'tool-continuation' ? TOOL_CONTINUATION_BUDGET_MS : PROFILE_CONTINUATION_BUDGET_MS
       const retainedHeapBudgetMb = EXPECTED_RETAINED_HEAP_MB * PERFORMANCE_BUDGET_HEADROOM
       console.log(JSON.stringify({
         benchmark: 'agent-continuation/' + scenario, workload: WORKLOAD,

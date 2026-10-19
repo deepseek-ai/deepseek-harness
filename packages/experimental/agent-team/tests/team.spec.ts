@@ -1,3 +1,4 @@
+import { Service } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -141,19 +142,20 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Team identity and provisioning', () => {
-  it('rejects missing and failed authoritative Team projections', async () => {
-    const first = await setup([])
-    const journal = teamInternals(first.ctx).journal
-    const stateOf = first.ctx.sessionProjections.stateOf.bind(first.ctx.sessionProjections)
-    const stateOfSpy = vi.spyOn(first.ctx.sessionProjections, 'stateOf').mockImplementation((session, key) => (
-      key === 'agentTeam' ? undefined : stateOf(session, key)
-    ))
-    expect(() => journal.state(first.lead)).toThrow('Agent Teams projection is not registered')
-    stateOfSpy.mockImplementation((session, key) => key === 'agentTeam'
-      ? { ...teamProjectionDefinition.init(session.header), failure: 'failed Team projection' }
-      : stateOf(session, key))
-    expect(() => journal.state(first.lead)).toThrow('failed Team projection')
-    stateOfSpy.mockRestore()
+  it('rejects reads and mutations after a Team projection fails', async () => {
+    const { ctx, lead } = await setup([])
+    lead.session.append('team/message/delivered', {
+      version: 2,
+      teamId: TeamId(lead.id),
+      messageId: TeamMessageId('unqueued-message'),
+      targetId: lead.id,
+    })
+
+    expect(() => ctx.agentTeams.listMembers(lead)).toThrow('delivered before queueing')
+    const eventCount = lead.session.snapshotEvents().length
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'blocked', description: 'blocked' }))
+      .rejects.toThrow('delivered before queueing')
+    expect(lead.session.snapshotEvents()).toHaveLength(eventCount)
   })
 
   it('rejects deployment limits that are not positive safe integers', async () => {
@@ -181,7 +183,11 @@ describe('Team identity and provisioning', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentService)
     const lead = await ctx.agentLoop.create(SessionId('preexisting-lead'), {})
-    const service = new TeamService(ctx)
+    class DirectTeamService extends TeamService {
+      initialize(): Promise<void> { return this[Service.init]() }
+    }
+    const service = new DirectTeamService(ctx)
+    await service.initialize()
 
     expect(service.listMembers(lead)).toEqual([expect.objectContaining({
       name: 'lead',
@@ -1144,6 +1150,32 @@ describe('Team direct messages and waiting', () => {
 
     await expect(waiting).resolves.toEqual({ timedOut: false })
     expect(ctx.agents.get(started.member.id)).toBeUndefined()
+    expect(ctx.get('agentTeams')).toBeUndefined()
+  })
+
+  it.each([false, true])('settles admitted work after projection unregistration (failure: %s)', async (fails) => {
+    const { ctx, lead, teamFiber } = await setup([])
+    const internal = teamInternals(ctx)
+    const state = internal.journal.state(lead)
+    const finish = Promise.withResolvers<undefined>()
+    let readDuringShutdown = false
+    void internal.lifecycle.track(finish.promise.then(() => {
+      expect(internal.journal.state(lead)).toBe(state)
+      readDuringShutdown = true
+      if (fails) throw new Error('admitted operation failed during shutdown')
+    }))
+    const disposal = teamFiber.dispose()
+    try {
+      await vi.waitFor(() => {
+        expect(internal.lifecycle.disposed).toBe(true)
+        expect(ctx.sessionProjections.checkpoint(lead.session)).not.toHaveProperty('agentTeam')
+      })
+      expect(readDuringShutdown).toBe(false)
+    } finally {
+      finish.resolve(undefined)
+      await disposal
+    }
+    expect(readDuringShutdown).toBe(true)
     expect(ctx.get('agentTeams')).toBeUndefined()
   })
 

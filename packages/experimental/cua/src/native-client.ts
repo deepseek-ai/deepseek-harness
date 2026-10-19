@@ -43,6 +43,7 @@ export interface NativeClientConfig {
   maxResponseBytes: number
   graceMs: number
   textEventIntervalMs: number
+  maxClickHoldMs: number
 }
 
 /** One Agent's ordered connection to native operations and cleanup acknowledgement. */

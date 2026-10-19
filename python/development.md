@@ -61,10 +61,18 @@ Alternatively export a non-empty `DSH_HOME`. The SDK rejects a launch that would
 
 Repository contributors can select either development route; both execute the normal `dsh --profile sdk` launcher:
 
-- Set `DSH_RUNTIME_MODE=node` to use the built Node carrier on system Node `>=22.19`. The build script refreshes this carrier, but distributions never include or auto-select it.
+- Set `DSH_RUNTIME_MODE=node` to use the built Node carrier on system Node `>=24.9`. The build script refreshes this carrier, but distributions never include or auto-select it.
 - Set `dsh_bin` to the absolute built `apps/cli/lib/bin.js` path to exercise the checkout's CLI directly. Supply an explicit `dsh_home`, plus `profile` and ordered `patches` as needed.
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` uses the internal `_launch_args` test adapter to exercise the unbuilt TypeScript CLI under tsx. Arbitrary argv replacement is intentionally absent from the public SDK.
+
+The manual [shutdown example](sdk/tests/manual_sdk_shutdown_smoke.py) uses ordinary SDK calls: run one short real-model turn, close immediately with the default 1-second budget, then open another runtime and restore the same session. Install the SDK/runtime and set `DEEPSEEK_API_KEY` before running:
+
+```sh
+python python/sdk/tests/manual_sdk_shutdown_smoke.py
+```
+
+The example prints the close duration and history files, retains its temporary directory, and lets restoration failures raise normally. Recovery uses a separate 30-second shutdown budget. Reproduction depends on the host and first-turn timing; successful restoration does not establish a shutdown latency bound. This manual example is not collected by pytest.
 
 ## Build distributions
 

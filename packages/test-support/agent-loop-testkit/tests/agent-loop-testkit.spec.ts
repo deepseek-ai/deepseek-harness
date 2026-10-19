@@ -110,7 +110,7 @@ describe('dsh-agent-loop-testkit', () => {
       time: 1,
       data: { target: 'next-turn', start: 99, inserted: [] },
     }])
-    expect(() => ctx.sessionProjections.stateOf(invalid, 'inbox'))
+    expect(() => ctx.sessionProjections.checkpoint(invalid).inbox?.val)
       .toThrow(/invalid persisted inbox splice/)
     expect(harness.claim(agent, 'next-turn', 3)).toEqual([step, turn])
     expect(claimed).toEqual([

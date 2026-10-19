@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek 网页搜索与抓取 API",
+    "description": "通过 DeepSeek Search API 搜索网页、Fetch API 抓取网页正文。"
+  }
+}

@@ -225,6 +225,7 @@ export function testProfileResolution(mode: ExampleMode): void {
         ].join('\n'),
         'cordis.patch.yml': JSON.stringify([
           { id: 'headless-startup', disabled: true },
+          { id: 'sandbox-policy', inject: [], config: { mode: process.env.DSH_PERMISSION_MODE ?? 'workspace-write' } },
           { id: 'headless-runner', disabled: true },
           { id: 'llm-deepseek', disabled: true },
           { insert: [

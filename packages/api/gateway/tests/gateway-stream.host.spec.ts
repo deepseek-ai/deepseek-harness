@@ -416,16 +416,50 @@ describe('Typert Remote streams', () => {
     expect(() => { startup.commit() }).not.toThrow()
   })
 
-  it('validates the WebSocket heartbeat timer range and the stream inbox bound', () => {
-    expect(TypertGatewayService.Config({})).toEqual({ websocketHeartbeatIntervalMs: 2_000, streamInboxBytes: 262_144 })
-    expect(TypertGatewayService.Config({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 }))
-      .toEqual({ websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS, streamInboxBytes: 1 })
+  it('validates the WebSocket heartbeat timer range, the stream inbox bound, and the compression mode', () => {
+    expect(TypertGatewayService.Config({})).toEqual({
+      websocketHeartbeatIntervalMs: 2_000,
+      streamInboxBytes: 262_144,
+      websocketCompression: 'deflate',
+    })
+    expect(TypertGatewayService.Config({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+      websocketCompression: 'none',
+    })).toEqual({
+      websocketHeartbeatIntervalMs: MAX_TIMER_DELAY_MS,
+      streamInboxBytes: 1,
+      websocketCompression: 'none',
+    })
     for (const websocketHeartbeatIntervalMs of [0, 1.5, MAX_TIMER_DELAY_MS + 1]) {
       expect(() => TypertGatewayService.Config({ websocketHeartbeatIntervalMs })).toThrow()
     }
     for (const streamInboxBytes of [0, 1.5]) {
       expect(() => TypertGatewayService.Config({ streamInboxBytes })).toThrow()
     }
+    for (const websocketCompression of ['gzip', 'DEFLATE', '', 1]) {
+      expect(() => TypertGatewayService.Config({ websocketCompression } as never)).toThrow()
+    }
+  })
+
+  it('applies the configured compression mode to the Remote stream carrier', async () => {
+    const { ctx } = await setup(true)
+    const negotiating = new WebSocket(`ws://127.0.0.1:${String(ctx.webServer.port)}/api/remote.mux`, {
+      headers: { cookie: browserCookie(ctx) },
+    })
+    await once(negotiating, 'open')
+    expect(negotiating.extensions).toContain('permessage-deflate')
+    negotiating.close()
+    await once(negotiating, 'close')
+
+    const plain = await setup(true, { websocketCompression: 'none' })
+    const unnegotiated = new WebSocket(`ws://127.0.0.1:${String(plain.ctx.webServer.port)}/api/remote.mux`, {
+      headers: { cookie: browserCookie(plain.ctx) },
+    })
+    await once(unnegotiated, 'open')
+    expect(unnegotiated.extensions).toBe('')
+    unnegotiated.close()
+    await once(unnegotiated, 'close')
   })
 
   it('opens decoded carrier payloads through the in-process wire adapter', async () => {

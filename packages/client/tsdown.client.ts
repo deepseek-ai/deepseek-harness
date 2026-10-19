@@ -74,7 +74,7 @@ export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|session|llm|
  * identity to share — the framework itself is a requested module-table row
  * (external), while these are ordinary libraries a browser bundle inlines.
  */
-const VENDORED_LIBRARY = /^@deepseek-ai\/(cosmokit|schemastery)(\/|$)/
+const VENDORED_LIBRARY = /^@deepseek-ai\/(?:(?:cosmokit|schemastery)(?:\/|$)|cordis-plugin-timer$)/
 
 /** Generated descriptor/codec contribution with no shared runtime identity. */
 const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/

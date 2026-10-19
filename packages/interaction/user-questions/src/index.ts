@@ -7,16 +7,16 @@
  * @module @deepseek-ai/dsh-user-questions
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage, HarnessError, type MessageId, type ToolCallId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import z from '@deepseek-ai/schemastery'
-import { userQuestionProjectionDefinition } from './projection.ts'
+import { userQuestionProjectionDefinition, type UserQuestionProjectionState } from './projection.ts'
 import { TimedQuestionWait } from './timed-wait.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -78,14 +78,12 @@ type QueuedReply = { messageId: MessageId; claimedTurn?: number }
 /** `ctx.userQuestions`: validation plus the scoped answerer waterfall. */
 export class UserQuestionService extends TypertRemoteService {
   static Config = z.object({})
+  private userQuestionProjectionHandle: ProjectionHandle<UserQuestionProjectionState> | undefined
   private readonly waits = new Map<Agent, Map<ToolCallId, TimedQuestionWait>>()
   private readonly queuedReplies = new WeakMap<Session, Map<ToolCallId, QueuedReply>>()
 
   constructor(ctx: Context) {
     super(ctx, 'userQuestions')
-    ctx.inject(['sessionProjections'], (projectionCtx) => {
-      projectionCtx.sessionProjections.register(userQuestionProjectionDefinition)
-    })
     ctx.effect(() => () => {
       for (const calls of this.waits.values()) {
         for (const wait of calls.values()) wait.close(abortedQuestion())
@@ -128,6 +126,14 @@ export class UserQuestionService extends TypertRemoteService {
     calls.delete(callId)
   }
 
+  protected async [Service.init](): Promise<void> {
+    const binding = this.ctx.inject(['sessionProjections'], async (ctx) => {
+      this.userQuestionProjectionHandle = await ctx.sessionProjections.register(userQuestionProjectionDefinition)
+      return () => { this.userQuestionProjectionHandle = undefined }
+    })
+    if (this.ctx.get('sessionProjections') !== undefined) await binding
+  }
+
   private assertLiveRoot(agent: Agent): void {
     const agents = this.ctx.get('agents')
     if (agents === undefined || agents.get(agent.id) !== agent) {
@@ -144,8 +150,7 @@ export class UserQuestionService extends TypertRemoteService {
   }
 
   private continued(agent: Agent): readonly PendingUserQuestion[] {
-    const state = this.ctx.get('sessionProjections')?.stateOf(agent.session, 'userQuestions')
-    return (state?.questions.active ?? []).filter(question => question.state === 'continued')
+    return this.userQuestionProjectionHandle?.stateOf(agent.session).questions.active.filter(question => question.state === 'continued') ?? []
   }
 
   /**

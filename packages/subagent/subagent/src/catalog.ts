@@ -97,12 +97,6 @@ const stateSchema: z.ZodType<SubagentCatalogState> = z.object({
   head: chunkedListSchema(eventDataSchema).optional(),
 }).strict()
 
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    subagentCatalog: SubagentCatalogState
-  }
-}
-
 /**
  * Materialize complete and unknown-mode child identities from parent catalog events.
  * @param state - parent catalog fold state.

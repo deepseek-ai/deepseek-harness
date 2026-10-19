@@ -6,14 +6,16 @@
  * because the user acted on it. An award that expired before a render is not
  * drawn at all.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { BonusNotice } from './bonus-notices.ts'
 import css from './AccountNotice.module.css'
+import { dismissNotice } from './notice-transition.ts'
 
 /** @param expiresAt - server expiration timestamp. @returns whether the award can still be spent. */
 function live(expiresAt: string): boolean {
+  if (expiresAt === '') return true
   const expires = Date.parse(expiresAt)
   // An unparsable timestamp is not evidence of expiry, so the notice still shows.
   return Number.isNaN(expires) || expires > Date.now()
@@ -44,29 +46,26 @@ function afterPaint(run: () => void): () => void {
   }
 }
 
-/** @param props - notice copy and identity, sidebar anchor, and display callbacks.
- * @returns a non-modal notice above the account launcher until closed.
+/** @param props - server-ordered notices, localized fallback copy, anchor, and display callbacks.
+ * @returns a non-modal stack whose foreground card alone can report display or be closed.
  */
-export function AccountNoticeCard({ notice, anchor, title, closeLabel, onShown, onDismiss }: {
-  notice: BonusNotice
+export function AccountNoticeStack({ notices, anchor, title, closeLabel, onShown, onDismiss }: {
+  notices: readonly BonusNotice[]
   anchor: RefObject<HTMLElement>
   title: string
   closeLabel: string
-  /** Called once, after the visible card has passed a presented frame. */
+  /** Called after the foreground card has passed a visible presented frame. */
   onShown: (orderId: BonusNotice['orderId']) => void
-  /** Called when the user closes the card, which counts as having seen it. */
+  /** Called when the user closes the foreground card. */
   onDismiss: (orderId: BonusNotice['orderId']) => void
 }) {
   const [position, setPosition] = useState<{ left: number; bottom: number }>()
-  const reported = useRef(false)
   useLayoutEffect(() => {
-    if (!anchor.current || !live(notice.expiresAt)) return
+    if (!anchor.current) return
     const element = anchor.current
     const update = () => {
       const rect = element.getBoundingClientRect()
-      // The launcher row starts one 10px inset inside the sidebar, which is the
-      // card's fixed left inset; the width itself does not follow the sidebar.
-      setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 268)),
+      setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 288)),
         bottom: Math.max(8, window.innerHeight - rect.top + 4) })
     }
     update()
@@ -79,9 +78,29 @@ export function AccountNoticeCard({ notice, anchor, title, closeLabel, onShown, 
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
     }
-  }, [anchor, notice.orderId, notice.expiresAt])
+  }, [anchor])
+  const liveNotices = notices.filter(notice => live(notice.expiresAt))
+  return createPortal(<div className={css.stack} style={position ?? { visibility: 'hidden' }}>
+    {liveNotices.map((notice, depth) => <NoticeCard key={notice.orderId} notice={notice} depth={depth}
+      ready={position !== undefined} title={notice.title ?? title} closeLabel={closeLabel}
+      onShown={onShown} onDismiss={onDismiss} />)}
+  </div>, document.body)
+}
+
+/** One stable card node remains mounted as the cards before it are dismissed. */
+function NoticeCard({ notice, depth, ready, title, closeLabel, onShown, onDismiss }: {
+  notice: BonusNotice
+  depth: number
+  ready: boolean
+  title: string
+  closeLabel: string
+  onShown: (orderId: BonusNotice['orderId']) => void
+  onDismiss: (orderId: BonusNotice['orderId']) => void
+}) {
+  const foreground = depth === 0
+  const reported = useRef(false)
   useEffect(() => {
-    if (position === undefined || reported.current || !live(notice.expiresAt)) return
+    if (!ready || !foreground || reported.current || !live(notice.expiresAt)) return
     let cancel: (() => void) | undefined
     const attempt = () => {
       if (reported.current || cancel !== undefined || !live(notice.expiresAt)) return
@@ -99,11 +118,9 @@ export function AccountNoticeCard({ notice, anchor, title, closeLabel, onShown, 
       document.removeEventListener('visibilitychange', attempt)
       cancel?.()
     }
-  }, [position, notice.orderId, notice.expiresAt, onShown])
-  // Rendering nothing keeps an expired notice off screen without disturbing the
-  // hook order above.
-  if (!live(notice.expiresAt)) return null
-  return createPortal(<aside className={css.card} style={position ?? { visibility: 'hidden' }}>
+  }, [ready, foreground, notice.orderId, notice.expiresAt, onShown])
+  return <aside className={css.card} data-front={foreground} aria-hidden={!foreground}
+    style={{ '--notice-depth': depth, '--notice-scale': Math.pow(272 / 280, depth) } as CSSProperties}>
     <div role="status" className={css.copy}>
       <div className={css.title}><span className={css.icon} aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -113,6 +130,6 @@ export function AccountNoticeCard({ notice, anchor, title, closeLabel, onShown, 
       </span><span>{title}</span></div>
       <p>{notice.message}</p>
     </div>
-    <button type="button" className={css.close} aria-label={closeLabel} onClick={() => { onDismiss(notice.orderId) }}><IconCloseOutlineRegular size={10} /></button>
-  </aside>, document.body)
+    <button type="button" tabIndex={foreground ? undefined : -1} className={css.close} aria-label={closeLabel} onClick={(event) => { dismissNotice(event.currentTarget.parentElement as HTMLElement, () => { onDismiss(notice.orderId) }) }}><IconCloseOutlineRegular size={10} /></button>
+  </aside>
 }

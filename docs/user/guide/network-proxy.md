@@ -57,7 +57,7 @@ export NODE_EXTRA_CA_CERTS=/path/to/corporate-ca.pem
 
 Node reads that variable only at process start, so export it before running `dsh`.
 
-**Tools DSH runs for you follow the same proxy.** Commands in the bash tool, `git`, `gh`, and MCP servers started as child processes all inherit these variables. A child that is itself a Node program honors them only on Node 22.21 or later; an older Node connects directly. If one of your proxy variables holds a value DSH rejected — a SOCKS URL, say — Node-based tools also connect directly rather than fail to start, while `curl` and `git` still read that value.
+**Tools DSH runs for you follow the same proxy.** Commands in the bash tool, `git`, `gh`, and MCP servers started as child processes all inherit these variables. A child Node program uses its own installed runtime: Node 22.21+ and Node 24+ honor these variables; an older runtime connects directly. If one of your proxy variables holds a value DSH rejected — a SOCKS URL, say — Node-based tools also connect directly rather than fail to start, while `curl` and `git` still read that value.
 
 **A password in the proxy URL reaches those tools too.** `HTTPS_PROXY=http://alice:s3cret@proxy.example:8080` is a normal environment variable, so every command DSH runs — including the ones the model writes — can read it, and a command that prints its environment puts the password in output that is kept. This is how the variable already behaves for everything else in your shell. If that matters, give the proxy a credential-free entry point, or authenticate it some other way than in the URL.
 

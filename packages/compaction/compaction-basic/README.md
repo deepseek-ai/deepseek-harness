@@ -54,6 +54,8 @@ You can verify success by watching the conversation continue past the point wher
       - provider: local
         model: small-context
         thresholdRatio: 0.7
+        headroomTokens: 4096
+        maxTokens: 4096
         retainTokens: 2048
 ```
 
@@ -81,6 +83,12 @@ Misconfiguration fails fast: unknown settings, duplicate per-model overrides, in
 
 The oldest balanced span is replaced by one summary message and the recent tail stays verbatim; the conversation continues from the summary. The operation reports how many history items were condensed and the estimated tokens freed. If nothing can be condensed safely — for example the whole conversation is one indivisible unit — nothing changes and nothing is written to the session log. If no model is available to write the summary (no configured target and no routed request yet), condensation fails with a clear error telling you to configure the summarization provider and model or route one request.
 
+### Switching models
+
+Before a changed provider/model request is committed, automatic compaction measures the existing history against the destination model's capacity, output reservation, and pressure policy. When condensation is needed, it uses the previous routed model and its summary settings; an explicitly configured summary target still takes precedence. The destination request proceeds only after history falls below its threshold. Failure reports `MODEL_SWITCH_COMPACTION_FAILED` and leaves the previous request header intact; select a larger model or retry after correcting the reported cause. Completed pruning or condensation remains in the session even when a later attempt fails. The check runs when the next request is prepared, and `auto: false` disables it.
+
+The destination must have a registered adapter, declared context capacity, and a valid pressure budget even for short history. The default 65,536-token headroom does not fit a window of that size or smaller; set `modelPolicies[].headroomTokens` for that route as in the example above. See the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-alpha.4/model-switch-compaction/guide.md) for migration.
+
 ### On-demand condensation with /compact
 
 With `dsh-command-compact` mounted, type `/compact` in a chat UI to condense immediately, even below the pressure threshold. The command reports how many history items were condensed and the estimated tokens saved. While the agent is mid-turn or condensation is already running, `/compact` reports that condensation is unavailable; prompts you send while it runs are accepted and start after it finishes.
@@ -103,16 +111,18 @@ This section explains the design decisions behind the backend; the observable be
 
 The backend is built on four commitments:
 
-- **One measurement service prices every decision.** The singleton `ctx.tokenMeter` measures the latest canonical logged envelope and current surface at one consumed-log revision. When the routed adapter declares request-image pricing, the meter applies it to image history. Pressure, recent-tail retention, range selection, and shrink validation use the same route-priced node figures; logged replacement shadow prices stay on the route-independent heuristic so pure projection folds remain consistent.
+- **One measurement service prices every decision.** The singleton `ctx.tokenMeter` measures the latest canonical logged envelope and current surface at one consumed-log revision. When the routed adapter declares request-image pricing, the meter applies it to image history. Model-switch pressure, retention, and range selection use destination pricing; region shrink validation uses the last committed route; logged replacement shadow prices stay on the route-independent heuristic so pure projection folds remain consistent.
 - **The log-recorded bracket is the transaction.** All entry points share one bracket-first region transaction: validate the range and live lock, append `compaction/start` synchronously, prepare and await the summary, revalidate, append `compaction/summary` plus the replacement, and make exactly one closing attempt. Automatic and explicit-region calls require a numeric open-turn owner and whole-surface stability; `compactNow()` reserves idle admission, uses `turn: null`, accepts append-only context outside its selected span, flushes every closed attempt, and releases admission in `finally`.
 - **Summarization reuses the provider's warm prefix.** Replaying the system prompt held by the `system/message` at surface node 0, the last routed request's tools, and the shadowed-region messages byte-for-byte makes the auxiliary call a genuine prefix of the conversation, so only the trailing instruction and the summary output are uncached.
 - **`summarize()` is the sole subclass hook.** A template- or remote-summarizer subclass can override it while pressure, retention, cited source events, shrink validation, and shadowed-token accounting stay on the token meter.
 
 ### Automatic triggers and overflow recovery
 
+The `agent/request` listener waits for routing listeners to select the destination, then checks its pressure before the new header is logged. It uses `compactPressure` directly because `compactIfNeeded` reads the committed header; both paths generate summaries through `summarize()`.
+
 With `auto: true`, a serial `agent/pre-step` listener checks pressure before request derivation: it prices the latest durable routed request envelope through `ctx.tokenMeter`, and when pressure crosses the routed model's threshold it prunes, then summarizes the oldest balanced span while keeping a priced recent tail. Every selected range starts at the first surface node that is not a `system/message`, so a system prompt at surface node 0 is never shadowed; a later `system/message` appended by an in-history prompt update is ordinary history that the range may shadow, and the agent loop's projection then replaces node 0 with the current prompt when their text differs ([decision rule](../../core/agent-loop/README.md#understand-the-implementation)). The `agent/request-error` listener reacts to a provider-confirmed `CONTEXT_WINDOW_EXCEEDED`: it bypasses the normal threshold and retention policy, attempts one maximal balanced head reduction, and authorizes a retry only after the surface replacement generation advances. Cancellation stays authoritative throughout.
 
-Pressure policy resolves capacity from the adapter that owns the durable route. Missing capacity, output plus headroom exhausting the window, or a retained budget at least as large as the threshold makes the manual pressure path throw a target-specific configuration error. The automatic listener warns once for that exact target and skips proactive compaction until its configuration is corrected; provider-confirmed overflow recovery remains available.
+Pressure policy resolves capacity from the adapter that owns the durable route. Missing capacity, output plus headroom exhausting the window, or a retained budget at least as large as the threshold makes the manual pressure path throw a target-specific configuration error. The `agent/pre-step` listener warns once for that exact target and continues the turn; provider-confirmed overflow recovery remains available. Model-switch checks instead reject the request with `MODEL_SWITCH_COMPACTION_FAILED`, including when capacity or adapter lookup fails.
 
 ### Summarization mechanics
 
@@ -126,7 +136,7 @@ The transaction validates the surface span and the durable lock, appends `compac
 
 ### Config resolution
 
-`resolveConfig` validates and detaches defaults, `resolveTargetPolicy` merges exact provider/model overrides, and `resolveCompactSpec` requires explicit adapter capacity and routed output reservation to resolve the trigger and retained budget. The effective envelope’s `maxTokens` supplies that reservation, falling back to the adapter default and then zero. Model discovery (`listModels()`) is never consulted for policy; only the durable route's capacity matters.
+`resolveConfig` validates and detaches defaults, `resolveTargetPolicy` merges exact provider/model overrides, and `resolveCompactSpec` requires explicit adapter capacity and routed output reservation to resolve the trigger and retained budget. The effective envelope’s `maxTokens` supplies that reservation, falling back to the adapter default and then zero. Model discovery (`listModels()`) is never consulted for policy; capacity comes from the durable route or the proposed destination during a model switch.
 
 ### Source map
 
@@ -243,7 +253,8 @@ These limits define when automatic condensation is a poor fit or needs special c
 - **Overflow classification is adapter-maintained** — provider wording can change; both DeepSeek adapters normalize recognized context-limit failures to `CONTEXT_WINDOW_EXCEEDED`.
 - **Some indivisible-unit and envelope-only overflow remains outside surface compaction** — recovery cannot shrink system/tools/prefix, split an indivisible non-tool node, or repair a tool unit whose non-prunable remainder still exceeds the window. The optional pruner can shrink text-bearing tool-result bulk inside an otherwise indivisible pair.
 - **`compactRegion` requires an open turn** — a manual call on a fully-closed session throws ("no open turn") rather than compacting.
-- **Summarization failure preserves the latest durable surface** — before any replacement, the auto path logs a warning and proceeds with full over-budget history. If pruning already landed, a later summarization failure proceeds from that durable pruned surface. Summarization truncation at `maxTokens`, which hidden reasoning tokens can consume, follows the same rule.
+- **Summarization failure preserves the latest durable surface** — pre-step pressure logs a warning and continues; model-switch pressure rejects the destination request. Completed pruning and earlier checkpoints survive either failure. Summarization truncation at `maxTokens`, which hidden reasoning tokens can consume, follows the same rule.
+- **Cross-model image pricing can reject a useful summary** — switch range selection uses destination pricing, while shrink validation uses the committed route. Different image prices can make a summary fail shrink validation even when it would reduce destination pressure.
 
 <a id="dev-note"></a>
 ### Dev Note

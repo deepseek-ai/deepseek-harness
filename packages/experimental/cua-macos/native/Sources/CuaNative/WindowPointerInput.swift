@@ -57,8 +57,9 @@ final class WindowPointerInput {
         }
     }
 
-    /// Post one or two left clicks, or one right/middle click, with a shared window-routing group.
-    func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int, modifiers: [String] = []) throws {
+    /// Post balanced mouse presses; holdMs replaces each press-to-release interval and remains cancellable.
+    func click(in route: WindowRoute, at point: WindowPoint, button: String, count: Int, modifiers: [String] = [],
+               holdMs: Int? = nil, isolation: isolated (any Actor)? = #isolation) async throws {
         try checkCancellation()
         try Self.validate(point, in: route)
         guard (button == "left" && (count == 1 || count == 2)) || (["right", "middle"].contains(button) && count == 1) else {
@@ -84,10 +85,11 @@ final class WindowPointerInput {
             }
             try checkCancellation()
             poster.post(move, to: route.owner.pid)
-            Thread.sleep(forTimeInterval: 0.015)
+            try await Task.sleep(for: .milliseconds(15))
             for (index, pair) in pairs.enumerated() {
-                try postPair(pair, to: route.owner.pid, downInterval: 0.001)
-                if index + 1 < pairs.count { Thread.sleep(forTimeInterval: 0.080) }
+                try await Self.postPair(downInterval: .milliseconds(holdMs ?? 1), checkCancellation: checkCancellation,
+                    down: { poster.post(pair.down, to: route.owner.pid) }, up: { poster.post(pair.up, to: route.owner.pid) })
+                if index + 1 < pairs.count { try await Task.sleep(for: .milliseconds(80)) }
             }
         } else {
             let pair = try mousePair(
@@ -96,8 +98,9 @@ final class WindowPointerInput {
             )
             try checkCancellation()
             poster.post(move, to: route.owner.pid)
-            Thread.sleep(forTimeInterval: 0.012)
-            try postPair(pair, to: route.owner.pid, downInterval: 0.028)
+            try await Task.sleep(for: .milliseconds(12))
+            try await Self.postPair(downInterval: .milliseconds(holdMs ?? 28), checkCancellation: checkCancellation,
+                down: { poster.post(pair.down, to: route.owner.pid) }, up: { poster.post(pair.up, to: route.owner.pid) })
         }
         try checkCancellation()
     }
@@ -206,18 +209,14 @@ final class WindowPointerInput {
         try checkCancellation()
     }
 
-    private func postPair(_ pair: MousePair, to pid: Int32, downInterval: TimeInterval) throws {
-        var held = false
-        defer {
-            if held { poster.post(pair.up, to: pid) }
-        }
+    /// Every posted down is paired with exactly one up, including cancellation during the wait.
+    static func postPair(downInterval: Duration, checkCancellation: () throws -> Void,
+                         down: () -> Void, up: () -> Void, isolation: isolated (any Actor)? = #isolation) async throws {
         try checkCancellation()
-        poster.post(pair.down, to: pid)
-        held = true
-        Thread.sleep(forTimeInterval: downInterval)
+        down()
+        defer { up() }
+        try await Task.sleep(for: downInterval)
         try checkCancellation()
-        poster.post(pair.up, to: pid)
-        held = false
     }
 
     private func mousePair(

@@ -71,8 +71,8 @@ export async function repository(parent = tmpdir()): Promise<string> {
 export async function harness(root: string, config: Config = {}, mode: SandboxMode = 'danger-full-access'): Promise<Context> {
   const ctx = new Context()
   try {
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(LocalFileSystem, { cwd: root })
     await ctx.plugin(LocalSubprocessRuntime)

@@ -1,10 +1,10 @@
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import LlmRuntime, { createUserMessage, LlmAdapter, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SessionTitleService, {
   SessionTitleProviderId,
   type SessionTitleUserMessage,
@@ -92,7 +92,7 @@ async function harness(
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionTitleService, TITLE_CONFIG)
   const adapter = new RecordingAdapter(script, reasoningEfforts)
   ctx.llm.registerAdapter(['title-route'], adapter)
@@ -215,7 +215,7 @@ describe('all-messages LLM title provider', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+    await ctx.plugin(AgentRegistry)
     // A one-byte fallback cap cannot derive a title from the multibyte message,
     // so the service supplies no currentTitle to the provider.
     await ctx.plugin(SessionTitleService, { fallbackMaxWords: 5, fallbackMaxBytes: 1, maxTitleBytes: 80 })

@@ -177,7 +177,7 @@ it.each([
 it('reports invalid bonus fields without logging bonus data', async () => {
   const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-    code: 0, data: { biz_code: 0, biz_data: [{ order_id: 'private-order', msg: 'private-message' }] },
+    code: 0, data: { biz_code: 0, biz_data: [{ order_id: 42, msg: 'private-message' }] },
   })))
   try {
     await expect(readUnnotifiedBonuses('https://platform.deepseek.com', 'private-token',

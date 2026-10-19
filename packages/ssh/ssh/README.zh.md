@@ -27,6 +27,8 @@ kind: "package-reference"
 
 在自定义 `dsh` 配置组合中，将本服务与 [`fs-ssh`](../fs-ssh/README.zh.md)、[`subprocess-ssh`](../subprocess-ssh/README.zh.md) 和 [`sandbox-ssh`](../sandbox-ssh/README.zh.md) 组合。主机运行 Harness、模型传输和 Session 存储；远端机器提供文件与进程。headless 配置组合支持这种安排。
 
+辅助进程验证线协议中的额外可写根目录；其执行限制的提供方要求使用远端文件系统中的物理目录路径。只读模式不授予这些目录的写权限。
+
 ### 部署前提
 
 两端均需运行 Linux 或 macOS。本地 `ssh` 命令必须支持连接复用与 Unix 套接字转发，服务器也必须允许该转发。启动前配置主机别名、凭据与已知主机记录：本服务启用 `BatchMode`、要求严格检查主机密钥、禁用认证代理转发，且不提供交互认证流程。

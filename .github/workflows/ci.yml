@@ -415,13 +415,8 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - node: '22.19'
-            name: node 22.19
-            runner: ubuntu-latest
-            gate_concurrency: '1'
-          # Pinned inside 24.0-24.11.1: those releases carry the v1 internal
-          # loader while reporting major 24, and every other job tracks the
-          # latest 24, which is v2. A bare `24` here would retest that same v2.
+          # Pin the supported floor, whose internal loader is v1. Primary
+          # jobs track latest 24 and exercise v2, introduced in 24.12.0.
           - node: '24.9'
             name: node 24.9
             runner: ubuntu-latest
@@ -575,12 +570,15 @@ jobs:
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |
-          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-task.ps1')) {
+          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1')) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors.Count) { throw ($parseErrors -join "`n") }
           }
+      - name: Verify windowless Windows runner launcher
+        shell: pwsh
+        run: ./apps/desktop/tests/windows-runner-launcher.ps1
       - name: Run Windows observational gates on built artifacts
         id: observational
         continue-on-error: true

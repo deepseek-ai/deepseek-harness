@@ -309,6 +309,7 @@ Credit frames wait until a consumer that needs sustained high-volume uplink appe
 | Peer | Admitted at upgrade as one `PeerScope`; `invocation.peer` of every stream on that socket is that Peer |
 | Item validation | With an uplink codec, every item is decoded strictly, and a failure fails the whole stream with the existing `gateway/input-invalid` (details `{ endpoint, field: 'uplink' }`); without a codec, only JSON-safety validation applies |
 | Frame size | A single frame keeps the `maxPayload` of `ws`; the inbox limit bounds the accumulated total |
+| Frame compression | Each connection negotiates `permessage-deflate` when the Gateway config `websocketCompression` is `'deflate'` (the default); frames below 1,024 characters are sent uncompressed. See [the compression decision](2026-10-18-websocket-permessage-deflate.md) |
 
 ### In-process and worker carriers
 
@@ -392,6 +393,8 @@ export type RemoteStreamOpener = (
 // index.ts Config addition
 /** Uplink inbox limit per logical stream, in UTF-8 bytes of frames (default 262144). */
 readonly streamInboxBytes?: number
+/** Per-message WebSocket compression; 'none' disables the extension (default 'deflate'). */
+readonly websocketCompression?: 'none' | 'deflate'
 ```
 
 `prepareInvocation`:
@@ -453,7 +456,7 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-registry` | Load-time validation that `uplink.codec` is a valid strict codec |
 | `dsh-typert-generator` (`model.ts`, `analyzer.ts`, `emitter.ts`) | `remoteResultType` recognizes `RemoteStream<Out, In>` and generates the `uplink` boundary; the descriptor emits `uplink: { codec }`; the generated Client signature returns `RemoteStreamHandle<Out, In>`; the parameter loop accepts only business parameters and a final `signal` |
 | `dsh-client-connection` (`peer.ts`, `rpc.ts`, `rpc-host.ts`, `index.ts`) | The `Peer` class; `connection.browserPeer` and `admit`; the `/api` and upgrade routes obtain the Peer through `admit`; the optional `uplink` of `rpc.open` |
-| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)` |
+| `dsh-api-gateway` Host (`stream-protocol.ts`, `stream-server.ts`, `types.ts`, `index.ts`) | `item` / `end` frames; `UplinkInbox`; `Config.streamInboxBytes` and `Config.websocketCompression`; `GatewayInvocation` and `extend({ invocation })`; `UplinkDecoder`; `handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client (`client/index.ts`, `client/stream-client.ts`) | `invokeStream` returns the handle; the uplink pump is driven by the handle's queue |
 | `dsh-webworker-runtime`, `dsh-remote-mock` | The worker tunnel's two uplink frames and the `serveStream` assembly; `StreamHandle.uplink`; the direct proxy returns the real handle |
 | Documentation | The READMEs of gateway, the api group, connection, protocol, and generator; `docs/api-gateway`; the type-equiv blocks of `docs/subsystems/typert`; the config and Cordis catalogs |

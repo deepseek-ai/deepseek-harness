@@ -886,7 +886,10 @@ async function verifyProviderCwdResume(
     })
     const output = records(resumed.stdout)
     expect(output[0]).toEqual({ type: 'session', sessionId: primary?.header.id, cwd: providerCwd })
-    expect(output.at(-1)).toEqual({ type: 'final', text: finalTextFromSession(primary!.content) })
+    expect(output.at(-1)).toEqual({
+      type: 'final', sessionId: primary?.header.id,
+      reason: { kind: 'completed' }, text: finalTextFromSession(primary!.content),
+    })
     const continued = await persistedSessions(cwd)
     expect(continued).toHaveLength(1)
     expect(continued[0]?.header).toEqual(primary?.header)
@@ -1331,6 +1334,14 @@ describe('headless recorded-session snapshots', () => {
           },
           inspect: async (cwd) => {
             actualLogs = await persistedSessions(cwd)
+            if (scenario.name === 'empty-response-retry-current') {
+              const events = parseSessionLog(actualLogs[0]!.content)
+              expect(events.filter(event => event.type === 'assistant/attempt' || event.type === 'llm/retry'
+                || event.type === 'llm/retry-started' || event.type === 'assistant/message')
+                .map(event => event.type)).toEqual([
+                'assistant/attempt', 'llm/retry', 'llm/retry-started', 'assistant/message',
+              ])
+            }
             if (retainedToolInput !== undefined) {
               verifyToolResultWriterParity(primaryFixture, actualLogs[0]!.content)
             }

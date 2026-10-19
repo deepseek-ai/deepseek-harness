@@ -107,8 +107,27 @@
   padding: 0 10px;
 }
 
-.lineTarget {
-  background: var(--dsw-alias-interactive-bg-hover);
+/* A navigated line's mark: a band in the scrollport over the line, so renderer
+   re-renders such as syntax highlighting do not drop it. It holds briefly, then
+   fades out and removes itself. Reduced motion keeps the fade: it is an
+   opacity change, not movement, and its end removes the band. */
+.lineMark {
+  position: absolute;
+  left: 0;
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  pointer-events: none;
+  animation: line-mark-fade 2s ease-in forwards;
+}
+
+@keyframes line-mark-fade {
+  0%,
+  30% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 /* The failure with nothing read yet: the whole body, centred a little above

@@ -65,7 +65,7 @@ vi.mock('../src/workspace.ts', async importOriginal => ({
   },
 }))
 
-const { TypertWorkerError, typertPlugin } = await import('../src/tsdown-plugin.ts')
+const { TypertWorkerError, typertPlugin, decoratorPlugin } = await import('../src/tsdown-plugin.ts')
 const roots: string[] = []
 
 afterEach(() => {
@@ -76,8 +76,8 @@ afterEach(() => {
 })
 
 describe('typertPlugin', () => {
-  it('lowers standard decorators in TypeScript source dependencies', () => {
-    const { transform } = typertPlugin()
+  it.each([['typertPlugin', typertPlugin], ['decoratorPlugin', decoratorPlugin]] as const)('lowers standard decorators in TypeScript source dependencies through %s', (_name, factory) => {
+    const { transform } = factory()
     expect(transform.handler('export const value = 1\n', '/workspace/src/plain.ts')).toBeUndefined()
     expect(transform.handler('@sealed\nexport class Example {}\n', '/workspace/src/example.ts?raw')?.code)
       .not.toContain('@sealed')

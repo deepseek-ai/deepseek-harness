@@ -4,7 +4,7 @@ Status: proposed
 
 ## Problem
 
-The [vendor manifest](README.md) records Cordis core 4.0.0-rc.7, Loader 1.0.0-rc.5, Include 1.0.4, HMR 1.0.15 and Timer 1.1.2, with 24 local-modification entries. [Cordis v4.0.0-rc.11](https://github.com/cordiverse/cordis/releases/tag/v4.0.0-rc.11) incorporates some fixes and replaces other mechanisms. Updating every package and retiring every patch in one change would combine configuration, persistence, lifecycle and module-replacement decisions.
+The upgrade starts from the [vendored](README.md) baselines Cordis core 4.0.0-rc.7, Loader 1.0.0-rc.5, Include 1.0.4, HMR 1.0.15 and Timer 1.1.2, with 24 local-modification entries. [Cordis v4.0.0-rc.11](https://github.com/cordiverse/cordis/releases/tag/v4.0.0-rc.11) incorporates some fixes and replaces other mechanisms. Updating every package and retiring every patch in one change would combine configuration, persistence, lifecycle and module-replacement decisions.
 
 DSH also has consumers that upstream Cordis does not own. Volatile configuration fields are stable references updated without restarting plugins; the settings UI reads their live values. A profile selects ordered plugin bundles and configuration overrides. [DSH HMR](../packages/boot/hmr/README.md) coordinates module replacement and profile changes through `ctx.hmr`. An entry's module namespace is its raw import result, retained before selecting `default` or `apply` so HMR can identify the module already loaded. These consumers must remain usable at every merge point.
 

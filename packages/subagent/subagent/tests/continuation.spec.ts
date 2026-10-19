@@ -1,3 +1,4 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -100,6 +101,7 @@ async function setupWith(
   await ctx.plugin(AgentLoop, { agents: [] })
   if (options.sessionQuery !== false) await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
+  if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime,
     options.maxActiveSubagents === undefined ? {} : { maxActiveSubagents: options.maxActiveSubagents }))
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
@@ -262,6 +264,7 @@ describe('continuable activation capacity', () => {
     const ctx = new Context()
     try {
       await mountWorkingDirectoryFixture(ctx)
+      if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
       await expect(ctx.plugin(SubagentRuntime, { maxActiveSubagents })).rejects.toThrow()
     } finally {
       await ctx.fiber.dispose()
@@ -272,6 +275,7 @@ describe('continuable activation capacity', () => {
     const ctx = new Context()
     try {
       await mountWorkingDirectoryFixture(ctx)
+      if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
       const live = await liveConfig(ctx, SubagentRuntime, { maxDepth: 4 })
       subagentConfigs.set(ctx, live)
       const fiber = live.fiber
@@ -3802,6 +3806,7 @@ describe('continuable errors', () => {
     })
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
+    if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
     const serviceFiber = await ctx.plugin(SubagentRuntime)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     ctx.llm.registerAdapter(['mock'], adapter)

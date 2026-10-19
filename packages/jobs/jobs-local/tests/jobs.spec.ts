@@ -5,6 +5,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
@@ -117,6 +118,7 @@ function producer(overrides: ProducerOverrides = {}) {
 
 async function harness(config: JobsConfig = {}) {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry, config)
   ctx.jobs.attachController('test-controller')
@@ -183,6 +185,7 @@ describe('LocalJobRegistry.start', () => {
 
   it('refuses an owner whose own composition attaches no controller', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     // Two standing preset mounts over one registry; only the first loads the
@@ -204,6 +207,7 @@ describe('LocalJobRegistry.start', () => {
 
   it('lets a controller attached without a scope serve every owner', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     // The host-plane composition's own controls: no scope, so the global layer
@@ -911,6 +915,7 @@ describe('LocalJobRegistry owner cleanup', () => {
 
   it('registers owner cleanup on the agent scope rather than the jobs fiber', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const tasksFiber = await ctx.plugin(LocalJobRegistry)
     ctx.jobs.attachController('test-controller')
@@ -977,6 +982,7 @@ describe('LocalJobRegistry owner cleanup', () => {
 describe('LocalJobRegistry disposal', () => {
   it('cancels live jobs, awaits settlement, and announces the teardown to outside subscribers', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const fiber = await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(Object.assign((inner: Context) => {
@@ -1007,6 +1013,7 @@ describe('LocalJobRegistry disposal', () => {
 
   it('force-fails a throwing cancel so service disposal does not await producer done', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const fiber = await ctx.plugin(LocalJobRegistry)
     ctx.jobs.attachController('test-controller')
@@ -1044,6 +1051,7 @@ describe('LocalJobRegistry disposal', () => {
 
   it('detaches owner effects from still-live agent scopes when the service unloads', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const tasksFiber = await ctx.plugin(LocalJobRegistry)
     ctx.jobs.attachController('test-controller')
@@ -1069,6 +1077,7 @@ describe('LocalJobRegistry disposal', () => {
 
   it('drops a scoped layer when its registrations dispose', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     const standing = createScope(ctx, {})

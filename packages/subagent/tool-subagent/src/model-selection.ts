@@ -19,7 +19,7 @@ export const AllowedModelRouteSchema: z<AllowedModelRoute> = z.object({
   model: z.string().min(1).required(),
 })
 
-/** Route-selection authority captured by one delegation definition. */
+/** Exact routes authorized for one Session. */
 export interface ModelSelectionPolicy {
   /** Exact provider/model routes authorized for explicit selection. */
   readonly routes: readonly AllowedModelRoute[]
@@ -131,7 +131,7 @@ export function requestedAgentOptions(
  * Enforce a settings-owned route list at the operation that creates the child.
  * Pure inheritance remains outside this policy because no model-facing choice
  * occurred; any explicit route or effort field must resolve to an allowed route.
- * @param policy - Selection authority captured for this Session.
+ * @param policy - Session allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent values that supply missing child values.
  * @param requested - Effective child options after request/config merging.
  * @param request - Model-facing selection fields from the tool call.
@@ -142,14 +142,20 @@ export function assertAllowedModelSelection(
   requested: AgentOptions | undefined,
   request: DelegationModelRequest,
 ): void {
-  if (policy === undefined || !hasDelegationModelRequest(request)) return
+  if (!hasDelegationModelRequest(request)) return
   const provider = requested?.provider ?? parentOptions.provider
   const model = requested?.model ?? parentOptions.model
   if (provider === undefined || model === undefined) {
     throw new Error('cannot select child LLM values without an effective provider and model')
   }
-  if (policy.routes.some(route => route.provider === provider && route.model === model)) return
-  throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`)
+  const allowed = policy === undefined
+    ? provider === parentOptions.provider && model === parentOptions.model
+    : policy.routes.some(route => route.provider === provider && route.model === model)
+  if (allowed) return
+  throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`
+    + (policy === undefined
+      ? '; without a recorded model-selection policy, explicit selection (including reasoning_effort) is limited to the parent route'
+      : ''))
 }
 
 /**

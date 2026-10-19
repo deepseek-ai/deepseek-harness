@@ -49,6 +49,28 @@ it('refuses reuse under another policy until the owner has been released', async
   expect((await runtime.run(spec)).value).toBe('undefined')
 })
 
+// Windows ACL rejects additional roots; its refusal is covered by sandbox-local's runner tests.
+it.skipIf(process.platform === 'win32')('requires release before changing a retained environment\'s additional writable roots', async () => {
+  const { root, cwd, runtime, owner, run } = await setup('workspace-write')
+  const extra = join(root, 'extra')
+  await mkdir(extra)
+  expect((await run('var retained = 7; retained')).value).toBe(7)
+  const spec = runtime.resolve({
+    program: 'typeof retained',
+    bindings: [],
+    stateOwner: owner,
+    sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra] },
+  })
+  await expect(runtime.run(spec)).rejects.toThrow('release the retained environment')
+  expect((await run('retained')).value).toBe(7)
+  await runtime.release(owner)
+  expect((await runtime.run(spec)).value).toBe('undefined')
+  const sameRoots = runtime.resolve({ ...spec, program: 'var second = 8; second', sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra, extra] } })
+  expect((await runtime.run(sameRoots)).value).toBe(8)
+  const changed = runtime.resolve({ ...spec, sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [cwd] } })
+  await expect(runtime.run(changed)).rejects.toThrow('release the retained environment')
+})
+
 it('fails closed when confinement is unavailable without spawning Node', async () => {
   const { ctx, run } = await setup()
   const confine = vi.spyOn(ctx.sandbox, 'confine').mockRejectedValue(new SandboxUnavailableError('read-only'))

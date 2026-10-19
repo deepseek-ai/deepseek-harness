@@ -217,6 +217,8 @@ export class ChatReading {
 
   private publish(state: ChatReadingState): void {
     this.follow.setFollowing(state.followingTail)
+    // Follow intent and pending sampling settle here, not only on the next scroll or resize.
+    this.viewport.refreshTailPin()
     if (state.initialized === this.state.initialized && state.followingTail === this.state.followingTail
       && state.activeTurn === this.state.activeTurn) return
     this.state = state

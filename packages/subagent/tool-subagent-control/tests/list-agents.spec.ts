@@ -15,7 +15,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import * as tool from '../src/list-agents.ts'
+import * as tool from '../src/index.ts'
 import { parkParent } from './park-parent.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 
@@ -107,7 +107,7 @@ async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void>
   }, { timeout: 5_000 })
 }
 
-describe('dsh-tool-subagent-control/list-agents', () => {
+describe('list_agents', () => {
   it('lists a settled caller-delivery local child in both scopes', async () => {
     const { ctx, parent } = await setup([textResponse('private result')])
     const started = await ctx.subagents.startActivation({
@@ -283,7 +283,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
 
   it('has the namespace-plugin export shape', () => {
     expect('default' in tool).toBe(false)
-    expect(tool.name).toBe('tool-subagent-list-agents')
+    expect(tool.name).toBe('tool-subagent-control')
     expect(tool.inject).toEqual(['tools', 'subagents', 'agents'])
     expect(typeof tool.apply).toBe('function')
   })

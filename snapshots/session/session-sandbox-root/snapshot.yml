@@ -10,7 +10,7 @@ header:
   toolSchemasSource: text-turn
 replay:
   override: true
-permission: workspace-write
+permission: danger-full-access
 workspace:
   final: true
   parent: outside-temp

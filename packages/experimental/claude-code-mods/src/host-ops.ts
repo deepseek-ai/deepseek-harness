@@ -10,18 +10,14 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-// Type-only: activate the `ctx.get('subprocess')` and `ctx.get('sessionProjections')` Context declarations.
+// Type-only: activate the `ctx.get('subprocess')` Context declaration.
 import type {} from '@deepseek-ai/dsh-subprocess'
-import type {} from '@deepseek-ai/dsh-session-projection'
-import type { SessionProjectionStateMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import type { Session } from '@deepseek-ai/dsh-session'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
-// Type-only: merges the token-meter projection states into SessionProjectionStateMap.
 import type {} from '@deepseek-ai/dsh-token-meter'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -225,11 +221,6 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
     if (agent !== undefined) options.redraw?.(agent.session.id)
   }
 
-  /** One projection's state, or undefined when the registry or the projection's owning plugin is not composed. */
-  function projection<K extends keyof SessionProjectionStateMap>(session: Session, key: K): SessionProjectionStateMap[K] | undefined {
-    return ctx.get('sessionProjections')?.stateOf(session, key)
-  }
-
   return {
     // ---- ui: no mod drawing surface exists; log-style calls reach the host log ----
     'ui.log': (input, { mod }) => {
@@ -411,14 +402,12 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
     },
     'session.turns': (_input, context) => {
       const agent = requireAgent(context, 'session.turns')
-      const boundary = projection(agent.session, 'turnBoundary')
-      if (boundary === undefined) throw new Error('$.session.turns needs the turnBoundary projection, which this deployment did not compose')
-      return boundary.lastTurn
+      return ctx.agents.turnBoundaryOf(agent.session).lastTurn
     },
     'session.messages': (_input, context) => sessionMessages(requireAgent(context, 'session.messages').session.deriveMessages(), aliases),
     'session.usage': (_input, context): SessionUsage => {
       const agent = requireAgent(context, 'session.usage')
-      const pressure = projection(agent.session, 'contextPressure')
+      const pressure = ctx.get('tokenMeter')?.contextPressure(agent.session)
       const tokens = pressure?.pressureTokens
       const window = pressure?.contextWindow ?? 0
       return {

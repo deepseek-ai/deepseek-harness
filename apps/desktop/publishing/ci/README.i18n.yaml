@@ -12,14 +12,20 @@
   en: 470bdf1487a739f9
   zh: cd80330eaa8f730c
 /desktop-ci-publication/table-of-contents:
-  en: 1b6a4d7146879eec
-  zh: f2520fc412cd2d2a
+  en: 34283bf8397f6836
+  zh: 1798bd921c3adf6c
+/desktop-ci-publication/setup-sequence:
+  en: 2be541ef35a092a4
+  zh: 77d87c00deb45758
+/desktop-ci-publication/runner-labels-and-queue-diagnosis:
+  en: 0478d8e35f9a3d55
+  zh: 0aa3fd828bc02691
 /desktop-ci-publication/machine-setup:
   en: f80388c2b1ffef4c
   zh: f242ab2316bf38a1
 /desktop-ci-publication/package-and-publish:
-  en: 0a26537845e89dda
-  zh: 307378bb65e24650
+  en: f7c12d343891e547
+  zh: da596ee1366c2046
 /desktop-ci-publication/recovery-and-records:
   en: 2e1e6b16d0d6bd41
   zh: 6ff4ad5a8f1f57b4

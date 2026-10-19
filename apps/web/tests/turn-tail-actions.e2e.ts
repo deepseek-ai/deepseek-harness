@@ -249,9 +249,10 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     expect(await process.evaluate(element => getComputedStyle(element).borderBottomWidth)).toBe('1px')
     const processBottom = await process.evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="turn-process"]')?.getBoundingClientRect().bottom)
-    const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
+    // The hidden reasoning row separates the folded control from the intermediate reply, so it keeps the 12px reply gap.
+    const leadTop = await page.getByText('Reading the workspace now.', { exact: true }).evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="assistant-step"]')?.getBoundingClientRect().top)
-    expect(answerTop).toBe((processBottom ?? 0) + 16)
+    expect(leadTop).toBe((processBottom ?? 0) + 12)
     await process.focus()
     const completed = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(COMPLETED_EXPECTED, completed, MODE)

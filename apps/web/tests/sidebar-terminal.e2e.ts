@@ -478,10 +478,18 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
       .filter(key => key.startsWith('dsh.terminal.binding.v1.')).map(key => localStorage.getItem(key)))
     const saved = await bindings()
     expect(saved).toHaveLength(2)
+    const closed = Promise.withResolvers<undefined>()
+    const close = scaffold.ctx.terminalController.close.bind(scaffold.ctx.terminalController)
+    vi.spyOn(scaffold.ctx.terminalController, 'close').mockImplementation((agent, id) => {
+      const result = close(agent, id)
+      closed.resolve(result.then(() => undefined))
+      return result
+    })
     const selected = second.locator('[data-dockkit-tab][aria-selected="true"]')
     await selected.hover()
-    await selected.locator('[data-dockkit-tab-close]').click()
-    await expect.poll(() => alive(secondProcess)).toBe(false)
+    // Tab removal starts background cleanup; the Host promise includes process termination.
+    await Promise.all([selected.locator('[data-dockkit-tab-close]').click(), closed.promise])
+    expect(alive(secondProcess)).toBe(false)
     expect(alive(firstProcess)).toBe(true)
     await expect.poll(() => bindings()).toHaveLength(1)
     expect(saved).toContain((await bindings())[0])

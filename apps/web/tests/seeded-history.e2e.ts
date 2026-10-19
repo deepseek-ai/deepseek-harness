@@ -381,7 +381,8 @@ describe('web e2e: seeded history renders through cold resume', () => {
     const processBottom = await process.evaluate(element => element.getBoundingClientRect().bottom)
     const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
       element.getBoundingClientRect().top)
-    expect(answerTop).toBe(processBottom + 16)
+    // Hidden process rows separate the folded control from the answer, so it keeps the 12px reply gap.
+    expect(answerTop).toBe(processBottom + 12)
     expect(await page.getByText('Context compacted', { exact: true }).count()).toBe(0)
     // Tool cards render from logged tool/call + tool/result alone (views are
     // host-recomputed per page; the generic card is the documented default).
@@ -852,7 +853,9 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await expect.poll(() => terminals().length).toBe(1)
     expect(terminals()[0]!.id).not.toBe(previous)
     await terminal.getByRole('status').waitFor({ state: 'hidden' })
-    await terminal.getByRole('textbox', { name: 'Terminal', exact: true }).waitFor()
+    await terminal.locator('.xterm-screen').waitFor({ state: 'visible' })
+    // xterm's input proxy can remain zero-sized until its cursor moves.
+    await terminal.getByRole('textbox', { name: 'Terminal', exact: true }).waitFor({ state: 'attached' })
   })
 
   it.skipIf(MODE === 'record')('omits blank reasoning rows around recorded text in an appended fixture turn', async () => {

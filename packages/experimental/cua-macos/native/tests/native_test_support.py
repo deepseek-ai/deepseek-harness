@@ -101,7 +101,11 @@ class NativeHelper:
 
     def stop(self):
         try:
-            stop_group(self.process)
+            self.process.stdin.close()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                stop_group(self.process)
         finally:
             self.process.stdin.close()
             self.process.stdout.close()

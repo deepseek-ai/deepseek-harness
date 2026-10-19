@@ -429,10 +429,10 @@ describe('time-context projection fold edges', () => {
       content: [{ type: 'text', text: 'reading' }],
       source: { kind: 'time-context' },
     }), { surfaceOp: 'append' })
-    expect(typeof ctx.sessionProjections.stateOf(session, 'timeContext')?.lastTurnInjectionTime).toBe('number')
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toHaveProperty('lastTurnInjectionTime', expect.any(Number))
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     session.append('turn/start', { turn: 2 })
-    expect(ctx.sessionProjections.stateOf(session, 'timeContext')).toMatchObject({
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       lastTurnInjectionTime: null,
     })
   })
@@ -441,7 +441,7 @@ describe('time-context projection fold edges', () => {
     const { ctx } = await mount()
     const session = Session.create(SessionId('end-without-start'))
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    expect(ctx.sessionProjections.stateOf(session, 'timeContext')).toMatchObject({
+    expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       lastTurnInjectionTime: null,
     })
   })

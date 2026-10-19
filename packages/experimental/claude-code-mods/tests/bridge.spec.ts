@@ -951,7 +951,7 @@ describe('loading diagnostics and configuration', () => {
   })
 
   it('is a Service plugin the Loader keeps by its default export', () => {
-    expect(ClaudeCodeMods.inject).toEqual(['workingDirectory'])
+    expect(ClaudeCodeMods.inject).toEqual(['workingDirectory', 'agents'])
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped: unknown = loader.unwrapExports({ default: ClaudeCodeMods })
     expect(unwrapped).toBe(ClaudeCodeMods)

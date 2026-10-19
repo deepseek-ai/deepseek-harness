@@ -170,3 +170,6 @@
       config:
         root: !!js dshHomePath('sessions')
         compression: none
+
+    - id: session-checkpoint-policy
+      name: '@deepseek-ai/dsh-session-checkpoint-policy'

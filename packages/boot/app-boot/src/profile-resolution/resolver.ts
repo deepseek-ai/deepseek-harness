@@ -751,7 +751,7 @@ function internalModules(): InternalModules {
   }
   const esm = esmModule.getOrInitializeCascadedLoader()
   const modern = 'getOrCreateModuleJob' in esm
-  /* v8 ignore start -- the supported Node 22/24/26 matrix validates each available Internal interface */
+  /* v8 ignore start -- the supported Node 24/26 matrix validates each available Internal interface */
   if (typeof esm.resolveSync !== 'function'
     || typeof Reflect.get(esm, modern ? 'getOrCreateModuleJob' : 'getModuleJobForImport') !== 'function'
     || (!modern && typeof Reflect.get(esm, 'resolve') !== 'function')
@@ -851,7 +851,7 @@ export function installRuntimeInterception(
         let expected: ResolveResult | Promise<ResolveResult>
         try {
           expected = adapted(target.specifier, target.parentURL, attributes)
-          /* v8 ignore next -- Node 24+ resolves synchronously; the Node 22 matrix covers its Promise result */
+          /* v8 ignore next -- the current loader resolves synchronously; the private interface also permits Promise results */
           if (expected instanceof Promise) expected = expected.catch(restoreImporter)
         } catch (error) {
           return restoreImporter(error)
@@ -877,7 +877,7 @@ export function installRuntimeInterception(
         } catch (error) {
           return restoreImporter(error)
         }
-        /* v8 ignore next -- Node 24+ resolves synchronously; the Node 22 matrix covers its Promise result */
+        /* v8 ignore next -- the current loader resolves synchronously; the private interface also permits Promise results */
         if (result instanceof Promise) return result.catch(restoreImporter)
         if (cacheable) state.esm = result
         return result
@@ -897,13 +897,13 @@ export function installRuntimeInterception(
     }
     return (request, parent, attributes) => {
       const result = adapted(request, parent, attributes)
-      /* v8 ignore next -- Node 24+ resolves synchronously; the Node 22 matrix covers its Promise result */
+      /* v8 ignore next -- the current loader resolves synchronously; the private interface also permits Promise results */
       return result instanceof Promise ? result.then(resolved => relocate(resolved, parent)) : relocate(result, parent)
     }
   }
 
   let restoreEsm: () => void
-  /* v8 ignore else -- CI coverage runs Node 24 v2; the Node 22 matrix exercises the v1 adapter */
+  /* v8 ignore else -- CI coverage runs Node 24 v2; the Node 24.0 matrix exercises the v1 adapter */
   if (modern) {
     const loader = esm as ModuleLoaderV2
     const original = Reflect.get(loader, 'resolveSync')

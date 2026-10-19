@@ -143,6 +143,8 @@ globalThis.__dshCache = new Map()   // shared across instances, reclaimed never
 
 业务能力住在自己的包里，经注册面接入——registry、`slots.inject`、waterfall 或事件订阅。runtime、controller、manager、gateway 承载通用编排：它可以持有注册表结构与 disposal 生命周期，但条目由拥有它们的包写入，且绝不硬编码一张业务中心表。
 
+先确定新增的区分、字段或适配器是否必要，再选择其所有者；移动不必要的概念并不能消除维护成本。对于必需的行为，如果局部实现只增加少量复杂度，就优先使用靠近生产者或消费方的现有扩展点。生产者可以在自己的包内通过[声明合并](../subsystems/core.zh.md#the-map--derived-union-pattern)声明功能专属变体，无需修改声明该共享类型的包。所有消费方共同依赖的义务由共享所有者负责。
+
 判定条件是：该能力是否由业务包自己声明并注册，中心层只做转发与生命周期管理、不做业务判定。边界是：中心层持有注册表结构与 disposal 生命周期，条目来自拥有它们的包。一条例外：纯基础设施能力——日志、传输、存储——不经业务注册面接入。中心层新增分支必须说明它为何无法下沉到业务包。
 
 ```ts

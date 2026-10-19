@@ -8,6 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { bwrapProfileArgs } from '../src/profiles.ts'
+import { checkExtraWrites, checkRedirectedRoot } from './extra-roots.ts'
 
 /**
  * Keyless backend integration through `confine()` and a real bwrap process. With no rung forced,
@@ -51,6 +52,12 @@ async function runConfined(sandbox: LocalSandboxProvider, command: string, polic
 }
 
 describe.skipIf(!bwrapUsable)('sandbox-local: real bwrap confinement', () => {
+  it('grants explicit directories while denying unrelated and read-only writes', async () => {
+    await checkExtraWrites(await provider(), tempDir)
+  })
+  it('rejects a directory grant redirected by a confined command', async () => {
+    await checkRedirectedRoot(await provider(), tempDir)
+  })
   it('the passing probe selects the bwrap rung naturally — first in the ladder, full enforcement, EROFS dialect', async () => {
     const workdir = await tempDir(tmpdir())
     const sandbox = await provider()

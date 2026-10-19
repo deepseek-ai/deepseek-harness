@@ -33,7 +33,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { PlanProjection, PlanUnitState } from './types.ts'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -171,12 +171,15 @@ export const planProjectionDefinition = {
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
  * the `plan:policy` section, the `/plan` command, and the stable exit tool.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
+ * Agent prompt assembly fails while the projection reader is not ready;
+ * callers must await plugin activation before running an agent.
  */
 export class PlanModeController extends Service {
-  static inject = ['tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['tools', 'systemPrompt', 'sessionProjections', 'agents']
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
+  private planProjectionHandle: ProjectionHandle<PlanUnitState> | undefined
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -188,6 +191,20 @@ export class PlanModeController extends Service {
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    ctx.systemPrompt.section({
+      name: 'plan:policy',
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        const pending = this.pendingIntents.get(context.agent.session)
+        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
+      },
+    })
+    this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -212,18 +229,6 @@ export class PlanModeController extends Service {
         : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
-
-    ctx.systemPrompt.section({
-      name: 'plan:policy',
-      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
-      text: (context) => {
-        if (context.agent === undefined) return ''
-        const pending = this.pendingIntents.get(context.agent.session)
-        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
-      },
-    })
-
-    ctx.sessionProjections.register(planProjectionDefinition)
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -377,20 +382,18 @@ export class PlanModeController extends Service {
   }
 
   private hasOpenTurn(session: Session): boolean {
-    const state = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    if (state === undefined) throw new Error('plan-mode requires the turnBoundary session projection')
-    return state.openTurnStartSeq !== null
+    return this.ctx.agents.turnBoundaryOf(session).openTurnStartSeq !== null
   }
 
   private loggedActiveAtLastHeader(session: Session): boolean | undefined {
     return this.planState(session).activeAtLastHeader ?? undefined
   }
 
-  /** Read the required plan projection state or fail at the first service access. */
   private planState(session: Session): PlanUnitState {
-    const state = this.ctx.sessionProjections.stateOf(session, 'plan')
-    if (state === undefined) throw new Error('plan-mode requires the plan session projection')
-    return state
+    if (this.planProjectionHandle === undefined) {
+      throw new Error('plan mode is not ready; await plugin activation before running an agent')
+    }
+    return this.planProjectionHandle.stateOf(session)
   }
 
   /**

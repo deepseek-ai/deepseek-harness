@@ -288,7 +288,7 @@ describe('agent scope lifecycle', () => {
     const { ctx, loopFiber } = await harnessWithLoop()
     onTestFinished(() => ctx.fiber.dispose())
     const cold = ctx.sessions.create(SessionId('projection-before-any-agent'))
-    expect(ctx.sessionProjections.stateOf(cold, 'inbox')).toEqual({ 'next-turn': [], 'next-step': [] })
+    expect(ctx.sessionProjections.checkpoint(cold).inbox?.val).toEqual({ 'next-turn': [], 'next-step': [] })
     let first!: Awaited<ReturnType<typeof ctx.agents.create>>
     let second!: Awaited<ReturnType<typeof ctx.agents.create>>
     const firstOwner = await ctx.plugin(Object.assign(async (inner: Context) => {
@@ -304,15 +304,15 @@ describe('agent scope lifecycle', () => {
       })
     }, { inject: ['agents'] }))
 
-    expect(ctx.sessionProjections.stateOf(first.agent.session, 'inbox')).toBeDefined()
+    expect(ctx.sessionProjections.checkpoint(first.agent.session).inbox?.val).toBeDefined()
     await firstOwner.dispose()
-    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeDefined()
+    expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeDefined()
     await secondOwner.dispose()
-    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeDefined()
+    expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeDefined()
 
     await Promise.all([first.dispose(), second.dispose()])
     await loopFiber.dispose()
-    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeUndefined()
+    expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeUndefined()
   })
 
   it('agent.ctx listeners hear only their own agent (scoped dispatch end to end)', async () => {
@@ -567,7 +567,7 @@ describe('agent scope lifecycle', () => {
     await ctx.fiber.dispose()
   })
 
-  it('factory unload during scope minting skips setup and awaits provisional cleanup', async () => {
+  it('factory unload during scope minting drains provisional setup and cleanup', async () => {
     const { ctx, loopFiber } = await harnessWithLoop()
     let unloaded = false
     let setupCalls = 0

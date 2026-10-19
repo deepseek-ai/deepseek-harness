@@ -24,7 +24,7 @@ function PlanChip({ useProjection }: PlanChipProps) {
 }
 
 // The computation is a registered unit; the registry drives it and publishes changes.
-const planDefinition: ProjectionDefinition<'plan'> = {
+const planDefinition: ProjectionDefinition<'plan', typeof emptyPlan> = {
   key: 'plan',
   stateVersion: 1,
   init: () => emptyPlan,

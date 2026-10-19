@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署希望使用 DeepSeek 原生搜索、并接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它，因为 DeepSeek 不提供专用搜索端点。结果来自 DeepSeek 返回的结构化搜索块，绝不会从回复文本中抓取。凭据缺失时调用以结构化错误失败；响应缺少搜索结果块时会明确报错，而非降级。面向模型的 `web_search` 工具位于 `dsh-tool-web`。
+有了 `dsh-web-search-deepseek`，harness 可以通过 DeepSeek 原生搜索检索 web，使用 DeepSeek 账号登录或部署已有的 `DEEPSEEK_API_KEY`。当部署希望使用 DeepSeek 原生搜索、并接受一次搜索在延迟与 token 上消耗一个完整模型轮次时选择它；[dsh-web-deepseek-api](../web-deepseek-api/README.zh.md) 中的 DeepSeek Search 与 Fetch API 无需模型轮次即可检索。结果来自 DeepSeek 返回的结构化搜索块，绝不会从回复文本中抓取。凭据缺失时调用以结构化错误失败；响应缺少搜索结果块时会明确报错，而非降级。面向模型的 `web_search` 工具位于 `dsh-tool-web`。
 
 ## 目录
 
@@ -70,7 +70,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-失败抛出携带可按机器路由 code 的 `WebError`：凭据缺失为 `WEB_PROVIDER_CREDENTIAL_MISSING`，调用方取消为 `WEB_ABORTED`，提供方或传输失败，包括响应中没有 `web_search_tool_result` 块，为 `WEB_PROVIDER_ERROR`。HTTP 重定向会在接触 `Location` 指向的目标之前被拒绝。请求发出后的每项失败都会指出已解析的搜索端点，并说明搜索端点配置独立于聊天端点。如果该端点不符合用户预期，错误消息会要求会话模型指导用户进入 Settings > Plugins > Plugin configuration > Web search，修改 Endpoint 字段并保存。该页面不可用时，消息会把 `DEEPSEEK_SEARCH_BASE_URL` 和 `web-search-deepseek.baseURL` 作为部署配置方式。模型不得替用户选择或修改端点。面向模型的 `web_search` 工具会在自己的错误包装层内呈现这段文本。
+失败抛出携带可按机器路由 code 的 `WebError`：凭据缺失为 `WEB_PROVIDER_CREDENTIAL_MISSING`，调用方取消为 `WEB_ABORTED`，提供方或传输失败，包括响应中没有 `web_search_tool_result` 块，为 `WEB_PROVIDER_ERROR`。HTTP 重定向会在接触 `Location` 指向的目标之前被拒绝。请求发出后的每项失败都会指出已解析的搜索端点，并说明搜索端点配置独立于聊天端点。如果该端点不符合用户预期，错误消息会要求会话模型指导用户进入 Plugins > Built-in plugin settings > Web search，修改 Messages API base URL 字段并保存。该页面不可用时，消息会把 `web-search-deepseek.baseURL` 作为部署配置方式。模型不得替用户选择或修改端点。面向模型的 `web_search` 工具会在自己的错误包装层内呈现这段文本。
 
 -----
 
@@ -111,7 +111,7 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从共享词汇逐步进入服务、面向模型的工具与设计依据。
 
 - [web 子系统](../../../docs/subsystems/web.zh.md)——穷尽式的搜索请求／结果词汇与错误码。
-- [web 包映射](../README.zh.md)——六包家族与各角色。
+- [web 包映射](../README.zh.md)——七包家族与各角色。
 - [dsh-web](../web/README.zh.md)——本提供方注册进入的 web 服务。
 - [dsh-tool-web](../tool-web/README.zh.md)——渲染本提供方来源的面向模型 `web_search` 工具。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-search-deepseek)——每个受支持配置字段及其源声明。
@@ -126,11 +126,11 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-独立的 DeepSeek 模型会原样接收 `Perform a web search for the query: <query>` 作为用户文本，并收到一个原生 `web_search` 服务器工具定义。该请求不属于会话模型上下文。
+独立的 DeepSeek 模型会原样接收 `Perform a web search for the query: <query>` 作为用户文本，并收到一个原生 `web_search` 服务器工具定义，思考模式关闭。该请求不属于会话模型上下文。
 
 #### Token 影响
 
-每次搜索都会产生独立的提供方输入与输出 token；`maxTokens` 限制生成输出，`maxUses` 限制原生搜索次数。
+每次搜索都会产生独立的提供方输入与输出 token；关闭思考模式不产生推理 token，`maxTokens` 限制生成输出，`maxUses` 限制原生搜索次数。
 
 #### KV Cache 影响
 
@@ -157,10 +157,10 @@ kind: "package-reference"
 
 这些限制说明提供方在哪些情况下昂贵或不完整。它们是当前包约束。
 
-- **一次搜索消耗一个完整的 Messages 模型轮次**——产生延迟与生成 token，最多执行 `maxUses` 次服务端搜索；DeepSeek 不公开专用检索端点。
+- **一次搜索消耗一个完整的 Messages 模型轮次**——产生延迟与生成 token，最多执行 `maxUses` 次服务端搜索；[dsh-web-deepseek-api](../web-deepseek-api/README.zh.md) 改用专用的 Search API。
 - **动态凭据的可用性在操作内部解析**——同步可用性检查可以确认解析器存在，但无法查询异步凭据存储，因此选中的无密钥提供方会使搜索以 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败；稳定的 `web_search` schema 仍保持注册。
 - **超量返回的来源仍消耗 token**——协议没有结果数量旋钮，`maxResults` 只能由服务在事后截断。
-- **未引用的结果没有 `snippet`**——只有当文本块引用（`cited_text`）匹配其 URL 时，来源才会获得 snippet。
+- **来源通常没有 `snippet`**——只有当文本块引用（`cited_text`）匹配其 URL 时，来源才会获得 snippet，而 DeepSeek 的 Anthropic 兼容端点返回的文本块不带 `citations`。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -170,8 +170,8 @@ kind: "package-reference"
 
 本开发备注是维护者的工作上下文：开放问题与尚未决定的探索方向。它明确不具权威性——已交付的行为、限制与既定理由以上文和相关 Agent Note 为准。
 
-#### 未来：专用检索端点
+#### 专用检索端点
 
-能够避免完整模型轮次的 DeepSeek 原生搜索端点将消除主要成本；在 DeepSeek 公开此类端点之前，本提供方仍是 Messages 调用适配器。
+无需完整模型轮次的 DeepSeek Search 与 Fetch API 位于 [dsh-web-deepseek-api](../web-deepseek-api/README.zh.md)，由网页搜索设置页的开关选择；在 Search API 正式发布公告之前，本提供方仍是默认值。
 
 </details>

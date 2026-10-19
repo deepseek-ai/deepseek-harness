@@ -1,0 +1,231 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:web/deepseek-search-llm-request",
+      "kind": "event",
+      "event": "web/deepseek-search-llm-request",
+      "surface": false,
+      "digest": "0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 17,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 18,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "apiVersion",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "body",
+                "type": 3,
+                "optional": false
+              },
+              {
+                "name": "endpoint",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "max_tokens",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "messages",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "model",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "thinking",
+                "type": 11,
+                "optional": true
+              },
+              {
+                "name": "tools",
+                "type": 13,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "tuple",
+            "elements": [
+              {
+                "type": 6,
+                "optional": false,
+                "rest": false
+              }
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "content",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "role",
+                "type": 10,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "tuple",
+            "elements": [
+              {
+                "type": 8,
+                "optional": false,
+                "rest": false
+              }
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "text",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 9,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "text"
+          },
+          {
+            "kind": "literal",
+            "value": "user"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "type",
+                "type": 12,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "disabled"
+          },
+          {
+            "kind": "tuple",
+            "elements": [
+              {
+                "type": 14,
+                "optional": false,
+                "rest": false
+              }
+            ]
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "max_uses",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 15,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 16,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": "web_search"
+          },
+          {
+            "kind": "literal",
+            "value": "web_search_20250305"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "literal",
+            "value": "web/deepseek-search-llm-request"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

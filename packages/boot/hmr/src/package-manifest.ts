@@ -111,7 +111,7 @@ function captureEsmResolveCache(native: NativeAccess, parentURL: string): Map<st
   }
   try {
     const loader = native.esmLoader
-    /* v8 ignore else -- CI coverage runs the Node 24 loader; the Node 22 matrix exercises the v1 signature */
+    /* v8 ignore else -- CI coverage runs the Node 24 loader; the Node 24.0 matrix exercises the v1 signature */
     if ('getOrCreateModuleJob' in loader) loader.resolveSync(parentURL, { specifier: 'node:path', attributes: {} })
     else loader.resolveSync('node:path', parentURL, {})
   } finally {

@@ -87,12 +87,13 @@ function options(registryUrl: string, cacheDir: string, lines: string[], warning
   }
 }
 
-it('lists every non-deprecated bundle version from the registry document and reads display fields from the highest tarball', async () => {
+it('lists every bundle version from the registry document that is neither deprecated nor private and reads display fields from the highest tarball', async () => {
   const packages: Packages = {
     'dsh-a': {
       '0.9.0': { time: '2026-01-01T00:00:00.000Z' },
       '1.0.0': { time: '2026-02-01T00:00:00.000Z', manifest: { ...BUNDLE, keywords: ['old'], engines: { dsh: '>=0.2.0' }, peerDependencies: { '@deepseek-ai/dsh': '9' } } },
       '1.1.0': { time: '2026-03-01T00:00:00.000Z', manifest: { ...BUNDLE, deprecated: 'broken' } },
+      '1.1.5': { time: '2026-03-15T00:00:00.000Z', manifest: { ...BUNDLE, private: true } },
       '1.2.0': {
         time: '2026-04-01T00:00:00.000Z',
         manifest: {
@@ -117,6 +118,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
     },
     'dsh-b': { '1.0.0': { time: '2026-06-02T00:00:00.000Z', manifest: { ...BUNDLE, author: 'Bob' }, tarball: await pack({ 'package.json': bundleManifest('dsh-b', '1.0.0') }) } },
     'plain-lib': { '1.0.0': { time: '2026-06-01T00:00:00.000Z' } },
+    'dsh-private': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: { ...BUNDLE, private: true } } },
     'dsh-imposter': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE, tarball: await pack({ 'package.json': bundleManifest('dsh-other', '1.0.0') }) } },
     'dsh-tampered': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE, tarball: await pack({ 'package.json': bundleManifest('dsh-tampered', '1.0.0') }), integrity: 'sha512-AAAA' } },
     'dsh-unsigned': { '1.0.0': { time: '2026-06-01T00:00:00.000Z', manifest: BUNDLE } },
@@ -129,7 +131,7 @@ it('lists every non-deprecated bundle version from the registry document and rea
   const server = await registry(packages)
   const cacheDir = scratch()
   const warnings: string[] = []
-  const lines = ['dsh-a', 'dsh-b', 'plain-lib', 'dsh-imposter', 'dsh-tampered', 'dsh-unsigned', 'dsh-huge', 'dsh-bomb', 'dsh-no-tarball', 'dsh-unpublished', 'dsh-missing']
+  const lines = ['dsh-a', 'dsh-b', 'plain-lib', 'dsh-private', 'dsh-imposter', 'dsh-tampered', 'dsh-unsigned', 'dsh-huge', 'dsh-bomb', 'dsh-no-tarball', 'dsh-unpublished', 'dsh-missing']
   const first = await generate(options(server.url, cacheDir, lines, warnings))
   const npm = { type: 'npm', registry: server.url }
   expect(first.index).toMatchObject({ format: 1, title: 'Test Market', description: 'For tests' })
@@ -160,8 +162,9 @@ it('lists every non-deprecated bundle version from the registry document and rea
   expect(warnings).toEqual(expect.arrayContaining([
     'dsh-a: dsh-a@1.3.0 skipped: DSH range "workspace:>=1" is not a valid SemVer range',
     'dsh-a@2.0.0-rc.1: locale file locale/x_y.json ignored: its name is not a language id',
-    'plain-lib: no published version declares dsh.bundle',
-    'dsh-unpublished: no published version declares dsh.bundle',
+    'plain-lib: no published version that is neither deprecated nor private declares dsh.bundle',
+    'dsh-private: no published version that is neither deprecated nor private declares dsh.bundle',
+    'dsh-unpublished: no published version that is neither deprecated nor private declares dsh.bundle',
   ]))
 
   // Unchanged version lists come from the cache; a failing source keeps its last result for the same registry only.

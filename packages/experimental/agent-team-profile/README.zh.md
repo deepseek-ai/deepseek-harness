@@ -58,7 +58,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 `dsh-base` 之后应用时，patch 会禁用 `tool-subagent-control`、`tool-subagent-list-agents`、`tool-subagent` 和 `tool-subagent-fork`，并以显式 provider 和限制插入 Team 服务、工具和 UI 行。UI 插件的 Host 入口不执行逻辑；只有 Web 客户端加载器会挂载其浏览器入口，因此 headless 无需启动 Web 服务。
+本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 `dsh-base` 之后应用时，patch 会禁用 `tool-subagent-control`、`tool-subagent` 和 `tool-subagent-fork`，并以显式 provider 和限制插入 Team 服务、工具和 UI 行。UI 插件的 Host 入口不执行逻辑；只有 Web 客户端加载器会挂载其浏览器入口，因此 headless 无需启动 Web 服务。
 
 | 文件 | 职责 |
 |---|---|

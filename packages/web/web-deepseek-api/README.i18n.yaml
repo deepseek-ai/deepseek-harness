@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/web/web-deepseek-api/README.md
+/:
+  en: eb52169ad8cf3b38
+  zh: 3ad61fa2317079cf
+/deepseek-ai-dsh-web-deepseek-api:
+  en: a56113c9530cb046
+  zh: bb07334e63fd9204
+/deepseek-ai-dsh-web-deepseek-api/summary:
+  en: 49ea0208c97514dc
+  zh: 5ad4698f3588ebdb
+/deepseek-ai-dsh-web-deepseek-api/table-of-contents:
+  en: 76368b6b1da79c80
+  zh: 1e8f931a56b7d34d
+/deepseek-ai-dsh-web-deepseek-api/use-this-package:
+  en: 408a1ef777a98309
+  zh: 30c6b52c20de3b67
+/deepseek-ai-dsh-web-deepseek-api/use-this-package/authentication:
+  en: 491f4c93c0d02152
+  zh: 4888cd52667bdc39
+/deepseek-ai-dsh-web-deepseek-api/use-this-package/results-and-failures:
+  en: b8bfad1c79b2f05a
+  zh: b8d89fabbc028ac1
+/deepseek-ai-dsh-web-deepseek-api/understand-the-implementation:
+  en: 0372c46bac133870
+  zh: 0c803f4fb04a7ee4
+/deepseek-ai-dsh-web-deepseek-api/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results:
+  en: dfd3b61aff4a8aa8
+  zh: 06e2b6cc71f461e2
+/deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results/what-the-model-sees:
+  en: a9fbb78ffe886f0b
+  zh: 813dc7ee283018d2
+/deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results/token-effect:
+  en: d82cd03f38fb4b38
+  zh: 7049a13d2373a7b9
+/deepseek-ai-dsh-web-deepseek-api/model-experience/conversation-tool-results/kv-cache-effect:
+  en: 54ed534b58469807
+  zh: c3f8f178abb86ccb
+/deepseek-ai-dsh-web-deepseek-api/known-limitations-and-deferred-work:
+  en: d4877c8f4e158a5d
+  zh: 45177b6d6c3ecc40
+/deepseek-ai-dsh-web-deepseek-api/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

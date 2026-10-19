@@ -24,15 +24,14 @@ Status: proposed
 
 ### host 侧投影注册表（`dsh-session-projection`，新包）
 
-一个轻量的 Service Definition 包：merge-extensible 的 host 状态与客户端视图类型表、注册表服务，以及针对持久状态和客户端值的 zod 校验。能力 seam 的角色如下：领域 host 插件提供投影单元，载体消费这些单元，两侧互不相识。
+一个轻量的 Service Definition 包：局部 host 状态定义、merge-extensible 的客户端视图类型表、注册表服务，以及针对持久状态和客户端值的 zod 校验。能力 seam 的角色如下：领域 host 插件提供投影单元，载体消费这些单元，两侧互不相识。
 
 领域注册的是一个**状态驱动计算单元（state-driven computation unit）**——纯折叠、若干声明及可选客户端视图——绝不是一个不透明的 getter。驱动它是框架的职责（订阅、水位线（watermark）、缓存，以及后续的检查点机制），领域只负责计算。投影服务于所有业务领域（会话标题、plan、goal、权限、todos）；命令只是其中一条触发路径，在本约定中没有任何特殊地位。
 
 ```ts ignore-check
-export interface SessionProjectionStateMap {} // host fold states
-export interface SessionProjectionMap {}      // client-visible whole values
+export interface SessionProjectionMap {} // client-visible whole values
 
-export interface ProjectionDefinition<K extends keyof SessionProjectionStateMap, S> {
+export interface ProjectionDefinition<K extends string, S> {
   key: K
   stateSchema: ZodType<S>
   persist?: boolean // host-only units opt in; client-visible units always persist
@@ -54,7 +53,7 @@ declare module 'cordis' {
 }
 ```
 
-- `SessionProjectionStateMap` 描述 host 折叠状态；`SessionProjectionMap` 继续作为协议块和 React 钩子经 `import type` 共享的唯一客户端 DTO 表。单元省略 `wire` 即保持 host-only。客户端值如何*渲染*是 slot 体系的事，永远不归投影层管。状态/视图拆分见[已实现的状态与客户端视图记录](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md)。
+- `ProjectionDefinition<K, S>` 携带各单元的宿主状态类型；`SessionProjectionMap` 继续作为协议块和 React 钩子经 `import type` 共享的唯一客户端 DTO 表。单元省略 `wire` 即保持 host-only。客户端值如何*渲染*是 slot 体系的事，永远不归投影层管。状态/视图拆分见[已实现的状态与客户端视图记录](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md)。
 - **host 是投影唯一的计算地点。** 框架主动驱动（eager drive）每个已注册的单元：每个已提交的会话事件都经过 `apply`；对某事件不感兴趣的单元返回同一个状态引用，而引用未变（`Object.is`）就不产生任何下游工作。客户端从不折叠领域事件——它们收到的是成品值（基线块 + 下文的推送帧）。这消除了双重实现陷阱（plan 的双事件折叠只在 host 写一遍），也消除了一切客户端侧领域代码。
 - **状态永远靠计算得出，绝不入日志。** 日志只存事件；单元的状态住在框架的按会话水位线缓存里（每单元一份 `{state, observedSeq}`），并在后续阶段进入 domain-KV 存储 seam 上的**持久投影缓存（persisted projection cache）**：形如 `(sessionId, key, ver, seq, val)` 的行（`ver` = 单元的 `stateVersion`，`seq` = 水位线，`val` = 状态 JSON）。一行永远不会是错的，至多是陈旧的——其 `seq` 精确说明陈旧到哪。冷读与活读共用同一套读取配方：取缓存状态（或 `init()`），只对超出其水位线的事件做正向 `apply`，再对结果做 `view`。冷列表（跨全部 workspace 列出每个会话的标题）变成一次索引读，至多外加一小段尾部回放；session-persistence seam 在同一后续阶段为这段尾部补一个按 seq 起读的原语。写入策略：节流（次数/间隔，可配置）外加两个强制点——`turn/end` 与 detach（由活转冷的时刻）。两次写入之间崩溃的代价是尾部回放更长一些，绝不会是值出错。
 - 领域的输入事件集由领域自己选择：todos 只折叠 `todo/write`；plan 折叠 `plan/mode` 外加它自己的 `/plan` `command/run` 记录（见 plan 一节）；goal 折叠 `goal/change` 元数据；会话标题折叠其标题事件（顺带下线专设的 `session/title` 帧与客户端的标题快照表——这是该 seam 收编的第四个手工投影）。
@@ -161,7 +160,7 @@ host 侧命令执行器（`packages/interaction/commands`）在调用处理器�
 
 **把注册表挂到 `ctx.apiProxy` 名下**——不予采纳：会话投影并非 web 专属（TUI、ACP（Agent Client Protocol）、headless 都是未来消费方），且领域包不得依赖 apiproxy 包。独立 seam 还顺带删掉了 #587 从 api-proxy 指向 plan 包的 type-only 导入边。
 
-**第二张客户端 DTO 类型表**——不予采纳：`SessionProjectionMap` 仍是协议与 UI 共享的唯一客户端词汇。`SessionProjectionStateMap` 不是另一张客户端视图表；它描述 host 折叠状态，使内部状态可以不同于发往客户端的值。
+**第二张客户端 DTO 类型表**——不予采纳：`SessionProjectionMap` 仍是协议与 UI 共享的唯一客户端词汇。各单元在内部声明宿主折叠状态类型，与发往客户端的值相互独立。
 
 **用事件广播收集、替代注册表遍历**——不予采纳：异步监听器给不出那个单一的同步切面，而正是它让 `asOfSeq` 成为横跨所有 key 的一致快照；注册表才是本仓库承接贡献的通行形状（`ctx.tools`、提示词片段、slot）。
 

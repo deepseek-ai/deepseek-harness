@@ -261,7 +261,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
  * identity to share — the framework itself is a requested module-table row
  * (external), while these are ordinary libraries a browser bundle inlines.
  */
-const VENDORED_LIBRARY = /^@deepseek-ai\\/(cosmokit|schemastery)(\\/|$)/
+const VENDORED_LIBRARY = /^@deepseek-ai\\/(?:(?:cosmokit|schemastery)(?:\\/|$)|cordis-plugin-timer$)/
 
 /** Generated descriptor/codec contribution with no shared runtime identity. */`,
     expect: 1,

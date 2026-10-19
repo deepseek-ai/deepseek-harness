@@ -56,7 +56,7 @@ kind: "package-reference"
 | 模式 | 效果 |
 |---|---|
 | `read-only` | 拒绝写入，必需 sink（如 `/dev/null`）除外 |
-| `workspace-write` | 允许写入工作区根目录及后端定义的临时区域 |
+| `workspace-write` | 允许写入工作区根目录、显式配置的额外根目录及后端定义的临时区域 |
 | `danger-full-access` | 绕过隔离；消费方直接 spawn 原始 argv |
 
 强制执行逐调用报告：`full` 表示后端管辖模式承诺的每个文件操作，`partial` 表示活动后端或较旧的内核 ABI 只管辖子集——Windows ACL 档与较旧的 Landlock ABI 是当前的部分强制执行情形，需要绝对边界的消费方可以拒绝或向上暴露它们。
@@ -92,7 +92,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxProvider` 服务、模式/强制执行/策略类型、故障关闭错误 |
 | [`src/escalation.ts`](src/escalation.ts) | 升权词汇：更宽模式阶梯、参数校验、拒绝与提示标记、审批编排 |
-| [`src/roots.ts`](src/roots.ts) | 可写根目录推导，Seatbelt profile 与进程内 fs 栅栏共享 |
+| [`src/roots.ts`](src/roots.ts) | 共享的工作区和额外根目录验证，以及后端特定的临时区域推导 |
 
 ### 升权编排
 
@@ -100,7 +100,7 @@ kind: "package-reference"
 
 ### 可写根目录
 
-`workspace-write` 意味着「工作区根目录加宿主临时区域」：`writableRoots` 以规范化方式推导该白名单，解析符号链接并去重，使 Seatbelt profile 与进程内 fs 栅栏授予完全相同的根目录。
+`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，并拒绝不存在、不是目录或经过符号链接解析的额外路径。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
 
 </details>
 

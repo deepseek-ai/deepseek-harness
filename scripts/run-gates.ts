@@ -95,6 +95,9 @@ type ResultObserver = (result: GateResult) => void
 /** Worker cap of the documentation and hygiene aggregates, locally and in CI, whose leaves each build a full ts.Program. */
 const PROGRAM_MODE_CAP = 8
 
+/** CI pins this minor in .github/workflows/ci.yml; its compatibility leg owns the built CLI smoke. */
+export const BUILD_BACKED_NODE_COMPAT_VERSION = '24.9'
+
 const root = resolve(import.meta.dirname, '..')
 if (import.meta.main) {
   process.exitCode = await main(process.argv.slice(2))
@@ -429,7 +432,7 @@ function nodeCompatGates(): Gate[] {
   const typecheck = flagEnabled('DSH_NODE_COMPAT_SKIP_TYPECHECK')
     ? []
     : [pnpmScript('typecheck', 'typecheck')]
-  if (runningNodeMajor() !== 22) {
+  if (!process.versions.node.startsWith(`${BUILD_BACKED_NODE_COMPAT_VERSION}.`)) {
     return [...typecheck, ...nodeCompatSmokeGates()]
   }
   return [
@@ -452,6 +455,7 @@ function nodeCompatSmokeGates(options: { cliSmoke?: boolean } = {}): Gate[] {
       'packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts',
       'apps/cli/tests/source-launch.compat.spec.ts',
       'scripts/vitest-environment.compat.spec.ts',
+      'scripts/command-entrypoints.compat.spec.ts',
       'packages/boot/app-boot/tests/profile-resolution.spec.ts',
       'packages/boot/app-boot/tests/profile-resolution-service.spec.ts',
       'packages/boot/app-boot/tests/profile-resolution-worker-bootstrap.spec.ts',
@@ -473,15 +477,6 @@ function nodeCompatSmokeGates(options: { cliSmoke?: boolean } = {}): Gate[] {
     )
   }
   return gates
-}
-
-/** Active Node major used to select version-specific compatibility checks. */
-function runningNodeMajor(): number {
-  const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10)
-  if (!Number.isSafeInteger(major)) {
-    throw new Error(`run-gates: cannot parse Node version ${JSON.stringify(process.versions.node)}.`)
-  }
-  return major
 }
 
 function ciStaticGates(options: { ownsBuild: boolean }): Gate[] {

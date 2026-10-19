@@ -145,7 +145,7 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   'ptc-turn': {
     patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'CODE_ONE+CODE_TWO',
-    expectedTools: { run_code: ['description', 'code'] },
+    expectedTools: { run_code: ['code', 'description'] },
   },
   'subagent-spawn-in-process': {
     patches: [fileURLToPath(new URL('./subagent-spawn-in-process/runtime.cordis.yml', import.meta.url))],
@@ -952,6 +952,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       const actualContext = contextOf(ordered, cwd)
       if (scenario.name === 'minimal-image-compaction') {
         const events = results.flatMap(result => result.events)
+        const failures = events.filter(event => event.type === 'turn/end' && event.data.reason.kind === 'error')
+        expect(failures, 'minimal profile completes its checkpointed turn').toEqual([])
         const image = events.find(event => event.type === 'tool/result')
         expect(image).toMatchObject({ data: { message: {
           toolCallId: 'minimal-image-read',

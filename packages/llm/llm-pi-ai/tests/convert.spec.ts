@@ -724,7 +724,7 @@ describe('toStreamChunks', () => {
     if (requested === undefined) throw new Error('missing Anthropic catalog model')
     expect(transformMessages(context.messages, requested)[0]).toMatchObject({ content: native.content })
     expect(transformMessages(context.messages, { ...requested, id: 'other-model' })[0]).toMatchObject({
-      content: [{ type: 'text', text: 'reason' }],
+      content: [],
     })
   })
 

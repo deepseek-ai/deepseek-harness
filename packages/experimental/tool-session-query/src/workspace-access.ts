@@ -17,14 +17,13 @@ import type {
   SessionRecord,
 } from '@deepseek-ai/dsh-session-query'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import { serviceBoundary } from './service-boundary.ts'
 
 interface Caller {
   readonly id: SessionIdValue
   readonly header: SessionHeader
   /** The caller's own-session boundary fold (the `turnBoundary` projection). */
-  readonly boundary: TurnBoundaryProjection | undefined
+  readonly boundary: TurnBoundaryProjection
 }
 
 interface TitleView {
@@ -64,7 +63,7 @@ function callerOf(exec: ToolRunContext, ctx: Context): Caller {
   return {
     id: agent.session.id,
     header: agent.session.header,
-    boundary: ctx.sessionProjections.stateOf(agent.session, 'turnBoundary'),
+    boundary: ctx.agents.turnBoundaryOf(agent.session),
   }
 }
 

@@ -1,0 +1,41 @@
+# The second request selects a smaller model before its header is committed.
+
+- id: agent-instructions
+  disabled: true
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  config:
+    thresholdRatio: 0.8
+    headroomTokens: 1800
+    retainTokens: 20
+    maxTokens: 32
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                contextWindow: 100000
+                defaultMaxTokens: 1000
+              - id: deepseek-v4-pro
+                contextWindow: 8622
+                defaultMaxTokens: 1000
+    - id: compaction-working-directory
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
+    - id: model-switch-compaction-driver
+      name: './driver.mjs'

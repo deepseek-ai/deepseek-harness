@@ -28,6 +28,7 @@ import type {
 } from '@deepseek-ai/dsh-session'
 import type {
   ProjectionCheckpoint,
+  ProjectionKeySelection,
   ProjectionSnapshot,
   SessionProjectionMap,
 } from '@deepseek-ai/dsh-session-projection'
@@ -160,7 +161,7 @@ export class SessionProjectionCache extends Service {
    */
   cachedSnapshot(
     meta: SessionHeader,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot | undefined {
     const expected = lifecycleIdentityOf(meta)
     const record = this.requireTable().get(meta.id)
@@ -199,7 +200,7 @@ export class SessionProjectionCache extends Service {
    */
   private viewRecord(
     record: CheckpointRecord,
-    keys?: readonly Extract<keyof SessionProjectionMap, string>[],
+    keys?: ProjectionKeySelection,
   ): ProjectionSnapshot | undefined {
     const values = this.ctx.sessionProjections.viewCheckpoint(record.rows, keys)
     let asOfSeq: ProjectionSnapshot['asOfSeq'] | undefined

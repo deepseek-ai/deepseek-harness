@@ -408,9 +408,22 @@ export interface LaunchOptions {
    */
   deepSeekSearch?: {
     /** Anthropic-compatible base URL; the provider appends `/messages`. */
-    baseURL: string
+    baseURL?: string
     /** Credential reference resolved by the shipped search provider. */
     apiKeyEnv: string
+  }
+  /**
+   * Patch the shipped DeepSeek Search and Fetch API row to a deterministic
+   * endpoint and credential reference, optionally selecting both providers as
+   * the settings switch does.
+   */
+  deepSeekWebApi?: {
+    /** Search and Fetch API base URL; the providers append `/search` or `/fetch`. */
+    baseURL: string
+    /** Credential reference resolved by both providers. */
+    apiKeyEnv: string
+    /** Select `deepseek-search-api` and `deepseek-fetch-api` in place of the shipped selection. */
+    select?: boolean
   }
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
@@ -683,15 +696,21 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         id: 'web-search-deepseek',
         config: {
           apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
+          ...options.deepSeekSearch.baseURL === undefined ? {} : { baseURL: options.deepSeekSearch.baseURL },
         },
       }],
+    ...options.deepSeekWebApi === undefined ? [] : [
+      { id: 'web-deepseek-api', config: { apiKeyEnv: options.deepSeekWebApi.apiKeyEnv, baseURL: options.deepSeekWebApi.baseURL } },
+      ...options.deepSeekWebApi.select === true
+        ? [{ id: 'web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } }]
+        : [],
+    ],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
   const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',
-    'web-search-deepseek', 'agent-loop', 'subagent', 'bash-sandbox', 'pwsh-sandbox',
+    'web', 'web-search-deepseek', 'web-deepseek-api', 'agent-loop', 'subagent', 'bash-sandbox', 'pwsh-sandbox',
     'session-log-deepseek', 'ui-theme', 'locale', 'ui-chat', 'ui-conversation', 'ui-settings', 'ui-settings-general', 'permission'])
   const formDefaults: PatchOptions[] = []
   const processOverlays = overlayPatches.map((patch) => {

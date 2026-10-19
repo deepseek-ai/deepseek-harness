@@ -5,7 +5,6 @@ $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.
 $taskName = 'DSH-Packaging-' + $digest.Substring(0,16)
 $log = Join-Path $PSScriptRoot ('run-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + $PID + '.log')
 try {
-    @{ Pid = $PID; Started = (Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'process.json')
     $config = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'config.json') -Raw | ConvertFrom-Json
     $attemptFile = Join-Path $PSScriptRoot 'attempts.txt'
     $attempts = [int](Get-Content -LiteralPath $attemptFile -Raw)

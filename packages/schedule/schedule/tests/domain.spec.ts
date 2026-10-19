@@ -22,6 +22,7 @@ import {
   resolveEveryOccurrence,
   scheduleView,
 } from '../src/domain.ts'
+import type { LocalAtInput } from '../src/types.ts'
 
 function scheduleEvent(data: unknown, seq = 0): SessionEvent {
   return { type: 'schedule/change', seq, time: 1, data } as SessionEvent
@@ -555,6 +556,24 @@ describe('absolute record and time-zone resolution', () => {
       now,
       'x',
     )).toThrow(ScheduleInputError)
+  })
+
+  it('keeps the three local-calendar diagnostics distinct', () => {
+    const diagnostic = (at: LocalAtInput): string => {
+      try {
+        createAtScheduleRecord(ScheduleId('schedule-at'), 'x', at, now, 'x')
+        throw new Error('expected local selector failure')
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ScheduleInputError)
+        return (error as ScheduleInputError).message
+      }
+    }
+    expect(diagnostic({ date: '2026-02-30', time: '09:00:00', time_zone: 'UTC' }))
+      .toBe('The at value must be a real ISO calendar date and time.')
+    expect(diagnostic({ date: '2026-08-06', time: '24:00:00', time_zone: 'UTC' }))
+      .toBe('The local at value must be a real ISO calendar date and time.')
+    expect(diagnostic({ date: '2026/08/06', time: '09:00:00', time_zone: 'UTC' }))
+      .toBe('Local at requires date YYYY-MM-DD and time HH:mm:ss with optional one-to-three digit milliseconds.')
   })
 
   it('rejects empty prompts and local instants outside the four-digit range', () => {

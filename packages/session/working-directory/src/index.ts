@@ -11,7 +11,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
@@ -45,11 +45,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
     /** Recorded current directory for Session observations, or null when none is recorded. */
     workingDirectory: string | null
   }
-
-  interface SessionProjectionStateMap {
-    /** Last committed working directory, or null before an explicit value exists. */
-    workingDirectory: string | null
-  }
 }
 
 /** Deployment default for Sessions without an original project directory. */
@@ -72,14 +67,19 @@ export class WorkingDirectoryService extends Service {
   private readonly operations = new Set<Promise<unknown>>()
   private readonly lifecycle = new AbortController()
 
+  private workingDirectoryProjectionHandle!: ProjectionHandle<string | null>
+
   constructor(ctx: Context, config: Config) {
     super(ctx, 'workingDirectory')
     const directory = config.defaultDirectory ?? process.cwd()
     if (!isAbsolute(directory)) throw new Error('working-directory: defaultDirectory must be absolute')
     this.defaultDirectory = directory
+  }
 
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
     const directorySchema = zod.string().min(1).refine(isAbsolute).nullable()
-    ctx.sessionProjections.register({
+    this.workingDirectoryProjectionHandle = await ctx.sessionProjections.register({
       key: 'workingDirectory',
       stateVersion: 1,
       stateSchema: directorySchema,
@@ -120,7 +120,7 @@ export class WorkingDirectoryService extends Service {
    * @returns its effective absolute directory.
    */
   get(session: Session): string {
-    return this.ctx.sessionProjections.stateOf(session, 'workingDirectory') ?? this.defaultDirectory
+    return this.workingDirectoryProjectionHandle.stateOf(session) ?? this.defaultDirectory
   }
 
   /**
@@ -139,7 +139,7 @@ export class WorkingDirectoryService extends Service {
       control.throwIfAborted()
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
-        if (this.ctx.sessionProjections.stateOf(agent.session, 'workingDirectory') === null) {
+        if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
           agent.session.append('working-directory/change', { cwd: current })
         }
         return current

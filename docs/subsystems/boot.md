@@ -92,6 +92,14 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
 
+<a id="ctxheadlessstartup--headlessstartupvalues"></a>
+
+### `ctx.headlessStartup` — `HeadlessStartupValues`
+
+What the runner row reads from HEADLESS_STARTUP_SERVICE.
+
+Source: [`packages/bundle/headless/src/startup.ts`](../../packages/bundle/headless/src/startup.ts)
+
 <a id="ctxhmr--hmr"></a>
 
 ### `ctx.hmr` — `Hmr`

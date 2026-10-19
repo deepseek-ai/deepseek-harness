@@ -78,10 +78,9 @@ export function apply(ctx: Context): void {
       if (!result.ok) throw new Error('account bonus acknowledgement failed')
       return result.value
     },
-    publish: (notice) => {
-      const { notice: _replaced, ...withoutNotice } = snapshot
-      // exactOptionalPropertyTypes distinguishes an absent notice from an undefined one.
-      publish(notice === null ? withoutNotice : { ...withoutNotice, notice })
+    publish: (notices) => {
+      const { notices: _replaced, ...withoutNotices } = snapshot
+      publish(notices.length === 0 ? withoutNotices : { ...withoutNotices, notices })
     },
   })
   ctx.effect(() => () => { notices.end() }, 'account: bonus notice lifetime')
@@ -129,9 +128,9 @@ export function apply(ctx: Context): void {
       avatar.reset()
       const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
         && snapshot.view?.attempt?.phase !== 'succeeded'
-      const { notice, ...previous } = snapshot
+      const { notices: previousNotices, ...previous } = snapshot
       publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
-        ...(frame.value.status === 'credential-stored' && notice ? { notice } : {}) })
+        ...(frame.value.status === 'credential-stored' && previousNotices ? { notices: previousNotices } : {}) })
       browser.update(frame.value)
       frame.accept()
       if (frame.value.status === 'credential-stored') notices.begin()

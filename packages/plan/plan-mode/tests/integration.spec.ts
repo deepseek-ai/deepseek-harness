@@ -56,8 +56,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 
 /** Read the plan unit that backs the service in this full composition. */
 function planActive(ctx: Context, agent: Agent): boolean {
-  const state = ctx.sessionProjections.stateOf(agent.session, 'plan')
-  if (state === undefined) throw new Error('plan projection is not registered')
+  const state = ctx.planMode.get(agent)
   return state.active
 }
 

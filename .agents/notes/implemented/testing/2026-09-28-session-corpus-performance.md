@@ -37,6 +37,8 @@ The projection cache is part of the list endpoint: each cold row carries cached 
 
 Workers are compiled plain-Node processes, each started fresh against a seeded root. They compose the production Session store, projection registry, JSONL persistence, SQLite Session query with `openAt: first-search` on an in-memory index, JSON storage and projection cache, the Web projection set, AgentLoop, and the real `SessionController`. Transport lookups, upload registration, default model selection, and the Workspace registry are inert providers, because no measured path depends on them.
 
+The shared corpus and projection-list controller fixture awaits controller activation and supplies the fixed attachment image policy. Its snapshots therefore include the production `imageLimits` unit; attachment I/O remains outside these workloads. Event corpora, measurement endpoints, and budgets are unchanged.
+
 | Case | Corpus | Samples | Endpoint |
 |---|---|---:|---|
 | List | 3,000 | 3 | Host boot; first `session.list`; repeated `session.list` in the same process |

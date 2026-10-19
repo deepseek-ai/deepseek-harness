@@ -25,7 +25,7 @@ Use `dsh-agent` to create or resume live agents, send follow-up or steering inpu
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `dsh-agent` wherever live agents exist: it provides `ctx.agents` and the `Agent` handle that plugins, UI, hooks, and orchestrators work against. The service is inert until a driver registers a factory — the shipped driver is `dsh-agent-loop`, so the smallest useful composition loads both.
+Mount `dsh-agent` with `dsh-session-projection`: it provides `ctx.agents`, the `Agent` handle, and `turnBoundaryOf(session)` for recorded turn and step positions. Creating or resuming an Agent also requires a driver to register a factory; the shipped driver is `dsh-agent-loop`.
 
 ### Create or resume an agent
 
@@ -86,7 +86,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 
 ### Durable inbox
 
-`Agent.inbox` exposes only the structural `Inbox` interface and the projection vocabulary stays in this package. dsh-agent-loop owns the package-internal `ReactLoopInbox` and the standard `inbox` projection; constructing its concrete inbox ensures that the projection registry owns one registration for the durable `agent/inbox/spliced` fold. The registry remains the sole owner of the live `{ 'next-turn', 'next-step' }` state. Reconstruction rejects unsafe or out-of-range splice coordinates and duplicate `MessageId` values across both pending lists and reports the offending event seq.
+`Agent.inbox` exposes only the structural `Inbox` interface and the projection vocabulary stays in this package. dsh-agent-loop owns the package-internal `ReactLoopInbox` and the standard `inbox` projection; the loop service acquires one registration for the durable `agent/inbox/spliced` fold and gives each inbox a state-reading callback. The registry remains the sole owner of the live `{ 'next-turn', 'next-step' }` state. Reconstruction rejects unsafe or out-of-range splice coordinates and duplicate `MessageId` values across both pending lists and reports the offending event seq.
 
 `Inbox` exposes pending `nextTurn` and `nextStep` messages and mutates them through `append`, `prepend`, `replace`, `remove`, `clear`, and `splice`. Ordinary removals and `clear()` are durable cancellations. At a step boundary, the loop's internal implementation claims pending input through pure deletion splices. Live notifications are deliberately per-message and minimal: `agent/inbox/inserted { message }`, `agent/inbox/claimed { message, turn }`, and `agent/inbox/discarded { message }`.
 

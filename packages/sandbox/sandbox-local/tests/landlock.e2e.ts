@@ -8,6 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import { launcherPath } from '@deepseek-ai/node-addon-system/landlock-run'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
+import { checkExtraWrites, checkRedirectedRoot } from './extra-roots.ts'
 
 /**
  * Keyless backend integration through `confine()` and the workspace `landlock-run` launcher, with
@@ -52,6 +53,12 @@ async function runConfined(sandbox: LocalSandboxProvider, command: string, polic
 }
 
 describe.skipIf(!landlockUsable)('sandbox-local: real Landlock confinement through the bundled launcher', () => {
+  it('grants explicit directories while denying unrelated and read-only writes', async () => {
+    await checkExtraWrites(await provider(), tempDir)
+  })
+  it('rejects a directory grant redirected by a confined command', async () => {
+    await checkRedirectedRoot(await provider(), tempDir)
+  })
   it('read-only denies a write — the file must NOT exist, the wrap reports the probed enforcement', async () => {
     const workdir = await tempDir(tmpdir())
     const sandbox = await provider()

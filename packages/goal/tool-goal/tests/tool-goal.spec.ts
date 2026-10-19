@@ -3,7 +3,6 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus, Inbox } from '@deepseek-ai/dsh-agent'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
 import type { GoalRef } from '@deepseek-ai/dsh-goal'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -104,7 +103,6 @@ async function harness(config: toolGoal.Config = {}) {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(ToolRuntime)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(GoalService)
   const fiber = await ctx.plugin(toolGoal, config)
   const root = stubAgent(`goal-tool-root-${Math.random()}`, undefined, ctx)
@@ -195,20 +193,20 @@ describe('goal tool registration and presentation', () => {
   it('has the Loader-safe namespace export shape', () => {
     expect('default' in toolGoal).toBe(false)
     expect(toolGoal.name).toBe('tool-goal')
-    expect(toolGoal.inject).toEqual(['agents', 'goals', 'tools', 'systemPrompt', 'sessionProjections'])
+    expect(toolGoal.inject).toEqual(['agents', 'goals', 'tools', 'systemPrompt'])
     const loader = Object.create(Loader.prototype) as Loader
     expect(loader.unwrapExports(toolGoal)).toBe(toolGoal)
   })
 
   it('fails invalid direct config before registering anything', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(GoalService)
-    expect(() => {
-      toolGoal.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 })
-    }).toThrow(
+    expect(() => { toolGoal.apply(ctx, { blockedAfterConsecutiveRounds: 1.5 }) }).toThrow(
       'blockedAfterConsecutiveRounds must be a positive safe integer',
     )
     expect(ctx.tools.get('get_goal')).toBeUndefined()
@@ -216,6 +214,8 @@ describe('goal tool registration and presentation', () => {
 
   it('resolves the direct-apply default before registration', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolRuntime)
@@ -329,6 +329,26 @@ describe('goal tool execution authority', () => {
       goal_id: 'goal-missing', revision: 1, action: 'pause', objective: 'probe',
     }, root.agent)
     expect(malformed.error?.info?.code).toBe('GOAL_TOOL_AUTHORITY_REQUIRED')
+  })
+
+  it('does not carry human authority into a later non-human turn', async () => {
+    const { ctx, root } = await harness()
+    const turn = openTurn(root, { kind: 'user' })
+    await execute(ctx, 'get_goal', {}, root.agent)
+    closeTurn(root, turn)
+    openTurn(root, { kind: 'test' })
+    const result = await execute(ctx, 'create_goal', { objective: 'unauthorized' }, root.agent)
+    expect(result.error?.info?.code).toBe('GOAL_TOOL_AUTHORITY_REQUIRED')
+    expect(ctx.goals.get(root.agent)).toBeUndefined()
+  })
+
+  it('reconstructs current-turn authority when the tools mount after input was committed', async () => {
+    const { ctx, root, fiber } = await harness()
+    await fiber.dispose()
+    openTurn(root, { kind: 'user' })
+    await ctx.plugin(toolGoal, {})
+    const result = await execute(ctx, 'create_goal', { objective: 'accepted before tool load' }, root.agent)
+    expect(resultGoal(result)).toMatchObject({ objective: 'accepted before tool load' })
   })
 
   it('accepts direct human steering in a goal-sourced root turn', async () => {

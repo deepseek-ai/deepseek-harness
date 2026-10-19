@@ -76,7 +76,7 @@ async function setup(): Promise<{ ctx: Context; transport: SessionHistoryControl
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   installSessionReadTestServices(ctx)
-  ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
+  await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
   const transport = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
   return { ctx, transport }
 }

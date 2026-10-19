@@ -1,13 +1,11 @@
 /**
  * Generate the repository's Typert artifacts without bundling.
  *
- * The pass writes the same files, through the same generator calls, as the workspace-mode Typert
- * plugin in the Host tsdown pass (`tsdown.config.ts`): every explicit contributor's
- * `lib/typert.host.*` and `lib/typert.remote-client.*`. Gates that read only generated
- * declarations run it instead of bundling. It reads workspace packages only from source and fails
- * when the Host program would load a package's `lib/` output, so it can run beside Host package
- * compilation. Like the plugin it skips TypeScript diagnostics, which that compilation owns;
- * Typert's own checks still fail the pass.
+ * Writes every explicit contributor's `lib/typert.host.*` and `lib/typert.remote-client.*`
+ * with the same generator and writer as the workspace-mode Typert bundler plugin. It reads
+ * workspace packages only from source and rejects imports requiring compiled output, so metadata
+ * generation precedes package compilation. The compiler owns TypeScript diagnostics;
+ * Typert analysis and emission failures still fail this pass.
  *
  * Usage: `tsx scripts/generate-typert.ts`, from the repository root or any directory below it.
  * Exit status 0 means every artifact was written, 1 means generation failed, and 2 means the
@@ -55,7 +53,7 @@ const STAGE_ACTIONS: Readonly<Record<TypertGenerationStage, string>> = {
 }
 
 // Host package compilation owns TypeScript diagnostics, as it does for the
-// tsdown plugin; rejecting build outputs lets this pass run beside it.
+// tsdown plugin; rejecting build outputs lets this pass run before package compilation.
 const GENERATION_OPTIONS = { checkDiagnostics: false, rejectBuildOutputs: true } as const
 
 /**

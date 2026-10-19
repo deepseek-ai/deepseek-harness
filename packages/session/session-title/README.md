@@ -88,6 +88,8 @@ Titles are durable, log-only state: every accepted revision is a `session/title`
 
 ### Lifecycle and concurrency
 
+Messages received during activation wait for the service to become ready and request the built-in fallback. Providers register after service readiness; earlier messages and requests do not trigger them retroactively. Activation failure, service disposal, or Session removal prevents the deferred fallback from writing.
+
 Per-session work state tracks a revision counter, an in-flight fallback, and pending and active provider work. A newer user message, provider disposal, session disposal, or explicit refresh aborts older work through an `AbortController`; a completion whose provider, revision, session, or signal is stale cannot append. Explicit refreshes reserve their revision before provider work; overlapping automatic and explicit fallback requests share one session-local in-flight append. Service teardown cancels queued work and drains calls that ignore cancellation before unloading completes.
 
 ### Normalization

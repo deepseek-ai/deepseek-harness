@@ -208,8 +208,8 @@ export class ClaudeCodeMods extends TypertRemoteService {
     bandRows: z.number().default(10),
   })
 
-  // Session initialization requires its directory owner; other services are read on demand.
-  static inject = ['workingDirectory']
+  // Session initialization requires its directory and turn-boundary reader; other services are read on demand.
+  static inject = ['workingDirectory', 'agents']
 
   private readonly engine: ModsEngine<AgentBinding>
   private readonly registrations = new Map<string, Set<() => void>>()

@@ -47,10 +47,10 @@ async function harness(withPersistence = true) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
-  ctx.sessionProjections.register(titleProjectionDefinition)
+  await ctx.plugin(AgentRegistry)
+  await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
+  await ctx.sessionProjections.register(titleProjectionDefinition)
   if (withPersistence) {
     await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'logs'), compression: 'none' })
     const list = vi.spyOn(ctx.sessionPersistence, 'list').mockRejectedValue(new Error('unexpected corpus listing'))
@@ -58,7 +58,7 @@ async function harness(withPersistence = true) {
       expect(list).not.toHaveBeenCalled()
     })
   }
-  const controller = createSessionTestController(ctx, {
+  const controller = await createSessionTestController(ctx, {
     defaultModelSelection: () => ({ provider: 'test', model: 'test' }),
     cwd: root,
   })

@@ -58,7 +58,7 @@ Adopt the following dependency swaps. Rejected — per-item evidence below; a fu
 
 **SQLite and storage:**
 
-- **`better-sqlite3` for the three SQLite backends**: all use builtin `node:sqlite`, intentional twice over — it gates the [Node engine floor](../../implemented/process/2026-07-06-node-engine-floor.md) and works inside the single-file executable where a native addon would complicate packaging. No hand-rolled migrations or busy-retry loops exist.
+- **`better-sqlite3` for the three SQLite backends**: all use builtin `node:sqlite`, intentional twice over — it is available throughout the [supported Node range](../../implemented/process/2026-10-15-node-24-runtime-floor.md) and works inside the single-file executable where a native addon would complicate packaging. No hand-rolled migrations or busy-retry loops exist.
 
 **Repo tooling:**
 

@@ -88,7 +88,7 @@ async function harness(): Promise<{
   const loop = await mountAgentLoopTestHarness(ctx)
   const shared = await loop.create(SHARED)
   const hidden = await loop.create(PRIVATE)
-  const controller = createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+  const controller = await createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
   const as = (principal: Principal, method: string): Context => {
     const invocation: RemoteInvocation = {
       request: { namespace: 'session', method, args: {} },

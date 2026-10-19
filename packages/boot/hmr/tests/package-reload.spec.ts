@@ -1159,7 +1159,7 @@ it('records freshly mounted plugin files so installing the next bundle does not 
   expect(f.trace).toEqual(['start:other'])
 })
 
-it('walks Node 22 null-prototype linked arrays', async () => {
+it('walks v1-loader null-prototype linked arrays', async () => {
   const f = await fixture()
   const internal = ModuleLoader.fromInternal()!
   const url = pathToFileURL(join(f.dir, 'node_modules', 'addon', 'index.mjs')).href

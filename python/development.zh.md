@@ -61,10 +61,18 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/test-dsh-home") as harness:
 
 仓库贡献者可以选择以下任一开发路径；两者都执行普通的 `dsh --profile sdk` 启动器：
 
-- 设置 `DSH_RUNTIME_MODE=node`，在系统 Node `>=22.19` 上使用已构建的 Node 载体。构建脚本会刷新该载体，但分发物绝不会包含或自动选择它。
+- 设置 `DSH_RUNTIME_MODE=node`，在系统 Node `>=24.9` 上使用已构建的 Node 载体。构建脚本会刷新该载体，但分发物绝不会包含或自动选择它。
 - 将 `dsh_bin` 设置为已构建 `apps/cli/lib/bin.js` 的绝对路径，直接验证当前 checkout 的 CLI。请显式提供 `dsh_home`，并按需提供 `profile` 与有序 `patches`。
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` 使用内部 `_launch_args` 测试适配器，通过 tsx 验证未构建的 TypeScript CLI。公开 SDK 刻意不提供任意 argv 替换。
+
+手动[关闭示例](sdk/tests/manual_sdk_shutdown_smoke.py)只使用普通 SDK 调用：运行一轮真实模型短对话，以默认 1 秒预算立即关闭，再启动另一个运行时恢复同一会话。安装 SDK／运行时并设置 `DEEPSEEK_API_KEY` 后运行：
+
+```sh
+python python/sdk/tests/manual_sdk_shutdown_smoke.py
+```
+
+示例打印关闭耗时和历史文件列表，保留临时目录，并让恢复失败正常抛出异常。恢复进程使用独立的 30 秒关闭预算。能否复现取决于主机和首轮耗时，恢复成功不能确定关闭耗时上限。pytest 不收集此手动示例。
 
 ## 构建分发包
 

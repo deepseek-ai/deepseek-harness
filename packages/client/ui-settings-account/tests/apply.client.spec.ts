@@ -35,8 +35,7 @@ function bonus(orderId: string, message = 'Awarded 5.00'): AccountBonusBatch {
   return {
     accountId: 'account-user' as AccountUserId,
     bonuses: [{
-      orderId: orderId as AccountBonusOrderId, campaign: 'dsh_login_bonus', amount: '5.00', currency: 'CNY',
-      grantedAt: '2026-09-21T12:00:00Z', expiresAt: '2099-01-01T00:00:00Z', message,
+      orderId: orderId as AccountBonusOrderId, expiresAt: '2099-01-01T00:00:00Z', message,
     }],
   }
 }
@@ -526,7 +525,7 @@ it('reads the unnotified bonus in the active locale and acknowledges only after 
   c.mock.remote.account.ackBonusNotified.mockResolvedValue(ok(true))
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId, message: 'Awarded 5.00' })
+    expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId, message: 'Awarded 5.00' })
   })
   expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }))
   // A successful read is not a display, so nothing may be acknowledged yet.
@@ -536,7 +535,7 @@ it('reads the unnotified bonus in the active locale and acknowledges only after 
     expect(c.mock.remote.account.ackBonusNotified).toHaveBeenCalledWith('account-user', orderId, expect.objectContaining({ locale: 'en' }))
   })
   actions.bonusNoticeDismissed(orderId as AccountBonusOrderId)
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
 }, 60_000)
 
 it('keeps the notice and its acknowledgement retry across repeated signed-in frames', async ({ start }) => {
@@ -548,7 +547,7 @@ it('keeps the notice and its acknowledgement retry across repeated signed-in fra
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus(orderId)))
   c.mock.remote.account.ackBonusNotified.mockResolvedValue({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) })
   c.mock.streams.push('account/watch', stored)
-  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId }) })
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId }) })
   actions.bonusNoticeShown(orderId as AccountBonusOrderId)
   await vi.waitFor(() => { expect(c.mock.remote.account.ackBonusNotified.mock.calls.length).toBeGreaterThan(0) })
   // One sign-in commits the credential and then updates the attempt; a reconnected
@@ -558,7 +557,7 @@ it('keeps the notice and its acknowledgement retry across repeated signed-in fra
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(stored) })
   // The displayed card stays, no second read replaces it, and the failed
   // acknowledgement keeps backing off instead of stopping until sign-out.
-  expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId })
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId })
   expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledOnce()
   await vi.waitFor(() => { expect(c.mock.remote.account.ackBonusNotified.mock.calls.length).toBeGreaterThan(1) }, { timeout: 30_000 })
 }, 60_000)
@@ -573,12 +572,12 @@ it('keeps the notice absent when the bonus read is refused, then shows the next 
   })
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => { expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledOnce() })
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
   expect(c.mock.remote.account.ackBonusNotified).not.toHaveBeenCalled()
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus(orderId)))
   await actions.refreshAccount()
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId, message: 'Awarded 5.00' })
+    expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId, message: 'Awarded 5.00' })
   })
 }, 60_000)
 
@@ -589,11 +588,11 @@ it('drops the previous account notice and stops reading after sign-out', async (
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus('4c1b0000-0000-4000-8000-000000000001')))
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice?.message).toBe('Awarded 5.00')
+    expect(actions.hooks.account.getSnapshot().notices?.[0]?.message).toBe('Awarded 5.00')
   })
   c.mock.streams.push('account/watch', view)
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
   // Signing out ends the lifecycle, so no further read follows.
   const reads = c.mock.remote.account.getUnnotifiedBonuses.mock.calls.length
   await new Promise((resolve) => { setTimeout(resolve, 20) })

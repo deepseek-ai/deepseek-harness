@@ -232,7 +232,7 @@ class BuildCli {
       '  --dry-run              print every command and config patch without executing.',
       '  --help                 print this help.',
       '',
-      'Build route: @yao-pkg/pkg --sea (root devDependency, pnpm-patched); see .agents/notes/implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md.',
+      'Build route: @yao-pkg/pkg --sea --compress Brotli (root devDependency, pnpm-patched); see .agents/notes/implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md.',
       `Stages the node carrier in ${PYTHON_RUNTIME_DIR}/${PYTHON_NODE_SUBDIR} and writes executables to ${OUT_DIR}/.`,
     ].join('\n')
   }
@@ -399,6 +399,8 @@ class SingleExeBuild {
       'pkg',
       this.staging,
       '--sea',
+      '--compress',
+      'Brotli',
       '--targets',
       target.spec,
       '--output',

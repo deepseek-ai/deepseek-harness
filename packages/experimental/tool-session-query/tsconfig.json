@@ -36,9 +36,6 @@
       "path": "../../util/timeout"
     },
     {
-      "path": "../../session/session-projection"
-    },
-    {
       "path": "../../core/agent"
     }
   ]

@@ -10,7 +10,7 @@ Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运�
 
 仓库曾短暂拥有过答案，又在无人察觉时弄丢了。PR #971 在 `bin/dsh` 里设置了 `NODE_USE_ENV_PROXY=1`；十一天后的“cleanup: remove managed source installer”改动整体删除了那个启动器，把该标志一并带走。留下的只有 `apps/cli/reference/README.md` 里的一句话，让读者去设置一个已经无人消费的变量。
 
-即便照做，那句话也不可能生效，原因有三条且都经过实测。`NODE_USE_ENV_PROXY` 在进程启动时对环境取快照，而 `loadLayeredEnv()` 是在之后才合并 `.env` 层，因此写在 `$DSH_HOME/.env` 中的代理对它不可见。它只覆盖 Node 24.0+，在 22 线上只覆盖 22.21+——而 `engines` 允许 `^22.19.0`，那里根本没有这个变量，设置了也不会有任何警告。它也完全触及不到 `web-fetch-http`：该提供方向 `fetch` 传入自己的 `dispatcher`，而显式 dispatcher 无论标志如何都会覆盖全局的那个。
+即便照做，那句话也不可能生效，原因有三条且都经过实测。`NODE_USE_ENV_PROXY` 在进程启动时对环境取快照，而 `loadLayeredEnv()` 是在之后才合并 `.env` 层，因此写在 `$DSH_HOME/.env` 中的代理对它不可见。它只覆盖 Node 24.0+，在 22 线上只覆盖 22.21+——采用此决策时的运行时下限为 Node 22.19，那里根本没有这个变量，设置了也不会有任何警告。它也完全触及不到 `web-fetch-http`：该提供方向 `fetch` 传入自己的 `dispatcher`，而显式 dispatcher 无论标志如何都会覆盖全局的那个。
 
 ## Decision
 
@@ -48,7 +48,7 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 **SDK 传输需要独立验证。** OTLP 导出器在 Node 上选择 `http-exporter-transport`，通过 `node:http` 投递并绕过全局 fetch dispatcher；其浏览器实现中的 `globalThis.fetch` 引用不能证明 Node 路由。[E2B 移除决策](../simplification/2026-09-11-remove-e2b-providers.zh.md)撤下另一项 SDK 传输集成，但不改变这一要求。
 
-**遥测的直连是有意为之。** 要让它走代理只有两条路，代价都超过这条通道本身的价值。`http.Agent` 通过 `proxyEnv` 读取环境，而该选项自 Node 22.21 与 24.5 才有——落在 engines 范围之内，因此 22.19、22.20 与 24.0–24.4 无论如何仍是直连，而代理包还得为一条只在部分运行时生效的路径保留 `createNodeHttpAgent` 导出。改用 SDK 的 `fetch` delegate 替换传输可以覆盖所有运行时，但该 delegate 没有压缩能力，而随附的 `base` bundle 启用了 gzip：实测一批真实规模的 OTLP 数据启用后体积只有 1/6.4。曾有一版转而在加载期拒绝 `exporter.compression`，结果凡是启动随附 bundle 的测试全部失败；另一版在 serializer 处 gzip 确实能跑通，但代价是把传输层代码塞进了遥测插件。
+**遥测的直连是有意为之。** 要让它走代理只有两条路，代价都超过这条通道本身的价值。`http.Agent` 通过 `proxyEnv` 读取环境，而该选项自 Node 22.21 与 24.5 才有——高于采用此决策时的运行时下限，因此 Node 22.19、22.20 与 24.0–24.4 无论如何仍是直连，而代理包还得为一条只在当时部分运行时生效的路径保留 `createNodeHttpAgent` 导出。Node 24.9 下限消除了这一 API 缺口；代理路由仍需要独立集成传输，并保留压缩。改用 SDK 的 `fetch` delegate 替换传输可以覆盖所有运行时，但该 delegate 没有压缩能力，而随附的 `base` bundle 启用了 gzip：实测一批真实规模的 OTLP 数据启用后体积只有 1/6.4。曾有一版转而在加载期拒绝 `exporter.compression`，结果凡是启动随附 bundle 的测试全部失败；另一版在 serializer 处 gzip 确实能跑通，但代价是把传输层代码塞进了遥测插件。
 
 与之相比，遥测是唯一一条丢失了对用户毫无代价的出网通道：没有任何工具、模型请求或会话依赖它，而连不上的导出本就被静默丢弃。处在强制代理后的用户，只是停留在本次改动之前的状态，而不是被弄坏。`egress.spec.ts` 现在断言这一排除——若某次 SDK 升级把导出器挪到 `fetch` 上，遥测就会开始静默走代理，而该用例正是让这件事暴露出来的东西。
 
@@ -58,7 +58,7 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 ## Alternatives considered
 
-**只写文档，让用户设 `NODE_USE_ENV_PROXY=1`。** 基于上文三条实测被否决：对 `$DSH_HOME/.env` 不可见、在最低支持的 Node 上不存在、且无论如何被 `web-fetch-http` 绕过。而这恰恰是仓库此前声称的做法。
+**只写文档，让用户设 `NODE_USE_ENV_PROXY=1`。** 采用此决策时基于上文三条实测被否决：对 `$DSH_HOME/.env` 不可见、在 Node 22.19 下限上不存在、且无论如何被 `web-fetch-http` 绕过。环境快照和显式 dispatcher 的限制在当前运行时下限上仍然存在。
 
 **把策略值传递到每一个调用点。** DeepSeek-Reasonix 在 98 处这样做，换来每提供方的 opt-out。被否决：该能力服务于本 Harness 并不具备的需求，而手工改九处意味着第十处会被遗忘——Pi 的变更日志正记录了 OAuth 与 Bedrock 两次事后补漏。它关于隔离性的论点确实成立，本方案改为显式处理 worker 线程、并以「dispose 后还原前一个 dispatcher」的断言来回应。
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OAR subagent tool",
+    "description": "Choose a configured external agent for each standalone task."
+  }
+}

@@ -25,10 +25,13 @@ export const AssistantNodeView = memo(function AssistantNodeView({
     () => owner === undefined ? undefined : fileMentions(owner),
     [fileMentions, owner],
   )
+  const keepReplies = usePresentation(policy => policy.foldedReplies === 'all')
+  // A kept reply row stays visible while the folded Turn hides its inline reasoning.
   const reasoningHidden = turnProcess !== undefined
     && turnProcess.foldable
-    && turnProcess.spec.answerStep === data.step
-    && turnProcess.spec.inlineReasoning
+    && (keepReplies
+      ? groupPart !== 'reasoning'
+      : turnProcess.spec.answerStep === data.step && turnProcess.spec.inlineReasoning)
     && !turnProcess.open
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
   return (

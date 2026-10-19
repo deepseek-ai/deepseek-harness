@@ -54,7 +54,15 @@ it.each(['turn-tail-actions', 'goal-multi-turn-actions', 'present'] as const)(
         const { top, bottom } = seat.getBoundingClientRect()
         return { top, bottom }
       })
-      expect(answerBounds.top).toBe(await process.evaluate(element => element.getBoundingClientRect().bottom) + 16)
+      const processBottom = await process.evaluate(element => element.getBoundingClientRect().bottom)
+      // Hidden process rows separate the folded control from the first visible reply, so it keeps the 12px reply gap.
+      const lead = scenario === 'present' ? answer : page.getByText('Reading the workspace now.', { exact: true })
+      const leadTop = await lead.evaluate((element) => {
+        const seat = element.closest('[data-chat-flow-kind="assistant-step"]')
+        if (seat === null) throw new Error('first visible reply has no Chat seat')
+        return seat.getBoundingClientRect().top
+      })
+      expect(leadTop).toBe(processBottom + 12)
       if (scenario === 'present') {
         const geometry = await page.locator('[data-presented-files-row]').evaluate((grid) => {
           const root = grid.parentElement

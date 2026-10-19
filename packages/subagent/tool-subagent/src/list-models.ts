@@ -4,7 +4,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import type LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ModelSelectionPolicy } from './model-selection.ts'
+import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
+import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
+import { subagentModelSelectionPolicy } from './model-selection-state.ts'
 
 interface ListSubagentModelsRequest {
   readonly provider?: string
@@ -32,13 +36,25 @@ function modelLine(provider: string, model: { id: string; name: string; descript
   return `${provider}/${model.id} — ${model.name}${model.description === undefined ? '' : `: ${model.description}`}`
 }
 
-/** Read the requested provider, advertised models, or exact-model efforts. */
+/** Read the requested provider, allowed models, or exact-model efforts. */
 async function listSubagentModels(
   ctx: Context,
-  policy: ModelSelectionPolicy,
+  policyHandle: ProjectionHandle<AllowedModelRoute[] | null>,
   request: ListSubagentModelsRequest,
-  signal: AbortSignal,
+  exec: ToolRunContext,
 ): Promise<string> {
+  if (exec.agent === undefined) throw new Error('list_subagent_models requires a calling agent')
+  const routes = subagentModelSelectionPolicy(policyHandle, exec.agent.session)
+  let policy = routes === undefined ? undefined : { routes }
+  const selectionEnabled = policy !== undefined
+  if (policy === undefined) {
+    const { provider, model } = parentAgentOptionsForDelegation(exec.agent)
+    if (provider === undefined || model === undefined) {
+      throw new Error('cannot discover child LLM routes without a parent provider and model')
+    }
+    policy = { routes: [{ provider, model }] }
+  }
+  const { signal } = exec
   const llm = ctx.get('llm')
   if (llm === undefined) {
     throw new Error('cannot discover child LLM routes because the `llm` service is unavailable')
@@ -55,13 +71,16 @@ async function listSubagentModels(
   }
   if (request.provider.length === 0) throw new Error('`provider` must be non-empty')
   const allowedRoutes = policy.routes.filter(route => route.provider === request.provider)
-  if (allowedRoutes.length === 0) {
+  const [firstRoute] = allowedRoutes
+  if (firstRoute === undefined) {
     throw new Error(`LLM provider "${request.provider}" is not allowed for this Session`)
   }
   const provider = registeredProvider(llm, policy, request.provider)
   if (request.model === undefined) {
-    const models = (await llm.listModels(provider.id))
-      .filter(model => allowedRoutes.some(route => route.model === model.id))
+    const models = selectionEnabled
+      ? (await llm.listModels(provider.id)).filter(model => allowedRoutes.some(route => route.model === model.id))
+      : [await llm.resolveModelInfo(provider.id, firstRoute.model, signal)]
+    signal.throwIfAborted()
     return models.length === 0
       ? `(no advertised models for ${provider.id})`
       : models.map(model => modelLine(provider.id, model)).join('\n')
@@ -79,27 +98,28 @@ async function listSubagentModels(
 }
 
 /**
- * Register `list_subagent_models` for one owning delegation-tool instance.
- * @param ctx - Context whose tool registry owns the fixed discovery definition.
- * @param policy - Route policy captured for this Session.
+ * Register discovery of the calling Session’s authorized child models.
+ * @param ctx - Context carrying the tool registry and LLM service.
+ * @param policyHandle - retained reader for the Session’s authorized child routes.
  */
-export function registerListSubagentModels(ctx: Context, policy: ModelSelectionPolicy): void {
+export function registerListSubagentModels(
+  ctx: Context,
+  policyHandle: ProjectionHandle<AllowedModelRoute[] | null>,
+): void {
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
-      'Discover LLM routes for subagents without changing the current Agent. Call with no arguments to list '
-      + 'registered providers, with `provider` to list its advertised models, or with `provider` and `model` '
-      + 'to inspect that exact model and its reasoning efforts. Catalog membership is advisory: an adapter may '
-      + 'accept an unlisted model id. Use the returned ids with a delegation tool\'s `provider`, `model`, and '
-      + '`reasoning_effort` fields.',
+      'Inspect subagent models without changing the current Agent. No arguments: providers; '
+      + '`provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. '
+      + 'Inspect options here before selecting a child provider and model; use returned ids for delegation.',
     parameters: {
       provider: {
         type: 'string',
-        description: 'Registered LLM provider id. Omit to list providers.',
+        description: 'Registered LLM provider id.',
       },
       model: {
         type: 'string',
-        description: 'Exact model id to inspect. Requires provider; omit to list that provider\'s advertised models.',
+        description: 'Exact model id; requires provider.',
       },
     },
     output: {
@@ -107,7 +127,7 @@ export function registerListSubagentModels(ctx: Context, policy: ModelSelectionP
       render: (_args, result) => [{ type: 'text', text: result }],
     },
     execute(args, exec) {
-      return listSubagentModels(ctx, policy, args, exec.signal)
+      return listSubagentModels(ctx, policyHandle, args, exec)
     },
   }))
 }

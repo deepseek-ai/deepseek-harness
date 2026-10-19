@@ -10,6 +10,9 @@ const relativePoint = z.number().int().min(0).max(1000)
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
+const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
+  holdMs: z.number().int().nonnegative().optional()
+    .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
 const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
@@ -43,9 +46,9 @@ export const Request = z.discriminatedUnion('method', [
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
-    z.object({ ...snapshot, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
-    z.object({ ...absoluteCoordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
-    z.object({ ...relativeCoordinate, ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional() }).strict(),
+    z.object({ ...snapshot, ...click }).strict(),
+    z.object({ ...absoluteCoordinate, ...click }).strict(),
+    z.object({ ...relativeCoordinate, ...click }).strict(),
   ]) }).strict(),
   operation('setValue', { ...snapshot, value: z.string() }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),

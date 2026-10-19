@@ -308,7 +308,8 @@ export type DockLayoutProps = DockSurfaceProps & TabRetention
 /**
  * Render one pane or two horizontal panes, and their floats, in one stable content tree.
  * @param props - layout, gestures and lazy body-retention policy.
- * @returns the layout; the containing ancestors must not clip or establish a fixed-position containing block.
+ * @returns the layout; the containing ancestors must not establish a fixed-position containing block.
+ *   They may clip `overflow`, which does not reach the fixed-position floats.
  */
 export function DockLayout(props: DockLayoutProps): ReactNode {
   return <Surface {...props} draw={(callbacks, preview) =>

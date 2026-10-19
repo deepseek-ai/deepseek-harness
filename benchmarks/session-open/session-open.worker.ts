@@ -3,7 +3,7 @@
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
-import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, {
@@ -12,7 +12,7 @@ import SessionStore, {
   SessionLogOffset,
   SessionPreparation,
 } from '@deepseek-ai/dsh-session'
-import type { AgentHandle } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type AgentHandle } from '@deepseek-ai/dsh-agent'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
@@ -30,7 +30,7 @@ import * as SessionTurnOutlinePlugin from '@deepseek-ai/dsh-session-turn-outline
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 // These Host-only adapters have no public Node export and are compiled into the benchmark worker.
 import { SessionHistoryController } from '../../packages/api/session-controller/src/history.ts'
-import { installModelSelectionProjection } from '../../packages/api/session-controller/src/model-selection-projection.ts'
+import { modelSelectionProjection } from '../../packages/api/session-controller/src/model-selection-projection.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 import { SYNTHETIC_SESSION_ID } from './session-open.constants.ts'
 
@@ -128,11 +128,10 @@ function memoryDelta(
   }
 }
 
-async function installProjectionSet(ctx: Context, agentLoopOwnsBoundary: boolean): Promise<void> {
+async function installProjectionSet(ctx: Context): Promise<void> {
   // Mirrors projection owners mounted by the base and web-app bundles without timing profile boot.
-  if (!agentLoopOwnsBoundary) ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  installModelSelectionProjection(ctx)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
+  await ctx.sessionProjections.register(modelSelectionProjection)
   await ctx.plugin(SessionTitleService, {
     fallbackMaxWords: 5,
     fallbackMaxBytes: 40,
@@ -163,9 +162,10 @@ class SessionBenchmarkHost {
     if (agentScenario) await mountAgentLoopTestDependencies(ctx)
     else {
       await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
     }
-    await installProjectionSet(ctx, agentScenario)
+    await installProjectionSet(ctx)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
     let history: SessionHistoryController | undefined
     if (scenario === 'first-history') {

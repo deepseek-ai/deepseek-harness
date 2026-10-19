@@ -66,8 +66,12 @@ export type CuaShowResult = z.output<typeof ShowResult>
 export type CuaPointerModifier = NonNullable<CuaParameters<'click'>['modifiers']>[number]
 /** Buttons supported by window-directed clicks and drags. */
 export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
-/** Left clicks support one or two presses; right and middle clicks support one. */
-export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers'> & CuaCoordinateOptions
+/**
+ * Left clicks support one or two presses; right and middle clicks support one.
+ * holdMs is a nonnegative integer in milliseconds, limited by maxClickHoldMs; zero releases immediately.
+ * Explicit holds use pointer input; omission preserves ordinary clicks.
+ */
+export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
 export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
@@ -120,8 +124,9 @@ export interface CuaSurface {
   hover(target: number | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
    * Click a current AX index or screenshot-local point.
+   * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
    * @param target - index or [x,y].
-   * @param options - button, click count, modifiers and coordinate mode.
+   * @param options - button, click count, modifiers, optional hold duration and coordinate mode.
    * @returns dispatch evidence.
    */
   click(target: number | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>

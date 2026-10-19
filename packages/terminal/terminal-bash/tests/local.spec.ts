@@ -61,10 +61,10 @@ async function harness(
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
   await ctx.plugin(PassthroughSandbox)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode, workspaceRoot: root })
   await ctx.plugin(LocalSubprocessRuntime)
   const fiber = await ctx.plugin(ptyLocal, {

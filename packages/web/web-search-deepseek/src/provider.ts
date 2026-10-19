@@ -73,6 +73,13 @@ export interface DeepSeekSearchLlmRequest {
       readonly name: 'web_search'
       readonly max_uses: number
     }]
+    /**
+     * Thinking mode for the auxiliary turn. The provider always sends
+     * `disabled`: it discards the generated text, so reasoning tokens have no
+     * consumer. Absent means the request omitted the field and the provider
+     * applied its default.
+     */
+    readonly thinking?: { readonly type: 'disabled' }
   }
 }
 
@@ -226,6 +233,7 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
         content: [{ type: 'text', text: `Perform a web search for the query: ${request.query}` }],
       }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: options.maxUses }],
+      thinking: { type: 'disabled' },
     }
     options.recordRequest?.({
       endpoint,
@@ -371,12 +379,11 @@ function accountRejectedError(message: string): WebError {
 /** Add endpoint recovery instructions to failures that occur after request dispatch begins. */
 function searchEndpointError(endpoint: string, message: string, cause?: unknown): WebError {
   return new WebError(
-    `${message}\n\nThe web search request used endpoint ${JSON.stringify(endpoint)}. `
+    `${message}\n\nThe web request used endpoint ${JSON.stringify(endpoint)}. `
     + 'Search endpoint configuration is separate from chat. If that endpoint is not intended, '
-    + 'guide the user to Settings > Plugins > Plugin configuration > Web search, where they can '
-    + 'change and save Endpoint. If that settings page is unavailable, the user can set '
-    + 'DEEPSEEK_SEARCH_BASE_URL or configure web-search-deepseek.baseURL to a trusted '
-    + 'Anthropic-compatible Messages API base. Only the user should choose or change the endpoint.',
+    + 'guide the user to Plugins > Built-in plugin settings > Web search, where they can '
+    + 'change and save Messages API base URL. If that settings page is unavailable, the user can set '
+    + 'web-search-deepseek.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
     'WEB_PROVIDER_ERROR',
     cause === undefined ? undefined : { cause },
   )

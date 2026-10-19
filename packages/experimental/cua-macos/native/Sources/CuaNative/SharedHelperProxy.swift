@@ -15,6 +15,7 @@ enum SharedHelperProxy {
         let hello = JSONValue.object(["type": .string("hello"), "protocol": .number(1), "runtimeKey": .string(digest), "config": .object([
             "maxRequestBytes": .number(Double(configuration.maxRequestBytes)), "maxResponseBytes": .number(Double(configuration.maxResponseBytes)),
             "axTimeoutMs": .number(Double(configuration.axTimeoutSeconds) * 1000), "textEventIntervalMs": .number(configuration.textEventIntervalSeconds * 1000),
+            "maxClickHoldMs": .number(Double(configuration.maxClickHoldMs)),
             "screenshotTimeoutMs": .number(configuration.screenshotTimeoutSeconds * 1000), "timeoutMs": .number(configuration.timeoutSeconds * 1000),
             "graceMs": .number(configuration.shutdownGraceSeconds * 1000),
         ])])

@@ -1,0 +1,41 @@
+- insert:
+    - id: experimental-subagent-oar-codex
+      name: '@deepseek-ai/dsh-experimental-subagent-oar'
+      config:
+        runtime: codex
+        providerName: oar-codex
+        launchArgs:
+          - -c
+          - sandbox_mode="workspace-write"
+    - id: experimental-subagent-oar-claude
+      name: '@deepseek-ai/dsh-experimental-subagent-oar'
+      config:
+        runtime: claude
+        providerName: oar-claude
+        launchArgs:
+          - --permission-mode
+          - dontAsk
+          - --permission-prompts
+          - none
+    - id: tool-subagent-oar
+      name: '@deepseek-ai/dsh-experimental-tool-subagent-oar'
+      config:
+        providers:
+          codex: oar-codex
+          claude: oar-claude
+
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+
+- insert:
+    - id: oar-loader-fixture
+      name: './fixture.ts'

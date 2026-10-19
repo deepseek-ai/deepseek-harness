@@ -473,3 +473,21 @@ it('requires the standalone shortcut protocol and rejects unrelated runtime file
       .toEqual([expect.stringContaining('package.json files must be')])
   }
 })
+
+it('requires the OAR license while rejecting unrelated payload files', () => {
+  const dir = 'packages/experimental/subagent-oar'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  const files = [
+    'icon.svg', 'locale/*.json', 'lib/index.js',
+    'LICENSE-OAR', 'lib/types/**/*.d.ts',
+  ]
+  expect(expectedDshPackageFiles(manifest)).toEqual(files)
+  expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  for (const invalidFiles of [
+    files.filter(file => file !== 'LICENSE-OAR'),
+    [...files, 'lib/unrelated.js'],
+  ]) {
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files: invalidFiles } }))
+      .toEqual([expect.stringContaining('package.json files must be')])
+  }
+})

@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
 
@@ -12,6 +13,7 @@ async function harness(withTitleService: boolean): Promise<{ ctx: Context; sessi
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   if (withTitleService) await ctx.plugin(SessionTitleService, CONFIG)
   return { ctx, session: ctx.sessions.create(SessionId('titled')) }
 }
@@ -90,10 +92,8 @@ describe('title projection unit', () => {
     }
     await ctx.plugin(SessionTitleService, CONFIG)
 
-    const state = ctx.sessionProjections.stateOf(session, 'titleInput')
-    expect(state?.count).toBe(5_000)
-    expect(state?.first?.text).toBe('message 0')
-    expect(state?.lastSeq).toBe(session.seq - 1)
+    const state = ctx.sessionProjections.checkpoint(session).titleInput?.val
+    expect(state).toMatchObject({ count: 5_000, first: { text: 'message 0' }, lastSeq: session.seq - 1 })
     expect(ctx.sessionProjections.checkpoint(session).titleInput).toBeDefined()
   })
 

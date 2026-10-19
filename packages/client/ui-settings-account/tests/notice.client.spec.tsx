@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { act } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AccountBonusOrderId } from '@deepseek-ai/dsh-deepseek-account/types'
-import { AccountNoticeCard } from '../src/client/AccountNotice.tsx'
+import { AccountNoticeStack } from '../src/client/AccountNotice.tsx'
 
 const disconnect = vi.fn()
 let visibility: 'visible' | 'hidden' = 'visible'
@@ -36,8 +36,8 @@ function mount(id: string, onShown = vi.fn(), onDismiss = vi.fn()) {
   const anchor = createRef<HTMLDivElement>()
   const view = render(<>
     <div ref={anchor} style={{ position: 'absolute', left: 40, top: 200 }} />
-    <AccountNoticeCard key={id} anchor={anchor} title="Bonus credited" closeLabel="Close"
-      notice={{ orderId: id as AccountBonusOrderId, message: 'Server copy 5.00', expiresAt: '2099-01-01T00:00:00Z' }}
+    <AccountNoticeStack key={id} anchor={anchor} title="Bonus credited" closeLabel="Close"
+      notices={[{ orderId: id as AccountBonusOrderId, message: 'Server copy 5.00', expiresAt: '2099-01-01T00:00:00Z' }]}
       onShown={onShown} onDismiss={onDismiss} />
   </>)
   return { view, onShown, onDismiss }
@@ -137,4 +137,45 @@ it.each([true, false])('cancels the presentation task when the card unmounts fir
   view.unmount()
   act(() => { vi.runAllTimers() })
   expect(onShown).not.toHaveBeenCalled()
+})
+
+it('keeps back cards mounted but inaccessible and reports them only after promotion', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect = disconnect })
+  const anchor = createRef<HTMLDivElement>()
+  const onShown = vi.fn()
+  const onDismiss = vi.fn()
+  const notices = ['first', 'second', 'third'].map(id => ({
+    orderId: id as AccountBonusOrderId, title: id, message: `${id} copy`, expiresAt: '',
+  }))
+  const tree = (remaining: typeof notices) => <>
+    <div ref={anchor} />
+    <AccountNoticeStack notices={remaining} anchor={anchor} title="Bonus credited" closeLabel="Close"
+      onShown={onShown} onDismiss={onDismiss} />
+  </>
+  const view = render(tree(notices))
+  const second = screen.getByText('second copy').closest('aside')
+  expect(document.querySelectorAll('aside')).toHaveLength(3)
+  expect(screen.getAllByRole('status')).toHaveLength(1)
+  expect(second?.querySelector('button')?.tabIndex).toBe(-1)
+  await presentFrames()
+  expect(onShown).toHaveBeenCalledExactlyOnceWith('first')
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(onDismiss).toHaveBeenCalledExactlyOnceWith('first')
+  view.rerender(tree(notices.slice(1)))
+  expect(screen.getByText('second copy').closest('aside')).toBe(second)
+  expect(second?.querySelector('button')?.tabIndex).toBe(0)
+  expect(onShown).toHaveBeenCalledTimes(1)
+  await presentFrames()
+  expect(onShown).toHaveBeenLastCalledWith('second')
+  expect(onShown).toHaveBeenCalledTimes(2)
+})
+
+it('does not acknowledge a notice before an anchor is mounted', async () => {
+  const onShown = vi.fn()
+  render(<AccountNoticeStack anchor={createRef<HTMLDivElement>()} title="News" closeLabel="Close"
+    notices={[{ orderId: 'notice' as AccountBonusOrderId, message: 'News', expiresAt: '' }]}
+    onShown={onShown} onDismiss={vi.fn()} />)
+  await presentFrames()
+  expect(onShown).not.toHaveBeenCalled()
+  expect(screen.queryByRole('status')).toBeNull()
 })

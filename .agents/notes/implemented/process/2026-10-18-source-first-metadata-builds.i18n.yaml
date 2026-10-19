@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-18-source-first-metadata-builds.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-18-source-first-metadata-builds.md
+/agent-note-generate-metadata-before-package-compilation:
+  en: 734f339ae4f8dc93
+  zh: 5adf12518d4be31d
+/agent-note-generate-metadata-before-package-compilation/problem:
+  en: 3c40c9bd375290a6
+  zh: dc8d892bdd08c6b4
+/agent-note-generate-metadata-before-package-compilation/decision:
+  en: c9f896731a173a13
+  zh: 9978e46528caa456
+/agent-note-generate-metadata-before-package-compilation/measurements:
+  en: 42f488af4497f671
+  zh: 00eeb4cc51799da3
+/agent-note-generate-metadata-before-package-compilation/alternatives-considered:
+  en: 81fde4514a8b6fc0
+  zh: 4739f5c7978e7db2
+/agent-note-generate-metadata-before-package-compilation/consequences:
+  en: b12bcb7cc9467706
+  zh: 8896ac7cd011e3c0

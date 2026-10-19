@@ -18,7 +18,11 @@ const RESERVED_PATH_SEGMENTS = new Set(['', '.', '..'])
 export interface Config {
   /** Directory entries that identify the project root while walking upward from the current working directory. */
   projectRootMarkers?: string[]
-  /** UTF-8 byte cap for one rendered baseline or dynamic batch; non-positive or non-finite disables loading. */
+  /**
+   * UTF-8 byte cap for each instruction chain (user-global, project) within one
+   * rendered baseline or dynamic batch, so a baseline or batch holding both
+   * chains is at most twice this size; non-positive or non-finite disables loading.
+   */
   maxBytes: number
   /** Maximum UTF-8 bytes read from one instruction file; larger files are ignored. */
   maxSourceBytes?: number

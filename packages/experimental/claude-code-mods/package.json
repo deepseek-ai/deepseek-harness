@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-claude-code-mods",
   "description": "Experimental bridge: load Claude Code mods (hooks modules) and run their hook chains on DeepSeek Harness extension points",
-  "version": "0.2.1-alpha.4",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -62,7 +62,6 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-storage-domain": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-token-meter": "workspace:*",

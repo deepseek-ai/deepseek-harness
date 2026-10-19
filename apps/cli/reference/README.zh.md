@@ -128,7 +128,7 @@ dsh web --help
 
 进程关闭时，插件树最多有 5 秒完成 dispose。首次收到 `SIGINT` 或 `SIGTERM` 时会开始优雅排空：`SIGTERM` 是监督进程发出的常规停止请求，在所有运行模式下都以 0 退出；`SIGINT` 则报告 130。第二次收到信号时会立即强制退出。如果一次性运行在正常结束时已经卡在 dispose 阶段，第一次按下 `Ctrl+C` 就会直接升级为强制退出，而不会被忽略。
 
-基于 base 的模式都将运行命令时所在的目录作为默认 workspace 根目录，以 65,536 字节渲染预算加载适用的 `AGENTS.md` 或 `CLAUDE.md` 指令，并使用内存 SQLite 会话内容索引。独立的 `sdk-minimal` profile 把运行命令时所在的目录作为沙箱策略根目录并包含 `read_image`，但省略文本文件系统工具、指令发现与 SQLite。启用的 HMR 插件会监视 profile 与 home 两个 `cordis.patch.yml` 配置层的有效变更，并以事务方式重新应用；未启用 HMR 时只应用一次。一次性运行模式通过有界关闭流程退出，该流程会 dispose 所有实时监视器。
+基于 base 的模式都将运行命令时所在的目录作为默认 workspace 根目录，以每条指令链 65,536 字节的渲染预算加载适用的 `AGENTS.md` 或 `CLAUDE.md` 指令，并使用内存 SQLite 会话内容索引。独立的 `sdk-minimal` profile 把运行命令时所在的目录作为沙箱策略根目录并包含 `read_image`，但省略文本文件系统工具、指令发现与 SQLite。启用的 HMR 插件会监视 profile 与 home 两个 `cordis.patch.yml` 配置层的有效变更，并以事务方式重新应用；未启用 HMR 时只应用一次。一次性运行模式通过有界关闭流程退出，该流程会 dispose 所有实时监视器。
 
 基于 base 的 profile 中，新会话默认使用 `workspace-write` 权限预设。Bash 和文件系统修改仅限于会话 workspace 与平台临时根目录；读取和网络访问不受限制，进程可见性则取决于所选沙箱后端——bwrap 在私有 PID 命名空间中运行命令并隐藏宿主进程，Landlock 与 Seatbelt 保持宿主进程可见性不变。`DSH_PERMISSION_MODE` 更改进程后备值。General settings 中存储的权限影响后续 Web 会话，不改变已打开的会话。独立的 `sdk-minimal` 配置树则固定为 `danger-full-access`，且不挂载 approval 或权限 settings 服务。
 

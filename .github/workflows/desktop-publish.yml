@@ -74,6 +74,9 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Check local publication configuration before dependency installation
+        working-directory: desktop-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: desktop-publisher
       - name: Resolve retained package and approval environment
@@ -115,6 +118,9 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Check local publication configuration before dependency installation
+        working-directory: desktop-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: desktop-publisher
       - name: Verify local package without upload credentials

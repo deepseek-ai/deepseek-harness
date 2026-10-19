@@ -1,0 +1,8 @@
+version: 1
+scenario: product-subagent-oar
+profile: headless
+composition: product-subagent-oar
+recording: authored
+header:
+  class: product-subagent-oar
+  pin: true

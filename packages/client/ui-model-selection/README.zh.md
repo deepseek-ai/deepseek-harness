@@ -45,6 +45,14 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 展开的控件无法排在同一行时，composer 将模型与推理强度文字替换为模型图标；空间足够后恢复文字。触发器的无障碍名称、提示和菜单仍提供完整选择。
 
+### 模型名称扩展
+
+`conversation.input.model.label` 是会话作用域的内联 `single` slot，覆盖 composer 触发按钮（`placement: 'trigger'`）、根菜单中的当前值（`'menu'`）和各模型选项（`'option'`）。owner props 提供 `provider: { id, name }`、准确的目录 `model`、`placement` 和 `selected`。提供方名称是本地化显示名称；按 `provider.id` 匹配渠道，按提供方与模型 ID 的组合识别模型。slot 不接收连接 URL 或凭据。
+
+扩展必须渲染非交互的内联内容，例如带颜色的名称或徽标。选择器负责点击、搜索、焦点、禁用状态、勾选标记、推理强度和触发按钮的无障碍文字。没有扩展（包括插件卸载后）时显示目录名称。触发按钮和根菜单当前值仅在所选模型存在于显示目录中时调用 slot，否则保留内置占位文字。刷新期间保留的目录条目仍调用 slot。菜单打开时会跟随名称内容的尺寸变化调整位置，保持在视口内。`/model` 命令行使用命令弹窗独立的渲染 API。
+
+以 type-only 方式导入本包的 `/client` 声明，再通过 `ctx.slots.inject('conversation.input.model.label', () => ctx.slots.register({ name: 'conversation.input.model.label' }, ModelLabel))` 注册。`ModelLabel` 的 props 从 `PropsRuntime<'conversation.input.model.label'>` 派生；用提供方 ID 选择 CSS Module 类，并保留 `model.name` 作为文字。注册随声明和贡献插件的生命周期清理。不替换组件时，样式也可以在三个显示位置通过名称外层的 `data-provider-id` 和 `data-model-id` 属性定位。
+
 ### 不可路由的会话
 
 目录可用性不会阻止使用已保存选择发送消息；请求执行负责报告凭据缺失或模型不可用。刷新及刷新失败期间保留上次显示的选择和分组。Host 重置时清空这些显示。退登后选择器隐藏账号提供方，同时保留已保存的提供方／模型 ID 和推理强度。再次登录且该模型可用时恢复目录名称。既有会话日志保持不变。
