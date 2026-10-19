@@ -13,7 +13,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
 import {
-  SCAFFOLD_DEFAULTS_BUNDLE, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
+  SCAFFOLD_DEFAULTS_BUNDLE, acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
@@ -800,7 +800,7 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('enables the Team tools and browser plugin with one bundle switch', async () => {
+  it('installs Team controls with the bundle and enables tools per Session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-team'))
     const panel = await openPluginsPanel()
     const toggle = panel.getByRole('switch', { name: '启用 智能体团队', exact: true })
@@ -829,12 +829,19 @@ describe('web e2e: plugin manager', () => {
       try {
         await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(3)
         await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
-        await action.waitFor({ timeout: 20_000 })
+        expect(await action.count()).toBe(0)
+        const beforeReload = teamTripwire.warnings.length
+        await teamPage.reload({ waitUntil: 'load' })
+        await teamPage.getByRole('button', { name: /^选择模型/u }).click()
+        const sessionMode = teamPage.getByRole('switch', { name: '使用智能体团队', exact: true })
+        await sessionMode.waitFor()
+        expect(await sessionMode.getAttribute('aria-checked')).toBe('false')
+        await sessionMode.click()
+        await expect.poll(() => sessionMode.getAttribute('aria-checked')).toBe('true')
+        await teamPage.keyboard.press('Escape')
         await action.getByRole('button', { name: '任务板', exact: true }).click()
         const teamPanel = teamPage.getByRole('dialog', { name: '任务板', exact: true })
-        await teamPanel.getByText('任务板暂不可用', { exact: true }).waitFor()
-        await teamPage.reload({ waitUntil: 'load' })
-        await action.getByRole('button', { name: '任务板', exact: true }).click()
+        acknowledgeReloadConnectionLoss(teamTripwire, beforeReload)
         await teamPanel.getByText('暂无共享任务，可以通过对话创建').waitFor()
         expect(await teamPanel.getByRole('heading', { name: '成员', exact: true }).count()).toBe(0)
         const manifest = JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
