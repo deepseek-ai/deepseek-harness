@@ -31,7 +31,9 @@ import {
   type InstallInputError, type InstallState, type InstallSubject, type PackageRow, type PackageView,
   type PluginManagerFace, type PluginManagerState, type RegistryChoice, type VersionCheck,
 } from './manager-store.ts'
-import { managementText, noticeText, packageText, registryText, restartText, rowText, type Translate } from './presentation.ts'
+import {
+  localizedTextValues, managementText, noticeText, packageText, registryText, restartText, rowText, type Translate,
+} from './presentation.ts'
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
@@ -284,8 +286,13 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
   const [filter, setFilter] = useState('')
   const query = filter.trim().toLowerCase()
   const localized = rows.map(row => ({ row, ...rowText(row, resolveText) }))
-  const shown = query === '' ? localized : localized.filter(({ row, title, description }) =>
-    [title, description, row.rowId, row.moduleName].some(value => value?.toLowerCase().includes(query)))
+  // Rows display one language; matching covers every declared language so a
+  // person who learned a component in another UI language still finds it.
+  const shown = query === '' ? localized : localized.filter(({ row }) =>
+    [
+      row.rowId, row.moduleName,
+      ...localizedTextValues(row.meta?.title), ...localizedTextValues(row.meta?.description),
+    ].some(value => value.toLowerCase().includes(query)))
   return (
     <section className={css.detailSection} data-plugin-rows>
       <div className={css.sectionHead}>

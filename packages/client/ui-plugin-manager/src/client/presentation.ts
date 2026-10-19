@@ -2,6 +2,7 @@
 
 import { EXPERIMENTAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginManagerLocaleKey } from './locales.ts'
 import type { FailedAction, ManagerNotice, PackageRow, PackageView, PluginManagerFace } from './manager-store.ts'
@@ -140,6 +141,16 @@ export function rowText(
     title: row.meta?.title === undefined ? row.moduleName : resolveText(row.meta.title),
     description: row.meta?.description === undefined ? undefined : resolveText(row.meta.description) || undefined,
   }
+}
+
+/**
+ * Every string a localized package text declares, for matching regardless of the UI language.
+ * @param text - literal text, or translations keyed by lowercase language id.
+ * @returns the literal or every translation value; empty when the text is absent.
+ */
+export function localizedTextValues(text: LocalizedText | undefined): readonly string[] {
+  if (text === undefined) return []
+  return typeof text === 'string' ? [text] : Object.values(text)
 }
 
 /** The sentence naming why a change waits for a restart. */
