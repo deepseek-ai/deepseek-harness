@@ -49,10 +49,14 @@ const closed = (state: MenuState): MenuState =>
     ? { open: false, hit: null, generation: state.generation, groups: [], highlight: null }
     : state
 
-/** First item of the first non-empty ready group, or null. */
+/**
+ * First item in menu order, or null while an earlier group is still pending, so
+ * whichever source answers first cannot take the default highlight.
+ */
 function firstHighlight(groups: MenuState['groups']): MenuState['highlight'] {
   for (const g of groups) {
-    if (g.status === 'ready' && g.items.length > 0) return { source: g.source, index: 0 }
+    if (g.status === 'pending') return null
+    if (g.items.length > 0) return { source: g.source, index: 0 }
   }
   return null
 }
@@ -62,6 +66,17 @@ function validHighlight(highlight: MenuState['highlight'], groups: MenuState['gr
   if (!highlight) return null
   const g = groups.find(x => x.source === highlight.source)
   return g && g.status === 'ready' && highlight.index < g.items.length ? highlight : null
+}
+
+/**
+ * The highlight after a group settles or fails: kept while valid or parked on a
+ * group that is still revalidating, otherwise the first item in menu order.
+ */
+function settledHighlight(highlight: MenuState['highlight'], groups: MenuState['groups']): MenuState['highlight'] {
+  const valid = validHighlight(highlight, groups)
+  if (valid !== null) return valid
+  if (highlight && groups.some(g => g.source === highlight.source && g.status === 'pending')) return highlight
+  return firstHighlight(groups)
 }
 
 /** Flatten ready items into (source, index) positions in group order. */
@@ -116,7 +131,7 @@ export const menuReduce: MenuReduce = (state, ev) => {
       const groups = state.groups.map((g, i) =>
         i === idx ? { ...g, status: 'ready' as const, items } : g)
       if (allReadyEmpty(groups)) return closed(state)
-      const highlight = validHighlight(state.highlight, groups) ?? firstHighlight(groups)
+      const highlight = settledHighlight(state.highlight, groups)
       return { ...state, groups, highlight }
     }
     case 'source-failed': {
@@ -124,7 +139,7 @@ export const menuReduce: MenuReduce = (state, ev) => {
       if (!state.groups.some(g => g.source === ev.source)) return state
       const groups = state.groups.filter(g => g.source !== ev.source)
       if (groups.length === 0 || allReadyEmpty(groups)) return closed(state)
-      const highlight = validHighlight(state.highlight, groups) ?? firstHighlight(groups)
+      const highlight = settledHighlight(state.highlight, groups)
       return { ...state, groups, highlight }
     }
     case 'move': {
