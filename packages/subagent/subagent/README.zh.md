@@ -73,6 +73,8 @@ agent 名字是不可变的路径段，只在同一父级的直接子级中唯�
 
 ### 失败与恢复
 
+名字准入以 `INVALID_AGENT_NAME` 拒绝非法片段，以 `DUPLICATE_AGENT_NAME` 拒绝同级已占用名字；选择合法且未占用的片段，或省略名字。查询不存在的路径时报告 `AGENT_NAME_NOT_FOUND`：通过 `list_agents` 重新发现。`CORRUPT_AGENT_NAMES` 表示父级 catalog 存在歧义分配，需要修复。`AGENT_TREE_UNAVAILABLE` 表示所需在线祖先缺失或在创建期间发生变化；恢复根后再重试。
+
 缺少 `agents` 服务时，启动请求以 `CONTINUATION_UNAVAILABLE` 拒绝；运行时可用但父级缺失或被替换时，以 `UNAUTHORIZED` 拒绝。未实现任何执行方法的提供方会在注册时以 `UNSUPPORTED_CAPABILITY` 被拒绝；请求不受支持的能力会以同一码使创建失败。调用方信号仅取消尚未发布的工作；发布后通过 `dispose()` 取消该次 activation，并等待其资源清理完成。创建后代独立继续运行；宿主必须在释放根句柄前等待 `drainDescendants([root])`，以停止所有成员并等待正在启动的工作。`result` 在清理与通知结束后完成，携带输出、可选结构化数据与停止原因；结果捕获故障在清理后使其拒绝。清理失败使 `dispose()` 拒绝，并将生命周期结束事件标记为失败；结果 promise 与父级通知保留已捕获的执行结果。
 
 -----
@@ -181,17 +183,17 @@ agent 名字是不可变的路径段，只在同一父级的直接子级中唯�
 
 #### 模型看到什么
 
-子级初始任务包含以下指导，其中 `<parent-id>` 替换为 JSON 编码的父级 Session id。子级在最终回答中提供结果和证据；中途消息用于报告会改变父级下一步操作的发现。
+子级初始任务包含以下指导，其中 `<child-name>` 和 `<parent-name>` 替换为 JSON 编码的完整路径。子级在最终回答中提供结果和证据；中途消息用于报告会改变父级下一步操作的发现。
 
 ##### 返回指导
 
 ```markdown
-Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your name is <child-name>. Your parent agent name is <parent-name>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
 ```
 
 #### Token 影响
 
-每个可继续执行子级的初始任务增加一个指导块，其中两次写出父级 id。
+每个可继续执行子级的初始任务增加一个指导块，其中一次写出自身路径，两次写出父级路径。
 
 #### KV Cache 影响
 

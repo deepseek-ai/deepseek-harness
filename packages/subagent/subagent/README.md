@@ -73,6 +73,8 @@ In-process spawn accepts an independent `agentPreset`; fork and external backend
 
 ### Failure and recovery
 
+Name admission rejects invalid segments with `INVALID_AGENT_NAME` and occupied siblings with `DUPLICATE_AGENT_NAME`; choose a valid unused segment or omit it. Lookup reports `AGENT_NAME_NOT_FOUND` for an absent path: rediscover with `list_agents`. `CORRUPT_AGENT_NAMES` means a parent catalog has ambiguous assignments and needs repair. `AGENT_TREE_UNAVAILABLE` means the required live ancestry is missing or changed during creation; restore the root before retrying.
+
 Starting without the `agents` service rejects with `CONTINUATION_UNAVAILABLE`; an available runtime rejects a missing or replaced parent with `UNAUTHORIZED`. Providers implementing neither execution method are rejected at registration with `UNSUPPORTED_CAPABILITY`; unsupported requested capabilities reject creation with the same code. The caller signal cancels only unpublished work; after publication, `dispose()` cancels the exact activation and waits for its resource cleanup. Creation descendants continue independently; hosts must await `drainDescendants([root])` before disposing the root handle to stop all members and await pending startup. `result` settles after teardown and notifications, carrying output, optional structured data, and a stop reason; capture failures reject it after teardown. Cleanup failures reject `dispose()` and mark the lifecycle end as failed; the result promise and parent notification retain the captured execution result.
 
 -----
@@ -181,17 +183,17 @@ Append-only in the parent: the notice follows its reusable request prefix. Reach
 
 #### What the model sees
 
-The child's initial task includes the guidance below, with `<parent-id>` replaced by its JSON-encoded parent Session id. The child places its result and evidence in its final answer; an intermediate message serves findings that change the parent's next action.
+The child's initial task includes the guidance below, with `<child-name>` and `<parent-name>` replaced by JSON-encoded full paths. The child places its result and evidence in its final answer; an intermediate message serves findings that change the parent's next action.
 
 ##### Return guidance
 
 ```markdown
-Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your name is <child-name>. Your parent agent name is <parent-name>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
 ```
 
 #### Token effect
 
-One guidance block in each continuable child's initial task, naming its parent twice.
+One guidance block in each continuable child's initial task, containing its own path once and its parent's path twice.
 
 #### KV Cache effect
 
