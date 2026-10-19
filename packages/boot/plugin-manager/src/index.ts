@@ -36,6 +36,7 @@ import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan }
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { PluginManagerError, readProfileState } from './error.ts'
+import { installPluginReference } from './plugin-reference.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
@@ -395,6 +396,11 @@ export class PluginManager extends TypertRemoteService {
       this.abort.abort()
       await Promise.allSettled([...this.packageOperations])
     }, 'plugin-manager: package cancellation')
+    ctx.effect(() => installPluginReference(
+      { on: (event, listener, options) => ctx.on(event, listener, options) },
+      () => readPluginInventory(ctx),
+      { pluginPackages: ctx.get('pluginPackages'), profileContext: ctx.get('profileContext') },
+    ), 'plugin-manager: plugin references')
     ctx.inject(['connection'], (scope) => {
       scope.effect(() => scope.connection.fetch.register({
         path: DETAIL_FILE_PATH, methods: ['GET'], requestBody: 'buffered', fetch: request => this.serveDetailFile(request),

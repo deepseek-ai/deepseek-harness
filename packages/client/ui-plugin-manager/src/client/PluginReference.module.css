@@ -1,0 +1,10 @@
+.chip {
+  display: inline-flex;
+  vertical-align: baseline;
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

@@ -47,6 +47,18 @@
 /deepseek-ai-dsh-plugin-manager/model-experience/management-tool/kv-cache-effect:
   en: c29f60be7f3edc1a
   zh: d9b9388b96ef95cc
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references:
+  en: 4df89f1fd74b0103
+  zh: 5d44e686e7250bf8
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/what-the-model-sees:
+  en: d5a276915979c580
+  zh: 75779a1af5f95a9f
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/token-effect:
+  en: 545a4c0b0964cbf7
+  zh: dd0f53e1e439369a
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/kv-cache-effect:
+  en: 749f36747c9e0f91
+  zh: d8f3920a3da2947d
 /deepseek-ai-dsh-plugin-manager/known-limitations-and-deferred-work:
   en: 89306b478cb75b3b
   zh: f2f50c88114fec99

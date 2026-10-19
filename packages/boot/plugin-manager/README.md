@@ -162,6 +162,20 @@ The tool declaration is present when its consumer is mounted; each invocation ad
 
 Tool results append to the transcript. Enabling or disabling other tools can change subsequent tool declarations and their cache reuse.
 
+### Plugin references
+
+#### What the model sees
+
+A message that cites a package with `@[label](dsh-plugin:<package>)` gains one user-role context message before the model step. The mention folds to `@label`, and the context JSON lists each package's installed entries, version, scope, package directory, manifest and README paths, linked root, and whether the directory sits inside the workspace. Configuration values are omitted. The context is untrusted background and is bounded to eight packages and twelve entries per package.
+
+#### Token effect
+
+Each step that cites plugins adds one JSON context message.
+
+#### KV Cache effect
+
+The context appends to the transcript; later steps keep the cached prefix.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
