@@ -693,7 +693,7 @@ function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   }])
 }
 
-/** Keep task commits, coalesced inbox delivery, and waiting observable in the shipped composition. */
+/** Task commits wake an active wait after persistence without leaving inbox input or a retained signal. */
 function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(2)
   const root = parseSessionLog(logs[0]!.content)
@@ -704,21 +704,24 @@ function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
     { id: 'task-1', revision: 2, status: 'in_progress', ownerId: logs[1]!.header.id },
     { id: 'task-1', revision: 3, status: 'completed', ownerId: logs[1]!.header.id },
   ])
-  const notices = root.flatMap(event => event.type === 'user/message'
-    && event.data.source.kind === 'team-task-change' ? [event.data] : [])
-  expect(notices).toHaveLength(1)
-  expect(notices[0]?.source).toEqual({
-    kind: 'team-task-change', form: 'notice', rootSessionId: logs[0]!.header.id,
-    summary: 'Shared task board updated: task-1 revision 3.',
-  })
-  const inserted = root.flatMap(event => event.type === 'agent/inbox/spliced'
-    ? event.data.inserted.filter(message => message.source.kind === 'team-task-change') : [])
-  expect(inserted).toHaveLength(3)
-  expect(new Set(inserted.map(message => message.id)).size).toBe(1)
+  const sources = [...root, ...child].flatMap(event => event.type === 'user/message'
+    ? [event.data.source.kind]
+    : event.type === 'agent/inbox/spliced' ? event.data.inserted.map(message => message.source.kind) : [])
+  expect(sources).not.toContain('team-task-change')
+  for (const id of ['wait-past-change', 'wait-current-change']) {
+    const start = root.findIndex(event => event.type === 'tool/call' && event.data.callId === id)
+    const end = root.findIndex(event => event.type === 'tool/result' && event.data.message.toolCallId === id)
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(root.slice(start, end).some(event => event.type === 'user/message'
+      || event.type === 'agent/inbox/spliced' && event.data.inserted.length > 0)).toBe(false)
+  }
   const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-  expect(results).toHaveLength(6)
+  expect(results).toHaveLength(7)
   expect(results.every(result => result.isError === false)).toBe(true)
-  expect(results.find(result => result.toolCallId === 'wait-inbox')?.content)
+  expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
+  expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":false}' }])
 }
 

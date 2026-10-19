@@ -14,7 +14,7 @@ Agent Teams needs an explicit opt-in composition while its public contracts rema
 
 ## Decision
 
-Every ordinary root and its descendants form the Team identified by the root `SessionId`; durable task state begins with the first task event. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) owns the single agent identity. [Task-board inbox coordination](../architecture/2026-10-19-team-task-board-inbox.md) owns task notices and ordinary inbox waiting. An ordinary Session fork leads a new tree and excludes inherited Team authority.
+Every ordinary root and its descendants form the Team identified by the root `SessionId`; durable task state begins with the first task event. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) owns the single agent identity. [Task-board wait coordination](../architecture/2026-10-19-team-task-board-inbox.md) owns task-board signals and ordinary inbox waiting. An ordinary Session fork leads a new tree and excludes inherited Team authority.
 
 The implementation is split into `@deepseek-ai/dsh-experimental-agent-team`, which owns `ctx.agentTeams` and durable semantics, and `@deepseek-ai/dsh-experimental-tool-agent-team`, which owns scoped schemas and model guidance. Every Team tool declares its complete result schema and renders that value as compact JSON, so the compiler checks each `execute` against what the model is promised and no result spends tokens on indentation. Deployments mount both plugins explicitly; Team registers no tool that shares a name with the subagent controls. The shared policy announces Team availability and describes coordination responsibilities. Both packages are public members of `packages/experimental/`; the [experimental package reference](../../../../packages/experimental/AGENTS.md) owns publication, dependency isolation, and promotion.
 
@@ -42,7 +42,7 @@ Member messages use the subagent `send_message` operation, which steers running,
 
 Shared tasks are complete snapshots with Team-local ids and monotonic revisions. Every mutation carries `expectedRevision`. Any member creates, reads, or claims a ready unowned task; the owner or Lead edits and transitions it, while only the Lead assigns another member. Numeric task ids remain within the safe-integer allocation range, and exhaustion fails without reusing an id. Dependencies must name non-deleted tasks and form a complete DAG. Deleted tasks are retained tombstones. `writeScopes` are normalized path prefixes that produce overlap diagnostics but never block claim or authorize a write.
 
-`wait_agent` belongs to ordinary subagent controls and waits for the exact caller’s next-step inbox, including already-pending input. Task commits notify other live local members through that inbox without waking idle members. [Task-board inbox coordination](../architecture/2026-10-19-team-task-board-inbox.md) supersedes the Team-wide edge wait. Ancestors may interrupt descendants without changing task ownership.
+`wait_agent` belongs to ordinary subagent controls and waits for the exact caller’s next-step inbox, including already-pending input. After flushing, task commits signal active waits for all resident Agents in the same tree without retaining unread state or starting idle turns. [Task-board wait coordination](../architecture/2026-10-19-team-task-board-inbox.md) supersedes the Team-wide edge wait. Ancestors may interrupt descendants without changing task ownership.
 
 ## Shared checkout boundary
 
@@ -62,7 +62,7 @@ Publication requires `apply` to return a new state per applied event and replace
 
 **Keep a separate Team communication authority.** The later [tree-wide communication decision](../architecture/2026-10-16-tree-wide-agent-communication.md) places routing and authorization in the subagent runtime; a task board cannot grant another route.
 
-**Keep a durable Team mailbox.** Target admission and task commit are independent operations. The historical Team mailbox remains readable, while current messaging uses the target inbox and post-commit task notices explicitly report delivery failure without undoing the task.
+**Keep a durable Team mailbox.** Target admission and task commit are independent operations. The historical Team mailbox remains readable, while current messaging uses the target inbox. Task-board wakeups carry no message and remain in memory.
 
 **Treat task ownership or write scopes as locks.** Rejected because external writers bypass them, crashed owners remain durable, and path-prefix overlap cannot prove semantic independence. False mutual exclusion is more dangerous than an explicit warning.
 

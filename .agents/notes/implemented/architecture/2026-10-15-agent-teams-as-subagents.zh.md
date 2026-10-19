@@ -18,7 +18,7 @@ Status: implemented
 
 每个根 Agent 及其后代组成以根 Session id 标识的 Team。Team 不创建 agent，仅提供任务工具和任务策略。普通 subagent 控制工具提供发现、通信、中断、收件箱等待和必需运行时身份。父级和 fork 子级接收相同工具 schema 和共享策略。
 
-任务归属使用 `ownerId`；根重新分配可指定自身或任意可达的可继续执行后代。历史名册记录仅供解码。Team 持久化任务变更，并在提交后接纳不唤醒成员的收件箱通知。历史 `team/message/*` 记录仍可读取，但绝不再投递或确认。
+任务归属使用 `ownerId`；根重新分配可指定自身或任意可达的可继续执行后代。历史名册记录仅供解码。Team 持久化任务变更，并在提交后通知当前等待，不启动空闲轮次。历史 `team/message/*` 记录仍可读取，但绝不再投递或确认。
 
 本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
 

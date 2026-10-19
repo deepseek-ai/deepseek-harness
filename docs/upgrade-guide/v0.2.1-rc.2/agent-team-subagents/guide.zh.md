@@ -9,7 +9,7 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 
 ## 变更
 
-实验性 Agent Teams 插件使用标准子代理工具和 Session id。描述标注职责；重复描述不能标识接收者。
+Agent Teams 使用子代理工具和 Session id。描述标注职责；仅 id 标识接收者。
 
 - 移除 `spawn_teammate` 以及 Team 作用域的 `send_message`、`list_agents` 和 `interrupt_agent`。标准控制工具使用 `agent_id` 而非 `target`。同一根下的成员可以通过 id 跨分支互发消息；中断仍只允许祖先执行。
 - `list_agents` 不接受参数，列出整棵树。移除脚本中的 `scope` 参数。行使用 `kind: root` 或 `kind: child`；后代包含父 id 和相对根的深度。根可将任务分配给自身或任意已发现的可继续执行后代。
@@ -19,7 +19,7 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 - 运行时实例共享根所有权，不改变创建祖先关系。成员收尾不释放后代。消息仅恢复目标。根关闭时 host 关闭整棵树；成员显式获取所需结果。
 - 冷恢复使用已保存的 preset 和权限，而非创建者当前代次。缺失 preset 会导致恢复失败；历史目标没有保存 preset 时，使用 host 组合及描述符覆盖。生命周期分派使用根作用域，同时在 `parentSessionId` 中保留直接创建者。浏览器继续执行需要根在线；失败使用 `subagent/delivery-unavailable`。
 - 历史 Team 名册和邮箱记录仍可读取。其中的名字仅作为历史数据，不用于解析消息收件人或任务所有者。Subagent catalog 载荷不变。
-- Web Team 面板仅显示任务；普通 subagent 导航负责浏览成员。历史 `agentTeam.members` 仍可解码，但不授予权限。任务提交仅向本地在线同伴发送合并的不唤醒通知。`TEAM_TASK_NOTIFICATION_FAILED` 报告 `committedTask` 和 `failedRecipients`；修改已经提交。
+- Web Team 面板仅显示任务；普通 subagent 导航负责浏览成员。历史 `agentTeam.members` 仍可解码，但不授予权限。任务提交刷盘后结束同树所有驻留 Agent 的当前等待。信号不保留未读状态，也不启动 Agent；等待之外的变更不能唤醒后续等待。
 
 ## 迁移
 
@@ -27,4 +27,4 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 2. 将 `spawn_teammate({ name, description, prompt, context })` 替换为 `subagent({ description, prompt })`；继承对话历史时使用 `subagent_fork`。保存返回的 agent id。
 3. 使用 `send_message({ agent_id, message })` 和 `interrupt_agent({ agent_id })`。通过 `list_agents` 查询所有 Team 成员的 id。
 4. 任务的 `owner` 字段传入成员 Session id，结果读取 `ownerId`。以 Lead 的 Session id 取代 `lead` 别名。
-5. 将已移除服务调用替换为 `ctx.subagents` 操作。为 `tool-subagent-control` 提供 `systemPrompt`。将上下文排序键 `TEAM_IDENTITY` 替换为 `SUBAGENT_IDENTITY`。验证成员导航、向嵌套后代分配任务和任务通知。通知失败时，恢复前读取 `committedTask`；绝不盲目重试创建。
+5. 将已移除服务调用替换为 `ctx.subagents` 操作。为 `tool-subagent-control` 提供 `systemPrompt`。将上下文排序键 `TEAM_IDENTITY` 替换为 `SUBAGENT_IDENTITY`。验证成员导航、向嵌套后代分配任务，以及当前等待期间的任务板唤醒。等待结束后重新读取任务。

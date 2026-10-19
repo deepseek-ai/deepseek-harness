@@ -2,13 +2,13 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition } from './projection.ts'
 import { TeamTaskBoard } from './task-board.ts'
 import { TeamTaskId } from './types.ts'
-import { notifyTaskChange } from './task-notifications.ts'
 import type {
   Config,
   CreateTeamTaskRequest,
@@ -18,7 +18,7 @@ import type {
 
 export type * from './types.ts'
 export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
-export { TeamError, TeamTaskNotificationError } from './error.ts'
+export { TeamError } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -62,7 +62,13 @@ export class TeamService extends Service {
     }
     const maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
 
-    this.journal = new TeamJournal(ctx, (caller, root, task) => { notifyTaskChange(ctx, caller, root, task) })
+    this.journal = new TeamJournal(ctx, (root) => {
+      for (const agent of ctx.agents.list()) {
+        if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) {
+          emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+        }
+      }
+    })
     this.tasks = new TeamTaskBoard(ctx, this.journal, maxTasks)
 
     ctx.effect(() => ctx.root.sessionProjections.register(teamProjectionDefinition), 'agentTeams.runtimeLifecycle()')
@@ -73,7 +79,6 @@ export class TeamService extends Service {
    * @param caller - exact live Team member creating the task.
    * @param request - task text, blockers, and advisory write scopes.
    * @returns the revision-one task view.
-   * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
    */
   async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
     return await this.tasks.create(caller, this.ctx.subagents.rootOf(caller), request)
@@ -103,7 +108,6 @@ export class TeamService extends Service {
    * @param caller - exact live Team member authorizing the mutation.
    * @param request - task identity, expected revision, action, and action fields.
    * @returns the committed next task revision.
-   * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
    */
   async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView> {
     return await this.tasks.update(caller, this.ctx.subagents.rootOf(caller), request)

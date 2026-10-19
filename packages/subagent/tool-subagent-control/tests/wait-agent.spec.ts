@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { agentCarrier, emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -73,6 +74,8 @@ describe('wait_agent', () => {
     void result.then(() => { returned = true })
     agent.inbox.splice('next-turn', 0, 0, [input('queued')])
     other.inject(input('someone else'))
+    emitAgentEvent(ctx, other, 'agent/status', { status: 'running' })
+    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
     await vi.advanceTimersByTimeAsync(9_999)
     expect(returned).toBe(false)
     agent.inject(input('steering'))
@@ -81,6 +84,53 @@ describe('wait_agent', () => {
     expect(agent.inbox.nextStep).toHaveLength(1)
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('ends all current waits for an exact agent without retaining notifications', async () => {
+    const { ctx, agent, other } = await setup()
+    vi.useFakeTimers()
+    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+    const first = await startWait(ctx, agent, { timeout_ms: 10_000 })
+    const second = await startWait(ctx, agent, { timeout_ms: 10_000 })
+    let returned = false
+    void first.result.then(() => { returned = true })
+    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(returned).toBe(false)
+    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+    for (const result of await Promise.all([first.result, second.result])) {
+      expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
+    }
+    expect(agent.inbox.nextStep).toHaveLength(0)
+    expect(agent.inbox.nextTurn).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+    const later = await startWait(ctx, agent, { timeout_ms: 10_000 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await later.result).toMatchObject({ isError: false, value: { timedOut: true } })
+  })
+
+  it.each(['input', 'notification', 'timeout', 'cancel', 'dispose', 'unload'] as const)(
+    'removes its notification subscription after %s',
+    async (settlement) => {
+      const { ctx, agent, handle, fiber } = await setup()
+      vi.useFakeTimers()
+      const listeners = () => ctx.events.dispatch('emit', [agentCarrier(agent), 'agent/wait-notified', { agent }]).length
+      const baseline = listeners()
+      const controller = new AbortController()
+      const { result } = await startWait(ctx, agent, { timeout_ms: 10_000 }, controller.signal)
+      expect(listeners()).toBe(baseline + 1)
+      switch (settlement) {
+        case 'input': agent.inject(input()); break
+        case 'notification': emitAgentEvent(ctx, agent, 'agent/wait-notified', {}); break
+        case 'timeout': await vi.advanceTimersByTimeAsync(10_000); break
+        case 'cancel': controller.abort(new Error('stop waiting')); break
+        case 'dispose': await handle.dispose(); break
+        case 'unload': await fiber.dispose(); break
+      }
+      await result
+      expect(listeners()).toBe(baseline)
+      expect(vi.getTimerCount()).toBe(0)
+    },
+  )
 
   it('subscribes before checking pending input', async () => {
     const { ctx, agent } = await setup()

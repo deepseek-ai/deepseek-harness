@@ -18,7 +18,7 @@ function latestAssistantCalls(messages) {
 function hasNewCoordinationInput(messages) {
   const toolIndex = messages.findLastIndex(message => message.role === 'tool')
   return messages.some((message, index) => index > toolIndex && message.role === 'user'
-    && ['team-task-change', 'agent-message', 'subagent-settled'].includes(message.source?.kind))
+    && ['agent-message', 'subagent-settled'].includes(message.source?.kind))
 }
 
 function hasTaskAction(messages, action) {
@@ -215,9 +215,27 @@ class TeamFixtureAdapter extends LlmAdapter {
 /** Cordis plugin name. */
 export const name = 'team-fixture-llm'
 /** LLM registry dependency. */
-export const inject = ['llm']
+export const inject = ['llm', 'tools']
 
 /** Register the keyless adapter on the shipped default provider route. */
 export function apply(ctx) {
+  const implementerWaiting = Promise.withResolvers()
+  const leadWaiting = Promise.withResolvers()
+  for (const gate of [implementerWaiting, leadWaiting]) void gate.promise.catch(() => undefined)
+  ctx.effect(() => () => {
+    implementerWaiting.reject(new Error('Team fixture disposed before implementer wait'))
+    leadWaiting.reject(new Error('Team fixture disposed before lead wait'))
+  })
+  ctx.on('tools/execute', async (exec, next) => {
+    if (exec.name === 'team_task_create' && exec.arguments.subject === 'Research') {
+      await Promise.all([implementerWaiting.promise, leadWaiting.promise])
+    }
+    const result = next()
+    if (exec.name === 'wait_agent') {
+      if (exec.agent.session.header.origin === 'subagent') implementerWaiting.resolve()
+      else leadWaiting.resolve()
+    }
+    return result
+  })
   ctx.llm.registerAdapter(['deepseek-official'], new TeamFixtureAdapter())
 }

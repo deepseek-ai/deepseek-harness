@@ -14,7 +14,7 @@ Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的�
 
 ## Decision
 
-每个普通根及其后代组成以根 `SessionId` 标识的 Team；持久任务状态从首个任务事件开始。[subagent 队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责单一 agent 身份。[任务板收件箱协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)负责任务通知和普通收件箱等待。普通 Session fork 成为一棵新树的根，并排除继承的 Team 权限。
+每个普通根及其后代组成以根 `SessionId` 标识的 Team；持久任务状态从首个任务事件开始。[subagent 队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责单一 agent 身份。[任务板等待协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)负责任务板信号和普通收件箱等待。普通 Session fork 成为一棵新树的根，并排除继承的 Team 权限。
 
 实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件；Team 不注册与 subagent control 同名的工具。共享策略声明 Team 可用，并说明协调责任。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
 
@@ -42,7 +42,7 @@ member 消息使用 subagent 的 `send_message` 操作，它对 running、idle �
 
 共享 task 是带 Team-local id 与单调 revision 的完整快照。每次变更都携带 `expectedRevision`。任意 member 可以创建、读取或 claim ready 且无 owner 的任务；Owner 或 Lead 可以编辑和转换；只有 Lead 可以分配给另一个 member。数字 task id 保持在安全整数分配范围内；该范围耗尽时会失败，不会复用 id。依赖必须指向未删除任务，并形成完整 DAG。删除任务保留为 tombstone。`writeScopes` 是规范化路径前缀，只产生重叠诊断，绝不会阻止 claim 或授予写权限。
 
-`wait_agent` 属于普通 subagent 控制工具，等待当前调用者的下一步收件箱，包括已有待处理输入。任务提交通过该收件箱通知其他本地在线成员，不唤醒空闲成员。[任务板收件箱协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)取代 Team 范围的边沿等待。祖先可中断后代，不改变任务归属。
+`wait_agent` 属于普通 subagent 控制工具，等待当前调用者的下一步收件箱，包括已有待处理输入。任务提交刷盘后通知同树所有驻留 Agent 的当前等待，不保留未读状态，也不启动空闲轮次。[任务板等待协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)取代 Team 范围的边沿等待。祖先可中断后代，不改变任务归属。
 
 ## Shared checkout boundary
 
@@ -62,7 +62,7 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 **保留独立 Team 通信权限。** 后续的[整树通信决策](../architecture/2026-10-16-tree-wide-agent-communication.zh.md)将路由和授权置于 subagent 运行时；任务板不能授予另一条路由。
 
-**保留持久化 Team 邮箱。** 目标接纳和任务提交是独立操作。历史 Team 邮箱保持可读，当前通信使用目标收件箱，提交后任务通知明确报告投递失败，不撤销任务。
+**保留持久化 Team 邮箱。** 目标接纳和任务提交是独立操作。历史 Team 邮箱保持可读，当前通信使用目标收件箱。任务板唤醒不携带消息，仅存在于内存中。
 
 **把 task ownership 或 write scope 当作锁。** 拒绝，因为外部 writer 会绕过它们，崩溃 owner 会持久保留，而路径前缀重叠不能证明语义独立。虚假的互斥保证比明确 warning 更危险。
 

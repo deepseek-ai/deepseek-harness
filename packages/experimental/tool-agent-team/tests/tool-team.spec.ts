@@ -60,6 +60,8 @@ class TestSessionQuery extends SessionQueryEngine {
 }
 
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   for (const ctx of contexts) await ctx.fiber.dispose()
   contexts.clear()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -105,6 +107,20 @@ function execute(
 
 function text(result: Awaited<ReturnType<typeof execute>>): string {
   return result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+}
+
+/** Observe wait subscription before committing a competing task change. */
+async function startWait(ctx: Context, agent: Agent) {
+  const entered = Promise.withResolvers<undefined>()
+  const off = ctx.on('tools/execute', (exec, next) => {
+    const result = next()
+    if (exec.name === 'wait_agent' && exec.agent === agent) entered.resolve(undefined)
+    return result
+  })
+  const result = execute(ctx, agent, 'wait_agent', { timeout_ms: 10_000 })
+  await entered.promise
+  off()
+  return { result }
 }
 
 /** Start a continuable child of the Lead with a task description. */
@@ -351,7 +367,7 @@ describe('dsh-tool-team', () => {
     expect(text(stale)).toContain('stale team task')
 
     lead.inbox.clear()
-    const wait = execute(ctx, lead, 'wait_agent', { timeout_ms: 10_000 })
+    const { result: wait } = await startWait(ctx, lead)
     const completed = await execute(ctx, child, 'team_task_update', {
       task_id: task.id, expected_revision: 2, action: 'complete',
     })
@@ -421,7 +437,7 @@ describe('dsh-tool-team', () => {
 
     const child = ctx.agents.get(childId)!
     child.inbox.clear()
-    const wait = execute(ctx, child, 'wait_agent', {})
+    const { result: wait } = await startWait(ctx, child)
     const wake = await execute(ctx, lead, 'team_task_create', { subject: 'wake', description: 'notify waiting child' })
     expect(wake.isError).toBe(false)
     expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
@@ -474,25 +490,70 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it('reports a committed task through the tool after notice delivery fails', async () => {
-    const { ctx, lead } = await setup([])
+  it('ends every current wait in the committing tree without waking an unrelated tree', async () => {
+    const { ctx, lead, adapter } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('tool-notice-recipient'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: SessionId('waiting-child'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
     })
-    const inject = vi.spyOn(child.agent, 'inject').mockImplementation(() => { throw new Error('inbox unavailable') })
-    try {
-      const result = await execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'notice failure' })
-      expect(result.isError).toBe(true)
-      expect(text(result)).toContain('Task task-1 revision 1 was committed')
-      expect(text(result)).toContain(child.agent.id)
-      expect(text(result)).toContain('do not repeat the mutation')
-      const get = await execute(ctx, lead, 'team_task_get', { task_id: 'task-1' })
-      expect(get.isError).toBe(false)
-      expect(JSON.parse(text(get))).toMatchObject({ id: 'task-1', revision: 1, subject: 'committed' })
-    } finally {
-      inject.mockRestore()
-      await child.dispose()
+    const unrelated = await ctx.agents.create({
+      sessionId: SessionId('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    vi.useFakeTimers()
+    const first = await startWait(ctx, lead)
+    const second = await startWait(ctx, lead)
+    const descendant = await startWait(ctx, child.agent)
+    const separate = await startWait(ctx, unrelated.agent)
+    const committed = await execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'wake current waits' })
+    expect(committed.isError).toBe(false)
+    for (const result of await Promise.all([first.result, second.result, descendant.result])) {
+      expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
     }
+    expect(vi.getTimerCount()).toBe(1)
+    for (const agent of [lead, child.agent, unrelated.agent]) {
+      expect(agent.inbox.nextStep).toHaveLength(0)
+      expect(agent.inbox.nextTurn).toHaveLength(0)
+      expect(agent.status).toBe('idle')
+    }
+    expect(adapter.requests).toHaveLength(0)
+    const later = await startWait(ctx, lead)
+    await vi.advanceTimersByTimeAsync(10_000)
+    for (const result of await Promise.all([separate.result, later.result])) {
+      expect(result).toMatchObject({ isError: false, value: { timedOut: true } })
+    }
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps waiting until a task flush succeeds and ignores a failed flush', async () => {
+    const { ctx, lead } = await setup([])
+    vi.useFakeTimers()
+    const flush = ctx.sessions.flush.bind(ctx.sessions)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    vi.spyOn(ctx.sessions, 'flush').mockImplementationOnce(async (session) => {
+      entered.resolve(undefined)
+      await release.promise
+      return await flush(session)
+    })
+    const waiting = await startWait(ctx, lead)
+    let returned = false
+    void waiting.result.then(() => { returned = true })
+    const creating = execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'wait for flush' })
+    try {
+      await entered.promise
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(returned).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      expect((await creating).isError).toBe(false)
+    }
+    expect(await waiting.result).toMatchObject({ isError: false, value: { timedOut: false } })
+    const afterCommit = await startWait(ctx, lead)
+    vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
+    const failed = await execute(ctx, lead, 'team_task_create', { subject: 'failed', description: 'flush fails' })
+    expect(failed.isError).toBe(true)
+    expect(text(failed)).toContain('storage unavailable')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await afterCommit.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
   it('rolls back partial scoped installation after a same-scope collision', async () => {

@@ -2,7 +2,7 @@
 
 English | [中文](agent-team.zh.md)
 
-Types shared by the experimental task board, model tools, and host adapters. The [task-board and inbox decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
+Types shared by the experimental task board, model tools, and host adapters. The [task-board wait decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
 
 ## Identity and historical roster
 
@@ -25,7 +25,7 @@ Historical records retain their recorded `provisioning`, `active`, or `failed` p
 
 ## Messages and historical mailbox
 
-Members exchange ordinary [subagent messages](subagent.md), retaining the real sender Session id. Task commits separately enqueue coalesced `team-task-change` notices in other live local members’ next-step inboxes. Notices neither restore cold members nor start idle turns. The following historical mailbox types remain readable; Team never delivers their pending records.
+Members exchange ordinary [subagent messages](subagent.md), retaining the real sender Session id. After flushing, task commits signal active waits in all resident Agents in the same tree, including the caller and root. These in-memory signals do not persist unread state, restore cold members, or start idle turns. A change outside an active wait cannot wake a future wait. The following historical mailbox types remain readable; Team never delivers their pending records.
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/experimental/agent-team/README.md) defines task operations, notification failures, and limits.
+The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/experimental/agent-team/README.md) defines task operations, wait signals, and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -146,7 +146,6 @@ Agent Teams service backed by the exact live Lead Session log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
  * @returns the revision-one task view.
- * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
 
@@ -170,7 +169,6 @@ listTasks(caller: Agent): TeamTaskView[]
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
  * @returns the committed next task revision.
- * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
 ```

@@ -56,7 +56,7 @@ kind: "package-reference"
 
 ### 成功与失败的表现
 
-任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。提交后通知失败会报告已提交任务和失败接收者；恢复前读取任务，不要盲目重复创建调用。
+任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。
 
 -----
 
@@ -126,7 +126,7 @@ A shared task board is available to every agent in your subagent tree. Task owne
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes notify other live agents through their inbox. Consecutive updates may share one pending notice. After a task-board notice, read the latest tasks before acting. wait_agent receives these notices through the same inbox as other messages. A notice does not start an idle agent; use send_message when it needs to continue working.
+Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.
 ```
 
 #### Token 影响

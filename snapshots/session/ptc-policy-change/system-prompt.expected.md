@@ -212,7 +212,7 @@ interface ToolArgsMap {
     /** Required only with action blocked: the concrete condition that persisted across rounds and blocks progress. */
     blocked_reason?: string;
   } & Record<string, JsonValue>;
-  /** Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents. */
+  /** Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. In Team mode, a task-board change during the wait also ends it; read the latest tasks afterward. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents. */
   wait_agent: {
     /** Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000. */
     timeout_ms?: number;

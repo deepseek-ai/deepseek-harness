@@ -53,7 +53,7 @@ Sends a message to another Team member by `agent_id`. The caller must be the liv
 <a id="wait_agent"></a>
 ### wait_agent
 
-Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, user steering, and task-board notices, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
+Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. An Agent-scoped in-memory wait signal also ends an active wait; signals are not retained for future waits. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
@@ -71,7 +71,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox before checking pending next-step input, and removes its listeners and timer on every settlement.
+Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 
@@ -136,7 +136,7 @@ Policy text stays identical across members. Identity is appended through runtime
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or a wait signal, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
 
 #### Token effect
 

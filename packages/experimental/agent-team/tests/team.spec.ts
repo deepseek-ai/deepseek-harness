@@ -618,41 +618,42 @@ describe('Team shared task DAG', () => {
   })
 })
 
-describe('Task-board inbox notices', () => {
-  it('coalesces changes for other live tree members without waking idle agents', async () => {
+describe('Task-board wait notifications', () => {
+  it('notifies the root and every resident descendant without writing inboxes or starting idle agents', async () => {
     const { ctx, lead, adapter } = await setup([])
-    const alpha = await resident(ctx, lead, 'notice-alpha')
-    const beta = await resident(ctx, lead, 'notice-beta')
+    const alpha = await resident(ctx, lead, 'notify-alpha')
+    const beta = (await ctx.agents.create({
+      sessionId: SessionId('notify-beta'), parentAgent: lead, meta: { parentSession: alpha.id },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })).agent
     const unrelated = await ctx.agentLoop.create(SessionId('unrelated'), { provider: 'mock', model: 'mock' })
+    const notified: Agent[] = []
+    const rootNotifications: Agent[] = []
+    const betaNotifications: Agent[] = []
+    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
+    lead.ctx.on('agent/wait-notified', ({ agent }) => { rootNotifications.push(agent) })
+    beta.ctx.on('agent/wait-notified', ({ agent }) => { betaNotifications.push(agent) })
     const first = await ctx.agentTeams.createTask(lead, { subject: 'one', description: 'first change' })
-    expect(lead.inbox.nextStep).toHaveLength(0)
-    expect(alpha.inbox.nextStep).toHaveLength(1)
-    const noticeId = alpha.inbox.nextStep[0]!.id
-    const claimed = await ctx.agentTeams.updateTask(lead, {
+    await ctx.agentTeams.updateTask(beta, {
       taskId: first.id, expectedRevision: first.revision, action: 'claim',
     })
-    expect(alpha.inbox.nextStep).toHaveLength(1)
-    expect(alpha.inbox.nextStep[0]).toMatchObject({
-      id: noticeId,
-      source: { kind: 'team-task-change', rootSessionId: lead.id, form: 'notice' },
-    })
-    expect(JSON.stringify(alpha.inbox.nextStep[0]!.content)).toContain(`revision ${claimed.revision}`)
-    expect(beta.inbox.nextStep).toHaveLength(1)
-    expect(unrelated.inbox.nextStep).toHaveLength(0)
-    expect([alpha.status, beta.status, lead.status]).toEqual(['idle', 'idle', 'idle'])
+    expect(notified).toEqual([lead, alpha, beta, lead, alpha, beta])
+    expect(rootNotifications).toEqual([lead, lead])
+    expect(betaNotifications).toEqual([beta, beta])
+    for (const agent of [lead, alpha, beta, unrelated]) {
+      expect(agent.inbox.nextStep).toHaveLength(0)
+      expect(agent.inbox.nextTurn).toHaveLength(0)
+      expect(agent.status).toBe('idle')
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(0)
+    }
     expect(adapter.requests).toHaveLength(0)
-    expect(alpha.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(2)
-
-    alpha.inbox.clear()
-    await ctx.agentTeams.createTask(beta, { subject: 'two', description: 'notify root too' })
-    expect(alpha.inbox.nextStep).toHaveLength(1)
-    expect(alpha.inbox.nextStep[0]!.id).not.toBe(noticeId)
-    expect(lead.inbox.nextStep).toHaveLength(1)
   })
 
-  it('publishes notices only after persistence succeeds', async () => {
+  it('publishes notifications only after persistence succeeds', async () => {
     const { ctx, lead } = await setup([])
     const child = await resident(ctx, lead, 'flush-recipient')
+    const notified: Agent[] = []
+    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -664,76 +665,41 @@ describe('Task-board inbox notices', () => {
     const creating = ctx.agentTeams.createTask(lead, { subject: 'one', description: 'wait for flush' })
     try {
       await entered.promise
-      expect(child.inbox.nextStep).toHaveLength(0)
+      expect(notified).toEqual([])
     } finally {
       release.resolve(undefined)
       await creating
     }
-    expect(child.inbox.nextStep).toHaveLength(1)
-    child.inbox.clear()
+    expect(notified).toEqual([lead, child])
+    notified.length = 0
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(ctx.agentTeams.createTask(lead, { subject: 'two', description: 'failed flush' })).rejects.toThrow('storage unavailable')
-    expect(child.inbox.nextStep).toHaveLength(0)
+    expect(notified).toEqual([])
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
-    expect(child.inbox.nextStep).toHaveLength(0)
+    expect(notified).toEqual([])
   })
 
-  it('retains the durable committed revision when replacing one recipient’s notice fails', async () => {
+  it('contains listener failures and continues notifying the same agent and later recipients', async () => {
     const { ctx, lead } = await setup([])
-    const failed = await resident(ctx, lead, 'replace-failed')
-    const healthy = await resident(ctx, lead, 'replace-healthy')
-    const task = await ctx.agentTeams.createTask(lead, { subject: 'durable', description: 'claim stays committed' })
-    const failedNotice = failed.inbox.nextStep[0]!
-    const healthyNotice = healthy.inbox.nextStep[0]!
-    const replace = vi.spyOn(failed.inbox, 'replace').mockImplementationOnce(() => { throw new Error('replace unavailable') })
-    await expect(ctx.agentTeams.updateTask(lead, {
-      taskId: task.id, expectedRevision: task.revision, action: 'claim',
-    })).rejects.toMatchObject({
-      code: 'TEAM_TASK_NOTIFICATION_FAILED',
-      committedTask: { id: task.id, revision: 2, status: 'in_progress', ownerId: lead.id },
-      failedRecipients: [failed.id],
-    })
-    expect(failed.inbox.nextStep).toEqual([failedNotice])
-    expect(healthy.inbox.nextStep).toHaveLength(1)
-    expect(healthy.inbox.nextStep[0]).toMatchObject({
-      id: healthyNotice.id, source: { summary: `Shared task board updated: ${task.id} revision 2.` },
-    })
-    const stored = await ctx.sessionPersistence.open(lead.id, 'read')
-    try {
-      const events = (await stored.read()).events.filter(event => event.type === 'team/task')
-      expect(events).toHaveLength(2)
-      expect(events[1]!.data).toMatchObject({ task: { id: task.id, revision: 2, status: 'in_progress', ownerId: lead.id } })
-    } finally {
-      await stored.close()
-    }
-    replace.mockRestore()
-    const released = await ctx.agentTeams.updateTask(lead, {
-      taskId: task.id, expectedRevision: 2, action: 'release',
-    })
-    expect(released).toMatchObject({ revision: 3, status: 'pending' })
-    expect(ctx.agentTeams.listTasks(lead)).toHaveLength(1)
-    expect(failed.inbox.nextStep[0]).toMatchObject({
-      id: failedNotice.id, source: { summary: `Shared task board updated: ${task.id} revision 3.` },
-    })
-  })
-
-  it('reports committed task identity and continues notifying other recipients after delivery failure', async () => {
-    const { ctx, lead } = await setup([])
-    const failed = await resident(ctx, lead, 'failed-recipient')
-    const healthy = await resident(ctx, lead, 'healthy-recipient')
-    vi.spyOn(failed, 'inject').mockImplementation(() => { throw new Error('inbox unavailable') })
-    await expect(ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'delivery failure' })).rejects.toMatchObject({
-      code: 'TEAM_TASK_NOTIFICATION_FAILED',
-      committedTask: { id: 'task-1', revision: 1 },
-      failedRecipients: [failed.id],
-    })
-    expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-1')).subject).toBe('committed')
-    expect(healthy.inbox.nextStep).toHaveLength(1)
-    expect(failed.inbox.nextStep).toHaveLength(0)
-    vi.restoreAllMocks()
-    const next = await ctx.agentTeams.createTask(lead, { subject: 'next', description: 'queue remains usable' })
-    expect(next.id).toBe('task-2')
+    const child = await resident(ctx, lead, 'healthy-recipient')
+    const warnings: string[] = []
+    ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
+    lead.ctx.on('agent/wait-notified', () => { throw new Error('sync listener') })
+    lead.ctx.on('agent/wait-notified', () => Promise.reject(new Error('async listener')) as never)
+    const notified: Agent[] = []
+    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'listener failure' })
+    expect(task).toMatchObject({ id: 'task-1', revision: 1 })
+    expect(notified).toEqual([lead, child])
+    expect(warnings).toEqual([
+      'agent event "agent/wait-notified" listener threw: Error: sync listener',
+      'agent event "agent/wait-notified" listener rejected: Error: async listener',
+    ])
+    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
+    const events = (await stored.read()).events.filter(event => event.type === 'team/task')
+    expect(events).toHaveLength(1)
+    expect(events[0]!.data).toMatchObject({ task: { id: task.id, revision: 1, subject: 'committed' } })
   })
 })

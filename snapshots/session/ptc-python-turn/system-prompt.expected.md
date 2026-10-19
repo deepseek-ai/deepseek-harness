@@ -566,7 +566,7 @@ class Tools(Protocol):
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents."""
+        """Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. In Team mode, a task-board change during the wait also ends it; read the latest tasks afterward. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

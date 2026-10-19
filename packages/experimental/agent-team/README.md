@@ -1,5 +1,5 @@
 ---
-description: "Coordinate subagents through a durable shared task board and inbox notices in experimental Team compositions."
+description: "Coordinate subagents through a durable shared task board and in-memory wait signals in experimental Team compositions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team` adds a durable shared task board to an existing subagent tree. Members use standard subagent tools to discover and contact one another. Team adds compare-and-set task ownership and notifies other live members after each committed task change. Mount `dsh-experimental-tool-agent-team` for task tools. The package is experimental, and members share one checkout.
+`dsh-experimental-agent-team` adds a durable shared task board to an existing subagent tree. Members use standard subagent tools to discover and contact one another. Team adds compare-and-set task ownership and signals all resident Agents in the tree after each task commit is flushed. Mount `dsh-experimental-tool-agent-team` for task tools. The package is experimental, and members share one checkout.
 
 ## Table of Contents
 
@@ -59,7 +59,7 @@ Every root agent and its descendants form one Team. Task assignment accepts the 
 
 ### Messages between teammates
 
-Members use standard `list_agents` to discover the tree and `send_message` to contact another member by Session id. The subagent runtime owns routing, sender attribution, and cold restoration. Task-board notices use only live local inboxes and never restore a cold member.
+Members use standard `list_agents` to discover the tree and `send_message` to contact another member by Session id. The subagent runtime owns routing, sender attribution, and cold restoration. Task-board signals address all resident Agents in the same tree and never restore a cold member.
 
 ### Shared task board
 
@@ -71,13 +71,13 @@ File hints produce warnings when two in-progress tasks plan to touch overlapping
 
 ### Waiting and interruption
 
-The standard `wait_agent` tool waits for input in the exact caller’s next-step inbox, including task-board notices. It is available without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Task changes send non-waking notices after commit; recipients re-read the board before acting.
+The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Team mode also ends an active wait when a task-board commit finishes flushing. Re-read the board after waiting. A change outside an active wait is not retained and cannot make a later wait return immediately.
 
 An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
 ### What success and failure look like
 
-Success returns the committed task revision. Unknown owners, unready tasks, stale revisions, unauthorized mutations, and exhausted task limits report typed errors. `TEAM_TASK_NOTIFICATION_FAILED` means the task already committed: `committedTask` identifies its revision and `failedRecipients` identifies failed notice deliveries. Re-read the task before recovery; do not blindly retry task creation.
+Success returns the committed task revision. Unknown owners, unready tasks, stale revisions, unauthorized mutations, and exhausted task limits report typed errors.
 
 -----
 
@@ -98,14 +98,13 @@ The service is built on four commitments:
 - **Explicit authority.** Every service method takes the exact live calling `Agent`; a task owner or the Lead mutates a task, and only the Lead reassigns one.
 - **Bounds that fail loud.** `maxTasks` is a validated deployment value, and exhaustion reports a typed error instead of reusing an id.
 
-The [task-board and inbox decision](../../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns task notifications and the separation from ordinary subagent controls.
+The [task-board wait decision](../../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns task-board wait signals and the separation from ordinary subagent controls.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, configuration validation, and task service registration |
-| [`src/task-notifications.ts`](src/task-notifications.ts) | Coalesced non-waking inbox notices after task commit |
 | [`src/task-board.ts`](src/task-board.ts) | Task CAS commands, DAG validation, and derived views |
 | [`src/journal.ts`](src/journal.ts) | Serialized Lead-log transactions and commit notification |
 | [`src/projection.ts`](src/projection.ts) | Strict replay of historical roster, tasks, and mailbox records, publishing the `agentTeam` client view |
@@ -121,19 +120,19 @@ Reassignment resolves the root or a continuable descendant through the same disc
 
 ### Messages and historical mailbox
 
-Peer messaging, Steer delivery, cold resume, and sender framing belong to the subagent runtime. Team sends only task-board notices. Historical `team/message/queued` and `team/message/delivered` records and `team-message` sources remain decodable but are never delivered or acknowledged.
+Peer messaging, Steer delivery, cold resume, and sender framing belong to the subagent runtime. Task-board changes use in-memory wait signals. Historical `team/message/queued` and `team/message/delivered` records and `team-message` sources remain decodable but are never delivered or acknowledged.
 
 ### Shared task board
 
 Tasks are complete versioned snapshots. Mutations require `expectedRevision`; stale updates report `TEAM_TASK_STALE_REVISION`. Numeric `task-<n>` ids stay within the safe-integer range. Deleted tasks remain replay tombstones but do not consume `maxTasks` or appear in `listTasks()`. Normalized workspace-relative `writeScopes` warn about overlapping in-progress work without blocking claims or authorizing writes.
 
-### Task-board notices
+### Task-board wait signals
 
-After a successful append and flush, Team injects a `team-task-change` notice into every other live local Agent in the tree. It replaces an existing pending notice for the same board while retaining its inbox id. Notices neither start idle turns nor restore cold members. A post-commit delivery failure reports the committed task and all failed recipients; the task stays committed.
+After a successful append and flush, Team emits an Agent-scoped in-memory signal for all resident Agents in the same tree, including the caller and root. The signal ends only an active wait. It adds no inbox entry or unread state, never starts an idle turn, and never restores a cold member. Changes between waits are not replayed to the next wait.
 
 ### Durability model
 
-Task mutations append `team/task` to the exact live root Session and flush before notices are admitted. Task records remain log-only. Accepted notices use ordinary Agent inbox persistence, so their model-visible content is reconstructable from the recipient’s Session. No committed task or historical payload generation is rewritten.
+Task mutations append `team/task` to the exact live root Session and flush before emitting wait signals. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
 
 Mailbox projection and checkpoint admission preserve decoded JSON fields outside locally declared validators, including an own `__proto__` key. Historical payload generations remain unchanged; projection caches rebuild from the Session log when their cache version changes.
 
@@ -172,15 +171,15 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results and receives compact task-board notices through its inbox. Views identify owners by `ownerId`. Errors include the current revision for stale updates and the committed task for post-commit delivery failures.
+The model reads task views through task-tool results. Views identify owners by `ownerId`; stale updates report the current revision. A task-board signal ends an active `wait_agent` call without supplying task contents. The model re-reads current tasks before acting.
 
 #### Token effect
 
-Each task result adds a compact task view. Notices coalesce while pending, limiting repeated notification text; recipients query current task state rather than relying on the notice as a board snapshot.
+Each task result adds a compact task view. Wait signals add no message text.
 
 #### KV Cache effect
 
-Task records stay outside model history. Accepted inbox notices and task results append after the reusable request prefix.
+Task records stay outside model history. Task and wait results append after the reusable request prefix.
 
 ## Known Limitations and Deferred Work
 

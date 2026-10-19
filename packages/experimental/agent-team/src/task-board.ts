@@ -67,7 +67,7 @@ export class TeamTaskBoard {
       }
       this.assertTaskGraph(state, task)
       this.ctx.subagents.rootOf(caller)
-      await this.journal.appendAndFlush(caller, root, task)
+      await this.journal.appendAndFlush(root, task)
       return projectTaskView(state, task)
     })
   }
@@ -206,7 +206,7 @@ export class TeamTaskBoard {
       }
       this.assertTaskGraph(state, task)
       this.ctx.subagents.rootOf(caller)
-      await this.journal.appendAndFlush(caller, root, task)
+      await this.journal.appendAndFlush(root, task)
       return projectTaskView(state, task)
     })
   }

@@ -1,4 +1,4 @@
-/** Inbox waiting owned by the subagent control plugin. */
+/** Input waiting owned by the subagent control plugin. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -14,7 +14,7 @@ class AgentWaitError extends HarnessError {
 }
 
 /** Wait without consuming input; every settlement removes its live resources. */
-function waitForInbox(
+function waitForInput(
   ctx: Context,
   agent: Agent,
   timeoutMs: number,
@@ -29,6 +29,7 @@ function waitForInbox(
     const finish = (settle: () => void): void => {
       clearTimeout(timer)
       offInbox()
+      offNotified()
       offDisposed()
       signal.removeEventListener('abort', onAbort)
       lifetime.removeEventListener('abort', onUnload)
@@ -44,6 +45,9 @@ function waitForInbox(
     const timer = setTimeout(() => { finish(() => { resolve({ timedOut: true }) }) }, timeoutMs)
     const offInbox = ctx.on('agent/inbox/inserted', ({ agent: recipient }) => {
       if (recipient === agent) onInput()
+    })
+    const offNotified = ctx.on('agent/wait-notified', ({ agent: recipient }) => {
+      if (recipient === agent) finish(() => { resolve({ timedOut: false }) })
     })
     const offDisposed = ctx.on('agent/disposed', ({ agent: disposed }) => {
       if (disposed === agent) {
@@ -71,7 +75,7 @@ export function registerWaitAgent(ctx: Context): void {
   }, 'subagent-control.waits()')
   ctx.tools.register(defineTool({
     name: 'wait_agent',
-    description: 'Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents.',
+    description: 'Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. In Team mode, a task-board change during the wait also ends it; read the latest tasks afterward. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents.',
     parameters: {
       timeout_ms: {
         type: 'integer',
@@ -94,7 +98,7 @@ export function registerWaitAgent(ctx: Context): void {
       if (exec.agent === undefined) {
         throw new AgentWaitError('wait_agent requires a calling agent', 'WAIT_UNAVAILABLE')
       }
-      return await waitForInbox(ctx, exec.agent, timeoutMs, exec.signal, lifetime.signal)
+      return await waitForInput(ctx, exec.agent, timeoutMs, exec.signal, lifetime.signal)
     },
   }))
 }

@@ -2,7 +2,7 @@
 
 [English](agent-team.md) | 中文
 
-实验性任务板、模型工具和 host 适配器共享的类型。[任务板与收件箱决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的持久化和客户端可见形式。
+实验性任务板、模型工具和 host 适配器共享的类型。[任务板等待决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的持久化和客户端可见形式。
 
 ## 身份与历史名册
 
@@ -25,7 +25,7 @@ interface TeamMemberSnapshot {
 
 ## 消息与历史 mailbox
 
-成员交换普通 [subagent 消息](subagent.zh.md)，保留真实发送方 Session id。任务提交另外向其他本地在线成员的下一步收件箱加入合并的 `team-task-change` 通知。通知既不恢复冷成员，也不启动空闲轮次。下列历史邮箱类型保持可读；Team 绝不投递其待处理记录。
+成员交换普通 [subagent 消息](subagent.zh.md)，保留真实发送方 Session id。任务提交刷盘后，向同树所有驻留 Agent（包括调用者和根）的当前等待发出信号。这些内存信号不持久化未读状态，不恢复冷成员，也不启动空闲轮次。不在等待期间发生的变更不能唤醒后续等待。下列历史邮箱类型保持可读；Team 绝不投递其待处理记录。
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/experimental/agent-team/README.zh.md)定义任务操作、通知失败和限制。
+`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/experimental/agent-team/README.zh.md)定义任务操作、等待信号和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -146,7 +146,6 @@ Agent Teams service backed by the exact live Lead Session log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
  * @returns the revision-one task view.
- * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
 
@@ -170,7 +169,6 @@ listTasks(caller: Agent): TeamTaskView[]
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
  * @returns the committed next task revision.
- * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
 ```

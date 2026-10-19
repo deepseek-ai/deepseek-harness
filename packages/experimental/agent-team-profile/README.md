@@ -73,7 +73,7 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 ## Further Exploration
 
 - [Experimental packages](../README.md) — incubation status and publication policy.
-- [Agent Teams service](../agent-team/README.md) — durable shared tasks and inbox notices.
+- [Agent Teams service](../agent-team/README.md) — durable shared tasks and in-memory wait signals.
 - [Agent Teams tools](../tool-agent-team/README.md) — task tools and shared-board policy.
 - [Agent Teams browser UI](../client-ui-agent-team/README.md) — the shared task panel.
 - [Base bundle](../../bundle/base/README.md) — the profile layer this patch extends.

@@ -2232,7 +2232,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `wait_agent`
 
-Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents.
+Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. In Team mode, a task-board change during the wait also ends it; read the latest tasks afterward. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents.
 
 ```json
 {

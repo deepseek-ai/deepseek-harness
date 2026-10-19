@@ -1195,6 +1195,15 @@ describe('headless stream-json snapshots', () => {
           return [text('subagent:identity')]
         }).sort()
         const allRows = logs.flatMap(log => parseJsonl(log.content))
+        const messageSources = allRows.flatMap((row) => {
+          const data = row.data as JsonObject
+          if (row.type === 'user/message') return [(data.source as JsonObject).kind]
+          if (row.type === 'agent/inbox/spliced') {
+            return (data.inserted as JsonObject[]).map(message => (message.source as JsonObject).kind)
+          }
+          return []
+        })
+        expect(messageSources).not.toContain('team-task-change')
         const waitIds = new Set(allRows.filter(row => row.type === 'tool/call'
           && (row.data as JsonObject).name === 'wait_agent').map(row => (row.data as JsonObject).callId))
         const waitResults = allRows.filter((row) => {
@@ -1212,8 +1221,7 @@ describe('headless stream-json snapshots', () => {
         }
         projection = {
           sessions: logs.length,
-          taskNoticeEntered: rows.some(row => row.type === 'user/message'
-            && ((row.data as JsonObject).source as JsonObject).kind === 'team-task-change'),
+          taskNoticeEntered: messageSources.includes('team-task-change'),
           workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
           identities,
           teammates: [...teammates].sort(),
@@ -1258,7 +1266,7 @@ describe('headless stream-json snapshots', () => {
           "messageEntered": true,
           "nextStepInbox": true,
         },
-        "taskNoticeEntered": true,
+        "taskNoticeEntered": false,
         "tasks": [
           {
             "revision": 3,

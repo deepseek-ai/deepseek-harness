@@ -73,7 +73,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ## 进一步探索
 
 - [实验性包](../README.zh.md)——孵化状态与发布规则。
-- [Agent Teams 服务](../agent-team/README.zh.md) — 持久化共享任务和收件箱通知。
+- [Agent Teams 服务](../agent-team/README.zh.md) — 持久化共享任务和内存等待信号。
 - [Agent Teams 工具](../tool-agent-team/README.zh.md) — 任务工具和共享任务板策略。
 - [Agent Teams 浏览器 UI](../client-ui-agent-team/README.zh.md) — 共享任务面板。
 - [Base bundle](../../bundle/base/README.zh.md)——本 patch 扩展的 profile 层。

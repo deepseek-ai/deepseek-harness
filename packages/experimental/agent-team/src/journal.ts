@@ -18,7 +18,7 @@ export class TeamJournal {
    */
   constructor(
     private readonly ctx: Context,
-    private readonly onCommit: (caller: Agent, root: Agent, task: TeamTaskSnapshot) => void,
+    private readonly onCommit: (root: Agent) => void,
   ) {}
 
   /**
@@ -52,15 +52,14 @@ export class TeamJournal {
   }
 
   /**
-   * Commit a task before publishing its inbox notifications.
-   * @param caller - Agent that requested the mutation.
+   * Commit a task before notifying current waits in its tree.
    * @param root - live tree root whose Session stores the task.
    * @param task - complete committed task revision.
-   * @throws when persistence fails, or when a committed task's notifications fail.
+   * @throws when persistence fails.
    */
-  async appendAndFlush(caller: Agent, root: Agent, task: TeamTaskSnapshot): Promise<void> {
+  async appendAndFlush(root: Agent, task: TeamTaskSnapshot): Promise<void> {
     root.session.append('team/task', { version: 2, teamId: TeamId(root.id), task })
     await this.ctx.sessions.flush(root.session)
-    this.onCommit(caller, root, task)
+    this.onCommit(root)
   }
 }

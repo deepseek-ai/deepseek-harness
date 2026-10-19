@@ -327,7 +327,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create one unowned pending task in the Team Lead log.',
         parameters: [{ name: 'caller', description: 'exact live Team member creating the task.' }, { name: 'request', description: 'task text, blockers, and advisory write scopes.' }],
         returns: 'the revision-one task view.',
-        throws: ['TeamTaskNotificationError if the task committed but some inbox notifications failed.'],
       },
       {
         signature: 'getTask(caller: Agent, id: TeamTaskId): TeamTaskView',
@@ -346,7 +345,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Compare-and-set one authorized task transition.',
         parameters: [{ name: 'caller', description: 'exact live Team member authorizing the mutation.' }, { name: 'request', description: 'task identity, expected revision, action, and action fields.' }],
         returns: 'the committed next task revision.',
-        throws: ['TeamTaskNotificationError if the task committed but some inbox notifications failed.'],
       },
     ],
   },
@@ -4116,6 +4114,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'The turn is about to close: the model owes no response (no live tool calls, no fresh steering).',
     description: 'The turn is about to close: the model owes no response (no live tool calls, no fresh steering). Awaited before the boundary commits — a listener that objects steers (`agent.steer(...)`) and the machine re-reads its inbox: fresh steering runs another step, none closes the turn. Data decides, so listener order cannot change the outcome. The inverse control (stop a tool loop early) is data too: a tool result carrying `concludesTurn` ends the turn at its step. The conclusion never short-circuits already-submitted next-step work: same-step `additionalContexts` or racing steering still runs, and the turn closes only when that inbox drains.',
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
+  },
+  {
+    name: 'agent/wait-notified',
+    mode: 'emit',
+    signature: '\'agent/wait-notified\'(this: Scoped<Agent>, payload: { agent: Agent }): void',
+    summary: 'End current input waits without adding inbox content or starting the agent.',
+    description: 'End current input waits without adding inbox content or starting the agent. This process-local signal is not retained for later waits.',
+    parameters: [{ name: 'payload', description: '.agent - the exact agent whose current waits should end. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
     name: 'api-session/activity',
