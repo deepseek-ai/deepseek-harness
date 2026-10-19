@@ -593,7 +593,7 @@
     },
     {
       "name": "wait_agent",
-      "description": "Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending.",
+      "description": "Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.",
       "parameters": {
         "type": "object",
         "properties": {

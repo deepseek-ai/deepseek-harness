@@ -2232,7 +2232,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `wait_agent`
 
-Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending.
+Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.
 
 ```json
 {

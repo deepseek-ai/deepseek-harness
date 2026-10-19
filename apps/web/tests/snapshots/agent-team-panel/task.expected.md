@@ -4,4 +4,4 @@
     - strong: Agent task
     - text: In progress
     - paragraph: Created by the root agent
-    - text: "task-1Owner: Open the task board.Write scopes: src/web"
+    - text: "task-1Owner: LeadWrite scopes: src/web"

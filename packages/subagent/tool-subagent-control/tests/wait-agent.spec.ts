@@ -121,11 +121,12 @@ describe('wait_agent', () => {
     async (settlement) => {
       const { ctx, agent, handle, fiber } = await setup()
       vi.useFakeTimers()
-      const listeners = () => ctx.events.dispatch('emit', [agentCarrier(agent), 'agent/wait-notified', { agent }]).length
+      const listeners = () => ['agent/inbox/inserted', 'agent/wait-notified', 'agent/disposed'].map(name =>
+        ctx.events.dispatch('emit', [agentCarrier(agent), name, { agent }]).length)
       const baseline = listeners()
       const controller = new AbortController()
       const { result } = await startWait(ctx, agent, { timeout_ms: 10_000 }, controller.signal)
-      expect(listeners()).toBe(baseline + 1)
+      expect(listeners()).toEqual(baseline.map(count => count + 1))
       switch (settlement) {
         case 'input': agent.inject(input()); break
         case 'notification': emitAgentEvent(ctx, agent, 'agent/wait-notified', {}); break
@@ -135,7 +136,7 @@ describe('wait_agent', () => {
         case 'unload': await fiber.dispose(); break
       }
       await result
-      expect(listeners()).toBe(baseline)
+      expect(listeners()).toEqual(baseline)
       expect(vi.getTimerCount()).toBe(0)
     },
   )
@@ -150,6 +151,23 @@ describe('wait_agent', () => {
     const { result } = await startWait(ctx, agent)
     expect(await result).toMatchObject({ isError: false, value: { timedOut: false } })
     expect(agent.inbox.nextStep.map(item => item.id)).toEqual([message.id])
+  })
+
+  it('leaves no timer when plugin disposal rejects listener registration', async () => {
+    const { ctx, agent, fiber } = await setup()
+    vi.useFakeTimers()
+    const definition = ctx.tools.get('wait_agent')!
+    const execute = definition.execute.bind(definition)
+    let disposal = Promise.resolve()
+    vi.spyOn(definition, 'execute').mockImplementation((args, exec) => {
+      // Disposal invalidates the context before its deferred cleanup aborts waits.
+      disposal = Promise.resolve(fiber.dispose())
+      return execute(args, exec)
+    })
+    const { result } = await startWait(ctx, agent)
+    expect(await result).toMatchObject({ isError: true, error: { message: 'cannot create effect on inactive context' } })
+    await disposal
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it.each([

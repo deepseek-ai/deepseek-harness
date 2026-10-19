@@ -641,7 +641,9 @@ def test_subtree_keeps_descendant_completion_after_creator_finishes() -> None:
         ]:
             client._handle_message({"jsonrpc": "2.0", "method": method,
                                    "params": {"parentSessionId": parent, "childSessionId": child}})
-            assert subtree.next().payload == {"parentSessionId": parent, "childSessionId": child}
+            received: list[Notification] = []
+            subtree.drain(received.append)
+            assert [item.payload for item in received] == [{"parentSessionId": parent, "childSessionId": child}]
 
 
 def test_session_subscription_preserves_reused_child_ancestry_after_late_finish() -> None:

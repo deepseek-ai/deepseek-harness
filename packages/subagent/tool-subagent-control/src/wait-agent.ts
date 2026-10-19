@@ -42,7 +42,6 @@ function waitForInput(
     const onAbort = (): void => { finish(() => { reject(signal.reason) }) }
     // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- This plugin aborts its lifetime only with AgentWaitError.
     const onUnload = (): void => { finish(() => { reject(lifetime.reason) }) }
-    const timer = setTimeout(() => { finish(() => { resolve({ timedOut: true }) }) }, timeoutMs)
     const offInbox = ctx.on('agent/inbox/inserted', ({ agent: recipient }) => {
       if (recipient === agent) onInput()
     })
@@ -58,6 +57,7 @@ function waitForInput(
     })
     signal.addEventListener('abort', onAbort, { once: true })
     lifetime.addEventListener('abort', onUnload, { once: true })
+    const timer = setTimeout(() => { finish(() => { resolve({ timedOut: true }) }) }, timeoutMs)
     // Subscribe before reading pending input so an arrival cannot fall between them.
     if (signal.aborted) onAbort()
     else onInput()
@@ -75,7 +75,7 @@ export function registerWaitAgent(ctx: Context): void {
   }, 'subagent-control.waits()')
   ctx.tools.register(defineTool({
     name: 'wait_agent',
-    description: 'Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending.',
+    description: 'Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.',
     parameters: {
       timeout_ms: {
         type: 'integer',

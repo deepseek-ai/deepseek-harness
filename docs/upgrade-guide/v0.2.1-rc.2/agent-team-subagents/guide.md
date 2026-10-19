@@ -9,17 +9,17 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Agent Teams uses subagent tools and Session ids. Descriptions label responsibilities; only ids identify recipients.
+Descriptions label responsibilities; only Session ids identify recipients.
 
 - `spawn_teammate` and the Team-scoped `send_message`, `list_agents`, and `interrupt_agent` are removed. The standard control tools use `agent_id`, not `target`. Members of one root tree can message each other across branches by id; interruption remains ancestor-only.
-- `list_agents` takes no arguments and lists the entire tree. Remove scripted `scope` arguments. Rows use `kind: root` or `kind: child`; descendants include parent ids and root-relative depth. The root can assign tasks to itself or any discovered continuable descendant.
+- `list_agents` takes no arguments and lists the entire tree. Remove scripted `scope` arguments. Rows use `kind: root`, `kind: child`, or `kind: diagnostic`; descendants include parent ids and root-relative depth.
 - Team adds four task tools, task policy, and required identity. `wait_agent` moves to ordinary subagent controls and waits for the caller’s next-step inbox, including pending input. Status changes and unrelated inboxes do not wake it; `noProgress` is removed. Timeout bounds and default are unchanged.
 - `agent-team` rejects `maxMembers`, `maxMessageBytes`, and `disposalTimeoutMs`; `tool-agent-team` rejects `interrupt`, `freshProvider`, and `forkProvider`.
-- `ctx.agentTeams` removes creation, messaging, interruption, roster, membership, and wait APIs. `TeamMembership` and `TeamMembers` are removed; use subagent root resolution and discovery. Task ownership uses `ownerId`, including the root’s Session id.
+- `ctx.agentTeams` removes creation, messaging, interruption, roster, membership, and wait APIs. `TeamMembership`, `TeamMemberView`, spawn/send request/result types, and `TeamWaitResult` are removed. Task ownership uses `ownerId`, including the root’s Session id.
 - Runtime instances share root ownership without changing creation ancestry. Member settlement does not dispose descendants. Messages restore only their target. Hosts close the tree when its root closes; members obtain required results explicitly.
 - Cold resume uses saved presets and permissions, not the creator’s current generation. Missing presets fail restoration; historical targets without one use host composition plus descriptor overrides. Lifecycle dispatch uses the root scope while retaining the direct creator in `parentSessionId`. Browser continuation requires the root online; failure uses `subagent/delivery-unavailable`.
 - Historical Team roster and mailbox records remain readable. Historical names do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
-- The Web Team panel shows tasks only; ordinary subagent navigation owns member browsing. Historical `agentTeam.members` remains decodable but grants no authority. After flush, task commits end all resident Agents’ active waits in the tree. Signals retain no unread state and start no agents; changes outside a wait cannot wake later waits.
+- The Web Team panel shows tasks only; ordinary subagent navigation owns member browsing. The wire `agentTeam.members` field and `TeamMemberProjection` are removed; persisted roster state still decodes. After flush, task commits end all resident Agents’ active waits in the tree. Signals retain no unread state and start no agents; changes outside a wait cannot wake later waits.
 
 ## Migration
 
@@ -27,4 +27,5 @@ Agent Teams uses subagent tools and Session ids. Descriptions label responsibili
 2. Replace `spawn_teammate({ name, description, prompt, context })` with `subagent({ description, prompt })`, or `subagent_fork` for inherited conversation history. Save the returned agent id.
 3. Use `send_message({ agent_id, message })` and `interrupt_agent({ agent_id })`. Discover all Team member ids with `list_agents`.
 4. Pass member Session ids to task `owner` fields and read `ownerId` in results. Use the Lead's Session id instead of the alias `lead`.
-5. Replace removed service calls with `ctx.subagents` operations. Verify member navigation, assignment to a nested descendant, and task-board wakeups during an active wait. Re-read tasks after waiting.
+5. Replace `spawnTeammate`, `sendMessage`, and `interrupt` with `ctx.subagents.startActivation`, `sendMessage`, and `interrupt`. Replace `membership`/`tryMembership` with `rootOf`, and `listMembers` with `listDescendants`. Replace `waitForChange` with `wait_agent`, then re-read tasks.
+6. SDK `session/resume` rejects subagent sessions. Resume the root Session instead. Verify navigation, nested task assignment, and active-wait wakeups.

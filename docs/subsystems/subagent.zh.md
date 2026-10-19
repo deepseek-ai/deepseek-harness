@@ -173,7 +173,7 @@ interface ContinuableCreateSpec {
 
 ## 消息与中断
 
-sendMessage 要求确切在线发送方和目标 Session id。每个发送方可联系直接可继续子级；驻留的可继续子级还可联系直接父级和可继续同级。同级投递使用共同在线父级的权限，保留实际发送方 id。运行中目标接收 Steer；不在线的子级和同级冷恢复。外部执行拒绝后续输入。本地和外部执行通过父级结算通知报告最终文本、结构化输出、诊断和状态；caller 投递抑制通知。drainDescendants 和 drainChildren 等待所属资源释放。
+`sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 和 `drainChildren` 等待所属资源释放。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -206,7 +206,7 @@ interface SubagentSettledMessageSource {
 ```
 
 ```ts type-equiv
-/** Options for one model-authored message between adjacent Agents. */
+/** Options for one model-authored message within a subagent tree. */
 interface SubagentSendMessageOptions {
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal

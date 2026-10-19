@@ -78,8 +78,7 @@ export function apply(ctx: ClientContext): void {
     () => ctx.slots.register({
       name: 'conversation.session.header.actions',
       id: 'subagent-catalog',
-      // Between the preset label (-10) and background tasks (20), after Team
-      // navigation (-20).
+      // Between the preset label (-10) and background tasks (20).
       order: 10,
       locale: NS,
       inject: catalogActions,

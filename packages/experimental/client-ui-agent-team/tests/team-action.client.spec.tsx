@@ -39,7 +39,7 @@ const task: TeamTask = {
   ready: false,
   writeScopeWarnings: ['write scopes overlap with task-2'],
 }
-const team: TeamProjection = { members: [], tasks: [task] }
+const team: TeamProjection = { tasks: [task] }
 
 type Projections = SessionListState['projectionsBySession']
 
@@ -111,13 +111,11 @@ function setProjection(sessions: ReturnType<typeof bench>['sessions'], sessionId
 
 describe('TeamAction', () => {
   it('shows the task board without a roster or a subagent catalog', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeam: {
-      ...team,
-      members: [{ id: WORKER, role: 'teammate', phase: 'failed', description: 'historical member', error: 'old failure' }],
-    } } } } })
+    const b = bench({ byId: { [SESSION]: summary(SESSION, 'Open the task board.') } })
     render(<TeamAction {...b.props} />)
     openPanel()
     expect(screen.getByText(task.subject)).toBeTruthy()
+    expect(screen.getByText('负责人: 主代理')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '共享任务1' })).toBeTruthy()
     expect(screen.queryByText('historical member')).toBeNull()
     expect(screen.queryByText('old failure')).toBeNull()
@@ -125,7 +123,7 @@ describe('TeamAction', () => {
     expect(screen.queryByRole('button', { name: /打开成员会话/u })).toBeNull()
   })
 
-  it('updates owner labels from Session titles and direct-parent catalogs', () => {
+  it('prefers direct-parent catalog labels and falls back to Session titles', () => {
     const b = bench({
       byId: {
         [SESSION]: summary(SESSION),
@@ -143,13 +141,15 @@ describe('TeamAction', () => {
     })
     render(<TeamAction {...b.props} />)
     openPanel()
-    expect(screen.getByText('Owner: Nested implementer')).toBeTruthy()
+    expect(screen.getByText('负责人: Nested implementer')).toBeTruthy()
     act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...draft.byId[NESTED]!, title: 'Runtime work' } }) })
-    expect(screen.getByText('Owner: Runtime work')).toBeTruthy()
+    expect(screen.getByText('负责人: Nested implementer')).toBeTruthy()
+    act(() => { b.sessions.update((draft) => { draft.projectionsBySession = { [SESSION]: draft.projectionsBySession[SESSION]! } }) })
+    expect(screen.getByText('负责人: Runtime work')).toBeTruthy()
     act(() => { b.sessions.set({
       ...b.sessions.getSnapshot(), byId: { [SESSION]: summary(SESSION), [WORKER]: summary(WORKER) },
     }) })
-    expect(screen.getByText(`Owner: ${NESTED}`)).toBeTruthy()
+    expect(screen.getByText(`负责人: ${NESTED}`)).toBeTruthy()
   })
 
   it('uses a root catalog label when the owner has no Session summary', () => {
@@ -159,9 +159,9 @@ describe('TeamAction', () => {
     } } } })
     render(<TeamAction {...b.props} />)
     openPanel()
-    expect(screen.getByText('Owner: Current responsibility')).toBeTruthy()
+    expect(screen.getByText('负责人: Current responsibility')).toBeTruthy()
     setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: WORKER }] })
-    expect(screen.getByText(`Owner: ${WORKER}`)).toBeTruthy()
+    expect(screen.getByText(`负责人: ${WORKER}`)).toBeTruthy()
   })
 
   it('applies later projection frames without a refresh action', () => {
@@ -193,7 +193,7 @@ describe('TeamAction', () => {
     expect(screen.queryByRole('status')).toBeNull()
     setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: {} })
     expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
-    setProjection(b.sessions, SESSION, { members: [], tasks: [] })
+    setProjection(b.sessions, SESSION, { tasks: [] })
     expect(screen.getByText(zh.empty)).toBeTruthy()
   })
 
@@ -243,7 +243,7 @@ describe('TeamAction', () => {
         byId: { ...current.byId, ['unrelated' as SessionId]: summary('unrelated' as SessionId) },
         projectionsBySession: {
           ...current.projectionsBySession,
-          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { agentTeam: { members: [], tasks: [] } } },
+          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { agentTeam: { tasks: [] } } },
         },
       })
     })
@@ -276,8 +276,8 @@ describe('TeamAction', () => {
     openPanel()
     expect(screen.getByText(zh.ready)).toBeTruthy()
     expect(screen.getByText(zh.blocked)).toBeTruthy()
-    expect(screen.getAllByText('Owner: 未分配')).toHaveLength(2)
-    expect(screen.getByText(`Owner: ${WORKER}`)).toBeTruthy()
+    expect(screen.getAllByText('负责人: 未分配')).toHaveLength(2)
+    expect(screen.getByText(`负责人: ${WORKER}`)).toBeTruthy()
     const tasks = [...document.querySelectorAll('article')]
     expect(tasks.map(card => card.querySelector('[data-state]')?.getAttribute('data-state')))
       .toEqual(['idle', 'warning', 'done'])
