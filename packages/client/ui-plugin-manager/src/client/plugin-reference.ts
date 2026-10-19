@@ -51,20 +51,33 @@ function decodePluginReferenceUri(uri: string): string {
   return packageName
 }
 
-/** The bare package name owning a module specifier. */
+/**
+ * The bare package name owning a module specifier.
+ * @param moduleName - configured plugin module specifier.
+ * @returns the package name without a subpath.
+ */
 export function packageNameOfModule(moduleName: string): string {
   const scoped = moduleName.startsWith('@') ? moduleName.indexOf('/') : -1
   const slash = moduleName.indexOf('/', scoped + 1)
   return slash === -1 ? moduleName : moduleName.slice(0, slash)
 }
 
-/** Render one canonical Markdown mention. */
+/**
+ * Render one canonical Markdown mention.
+ * @param reference - package name and optional display label.
+ * @returns the canonical mention.
+ */
 export function formatPluginMention(reference: PluginReferenceInput): string {
   const label = escapeLabel(reference.label ?? reference.packageName)
   return `@[${label}](${PLUGIN_REFERENCE_SCHEME}${reference.packageName})`
 }
 
-/** Find the nearest canonical mention at or after `from`. */
+/**
+ * Find the nearest canonical mention at or after `from`.
+ * @param text - original sent text.
+ * @param from - inclusive UTF-16 start offset.
+ * @returns the matched mention and its range, or undefined when none follows.
+ */
 export function nextPluginMention(text: string, from = 0): PluginMentionMatch | undefined {
   const pattern = new RegExp(MENTION_SOURCE, 'gu')
   pattern.lastIndex = from
@@ -85,7 +98,11 @@ export function nextPluginMention(text: string, from = 0): PluginMentionMatch | 
   return undefined
 }
 
-/** The package named by a mention that occupies the whole string. */
+/**
+ * The package named by a mention that occupies the whole string.
+ * @param mention - one canonical mention.
+ * @returns the package name, or undefined when the string is not exactly one mention.
+ */
 export function packageNameOfPluginMention(mention: string): string | undefined {
   const match = nextPluginMention(mention)
   return match !== undefined && match.start === 0 && match.end === mention.length ? match.packageName : undefined

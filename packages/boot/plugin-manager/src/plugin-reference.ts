@@ -118,12 +118,20 @@ function unescapeLabel(label: string): string {
   return label.replace(/\\(.)/gu, '$1')
 }
 
-/** Whether a string is a bare npm package name. */
+/**
+ * Whether a string is a bare npm package name.
+ * @param value - candidate package name.
+ * @returns whether the value names one package without a subpath.
+ */
 export function isPluginPackageName(value: string): boolean {
   return PACKAGE_NAME.test(value)
 }
 
-/** Encode one package name as a canonical reference URI. */
+/**
+ * Encode one package name as a canonical reference URI.
+ * @param packageName - bare npm package name.
+ * @returns the canonical URI.
+ */
 export function encodePluginReferenceUri(packageName: string): string {
   if (!isPluginPackageName(packageName)) {
     throw new Error(`invalid plugin package name ${JSON.stringify(packageName)}`)
@@ -131,7 +139,11 @@ export function encodePluginReferenceUri(packageName: string): string {
   return `${PLUGIN_REFERENCE_SCHEME}${packageName}`
 }
 
-/** Decode one canonical reference URI. */
+/**
+ * Decode one canonical reference URI.
+ * @param uri - canonical plugin reference URI.
+ * @returns the package name.
+ */
 export function decodePluginReferenceUri(uri: string): string {
   if (!uri.startsWith(PLUGIN_REFERENCE_SCHEME)) {
     throw new Error(`invalid plugin reference URI ${JSON.stringify(uri)}`)
@@ -143,20 +155,32 @@ export function decodePluginReferenceUri(uri: string): string {
   return packageName
 }
 
-/** Render one canonical Markdown mention. */
+/**
+ * Render one canonical Markdown mention.
+ * @param reference - package name and optional display label.
+ * @returns the canonical mention.
+ */
 export function formatPluginMention(reference: PluginReferenceInput): string {
   const label = escapeLabel(reference.label ?? reference.packageName)
   return `@[${label}](${encodePluginReferenceUri(reference.packageName)})`
 }
 
-/** The bare package name owning a module specifier. */
+/**
+ * The bare package name owning a module specifier.
+ * @param moduleName - configured plugin module specifier.
+ * @returns the package name without a subpath.
+ */
 export function packageNameOfModule(moduleName: string): string {
   const scoped = moduleName.startsWith('@') ? moduleName.indexOf('/') : -1
   const slash = moduleName.indexOf('/', scoped + 1)
   return slash === -1 ? moduleName : moduleName.slice(0, slash)
 }
 
-/** Fold canonical mentions into readable labels and collect their references. */
+/**
+ * Fold canonical mentions into readable labels and collect their references.
+ * @param text - user text that may cite plugins.
+ * @returns readable text and references in appearance order.
+ */
 export function parsePluginMentions(text: string): ParsedPluginMentions {
   const references: ParsedPluginReference[] = []
   let rendered = ''
