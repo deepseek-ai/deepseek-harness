@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets every agent in a subagent tree create, claim, and complete shared tasks. It adds four task schemas and shared-board guidance. Ordinary subagent controls own discovery, messaging, interruption, inbox waiting, and agent identity. The package is experimental and provides no stability guarantee.
+This package lets every agent in a subagent tree create, claim, and complete shared tasks. It adds four task schemas, shared-board guidance, and required Team identity. Ordinary subagent controls own discovery, messaging, interruption, and inbox waiting. The package is experimental and provides no stability guarantee.
 
 ## Table of Contents
 
@@ -83,11 +83,11 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, task policy, and four scoped task tools |
+| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, Team policy and identity, and four scoped task tools |
 
 ### Policy and tools
 
-One `team:policy` section and four task schemas are registered on each Agent scope, including fork children. Identity, communication, waiting, and final-result coordination belong to [subagent controls](../../subagent/tool-subagent-control/README.md). Team-specific runtime identity is not injected.
+One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Identity comes from `ctx.subagents.rootOf(agent)`, without a separate membership service. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
@@ -104,7 +104,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
-- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — identity, messaging, listing, interruption, and inbox waiting.
+- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, interruption, and inbox waiting.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team) — every tool schema the model receives.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — model-facing, scoping, and tool-family decisions.
 
@@ -136,6 +136,32 @@ The section is a fixed cost on every request of every Team member.
 #### KV Cache effect
 
 The text is identical for the Lead and every descendant and does not change while the plugin stays loaded, so it keeps a stable system-prompt prefix, including between a parent and its `subagent_fork` child. Loading or unloading the plugin changes the system prompt of every member and invalidates their cached prefixes.
+
+### Team identity runtime context
+
+#### What the model sees
+
+Required `team:identity` context uses the following text, replacing `<agent-id>` or `<root-id>` with the JSON-encoded Session id derived from the subagent tree. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
+
+##### Root identity
+
+```markdown
+You are the Team Lead. Your agent id is <agent-id>.
+```
+
+##### Teammate identity
+
+```markdown
+You are a teammate in the Team led by agent <root-id>.
+```
+
+#### Token effect
+
+Identity is part of the full runtime-context snapshot. Stable retained context adds no new message.
+
+#### KV Cache effect
+
+Identity appends through runtime context while shared system text stays identical across members. An ordinary Session fork in Team mode receives its own root identity; actual provider cache reuse remains best-effort.
 
 ### Task tool schemas
 

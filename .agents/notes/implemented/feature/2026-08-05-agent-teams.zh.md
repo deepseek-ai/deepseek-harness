@@ -46,7 +46,7 @@ member 消息使用 subagent 的 `send_message` 操作，它对 running、idle �
 
 ## Shared checkout boundary
 
-所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
+所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。任务策略要求 member 认领就绪任务、使用提示性 write scope 和依赖，并在完成工作后完成任务。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
 
 Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 cwd。deployment 或调用方可以另外使用[显式工作树创建](2026-09-13-explicit-worktree-creation.zh.md)。这样保留既有 same-world subagent 与 sandbox 契约。
 
@@ -76,9 +76,9 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 ## Testing
 
-包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及提交后通知。普通 subagent 测试覆盖收件箱等待和身份；录制 Team 组合覆盖任务策略和工具。
+包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及提交后等待信号。普通 subagent 测试覆盖收件箱等待；录制 Team 组合覆盖身份、任务策略和工具。
 
-模型可见身份和收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；任务策略遵循 [Team 工具参考](../../../../packages/experimental/tool-agent-team/README.zh.md)。
+收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/experimental/tool-agent-team/README.zh.md)。
 
 ## Consequences
 

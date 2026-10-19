@@ -2,7 +2,7 @@
 
 English | [中文](subagent.zh.md)
 
-The unified activation API manages local conversations and external executions. The subagent tree defines the Team independently of an optional task board. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own required identity and exact-caller inbox waiting; experimental Team tools add only shared tasks.
+The unified activation API manages local conversations and external executions. The subagent tree defines the Team independently of an optional task board. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own exact-caller inbox waiting; experimental Team tools add shared tasks, task policy, and Team identity.
 
 ## Capabilities and activation requests
 

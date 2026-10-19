@@ -46,7 +46,7 @@ Shared tasks are complete snapshots with Team-local ids and monotonic revisions.
 
 ## Shared checkout boundary
 
-Members start in the Lead’s current directory and observe shared filesystem writes immediately. Later directory changes stay local to each Session. The policy tells members to partition tasks, record advisory write scopes, order dependent work, and let the Lead inspect the final diff and run tests. A filesystem stale-version rejection requires rereading and rebasing the intended change. No equivalent guarantee is claimed for Bash, formatters, code generation, or direct external writes.
+Members start in the Lead’s current directory and observe shared filesystem writes immediately. Later directory changes stay local to each Session. The task policy tells members to claim ready tasks, use advisory write scopes and dependencies, and complete tasks after doing the work. A filesystem stale-version rejection requires rereading and rebasing the intended change. No equivalent guarantee is claimed for Bash, formatters, code generation, or direct external writes.
 
 The Team domain does not infer branches, create worktrees, merge changes, or silently change cwd. A deployment or caller can use [explicit worktree creation](2026-09-13-explicit-worktree-creation.md) separately. This preserves the existing same-world subagent and sandbox contracts.
 
@@ -76,9 +76,9 @@ Publication requires `apply` to return a new state per applied event and replace
 
 ## Testing
 
-Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and post-commit notices. Ordinary subagent tests cover inbox waiting and identity; recorded Team compositions cover task policy and tools.
+Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and post-commit wait signals. Ordinary subagent tests cover inbox waiting; recorded Team compositions cover identity, task policy, and tools.
 
-Model-facing identity and inbox waiting follow [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); task policy follows the [Team tool reference](../../../../packages/experimental/tool-agent-team/README.md).
+Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/experimental/tool-agent-team/README.md).
 
 ## Consequences
 

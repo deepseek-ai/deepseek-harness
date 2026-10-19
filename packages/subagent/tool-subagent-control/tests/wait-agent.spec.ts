@@ -5,10 +5,9 @@ import { agentCarrier, emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SubagentRuntime, { SubagentError } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import * as control from '../src/index.ts'
-import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -50,6 +49,15 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
 }
 
 describe('wait_agent', () => {
+  it('adds no collaboration policy or identity without Team mode', async () => {
+    const { ctx, agent } = await setup()
+    const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
+    expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
+    expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
+    expect(renderContextSnapshot(assembled)).not.toContain('Your agent id')
+    expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
+  })
+
   it('is available without Team mode and leaves pending input for normal admission', async () => {
     const { ctx, agent, harness } = await setup()
     const message = input()
@@ -208,7 +216,7 @@ describe('wait_agent', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('reports plugin unload, removes prompts, and permits a clean reload', async () => {
+  it('reports plugin unload and permits a clean reload', async () => {
     const { ctx, agent, fiber } = await setup()
     vi.useFakeTimers()
     const { result } = await startWait(ctx, agent)
@@ -216,14 +224,7 @@ describe('wait_agent', () => {
     expect(await result).toMatchObject({ isError: true, error: { info: { code: 'WAIT_UNAVAILABLE' } } })
     expect(vi.getTimerCount()).toBe(0)
     expect(ctx.tools.get('wait_agent')).toBeUndefined()
-    const absent = await ctx.systemPrompt.assemble({ agent, scope: agent })
-    expect(absent.sections.some(section => section.name === 'subagent:policy')).toBe(false)
-    expect(absent.contexts.some(context => context.name === 'subagent:identity')).toBe(false)
-
     await ctx.plugin(control)
-    const restored = await ctx.systemPrompt.assemble({ agent, scope: agent })
-    expect(restored.sections.filter(section => section.name === 'subagent:policy')).toHaveLength(1)
-    expect(renderContextSnapshot(restored)).toContain('Your agent id is "waiting". Your Team root agent id is "waiting". You are the root agent.')
     agent.inject(input())
     expect(await (await startWait(ctx, agent)).result).toMatchObject({ isError: false, value: { timedOut: false } })
   })
@@ -237,52 +238,5 @@ describe('wait_agent', () => {
     await handle.dispose()
     const { result } = await startWait(ctx, agent)
     expect(await result).toMatchObject({ isError: true, error: { info: { code: 'WAIT_UNAVAILABLE' } } })
-  })
-
-  it('derives nested identity from runtime ownership while ordinary forks remain roots', async () => {
-    const { ctx, agent } = await setup()
-    const child = await ctx.agents.create({
-      sessionId: SessionId('child'), parentAgent: agent,
-      meta: { parentSession: agent.id, origin: 'subagent' },
-    })
-    const nested = await ctx.agents.create({
-      sessionId: SessionId('nested'), parentAgent: agent,
-      meta: { parentSession: child.agent.id, origin: 'subagent' },
-    })
-    const fork = await ctx.agents.create({
-      sessionId: SessionId('ordinary-fork'), meta: { parentSession: agent.id },
-    })
-    const nestedAssembly = await ctx.systemPrompt.assemble({ agent: nested.agent, scope: nested.agent })
-    expect(renderContextSnapshot(nestedAssembly)).toContain('Your agent id is "nested". Your Team root agent id is "waiting". Your parent agent id is "child".')
-    const forkAssembly = await ctx.systemPrompt.assemble({ agent: fork.agent, scope: fork.agent })
-    expect(renderContextSnapshot(forkAssembly)).toContain('Your agent id is "ordinary-fork". Your Team root agent id is "ordinary-fork". You are the root agent.')
-    expect(renderContextSnapshot(forkAssembly)).not.toContain('Your parent agent id')
-  })
-
-  it('allows an orphaned subagent to continue ordinary work without inventing a root', async () => {
-    const { ctx } = await setup()
-    const adapter = new MockAdapter([textResponse('independent work done')])
-    ctx.llm.registerAdapter(['mock'], adapter)
-    const orphan = await ctx.agents.create({
-      sessionId: SessionId('orphan'),
-      meta: { parentSession: SessionId('unloaded-parent'), origin: 'subagent' },
-      agentOptions: { provider: 'mock', model: 'mock' },
-    })
-    orphan.agent.followup(input('continue ordinary work'))
-    await orphan.agent.whenIdle()
-    expect(adapter.requests).toHaveLength(1)
-    const assembly = await ctx.systemPrompt.assemble({ agent: orphan.agent, scope: orphan.agent })
-    expect(renderContextSnapshot(assembly)).toContain('Your agent id is "orphan". Your Team root agent is unavailable. Your parent agent id is "unloaded-parent".')
-    expect(renderContextSnapshot(assembly)).not.toContain('You are the root agent.')
-    expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message')).toBe(true)
-  })
-
-  it('omits identity without an agent and propagates unexpected root lookup failures', async () => {
-    const { ctx, agent } = await setup()
-    const agentless = await ctx.systemPrompt.assemble()
-    expect(renderContextSnapshot(agentless)).not.toContain('Your agent id')
-    const failure = new SubagentError('root lookup failed', 'INTERNAL_FAILURE')
-    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
-    await expect(ctx.systemPrompt.assemble({ agent, scope: agent })).rejects.toBe(failure)
   })
 })

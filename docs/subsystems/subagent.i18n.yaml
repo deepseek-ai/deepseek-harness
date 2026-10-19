@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/subagent.md
 /subagents:
-  en: 1ec29ac7ec4fd343
-  zh: c8938f8fed635d6c
+  en: 9b1012797d8cc4e0
+  zh: 3c2e6f6a3f1243f0
 /subagents/capabilities-and-activation-requests:
   en: 8c92b131f67997f6
   zh: c2dc606a0859420c

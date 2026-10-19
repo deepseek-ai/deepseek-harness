@@ -16,7 +16,7 @@ Status: implemented
 
 [整树通信](2026-10-16-tree-wide-agent-communication.zh.md)在同一根树内授权当前在线发送方，并保留实际发送方 id。中断保留祖先权限和 id 寻址。
 
-每个根 Agent 及其后代组成以根 Session id 标识的 Team。Team 不创建 agent，仅提供任务工具和任务策略。普通 subagent 控制工具提供发现、通信、中断、收件箱等待和必需运行时身份。父级和 fork 子级接收相同工具 schema 和共享策略。
+每个根 Agent 及其后代组成以根 Session id 标识的 Team。Team 不创建 agent，提供任务工具、任务策略和必需 Team 身份。普通 subagent 控制工具提供发现、通信、中断和收件箱等待。父级和 fork 子级接收相同工具 schema 和共享策略。
 
 任务归属使用 `ownerId`；根重新分配可指定自身或任意可达的可继续执行后代。历史名册记录仅供解码。Team 持久化任务变更，并在提交后通知当前等待，不启动空闲轮次。历史 `team/message/*` 记录仍可读取，但绝不再投递或确认。
 
@@ -38,4 +38,4 @@ Status: implemented
 
 ## Testing
 
-验证覆盖具有实际发送方归属的整树投递和冷恢复、任务 CAS 与所有者发现、历史解码、收件箱等待隔离和注册释放。录制会话覆盖模型可见任务策略和普通 subagent 指导。
+验证覆盖具有实际发送方归属的整树投递和冷恢复、任务 CAS 与所有者发现、历史解码、收件箱等待隔离和注册释放。录制会话覆盖 Team 策略和身份，以及普通 subagent 返回指导。

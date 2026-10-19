@@ -11,7 +11,7 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
-import SubagentService from '@deepseek-ai/dsh-subagent'
+import SubagentService, { SubagentError } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { renderPrompt, renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
@@ -42,7 +42,7 @@ const TEAM_TOOLS = [
   'team_task_list',
   'team_task_update',
 ]
-const leadIdentity = (agent: Agent): string => `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent id is ${JSON.stringify(agent.id)}.`
+const leadIdentity = (agent: Agent): string => `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
 
 const roots: string[] = []
 const contexts = new Set<Context>()
@@ -146,7 +146,7 @@ function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
 }
 
 function teammateIdentity(lead: Agent): string {
-  return `Your Team root agent id is ${JSON.stringify(lead.id)}.`
+  return `You are a teammate in the Team led by agent ${JSON.stringify(lead.id)}.`
 }
 
 async function runTurn(agent: Agent, text: string): Promise<void> {
@@ -171,16 +171,16 @@ async function interrupt(ctx: Context, lead: Agent, target: SessionId): Promise<
 }
 
 describe('dsh-tool-team', () => {
-  it('adds only task tools and task policy to the shared subagent controls', async () => {
+  it('adds task tools, policy, and scoped identity to the shared subagent controls', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const leadPrompt = renderPrompt(leadAssembly)
-    expect(leadPrompt).toContain('Your Team is the subagent tree')
-    expect(leadPrompt).toContain('FS_STALE_VERSION')
+    expect(leadPrompt).toContain('A shared task board is available to every agent in your subagent tree')
     expect(leadPrompt).toContain('Task readiness does not start an agent')
-    expect(leadPrompt).toContain('wait for your own inbox')
+    expect(leadPrompt).toContain('Task changes end current wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(leadIdentity(lead))
+    expect((await ctx.systemPrompt.assemble()).contexts.some(context => context.name === 'team:identity')).toBe(false)
     expect(leadAssembly.tools.map(schema => schema.name)).not.toContain('spawn_teammate')
     // Messaging, listing, and interruption stay the global subagent controls.
     for (const name of ['send_message', 'list_agents', 'interrupt_agent', 'wait_agent']) {
@@ -247,6 +247,20 @@ describe('dsh-tool-team', () => {
     expect(handle.agent.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
     expect(ctx.subagents.rootOf(handle.agent)).toBe(handle.agent)
     await handle.dispose()
+  })
+
+  it('identifies nested descendants with the tree root rather than their direct parent', async () => {
+    const { ctx, lead } = await setup([])
+    const child = await ctx.agents.create({
+      sessionId: SessionId('identity-child'), parentAgent: lead,
+      meta: { parentSession: lead.id, origin: 'subagent' },
+    })
+    const nested = await ctx.agents.create({
+      sessionId: SessionId('identity-nested'), parentAgent: lead,
+      meta: { parentSession: child.agent.id, origin: 'subagent' },
+    })
+    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
+    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(teammateIdentity(child.agent))
   })
 
   it.each([undefined, 'in-history'] as const)('appends current Lead identity to a teammate fork with update mode %s', async (systemPromptUpdate) => {
@@ -460,7 +474,12 @@ describe('dsh-tool-team', () => {
     expect(ctx.agents.get(childId)).toBe(child)
 
     const replacement = await ctx.plugin(toolTeam)
-    for (const agent of [lead, child]) expect(teamTools(await assembly(ctx, agent))).toEqual(TEAM_TOOLS)
+    for (const agent of [lead, child]) {
+      const assembled = await assembly(ctx, agent)
+      expect(teamTools(assembled)).toEqual(TEAM_TOOLS)
+      expect(assembled.contexts.filter(context => context.name === 'team:identity')).toHaveLength(1)
+      expect(renderContextSnapshot(assembled)).toContain(agent === lead ? leadIdentity(lead) : teammateIdentity(lead))
+    }
     expect(child.status).toBe('running')
     await interrupt(ctx, lead, childId)
     await waitNoAgent(ctx, childId)
@@ -603,14 +622,18 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it('rejects task use by an orphaned subagent', async () => {
-    const { ctx } = await setup([textResponse('child done')])
+  it('reports an unavailable Team root while allowing an orphaned subagent to continue ordinary work', async () => {
+    const { ctx, adapter } = await setup([
+      textResponse('child done'), textResponse('parent received settlement'), textResponse('independent work done'),
+    ])
     const parent = await ctx.agents.create({
       sessionId: SessionId('temporary-parent'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const childId = await spawn(ctx, parent.agent, 'orphan', 'finish')
     await waitNoAgent(ctx, childId)
+    await vi.waitFor(() => { expect(adapter.requests.filter(request => request.sessionId === parent.agent.id)).toHaveLength(1) })
+    await parent.agent.whenIdle()
     await parent.dispose()
     const orphan = await ctx.agents.resume({
       resumeSessionId: childId,
@@ -619,7 +642,32 @@ describe('dsh-tool-team', () => {
     const result = await execute(ctx, orphan.agent, 'team_task_list', {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('agent has no active Team owner')
+    await runTurn(orphan.agent, 'continue ordinary work')
+    const request = adapter.requests.findLast(request => request.sessionId === childId)!
+    expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable. Your parent agent id is "temporary-parent".`)
+    expect(runtimeContextText(request)).not.toContain('You are the Team Lead.')
+    expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
+      && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
     await orphan.dispose()
+  })
+
+  it.each([
+    new Error('root lookup failed'),
+    new SubagentError('root lookup failed', 'INTERNAL_FAILURE'),
+  ])('propagates unexpected identity lookup failures: %s', async (failure) => {
+    const { ctx, lead } = await setup([])
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
+    await expect(assembly(ctx, lead)).rejects.toBe(failure)
+  })
+
+  it('reports unavailable identity without inventing a parent id', async () => {
+    const { ctx, lead } = await setup([])
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
+      throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
+    })
+    const context = renderContextSnapshot(await assembly(ctx, lead))
+    expect(context).toContain(`Your agent id is ${JSON.stringify(lead.id)}. Your Team root agent is unavailable. Continue independent work;`)
+    expect(context).not.toContain('Your parent agent id')
   })
 
   it('fails safely without a calling Agent and has the function-plugin export shape', async () => {
@@ -629,6 +677,6 @@ describe('dsh-tool-team', () => {
     expect(text(result)).toContain('unknown tool "team_task_list"')
     expect('default' in toolTeam).toBe(false)
     expect(toolTeam.name).toBe('tool-agent-team')
-    expect(toolTeam.inject).toEqual(['agents', 'agentTeams', 'tools', 'systemPrompt'])
+    expect(toolTeam.inject).toEqual(['agents', 'agentTeams', 'subagents', 'tools', 'systemPrompt'])
   })
 })

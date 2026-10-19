@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema 和共享任务板指导。普通 subagent 控制工具负责发现、通信、中断、收件箱等待和 agent 身份。此包为实验性包，不提供稳定性保证。
+此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema、共享任务板指导和必需的 Team 身份。普通 subagent 控制工具负责发现、通信、中断和收件箱等待。此包为实验性包，不提供稳定性保证。
 
 ## 目录
 
@@ -83,11 +83,11 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、任务策略和四个作用域内任务工具 |
+| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略与身份，以及四个作用域内任务工具 |
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落和四个任务 schema，包括 fork 子级。身份、通信、等待和最终结果协调属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)。不注入 Team 专用运行时身份。
+每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。身份从 `ctx.subagents.rootOf(agent)` 派生，不使用独立成员关系服务。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -104,7 +104,7 @@ kind: "package-reference"
 
 - [agent-team 包](../agent-team/README.zh.md)——这些工具背后的 `ctx.agentTeams` 领域服务。
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与服务 API。
-- [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md) — 身份、通信、列表、中断和收件箱等待。
+- [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md) — 通信、列表、中断和收件箱等待。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)——模型接收的每个工具 schema。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——模型侧、scoping 与工具族决策。
 
@@ -136,6 +136,32 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 #### KV Cache 影响
 
 该文本对 Lead 与每个后代都相同，并且在插件保持加载期间不会变化，因此它保持稳定的 system prompt 前缀，包括父级与其 `subagent_fork` 子级之间。加载或卸载插件会改变每个成员的 system prompt，并使其已缓存前缀失效。
+
+### Team 身份运行时上下文
+
+#### 模型看到什么
+
+必需的 `team:identity` 上下文使用以下文本，将 `<agent-id>` 或 `<root-id>` 替换为从 subagent 树派生的 JSON 编码 Session id。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
+
+##### 根身份
+
+```markdown
+You are the Team Lead. Your agent id is <agent-id>.
+```
+
+##### 队友身份
+
+```markdown
+You are a teammate in the Team led by agent <root-id>.
+```
+
+#### Token 影响
+
+身份属于完整运行时上下文快照。已保留的稳定上下文不会新增消息。
+
+#### KV Cache 影响
+
+身份通过运行时上下文追加，成员共享的系统文本保持一致。Team 模式中的普通 Session fork 获得自身的根身份；实际提供方的缓存复用仍为尽力而为。
 
 ### 任务工具 schema
 

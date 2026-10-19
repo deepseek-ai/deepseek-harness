@@ -1191,8 +1191,8 @@ describe('headless stream-json snapshots', () => {
             if (typeof value !== 'string') throw new Error(`Teammate runtime context has no ${name}`)
             return value.replaceAll(log.header.id as string, '<self>').replaceAll(leadId, '<lead>')
           }
-          expect(sections?.some(section => section.name === 'team:identity')).toBe(false)
-          return [text('subagent:identity')]
+          expect(sections?.some(section => section.name === 'subagent:identity')).toBe(false)
+          return [text('team:identity')]
         }).sort()
         const allRows = logs.flatMap(log => parseJsonl(log.content))
         const messageSources = allRows.flatMap((row) => {
@@ -1255,8 +1255,8 @@ describe('headless stream-json snapshots', () => {
         "checkedAgents": true,
         "deliveredMessages": 0,
         "identities": [
-          "Your agent id is "<self>". Your Team root agent id is "<lead>". Your parent agent id is "<lead>".",
-          "Your agent id is "<self>". Your Team root agent id is "<lead>". Your parent agent id is "<lead>".",
+          "You are a teammate in the Team led by agent "<lead>".",
+          "You are a teammate in the Team led by agent "<lead>".",
         ],
         "queuedMessages": 0,
         "sessions": 4,

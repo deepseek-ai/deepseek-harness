@@ -9,8 +9,8 @@
   en: 0b01a243291821bc
   zh: 0dadd38d709ae9bd
 /deepseek-ai-dsh-experimental-tool-agent-team/summary:
-  en: 636ae7ba7281b87f
-  zh: e3dca0456ad46383
+  en: cc67d8d145a8ffb9
+  zh: dec0d9798d1e5382
 /deepseek-ai-dsh-experimental-tool-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -36,17 +36,17 @@
   en: 9b3218d9dd0019e4
   zh: cefbcdbdb91648ab
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/source-map:
-  en: e5b5987b4673b685
-  zh: 77c9ca592ac39680
+  en: 29ff96b23b25b13e
+  zh: 7d2cdf9be86d1ed4
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 349b34c3c00c0885
-  zh: e2d9e3b5daaa56e9
+  en: f557dca7db212fa9
+  zh: 2b91f9dc363f9f39
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: ef8a0940f658d225
   zh: c13048bcda07d006
 /deepseek-ai-dsh-experimental-tool-agent-team/further-exploration:
-  en: 2f16b98837d1d49f
-  zh: 76f1ee3ca2ddaee2
+  en: 87d4f26b5d6e0361
+  zh: 1a012fa95808e8fa
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -65,6 +65,24 @@
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-policy-system-prompt/kv-cache-effect:
   en: 6723f8e3f2497338
   zh: ca68851b279362e1
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context:
+  en: ed8642015d306d6d
+  zh: 31496981d115ba40
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees:
+  en: f53d44b775dadb2f
+  zh: ff7d8144fc003d53
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/root-identity:
+  en: 58d2b04f507baa5f
+  zh: 773786c59605a154
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/teammate-identity:
+  en: f0d12764966d3005
+  zh: 365df450e96cb6e1
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/token-effect:
+  en: b9c8f7524fbe3204
+  zh: 6c61dfb24b4b677a
+/deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/kv-cache-effect:
+  en: 32488ff4b3134dbf
+  zh: 5b76b6a325597ddb
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/task-tool-schemas:
   en: d6918434714cf05a
   zh: eef799d16e0c8f4b

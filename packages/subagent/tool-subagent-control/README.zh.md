@@ -1,5 +1,5 @@
 ---
-description: "通过消息、中断、收件箱等待和持久运行时身份发现并协调 subagent 树。"
+description: "通过消息、中断和收件箱等待发现并协调 subagent 树。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。它提供共享协作指导和必需的运行时身份，无需实验性 Team 模式。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
+`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个工具作用域挂载一次此包。它需要 `tools`、`subagents`、`agents` 和 `systemPrompt`。
+每个工具作用域挂载一次此包。它需要 `tools`、`subagents` 和 `agents`。
 
 ### 最小配置
 
@@ -85,10 +85,9 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 共享控制工具和提示注册 |
+| [`src/index.ts`](src/index.ts) | 共享控制工具注册 |
 | [`src/list-agents.ts`](src/list-agents.ts) | 整个 Team 的发现与活动投影 |
 | [`src/wait-agent.ts`](src/wait-agent.ts) | 当前调用者的收件箱等待和清理 |
-| [`src/collaboration-prompt.ts`](src/collaboration-prompt.ts) | 共享策略和必需的 Agent 身份 |
 
 </details>
 
@@ -107,30 +106,6 @@ kind: "package-reference"
 
 <a id="model-experience"></a>
 ## 模型体验
-
-### 协作策略与身份
-
-#### 模型看到什么
-
-共享的 `subagent:policy` 段落提供下方策略。必需的 `subagent:identity` 上下文以 `Your agent id is <id>. Your Team root agent id is <root>.` 开头。根添加 `You are the root agent.`；后代添加父 id。根解析不可用时，明确报告该事实并允许独立工作。普通 Session fork 获得自身的根身份。可选上下文抑制不能移除身份；运行时上下文组装会在压缩后恢复它。
-
-##### 协作策略
-
-```markdown
-Your Team is the subagent tree rooted at the root agent. Use list_agents to discover agents and send_message with an agent id to contact another listed agent. A working agent receives the message at its next step; an idle agent starts a new turn. Successful delivery does not mean the recipient has processed the message. A delegated agent's final answer is returned automatically while its parent is online.
-
-Continue independent work while other agents run. When you need more input, use wait_agent to wait for your own inbox. Pending input returns immediately; new messages, completion notifications, and user steering end the wait. The tool does not consume messages or start agents, and queued next-turn messages stay queued. After a wakeup or timeout, assess what work remains. Obtain the results needed for your assigned work before answering; unrelated agents need not finish.
-
-Agents may share files even when their working directories differ. Coordinate overlapping edits. If a file operation returns FS_STALE_VERSION, read the current file, apply your intended change to the updated content, and retry. Coordinate formatters, generators, and shell writes explicitly, then review the combined diff and run relevant checks.
-```
-
-#### Token 影响
-
-共享策略产生固定开销。身份属于完整运行时上下文快照；已保留的稳定上下文不会新增消息。
-
-#### KV Cache 影响
-
-各成员的策略文本相同。身份通过运行时上下文追加，不改变共享系统文本；实际提供方的缓存复用仍为尽力而为。
 
 ### 工具 schema
 

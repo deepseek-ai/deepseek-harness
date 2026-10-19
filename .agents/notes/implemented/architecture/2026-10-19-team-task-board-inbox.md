@@ -10,7 +10,7 @@ The subagent tree already supplies identity, discovery, routing, and lifecycle. 
 
 ## Decision
 
-The subagent tree is the Team. Ordinary controls own identity, communication, discovery, interruption, and `wait_agent`, independently of the optional task board. Required runtime context states current identity; shared policy explains result collection and shared-file coordination. Team owns task storage, dependencies, compare-and-set commands, and task policy. Assignment accepts the root or any discovered continuable descendant. Historical roster records grant no authority; the Team panel shows tasks and ordinary navigation owns members.
+The subagent tree is the Team. Ordinary controls own communication, discovery, interruption, and `wait_agent`, independently of the optional task board. Team tools own task policy and required Team identity, without adding either to ordinary subagent compositions. Team owns task storage, dependencies, and compare-and-set commands. Assignment accepts the root or any discovered continuable descendant. Historical roster records grant no authority; the Team panel shows tasks and ordinary navigation owns members.
 
 `wait_agent` subscribes before checking the exact caller’s next-step inbox. Pending input returns immediately; later input ends the wait. An `agent/wait-notified` event for that same Agent also ends an active wait. Other inboxes, other Agents’ signals, queued next-turn input, and status changes do not end it. Waiting neither consumes input nor starts Agents. Settlement removes listeners and the timer, including on timeout, cancellation, disposal, or plugin unload.
 

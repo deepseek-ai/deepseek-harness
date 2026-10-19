@@ -87,11 +87,11 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 
 #### What the model sees
 
-The task policy and four task schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only; ordinary subagent identity, control tools, and inbox waiting remain owned by the base-profile subagent controls.
+The task policy, required Team identity, and four task schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only; ordinary control tools and inbox waiting remain owned by the base-profile subagent controls.
 
 #### Token effect
 
-The bundle adds the task policy and four schemas owned by `@deepseek-ai/dsh-experimental-tool-agent-team`; it contributes no prompt text of its own.
+The bundle adds the task policy, runtime identity, and four schemas owned by `@deepseek-ai/dsh-experimental-tool-agent-team`; it contributes no prompt text of its own.
 
 #### KV Cache effect
 

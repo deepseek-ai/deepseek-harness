@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { TeamTaskId } from '@deepseek-ai/dsh-experimental-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
@@ -11,7 +12,7 @@ import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agents', 'agentTeams', 'tools', 'systemPrompt']
+export const inject = ['agents', 'agentTeams', 'subagents', 'tools', 'systemPrompt']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -90,6 +91,25 @@ function install(agent: Agent, ctx: Context): () => void {
       name: 'team:policy',
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
       text: TEAM_POLICY,
+    }))
+    register(scoped.systemPrompt.context({
+      name: 'team:identity',
+      order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
+      required: true,
+      interpolate: false,
+      text: () => {
+        try {
+          const root = ctx.subagents.rootOf(agent)
+          return root === agent
+            ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
+            : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
+        } catch (error: unknown) {
+          if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
+          const parentId = agent.session.header.parentSession
+          const parent = parentId === undefined ? '' : ` Your parent agent id is ${JSON.stringify(parentId)}.`
+          return `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent is unavailable.${parent} Continue independent work; Team discovery and messaging require an active root.`
+        }
+      },
     }))
     register(scoped.tools.register(defineTool({
       name: 'team_task_create',
@@ -205,7 +225,7 @@ function install(agent: Agent, ctx: Context): () => void {
 
 /**
  * Install Team tools in every live or subsequently published Team member scope.
- * @param ctx - context carrying the Agent registry, Team service, tools, and system prompt.
+ * @param ctx - context carrying the Agent registry, Team and subagent services, tools, and system prompt.
  * @param config - the empty plugin configuration; removed keys fail at load.
  */
 export function apply(ctx: Context, config: Config = {}): void {

@@ -87,11 +87,11 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 
 #### 模型会看到什么
 
-任务策略和四个任务 schema 属于 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.zh.md)。此 bundle 只改变组合；普通 subagent 身份、控制工具和收件箱等待仍由基础 profile 的 subagent 控制工具负责。
+任务策略、必需 Team 身份和四个任务 schema 属于 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.zh.md)。此 bundle 只改变组合；普通控制工具和收件箱等待仍由基础 profile 的 subagent 控制工具负责。
 
 #### Token 影响
 
-bundle 添加 `@deepseek-ai/dsh-experimental-tool-agent-team` 所有的任务策略和四个 schema；自身不提供提示文本。
+bundle 添加 `@deepseek-ai/dsh-experimental-tool-agent-team` 所有的任务策略、运行时身份和四个 schema；自身不提供提示文本。
 
 #### KV Cache 影响
 

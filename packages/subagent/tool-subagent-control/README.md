@@ -1,5 +1,5 @@
 ---
-description: "Discover and coordinate a subagent tree through messaging, interruption, inbox waiting, and durable runtime identity."
+description: "Discover and coordinate a subagent tree through messaging, interruption, and inbox waiting."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. It supplies shared collaboration guidance and required runtime identity, including without experimental Team mode. One plugin instance registers all four tools; members inherit the same definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. One plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`.
+Mount this package once per tool scope. It requires `tools`, `subagents`, and `agents`.
 
 ### Minimal configuration
 
@@ -85,10 +85,9 @@ The execution signal owns work only until inbox acceptance. Accepted messages ca
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Shared control-tool and prompt registration |
+| [`src/index.ts`](src/index.ts) | Shared control-tool registration |
 | [`src/list-agents.ts`](src/list-agents.ts) | Whole-Team discovery and activity projection |
 | [`src/wait-agent.ts`](src/wait-agent.ts) | Exact-caller inbox wait and cleanup |
-| [`src/collaboration-prompt.ts`](src/collaboration-prompt.ts) | Shared policy and required Agent identity |
 
 </details>
 
@@ -107,30 +106,6 @@ Read these pages when the package-level contract is not enough; they move from t
 
 <a id="model-experience"></a>
 ## Model Experience
-
-### Collaboration policy and identity
-
-#### What the model sees
-
-The shared `subagent:policy` section supplies the policy below. Required `subagent:identity` context starts with `Your agent id is <id>. Your Team root agent id is <root>.` A root adds `You are the root agent.`; a descendant adds its parent id. If root resolution is unavailable, it explicitly reports that fact and permits independent work. Ordinary Session forks receive their own root identity. Optional-context suppression cannot remove identity; runtime-context assembly restores it after compaction.
-
-##### Collaboration policy
-
-```markdown
-Your Team is the subagent tree rooted at the root agent. Use list_agents to discover agents and send_message with an agent id to contact another listed agent. A working agent receives the message at its next step; an idle agent starts a new turn. Successful delivery does not mean the recipient has processed the message. A delegated agent's final answer is returned automatically while its parent is online.
-
-Continue independent work while other agents run. When you need more input, use wait_agent to wait for your own inbox. Pending input returns immediately; new messages, completion notifications, and user steering end the wait. The tool does not consume messages or start agents, and queued next-turn messages stay queued. After a wakeup or timeout, assess what work remains. Obtain the results needed for your assigned work before answering; unrelated agents need not finish.
-
-Agents may share files even when their working directories differ. Coordinate overlapping edits. If a file operation returns FS_STALE_VERSION, read the current file, apply your intended change to the updated content, and retry. Coordinate formatters, generators, and shell writes explicitly, then review the combined diff and run relevant checks.
-```
-
-#### Token effect
-
-The shared policy has a fixed cost. Identity is part of the full runtime-context snapshot; stable retained context adds no new message.
-
-#### KV Cache effect
-
-Policy text stays identical across members. Identity is appended through runtime context rather than changing shared system text; actual provider cache reuse remains best-effort.
 
 ### Tool schema
 
