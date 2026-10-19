@@ -3679,6 +3679,46 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'tencentMeeting',
+    summary: 'Registers the CLI and its skill, and owns the account operations the Plugins page drives.',
+    description: 'Registers the CLI and its skill, and owns the account operations the Plugins page drives.',
+    methods: [
+      {
+        signature: '@Remote check(): CliOperationId',
+        description: 'Check the account again without changing it.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another operation runs.'],
+      },
+      {
+        signature: '@Remote signIn(): CliOperationId',
+        description: 'Sign in through the CLI\'s authorization page.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another operation runs.'],
+      },
+      {
+        signature: '@Remote signOut(): CliOperationId',
+        description: 'Sign the default account out, which also signs out the user\'s own terminal.',
+        parameters: [],
+        returns: 'the operation identity.',
+        throws: ['while another operation runs.'],
+      },
+      {
+        signature: '@Remote cancel(id: CliOperationId): Promise<void>',
+        description: 'Cancel a sign-in while it waits for the user\'s authorization, and wait for its command to exit.',
+        parameters: [{ name: 'id', description: 'the operation to cancel; a finished one or another step is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<TencentMeetingState>',
+        description: 'Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime.' }],
+        returns: 'the current view, then each changed view.',
+      },
+    ],
+  },
+  {
     key: 'terminalController',
     summary: 'Typed Remote control of transient Session-owned terminal processes.',
     description: 'Typed Remote control of transient Session-owned terminal processes.',
@@ -5623,6 +5663,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperation',
+    declaration: 'export interface CliOperation<Kind extends string, Phase extends string> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase | \'checking\' | \'cancelling\';\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'CliOperationId',
+    declaration: 'export type CliOperationId = Branded<\'CliOperationId\'>;',
+  },
+  {
+    name: 'CliOperationResult',
+    declaration: 'export interface CliOperationResult<Kind extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'CollectedOutput',
@@ -9011,6 +9063,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeamWaitResult',
     declaration: 'export interface TeamWaitResult {\n    readonly timedOut: boolean;\n}',
+  },
+  {
+    name: 'TencentMeetingAccountState',
+    declaration: 'export type TencentMeetingAccountState = {\n    readonly state: \'unchecked\' | \'signed-out\' | \'unverified\';\n} | {\n    readonly state: \'connected\';\n    readonly userName: string;\n};',
+  },
+  {
+    name: 'TencentMeetingOperationFailure',
+    declaration: 'export type TencentMeetingOperationFailure = CliCommandFailure<\'auth-status\' | \'auth-login\' | \'auth-logout\'>;',
+  },
+  {
+    name: 'TencentMeetingOperationKind',
+    declaration: 'export type TencentMeetingOperationKind = \'check\' | \'sign-in\' | \'sign-out\';',
+  },
+  {
+    name: 'TencentMeetingPhase',
+    declaration: 'export type TencentMeetingPhase = \'authorizing\' | \'signing-out\';',
+  },
+  {
+    name: 'TencentMeetingState',
+    declaration: 'export type TencentMeetingState = CliAccountView<TencentMeetingAccountState, TencentMeetingOperationKind, TencentMeetingPhase, TencentMeetingOperationFailure>;',
   },
   {
     name: 'TerminalBackend',

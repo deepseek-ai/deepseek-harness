@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/tencent-meeting/README.md
+/:
+  en: bf058142ad507655
+  zh: af4c666af23c6049
+/deepseek-ai-dsh-tencent-meeting:
+  en: 8d9bc7c10be0189e
+  zh: df97cf0f74495ad0
+/deepseek-ai-dsh-tencent-meeting/summary:
+  en: 6fc2b9905f513391
+  zh: ba46116ca8ba0d93
+/deepseek-ai-dsh-tencent-meeting/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tencent-meeting/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-tencent-meeting/use-this-package/install-into-a-profile:
+  en: 4c67a9bd6e1c16ad
+  zh: 04d76ccb01dcb786
+/deepseek-ai-dsh-tencent-meeting/use-this-package/what-you-get:
+  en: 51966a5a44d96d17
+  zh: 8a69a57f9230b47f
+/deepseek-ai-dsh-tencent-meeting/understand-the-implementation:
+  en: 432f95efdd2dca25
+  zh: 7e73105819cced42
+/deepseek-ai-dsh-tencent-meeting/further-exploration:
+  en: 448376795f001b65
+  zh: 85a0407a10ee809e
+/deepseek-ai-dsh-tencent-meeting/model-experience:
+  en: 96a006ec86d83ebb
+  zh: 7d22941a9b7dd8f3
+/deepseek-ai-dsh-tencent-meeting/model-experience/kv-cache-effect:
+  en: 9cb678f8a94c5a7f
+  zh: 36cb368e33558f94
+/deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work:
+  en: f8ddc2f542d6b114
+  zh: 26aa86738a6aaf61
+/deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

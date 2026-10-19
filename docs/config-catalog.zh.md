@@ -3797,6 +3797,21 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-system-prompt -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting-cli -->
+<a id="deepseek-aidsh-tencent-meeting-cli"></a>
+
+## `@deepseek-ai/dsh-tencent-meeting-cli`
+
+- `inject`: `skills` · `subprocess` · `shellEnv`
+- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
+- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:32`](../packages/connector/tencent-meeting-cli/src/index.ts)
+
+```ts config-catalog
+/** Where tmeet is and how long a command that does not wait for the user may run. */
+export type Config = CliAccountConfig
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting-cli -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
 <a id="deepseek-aidsh-terminal-bash"></a>
 
@@ -4874,6 +4889,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-sidebar-terminal` | — | [`packages/client/ui-sidebar-terminal/src/index.ts`](../packages/client/ui-sidebar-terminal/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-skill` | — | [`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-subagent` | — | [`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-tencent-meeting` | — | [`packages/client/ui-tencent-meeting/src/index.ts`](../packages/client/ui-tencent-meeting/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-tool` | — | [`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-user-questions` | — | [`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-workflow-run` | — | [`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts) |
@@ -5031,6 +5047,7 @@ export interface Config {
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
+| `@deepseek-ai/dsh-tencent-meeting` | — | [`packages/connector/tencent-meeting/src/index.ts`](../packages/connector/tencent-meeting/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
 | `@deepseek-ai/dsh-tool-testkit` | — | [`packages/test-support/tool-testkit/src/index.ts`](../packages/test-support/tool-testkit/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |

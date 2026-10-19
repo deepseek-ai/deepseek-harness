@@ -138,6 +138,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-computer-use` | no | Exclusive named computer-use provider registration |
 
+## connector
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-tencent-meeting-cli` | yes | Tencent Meeting through the official tmeet: the CLI on the Shell PATH, its skill, and account operations over Remote |
+
 ## context
 
 | Package | Config | Description |
