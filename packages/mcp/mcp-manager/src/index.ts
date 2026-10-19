@@ -36,7 +36,7 @@ export type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
- * union: {@link validateServers} owns the per-transport field rules, and its
+ * union: {@link validateEntries} owns the per-transport field rules, and its
  * write-time refusals name the offending field where a union's shape error
  * would not.
  */
