@@ -398,8 +398,12 @@ export class PluginManager extends TypertRemoteService {
     }, 'plugin-manager: package cancellation')
     ctx.effect(() => installPluginReference(
       { on: (event, listener, options) => ctx.on(event, listener, options) },
-      () => readPluginInventory(ctx),
-      { pluginPackages: ctx.get('pluginPackages'), profileContext: ctx.get('profileContext') },
+      {
+        listBundles: () => this.listBundles(),
+        readInventory: () => readPluginInventory(ctx),
+        bundleDir: name => resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir),
+        profile: this.profile,
+      },
     ), 'plugin-manager: plugin references')
     ctx.inject(['connection'], (scope) => {
       scope.effect(() => scope.connection.fetch.register({

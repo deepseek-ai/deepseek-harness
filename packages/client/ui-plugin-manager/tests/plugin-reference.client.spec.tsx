@@ -8,10 +8,8 @@ import { cleanup, render } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginReference } from '../src/client/PluginReference.tsx'
-import {
-  createPluginReferenceSource, formatPluginMention, installPluginReference, nextPluginMention,
-  packageNameOfModule, packageNameOfPluginMention, pluginReferenceRule,
-} from '../src/client/plugin-reference.ts'
+import { formatPluginMention } from '@deepseek-ai/dsh-plugin-manager/grammar'
+import { createPluginReferenceSource, installPluginReference, pluginReferenceRule } from '../src/client/plugin-reference.ts'
 import { en, type PluginManagerLocaleKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -53,28 +51,13 @@ const session: ClientSessionContext = { sessionId: 'session' as ClientSessionCon
 const signal = new AbortController().signal
 const request = { query: '', position: 'inline' as const, drilled: false, signal }
 
-describe('plugin reference grammar', () => {
-  it('round-trips escaped labels and locates complete mentions', () => {
-    const mention = formatPluginMention({ packageName: '@acme/plugin', label: 'Acme ] one' })
-    expect(mention).toBe('@[Acme \\] one](dsh-plugin:@acme/plugin)')
-    expect(nextPluginMention(`x ${mention} y`)).toEqual({
-      start: 2, end: 2 + mention.length, packageName: '@acme/plugin', label: 'Acme ] one',
-    })
-    expect(packageNameOfPluginMention(mention)).toBe('@acme/plugin')
-    expect(packageNameOfPluginMention(`${mention} tail`)).toBeUndefined()
-    expect(packageNameOfPluginMention('@[bad](dsh-plugin:INVALID)')).toBeUndefined()
-  })
-
-  it('matches whole mentions in the transcript rule and folds bare package names', () => {
+describe('plugin reference transcript rule', () => {
+  it('turns a whole canonical mention into a plugin node', () => {
     const text = 'see @[Acme](dsh-plugin:@acme/plugin)'
     expect(pluginReferenceRule.match(text, 0, { read: () => undefined })).toEqual({
       id: 'plugin', start: 4, end: text.length, data: { packageName: '@acme/plugin', label: 'Acme' },
     })
     expect(pluginReferenceRule.match('no mention', 0, { read: () => undefined })).toBeUndefined()
-    expect(packageNameOfModule('@acme/plugin/client')).toBe('@acme/plugin')
-    expect(packageNameOfModule('plain/sub')).toBe('plain')
-    expect(packageNameOfModule('plain')).toBe('plain')
-    expect(formatPluginMention({ packageName: '@acme/plugin' })).toBe('@[@acme/plugin](dsh-plugin:@acme/plugin)')
   })
 })
 
@@ -110,7 +93,7 @@ describe('plugin reference source', () => {
     expect(source.codec?.clipboardText('ref')).toBe('ref')
   })
 
-  it('falls back for metadata-less and empty localized text and missing pick values', async () => {
+  it('falls back for metadata-less text, skips names a mention cannot carry, and handles missing pick values', async () => {
     const { source } = deps([
       bundle('@acme/plain'),
       bundle('@acme/empty', { en: '' }, { en: '' }),
@@ -121,6 +104,8 @@ describe('plugin reference source', () => {
     expect(rows.find(row => row.name === '@acme/empty')).toMatchObject({ label: '@acme/empty' })
     expect(rows.find(row => row.name === '@acme/plain')?.description).toBeUndefined()
     expect(rows.find(row => row.name === '@acme/late')).toMatchObject({ label: 'Late' })
+    const odd = await deps([bundle('Legacy_Name'), bundle('@acme/ok')]).source.candidates(session, request)
+    expect(odd.map(row => row.name)).toEqual(['@acme/ok'])
     const pick = (candidate: Parameters<NonNullable<typeof source.onPick>>[0]['candidate']) => source.onPick({
       candidate, session, position: 'inline', via: 'menu', action: 'pick', span: { start: 0, end: 1, draftRev: 1 },
     })

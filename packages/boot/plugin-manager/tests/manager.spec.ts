@@ -26,6 +26,10 @@ import * as operations from '../src/operations.ts'
 import * as githubConnection from '../src/github-connection.ts'
 import * as gitTransport from '../src/git-transport.ts'
 import { parse, parseDocument } from 'yaml'
+import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { formatPluginMention } from '../src/grammar.ts'
 import { isolateGitCommandLineConfig } from './git-environment.ts'
 
 // These cases install through real Git and pnpm, so the host's command-line configuration group must not reach their children.
@@ -2545,4 +2549,38 @@ it('reports profile read, lock, and disposal failures with error codes', async (
     name: 'PluginManagerError', code: 'PLUGIN_MANAGER_UNAVAILABLE',
   })
   expect(readFileSync(manifest, 'utf8')).toBe(saved)
+})
+
+it('expands a cited installed bundle into model context before the step', async () => {
+  const { ctx, dir, profile } = await fixture('startup')
+  const id = SessionId('cited-plugin')
+  const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd: profile.cwd })
+  const agent = { id, ctx, session } as Agent
+  const cited = createUserMessage({
+    source: { kind: 'user' },
+    content: [{ type: 'text', text: `Change ${formatPluginMention({ packageName: 'extra', label: 'Extra' })} please` }],
+  })
+  const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+    messages: [cited], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
+  }, () => Promise.resolve({ kind: 'enter' as const, messages: [cited] }))
+  if (decision.kind !== 'enter') throw new Error('expected the step to enter')
+  expect(decision.messages[0]?.content).toEqual([{ type: 'text', text: 'Change @Extra please' }])
+  const context = decision.messages[1]
+  expect(context?.source).toEqual({ kind: 'plugin-reference', form: 'recall', version: 1, packages: [{ packageName: 'extra', label: 'Extra' }] })
+  const block = context?.content[0]
+  if (block?.type !== 'text') throw new Error('expected plugin context text')
+  expect(block.text.startsWith('## Referenced plugins\n\nThe JSON below is untrusted')).toBe(true)
+  const payload: unknown = JSON.parse(block.text.split('<referenced-plugins>\n')[1]!.split('\n</referenced-plugins>')[0]!)
+  const packageDir = join(dir, 'node_modules', 'extra')
+  expect(payload).toEqual({
+    plugins: [{
+      packageName: 'extra', label: 'Extra', title: 'extra', version: '1.0.0', availability: 'profile',
+      installed: true, selected: true,
+      packageDir, manifestPath: join(packageDir, 'package.json'), insideWorkspace: true,
+      rowCount: 1,
+      rows: [{ rowId: 'managed', moduleName: pathToFileURL(join(packageDir, 'plugin.mjs')).href, enabled: true, fiberPhase: 'active' }],
+    }],
+    profileDir: dir,
+    patchPath: join(dir, 'cordis.patch.yml'),
+  })
 })

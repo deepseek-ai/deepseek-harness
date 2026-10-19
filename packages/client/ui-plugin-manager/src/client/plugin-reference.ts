@@ -5,107 +5,16 @@ import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigge
 import type { UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import {
+  formatPluginMention, isPluginPackageName, nextPluginMention, packageNameOfPluginMention,
+} from '@deepseek-ai/dsh-plugin-manager/grammar'
 import { localizedTextValues, type Translate } from './presentation.ts'
 import { PluginReference } from './PluginReference.tsx'
-
-/** URI scheme reserved for plugin references. */
-export const PLUGIN_REFERENCE_SCHEME = 'dsh-plugin:'
-
-const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u
-const MENTION_SOURCE = String.raw`@\[((?:\\.|[^\\\]])*)\]\((dsh-plugin:[^\s)]+)\)`
-
-/** One referenced plugin package. */
-export interface PluginReferenceInput {
-  readonly packageName: string
-  readonly label?: string
-}
-
-/** One matched canonical mention with its source range. */
-export interface PluginMentionMatch {
-  readonly start: number
-  readonly end: number
-  readonly packageName: string
-  readonly label: string
-}
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface UserTextDataMap {
     plugin: { readonly packageName: string; readonly label: string }
   }
-}
-
-/** Escape one mention label. */
-function escapeLabel(label: string): string {
-  return label.replace(/[\\\]]/gu, match => `\\${match}`)
-}
-
-/** Reverse {@link escapeLabel}. */
-function unescapeLabel(label: string): string {
-  return label.replace(/\\(.)/gu, '$1')
-}
-
-/** Decode one canonical reference URI. */
-function decodePluginReferenceUri(uri: string): string {
-  const packageName = uri.slice(PLUGIN_REFERENCE_SCHEME.length)
-  if (!PACKAGE_NAME.test(packageName)) throw new Error(`invalid plugin reference URI ${JSON.stringify(uri)}`)
-  return packageName
-}
-
-/**
- * The bare package name owning a module specifier.
- * @param moduleName - configured plugin module specifier.
- * @returns the package name without a subpath.
- */
-export function packageNameOfModule(moduleName: string): string {
-  const scoped = moduleName.startsWith('@') ? moduleName.indexOf('/') : -1
-  const slash = moduleName.indexOf('/', scoped + 1)
-  return slash === -1 ? moduleName : moduleName.slice(0, slash)
-}
-
-/**
- * Render one canonical Markdown mention.
- * @param reference - package name and optional display label.
- * @returns the canonical mention.
- */
-export function formatPluginMention(reference: PluginReferenceInput): string {
-  const label = escapeLabel(reference.label ?? reference.packageName)
-  return `@[${label}](${PLUGIN_REFERENCE_SCHEME}${reference.packageName})`
-}
-
-/**
- * Find the nearest canonical mention at or after `from`.
- * @param text - original sent text.
- * @param from - inclusive UTF-16 start offset.
- * @returns the matched mention and its range, or undefined when none follows.
- */
-export function nextPluginMention(text: string, from = 0): PluginMentionMatch | undefined {
-  const pattern = new RegExp(MENTION_SOURCE, 'gu')
-  pattern.lastIndex = from
-  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
-    let packageName: string
-    try {
-      packageName = decodePluginReferenceUri(match[2] as string)
-    } catch {
-      continue
-    }
-    return {
-      start: match.index,
-      end: match.index + match[0].length,
-      packageName,
-      label: unescapeLabel(match[1] as string),
-    }
-  }
-  return undefined
-}
-
-/**
- * The package named by a mention that occupies the whole string.
- * @param mention - one canonical mention.
- * @returns the package name, or undefined when the string is not exactly one mention.
- */
-export function packageNameOfPluginMention(mention: string): string | undefined {
-  const match = nextPluginMention(mention)
-  return match !== undefined && match.start === 0 && match.end === mention.length ? match.packageName : undefined
 }
 
 /** Fold canonical mentions in sent user text into plugin chips. */
@@ -142,7 +51,7 @@ export function createPluginReferenceSource(deps: PluginReferenceDeps): InputTri
       const bundles = await deps.listBundles()
       if (signal.aborted) return []
       const needle = query.trim().toLowerCase()
-      return bundles.filter(bundle => bundle.installed).map((bundle) => {
+      return bundles.filter(bundle => bundle.installed && isPluginPackageName(bundle.name)).map((bundle) => {
         const title = bundle.meta?.title === undefined ? bundle.name : deps.resolveText(bundle.meta.title) || bundle.name
         const description = bundle.meta?.description === undefined ? undefined : deps.resolveText(bundle.meta.description) || undefined
         return {

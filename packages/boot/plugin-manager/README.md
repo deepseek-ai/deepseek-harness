@@ -166,7 +166,7 @@ Tool results append to the transcript. Enabling or disabling other tools can cha
 
 #### What the model sees
 
-A message that cites a package with `@[label](dsh-plugin:<package>)` gains one user-role context message before the model step. The mention folds to `@label`, and the context JSON lists each package's installed entries, version, scope, package directory, manifest and README paths, linked root, and whether the directory sits inside the workspace. Configuration values are omitted. The context is untrusted background and is bounded to eight packages and twelve entries per package.
+A message that cites a bundle with `@[label](dsh-plugin:<package>)` gains one user-role context message before the model step. The mention folds to `@label`. The context JSON describes each cited bundle from the same bundle list Web shows: title, version, availability, installation and selection, dependency source, the real path of its package files with manifest and README paths, whether those files sit inside the session's working directory, and its declared rows with the live state of each loaded row. A name that is not a bundle, or a bundle whose files cannot be resolved, carries an `error`. Configuration values are omitted. The context is untrusted background and is bounded to eight bundles and twelve rows per bundle.
 
 #### Token effect
 
