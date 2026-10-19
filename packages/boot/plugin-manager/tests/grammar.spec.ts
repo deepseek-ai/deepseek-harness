@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatPluginMention, isPluginPackageName, nextPluginMention, packageNameOfModule, packageNameOfPluginMention,
+  formatPluginMention, isPluginPackageName, nextPluginMention, packageNameOfPluginMention,
   parsePluginMentions,
 } from '../src/grammar.ts'
 
@@ -44,12 +44,5 @@ describe('plugin reference grammar', () => {
     expect(packageNameOfPluginMention(` ${mention}`)).toBeUndefined()
     expect(packageNameOfPluginMention(`${mention} tail`)).toBeUndefined()
     expect(packageNameOfPluginMention('plain')).toBeUndefined()
-  })
-
-  it('reduces a module specifier to its bare package name', () => {
-    expect(packageNameOfModule('@acme/plugin')).toBe('@acme/plugin')
-    expect(packageNameOfModule('@acme/plugin/client')).toBe('@acme/plugin')
-    expect(packageNameOfModule('dsh-tool/read')).toBe('dsh-tool')
-    expect(packageNameOfModule('plain')).toBe('plain')
   })
 })

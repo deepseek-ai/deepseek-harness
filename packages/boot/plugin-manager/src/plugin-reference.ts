@@ -36,7 +36,11 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** What the resolver reads at each cited step; every read reflects the profile at that moment. */
+/**
+ * What the resolver reads at each cited step; every read reflects the profile at that moment.
+ * A rejected read never fails the step: a failed bundle list becomes a per-reference `error`,
+ * and a failed inventory read omits live row state.
+ */
 export interface PluginReferenceReader {
   /** The manager's bundle list, the same list the `@` menu offers. */
   readonly listBundles: () => Promise<readonly BundleInfo[]>
@@ -79,8 +83,7 @@ export interface PluginReferenceInfo {
   readonly availability?: BundleInfo['availability']
   readonly installed?: boolean
   readonly selected?: boolean
-  readonly source?: string
-  /** Real path of the installed package files; a `link:` source resolves to its checkout. */
+  /** Real path of the package files; a linked dependency resolves to its checkout. */
   readonly packageDir?: string
   readonly manifestPath?: string
   readonly readmePath?: string
@@ -100,7 +103,7 @@ export interface PluginReferenceInfo {
 /**
  * Describe the cited bundles for one pre-step.
  * @param references - deduplicated references in citation order.
- * @param bundles - the manager's bundle list read at this step.
+ * @param bundles - the manager's bundle list read at this step, or undefined when that read failed.
  * @param inventory - Loader entries read at this step.
  * @param reader - bundle location and profile paths.
  * @param cwd - requesting agent's working directory.
@@ -108,7 +111,7 @@ export interface PluginReferenceInfo {
  */
 export function renderPluginReferenceContext(
   references: readonly PluginReferenceInput[],
-  bundles: readonly BundleInfo[],
+  bundles: readonly BundleInfo[] | undefined,
   inventory: PluginInventorySnapshot,
   reader: Pick<PluginReferenceReader, 'bundleDir' | 'profile'>,
   cwd: string | undefined,
@@ -143,20 +146,21 @@ function withinDirectory(parent: string | undefined, directory: string): boolean
 /** Project one bundle's identity, files, and declared rows with their live state. */
 function describePluginReference(
   reference: PluginReferenceInput,
-  bundles: readonly BundleInfo[],
+  bundles: readonly BundleInfo[] | undefined,
   inventory: PluginInventorySnapshot,
   bundleDir: PluginReferenceReader['bundleDir'],
   workspace: string | undefined,
 ): PluginReferenceInfo {
   const packageName = reference.packageName
   const label = reference.label ?? packageName
+  if (bundles === undefined) return { packageName, label, rowCount: 0, rows: [], error: 'the profile bundle list could not be read' }
   const bundle = bundles.find(item => item.name === packageName)
   if (bundle === undefined) return { packageName, label, rowCount: 0, rows: [], error: 'not a bundle in this profile' }
-  const resolved = bundle.installed ? realDirectory(() => bundleDir(packageName)) : undefined
+  const resolved = bundle.availability === 'missing' ? undefined : realDirectory(() => bundleDir(packageName))
   const live = new Map(inventory.entries.map(entry => [String(entry.entryId), entry]))
   const error = bundle.error === undefined
-    ? bundle.installed && resolved === undefined ? 'package directory cannot be resolved' : undefined
-    : bundle.error.diagnostic ?? bundle.error.code
+    ? bundle.availability !== 'missing' && resolved === undefined ? 'package directory cannot be resolved' : undefined
+    : bundle.error.code
   return {
     packageName,
     label,
@@ -165,7 +169,6 @@ function describePluginReference(
     availability: bundle.availability,
     installed: bundle.installed,
     selected: bundle.enabled,
-    ...(bundle.source === undefined ? {} : { source: bundle.source }),
     ...(resolved === undefined ? {} : { packageDir: resolved, manifestPath: join(resolved, 'package.json') }),
     ...(resolved === undefined || !existsSync(join(resolved, 'README.md')) ? {} : { readmePath: join(resolved, 'README.md') }),
     ...(resolved !== undefined && withinDirectory(workspace, resolved) ? { insideWorkspace: true as const } : {}),
@@ -220,7 +223,10 @@ export async function expandPluginReferenceMessages(
   const references = uniqueReferences(parsed)
   if (references.length === 0) return [...messages]
   signal.throwIfAborted()
-  const [bundles, inventory] = await Promise.all([reader.listBundles(), reader.readInventory()])
+  const [bundles, inventory] = await Promise.all([
+    reader.listBundles().catch(() => undefined),
+    reader.readInventory().catch((): PluginInventorySnapshot => ({ entries: [] })),
+  ])
   signal.throwIfAborted()
   const selected = references.slice(0, MAX_REFERENCES)
   const omitted = references.length - selected.length

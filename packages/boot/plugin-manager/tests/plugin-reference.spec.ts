@@ -73,7 +73,7 @@ describe('plugin reference context', () => {
     })], [entry('live'), entry('off', false)], { '@acme/plugin': dir })
     expect(await render(['@acme/plugin'], source, join(root, 'workspace'))).toEqual([{
       packageName: '@acme/plugin', label: '@acme/plugin', title: { en: 'Acme', zh: '插件' }, version: '1.2.3',
-      availability: 'profile', installed: true, selected: true, source: 'link:/src/acme',
+      availability: 'profile', installed: true, selected: true,
       packageDir: dir, manifestPath: join(dir, 'package.json'), readmePath: join(dir, 'README.md'), insideWorkspace: true,
       rowCount: 3,
       rows: [
@@ -118,8 +118,16 @@ describe('plugin reference context', () => {
     })
     expect(gone).toMatchObject({ installed: true, error: 'package directory cannot be resolved' })
     expect(gone?.packageDir).toBeUndefined()
-    expect(broken?.error).toBe('bad patch')
+    expect(broken?.error).toBe('operation-error')
     expect(refused?.error).toBe('incompatible-version')
+  })
+
+  it('locates the files of a bundle the installation ships without a profile dependency', async () => {
+    const dir = join(root, 'shipped')
+    mkdirSync(dir, { recursive: true })
+    const [info] = await render(['shipped'], reader([bundle('shipped', { availability: 'installation', installed: false })], [], { shipped: dir }))
+    expect(info).toMatchObject({ availability: 'installation', installed: false, packageDir: dir })
+    expect(info?.error).toBeUndefined()
   })
 
   it('keeps a cited name that is not a bundle visible with an explicit error', async () => {
@@ -186,6 +194,23 @@ describe('plugin reference expansion', () => {
     const context = expanded[2]
     expect(context?.source.kind === 'plugin-reference' ? context.source.packages : []).toHaveLength(8)
     expect(JSON.stringify(context?.content)).toContain('The message omitted 2 additional plugin reference(s).')
+  })
+
+  it('describes a failed profile read instead of failing the step', async () => {
+    const failing = { ...source, listBundles: async () => { throw new Error('malformed profile package.json') } }
+    const expanded = await expandPluginReferenceMessages(undefined, [message(mention)], new AbortController().signal, failing)
+    const block = expanded[1]?.content[0]
+    expect(block?.type === 'text' ? plugins(block.text) : []).toEqual([{
+      packageName: '@acme/plugin', label: 'Acme', rowCount: 0, rows: [], error: 'the profile bundle list could not be read',
+    }])
+  })
+
+  it('omits live row state when the Loader inventory cannot be read', async () => {
+    const rows = reader([bundle('@acme/plugin', { rows: [row('live', 'live')] })], [entry('live')])
+    const failing = { ...rows, readInventory: async () => { throw new Error('inventory unavailable') } }
+    const expanded = await expandPluginReferenceMessages(undefined, [message(mention)], new AbortController().signal, failing)
+    const block = expanded[1]?.content[0]
+    expect(block?.type === 'text' ? plugins(block.text)[0]?.rows : []).toEqual([{ rowId: 'live', moduleName: '@acme/live' }])
   })
 
   it('rejects an aborted turn before reading the profile', async () => {

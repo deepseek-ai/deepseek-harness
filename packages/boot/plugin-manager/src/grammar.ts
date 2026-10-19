@@ -5,7 +5,7 @@
  */
 
 /** URI scheme reserved for plugin references. */
-export const PLUGIN_REFERENCE_SCHEME = 'dsh-plugin:'
+const PLUGIN_REFERENCE_SCHEME = 'dsh-plugin:'
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u
 const MENTION_SOURCE = String.raw`@\[((?:\\.|[^\\\]])*)\]\((dsh-plugin:[^\s)]+)\)`
@@ -60,17 +60,6 @@ export function formatPluginMention(reference: PluginReferenceInput): string {
     throw new Error(`invalid plugin package name ${JSON.stringify(reference.packageName)}`)
   }
   return `@[${escapeLabel(reference.label ?? reference.packageName)}](${PLUGIN_REFERENCE_SCHEME}${reference.packageName})`
-}
-
-/**
- * The bare package name owning a module specifier.
- * @param moduleName - configured plugin module specifier.
- * @returns the package name without a subpath.
- */
-export function packageNameOfModule(moduleName: string): string {
-  const scoped = moduleName.startsWith('@') ? moduleName.indexOf('/') : -1
-  const slash = moduleName.indexOf('/', scoped + 1)
-  return slash === -1 ? moduleName : moduleName.slice(0, slash)
 }
 
 /**
