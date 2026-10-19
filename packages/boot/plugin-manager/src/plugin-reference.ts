@@ -70,7 +70,12 @@ export interface PluginReferenceServices {
 
 /** The stable slice of an entering agent this resolver reads. */
 export interface PluginReferenceAgent {
-  readonly session: { readonly header: { readonly cwd?: string | undefined } }
+  readonly session: {
+    readonly header: {
+      /** Absent when the session has no working directory selected. */
+      readonly cwd?: string | undefined
+    }
+  }
 }
 
 /** The waterfall registration the plugin-manager already owns. */
