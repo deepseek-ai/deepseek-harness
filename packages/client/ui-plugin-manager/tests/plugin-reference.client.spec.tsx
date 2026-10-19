@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ClientSessionContext, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { Context } from '@deepseek-ai/cordis'
-import type { PluginEntryId, PluginInventorySnapshot, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
+import type { BundleInfo, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { cleanup, render } from '@testing-library/react'
@@ -18,26 +18,30 @@ afterEach(cleanup)
 
 const t = ((key: PluginManagerLocaleKey): string => en[key]) as Parameters<typeof createPluginReferenceSource>[0]['t']
 
-function entry(moduleName: string, title?: { en: string; zh?: string }, description?: { en: string; zh?: string }) {
+function bundle(name: string, title?: { en: string; zh?: string }, description?: { en: string; zh?: string }): BundleInfo {
   return {
-    entryId: moduleName as PluginEntryId,
-    moduleName,
-    ...(title === undefined ? {} : { meta: { title, ...(description === undefined ? {} : { description }) } }),
+    name,
+    official: false,
+    availability: 'profile',
+    installed: true,
+    optional: false,
+    removable: true,
     enabled: true,
-    fiberPhase: 'active' as const,
+    rows: [],
+    overrides: [],
+    ...(title === undefined ? {} : { meta: { title, ...(description === undefined ? {} : { description }) } }),
   }
 }
 
-function deps(entries = [
-  entry('@acme/plugin', { en: 'Acme', zh: '插件' }, { en: 'Acme plugin', zh: '插件说明' }),
-  entry('@acme/plugin/client'),
-  entry('@acme/tool', { en: 'Tool' }),
+function deps(bundles: readonly BundleInfo[] = [
+  bundle('@acme/plugin', { en: 'Acme', zh: '插件' }, { en: 'Acme plugin', zh: '插件说明' }),
+  bundle('@acme/tool', { en: 'Tool' }),
 ]) {
   const openBundle = vi.fn(() => true)
   return {
     openBundle,
     source: createPluginReferenceSource({
-      listInventory: async () => ({ entries }),
+      listBundles: async () => bundles,
       resolveText: text => typeof text === 'string' ? text : text.en,
       openBundle,
       t,
@@ -69,6 +73,7 @@ describe('plugin reference grammar', () => {
     expect(pluginReferenceRule.match('no mention', 0, { read: () => undefined })).toBeUndefined()
     expect(packageNameOfModule('@acme/plugin/client')).toBe('@acme/plugin')
     expect(packageNameOfModule('plain/sub')).toBe('plain')
+    expect(packageNameOfModule('plain')).toBe('plain')
     expect(formatPluginMention({ packageName: '@acme/plugin' })).toBe('@[@acme/plugin](dsh-plugin:@acme/plugin)')
   })
 })
@@ -107,11 +112,9 @@ describe('plugin reference source', () => {
 
   it('falls back for metadata-less and empty localized text and missing pick values', async () => {
     const { source } = deps([
-      entry('@acme/plain'),
-      entry('@acme/plain'),
-      entry('@acme/empty', { en: '' }, { en: '' }),
-      entry('@acme/late'),
-      entry('@acme/late', { en: 'Late' }),
+      bundle('@acme/plain'),
+      bundle('@acme/empty', { en: '' }, { en: '' }),
+      bundle('@acme/late', { en: 'Late' }),
     ])
     const rows = await source.candidates(session, request)
     expect(rows.find(row => row.name === '@acme/plain')).toMatchObject({ label: '@acme/plain' })
@@ -142,14 +145,20 @@ describe('plugin reference source', () => {
 
 describe('plugin reference installation', () => {
   async function bench(
-    list: () => Promise<ListResult> = async () => ({ ok: true, value: { entries: depsEntries() } }),
+    list: () => Promise<ListResult> = async () => ({ ok: true, value: depsBundles() }),
     navigation = true,
   ) {
     const listMock = vi.fn(list)
     const ctx = new Context()
     const locale = new LocaleRuntime(ctx)
     ctx.provide('locale', locale)
-    const remote = new TestRemote(ctx, { pluginInventory: { list: listMock } })
+    const remote = new TestRemote(ctx, {
+      pluginManager: {
+        listBundles: listMock,
+        listPlugins: vi.fn(async () => ({ ok: true, value: [] })),
+        registries: vi.fn(async () => ({ ok: true, value: { registry: null, fallbackRegistries: [], resolved: null } })),
+      },
+    })
     const sources: InputTriggerSource[] = []
     ctx.provide('inputTriggers', {
       registerSource: (source: InputTriggerSource) => { sources.push(source); return () => {} },
@@ -202,15 +211,15 @@ describe('plugin reference installation', () => {
     const list = vi.fn(async (): Promise<ListResult> => ({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) }))
     const b = await bench(list)
     const source = b.sources[0]!
-    await expect(source.candidates(session, request)).rejects.toThrow('pluginInventory.list failed')
+    await expect(source.candidates(session, request)).rejects.toThrow('pluginManager.listBundles failed')
     await b.fiber.dispose()
   })
 })
 
-type ListResult = { readonly ok: true; readonly value: PluginInventorySnapshot } | { readonly ok: false; readonly error: RemoteFailure }
+type ListResult = { readonly ok: true; readonly value: readonly BundleInfo[] } | { readonly ok: false; readonly error: RemoteFailure }
 
-function depsEntries() {
-  return [entry('@acme/plugin', { en: 'Acme' })]
+function depsBundles() {
+  return [bundle('@acme/plugin', { en: 'Acme' })]
 }
 
 describe('PluginReference', () => {

@@ -1,10 +1,9 @@
 /** Composer `@` source and transcript rule for canonical plugin references. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
+import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { UserTextRule } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PluginArtworkDefault } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import { localizedTextValues, type Translate } from './presentation.ts'
 import { PluginReference } from './PluginReference.tsx'
@@ -105,7 +104,7 @@ export const pluginReferenceRule: UserTextRule<'plugin'> = {
 
 /** Inventory and navigation capabilities the source consumes. */
 export interface PluginReferenceDeps {
-  readonly listInventory: () => Promise<PluginInventorySnapshot>
+  readonly listBundles: () => Promise<readonly BundleInfo[]>
   readonly resolveText: (text: LocalizedText) => string
   readonly openBundle: (packageName: string) => boolean
   readonly t: Translate
@@ -123,24 +122,17 @@ export function createPluginReferenceSource(deps: PluginReferenceDeps): InputTri
     order: 1,
     showGroupTitle: false,
     async candidates(_session, { query, signal }) {
-      const snapshot = await deps.listInventory()
+      const bundles = await deps.listBundles()
       if (signal.aborted) return []
       const needle = query.trim().toLowerCase()
-      const packages = new Map<string, PluginLocalizedMeta | undefined>()
-      for (const entry of snapshot.entries) {
-        const packageName = packageNameOfModule(entry.moduleName)
-        if (!packages.has(packageName) || (packages.get(packageName) === undefined && entry.meta !== undefined)) {
-          packages.set(packageName, entry.meta)
-        }
-      }
-      return [...packages].map(([packageName, meta]) => {
-        const title = meta?.title === undefined ? packageName : deps.resolveText(meta.title) || packageName
-        const description = meta?.description === undefined ? undefined : deps.resolveText(meta.description) || undefined
+      return bundles.filter(bundle => bundle.installed).map((bundle) => {
+        const title = bundle.meta?.title === undefined ? bundle.name : deps.resolveText(bundle.meta.title) || bundle.name
+        const description = bundle.meta?.description === undefined ? undefined : deps.resolveText(bundle.meta.description) || undefined
         return {
-          packageName,
+          packageName: bundle.name,
           title,
           description,
-          search: [packageName, ...localizedTextValues(meta?.title), ...localizedTextValues(meta?.description)],
+          search: [bundle.name, ...localizedTextValues(bundle.meta?.title), ...localizedTextValues(bundle.meta?.description)],
         }
       })
         .filter(row => needle === '' || row.search.some(value => value.toLowerCase().includes(needle)))
@@ -184,12 +176,12 @@ export function createPluginReferenceSource(deps: PluginReferenceDeps): InputTri
  * @param t - the plugin manager dictionary.
  */
 export function installPluginReference(ctx: ClientContext, t: Translate): void {
-  let pending: Promise<PluginInventorySnapshot> | undefined
-  const load = (): Promise<PluginInventorySnapshot> => {
+  let pending: Promise<readonly BundleInfo[]> | undefined
+  const load = (): Promise<readonly BundleInfo[]> => {
     if (pending === undefined) {
       pending = (async () => {
-        const result = await ctx.remote.pluginInventory.list()
-        if (!result.ok) throw new Error(`pluginInventory.list failed: ${result.error.code}: ${result.error.message}`)
+        const result = await ctx.remote.pluginManager.listBundles()
+        if (!result.ok) throw new Error(`pluginManager.listBundles failed: ${result.error.code}: ${result.error.message}`)
         return result.value
       })()
       pending.catch(() => { pending = undefined })
@@ -206,7 +198,7 @@ export function installPluginReference(ctx: ClientContext, t: Translate): void {
   }, 'ui-plugin-manager: plugin reference invalidation')
   ctx.inject(['inputTriggers', 'uiConversation', 'slots'], (scope) => {
     const source = createPluginReferenceSource({
-      listInventory: load,
+      listBundles: load,
       resolveText: text => ctx.locale.resolveText(text),
       openBundle: (packageName) => {
         const navigation = ctx.get('pluginNavigation')
