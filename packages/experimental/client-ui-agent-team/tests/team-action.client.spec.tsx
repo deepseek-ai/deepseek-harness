@@ -204,6 +204,8 @@ describe('TeamAction', () => {
     expect(screen.queryByRole('status')).toBeNull()
     setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { agentTeamMode: { enabled: true } } })
     expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
+    act(() => { b.sessions.set({ ...b.sessions.getSnapshot(), phase: 'pending' }) })
+    expect(screen.getByRole('status').textContent).toBe(zh.loading)
     setProjection(b.sessions, SESSION, { tasks: [] })
     expect(screen.getByText(zh.empty)).toBeTruthy()
   })

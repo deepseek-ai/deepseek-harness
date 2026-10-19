@@ -61,7 +61,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-client-ui-model-selection": "workspace:*",
-    "@deepseek-ai/dsh-api-remotes": "workspace:*"
+    "@deepseek-ai/dsh-api-remotes": "workspace:*",
+    "@deepseek-ai/dsh-commands": "workspace:*"
   },
   "files": [
     "locale/*.json",

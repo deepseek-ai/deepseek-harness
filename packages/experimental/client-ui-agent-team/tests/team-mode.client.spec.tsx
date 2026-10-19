@@ -32,9 +32,10 @@ it('renders only available mode and waits for persisted state before displaying 
   expect(toggle.getAttribute('aria-checked')).toBe('true')
 })
 
-it.each([false, true])('reports rejected mode writes through the menu host (throw: %s)', async (throws) => {
+it.each(['returned', 'error', 'string'])('reports rejected mode writes through the menu host (%s)', async (failure) => {
   const p = props(false, vi.fn(async () => {
-    if (throws) throw new Error('offline')
+    if (failure === 'error') throw new Error('offline')
+    if (failure === 'string') throw 'offline'
     return 'offline'
   }))
   render(<TeamModeToggle {...p} />)
