@@ -42,8 +42,7 @@ export function apply(ctx: Context, config: Config): void {
     parameters: {
       name: {
         type: 'string',
-        required: true,
-        description: 'A sibling-unique name segment: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens.',
+        description: 'Optional sibling-unique name; omission selects the first unused agent-N, starting at agent-1. Explicit names: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens.',
       },
       runtime: {
         type: 'string',
@@ -91,7 +90,7 @@ export function apply(ctx: Context, config: Config): void {
         throw new Error('subagent_oar requires a one-shot provider with independent conversation context')
       }
       const activation = await ctx.subagents.startActivation({
-        name: args.name,
+        ...args.name === undefined ? {} : { name: args.name },
         provider: providerName,
         label: args.description,
         request: {

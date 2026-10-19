@@ -57,7 +57,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Managed delegation
 
-Every call requires a sibling-unique `name` and returns `started subagent <full-path>` after the runtime accepts the child. It does not wait for the result. Names follow the [subagent naming rules](../subagent/README.md#local-and-external-children). The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
+Every call accepts an optional sibling-unique `name` and returns `started subagent <full-path>` after the runtime accepts the child. It does not wait for the result. Names follow the [subagent naming rules](../subagent/README.md#local-and-external-children). The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
 
 For every backend, the runtime automatically delivers the completion notice and any final answer if the calling Agent is still online when the child finishes. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
 
@@ -167,7 +167,7 @@ The schema is prefix-stable across adapter registration and catalog changes. Eac
 
 #### What the model sees
 
-Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
+Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run. Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
 
 ##### Tool-guidance section
 
@@ -221,7 +221,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Answer delivery follows the managed delegation rules above. The returned child id identifies subsequent control and catalog operations; only backends with continuation support accept follow-up messages.
+Answer delivery follows the managed delegation rules above. The returned full child path identifies subsequent control operations; only backends with continuation support accept follow-up messages.
 
 #### Token effect
 

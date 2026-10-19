@@ -260,6 +260,8 @@ describe('dsh-tool-team', () => {
       sessionId: SessionId('identity-nested'), parentAgent: lead,
       meta: { parentSession: child.agent.id, origin: 'subagent' },
     })
+    lead.session.append('subagent/catalog', { version: 0, childId: child.agent.id, childCreatedAt: 1, mode: 'continuable', label: 'Child', name: 'child' })
+    child.agent.session.append('subagent/catalog', { version: 0, childId: nested.agent.id, childCreatedAt: 1, mode: 'continuable', label: 'Nested', name: 'nested' })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(ctx.subagents.nameOf(child.agent))}`)
   })
@@ -476,6 +478,18 @@ describe('dsh-tool-team', () => {
     expect((await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: 2, action: 'reassign', owner: `legacy:${id}`,
     })).isError).toBe(true)
+  })
+
+  it('retains an uncataloged historical task owner as a legacy id', async () => {
+    const { ctx, lead } = await setup([])
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
+    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
+    lead.session.append('team/task', {
+      version: 2, teamId: TeamId(lead.id),
+      task: { ...saved, revision: 2, ownerId: SessionId('missing-worker') },
+    })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id }))))
+      .toMatchObject({ ownerName: 'legacy:missing-worker' })
   })
 
   it.each([false, true])('rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (cataloged) => {
@@ -732,40 +746,13 @@ describe('dsh-tool-team', () => {
     await expect(ctx.agents.create({ sessionId: SessionId('lookup-failure'), agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toBe(failure)
   })
 
-  it('retains a parent reference when an active teammate loses root discovery', async () => {
-    const { ctx, lead } = await setup(['hang'])
-    const id = await spawn(ctx, lead, 'disconnected', 'work')
-    const child = await waitRunning(ctx, id)
-    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
-      throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
-    })
-    expect(renderContextSnapshot(await assembly(ctx, child))).toContain(`Your parent agent id is ${JSON.stringify(lead.id)}`)
-    lookup.mockRestore()
-    await interrupt(ctx, lead, id)
-    await waitNoAgent(ctx, id)
-  })
-
-  it('labels historical owners with available legacy paths or a missing-id fallback', async () => {
-    const { ctx, lead } = await setup([textResponse('done')])
-    const id = await spawn(ctx, lead, 'legacy-owner', 'work')
-    await waitNoAgent(ctx, id)
-    const entries = await ctx.subagents.listDescendants(lead.id, SIGNAL)
-    vi.spyOn(ctx.subagents, 'listDescendants').mockResolvedValue(entries.map(({ name: _name, ...entry }) => entry))
-    const task = await ctx.agentTeams.createTask(lead, { subject: 'Historical owner', description: 'Read a persisted assignment' })
-    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
-    lead.session.append('team/task', { version: 2, teamId: TeamId(lead.id), task: { ...saved, revision: 2, ownerId: id } })
-    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ ownerName: `lead/legacy:${id}` }] })
-    lead.session.append('team/task', { version: 2, teamId: TeamId(lead.id), task: { ...saved, revision: 3, ownerId: SessionId('missing-owner') } })
-    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ ownerName: 'legacy:missing-owner' }] })
-  })
-
   it('reports unavailable identity without inventing a parent id' , async () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
     })
     const context = renderContextSnapshot(await assembly(ctx, lead))
-    expect(context).toContain(`Your agent id is ${JSON.stringify(lead.id)}. Your Team root agent is unavailable. Continue independent work;`)
+    expect(context).toContain('Your Team root agent is unavailable. Continue independent work;')
     expect(context).not.toContain('Your parent agent id')
   })
 

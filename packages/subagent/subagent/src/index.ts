@@ -293,7 +293,7 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Derive an Agent's full path from creation ancestry and descriptor names.
+   * Derive an Agent's full path from creation ancestry and parent catalogs.
    * @param agent - exact live Agent whose name is requested.
    * @returns lead followed by named or legacy child segments.
    */

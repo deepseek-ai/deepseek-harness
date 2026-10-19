@@ -10,9 +10,9 @@ Session ids are durable execution identities but difficult to read in model coor
 
 ## Decision
 
-Keep Session ids for persistence and authorization. Each child has an immutable name segment unique among its direct siblings. Model tools return and accept full paths rooted at `lead`, such as `lead/reviewer` and `lead/explore/alice`. Parent catalogs already record the required relationships; local descriptors retain the child’s segment. Path lookup reads only intermediate parent catalogs. Temporary reservations belong to the exact live parent and reject concurrent sibling duplicates before provider dispatch. A parent catalog append commits creation, and committed names survive settlement and restart.
+Keep Session ids for persistence and authorization. Each child has an immutable name segment unique among its direct siblings. Model tools return and accept full paths rooted at `lead`, such as `lead/reviewer` and `lead/explore/alice`. Parent catalogs retain the segment and relationship, including external caller-delivery work. Tools and host callers can omit the segment: runtime reserves the first unused `agent-N`, starting at `agent-1`, across committed and pending siblings before any asynchronous preparation. No persisted counter or descriptor copy is needed. Path lookup reads only intermediate parent catalogs. Temporary reservations belong to the exact live parent and reject concurrent sibling duplicates before provider dispatch. A parent catalog append commits creation, and committed names survive settlement and restart.
 
-This consolidates the tree-wide naming decision and supersedes the name-free interface in [Agent Teams as subagents](2026-10-15-agent-teams-as-subagents.md). Its lineage authority and shared subagent lifecycle remain current. Resolution grants no messaging, interruption, or assignment authority. Historical unnamed children use `legacy:<session-id>` segments; historical Team members without a catalog grant no assignment authority.
+This supersedes the name-free interface in [Agent Teams as subagents](2026-10-15-agent-teams-as-subagents.md). Its lineage authority and shared subagent lifecycle remain current. Resolution grants no messaging, interruption, or assignment authority. Historical unnamed children use `legacy:<session-id>` segments; historical Team members without a catalog grant no assignment authority.
 
 ## Alternatives considered
 
@@ -24,8 +24,8 @@ This consolidates the tree-wide naming decision and supersedes the name-free int
 
 ## Consequences
 
-Creation takes one segment; tool results, child guidance, message prefixes, task owners, and settlement notices use full paths. Different parents and independent roots can reuse segments. Cold path lookup depends on intermediate catalogs, but not unrelated branches. A failed parent catalog append can leave a local descriptor; a named child cannot resume without its matching parent entry. Internal Session and task-owner ids stay stable. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) describes caller changes.
+Creation accepts an optional segment; tool results, child guidance, message prefixes, task owners, and settlement notices use full paths. Different parents and independent roots can reuse segments. Cold path lookup depends on intermediate catalogs, but not unrelated branches. A failed parent catalog append can leave a local descriptor; a child cannot resume without its parent catalog entry. Internal Session and task-owner ids stay stable. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) describes caller changes.
 
 ## Testing
 
-Focused tests cover same-name children in separate branches, concurrent sibling rejection before dispatch, failed-start release, parent catalog failure, restoration, fork isolation, legacy paths, and ambiguous persisted names. Recorded Headless and SDK sessions cover creation, nested paths, messages, listing, and completion notices; Team tests reject historical membership as assignment or message authority.
+Focused tests cover automatic allocation, pending-name release, restart stability, same-name children in separate branches, concurrent sibling rejection before dispatch, failed-start release, parent catalog failure, restoration, fork isolation, legacy paths, and ambiguous persisted names. Recorded Headless and SDK sessions cover creation, nested paths, messages, listing, and completion notices; Team tests reject historical membership as assignment or message authority.

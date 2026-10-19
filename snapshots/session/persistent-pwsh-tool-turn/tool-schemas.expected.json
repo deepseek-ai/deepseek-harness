@@ -211,7 +211,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+            "description": "Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
           },
           "cwd": {
             "type": "string",
@@ -227,7 +227,6 @@
           }
         },
         "required": [
-          "name",
           "description",
           "prompt"
         ]
@@ -241,7 +240,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+            "description": "Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
           },
           "cwd": {
             "type": "string",
@@ -257,7 +256,6 @@
           }
         },
         "required": [
-          "name",
           "description",
           "prompt"
         ]

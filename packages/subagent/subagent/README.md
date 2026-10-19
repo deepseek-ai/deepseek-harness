@@ -42,7 +42,7 @@ Mount the service with `@deepseek-ai/dsh-session-projection`, a provider, and th
     toolName: subagent
 ```
 
-The tool requires a sibling-unique name segment and immediately returns the full child path. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
+The tool accepts an optional sibling-unique name segment and immediately returns the full child path. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
 
 ### Delegation settings
 
@@ -61,7 +61,7 @@ At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (br
 
 `startActivation({ name, provider, label, request, signal, delivery })` returns `{ childId, name, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `request.agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
 
-Agent names are immutable segments unique among one parent’s direct children. Creation accepts a lower-case letter followed by lower-case letters, digits, underscores, or hyphens. The returned `name` is a full path: `lead`, `lead/reviewer`, or `lead/explore/alice`. Each parent’s catalog and each local child’s descriptor retain the segment; ancestry supplies the prefix. Pending reservations are scoped to the live parent and released when creation returns or fails. Cataloged names remain taken after settlement. `nameOf(agent)` derives the path from creation ancestry; `resolveName()` follows only the catalogs along a full path and grants no operation authority. Unrelated unreadable branches do not block creation or lookup. Historical unnamed children use `legacy:<session-id>` as their path segment.
+Agent names are immutable segments unique among one parent’s direct children. Creation accepts a lower-case letter followed by lower-case letters, digits, underscores, or hyphens. The returned `name` is a full path: `lead`, `lead/reviewer`, or `lead/explore/alice`. Each parent’s catalog retains the segment; ancestry supplies the prefix. Both tools and `startActivation()` accept optional `name`; omission selects the first unused `agent-N`, starting at `agent-1`, across cataloged and pending siblings before provider preparation. Failed unpublished reservations release their names. Every activation enters the catalog regardless of delivery mode. Pending reservations are scoped to the live parent and released when creation returns or fails. Cataloged names remain taken after settlement. `nameOf(agent)` derives the path from creation ancestry; `resolveName()` follows only the catalogs along a full path and grants no operation authority. Unrelated unreadable branches do not block creation or lookup. Historical unnamed children use `legacy:<session-id>` as their path segment.
 
 ### Child presets
 
@@ -123,7 +123,7 @@ The manager reserves child identity and capacity, materializes a local Agent or 
 
 A local Agent failure without a subsequently committed `turn/end` settles as `error` independently of its descendants. Unclaimed input cannot keep that failed activation resident. A later committed turn ending supersedes the live failure and supplies the recovered outcome.
 
-Local and external creation appends a direct-child `subagent/catalog` fact to the parent Session regardless of result delivery. That append commits the child’s name; nested children require no additional root record. A failed append releases the pending name and disposes the activation. A local descriptor can remain, but a named child can resume only when its direct parent catalog contains the same name and id. After the append, execution or notification failure does not release the name. Persistence flush remains separate from the synchronous append. Historical unnamed continuation retains its existing behavior.
+Local and external creation appends a direct-child `subagent/catalog` fact to the parent Session regardless of result delivery. That append commits the child’s name; nested children require no additional root record. A failed append releases the pending name and disposes the activation. A local descriptor can remain, but a child can resume only when its direct parent catalog contains its id. After the append, execution or notification failure does not release the name. Persistence flush remains separate from the synchronous append. Historical unnamed catalog entries retain legacy paths.
 
 <a id="restoring-child-composition"></a>
 ### Restoring child composition
@@ -186,7 +186,7 @@ The child's initial task includes the guidance below, with `<parent-id>` replace
 ##### Return guidance
 
 ```markdown
-Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ agent_id: <parent-id>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
 ```
 
 #### Token effect

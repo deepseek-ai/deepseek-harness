@@ -27,7 +27,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   const controller = new AbortController()
   return {
     ctx, parent, controller,
-    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
       request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
     }),

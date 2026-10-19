@@ -30,7 +30,7 @@ import {
 import { assertSubagentMaxDepth } from './depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
-import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
+import { establishCatalogChild, establishExternalCatalogChild, subagentNameSegment } from './catalog.ts'
 import { SubagentError } from './error.ts'
 import { SubagentNames } from './names.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
@@ -165,7 +165,6 @@ export class SubagentManager {
     private readonly maxActiveSubagents: () => number,
   ) {
     this.names = new SubagentNames(ctx, {
-      identityOf: session => this.host.identityOf(session),
       catalogOf: session => this.host.catalogOf(session),
       residencyOf: (agent) => {
         const activation = this.resident.get(agent.id)
@@ -356,7 +355,6 @@ export class SubagentManager {
       const agentReasoningEffort = agentOptions.reasoningEffort
       const descriptor = snapshotSubagentDescriptor({
         mode: 'continuable',
-        name: spec.name,
         provider: spec.provider,
         label: spec.label,
         ...agentProvider !== undefined ? { agentProvider } : {},
@@ -427,7 +425,9 @@ export class SubagentManager {
           team.root,
           () => {
             this.assertAdmitting(parent)
-            reservation.commit(childId, () => { establishCatalogChild(parent.session, childHeader, descriptor) })
+            reservation.commit(childId, () => {
+              establishCatalogChild(parent.session, childHeader, { ...descriptor, name: reservation.segment })
+            })
           },
         )
       })
@@ -465,7 +465,7 @@ export class SubagentManager {
         this.assertAdmitting(parent)
         signal.throwIfAborted()
         const childId = activation.childId
-        reservation.commit(childId, () => { establishExternalCatalogChild(parent.session, childId, spec.label, spec.name) })
+        reservation.commit(childId, () => { establishExternalCatalogChild(parent.session, childId, spec.label, reservation.segment) })
         this.announce(activation)
         return this.receipt(activation)
       } catch (error: unknown) {
@@ -552,12 +552,11 @@ export class SubagentManager {
       if (seen.has(parentId)) throw new SubagentError('cyclic subagent creation ancestry', 'UNAUTHORIZED')
       seen.add(parentId)
       using parent = await this.observeContinuation(parentId, signal)
-      if (!parent.projections?.values.subagentCatalog?.some(entry =>
-        entry.id === header.id && (identity.name === undefined || entry.name === identity.name),
-      )) {
+      const entry = parent.projections?.values.subagentCatalog?.find(child => child.id === header.id)
+      if (entry === undefined) {
         throw new SubagentError('subagent is absent from its creator catalog', 'UNAUTHORIZED')
       }
-      names.unshift(identity.name ?? `legacy:${header.id}`)
+      names.unshift(subagentNameSegment(entry))
       ancestors.unshift(parentId)
       if (parentId === root?.id) return { root, ancestors, name: ['lead', ...names].join('/') }
       ;({ header, projections, inheritedEventCount } = parent)

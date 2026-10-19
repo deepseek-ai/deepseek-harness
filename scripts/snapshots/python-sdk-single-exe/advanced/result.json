@@ -1145,7 +1145,7 @@
         "childCreatedAt": 0,
         "mode": "continuable",
         "label": "advanced-exe-snapshot child 1",
-        "name": "workflow-{{workflow-run}}-1"
+        "name": "agent-1"
       }
     },
     {
@@ -3537,7 +3537,7 @@
             "childCreatedAt": 0,
             "mode": "continuable",
             "label": "advanced-exe-snapshot child 1",
-            "name": "workflow-{{workflow-run}}-1"
+            "name": "agent-1"
           }
         }
       }

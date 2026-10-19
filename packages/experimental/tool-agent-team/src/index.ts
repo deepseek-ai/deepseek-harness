@@ -76,7 +76,7 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 
 type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
 
-/** Project task owners from live descriptors or the Team’s direct-child catalog. */
+/** Project task owners from live activations or parent catalogs. */
 async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<NamedTaskView[]> {
   const root = ctx.subagents.rootOf(caller)
   const names = new Map<SessionId, string>([[root.id, 'lead']])
@@ -89,8 +89,7 @@ async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskV
   }
   if (missing.size > 0) {
     for (const entry of await ctx.subagents.listDescendants(root.id, signal)) {
-      const parent = names.get(entry.parentId) as string
-      names.set(entry.id, `${parent}/${entry.name ?? `legacy:${entry.id}`}`)
+      names.set(entry.id, `lead/${entry.path}`)
     }
   }
   return tasks.map(({ ownerId, ...view }) => ({
@@ -130,9 +129,7 @@ function install(agent: Agent, ctx: Context): () => void {
             : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(root))}.`
         } catch (error: unknown) {
           if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
-          const parentId = agent.session.header.parentSession
-          const parent = parentId === undefined ? '' : ` Your parent agent id is ${JSON.stringify(parentId)}.`
-          return `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent is unavailable.${parent} Continue independent work; Team discovery and messaging require an active root.`
+          return 'Your Team root agent is unavailable. Continue independent work; Team discovery and messaging require an active root.'
         }
       },
     }))

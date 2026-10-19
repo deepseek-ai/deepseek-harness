@@ -470,8 +470,8 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
     }
     expect(foldSubagentDescriptor([event(minimal)])).toEqual(minimal)
-    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work', name: 'worker' })]))
-      .toEqual({ ...minimal, label: 'child work', name: 'worker' })
+    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work' })]))
+      .toEqual({ ...minimal, label: 'child work' })
     expect(snapshotSubagentDescriptor({
       mode: 'continuable', provider: 'spawn', label: 'child',
     })).toEqual({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'child' })
@@ -527,7 +527,6 @@ describe('subagent descriptors', () => {
   })
 
   it.each([
-    ['invalid name', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', name: 'lead/reviewer' }, 'Invalid string'],
     ['string payload', 'invalid', 'payload must be an object'],
     ['null payload', null, 'payload must be an object'],
     ['array payload', [], 'payload must be an object'],

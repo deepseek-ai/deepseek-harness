@@ -293,11 +293,11 @@ describe('SubagentRuntime.listDescendants', () => {
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
 
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
-      { kind: 'child', id: SessionId('external-child'), mode: 'external', label: 'external-child',
+      { kind: 'child', id: SessionId('external-child'), path: 'legacy:external-child', mode: 'external', label: 'external-child',
         activity: 'inactive', hasChildren: false, parentId: parent.id, depth: 1 },
-      { kind: 'child', id: local.id, mode: 'continuable', label: 'local-child',
+      { kind: 'child', id: local.id, path: 'legacy:local-child', mode: 'continuable', label: 'local-child',
         activity: 'running', hasChildren: true, parentId: parent.id, depth: 1 },
-      { kind: 'child', id: SessionId('nested-external'), mode: 'external', label: 'nested-external',
+      { kind: 'child', id: SessionId('nested-external'), path: 'legacy:local-child/legacy:nested-external', mode: 'external', label: 'nested-external',
         activity: 'inactive', hasChildren: false, parentId: local.id, depth: 2 },
     ])
     expect(observe.mock.calls.map(([id]) => id)).toEqual([parent.id, local.id])
@@ -315,9 +315,9 @@ describe('SubagentRuntime.listDescendants', () => {
     const observeSession = vi.spyOn(ctx.sessionQuery, 'observeSession')
 
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
-      { kind: 'child', id: branch.id, mode: 'continuable', label: 'branch', activity: 'running', hasChildren: true, parentId: parent.id, depth: 1 },
-      { kind: 'child', id: leaf.id, mode: 'continuable', label: 'leaf', activity: 'running', hasChildren: false, parentId: branch.id, depth: 2 },
-      { kind: 'child', id: sibling.id, mode: 'one-shot', label: 'sibling', activity: 'running', hasChildren: false, parentId: parent.id, depth: 1 },
+      { kind: 'child', id: branch.id, path: 'legacy:branch', mode: 'continuable', label: 'branch', activity: 'running', hasChildren: true, parentId: parent.id, depth: 1 },
+      { kind: 'child', id: leaf.id, path: 'legacy:branch/legacy:leaf', mode: 'continuable', label: 'leaf', activity: 'running', hasChildren: false, parentId: branch.id, depth: 2 },
+      { kind: 'child', id: sibling.id, path: 'legacy:sibling', mode: 'one-shot', label: 'sibling', activity: 'running', hasChildren: false, parentId: parent.id, depth: 1 },
     ])
     expect(listSessions).not.toHaveBeenCalled()
     expect(observeSession.mock.calls.map(([id]) => id)).toEqual([parent.id, branch.id, leaf.id, sibling.id])
@@ -332,7 +332,7 @@ describe('SubagentRuntime.listDescendants', () => {
     }, [])
     catalog(parent.session, [{ id, createdAt: 1, mode: 'one-shot' }])
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
-      { kind: 'child', id, mode: 'one-shot', activity: 'inactive', hasChildren: false, parentId: parent.id, depth: 1 },
+      { kind: 'child', id, path: 'legacy:cold-child', mode: 'one-shot', activity: 'inactive', hasChildren: false, parentId: parent.id, depth: 1 },
     ])
     expect(ctx.agents.get(id)).toBeUndefined()
     expect(ctx.sessions.get(id)).toBeUndefined()
@@ -349,8 +349,8 @@ describe('SubagentRuntime.listDescendants', () => {
     const rows = await ctx.subagents.listDescendants(parent.id)
     expect(rows).toHaveLength(3)
     expect(rows[0]).toMatchObject({ kind: 'child', id: once.id, hasChildren: true })
-    expect(rows[1]).toEqual({ kind: 'diagnostic', id: unknown.id, ...named ? { name: 'future-child' } : {}, reason: 'unsupported', parentId: once.id, depth: 2 })
-    expect(rows[2]).toMatchObject({ kind: 'child', id: leaf.id, parentId: unknown.id, depth: 3 })
+    expect(rows[1]).toEqual({ kind: 'diagnostic', id: unknown.id, path: `legacy:once/${named ? 'future-child' : 'legacy:unknown'}`, ...named ? { name: 'future-child' } : {}, reason: 'unsupported', parentId: once.id, depth: 2 })
+    expect(rows[2]).toMatchObject({ kind: 'child', id: leaf.id, path: `legacy:once/${named ? 'future-child' : 'legacy:unknown'}/legacy:leaf`, parentId: unknown.id, depth: 3 })
   })
 
   it('visits each catalog once when persisted membership repeats or cycles', async () => {
@@ -379,7 +379,7 @@ describe('SubagentRuntime.listDescendants', () => {
 
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([])
     expect(await ctx.subagents.listDescendants(fork.id)).toEqual([
-      { kind: 'child', id: leaf.id, mode: 'continuable', label: 'fork-child',
+      { kind: 'child', id: leaf.id, path: 'legacy:fork-child', mode: 'continuable', label: 'fork-child',
         activity: 'running', hasChildren: false, parentId: fork.id, depth: 1 },
     ])
   })
@@ -405,7 +405,7 @@ describe('SubagentRuntime.listDescendants', () => {
       return observe(id, options)
     })
     const rows = await ctx.subagents.listDescendants(parent.id)
-    expect(rows[0]).toEqual({ kind: 'diagnostic', id: branch.id, name: 'broken-branch', parentId: parent.id, depth: 1, reason })
+    expect(rows[0]).toEqual({ kind: 'diagnostic', id: branch.id, path: 'broken-branch', name: 'broken-branch', parentId: parent.id, depth: 1, reason })
     expect(rows[1]).toMatchObject({ kind: 'child', id: sibling.id })
     expect(rows.some(row => row.id === hidden.id)).toBe(false)
   })
@@ -418,8 +418,8 @@ describe('SubagentRuntime.listDescendants', () => {
     catalog(branch, [{ ...child('invalid'), createdAt: -1 }])
 
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
-      { kind: 'diagnostic', id: branch.id, parentId: parent.id, depth: 1, reason: 'corrupt' },
-      { kind: 'child', id: sibling.id, mode: 'continuable', label: 'sibling',
+      { kind: 'diagnostic', id: branch.id, path: 'legacy:branch', parentId: parent.id, depth: 1, reason: 'corrupt' },
+      { kind: 'child', id: sibling.id, path: 'legacy:sibling', mode: 'continuable', label: 'sibling',
         activity: 'running', hasChildren: false, parentId: parent.id, depth: 1 },
     ])
   })
@@ -428,7 +428,7 @@ describe('SubagentRuntime.listDescendants', () => {
     const { ctx, parent } = await setup([])
     catalog(parent.session, [child('missing')])
     expect(await ctx.subagents.listDescendants(parent.id)).toEqual([
-      { kind: 'diagnostic', id: SessionId('missing'), parentId: parent.id, depth: 1, reason: 'unavailable' },
+      { kind: 'diagnostic', id: SessionId('missing'), path: 'legacy:missing', parentId: parent.id, depth: 1, reason: 'unavailable' },
     ])
   })
 

@@ -42,20 +42,20 @@ it('selects one configured provider per call and exposes only task inputs', asyn
     providers: { codex: 'codex-provider', claude: 'claude-provider', future: 'future-provider' },
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
-  expect(schema?.parameters.required).toEqual(['name', 'runtime', 'description', 'prompt'])
+  expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
   expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
-  for (const runtime of ['codex', 'claude', 'future']) {
+  for (const [index, runtime] of ['codex', 'claude', 'future'].entries()) {
     const result = await ctx.tools.execute({
       agent: parent, name: 'subagent_oar', signal: test.signal,
       callId: ToolCallId(randomUUID()),
-      arguments: { name: `child-${randomUUID()}`, runtime, description: `Use ${runtime}`, prompt: 'independent task' },
+      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task' },
     })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.content).toHaveLength(1)
     const content = result.content[0]
     expect(content?.type).toBe('text')
-    if (content?.type === 'text') expect(content.text).toMatch(/^started subagent /u)
+    if (content?.type === 'text') expect(content.text).toBe(`started subagent lead/agent-${index + 1}`)
   }
   expect(calls.map(call => call.provider)).toEqual(['codex-provider', 'claude-provider', 'future-provider'])
   expect(calls[0]?.request.prompt).toEqual([{ type: 'text', text: 'independent task' }])

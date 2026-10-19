@@ -76,6 +76,17 @@ describe('dsh-tool-subagent', () => {
     expect(text(result)).toBe('started subagent lead/reviewer')
   })
 
+  it('assigns sibling names when concurrent tool calls omit name', async () => {
+    const ctx = await setup({ provider: 'mock' }, { reply: 'done' })
+    const parent = modelSelectionSetupAgent(ctx)
+    const results = await Promise.all([
+      callSubagent(ctx, { description: 'first', prompt: 'First task' }, { agent: parent }),
+      callSubagent(ctx, { description: 'second', prompt: 'Second task' }, { agent: parent }),
+    ])
+    expect(results.map(text)).toEqual(['started subagent lead/agent-1', 'started subagent lead/agent-2'])
+    expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog').map(event => event.data)).toMatchObject([{ name: 'agent-1' }, { name: 'agent-2' }])
+  })
+
   it('resolves an explicit child directory without changing the parent directory', async () => {
     let childCwd: string | undefined
     const ctx = await setup({ provider: 'mock' }, {

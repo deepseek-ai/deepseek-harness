@@ -15,8 +15,19 @@ import type {
   SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { subagentNameSchema } from './descriptor.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
+
+/** Persisted and requested sibling names, each containing one path segment. */
+export const subagentNameSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/)
+
+/**
+ * Read the immutable catalog name, with an id-based segment for historical children.
+ * @param child - parent-owned child identity and optional name.
+ * @returns one named or legacy path segment.
+ */
+export function subagentNameSegment(child: { readonly id: SessionId; readonly name?: string }): string {
+  return child.name ?? `legacy:${child.id}`
+}
 
 /** Catalog payload version emitted by local child creation. */
 export const SUBAGENT_CATALOG_VERSION = 0

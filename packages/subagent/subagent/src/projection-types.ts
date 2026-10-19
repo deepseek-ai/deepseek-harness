@@ -45,10 +45,7 @@ export interface SubagentTimingProjection {
  * Label strength follows the descriptor schema: a continuable child always
  * carries one, a one-shot child may omit it.
  */
-export type SubagentIdentityProjection = {
-  /** Immutable sibling name from the descriptor, absent for historical children. */
-  readonly name?: string
-} & (
+export type SubagentIdentityProjection =
   | {
     /** A terminal one-shot child. */
     mode: 'one-shot'
@@ -70,7 +67,6 @@ export type SubagentIdentityProjection = {
     /** Seq of the folded descriptor event; see the one-shot arm for the own-suffix proof. */
     seq: SessionSeq
   }
-)
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {

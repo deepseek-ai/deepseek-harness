@@ -38,18 +38,18 @@ function statusOf(agents: { get(id: SessionId): Agent | undefined }, id: Session
 function project(
   agents: { get(id: SessionId): Agent | undefined },
   entry: SubagentDescendantListEntry,
-  nameOf: (id: SessionId) => string,
 ): ListAgentsEntry | undefined {
-  const at = { parent: nameOf(entry.parentId), depth: entry.depth }
+  const name = `lead/${entry.path}`
+  const at = { parent: name.slice(0, name.lastIndexOf('/')), depth: entry.depth }
   if (entry.kind === 'diagnostic') {
-    return { kind: 'diagnostic', name: nameOf(entry.id), reason: entry.reason, ...at }
+    return { kind: 'diagnostic', name, reason: entry.reason, ...at }
   }
   // One-shot children cannot be continued by send_message, so the model
   // never selects them; discovery still traversed them for descendants.
   if (entry.mode !== 'continuable') return undefined
   return {
     kind: 'child',
-    name: nameOf(entry.id),
+    name,
     label: entry.label,
     status: statusOf(agents, entry.id),
     ...at,
@@ -132,16 +132,10 @@ export function registerListAgents(ctx: Context): void {
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
-      const names = new Map<SessionId, string>([[root.id, ctx.subagents.nameOf(root)]])
-      for (const entry of entries) {
-        // listDescendants emits each parent before its children.
-        const parentName = names.get(entry.parentId) as string
-        names.set(entry.id, `${parentName}/${entry.name ?? `legacy:${entry.id}`}`)
-      }
       return [
         { kind: 'root' as const, name: ctx.subagents.nameOf(root), status: statusOf(ctx.agents, root.id) },
         ...entries
-          .map(entry => project(ctx.agents, entry, id => names.get(id) as string))
+          .map(entry => project(ctx.agents, entry))
           .filter(entry => entry !== undefined),
       ]
     },

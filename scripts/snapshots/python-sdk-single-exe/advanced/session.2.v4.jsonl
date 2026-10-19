@@ -1,5 +1,5 @@
 {"type":"session","version":4,"id":"{{child-2}}","createdAt":0,"cwd":"{{cwd}}","parentSession":"{{parent}}","isSeeded":false,"origin":"subagent","delegationDepth":1}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","name":"workflow-{{workflow-run}}-1","label":"advanced-exe-snapshot child 1","agentProvider":"deepseek-official","agentModel":"smoke-model","agentReasoningEffort":"high"}}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"advanced-exe-snapshot child 1","agentProvider":"deepseek-official","agentModel":"smoke-model","agentReasoningEffort":"high"}}
 {"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}

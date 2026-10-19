@@ -220,8 +220,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         parameters: {
           name: {
             type: 'string',
-            required: true,
-            description: 'Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
+            description: 'Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
           },
           cwd: {
             type: 'string',
@@ -328,7 +327,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           }
 
           const started = await runtimeCtx.subagents.startActivation({
-            name: args.name,
+            ...args.name === undefined ? {} : { name: args.name },
             provider: config.provider,
             label: args.description,
             request,

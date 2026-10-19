@@ -29,8 +29,8 @@ interface SubagentCapabilities {
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec {
-  /** Immutable name segment, unique among the parent’s direct children. */
-  readonly name: string
+  /** Immutable sibling name; omission reserves the first unused agent-N segment, starting at 1. */
+  readonly name?: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -41,7 +41,7 @@ interface SubagentActivationSpec {
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
   readonly signal: AbortSignal
-  /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
+  /** Parent delivery notifies the model; caller delivery only returns the result. Both enter the parent catalog. */
   readonly delivery: 'parent' | 'caller'
 }
 ```
@@ -387,6 +387,8 @@ The model-facing `list_agents` adapter reports current activity as `running` or 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
 type SubagentDescendantListEntry = SubagentListEntry & {
+  /** Slash-separated named or legacy segments relative to the requested root. */
+  readonly path: string
   /** Parent whose catalog contains this child. */
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
@@ -398,7 +400,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent names
 
-Sibling names are unique under one parent; full paths start at `lead`. Parent catalogs and local child descriptors retain name segments. Temporary reservations belong to the live parent. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
+Sibling names are unique under one parent; full paths start at `lead`. Parent catalogs retain name segments. Temporary reservations belong to the live parent. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -445,7 +447,7 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Derive an Agent's full path from creation ancestry and descriptor names.
+ * Derive an Agent's full path from creation ancestry and parent catalogs.
  * @param agent - exact live Agent whose name is requested.
  * @returns lead followed by named or legacy child segments.
  */

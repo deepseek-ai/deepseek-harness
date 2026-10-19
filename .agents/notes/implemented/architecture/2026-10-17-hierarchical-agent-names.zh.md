@@ -10,9 +10,9 @@ Session id 是持久执行身份，但不便于阅读模型协作内容。描述
 
 ## 决策
 
-保留 Session id 用于持久化和授权。每个子级有一个不可变的名字路径段，只在直接同级中唯一。模型工具返回并接受以 `lead` 为根的完整路径，如 `lead/reviewer` 和 `lead/explore/alice`。父级 catalog 已记录所需关系；本地 descriptor 保留子级路径段。路径查找只读取沿途父级 catalog。临时预留属于确切在线的父级，在 provider 派发前拒绝并发同级重名。父级 catalog 追加提交创建，已提交名字在执行结束和重启后保留。
+保留 Session id 用于持久化和授权。每个子级有一个不可变的名字路径段，只在直接同级中唯一。模型工具返回并接受以 `lead` 为根的完整路径，如 `lead/reviewer` 和 `lead/explore/alice`。父级 catalog 保留路径段及关系，包括 caller 交付的外部工作。工具和 host 调用方均可省略路径段：runtime 在任何异步准备之前，从 `agent-1` 开始预留已提交与临时预留的同级中第一个未占用的 `agent-N`。无需持久计数器或 descriptor 副本。路径查找只读取沿途父级 catalog。临时预留属于确切在线的父级，在 provider 派发前拒绝并发同级重名。父级 catalog 追加提交创建，已提交名字在执行结束和重启后保留。
 
-本记录合并树内唯一名字决策，并取代 [Agent Teams 作为 subagent](2026-10-15-agent-teams-as-subagents.zh.md) 中不使用名字的接口。其谱系权限与共享 subagent 生命周期仍然有效。解析不授予消息、中断或分配权限。历史无名子级使用 `legacy:<session-id>` 路径段；没有 catalog 的历史 Team 成员不授予分配权限。
+本记录取代 [Agent Teams 作为 subagent](2026-10-15-agent-teams-as-subagents.zh.md) 中不使用名字的接口。其谱系权限与共享 subagent 生命周期仍然有效。解析不授予消息、中断或分配权限。历史无名子级使用 `legacy:<session-id>` 路径段；没有 catalog 的历史 Team 成员不授予分配权限。
 
 ## 考虑的替代方案
 
@@ -24,8 +24,8 @@ Session id 是持久执行身份，但不便于阅读模型协作内容。描述
 
 ## 影响
 
-创建接受一个路径段；工具结果、子级指引、消息前缀、任务负责人和完成通知使用完整路径。不同父级和独立根可复用路径段。冷路径查找依赖沿途中间 catalog，不依赖无关分支。父级 catalog 追加失败可能留下本地 descriptor；命名子级缺少匹配的父级条目时无法恢复。内部 Session 和任务负责人 id 保持稳定。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md) 说明调用方变更。
+创建接受可选路径段；工具结果、子级指引、消息前缀、任务负责人和完成通知使用完整路径。不同父级和独立根可复用路径段。冷路径查找依赖沿途中间 catalog，不依赖无关分支。父级 catalog 追加失败可能留下本地 descriptor；子级缺少父级 catalog 条目时无法恢复。内部 Session 和任务负责人 id 保持稳定。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md) 说明调用方变更。
 
 ## 测试
 
-定向测试覆盖不同分支同名子级、派发前拒绝并发同级重名、启动失败释放、父级 catalog 失败、恢复、fork 隔离、legacy 路径和有歧义的持久化名字。录制的 Headless 与 SDK 会话覆盖创建、嵌套路径、消息、列表和完成通知；Team 测试拒绝将历史成员关系作为分配或消息权限。
+定向测试覆盖自动分配、临时名字释放、重启稳定性、不同分支同名子级、派发前拒绝并发同级重名、启动失败释放、父级 catalog 失败、恢复、fork 隔离、legacy 路径和有歧义的持久化名字。录制的 Headless 与 SDK 会话覆盖创建、嵌套路径、消息、列表和完成通知；Team 测试拒绝将历史成员关系作为分配或消息权限。

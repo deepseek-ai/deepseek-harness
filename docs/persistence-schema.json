@@ -15681,7 +15681,7 @@
       "kind": "event",
       "event": "subagent/descriptor",
       "surface": false,
-      "digest": "194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc",
+      "digest": "b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5",
       "schema": {
         "root": 0,
         "nodes": [
@@ -15752,11 +15752,6 @@
                 "optional": false
               },
               {
-                "name": "name",
-                "type": 3,
-                "optional": true
-              },
-              {
                 "name": "persona",
                 "type": 3,
                 "optional": true
@@ -15823,11 +15818,6 @@
                 "name": "mode",
                 "type": 9,
                 "optional": false
-              },
-              {
-                "name": "name",
-                "type": 3,
-                "optional": true
               },
               {
                 "name": "provider",
@@ -22898,11 +22888,6 @@
       "sources": []
     },
     {
-      "digest": "194530445ad15cc68b8a708321a4d8d118dfe54600864fcb965ffca9b1afb8cc",
-      "names": [],
-      "sources": []
-    },
-    {
       "digest": "1986c2664009c99155e44795676c887fa67f7c55cd2d5e6b648ff763e0ab033a",
       "names": [],
       "sources": []
@@ -24009,6 +23994,15 @@
       "sources": []
     },
     {
+      "digest": "5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564",
+      "names": [
+        "packages/subagent/subagent/src/descriptor.ts#OneShotSubagentDescriptorData"
+      ],
+      "sources": [
+        "packages/subagent/subagent/src/descriptor.ts:61"
+      ]
+    },
+    {
       "digest": "6085488d223aeffdef51d7ae17655fc26ab22ee13cbed82a50e62e2b6fb5b918",
       "names": [],
       "sources": []
@@ -24046,6 +24040,15 @@
       "digest": "62ecb62dc0fe1b5e70217f8a80c39256a40ee3a1917be14e5ca899d20c35f7fd",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f",
+      "names": [
+        "packages/subagent/subagent/src/descriptor.ts#ContinuableSubagentDescriptorData"
+      ],
+      "sources": [
+        "packages/subagent/subagent/src/descriptor.ts:72"
+      ]
     },
     {
       "digest": "6598cd6da253948d6b207c6374a45335804c79b576866d6215649c2d1bc85e25",
@@ -24565,6 +24568,15 @@
       "digest": "8620189c8e33582708ece48fd2d20dc4d57912486a17bdbb9aea4c44f7018062",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde",
+      "names": [
+        "packages/subagent/subagent/src/descriptor.ts#SubagentDescriptorData"
+      ],
+      "sources": [
+        "packages/subagent/subagent/src/descriptor.ts:89"
+      ]
     },
     {
       "digest": "86e1e384495ee09ac2d60c9db3610f1f1fddac2d248f6f1d6000e78054680219",
@@ -25342,6 +25354,11 @@
       "sources": []
     },
     {
+      "digest": "b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "b815d7b91cdd9fc6ccc7dcba05cfc5ce1d55fab5fc0c0801803cd3630cedb602",
       "names": [],
       "sources": []
@@ -25630,7 +25647,7 @@
         "packages/subagent/subagent/src/catalog.ts#SubagentCatalogEvent"
       ],
       "sources": [
-        "packages/subagent/subagent/src/catalog.ts:29"
+        "packages/subagent/subagent/src/catalog.ts:40"
       ]
     },
     {
@@ -25811,15 +25828,6 @@
       "digest": "e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05",
       "names": [],
       "sources": []
-    },
-    {
-      "digest": "e17928cecf8a76d8a2f4574d1bf86e5451d1af445032e5626e0711bfe0392509",
-      "names": [
-        "packages/subagent/subagent/src/descriptor.ts#SubagentDescriptorData"
-      ],
-      "sources": [
-        "packages/subagent/subagent/src/descriptor.ts:95"
-      ]
     },
     {
       "digest": "e2d0367e5716bc188435e51718ebff8ce873190625fa93b1c5331102d98758fa",
@@ -26096,15 +26104,6 @@
       ]
     },
     {
-      "digest": "f37e394b9557d1a228d6b2f29f9586c394d75fe9578ebb25aa143565aba50182",
-      "names": [
-        "packages/subagent/subagent/src/descriptor.ts#ContinuableSubagentDescriptorData"
-      ],
-      "sources": [
-        "packages/subagent/subagent/src/descriptor.ts:78"
-      ]
-    },
-    {
       "digest": "f4a66f654996c093aae700ea4c434ff2ee3569fea9c0e5813ccf6afdccabd163",
       "names": [],
       "sources": []
@@ -26164,15 +26163,6 @@
       "digest": "f7283223aacdc39b0adca728c8cbd4c090a20006a6fecec74421c30e943b489c",
       "names": [],
       "sources": []
-    },
-    {
-      "digest": "f73798a0676cd6a7d7890fcd09bf2a9cd8ad0967b6c7afd7d3edd3f5fbc1c124",
-      "names": [
-        "packages/subagent/subagent/src/descriptor.ts#OneShotSubagentDescriptorData"
-      ],
-      "sources": [
-        "packages/subagent/subagent/src/descriptor.ts:67"
-      ]
     },
     {
       "digest": "f789af5ab844827eb5a4f357c0afae1eeed108c6c22d8ca1a56e586b349a7c85",
