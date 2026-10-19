@@ -44,7 +44,7 @@ function taskDotState(task: TeamTask): StateDotState {
 /** Task card with a two-line description clamp expanded from a toggle in the meta row. */
 function TaskCard({ task, rootId, useSessions, t }: {
   task: TeamTask
-  rootId: SessionId | undefined
+  rootId: SessionId
   useSessions: TeamActionProps['useSessions']
   t: TranslateNS<typeof NS>
 }) {
@@ -52,7 +52,7 @@ function TaskCard({ task, rootId, useSessions, t }: {
     if (task.ownerId === undefined) return undefined
     const summary = state.byId[task.ownerId]
     const parentId = summary?.parentId ?? rootId
-    const catalog = parentId === undefined ? undefined : state.projectionsBySession[parentId]?.values.subagentCatalog
+    const catalog = state.projectionsBySession[parentId]?.values.subagentCatalog
     return summary?.title ?? catalog?.find(child => child.id === task.ownerId)?.label ?? summary?.displayTitle ?? task.ownerId
   })
   const [expanded, setExpanded] = useState(false)
@@ -246,7 +246,7 @@ export function TeamAction({
                         <h3>{t('tasks')}<span className={css.count}>{team.tasks.length}</span></h3>
                         <div className={css.tasks}>
                           {team.tasks.map(task => (
-                            <TaskCard key={task.id} task={task} rootId={rootId} useSessions={useSessions} t={t} />
+                            <TaskCard key={task.id} task={task} rootId={rootId as SessionId} useSessions={useSessions} t={t} />
                           ))}
                         </div>
                       </>
