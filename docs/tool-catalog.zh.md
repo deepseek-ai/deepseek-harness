@@ -2083,7 +2083,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "name": {
       "type": "string",
-      "description": "A sibling-unique name segment: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
+      "description": "Optional sibling-unique name; omission selects the first unused agent-N, starting at agent-1. Explicit names: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
     },
     "runtime": {
       "type": "string",
@@ -2107,7 +2107,6 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     }
   },
   "required": [
-    "name",
     "runtime",
     "description",
     "prompt"
@@ -2155,7 +2154,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "name": {
       "type": "string",
-      "description": "Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+      "description": "Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
     },
     "cwd": {
       "type": "string",
@@ -2171,7 +2170,6 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     }
   },
   "required": [
-    "name",
     "description",
     "prompt"
   ]

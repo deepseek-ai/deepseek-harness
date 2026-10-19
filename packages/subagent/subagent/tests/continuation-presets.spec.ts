@@ -172,7 +172,6 @@ describe('continuable child presets', () => {
       mode: 'continuable',
       provider: 'separate',
       label: 'preset work',
-      name: started.name.slice('lead/'.length),
       agentProvider: 'mock',
       agentModel: 'mock',
     })

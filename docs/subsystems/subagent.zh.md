@@ -29,8 +29,8 @@ interface SubagentCapabilities {
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec {
-  /** Immutable name segment, unique among the parent’s direct children. */
-  readonly name: string
+  /** Immutable sibling name; omission reserves the first unused agent-N segment, starting at 1. */
+  readonly name?: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -41,7 +41,7 @@ interface SubagentActivationSpec {
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
   readonly signal: AbortSignal
-  /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
+  /** Parent delivery notifies the model; caller delivery only returns the result. Both enter the parent catalog. */
   readonly delivery: 'parent' | 'caller'
 }
 ```
@@ -387,6 +387,8 @@ interface SubagentProvider {
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
 type SubagentDescendantListEntry = SubagentListEntry & {
+  /** Slash-separated named or legacy segments relative to the requested root. */
+  readonly path: string
   /** Parent whose catalog contains this child. */
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
@@ -400,7 +402,7 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 ## Agent 名字
 
-同级名字在一个父级下唯一；完整路径以 `lead` 开头。父级 catalog 与本地子级 descriptor 保留名字路径段。临时预留属于在线父级。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
+同级名字在一个父级下唯一；完整路径以 `lead` 开头。父级 catalog 保留名字路径段。临时预留属于在线父级。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -447,7 +449,7 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Derive an Agent's full path from creation ancestry and descriptor names.
+ * Derive an Agent's full path from creation ancestry and parent catalogs.
  * @param agent - exact live Agent whose name is requested.
  * @returns lead followed by named or legacy child segments.
  */

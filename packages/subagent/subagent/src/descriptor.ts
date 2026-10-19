@@ -21,7 +21,6 @@
  * @module @deepseek-ai/dsh-subagent/descriptor
  */
 
-import { z } from 'zod'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -48,13 +47,8 @@ declare module '@deepseek-ai/dsh-session/types' {
  */
 export const SUBAGENT_DESCRIPTOR_VERSION = 3
 
-/** Persisted and requested sibling names, each containing one path segment. */
-export const subagentNameSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/)
-
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
-  /** Immutable sibling name; absent in older descriptors. */
-  readonly name?: string
   /** Descriptor format version ({@link SUBAGENT_DESCRIPTOR_VERSION}). */
   readonly version: number
   /** Whether the child is a terminal one-shot run or a resumable conversation. */
@@ -104,7 +98,6 @@ const DESCRIPTOR_BASE_KEYS = [
   'mode',
   'provider',
   'label',
-  'name',
 ] as const
 const ONE_SHOT_DESCRIPTOR_KEYS = new Set(DESCRIPTOR_BASE_KEYS)
 const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
@@ -191,7 +184,6 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     mode === 'one-shot' ? ONE_SHOT_DESCRIPTOR_KEYS : CONTINUABLE_DESCRIPTOR_KEYS,
     'payload',
   )
-  const name = value['name'] === undefined ? undefined : subagentNameSchema.parse(value['name'])
   const provider = value['provider']
   if (typeof provider !== 'string') {
     throw new Error('persisted subagent descriptor provider must be a string')
@@ -202,7 +194,6 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode,
       provider,
-      ...name === undefined ? {} : { name },
       ...label !== undefined ? { label } : {},
     }
   }
@@ -222,7 +213,6 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     mode,
     provider,
     label,
-    ...name === undefined ? {} : { name },
     ...agentProvider !== undefined ? { agentProvider } : {},
     ...agentModel !== undefined ? { agentModel } : {},
     ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
@@ -244,7 +234,6 @@ export function snapshotSubagentDescriptor(
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode: input.mode,
     provider: input.provider,
-    ...input.name === undefined ? {} : { name: input.name },
     label: input.label,
     ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
     ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},

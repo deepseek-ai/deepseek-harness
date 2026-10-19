@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 受管理的委派
 
-每次调用都要求同级内唯一的 `name`，运行时接受子级后返回 `started subagent <full-path>`，不等待结果。名字遵循[子代理命名规则](../subagent/README.zh.md#local-and-external-children)。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
+每次调用都接受可选的同级唯一 `name`，运行时接受子级后返回 `started subagent <full-path>`，不等待结果。名字遵循[子代理命名规则](../subagent/README.zh.md#local-and-external-children)。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
 
 所有后端都由运行时自动递送完成通知及已有的最终回答，前提是子任务结束时调用方 Agent 仍在线。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 
@@ -167,7 +167,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可见的委派工具共享一段指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作；当只剩等待它们的结果时，结束本轮，而不是休眠或轮询。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
+可见的委派工具共享一段指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
 
 ##### 工具指导 section
 
@@ -221,7 +221,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-回答投递遵循上文的受管理委派规则。返回的子任务 id 用于后续控制与目录操作；只有支持继续执行的后端才接受后续消息。
+回答投递遵循上文的受管理委派规则。返回的子级完整路径用于后续控制操作；只有支持继续执行的后端才接受后续消息。
 
 #### Token 影响
 

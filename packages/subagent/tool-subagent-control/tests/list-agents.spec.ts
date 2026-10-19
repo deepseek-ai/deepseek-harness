@@ -197,7 +197,7 @@ describe('list_agents', () => {
       },
     ] satisfies SubagentCatalogEntry[]
     ctx.subagents.listDescendants = () => Promise.resolve(entries.map(entry => ({
-      ...entry, kind: 'child' as const, activity: 'inactive' as const, hasChildren: false,
+      ...entry, path: entry.name ?? `legacy:${entry.id}`, kind: 'child' as const, activity: 'inactive' as const, hasChildren: false,
       parentId: parent.id, depth: 1,
     })))
     const agents = new Map<string, {
@@ -342,7 +342,7 @@ describe('list_agents', () => {
     ctx.subagents.listDescendants = () => Promise.resolve([
       {
         kind: 'child',
-        id: SessionId('one-shot-mid'),
+        id: SessionId('one-shot-mid'), path: 'legacy:one-shot-mid',
         label: 'one-shot intermediate',
         mode: 'one-shot',
         activity: 'inactive',
@@ -352,7 +352,7 @@ describe('list_agents', () => {
       },
       {
         kind: 'child',
-        id: SessionId('deep-leaf'),
+        id: SessionId('deep-leaf'), path: 'legacy:one-shot-mid/legacy:deep-leaf',
         label: 'deep leaf',
         mode: 'continuable',
         activity: 'inactive',
@@ -362,7 +362,7 @@ describe('list_agents', () => {
       },
       {
         kind: 'diagnostic',
-        id: SessionId('broken-node'),
+        id: SessionId('broken-node'), path: 'legacy:broken-node',
         reason: 'unavailable',
         parentId: parent.id,
         depth: 1,

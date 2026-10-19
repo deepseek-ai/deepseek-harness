@@ -213,7 +213,7 @@ describe('workflow runtime outcomes', () => {
       const { parent: delegatedParent, ...request } = delegation.request
       expect(delegatedParent).toBe(parent)
       expect({ ...delegation, request }).toEqual({
-        provider: 'stub', name: `workflow-${run.id}-1`, label: 'host-test child 1', delivery: 'caller',
+        provider: 'stub', label: 'host-test child 1', delivery: 'caller',
         request: {
           cwd: ctx.workingDirectory.get(parent.session),
           prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },

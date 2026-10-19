@@ -31,7 +31,6 @@ import * as activationResults from '../src/activation.ts'
 import { requireLocalActivation } from '../src/activation.ts'
 import { SubagentNames } from '../src/names.ts'
 import { subagentCatalogProjectionDefinition, subagentCatalogEntries } from '../src/catalog.ts'
-import { subagentIdentityProjectionDefinition } from '../src/projection.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import {
@@ -610,7 +609,6 @@ describe('SubagentRuntime.startActivation', () => {
     expect(descriptorIndex).toBeLessThan(turnStartIndex)
     const descriptor = loaded.events[descriptorIndex] as SessionEvent<'subagent/descriptor'>
     expect(descriptor.data).toEqual({
-      name: started.name.slice('lead/'.length),
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',
       provider: 'spawn',
@@ -845,7 +843,6 @@ describe('SubagentRuntime.startActivation', () => {
     const descriptor = child.session.snapshotEvents().find(event => event.type === 'subagent/descriptor')
 
     expect(descriptor?.data).toEqual({
-      name: started.name.slice('lead/'.length),
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',
       provider: 'spawn',
@@ -1104,10 +1101,8 @@ describe('direct-child Queue residency routing', () => {
     await waitNoActivation(ctx, started.childId)
 
     const catalog = await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
-    const identity = await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
     const restored = new SubagentNames(ctx, {
       catalogOf: session => subagentCatalogEntries(catalog.stateOf(session)),
-      identityOf: session => identity.stateOf(session).identity,
       residencyOf: () => undefined,
     })
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')

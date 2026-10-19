@@ -260,6 +260,8 @@ describe('dsh-tool-team', () => {
       sessionId: SessionId('identity-nested'), parentAgent: lead,
       meta: { parentSession: child.agent.id, origin: 'subagent' },
     })
+    lead.session.append('subagent/catalog', { version: 0, childId: child.agent.id, childCreatedAt: 1, mode: 'continuable', label: 'Child', name: 'child' })
+    child.agent.session.append('subagent/catalog', { version: 0, childId: nested.agent.id, childCreatedAt: 1, mode: 'continuable', label: 'Nested', name: 'nested' })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(ctx.subagents.nameOf(child.agent))}`)
   })
@@ -478,6 +480,18 @@ describe('dsh-tool-team', () => {
     })).isError).toBe(true)
   })
 
+  it('retains an uncataloged historical task owner as a legacy id', async () => {
+    const { ctx, lead } = await setup([])
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
+    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
+    lead.session.append('team/task', {
+      version: 2, teamId: TeamId(lead.id),
+      task: { ...saved, revision: 2, ownerId: SessionId('missing-worker') },
+    })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id }))))
+      .toMatchObject({ ownerName: 'legacy:missing-worker' })
+  })
+
   it.each([false, true])('rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (cataloged) => {
     const { ctx, lead } = await setup([])
     const id = SessionId('historical-worker')
@@ -681,7 +695,7 @@ describe('dsh-tool-team', () => {
     expect(text(result)).toContain('agent has no active Team owner')
     await runTurn(orphan.agent, 'continue ordinary work')
     const request = adapter.requests.findLast(request => request.sessionId === childId)!
-    expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable. Your parent agent id is "temporary-parent".`)
+    expect(runtimeContextText(request)).toContain('Your Team root agent is unavailable. Continue independent work;')
     expect(runtimeContextText(request)).not.toContain('You are the Team Lead.')
     expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
       && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
@@ -703,7 +717,7 @@ describe('dsh-tool-team', () => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
     })
     const context = renderContextSnapshot(await assembly(ctx, lead))
-    expect(context).toContain(`Your agent id is ${JSON.stringify(lead.id)}. Your Team root agent is unavailable. Continue independent work;`)
+    expect(context).toContain('Your Team root agent is unavailable. Continue independent work;')
     expect(context).not.toContain('Your parent agent id')
   })
 

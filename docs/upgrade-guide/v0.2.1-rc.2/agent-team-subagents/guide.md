@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Agent Teams uses subagent tools. Full paths rooted at `lead` identify recipients; descriptions label responsibilities. Creation requires a sibling-unique name segment.
+Agent Teams uses subagent tools. Full paths rooted at `lead` identify recipients; descriptions label responsibilities. Creation accepts an optional sibling-unique name segment; omission selects the first unused `agent-N`, starting at `agent-1`.
 
 - `spawn_teammate` and the Team-scoped `send_message`, `list_agents`, and `interrupt_agent` are removed. The standard control tools use `name`, not `target`. Members can message across branches of their root tree; interruption remains ancestor-only.
 - `list_agents` takes no arguments and lists the entire tree. Remove scripted `scope` arguments. Rows use `kind: root` or `kind: child`; descendants include parent paths and root-relative depth. The root can assign tasks to itself or any discovered continuable descendant.
@@ -17,14 +17,15 @@ Agent Teams uses subagent tools. Full paths rooted at `lead` identify recipients
 - `agent-team` rejects `maxMembers`, `maxMessageBytes`, and `disposalTimeoutMs`; `tool-agent-team` rejects `interrupt`, `freshProvider`, and `forkProvider`.
 - `ctx.agentTeams` removes creation, messaging, interruption, roster, membership, and wait APIs. `TeamMembership` and `TeamMembers` are removed; use subagent root resolution and discovery. Service task ownership retains `ownerId`; model tool results use `ownerName`.
 - Runtime instances share root ownership; creation ancestry is unchanged. Member settlement does not dispose descendants. Messages restore only their target. Root closure closes the tree; members obtain results explicitly.
-- Cold resume uses saved presets and permissions. Missing presets fail restoration; historical targets without one use host composition plus descriptor overrides. Lifecycle dispatch uses the root scope while retaining the direct creator in `parentSessionId`. Browser continuation requires the root online; failure uses `subagent/delivery-unavailable`.
-- Historical Team rosters and mailboxes remain readable; their names grant no recipient or task-owner authority. New child descriptors and parent catalog entries carry an optional `name` segment; historical unnamed children use `legacy:<session-id>` path segments.
-- The Web Team panel shows tasks; subagent navigation browses members. Historical `agentTeam.members` remains decodable but grants no authority. After flush, task commits end all resident Agents’ active waits in the tree. Signals retain no unread state and start no agents; changes outside a wait cannot wake later waits.
+- Cold resume preserves saved presets and permissions; missing presets fail restoration. Lifecycle dispatch uses the root scope. Browser continuation requires the root online.
+- Historical Team rosters and mailboxes remain readable; their names grant no recipient or task-owner authority. Parent catalog entries carry an optional `name` segment; historical unnamed children use `legacy:<session-id>` path segments.
+- The Web Team panel shows tasks; subagent navigation browses members. Historical `agentTeam.members` grants no authority. Task commits end current waits across the tree; changes outside a wait cannot wake later waits.
 
 ## Migration
 
 1. Remove obsolete configuration keys and patches disabling subagent tools solely for Team support.
-2. Replace `spawn_teammate({ name, description, prompt, context })` with `subagent({ name, description, prompt })`; use `subagent_fork` to inherit conversation history. Save the returned path. `subagent_oar` also requires `name` and returns a path.
+2. Replace `spawn_teammate({ name, description, prompt, context })` with `subagent({ name, description, prompt })`; use `subagent_fork` to inherit conversation history. Save the returned path. `subagent_oar` also accepts optional `name` and returns a path.
 3. Use `send_message({ name, message })` and `interrupt_agent({ name })`; discover member paths with `list_agents`.
-4. Task `owner` fields accept paths; results expose `ownerName`. Use `lead` for the root. Host APIs retain Session ids.
-5. Replace removed services with `ctx.subagents`. Verify member navigation, nested-descendant assignment, and task-board wakeups during active waits. Re-read tasks after waiting.
+4. Task `owner` fields accept paths; results expose `ownerName`. Use `lead` for the root. Host operations retain Session ids. `startActivation()` accepts optional `name` and returns the full path in `activation.name`; retain `childId` for id-based operations.
+5. Every activation enters its parent catalog, including external `delivery: 'caller'` work. Discovery and the Web child list therefore include those entries; delivery only controls result routing. Verify scripts that count children.
+6. Replace removed services with `ctx.subagents`. Verify member navigation, nested-descendant assignment, and task-board wakeups during active waits. Re-read tasks after waiting.

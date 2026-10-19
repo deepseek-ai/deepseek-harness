@@ -5,14 +5,14 @@ import { dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import {
   SESSION_FORMAT_VERSION, SessionId as sessionId, SessionLogOffset, SessionSeq,
   type SessionEvent, type SessionHeader, type SessionId,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
-import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
+import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION, NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import { checkpointRecord, projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria,
@@ -102,6 +102,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
   let browser: Browser
   let page: Page
   let sidecarRoot: string
+  let parentId: SessionId
   let childId: SessionId
   let oneShotId: SessionId
   let grandchildId: SessionId
@@ -138,6 +139,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
     const parent = scaffold.ctx.agents.roots()[0]
     if (parent === undefined) throw new Error('fresh workspace did not publish its parent Agent')
+    parentId = parent.id
     const parentSettled = scaffold.whenTurnSettled()
     const parentInput = page.locator('[data-composer-input][contenteditable="true"]').first()
     await parentInput.fill(PARENT_PROMPT)
@@ -674,6 +676,43 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }, { timeout: 30_000 }).toBe(true)
     expect(scaffold.ctx.agents.get(forkId)).not.toBeUndefined()
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
+  })
+
+  it('shows caller-delivery external work as a non-navigable catalog leaf', async (test) => {
+    const parent = scaffold.ctx.agents.get(parentId)
+    if (parent === undefined) throw new Error('external caller fixture requires the live parent')
+    onTestFinished(scaffold.ctx.subagents.registerProvider({
+      name: 'external-caller-fixture', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
+      start: async () => ({
+        id: sessionId('external-caller-task'),
+        result: Promise.resolve({ output: [{ type: 'text', text: 'Caller received result' }], stopReason: 'completed' }),
+        dispose: async () => {},
+      }),
+    }))
+    const before = parent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')
+    const activation = await scaffold.ctx.subagents.startActivation({
+      provider: 'external-caller-fixture', label: 'Caller external task', delivery: 'caller', signal: test.signal,
+      request: { parent, prompt: [{ type: 'text', text: 'Return to the host caller' }] },
+    })
+    onTestFinished(() => activation.dispose())
+    expect(activation.name).toBe('lead/agent-1')
+    expect(await activation.result).toMatchObject({ stopReason: 'completed' })
+    expect(scaffold.ctx.sessions.get(activation.childId)).toBeUndefined()
+    expect(parent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toEqual(before)
+    await page.getByRole('tree', { name: 'Sessions' })
+      .getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
+    const catalog = page.getByRole('button', { name: '3 subagents', exact: true })
+    await catalog.waitFor()
+    await catalog.press('ArrowDown')
+    const leaf = page.getByRole('tree', { name: 'Subagent sessions' })
+      .getByRole('treeitem', { name: /Caller external task/ })
+    await leaf.waitFor()
+    expect(await leaf.getAttribute('aria-disabled')).toBe('true')
+    expect(await leaf.innerText()).toContain('External task')
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/subagent-external-caller.aria.md', import.meta.url)),
+      await leaf.ariaSnapshot(), MODE,
+    )
   })
 })
 

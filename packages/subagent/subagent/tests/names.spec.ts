@@ -8,7 +8,6 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { SubagentNames } from '../src/names.ts'
 import { subagentCatalogProjectionDefinition, subagentCatalogEntries, establishCatalogChild, establishExternalCatalogChild } from '../src/catalog.ts'
-import { subagentIdentityProjectionDefinition } from '../src/projection.ts'
 import { snapshotSubagentDescriptor } from '../src/descriptor.ts'
 import { externalTestParent } from './external-activation-helpers.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
@@ -23,10 +22,8 @@ async function setup() {
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(TestSessionQuery)
   const catalog = await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
-  const identity = await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
   const sources = {
     catalogOf: (session: typeof parent.session) => subagentCatalogEntries(catalog.stateOf(session)),
-    identityOf: (session: typeof parent.session) => identity.stateOf(session).identity,
     residencyOf: () => undefined,
   }
   return { ctx, parent, sources, names: new SubagentNames(ctx, sources) }
@@ -45,6 +42,27 @@ describe('agent paths', () => {
     }
   })
 
+  it('allocates the first free sibling ordinal across pending, committed, and restored catalogs', async () => {
+    const { ctx, parent, names, sources } = await setup()
+    establishExternalCatalogChild(parent.session, SessionId('explicit'), 'Explicit ordinal', 'agent-2')
+    const first = names.reserve(parent, undefined, signal)
+    using third = names.reserve(parent, undefined, signal)
+    expect(first.name).toBe('lead/agent-1')
+    expect(third.name).toBe('lead/agent-3')
+    first[Symbol.dispose]()
+    using retry = names.reserve(parent, undefined, signal)
+    expect(retry.name).toBe('lead/agent-1')
+    retry.commit(SessionId('first'), () => { establishExternalCatalogChild(parent.session, SessionId('first'), 'First', retry.segment) })
+    third.commit(SessionId('third'), () => { establishExternalCatalogChild(parent.session, SessionId('third'), 'Third', third.segment) })
+    const restored = new SubagentNames(ctx, sources)
+    using fourth = restored.reserve(parent, undefined, signal)
+    expect(fourth.name).toBe('lead/agent-4')
+    const other = await externalTestParent(ctx)
+    using independent = names.reserve(other, undefined, signal)
+    expect(independent.name).toBe('lead/agent-1')
+    expect(await restored.resolve(parent, 'lead/agent-1')).toBe('first')
+  })
+
   it.each(['', 'Reviewer', 'has space', '1worker', 'legacy:old', 'a/b', '.', '..', 'a\\b'])(
     'rejects invalid name %j without writing a creation record', async (name) => {
       const { parent, names } = await setup()
@@ -59,13 +77,13 @@ describe('agent paths', () => {
     const session = ctx.sessions.create(SessionId('nested'), { meta: { origin: 'subagent', parentSession: parent.id } })
     const nested = { ...parent, id: session.id, session }
     onTestFinished(ctx.agents.enter(nested, undefined))
-    const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'Review', name: 'reviewer' })
+    const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'Review' })
     session.append('subagent/descriptor', descriptor)
     {
       using reservation = names.reserve(parent, 'reviewer', signal, session.id)
       expect(reservation.name).toBe('lead/reviewer')
       await expect(names.resolve(parent, reservation.name)).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
-      reservation.commit(session.id, () => { establishCatalogChild(parent.session, session.header, descriptor) })
+      reservation.commit(session.id, () => { establishCatalogChild(parent.session, session.header, { ...descriptor, name: 'reviewer' }) })
     }
     const rootEvents = parent.session.snapshotEvents()
     {
@@ -96,9 +114,9 @@ describe('agent paths', () => {
       const session = ctx.sessions.create(SessionId(name), { meta: { origin: 'subagent', parentSession: parent.id } })
       const agent = { ...parent, id: session.id, session }
       onTestFinished(ctx.agents.enter(agent, undefined))
-      const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: name, name })
+      const descriptor = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: name })
       session.append('subagent/descriptor', descriptor)
-      establishCatalogChild(parent.session, session.header, descriptor)
+      establishCatalogChild(parent.session, session.header, { ...descriptor, name })
       return agent
     })
     const first = names.reserve(branches[0]!, 'alice', signal)
@@ -267,6 +285,14 @@ describe('agent paths', () => {
     }
     using retry = names.reserve(parent, 'reviewer', signal)
     expect(() => { retry.commit(SessionId('child'), () => { throw new Error('append failed') }) }).toThrow('append failed')
+  })
+
+  it('refuses an unmanaged child without its creator catalog entry', async () => {
+    const { ctx, parent, names } = await setup()
+    const session = ctx.sessions.create(SessionId('unpublished'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    const child = { ...parent, id: session.id, session }
+    onTestFinished(ctx.agents.enter(child, undefined))
+    expect(() => names.nameOf(child)).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
   })
 
   it('rejects cyclic live ancestry', async () => {

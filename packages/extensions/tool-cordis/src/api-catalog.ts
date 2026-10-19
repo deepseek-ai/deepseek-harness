@@ -3042,7 +3042,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'nameOf(agent: Agent): string',
-        description: 'Derive an Agent\'s full path from creation ancestry and descriptor names.',
+        description: 'Derive an Agent\'s full path from creation ancestry and parent catalogs.',
         parameters: [{ name: 'agent', description: 'exact live Agent whose name is requested.' }],
         returns: 'lead followed by named or legacy child segments.',
       },
@@ -7874,7 +7874,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentActivationSpec',
-    declaration: 'export interface SubagentActivationSpec {\n    readonly name: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
+    declaration: 'export interface SubagentActivationSpec {\n    readonly name?: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
   },
   {
     name: 'SubagentCapabilities',
@@ -7890,7 +7890,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentDescendantListEntry',
-    declaration: 'export type SubagentDescendantListEntry = SubagentListEntry & {\n    readonly parentId: SessionId;\n    readonly depth: number;\n};',
+    declaration: 'export type SubagentDescendantListEntry = SubagentListEntry & {\n    readonly path: string;\n    readonly parentId: SessionId;\n    readonly depth: number;\n};',
   },
   {
     name: 'SubagentInterruptAuthority',

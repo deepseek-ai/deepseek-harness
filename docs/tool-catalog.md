@@ -2077,7 +2077,7 @@ Delegate a self-contained task to a configured external agent. Choose its runtim
   "properties": {
     "name": {
       "type": "string",
-      "description": "A sibling-unique name segment: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
+      "description": "Optional sibling-unique name; omission selects the first unused agent-N, starting at agent-1. Explicit names: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
     },
     "runtime": {
       "type": "string",
@@ -2101,7 +2101,6 @@ Delegate a self-contained task to a configured external agent. Choose its runtim
     }
   },
   "required": [
-    "name",
     "runtime",
     "description",
     "prompt"
@@ -2149,7 +2148,7 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
   "properties": {
     "name": {
       "type": "string",
-      "description": "Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+      "description": "Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
     },
     "cwd": {
       "type": "string",
@@ -2165,7 +2164,6 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
     }
   },
   "required": [
-    "name",
     "description",
     "prompt"
   ]

@@ -8,12 +8,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentListEntry } from './control-types.ts'
 import { SubagentError } from './error.ts'
+import { subagentNameSegment } from './catalog.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 
 export type { SubagentListEntry } from './control-types.ts'
 
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
 export type SubagentDescendantListEntry = SubagentListEntry & {
+  /** Slash-separated named or legacy segments relative to the requested root. */
+  readonly path: string
   /** Parent whose catalog contains this child. */
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
@@ -86,12 +89,12 @@ export async function listDescendants(
     return children
   }
   const stack = (await readChildren(rootSessionId))
-    .map(entry => ({ entry, parentId: rootSessionId, depth: 1 }))
+    .map(entry => ({ entry, parentId: rootSessionId, depth: 1, path: subagentNameSegment(entry) }))
     .reverse()
   const visited = new Set<SessionId>([rootSessionId])
   const result: SubagentDescendantListEntry[] = []
   for (let position = stack.pop(); position !== undefined; position = stack.pop()) {
-    const { entry, parentId, depth } = position
+    const { entry, parentId, depth, path } = position
     if (visited.has(entry.id)) continue
     visited.add(entry.id)
     let children: SubagentCatalogEntry[]
@@ -101,7 +104,7 @@ export async function listDescendants(
       if (error instanceof SubagentError) throw error
       const code = error instanceof Error && 'code' in error ? error.code : undefined
       result.push({
-        kind: 'diagnostic', id: entry.id, parentId, depth,
+        kind: 'diagnostic', id: entry.id, parentId, depth, path,
         ...entry.name === undefined ? {} : { name: entry.name },
         reason: code === 'SESSION_QUERY_CORRUPT_SESSION' || code === 'SESSION_QUERY_SOURCE_CONFLICT'
           ? 'corrupt' : 'unavailable',
@@ -109,19 +112,19 @@ export async function listDescendants(
       continue
     }
     if (entry.mode === 'unknown') {
-      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth,
+      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth, path,
         ...entry.name === undefined ? {} : { name: entry.name }, reason: 'unsupported' })
     } else {
       const { createdAt: _createdAt, ...identity } = entry
       result.push({
-        ...identity, kind: 'child', parentId, depth,
+        ...identity, kind: 'child', parentId, depth, path,
         activity: sessions.get(entry.id) === undefined ? 'inactive' : 'running',
         hasChildren: children.length > 0,
       })
     }
     // Catalog event order defines siblings; the stack visits the first one next.
     for (const child of [...children].reverse()) {
-      stack.push({ entry: child, parentId: entry.id, depth: depth + 1 })
+      stack.push({ entry: child, parentId: entry.id, depth: depth + 1, path: `${path}/${subagentNameSegment(child)}` })
     }
   }
   return result

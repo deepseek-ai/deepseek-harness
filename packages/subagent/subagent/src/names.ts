@@ -5,15 +5,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
-import { subagentNameSchema } from './descriptor.ts'
+import type { SubagentCatalogEntry } from './projection-types.ts'
+import { subagentNameSchema, subagentNameSegment } from './catalog.ts'
 import { SubagentError } from './error.ts'
 import { listChildren } from './list-children.ts'
 
 /** Service-owned projections and current managed residency. */
 interface NameSources {
   catalogOf(session: Session): SubagentCatalogEntry[]
-  identityOf(session: Session): SubagentIdentityProjection | undefined
   residencyOf(agent: Agent): {
     readonly name: string
     readonly root: Agent
@@ -34,27 +33,35 @@ export class SubagentNames {
   /**
    * Reserve a sibling name before preparation or external provider dispatch.
    * @param parent - exact live spawning Agent.
-   * @param name - one lower-case path segment.
+   * @param requestedName - one lower-case segment; omission selects the first unused agent-N.
    * @param signal - cancellation before reservation or publication.
    * @param id - reserved local identity, when the provider does not allocate it.
    * @returns the full path, parent catalog publication, and temporary-reservation release.
    * @throws when the name or identity is taken, invalid, or cannot be checked.
    */
-  reserve(parent: Agent, name: string, signal: AbortSignal, id?: SessionId): {
+  reserve(parent: Agent, requestedName: string | undefined, signal: AbortSignal, id?: SessionId): {
+    readonly segment: string
     readonly name: string
     commit(id: SessionId, publish: () => void): void
     [Symbol.dispose](): void
   } {
-    if (!subagentNameSchema.safeParse(name).success) {
+    if (requestedName !== undefined && !subagentNameSchema.safeParse(requestedName).success) {
       throw new SubagentError('agent name must start with a lower-case letter and contain only lower-case letters, digits, underscores, or hyphens', 'INVALID_AGENT_NAME')
     }
     const lineage = this.lineage(parent)
-    const path = `${this.nameOf(parent)}/${name}`
     signal.throwIfAborted()
     const children = () => this.sources.catalogOf(parent.session)
     const pending = this.pending.get(parent) ?? new Set<string>()
     this.pending.set(parent, pending)
-    if (children().some(child => child.name === name) || pending.has(name)) {
+    const occupied = new Set([...children().map(subagentNameSegment), ...pending])
+    let name = requestedName
+    if (name === undefined) {
+      let ordinal = 1
+      while (occupied.has(`agent-${ordinal}`)) ordinal++
+      name = `agent-${ordinal}`
+    }
+    const path = `${this.nameOf(parent)}/${name}`
+    if (occupied.has(name)) {
       throw new SubagentError(`agent name "${name}" is already in use under ${this.nameOf(parent)}; choose another name`, 'DUPLICATE_AGENT_NAME')
     }
     const checkId = (candidate: SessionId): void => {
@@ -67,6 +74,7 @@ export class SubagentNames {
     if (id !== undefined) checkId(id)
     pending.add(name)
     return {
+      segment: name,
       name: path,
       commit: (childId, publish) => {
         signal.throwIfAborted()
@@ -81,7 +89,7 @@ export class SubagentNames {
   }
 
   /**
-   * Derive an Agent's full path from its creation ancestry and descriptor segments.
+   * Derive an Agent's full path from its creation ancestry and parent catalogs.
    * @param agent - exact live Agent.
    * @returns lead followed by named or legacy child segments.
    */
@@ -91,9 +99,10 @@ export class SubagentNames {
     if (resident !== undefined) return resident.name
     return lineage.map((member, index) => {
       if (index === 0) return 'lead'
-      const identity = this.sources.identityOf(member.session)
-      return identity !== undefined && member.session.isOwnSeq(identity.seq) && identity.name !== undefined
-        ? identity.name : `legacy:${member.id}`
+      const parent = lineage[index - 1] as Agent
+      const entry = this.sources.catalogOf(parent.session).find(child => child.id === member.id)
+      if (entry === undefined) throw new SubagentError('subagent is absent from its creator catalog', 'UNAUTHORIZED')
+      return subagentNameSegment(entry)
     }).join('/')
   }
 
@@ -114,7 +123,7 @@ export class SubagentNames {
       let children = this.sources.catalogOf(root.session)
       for (const [index, segment] of segments.entries()) {
         signal?.throwIfAborted()
-        const matches = children.filter(child => (child.name ?? `legacy:${child.id}`) === segment)
+        const matches = children.filter(child => subagentNameSegment(child) === segment)
         const child = matches[0]
         if (child === undefined) break
         if (matches.some(match => match.id !== child.id)) {

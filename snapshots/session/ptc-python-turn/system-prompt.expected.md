@@ -364,8 +364,8 @@ class SkillOutput(TypedDict):
     content: str
 
 class SubagentArgs(TypedDict):
-    # Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.
-    name: str
+    # Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.
+    name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.
@@ -379,8 +379,8 @@ class SubagentOutput(TypedDict):
     name: str
 
 class SubagentForkArgs(TypedDict):
-    # Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.
-    name: str
+    # Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.
+    name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.

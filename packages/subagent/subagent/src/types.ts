@@ -29,8 +29,8 @@ export function SubagentRunId(id: string): SubagentRunId {
 
 /** One managed child execution and its result delivery policy. */
 export interface SubagentActivationSpec {
-  /** Immutable name segment, unique among the parent’s direct children. */
-  readonly name: string
+  /** Immutable sibling name; omission reserves the first unused agent-N segment, starting at 1. */
+  readonly name?: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -41,7 +41,7 @@ export interface SubagentActivationSpec {
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
   readonly signal: AbortSignal
-  /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
+  /** Parent delivery notifies the model; caller delivery only returns the result. Both enter the parent catalog. */
   readonly delivery: 'parent' | 'caller'
 }
 

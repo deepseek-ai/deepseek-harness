@@ -1,6 +1,6 @@
 {"type":"session","version":4,"id":"{{session:2}}","createdAt":1789625685858,"cwd":"{{cwd}}","parentSession":"{{session:1}}","isSeeded":false,"origin":"subagent","delegationDepth":1,"agentPreset":"child"}
 {"type":"agent-preset/selected","data":{"agentPreset":"child"}}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","name":"worker-1","label":"Reply with CHILD_OK","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"Reply with CHILD_OK","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
 {"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"permission/preset","data":{"preset":"danger-full-access"}}
