@@ -7,6 +7,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TeamProjectionState, TeamState } from './projection.ts'
 
 import { TeamId } from './types.ts'
+import { TeamError } from './error.ts'
 import type { TeamTaskSnapshot } from './types.ts'
 
 /** Owns per-Lead transaction order and committed Team event publication. */
@@ -58,11 +59,19 @@ export class TeamJournal {
    * Commit a task before notifying current waits in its tree.
    * @param root - live tree root whose Session stores the task.
    * @param task - complete committed task revision.
-   * @throws when persistence fails.
+   * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED after append when durability cannot be confirmed; read the task before retrying.
    */
   async appendAndFlush(root: Agent, task: TeamTaskSnapshot): Promise<void> {
     root.session.append('team/task', { version: 2, teamId: TeamId(root.id), task })
-    await this.ctx.sessions.flush(root.session)
+    try {
+      await this.ctx.sessions.flush(root.session)
+    } catch (error: unknown) {
+      throw new TeamError(
+        `task "${task.id}" revision ${task.revision} is visible, but persistence was not confirmed; read the task before retrying`,
+        'TEAM_TASK_PERSISTENCE_UNCONFIRMED',
+        { cause: error },
+      )
+    }
     this.onCommit(root)
   }
 }

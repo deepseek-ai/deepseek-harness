@@ -136,7 +136,7 @@ After a successful append and flush, Team emits an Agent-scoped in-memory signal
 
 `Service.init` awaits registration of the `agentTeam` projection before publishing service readiness. The journal retains the returned handle and reads task state through `stateOf(session)`; callers use the Team service rather than registering another reader.
 
-Task mutations append `team/task` to the exact live root Session and flush before emitting wait signals. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
+Task mutations honor cancellation before appending `team/task` to the exact live root Session, then flush before emitting wait signals. Cancellation cannot retract an appended record. A flush failure raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown. Read that task before retrying. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
 
 Mailbox projection and checkpoint admission preserve decoded JSON fields outside locally declared validators, including an own `__proto__` key. Historical payload generations remain unchanged; projection caches rebuild from the Session log when their cache version changes.
 
@@ -146,7 +146,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 ### Browser projection
 
-The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical member fields remain for decoding compatibility and grant no runtime authority. A failed projection rejects subsequent Team reads and mutations without appending further Team events. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical member fields remain in persisted projection state for decoding compatibility, are omitted from the browser view, and grant no runtime authority. A failed projection rejects subsequent Team reads and mutations without appending further Team events. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
 The [Web UI](../client-ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels reuse Session and catalog data with an id fallback.
 

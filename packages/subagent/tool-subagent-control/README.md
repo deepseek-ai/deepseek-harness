@@ -71,7 +71,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before checking pending next-step input, and removes its listeners and timer on every settlement.
+Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 

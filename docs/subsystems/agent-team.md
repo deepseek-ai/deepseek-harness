@@ -77,23 +77,7 @@ interface TeamTaskSnapshot {
 
 `agentTeamMode.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. Mode writes serialize with task mutations, synchronize tools before flushing, and wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
-The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical `members` fields remain decodable but supply neither assignment authority nor a second browser roster. The task panel labels owners from existing Session and catalog data with id fallback.
-
-```ts type-equiv
-/**
- * One roster row published through the `agentTeam` Session projection: the
- * Lead and each historical roster member. Current children come from `subagentCatalog`.
- */
-interface TeamMemberProjection {
-  readonly id: SessionId
-  /** Delegated responsibility; absent for the Lead. Never used as an address. */
-  readonly description?: string
-  readonly role: 'lead' | 'teammate'
-  /** The Lead and continuable children are always `active`. Turn activity comes from Session status. */
-  readonly phase: TeamMemberPhase
-  readonly error?: string
-}
-```
+The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical member fields remain in persisted projection state but are omitted from the browser view. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -115,10 +99,9 @@ interface TeamTaskView {
 /**
  * Durable Team state published to browser clients through the Lead Session's
  * `agentTeam` projection. `failure` names the first rejected persisted Team
- * record; members and tasks then stay at the last valid state.
+ * record; tasks then stay at the last valid state.
  */
 interface TeamProjection {
-  readonly members: TeamMemberProjection[]
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }
@@ -167,9 +150,11 @@ async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
+ * @param signal - cancellation before the task event is appended; omitted means no cancellation.
  * @returns the revision-one task view.
+ * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
-async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
+async createTask(caller: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
 
 /**
  * Return one task, including a deleted tombstone.
@@ -190,9 +175,11 @@ listTasks(caller: Agent): TeamTaskView[]
  * Compare-and-set one authorized task transition.
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
+ * @param signal - cancellation before the task event is appended; omitted means no cancellation.
  * @returns the committed next task revision.
+ * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
-async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
+async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
 ```
 
 Types: [Agent](core.md)

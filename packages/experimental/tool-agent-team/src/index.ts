@@ -154,7 +154,7 @@ function install(agent: Agent, ctx: Context): () => void {
           description: args.description,
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        })
+        }, exec.signal)
         return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
@@ -238,7 +238,7 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
           ...owner === undefined ? {} : { owner },
-        })
+        }, exec.signal)
         return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))

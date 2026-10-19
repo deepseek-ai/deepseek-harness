@@ -50,10 +50,12 @@ export class TeamTaskBoard {
    * @param caller - exact live Agent creating the task.
    * @param root - live subagent tree root owning the board.
    * @param request - task text, blockers, and advisory write scopes.
+   * @param signal - cancellation before append; omitted means no cancellation.
    * @returns the revision-one task view.
    */
-  async create(caller: Agent, root: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
+  async create(caller: Agent, root: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView> {
     return this.journal.transact(root.id, async () => {
+      signal?.throwIfAborted()
       const state = this.state(root)
       const active = state.tasks.filter(task => task.status !== 'deleted').length
       if (active >= this.maxTasks) {
@@ -73,6 +75,7 @@ export class TeamTaskBoard {
         writeScopes: this.writeScopes(request.writeScopes ?? []),
       }
       this.assertTaskGraph(state, task)
+      // The transaction queue may outlive its caller.
       this.ctx.subagents.rootOf(caller)
       await this.journal.appendAndFlush(root, task)
       return projectTaskView(state, task)
@@ -109,14 +112,17 @@ export class TeamTaskBoard {
    * @param caller - exact live Team member authorizing the mutation.
    * @param root - live subagent tree root owning the board.
    * @param request - task identity, expected revision, action, and action fields.
+   * @param signal - cancellation before append; omitted means no cancellation.
    * @returns the committed next task revision.
    */
   async update(
     caller: Agent,
     root: Agent,
     request: UpdateTeamTaskRequest,
+    signal?: AbortSignal,
   ): Promise<TeamTaskView> {
     return this.journal.transact(root.id, async () => {
+      signal?.throwIfAborted()
       const state = this.state(root)
       const current = state.tasks.find(task => task.id === request.taskId)
       if (current === undefined) throw new TeamError(`team task "${request.taskId}" not found`, 'TEAM_TASK_NOT_FOUND')
@@ -190,7 +196,7 @@ export class TeamTaskBoard {
             break
           }
           if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
-          next = { ...current, status: 'in_progress', ownerId: await this.resolveAssignee(root, request.owner) }
+          next = { ...current, status: 'in_progress', ownerId: await this.resolveAssignee(root, request.owner, signal) }
           break
         }
         case 'delete': {
@@ -212,6 +218,8 @@ export class TeamTaskBoard {
         revision: current.revision + 1,
       }
       this.assertTaskGraph(state, task)
+      signal?.throwIfAborted()
+      // Queueing and assignee discovery may outlive the caller.
       this.ctx.subagents.rootOf(caller)
       await this.journal.appendAndFlush(root, task)
       return projectTaskView(state, task)
@@ -219,9 +227,9 @@ export class TeamTaskBoard {
   }
 
   /** Resolve a task owner through the same durable tree used by Agent discovery. */
-  private async resolveAssignee(root: Agent, target: SessionId): Promise<SessionId> {
+  private async resolveAssignee(root: Agent, target: SessionId, signal?: AbortSignal): Promise<SessionId> {
     if (target === root.id) return target
-    const descendants = await this.ctx.subagents.listDescendants(root.id)
+    const descendants = await this.ctx.subagents.listDescendants(root.id, signal)
     if (descendants.some(entry => entry.kind !== 'diagnostic' && entry.mode === 'continuable' && entry.id === target)) return target
     throw new TeamError(`agent "${target}" is not a continuable descendant of this task board's root`, 'TEAM_MEMBER_NOT_FOUND')
   }

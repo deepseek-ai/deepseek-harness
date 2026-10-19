@@ -244,7 +244,9 @@ describe('Tree-owned task boards', () => {
     expect([first.id, second.id]).toEqual([TeamTaskId('task-1'), TeamTaskId('task-2')])
   })
 
-  it.each(['create', 'claim'] as const)('rejects a queued %s after its caller is disposed', async (action) => {
+  it.each([
+    ['create', 'disposed'], ['claim', 'disposed'], ['create', 'cancelled'], ['claim', 'cancelled'],
+  ] as const)('rejects a queued %s after its caller is %s', async (action, stopped) => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
       sessionId: SessionId('queued-caller'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
@@ -261,11 +263,13 @@ describe('Tree-owned task boards', () => {
     const creating = ctx.agentTeams.createTask(lead, { subject: 'blocking', description: 'holds the transaction queue' })
     try {
       await entered.promise
+      const controller = new AbortController()
       const queued = action === 'create'
-        ? ctx.agentTeams.createTask(child.agent, { subject: 'disposed', description: 'must not be committed' })
-        : ctx.agentTeams.updateTask(child.agent, { taskId: task.id, expectedRevision: task.revision, action: 'claim' })
-      const rejected = expect(queued).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-      await child.dispose()
+        ? ctx.agentTeams.createTask(child.agent, { subject: 'stopped', description: 'must not be committed' }, controller.signal)
+        : ctx.agentTeams.updateTask(child.agent, { taskId: task.id, expectedRevision: task.revision, action: 'claim' }, controller.signal)
+      const rejected = expect(queued).rejects.toMatchObject(stopped === 'disposed' ? { code: 'UNAUTHORIZED' } : { name: 'AbortError' })
+      if (stopped === 'disposed') await child.dispose()
+      else controller.abort()
       release.resolve(undefined)
       await creating
       await rejected
@@ -697,7 +701,13 @@ describe('Task-board wait notifications', () => {
     expect(notified).toEqual([lead, child])
     notified.length = 0
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
-    await expect(ctx.agentTeams.createTask(lead, { subject: 'two', description: 'failed flush' })).rejects.toThrow('storage unavailable')
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'two', description: 'failed flush' })).rejects.toMatchObject({
+      code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED',
+      message: 'task "task-2" revision 1 is visible, but persistence was not confirmed; read the task before retrying',
+      cause: new Error('storage unavailable'),
+    })
+    expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-2'))).toMatchObject({ subject: 'two', revision: 1 })
+    expect(ctx.agentTeams.listTasks(lead)).toHaveLength(2)
     expect(notified).toEqual([])
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',

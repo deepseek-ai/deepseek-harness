@@ -172,6 +172,36 @@ async function interrupt(ctx: Context, lead: Agent, target: SessionId): Promise<
 }
 
 describe('dsh-tool-team', () => {
+  it.each([true, false])('cancels reassignment without appending when discovery observes cancellation: %s', async (observesCancellation) => {
+    const { ctx, lead } = await setup(['hang'])
+    const childId = await spawn(ctx, lead, 'worker', 'stay running')
+    await waitRunning(ctx, childId)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'work', description: 'assign work' })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const discover = ctx.subagents.listDescendants.bind(ctx.subagents)
+    const lookup = vi.spyOn(ctx.subagents, 'listDescendants').mockImplementationOnce(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return discover(args[0], observesCancellation ? args[1] : undefined)
+    })
+    const controller = new AbortController()
+    const result = execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: ctx.subagents.nameOf(ctx.agents.get(childId)!),
+    }, controller.signal)
+    try {
+      await entered.promise
+      expect(lookup.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal)
+      controller.abort(new Error('stop assignment'))
+    } finally {
+      release.resolve(undefined)
+    }
+    expect(await result).toMatchObject({ isError: true })
+    expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
+    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
+    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
+  })
+
   it('adds task tools, policy, and scoped identity to the shared subagent controls', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
@@ -621,7 +651,9 @@ describe('dsh-tool-team', () => {
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
     const failed = await execute(ctx, lead, 'team_task_create', { subject: 'failed', description: 'flush fails' })
     expect(failed.isError).toBe(true)
-    expect(text(failed)).toContain('storage unavailable')
+    expect(text(failed)).toContain('task "task-2" revision 1 is visible, but persistence was not confirmed')
+    expect(text(failed)).toContain('read the task before retrying')
+    expect(ctx.agentTeams.listTasks(lead).map(task => task.subject)).toEqual(['committed', 'failed'])
     await vi.advanceTimersByTimeAsync(10_000)
     expect(await afterCommit.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
@@ -686,7 +718,7 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
   })
 
-  it('installs Team scope before a cold-resumed teammate request' , async () => {
+  it('installs Team scope before a cold-resumed teammate request', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
     const childId = await spawn(ctx, lead, 'cold-worker', 'finish once')
     await waitNoAgent(ctx, childId)
@@ -746,7 +778,7 @@ describe('dsh-tool-team', () => {
     await expect(ctx.agents.create({ sessionId: SessionId('lookup-failure'), agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toBe(failure)
   })
 
-  it('reports unavailable identity without inventing a parent id' , async () => {
+  it('reports unavailable identity without inventing a parent id', async () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')

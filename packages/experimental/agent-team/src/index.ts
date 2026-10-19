@@ -152,10 +152,12 @@ export class TeamService extends Service {
    * Create one unowned pending task in the Team Lead log.
    * @param caller - exact live Team member creating the task.
    * @param request - task text, blockers, and advisory write scopes.
+   * @param signal - cancellation before the task event is appended; omitted means no cancellation.
    * @returns the revision-one task view.
+   * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
    */
-  async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
-    return await this.tasks.create(caller, this.ctx.subagents.rootOf(caller), request)
+  async createTask(caller: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView> {
+    return await this.tasks.create(caller, this.ctx.subagents.rootOf(caller), request, signal)
   }
 
   /**
@@ -181,10 +183,12 @@ export class TeamService extends Service {
    * Compare-and-set one authorized task transition.
    * @param caller - exact live Team member authorizing the mutation.
    * @param request - task identity, expected revision, action, and action fields.
+   * @param signal - cancellation before the task event is appended; omitted means no cancellation.
    * @returns the committed next task revision.
+   * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
    */
-  async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView> {
-    return await this.tasks.update(caller, this.ctx.subagents.rootOf(caller), request)
+  async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView> {
+    return await this.tasks.update(caller, this.ctx.subagents.rootOf(caller), request, signal)
   }
 
 }

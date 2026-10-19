@@ -50,10 +50,11 @@ function TaskCard({ task, rootId, useSessions, t }: {
 }) {
   const owner = useSessions((state) => {
     if (task.ownerId === undefined) return undefined
+    if (task.ownerId === rootId) return t('lead')
     const summary = state.byId[task.ownerId]
     const parentId = summary?.parentId ?? rootId
     const catalog = state.projectionsBySession[parentId]?.values.subagentCatalog
-    return summary?.title ?? catalog?.find(child => child.id === task.ownerId)?.label ?? summary?.displayTitle ?? task.ownerId
+    return catalog?.find(child => child.id === task.ownerId)?.label ?? summary?.title ?? summary?.displayTitle ?? task.ownerId
   })
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)

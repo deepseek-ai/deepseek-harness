@@ -177,7 +177,7 @@ interface ContinuableCreateSpec {
 
 ## Messages and interruption
 
-sendMessage requires the exact live root or resident continuable sender and another member’s Session id. Delivery preserves the actual sender, verifies the target’s durable branch, and restores cold continuable ancestors under their recorded parents without delivering the target’s message to them. Running targets receive Steer; inactive targets start a turn. External executions reject follow-ups. Interruption still requires ancestor authority. Local and external executions report final text, structured output, diagnostics, and status through parent settlement notices; caller delivery suppresses those notices. drainDescendants and drainChildren await owned teardown.
+`sendMessage` requires the exact live sender and a target Session id in the same root tree. Root and continuable members can message across branches; admission revalidates the sender and root. Running targets receive Steer; only an absent target cold-resumes, while its creation ancestors may remain offline. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status to their direct creator only while it is online; caller delivery suppresses those notices. `drainDescendants` and `drainChildren` await owned teardown.
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -210,7 +210,7 @@ interface SubagentSettledMessageSource {
 ```
 
 ```ts type-equiv
-/** Options for one model-authored message between adjacent Agents. */
+/** Options for one model-authored message within a subagent tree. */
 interface SubagentSendMessageOptions {
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal
