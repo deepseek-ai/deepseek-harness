@@ -267,11 +267,28 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   const installed = new Map<Agent, () => void>()
   const maybeInstall = (agent: Agent): void => {
-    if (installed.has(agent)) return
-    installed.set(agent, install(agent, ctx))
+    let enabled: boolean
+    try {
+      enabled = ctx.agentTeams.isEnabled(agent)
+    } catch (error: unknown) {
+      if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
+      // An independently resumed child has no active root to supply Team mode.
+      enabled = false
+    }
+    if (enabled) {
+      if (!installed.has(agent)) installed.set(agent, install(agent, ctx))
+    } else {
+      installed.get(agent)?.()
+      installed.delete(agent)
+    }
   }
   for (const agent of ctx.agents.list()) maybeInstall(agent)
   ctx.on('agent/created', ({ agent }) => { maybeInstall(agent) })
+  ctx.on('team/mode-changed', (root) => {
+    for (const agent of ctx.agents.list()) {
+      if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) maybeInstall(agent)
+    }
+  })
   ctx.on('agent/disposed', ({ agent }) => {
     installed.get(agent)?.()
     installed.delete(agent)

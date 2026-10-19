@@ -9,6 +9,8 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../agent-team" },
     { "path": "../../api/session-controller/tsconfig.client.json" },
+    { "path": "../../api/remotes/tsconfig.client.json" },
+    { "path": "../../client/ui-model-selection" },
     { "path": "../../client/locale/tsconfig.client.json" },
     { "path": "../../client/store" },
     { "path": "../../client/ui-conversation/tsconfig.client.json" },

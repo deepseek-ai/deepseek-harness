@@ -597,7 +597,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SubagentRuntime)
-      await ctx.plugin(TeamService)
+      await ctx.plugin(TeamService, { enabledByDefault: true })
       const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
       let agent!: Agent
       await ctx.plugin(Object.assign(async (inner: Context) => {

@@ -6,6 +6,9 @@ export const NS = 'agent-team'
 /** Simplified Chinese dictionary and key source. */
 export const zh = {
   trigger: '任务板',
+  'mode.label': '使用智能体团队',
+  'mode.failed': '无法确认智能体团队设置已保存，请重试：{message}',
+  'mode.unavailable': '此会话暂时无法切换智能体团队',
   loading: '正在加载任务板…',
   unavailable: '任务板暂不可用',
   failure: '任务记录无效：{message}',
@@ -30,6 +33,9 @@ export type TeamKey = keyof typeof zh
 /** English dictionary checked against the Chinese key set. */
 export const en = {
   trigger: 'Task board',
+  'mode.label': 'Use Agent Teams',
+  'mode.failed': 'Could not confirm Agent Teams was saved. Try again: {message}',
+  'mode.unavailable': 'Agent Teams cannot be changed in this session',
   loading: 'Loading task board…',
   unavailable: 'Task board is unavailable',
   failure: 'Invalid persisted task record: {message}',

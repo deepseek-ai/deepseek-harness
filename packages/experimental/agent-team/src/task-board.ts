@@ -31,12 +31,19 @@ export class TeamTaskBoard {
    * @param ctx - subagent discovery for task assignees.
    * @param journal - authoritative Lead-log transaction owner.
    * @param maxTasks - maximum non-deleted tasks retained by one Team.
+   * @param enabled - whether the root permits task-board operations.
    */
   constructor(
     private readonly ctx: Context,
     private readonly journal: TeamJournal,
     private readonly maxTasks: number,
+    private readonly enabled: (root: Agent) => boolean,
   ) {}
+
+  private state(root: Agent) {
+    if (!this.enabled(root)) throw new TeamError('enable Agent Teams for this Session before using the task board', 'TEAM_DISABLED')
+    return this.journal.state(root)
+  }
 
   /**
    * Create one unowned pending task in the Team Lead log.
@@ -47,7 +54,7 @@ export class TeamTaskBoard {
    */
   async create(caller: Agent, root: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
     return this.journal.transact(root.id, async () => {
-      const state = this.journal.state(root)
+      const state = this.state(root)
       const active = state.tasks.filter(task => task.status !== 'deleted').length
       if (active >= this.maxTasks) {
         throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
@@ -79,7 +86,7 @@ export class TeamTaskBoard {
    * @returns the latest task value and derived readiness diagnostics.
    */
   get(root: Agent, id: TeamTaskId): TeamTaskView {
-    const state = this.journal.state(root)
+    const state = this.state(root)
     const task = state.tasks.find(candidate => candidate.id === id)
     if (task === undefined) throw new TeamError(`team task "${id}" not found`, 'TEAM_TASK_NOT_FOUND')
     return projectTaskView(state, task)
@@ -91,7 +98,7 @@ export class TeamTaskBoard {
    * @returns detached current task views.
    */
   list(root: Agent): TeamTaskView[] {
-    const state = this.journal.state(root)
+    const state = this.state(root)
     return state.tasks
       .filter(task => task.status !== 'deleted')
       .map(task => projectTaskView(state, task))
@@ -110,7 +117,7 @@ export class TeamTaskBoard {
     request: UpdateTeamTaskRequest,
   ): Promise<TeamTaskView> {
     return this.journal.transact(root.id, async () => {
-      const state = this.journal.state(root)
+      const state = this.state(root)
       const current = state.tasks.find(task => task.id === request.taskId)
       if (current === undefined) throw new TeamError(`team task "${request.taskId}" not found`, 'TEAM_TASK_NOT_FOUND')
       if (current.revision !== request.expectedRevision) {

@@ -25,6 +25,8 @@ This package adds a shared task-board panel to the Web conversation header. Host
 <a id="use-this-package"></a>
 ## Use this package
 
+In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. The shared task-board action appears while enabled; members remain in the existing Subagent tree. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
+
 Enable this package through [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md), which supplies the Team service, tools, and Web UI together. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 
 ### Inspect the task board
@@ -41,7 +43,7 @@ The read-only board shows task identity, owner label, blockers, readiness, advis
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Client export registers its locale dictionaries and one conversation-header slot through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes both registrations.
+The Client export registers its locale dictionaries and conversation-header and model-menu slots through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes its registrations.
 
 The panel renders outside the conversation container and stays within the viewport. Hover opens it after 150ms; leaving the trigger and panel closes it after 120ms. Clicking pins the panel and moves focus into it. Outside clicks and Escape dismiss it; Escape returns focus when focus was inside. A narrow header uses an icon trigger that opens on click. The panel resolves the root through Session ancestry and reads its `agentTeam` projection. Incomplete ancestry or missing projection data leaves the board unavailable; conversation changes close the panel.
 

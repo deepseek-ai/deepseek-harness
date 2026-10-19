@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+在根会话的模型与推理等级菜单中打开**使用智能体团队**。新 Session 默认关闭。开启时显示共享任务板入口；成员仍由现有 Subagent 树展示。关闭后保留任务和子代理。开关等待保存后的投影更新，失败由菜单宿主提示。
+
 通过 [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.zh.md) 启用本包。这个组合包同时提供团队服务、工具与 Web 界面。Web Client loader 挂载 `/client` export；root Host export 不执行行为，本包也没有用户配置字段。
 
 ### 查看任务板
@@ -41,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Client export 通过 Cordis effect 注册 locale dictionary 与一个 conversation-header slot；它不挂载任何 Remote namespace。Dispose plugin fiber 会移除这两项 registration。
+Client export 通过 Cordis effect 注册语言字典、会话标题栏与模型菜单 slot；它不挂载 Remote namespace。销毁插件 fiber 会移除这些注册。
 
 面板渲染于对话容器之外，并保持在视口内。悬停 150ms 后打开；离开触发器和面板 120ms 后关闭。点击会固定面板并将焦点移入。外部点击和 Escape 关闭面板；焦点原在面板内时，Escape 将其送回。窄标题栏使用点击打开的图标触发器。面板通过 Session 祖先关系解析根并读取其 `agentTeam` 投影。祖先关系不完整或投影数据缺失时，任务板不可用；切换对话时关闭面板。
 

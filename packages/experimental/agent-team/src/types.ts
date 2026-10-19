@@ -142,8 +142,22 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** Team-service deployment limits. */
+/** Persisted Team selection, shared by a root Session and its descendants. */
+export interface TeamModeProjection {
+  readonly enabled: boolean
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    /** Whether the root Session enables the shared task board and Team guidance. */
+    agentTeamMode: TeamModeProjection
+  }
+}
+
+/** Team-service deployment limits and initial mode. */
 export interface Config {
+  /** Team mode before a Session records a selection or a shared task. Defaults to false. */
+  readonly enabledByDefault?: boolean
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
 }
@@ -181,6 +195,8 @@ export interface UpdateTeamTaskRequest {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
+    /** User-selected Team mode; child Agents use the selection of their runtime root. */
+    'team/mode': { enabled: boolean }
     /** Historical teammate lifecycle value; new teammates are continuable entries in the Lead's subagent catalog. */
     'team/member': { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
     /** Whole shared-task value, stored only in the Team Lead Session. */

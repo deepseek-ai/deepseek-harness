@@ -68,7 +68,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabledByDefault = true) {
   const ctx = new Context()
   contexts.add(ctx)
   await mountAgentLoopTestDependencies(ctx)
@@ -82,7 +82,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   await ctx.plugin(ToolSubagentControl)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  await ctx.plugin(TeamService)
+  await ctx.plugin(TeamService, { enabledByDefault })
   const fiber = await ctx.plugin(toolTeam)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -638,7 +638,41 @@ describe('dsh-tool-team', () => {
     expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
   })
 
-  it('installs Team scope before a cold-resumed teammate request', async () => {
+  it('switches tools and guidance for one tree while preserving tasks and ordinary subagents', async () => {
+    const { ctx, lead } = await setup(['hang'], false)
+    const other = await ctx.agents.create({ sessionId: SessionId('other-root'), agentOptions: { provider: 'mock', model: 'mock' } })
+    const child = await waitRunning(ctx, await spawn(ctx, lead, 'ordinary-child', 'work'))
+    for (const agent of [lead, child, other.agent]) expect(teamTools(await assembly(ctx, agent))).toEqual([])
+    await ctx.agentTeams.setEnabled(lead, true)
+    for (const agent of [lead, child]) expect(teamTools(await assembly(ctx, agent))).toEqual(TEAM_TOOLS)
+    expect(teamTools(await assembly(ctx, other.agent))).toEqual([])
+    const task = await ctx.agentTeams.createTask(child, { subject: 'shared', description: 'retained' })
+    await ctx.agentTeams.setEnabled(lead, false)
+    for (const agent of [lead, child]) {
+      const built = await assembly(ctx, agent)
+      expect(teamTools(built)).toEqual([])
+      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+    }
+    expect(ctx.agents.get(child.id)).toBe(child)
+    expect(() => ctx.agentTeams.listTasks(child)).toThrow('enable Agent Teams')
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(ctx.agentTeams.listTasks(lead)).toEqual([task])
+    await interrupt(ctx, lead, child.id)
+    await waitNoAgent(ctx, child.id)
+    await other.dispose()
+  })
+
+  it('keeps tools consistent with an appended selection if flushing fails, and permits retry', async () => {
+    const { ctx, lead } = await setup([], false)
+    const failure = new Error('storage unavailable')
+    vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
+    await expect(ctx.agentTeams.setEnabled(lead, true)).rejects.toBe(failure)
+    expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+  })
+
+  it('installs Team scope before a cold-resumed teammate request' , async () => {
     const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
     const childId = await spawn(ctx, lead, 'cold-worker', 'finish once')
     await waitNoAgent(ctx, childId)
@@ -659,7 +693,7 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it('reports an unavailable Team root while allowing an orphaned subagent to continue ordinary work', async () => {
+  it('keeps Team tools absent while an orphaned subagent continues ordinary work', async () => {
     const { ctx, adapter } = await setup([
       textResponse('child done'), textResponse('parent received settlement'), textResponse('independent work done'),
     ])
@@ -678,10 +712,10 @@ describe('dsh-tool-team', () => {
     })
     const result = await execute(ctx, orphan.agent, 'team_task_list', {})
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('agent has no active Team owner')
+    expect(text(result)).toContain('unknown tool')
     await runTurn(orphan.agent, 'continue ordinary work')
     const request = adapter.requests.findLast(request => request.sessionId === childId)!
-    expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable. Your parent agent id is "temporary-parent".`)
+    expect(teamTools(await assembly(ctx, orphan.agent))).toEqual([])
     expect(runtimeContextText(request)).not.toContain('You are the Team Lead.')
     expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
       && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
@@ -695,9 +729,37 @@ describe('dsh-tool-team', () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
     await expect(assembly(ctx, lead)).rejects.toBe(failure)
+    await expect(ctx.agents.create({ sessionId: SessionId('lookup-failure'), agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toBe(failure)
   })
 
-  it('reports unavailable identity without inventing a parent id', async () => {
+  it('retains a parent reference when an active teammate loses root discovery', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const id = await spawn(ctx, lead, 'disconnected', 'work')
+    const child = await waitRunning(ctx, id)
+    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
+      throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
+    })
+    expect(renderContextSnapshot(await assembly(ctx, child))).toContain(`Your parent agent id is ${JSON.stringify(lead.id)}`)
+    lookup.mockRestore()
+    await interrupt(ctx, lead, id)
+    await waitNoAgent(ctx, id)
+  })
+
+  it('labels historical owners with available legacy paths or a missing-id fallback', async () => {
+    const { ctx, lead } = await setup([textResponse('done')])
+    const id = await spawn(ctx, lead, 'legacy-owner', 'work')
+    await waitNoAgent(ctx, id)
+    const entries = await ctx.subagents.listDescendants(lead.id, SIGNAL)
+    vi.spyOn(ctx.subagents, 'listDescendants').mockResolvedValue(entries.map(({ name: _name, ...entry }) => entry))
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'Historical owner', description: 'Read a persisted assignment' })
+    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
+    lead.session.append('team/task', { version: 2, teamId: TeamId(lead.id), task: { ...saved, revision: 2, ownerId: id } })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ ownerName: `lead/legacy:${id}` }] })
+    lead.session.append('team/task', { version: 2, teamId: TeamId(lead.id), task: { ...saved, revision: 3, ownerId: SessionId('missing-owner') } })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ ownerName: 'legacy:missing-owner' }] })
+  })
+
+  it('reports unavailable identity without inventing a parent id' , async () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')

@@ -119,6 +119,7 @@ export function TeamAction({
   const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
   const rootId = useSessions(state => teamRootId(sessionId, parentId, state.byId))
   const team = useSessions(state => rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam)
+  const enabled = useSessions(state => rootId !== undefined && state.projectionsBySession[rootId]?.values.agentTeamMode?.enabled === true)
   const opening = useSession(snapshot => snapshot.openState === 'loading')
   const listing = useSessions(state => state.phase === 'pending')
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -133,7 +134,7 @@ export function TeamAction({
     cancelHoverChange()
     pinnedRef.current = false
     setOpen(false)
-  }, [sessionId])
+  }, [sessionId, enabled])
 
   useEffect(() => cancelHoverChange, [])
 
@@ -186,6 +187,8 @@ export function TeamAction({
     document.addEventListener('keydown', dismiss)
     return () => { document.removeEventListener('keydown', dismiss) }
   }, [open])
+
+  if (!enabled) return null
 
   const compact = team !== undefined && team.tasks.length === 0
 

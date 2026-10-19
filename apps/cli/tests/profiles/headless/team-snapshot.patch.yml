@@ -25,6 +25,7 @@
     - id: agent-team
       name: '@deepseek-ai/dsh-experimental-agent-team'
       config:
+        enabledByDefault: true
         maxTasks: 256
 
     - id: tool-agent-team

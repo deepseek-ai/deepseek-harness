@@ -10,6 +10,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import Commands from '@deepseek-ai/dsh-commands'
 import SubagentService from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -62,7 +63,7 @@ async function setup(
   await ctx.plugin(SubagentService)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  const teamFiber = await ctx.plugin(TeamService, config)
+  const teamFiber = await ctx.plugin(TeamService, { enabledByDefault: true, ...config })
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const lead = await ctx.agentLoop.create(SessionId('team-root'), { provider: 'mock', model: 'mock' })
@@ -98,6 +99,31 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
+  it('executes root mode commands and rejects unknown selections without changing mode', async () => {
+    const { ctx, lead } = await setup([], { enabledByDefault: false })
+    await ctx.plugin(Commands)
+    expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
+    await expect(ctx.commands.execute(lead, '/team maybe', [], SIGNAL)).resolves.toMatchObject({ result: { kind: 'error' } })
+    expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
+    for (const [command, enabled] of [['on', true], ['off', false]] as const) {
+      await expect(ctx.commands.execute(lead, `/team ${command}`, [], SIGNAL)).resolves.toMatchObject({ result: { kind: 'success' } })
+      expect(ctx.agentTeams.isEnabled(lead)).toBe(enabled)
+    }
+  })
+
+  it('rejects disabled task access and descendant mode changes without appending', async () => {
+    const { ctx, lead } = await setup([], { enabledByDefault: false })
+    const child = await resident(ctx, lead, 'mode-child')
+    expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
+    expect(() => ctx.agentTeams.listTasks(lead)).toThrow('enable Agent Teams')
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'off', description: 'off' })).rejects.toThrow('enable Agent Teams')
+    await expect(ctx.agentTeams.setEnabled(child, true)).rejects.toThrow('root Session')
+    const cancel = new AbortController()
+    cancel.abort(new Error('cancelled selection'))
+    await expect(ctx.agentTeams.setEnabled(lead, true, cancel.signal)).rejects.toThrow('cancelled selection')
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+  })
+
   it('rejects reads and mutations after a Team projection fails', async () => {
     const { ctx, lead } = await setup([])
     lead.session.append('team/task', {
@@ -209,6 +235,8 @@ describe('Tree-owned task boards', () => {
     }
     const direct = new DirectTeamService(ctx)
     await direct.initialize()
+    expect(direct.isEnabled(lead)).toBe(false)
+    await direct.setEnabled(lead, true)
     const [first, second] = await Promise.all([
       direct.createTask(lead, { subject: 'one', description: 'one' }),
       direct.createTask(lead, { subject: 'two', description: 'two' }),

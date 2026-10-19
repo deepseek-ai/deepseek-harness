@@ -25,6 +25,8 @@ This package lets every agent in a subagent tree create, claim, and complete sha
 <a id="use-this-package"></a>
 ## Use this package
 
+Team tools and guidance are installed only while the root Session enables Team mode. Mode changes update all resident descendants; ordinary subagent controls remain available.
+
 Mount this package with `@deepseek-ai/dsh-experimental-agent-team` when models need the shared board. The root and descendants receive identical task schemas and task policy.
 
 ### When to choose it

@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished
 import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import type {} from '@deepseek-ai/dsh-experimental-agent-team'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -81,6 +82,33 @@ describe('web e2e: Agent Teams panel', () => {
     await scaffold?.close()
   })
 
+  it('defaults off and saves a Session selection in the model menu', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-mode'))
+    expect(await page.locator('[data-team-action]').count()).toBe(0)
+    await page.getByRole('button', { name: /^Select model/u }).click()
+    const toggle = page.getByRole('switch', { name: 'Use Agent Teams', exact: true })
+    await toggle.waitFor()
+    expect(await toggle.getAttribute('aria-checked')).toBe('false')
+    await toggle.focus()
+    await page.keyboard.press('ArrowUp')
+    expect(await toggle.evaluate(element => element === document.activeElement)).toBe(false)
+    await page.keyboard.press('ArrowDown')
+    expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Space')
+    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+    await page.keyboard.press('Escape')
+    await page.locator('[data-team-action]').waitFor()
+    const agent = scaffold.ctx.agents.list()[0]!
+    const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
+    expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
+    await other.dispose()
+    await page.reload({ waitUntil: 'load' })
+    await page.locator('[data-team-action]').waitFor()
+    await page.getByRole('button', { name: /^Select model/u }).click()
+    expect(await toggle.getAttribute('aria-checked')).toBe('true')
+    await page.keyboard.press('Escape')
+  }, 60_000)
+
   it('displays agent-owned task changes through a read-only board without a refresh action', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
@@ -116,6 +144,20 @@ describe('web e2e: Agent Teams panel', () => {
     expect(tripwire.warnings).toEqual([])
     await page.keyboard.press('Escape')
   }, 60_000)
+
+  it('hides the board while disabled and restores its tasks when re-enabled', async () => {
+    await page.getByRole('button', { name: /^Select model/u }).click()
+    const toggle = page.getByRole('switch', { name: 'Use Agent Teams', exact: true })
+    await toggle.click()
+    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+    expect(await page.locator('[data-team-action]').count()).toBe(0)
+    await toggle.click()
+    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+    await page.keyboard.press('Escape')
+    await page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Task board', exact: true }).getByText('Agent task', { exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+  })
 
   it('keeps the panel inside the viewport and closes on outside click or Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))

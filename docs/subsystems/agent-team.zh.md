@@ -75,6 +75,8 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
+`agentTeamMode.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。模式写入与任务修改串行，刷盘前同步工具，刷盘后唤醒当前等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
+
 根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化 Team 记录。历史 `members` 字段仍可解码，但既不提供分配权限，也不提供第二个浏览器名册。任务面板从现有 Session 和目录数据标注所有者，缺失时使用 id。
 
 ```ts type-equiv
@@ -142,6 +144,26 @@ Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
 /**
+ * Read the Team selection shared by the caller's subagent tree.
+ * @param caller - exact live root or descendant.
+ * @returns whether Team tools and guidance are enabled.
+ */
+isEnabled(caller: Agent): boolean
+
+/**
+ * Save a root Session's Team selection without stopping children or deleting tasks.
+ * Tasks already admitted finish before the selection commits. Subsequent task calls
+ * use the new mode, and current waits end after the selection is flushed.
+ * @param caller - exact live root whose tree receives the selection.
+ * @param enabled - selected Team mode.
+ * @param signal - cancellation checked before appending a queued selection.
+ * @returns fulfillment after the selection flushes and scoped consumers update.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+ */
+async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
+
+/**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
@@ -171,6 +193,29 @@ listTasks(caller: Agent): TeamTaskView[]
  * @returns the committed next task revision.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/experimental/agent-team/src/index.ts`](../../packages/experimental/agent-team/src/index.ts)
+
+<a id="team-events"></a>
+
+### `team/*` events
+
+<a id="teammode-changed--parallel"></a>
+
+#### `team/mode-changed` — parallel
+
+A root Session's Team selection changed in memory; descendants observe the same mode.
+
+```ts cordis-catalog
+/**
+ * A root Session's Team selection changed in memory; descendants observe the same mode.
+ * @mode parallel
+ * @param root - exact live root whose selection changed.
+ */
+'team/mode-changed'(root: Agent): void
 ```
 
 Types: [Agent](core.zh.md)

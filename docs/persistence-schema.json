@@ -17053,6 +17053,76 @@
       }
     },
     {
+      "key": "event:team/mode",
+      "kind": "event",
+      "event": "team/mode",
+      "surface": false,
+      "digest": "920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 4,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 5,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "enabled",
+                "type": 2,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "team/mode"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:team/task",
       "kind": "event",
       "event": "team/task",
@@ -22602,7 +22672,7 @@
       "digest": "0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:191"
+        "packages/experimental/agent-team/src/types.ts:207"
       ]
     },
     {
@@ -24631,6 +24701,11 @@
       "sources": []
     },
     {
+      "digest": "920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "930c1cd289def119d443e19dd90008916bf035f0a4d23e07241e7f050f2b89b7",
       "names": [
         "packages/interaction/user-approval/src/types.ts#ApprovalOutcome"
@@ -24902,7 +24977,7 @@
       "digest": "a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:187"
+        "packages/experimental/agent-team/src/types.ts:203"
       ]
     },
     {
@@ -25149,7 +25224,7 @@
       "digest": "b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:185"
+        "packages/experimental/agent-team/src/types.ts:201"
       ]
     },
     {
@@ -25406,6 +25481,13 @@
       "sources": []
     },
     {
+      "digest": "c2a13242efc3bea4b36a843ddf1524ff4d33c765a71b582fa1fdbfa4fa148434",
+      "names": [],
+      "sources": [
+        "packages/experimental/agent-team/src/types.ts:199"
+      ]
+    },
+    {
       "digest": "c2deb7c9183735d4e0fffddf5c623f4e34daa1c8e96b111982e957dfcbbcf896",
       "names": [
         "packages/workflow/workflow/src/types.ts#WorkflowAgentOutcome"
@@ -25600,6 +25682,11 @@
     },
     {
       "digest": "d85590a5675c6e2fd8164e5792a6cceac714605b8ac228adae5ee668facb1490",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "d8a476d2c6fd30df6ec0e799f91716d1518c780d23b4121dce545abfcfb7c5a5",
       "names": [],
       "sources": []
     },
@@ -25862,7 +25949,7 @@
       "digest": "ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:189"
+        "packages/experimental/agent-team/src/types.ts:205"
       ]
     },
     {

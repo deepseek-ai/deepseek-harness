@@ -75,6 +75,8 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
+`agentTeamMode.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. Mode writes serialize with task mutations, synchronize tools before flushing, and wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+
 The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical `members` fields remain decodable but supply neither assignment authority nor a second browser roster. The task panel labels owners from existing Session and catalog data with id fallback.
 
 ```ts type-equiv
@@ -142,6 +144,26 @@ Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
 /**
+ * Read the Team selection shared by the caller's subagent tree.
+ * @param caller - exact live root or descendant.
+ * @returns whether Team tools and guidance are enabled.
+ */
+isEnabled(caller: Agent): boolean
+
+/**
+ * Save a root Session's Team selection without stopping children or deleting tasks.
+ * Tasks already admitted finish before the selection commits. Subsequent task calls
+ * use the new mode, and current waits end after the selection is flushed.
+ * @param caller - exact live root whose tree receives the selection.
+ * @param enabled - selected Team mode.
+ * @param signal - cancellation checked before appending a queued selection.
+ * @returns fulfillment after the selection flushes and scoped consumers update.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+ */
+async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
+
+/**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
@@ -171,6 +193,29 @@ listTasks(caller: Agent): TeamTaskView[]
  * @returns the committed next task revision.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/experimental/agent-team/src/index.ts`](../../packages/experimental/agent-team/src/index.ts)
+
+<a id="team-events"></a>
+
+### `team/*` events
+
+<a id="teammode-changed--parallel"></a>
+
+#### `team/mode-changed` — parallel
+
+A root Session's Team selection changed in memory; descendants observe the same mode.
+
+```ts cordis-catalog
+/**
+ * A root Session's Team selection changed in memory; descendants observe the same mode.
+ * @mode parallel
+ * @param root - exact live root whose selection changed.
+ */
+'team/mode-changed'(root: Agent): void
 ```
 
 Types: [Agent](core.md)

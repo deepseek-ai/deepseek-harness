@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+New Sessions default to Team mode off. Select **Use Agent Teams** in the model and reasoning menu, or run `/team on` in the root Session. `/team off` removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled. Deployments may set `enabledByDefault: true` for Sessions without a saved selection or historical tasks.
+
 Add this package when subagents need durable shared task ownership and dependencies. Mount it with `@deepseek-ai/dsh-experimental-tool-agent-team` for model tools.
 
 ### When to choose it

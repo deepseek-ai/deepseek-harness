@@ -87,6 +87,7 @@ async function stack(
   backend: PersistenceMount,
   root: string,
   script: ConstructorParameters<typeof MockAdapter>[0],
+  enabledByDefault = true,
 ) {
   const ctx = new Context()
   contexts.add(ctx)
@@ -97,7 +98,7 @@ async function stack(
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
-  await ctx.plugin(TeamService)
+  await ctx.plugin(TeamService, { enabledByDefault })
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   return {
@@ -109,6 +110,25 @@ async function stack(
 
 for (const backend of backends) {
   describe(`${backend.name} Agent Teams recovery`, () => {
+    it('restores the saved mode and retains tasks while disabled', async () => {
+      const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-mode-'))
+      roots.push(storageRoot)
+      const id = SessionId('saved-mode')
+      const first = await stack(backend, storageRoot, [], false)
+      const lead = await first.ctx.agentLoop.create(id, { provider: 'mock', model: 'mock' })
+      expect(first.ctx.agentTeams.isEnabled(lead)).toBe(false)
+      await first.ctx.agentTeams.setEnabled(lead, true)
+      const task = await first.ctx.agentTeams.createTask(lead, { subject: 'saved', description: 'retained while off' })
+      await first.ctx.agentTeams.setEnabled(lead, false)
+      await first.dispose()
+      const second = await stack(backend, storageRoot, [], true)
+      const resumed = await second.ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })
+      expect(second.ctx.agentTeams.isEnabled(resumed.agent)).toBe(false)
+      expect(second.ctx.sessionProjections.snapshot(resumed.agent.session).values.agentTeamMode).toEqual({ enabled: false })
+      await second.ctx.agentTeams.setEnabled(resumed.agent, true)
+      expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([task])
+    })
+
     it('restores continuable teammates and tasks from the Lead log after restart', {
       timeout: PERSISTENCE_TEST_TIMEOUT_MS,
     }, async () => {
@@ -130,7 +150,7 @@ for (const backend of backends) {
       await first.ctx.sessions.flush(firstLead.session)
       await first.dispose()
 
-      const second = await stack(backend, storageRoot, [])
+      const second = await stack(backend, storageRoot, [], false)
       const rootHandle = await second.ctx.agents.resume({
         resumeSessionId: rootId,
         agentOptions: { provider: 'mock', model: 'mock' },

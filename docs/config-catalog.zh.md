@@ -849,11 +849,13 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-agent-team`
 
 - `inject`: `agents` · `sessions` · `sessionProjections` · `subagents`
-- `source`: [`packages/experimental/agent-team/src/types.ts:146`](../packages/experimental/agent-team/src/types.ts)
+- `source`: [`packages/experimental/agent-team/src/types.ts:158`](../packages/experimental/agent-team/src/types.ts)
 
 ```ts config-catalog
-/** Team-service deployment limits. */
+/** Team-service deployment limits and initial mode. */
 export interface Config {
+  /** Team mode before a Session records a selection or a shared task. Defaults to false. */
+  readonly enabledByDefault?: boolean
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
 }

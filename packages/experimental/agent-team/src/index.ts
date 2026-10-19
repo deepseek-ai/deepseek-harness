@@ -2,6 +2,10 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
+import type {} from '@deepseek-ai/dsh-commands'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { teamModeProjection, type TeamModeState } from './mode.ts'
 import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TeamError } from './error.ts'
@@ -21,6 +25,14 @@ export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
 export { TeamError } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * A root Session's Team selection changed in memory; descendants observe the same mode.
+     * @mode parallel
+     * @param root - exact live root whose selection changed.
+     */
+    'team/mode-changed'(root: Agent): void
+  }
   interface Context {
     agentTeams: TeamService
   }
@@ -44,9 +56,12 @@ export class TeamService extends Service {
   static inject = ['agents', 'sessions', 'sessionProjections', 'subagents']
 
   static Config: z<Config> = z.object({
+    enabledByDefault: z.boolean().default(false),
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
   })
 
+  private readonly enabledByDefault: boolean
+  private mode!: ProjectionHandle<TeamModeState>
   private readonly maxTasks: number
   private journal!: TeamJournal
   private tasks!: TeamTaskBoard
@@ -61,11 +76,13 @@ export class TeamService extends Service {
         )
       }
     }
+    this.enabledByDefault = config.enabledByDefault ?? false
     this.maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
   }
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
+    this.mode = await ctx.sessionProjections.register(teamModeProjection(this.enabledByDefault))
     const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
     this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => {
       for (const agent of ctx.agents.list()) {
@@ -74,7 +91,61 @@ export class TeamService extends Service {
         }
       }
     })
-    this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
+    this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks, root => this.isEnabled(root))
+    ctx.inject(['commands'], (scope) => {
+      scope.commands.register({
+        definitionId: CommandDefinitionId('@deepseek-ai/dsh-experimental-agent-team'),
+        name: 'team',
+        description: 'Enable or disable Agent Teams for this Session',
+        input: { hint: 'on|off', attachments: false },
+        handler: async ({ agent, rawInput, signal }) => {
+          const selection = rawInput.trim()
+          if (selection !== 'on' && selection !== 'off') {
+            return { kind: 'error', text: 'Use /team on or /team off.' }
+          }
+          await this.setEnabled(agent, selection === 'on', signal)
+          return { kind: 'success', text: selection === 'on' ? 'Agent Teams enabled.' : 'Agent Teams disabled.' }
+        },
+      })
+    })
+  }
+
+  /**
+   * Read the Team selection shared by the caller's subagent tree.
+   * @param caller - exact live root or descendant.
+   * @returns whether Team tools and guidance are enabled.
+   */
+  isEnabled(caller: Agent): boolean {
+    const root = this.ctx.subagents.rootOf(caller)
+    return this.mode.stateOf(root.session).enabled ?? this.enabledByDefault
+  }
+
+  /**
+   * Save a root Session's Team selection without stopping children or deleting tasks.
+   * Tasks already admitted finish before the selection commits. Subsequent task calls
+   * use the new mode, and current waits end after the selection is flushed.
+   * @param caller - exact live root whose tree receives the selection.
+   * @param enabled - selected Team mode.
+   * @param signal - cancellation checked before appending a queued selection.
+   * @returns fulfillment after the selection flushes and scoped consumers update.
+   * @throws when called by a descendant or persistence fails. An appended selection remains active;
+   * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+   */
+  async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void> {
+    const root = this.ctx.subagents.rootOf(caller)
+    if (root !== caller) throw new TeamError('change Team mode from the root Session', 'TEAM_LEAD_REQUIRED')
+    await this.journal.transact(root.id, async () => {
+      signal?.throwIfAborted()
+      this.ctx.subagents.rootOf(caller)
+      if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
+      await this.ctx.parallel('team/mode-changed', root)
+      await this.ctx.sessions.flush(root.session)
+      for (const agent of this.ctx.agents.list()) {
+        if (agent === root || this.ctx.agents.isOwnedBy(agent.id, root)) {
+          emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
+        }
+      }
+    })
   }
 
   /**

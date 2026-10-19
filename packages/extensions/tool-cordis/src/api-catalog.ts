@@ -335,6 +335,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Agent Teams service backed by the exact live Lead Session log.',
     methods: [
       {
+        signature: 'isEnabled(caller: Agent): boolean',
+        description: 'Read the Team selection shared by the caller\'s subagent tree.',
+        parameters: [{ name: 'caller', description: 'exact live root or descendant.' }],
+        returns: 'whether Team tools and guidance are enabled.',
+      },
+      {
+        signature: 'async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>',
+        description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. Tasks already admitted finish before the selection commits. Subsequent task calls use the new mode, and current waits end after the selection is flushed.',
+        parameters: [{ name: 'caller', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before appending a queued selection.' }],
+        returns: 'fulfillment after the selection flushes and scoped consumers update.',
+        throws: ['when called by a descendant or persistence fails. An appended selection remains active; retrying the same selection synchronizes consumers and flushes without a duplicate event.'],
+      },
+      {
         signature: 'async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>',
         description: 'Create one unowned pending task in the Team Lead log.',
         parameters: [{ name: 'caller', description: 'exact live Team member creating the task.' }, { name: 'request', description: 'task text, blockers, and advisory write scopes.' }],
@@ -4563,6 +4576,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Emitted when any prompt provider changes.',
     description: 'Emitted when any prompt provider changes. This registry notification is unfiltered because a global change affects every scope.',
     parameters: [],
+  },
+  {
+    name: 'team/mode-changed',
+    mode: 'parallel',
+    signature: '\'team/mode-changed\'(root: Agent): void',
+    summary: 'A root Session\'s Team selection changed in memory; descendants observe the same mode.',
+    description: 'A root Session\'s Team selection changed in memory; descendants observe the same mode.',
+    parameters: [{ name: 'root', description: 'exact live root whose selection changed.' }],
   },
   {
     name: 'tools/change',

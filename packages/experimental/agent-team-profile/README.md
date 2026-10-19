@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+Installing this bundle makes Agent Teams available. New Sessions default to off; enable **Use Agent Teams** in the model and reasoning menu, or run `/team on` from the root Session.
+
 ### Install into a profile
 
 Add the package to an initialized profile, then run a task that asks the Lead to delegate work:

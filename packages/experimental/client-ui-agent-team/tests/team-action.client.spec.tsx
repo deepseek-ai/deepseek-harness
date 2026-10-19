@@ -61,7 +61,7 @@ function bench(options: {
   const byId = options.byId ?? { [SESSION]: summary(SESSION) }
   const sessions = createSnapshotStore<SessionListState>({
     ids: Object.keys(byId) as SessionId[], byId, phase: 'ready',
-    projectionsBySession: options.projections ?? { [SESSION]: { state: 'ready', error: null, values: { agentTeam: team } } },
+    projectionsBySession: options.projections ?? { [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: team } } },
   })
   const session = createSnapshotStore<SessionSnapshot>({
     sessionId,
@@ -106,12 +106,24 @@ function setProjectionSnapshot(
 }
 
 function setProjection(sessions: ReturnType<typeof bench>['sessions'], sessionId: SessionId, value: TeamProjection): void {
-  setProjectionSnapshot(sessions, sessionId, { state: 'ready', error: null, values: { agentTeam: value } })
+  setProjectionSnapshot(sessions, sessionId, { state: 'ready', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: value } })
 }
 
 describe('TeamAction', () => {
+  it('hides retained tasks when Team is disabled and shows them again after enabling', () => {
+    const b = bench()
+    render(<TeamAction {...b.props} />)
+    openPanel()
+    expect(screen.getByText(task.subject)).toBeTruthy()
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values: { agentTeam: team, agentTeamMode: { enabled: false } } })
+    expect(screen.queryByRole('button', { name: zh.trigger })).toBeNull()
+    expect(screen.queryByText(task.subject)).toBeNull()
+    setProjection(b.sessions, SESSION, team)
+    expect(screen.getByRole('button', { name: zh.trigger })).toBeTruthy()
+  })
+
   it('shows the task board without a roster or a subagent catalog', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeam: {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: {
       ...team,
       members: [{ id: WORKER, role: 'teammate', phase: 'failed', description: 'historical member', error: 'old failure' }],
     } } } } })
@@ -133,10 +145,10 @@ describe('TeamAction', () => {
         [NESTED]: { ...summary(NESTED), origin: 'subagent', parentId: WORKER },
       },
       projections: {
-        [SESSION]: { state: 'ready', error: null, values: {
+        [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true },
           agentTeam: { ...team, tasks: [{ ...task, ownerId: NESTED }] },
         } },
-        [WORKER]: { state: 'ready', error: null, values: {
+        [WORKER]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true },
           subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Nested implementer' }],
         } },
       },
@@ -153,7 +165,7 @@ describe('TeamAction', () => {
   })
 
   it('uses a root catalog label when the owner has no Session summary', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true },
       agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
       subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Current responsibility' }],
     } } } })
@@ -184,14 +196,13 @@ describe('TeamAction', () => {
       projections: {}, openState: 'loading',
     })
     render(<TeamAction {...b.props} />)
-    openPanel()
-    expect(screen.getByRole('status').textContent).toBe(zh.loading)
+    expect(screen.queryByRole('button', { name: zh.trigger })).toBeNull()
     act(() => { b.session.set({ ...b.session.getSnapshot(), openState: 'open' }) })
-    expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
-    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { agentTeam: team } })
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: team } })
+    openPanel()
     expect(screen.getByText(task.subject)).toBeTruthy()
     expect(screen.queryByRole('status')).toBeNull()
-    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: {} })
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'idle', error: null, values: { agentTeamMode: { enabled: true } } })
     expect(screen.getByRole('status').textContent).toBe(zh.unavailable)
     setProjection(b.sessions, SESSION, { members: [], tasks: [] })
     expect(screen.getByText(zh.empty)).toBeTruthy()
@@ -207,7 +218,7 @@ describe('TeamAction', () => {
     expect(screen.getByText(task.subject)).toBeTruthy()
     act(() => { b.sessions.set({ ...b.sessions.getSnapshot(), byId: {} }) })
     expect(screen.queryByText(task.subject)).toBeNull()
-    expect(screen.getByText(zh.unavailable)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: zh.trigger })).toBeNull()
     expect(teamRootId(WORKER, SESSION, {
       [SESSION]: { ...summary(SESSION), origin: 'subagent' },
     })).toBeUndefined()
@@ -220,12 +231,12 @@ describe('TeamAction', () => {
     const b = bench({ projections: {} })
     b.sessions.update((draft) => { draft.phase = 'pending' })
     render(<TeamAction {...b.props} />)
-    openPanel()
-    expect(screen.getByRole('status').textContent).toBe(zh.loading)
+    expect(screen.queryByRole('button', { name: zh.trigger })).toBeNull()
     act(() => { b.sessions.set({
       ...b.sessions.getSnapshot(), phase: 'ready',
-      projectionsBySession: { [SESSION]: { state: 'idle', error: null, values: { agentTeam: team } } },
+      projectionsBySession: { [SESSION]: { state: 'idle', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: team } } },
     }) })
+    openPanel()
     expect(screen.getByText(task.subject)).toBeTruthy()
     expect(screen.queryByRole('status')).toBeNull()
   })
@@ -243,7 +254,7 @@ describe('TeamAction', () => {
         byId: { ...current.byId, ['unrelated' as SessionId]: summary('unrelated' as SessionId) },
         projectionsBySession: {
           ...current.projectionsBySession,
-          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { agentTeam: { members: [], tasks: [] } } },
+          ['unrelated' as SessionId]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: { members: [], tasks: [] } } },
         },
       })
     })
@@ -253,7 +264,7 @@ describe('TeamAction', () => {
   })
 
   it('surfaces projection failure beside the last valid tasks', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true },
       agentTeam: { ...team, failure: 'revision is not contiguous' },
     } } } })
     render(<TeamAction {...b.props} />)
@@ -264,7 +275,7 @@ describe('TeamAction', () => {
 
   it('renders ready, blocked, completed, and unassigned tasks', () => {
     const { ownerId: _ownerId, ...unownedTask } = task
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeam: {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: { agentTeamMode: { enabled: true }, agentTeam: {
       ...team,
       tasks: [
         { ...unownedTask, id: 'ready-task' as TeamTaskId, status: 'pending', ready: true },
@@ -290,8 +301,7 @@ describe('TeamAction', () => {
     const next = bench({ sessionId: 'next-root' as SessionId, projections: {}, openState: 'loading' })
     rendered.rerender(<TeamAction {...next.props} />)
     expect(screen.queryByRole('dialog')).toBeNull()
-    openPanel()
-    expect(screen.getByRole('status').textContent).toBe(zh.loading)
+    expect(screen.queryByRole('button', { name: zh.trigger })).toBeNull()
   })
 
   it('keeps panel interactions open and dismisses on outside pointer or Escape', () => {

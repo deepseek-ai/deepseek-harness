@@ -25,6 +25,8 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
+安装本组合后可以使用 Agent Teams。新 Session 默认关闭；在模型与推理等级菜单中打开**使用智能体团队**，或从根 Session 执行 `/team on`。
+
 ### 安装到 profile
 
 将本包添加到已初始化的 profile，然后运行一个要求 Lead 委派工作的任务：
