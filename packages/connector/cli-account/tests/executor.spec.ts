@@ -30,7 +30,7 @@ describe('CliCommandExecutor', () => {
     await ctx.plugin(ShellEnv)
     subprocess = ctx.subprocess as ScriptedSubprocess
     binDir = await createBinDir()
-    ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir] })
+    ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir], programs: [PROGRAM] })
   })
 
   afterEach(async () => {

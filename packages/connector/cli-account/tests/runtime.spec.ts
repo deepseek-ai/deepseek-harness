@@ -36,7 +36,7 @@ beforeEach(async () => {
   await ctx.plugin(ShellEnv)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
-  ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir] })
+  ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir], programs: [PROGRAM] })
   account = new FixtureAccount({
     name: 'fixture',
     cli: new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 }),
