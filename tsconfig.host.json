@@ -296,6 +296,8 @@
     { "path": "./packages/client/connection/tsconfig.host.json" },
     { "path": "./packages/skill/skill-office" },
     { "path": "./packages/skill/tool-workspace-dependencies" },
+    { "path": "./packages/connector/tencent-meeting" },
+    { "path": "./packages/connector/tencent-meeting-cli" },
     { "path": "./packages/browser-use/browser-use" },
     { "path": "./packages/experimental/browser-use-runtime" },
     { "path": "./packages/experimental/browser-use-playwright-mcp" },

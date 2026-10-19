@@ -53,6 +53,9 @@ allowBuilds:
   electron-winstaller: false
   # Store-index rewriting only needs msgpackr's portable JavaScript codec.
   msgpackr-extract: false
+  # The Tencent Meeting plugin's CLI ships executable binaries; its install script only
+  # restores their mode and runs `tmeet auth logout`, so repository installs skip it.
+  '@tencentcloud/tmeet@1.0.18': false
 
 minimumReleaseAgeExclude:
   # Native Codex and Claude tests qualify this exact release with its local patches.
