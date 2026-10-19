@@ -1,4 +1,4 @@
-/** Display labels and toast sentences for global plugin management. */
+/** Display labels, matchable package text, and toast sentences for global plugin management. */
 
 import { EXPERIMENTAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
@@ -145,6 +145,8 @@ export function rowText(
 
 /**
  * Every string a localized package text declares, for matching regardless of the UI language.
+ * The Host-side plugin market expands the same metadata in its own search module; a shared
+ * runtime owner stays out of scope while every consumer imports `LocalizedText` as a type.
  * @param text - literal text, or translations keyed by lowercase language id.
  * @returns the literal or every translation value; empty when the text is absent.
  */

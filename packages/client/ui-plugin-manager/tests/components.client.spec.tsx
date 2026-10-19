@@ -1214,6 +1214,7 @@ describe('PluginManagerPage', () => {
     // A literal title remains matchable alongside the translated ones.
     fireEvent.change(search, { target: { value: 'Plain extra row' } })
     expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+    expect(document.querySelector('[data-plugin-row="include:extra-0"]')).toBeTruthy()
     fireEvent.change(search, { target: { value: '' } })
     expect(screen.getByText('sidebar')).toBeTruthy()
     expect(screen.getByText('@acme/dsh-sidebar-widget')).toBeTruthy()

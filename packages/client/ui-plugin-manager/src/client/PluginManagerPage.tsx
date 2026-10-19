@@ -286,8 +286,7 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
   const [filter, setFilter] = useState('')
   const query = filter.trim().toLowerCase()
   const localized = rows.map(row => ({ row, ...rowText(row, resolveText) }))
-  // Rows display one language; matching covers every declared language so a
-  // person who learned a component in another UI language still finds it.
+  // Rows display one language; matching covers every declared language.
   const shown = query === '' ? localized : localized.filter(({ row }) =>
     [
       row.rowId, row.moduleName,
