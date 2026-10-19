@@ -161,7 +161,7 @@ A call whose service is not composed rejects with the missing service's package 
 
 #### What the model sees
 
-Strings a `prompt.submit` hook adds to `e.context` become text blocks after the prompt as typed, inside the human's own message; a rewritten `text` replaces the prompt's text blocks. `$.prompt.submit({ text })` queues a `user`-sourced message: the text alone with `asUser: true`, otherwise framed as below with the plugin name and the text filled in.
+Strings a `prompt.submit` hook adds to `e.context` become text blocks after the prompt as typed, inside the human's own message; a rewritten `text` replaces the prompt's text blocks. `$.prompt.submit({ text })` queues a `user`-sourced message: the text alone with `asUser: true`, otherwise framed as below with the plugin name and the text filled in. With [Auto review](../auto-review/README.md#headless-supervision), these user-sourced submissions have user instruction authority, including hook context and framed submissions without `asUser: true`.
 
 ##### Framing of a prompt a mod submits
 

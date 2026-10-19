@@ -9,7 +9,7 @@ private let runtimeKey = String(repeating: "a", count: 64)
 private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     var config: [String: JSONValue] = [
         "maxRequestBytes": .number(4096), "maxResponseBytes": .number(8192), "axTimeoutMs": .number(250),
-        "textEventIntervalMs": .number(0.5), "screenshotTimeoutMs": .number(2000),
+        "textEventIntervalMs": .number(0.5), "maxClickHoldMs": .number(7000), "screenshotTimeoutMs": .number(2000),
         "timeoutMs": .number(8000), "graceMs": .number(500),
     ]
     config.merge(overrides) { _, value in value }
@@ -24,6 +24,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     #expect(configuration.maxResponseBytes == 8192)
     #expect(configuration.axTimeoutSeconds == 0.25)
     #expect(configuration.textEventIntervalSeconds == 0.0005)
+    #expect(configuration.maxClickHoldMs == 7000)
     #expect(configuration.screenshotTimeoutSeconds == 2)
     #expect(configuration.timeoutSeconds == 8)
     #expect(configuration.shutdownGraceSeconds == 0.5)
@@ -32,11 +33,22 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     }
 }
 
+@Test func resolvesClickHoldLimitFromHelperArguments() throws {
+    #expect(try HelperConfiguration(arguments: []).maxClickHoldMs == 5000)
+    for limit in [0, 7000] {
+        #expect(try HelperConfiguration(arguments: ["--max-click-hold-ms", String(limit)]).maxClickHoldMs == limit)
+    }
+    for invalid in ["-1", "0.5", "2147483648", "nan"] {
+        #expect(throws: NativeFailure.self) { try HelperConfiguration(arguments: ["--max-click-hold-ms", invalid]) }
+    }
+}
+
 @Test(arguments: [
     ("maxRequestBytes", JSONValue.number(1023)), ("maxResponseBytes", .number(1.5)),
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
-    ("unexpected", .bool(true)),
+    ("maxClickHoldMs", .number(-1)), ("maxClickHoldMs", .number(0.5)),
+    ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)),
 ])
 func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throws {
     #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: hello(overrides: [name: value]), runtimeKey: runtimeKey) }

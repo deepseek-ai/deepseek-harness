@@ -42,7 +42,7 @@ function fixture(options: {
     helperPath: '/fixture/helper', cwd: '/fixture', axTimeoutMs: 321, timeoutMs: options.timeoutMs ?? 60_000,
     connectTimeoutMs: 5000, screenshotTimeoutMs: options.screenshotTimeoutMs ?? 5000,
     maxRequestBytes: options.maxRequestBytes ?? 1024,
-    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: options.graceMs ?? 10, textEventIntervalMs: 0.5,
+    maxResponseBytes: options.maxResponseBytes ?? 1024, graceMs: options.graceMs ?? 10, textEventIntervalMs: 0.5, maxClickHoldMs: 5000,
   }
   const client = new NativeClient(owner, config, shared.create, options.reportDiagnostic)
   function finish() { done.resolve(); gone.resolve() }

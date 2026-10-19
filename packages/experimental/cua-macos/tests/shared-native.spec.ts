@@ -131,7 +131,7 @@ async function fixture(options: {
   const config: NativeClientConfig = {
     helperPath, cwd: root, connectTimeoutMs: options.connectTimeoutMs ?? 5000, screenshotTimeoutMs: 5000,
     timeoutMs: 30_000, graceMs: options.graceMs ?? 1000, axTimeoutMs: 3000,
-    maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5,
+    maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
   }
   function open(): NativeChannel {
     const channel = createSharedNativeChannel({ subprocess: { spawn } }, config)
@@ -188,7 +188,7 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     for (const handle of f.handles) expect(handle.terminate).not.toHaveBeenCalled()
     expect(f.hellos).toEqual([expect.objectContaining({ type: 'hello', protocol: 1, config: {
       axTimeoutMs: 3000, timeoutMs: 30000, screenshotTimeoutMs: 5000, graceMs: 1000,
-      maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5,
+      maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
     } }), expect.anything()])
   })
 

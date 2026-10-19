@@ -2481,6 +2481,36 @@
       "doc": "docs/subsystems/boot.md",
       "symbol": "PendingModule",
       "source": "packages/boot/hmr/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "SessionProjectionSummaryExcluded",
+      "source": "packages/session/session-projection/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "SessionProjectionViewValue",
+      "source": "packages/session/session-projection/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "SessionProjectionViewValues",
+      "source": "packages/session/session-projection/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "SessionProjectionSummaryExcludedKey",
+      "source": "packages/session/session-projection/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "SessionProjectionSummaryValues",
+      "source": "packages/session/session-projection/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionKeySelection",
+      "source": "packages/session/session-projection/src/index.ts"
     }
   ]
 }

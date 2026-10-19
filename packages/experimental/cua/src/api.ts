@@ -127,14 +127,15 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         const clickCount = options?.clickCount ?? 1
         if (mouseButton !== 'left' && clickCount !== 1) throw new Error('Only left double-click is supported')
         const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
+        const hold = options?.holdMs === undefined ? {} : { holdMs: options.holdMs }
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
         if (typeof target === 'number') {
-          return action('click', { ...snapshotParams(), ...modifiers, ...relative, elementIndex: target,
+          return action('click', { ...snapshotParams(), ...modifiers, ...hold, ...relative, elementIndex: target,
             ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
           })
         }
         const [x, y] = target
-        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers, ...relative })
+        return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative })
       },
       async setValue(index, value) { return action('setValue', { ...snapshotParams(), elementIndex: index, value }) },
       async selectText(index, text, options) {

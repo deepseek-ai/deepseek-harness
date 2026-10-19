@@ -23574,7 +23574,7 @@
         "packages/workflow/workflow/src/types.ts#WorkflowRunId"
       ],
       "sources": [
-        "packages/api/session-controller/src/types.ts:409",
+        "packages/api/session-controller/src/types.ts:414",
         "packages/attachment/attachment/src/brand.ts:6",
         "packages/compaction/compaction/src/brand.ts:4",
         "packages/core/session/src/types.ts:21",
@@ -24096,7 +24096,7 @@
       "digest": "6dacb1584f2bfbe209dc6b6f578d51da6d55595f64d0e63c727c98f359278def",
       "names": [],
       "sources": [
-        "packages/api/session-controller/src/types.ts:418"
+        "packages/api/session-controller/src/types.ts:423"
       ]
     },
     {
@@ -24245,7 +24245,7 @@
       "digest": "79ddc907312f97cf9553d4841e8b3fc937097bd8d97900a790efad3c05255e99",
       "names": [],
       "sources": [
-        "packages/todo/tool-todo/src/types.ts:31"
+        "packages/todo/tool-todo/src/types.ts:33"
       ]
     },
     {
@@ -24413,7 +24413,7 @@
         "packages/context/agent-instructions/src/render.ts#AgentInstructionChange"
       ],
       "sources": [
-        "packages/context/agent-instructions/src/render.ts:53"
+        "packages/context/agent-instructions/src/render.ts:62"
       ]
     },
     {
@@ -24965,7 +24965,7 @@
         "packages/todo/tool-todo/src/types.ts#TodoItem"
       ],
       "sources": [
-        "packages/todo/tool-todo/src/types.ts:21"
+        "packages/todo/tool-todo/src/types.ts:23"
       ]
     },
     {
@@ -25916,7 +25916,7 @@
         "packages/api/session-controller/src/types.ts#ModelSelection"
       ],
       "sources": [
-        "packages/api/session-controller/src/types.ts:101"
+        "packages/api/session-controller/src/types.ts:106"
       ]
     },
     {

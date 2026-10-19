@@ -309,6 +309,7 @@ credit 帧留待需要持续大流量上行的消费者出现时再加；inbox �
 | Peer | 升级时接纳为一个 `PeerScope`，该 socket 上所有流的 `invocation.peer` 都是它 |
 | 项校验 | 有 uplink codec 时逐项严格解码，失败即整条流以既有的 `gateway/input-invalid` 失败（details `{ endpoint, field: 'uplink' }`）；无 codec 时只做 JSON 安全校验 |
 | 帧大小 | 单帧沿用 `ws` 的 `maxPayload`；inbox 上限限制累计量 |
+| 帧压缩 | Gateway 配置 `websocketCompression` 为 `'deflate'`（默认）时，每条连接协商 `permessage-deflate`；少于 1024 个字符的帧不压缩。见[压缩决定](2026-10-18-websocket-permessage-deflate.zh.md) |
 
 ### 进程内与 worker 载体
 
@@ -392,6 +393,8 @@ export type RemoteStreamOpener = (
 // index.ts Config addition
 /** Uplink inbox limit per logical stream, in UTF-8 bytes of frames (default 262144). */
 readonly streamInboxBytes?: number
+/** Per-message WebSocket compression; 'none' disables the extension (default 'deflate'). */
+readonly websocketCompression?: 'none' | 'deflate'
 ```
 
 `prepareInvocation`：
@@ -453,7 +456,7 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-registry` | 加载校验 `uplink.codec` 为有效的严格 codec |
 | `dsh-typert-generator`（`model.ts`、`analyzer.ts`、`emitter.ts`） | `remoteResultType` 识别 `RemoteStream<Out, In>` 并生成 `uplink` boundary；描述符输出 `uplink: { codec }`；生成的 Client 签名返回 `RemoteStreamHandle<Out, In>`；参数循环只认业务参数与末位 `signal` |
 | `dsh-client-connection`（`peer.ts`、`rpc.ts`、`rpc-host.ts`、`index.ts`） | `Peer` 类；`connection.browserPeer` 与 `admit`；`/api` 与升级路由经 `admit` 取 Peer；`rpc.open` 的可选 `uplink` |
-| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)` |
+| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes` 与 `Config.websocketCompression`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client（`client/index.ts`、`client/stream-client.ts`） | `invokeStream` 返回句柄；上行泵由句柄的队列驱动 |
 | `dsh-webworker-runtime`、`dsh-remote-mock` | worker 隧道的两种上行帧与 `serveStream` 组装；`StreamHandle.uplink`；直接代理返回真句柄 |
 | 文档 | gateway、api 组、connection、protocol、generator 的 README；`docs/api-gateway`；`docs/subsystems/typert` 的 type-equiv 块；config 与 Cordis 目录 |

@@ -4,7 +4,7 @@ import Dispatch
 import Darwin
 
 final class CancellationLatch: @unchecked Sendable {
-    // The synchronous AX/input loops cannot await a cancellation message on their own actor.
+    // Blocking AX calls and synchronous input loops also observe connection cancellation.
     private let lock = NSLock()
     private var cancelled = false
     func cancel() { lock.withLock { cancelled = true } }
@@ -20,6 +20,7 @@ struct HelperConfiguration: Sendable {
     var axTimeoutSeconds: Float = 30
     var shutdownGraceSeconds: Double = 3
     var textEventIntervalSeconds: Double = 0.00025
+    var maxClickHoldMs = 5000
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
     init(arguments: [String]) throws {
@@ -29,6 +30,11 @@ struct HelperConfiguration: Sendable {
             let key = arguments[index]
             let text = arguments[index + 1]
             switch key {
+            case "--max-click-hold-ms":
+                guard let value = Int(text), (0...2147483647).contains(value) else {
+                    throw RequestParameters.invalid("Maximum click hold must be a nonnegative integer within 2147483647 milliseconds")
+                }
+                maxClickHoldMs = value
             case "--max-request-bytes", "--max-response-bytes":
                 guard let value = Int(text), value >= 1024, value < Int.max else { throw RequestParameters.invalid("\(key) must be a positive byte limit") }
                 if key == "--max-request-bytes" { maxRequestBytes = value } else { maxResponseBytes = value }
@@ -58,12 +64,12 @@ struct HelperConfiguration: Sendable {
         guard let fields = decoded.object, Set(fields.keys) == ["type", "protocol", "runtimeKey", "config"],
               fields["type"] == .string("hello"), fields["protocol"] == .number(1),
               fields["runtimeKey"] == .string(runtimeKey), let config = fields["config"]?.object,
-              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
+              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "maxClickHoldMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
             throw NativeFailure(code: "NATIVE_PROTOCOL", message: "Expected shared helper protocol 1 hello for this runtime")
         }
         func number(_ name: String) throws -> String {
             guard let number = config[name]?.number, number.isFinite else { throw RequestParameters.invalid("\(name) must be finite") }
-            if ["maxRequestBytes", "maxResponseBytes"].contains(name) {
+            if ["maxRequestBytes", "maxResponseBytes", "maxClickHoldMs"].contains(name) {
                 guard let integer = Int(exactly: number) else { throw RequestParameters.invalid("\(name) must be an integer") }
                 return String(integer)
             }
@@ -72,6 +78,7 @@ struct HelperConfiguration: Sendable {
         try self.init(arguments: [
             "--max-request-bytes", number("maxRequestBytes"), "--max-response-bytes", number("maxResponseBytes"),
             "--ax-timeout-ms", number("axTimeoutMs"), "--text-event-interval-ms", number("textEventIntervalMs"),
+            "--max-click-hold-ms", number("maxClickHoldMs"),
             "--screenshot-timeout-ms", number("screenshotTimeoutMs"), "--timeout-ms", number("timeoutMs"),
             "--shutdown-grace-ms", number("graceMs"),
         ])

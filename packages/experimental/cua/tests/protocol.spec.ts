@@ -19,6 +19,20 @@ it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }
 })
 
 it.each([
+  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0 },
+  { appHandle: 'app', windowId: 23, x: 1, y: 2 },
+  { appHandle: 'app', windowId: 23, x: 1, y: 2, relative: true },
+])('validates optional per-press hold duration for %j', (params) => {
+  for (const holdMs of [0, 1, 800, 5000, 7000]) {
+    const request = { method: 'click', params: { ...params, holdMs } }
+    expect(Request.parse(request)).toEqual(request)
+  }
+  for (const holdMs of [-1, 1.5, Infinity, NaN, '800', null]) {
+    expect(Request.safeParse({ method: 'click', params: { ...params, holdMs } }).success).toBe(false)
+  }
+})
+
+it.each([
   '', 'not base64!', 'AQ', 'AQ===', 'AQ==\n', 'A Q==', 'AQ-_', 'AB==', 'AAF=',
 ])('rejects noncanonical screenshot base64 %j', (data) => {
   expect(ScreenshotResult.safeParse({

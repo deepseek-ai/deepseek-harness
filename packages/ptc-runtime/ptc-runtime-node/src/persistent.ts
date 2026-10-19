@@ -26,6 +26,19 @@ function persistentOutput(maxBytes: number): OutputLedger {
   return new OutputLedger(maxBytes, `retained variables were cleared; outer output exceeded ${maxBytes} bytes`)
 }
 
+/**
+ * Compare requested extra grants without resolving paths in another execution world.
+ * @param left - one policy's additional roots.
+ * @param right - the other policy's additional roots.
+ * @returns whether both contain the same paths, ignoring order and duplicates.
+ */
+function sameAdditionalRoots(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  const effective = (roots: readonly string[] | undefined): string[] => [...new Set(roots ?? [])].sort()
+  const a = effective(left)
+  const b = effective(right)
+  return a.length === b.length && a.every((root, index) => root === b[index])
+}
+
 interface Evaluation {
   id: number
   data: ProgramBootData
@@ -335,7 +348,8 @@ export class InMemoryExecution {
     kernel?.assertIdle()
     if (kernel && !kernel.closed && (kernel.policy.mode !== spec.sandboxPolicy.mode
       || kernel.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
-      || kernel.policy.sessionId !== spec.sandboxPolicy.sessionId)) {
+      || kernel.policy.sessionId !== spec.sandboxPolicy.sessionId
+      || !sameAdditionalRoots(kernel.policy.additionalWritableRoots, spec.sandboxPolicy.additionalWritableRoots))) {
       throw new Error('persistent PTC: release the retained environment before changing its sandbox policy')
     }
     let code: string
@@ -351,7 +365,13 @@ export class InMemoryExecution {
     }
     if (!kernel || kernel.closed) {
       if (kernel) this.kernels.delete(kernel)
-      kernel = new Kernel(this.ctx, this.config, { ...spec.sandboxPolicy }, this.processes)
+      // Direct callers can own mutable policy arrays; the retained process owns its grant snapshot.
+      kernel = new Kernel(this.ctx, this.config, {
+        ...spec.sandboxPolicy,
+        ...spec.sandboxPolicy.additionalWritableRoots === undefined
+          ? {}
+          : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
+      }, this.processes)
       this.kernels.add(kernel)
       if (spec.stateOwner !== undefined) this.owners.set(spec.stateOwner, kernel)
     }

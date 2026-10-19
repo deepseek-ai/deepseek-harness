@@ -31,7 +31,7 @@ private final class HeldCapture: @unchecked Sendable {
     let capture = WindowCapture { _, _, _, _, finish in source.begin(finish) }
     let scheduler = RequestScheduler()
     let cancellation = CancellationLatch()
-    let worker = AXWorker(cancellation: cancellation, axTimeout: 1, textEventInterval: 0)
+    let worker = AXWorker(cancellation: cancellation, axTimeout: 1, textEventInterval: 0, maxClickHoldMs: 5000)
     let target = CaptureTarget(appHandle: "fixture", process: ProcessIdentity(pid: 1, startedSeconds: 1, startedMicroseconds: 0),
         window: WindowInfo(windowID: 1, pid: 1, appName: "fixture", title: "fixture",
                            bounds: WindowBounds(x: 0, y: 0, width: 1, height: 1), isOnScreen: true, onCurrentSpace: true))

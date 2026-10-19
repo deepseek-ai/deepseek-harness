@@ -9,7 +9,7 @@
  * set to. Both are the browser's job; the specs assert the body's arithmetic
  * over them.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
@@ -52,6 +52,21 @@ afterAll(() => {
     if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, name)
     else Object.defineProperty(HTMLElement.prototype, name, descriptor)
   }
+})
+
+/** Records each scrollport observer so a spec can report a resize to it. */
+class RecordingResizeObserver {
+  static instances: RecordingResizeObserver[] = []
+  readonly targets: Element[] = []
+  constructor(readonly callback: () => void) { RecordingResizeObserver.instances.push(this) }
+  observe(target: Element): void { this.targets.push(target) }
+  disconnect(): void {}
+  resize(): void { act(() => { this.callback() }) }
+}
+
+beforeEach(() => {
+  RecordingResizeObserver.instances = []
+  vi.stubGlobal('ResizeObserver', RecordingResizeObserver)
 })
 
 afterEach(() => {
@@ -108,6 +123,10 @@ function lines(container: HTMLElement): string[] {
 
 function target(container: HTMLElement): string | null {
   return container.querySelector('[data-textpreview-target]')?.getAttribute('data-textpreview-target') ?? null
+}
+
+function marks(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-textpreview-mark]'))
 }
 
 function click(container: HTMLElement, selector: string): void {
@@ -525,8 +544,12 @@ describe('TextPreview — navigation and view', () => {
     act(() => { PendingIntersectionObserver.instances[0]!.intersect(block) })
     await waitFor(() => { expect(view.container.querySelector('[data-code-preview] pre.shiki')).not.toBeNull() })
     expect(scrollport(view.container)).toBe(codeScrollport)
+    // The band lives in the scrollport, so the highlighted swap keeps it.
+    expect(marks(view.container).map(mark => [mark.parentElement, mark.dataset.textpreviewMark, mark.style.top]))
+      .toEqual([[codeScrollport, '2', `${LINE_HEIGHT}px`]])
     view.rerender(<TextPreview {...codeProps(h, { params: { line: 3 }, revision: 2 })} />)
     expect(codeScrollport.scrollTop).toBe(2 * LINE_HEIGHT)
+    expect(marks(view.container).map(mark => mark.dataset.textpreviewMark)).toEqual(['3'])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(2)
   })
 
@@ -540,6 +563,12 @@ describe('TextPreview — navigation and view', () => {
     expect(h.read).toHaveBeenLastCalledWith(SESSION, PATH, 4, h.controller.signal)
     expect(body(view.container).scrollTop).toBe(4 * LINE_HEIGHT)
     expect(target(view.container)).toBe('5')
+    const [mark] = marks(view.container)
+    expect(mark?.parentElement).toBe(body(view.container))
+    expect(mark?.dataset.textpreviewMark).toBe('5')
+    expect(mark?.style.top).toBe(`${4 * LINE_HEIGHT}px`)
+    fireEvent.animationEnd(mark!)
+    expect(marks(view.container)).toEqual([])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(1)
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.scrollTop).toBe(4 * LINE_HEIGHT)
   })
@@ -554,6 +583,7 @@ describe('TextPreview — navigation and view', () => {
     const second = render(<TextPreview {...h.props({ params: { line: 3 }, revision: 1 })} />)
     await settle()
     expect(body(second.container).scrollTop).toBe(300)
+    expect(marks(second.container)).toEqual([])
   })
 
   it('jumps again for a new navigation to the same tab', async () => {
@@ -564,7 +594,24 @@ describe('TextPreview — navigation and view', () => {
     view.rerender(<TextPreview {...h.props({ params: { line: 2 }, revision: 2 })} />)
     expect(body(view.container).scrollTop).toBe(1 * LINE_HEIGHT)
     expect(target(view.container)).toBe('2')
+    expect(marks(view.container).map(mark => mark.dataset.textpreviewMark)).toEqual(['2'])
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(2)
+  })
+
+  it('drops the line mark when the scrollport resizes or wrapping reflows its lines', async () => {
+    const h = harness({ 1: page(1, ['a', 'b', 'c'], true) })
+    const view = render(<TextPreview {...h.props({ params: { line: 3 }, revision: 1 })} />)
+    await settle()
+    const observer = RecordingResizeObserver.instances.find(item => item.targets.includes(body(view.container)))
+    observer!.resize()
+    expect(marks(view.container).map(mark => mark.dataset.textpreviewMark)).toEqual(['3'])
+    observer!.resize()
+    expect(marks(view.container)).toEqual([])
+
+    view.rerender(<TextPreview {...h.props({ params: { line: 2 }, revision: 2 })} />)
+    expect(marks(view.container)).toHaveLength(1)
+    fireEvent.click(view.container.querySelector<HTMLButtonElement>('[data-textpreview-tool="wrap"]')!)
+    expect(marks(view.container)).toEqual([])
   })
 
   it('stops at the end of the file for a line past it, and answers a navigation without a line', async () => {
@@ -573,6 +620,7 @@ describe('TextPreview — navigation and view', () => {
     await settle()
     expect(h.read).toHaveBeenCalledTimes(1)
     expect(target(view.container)).toBeNull()
+    expect(marks(view.container)).toEqual([])
     expect(body(view.container).scrollTop).toBe(0)
     expect(h.instance.getSnapshot().byTab[TAB_ID]?.revision).toBe(1)
     view.rerender(<TextPreview {...h.props({ params: {}, revision: 2 })} />)

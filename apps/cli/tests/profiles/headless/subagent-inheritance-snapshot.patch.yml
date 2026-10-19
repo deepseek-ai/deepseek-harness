@@ -10,6 +10,7 @@
   disabled: true
 
 - id: sandbox-policy
+  inject: []
   config:
     mode: workspace-write
     workspaceRoot: !!js process.cwd()

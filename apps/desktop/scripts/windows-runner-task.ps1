@@ -37,12 +37,16 @@ if ($Action -eq 'install') {
     } else {
         $null = New-Item -ItemType Directory -Path $serviceDir
     }
+    $compiler = Join-Path $env:SystemRoot 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+    if (-not (Test-Path -LiteralPath $compiler)) { throw 'Install requires the Windows .NET Framework 4.5+ compiler (Framework64/v4.0.30319/csc.exe).' }
+    $launcher = Join-Path $serviceDir 'launcher.exe'
+    & $compiler /nologo /target:winexe "/out:$launcher" (Join-Path $PSScriptRoot 'windows-runner-launcher.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Runner launcher compilation failed; verify .NET Framework 4.5+ is installed. No task was installed.' }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start-windows-packaging-runner.ps1') -Destination (Join-Path $serviceDir 'start.ps1')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-windows-runner-task.ps1') -Destination (Join-Path $serviceDir 'run.ps1')
     @{ RunnerRoot = $RunnerRoot; ConfigRoot = $ConfigRoot; TaskName = $taskName; RestartCount = $RestartCount } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $serviceDir 'config.json') -Encoding utf8
     Set-Content -LiteralPath (Join-Path $serviceDir 'attempts.txt') -Value '0'
-    $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -File "' + (Join-Path $serviceDir 'run.ps1') + '"'
-    $execution = New-ScheduledTaskAction -Execute $pwsh -Argument $arguments -WorkingDirectory $RunnerRoot
+    $execution = New-ScheduledTaskAction -Execute $launcher -Argument ('"' + $pwsh + '"') -WorkingDirectory $RunnerRoot
     $principal = New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited
     $trigger = @(
         (New-ScheduledTaskTrigger -AtLogOn -User $sid),

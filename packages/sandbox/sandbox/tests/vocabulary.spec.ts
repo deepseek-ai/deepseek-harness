@@ -7,7 +7,17 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { SANDBOX_UNAVAILABLE, SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
+import { SANDBOX_UNAVAILABLE, SandboxUnavailableError, SandboxUnsupportedPolicyError } from '@deepseek-ai/dsh-sandbox'
+
+describe('SandboxUnsupportedPolicyError', () => {
+  it('distinguishes an unsupported policy from an unavailable backend', () => {
+    const error = new SandboxUnsupportedPolicyError('The selected backend cannot grant additional directories.')
+    expect(error).toBeInstanceOf(Error)
+    expect(error.name).toBe('SandboxUnsupportedPolicyError')
+    expect(error.code).toBe('SANDBOX_UNSUPPORTED_POLICY')
+    expect(error.message).toBe('The selected backend cannot grant additional directories.')
+  })
+})
 
 describe('SandboxUnavailableError', () => {
   it('carries the structured { name, code } identity consumers key on', () => {

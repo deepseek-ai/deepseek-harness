@@ -19,12 +19,12 @@ export {
   validateEscalationArgs,
 } from './escalation.ts'
 export type { EscalationApproval, EscalationApprover, EscalationOutcome, EscalationRequest } from './escalation.ts'
-export { canonicalPath, writableRoots } from './roots.ts'
+export { canonicalPath, workspaceWritableRoots, writableRoots, SandboxInvalidRootError } from './roots.ts'
 
 /**
  * File-effect policy for confined processes. `read-only` permits only required
- * sinks such as `/dev/null`; `workspace-write` also permits the workspace and a
- * backend-defined temp area; `danger-full-access` bypasses confinement. Network
+ * sinks such as `/dev/null`; `workspace-write` also permits the workspace,
+ * explicit extra roots, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
  * and process visibility are outside this vocabulary.
  */
 export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -42,6 +42,13 @@ export interface SandboxExecutionPolicy {
   mode: SandboxMode
   /** Absolute root directory `workspace-write` may write under. */
   workspaceRoot: string
+  /**
+   * Extra physical absolute directories `workspace-write` may also write under.
+   * Absence means none. The enforcing host rejects missing, non-directory, and
+   * symlinked entries on each call. Remote paths are checked on the remote host.
+   * These grant nothing under `read-only` or `danger-full-access`.
+   */
+  additionalWritableRoots?: readonly string[]
   /**
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
@@ -141,6 +148,14 @@ export class SandboxUnavailableError extends HarnessError {
       SANDBOX_UNAVAILABLE,
     )
     this.name = 'SandboxUnavailableError'
+  }
+}
+
+/** The selected backend is available but cannot enforce the requested policy. */
+export class SandboxUnsupportedPolicyError extends HarnessError {
+  constructor(detail: string) {
+    super(detail, 'SANDBOX_UNSUPPORTED_POLICY')
+    this.name = 'SandboxUnsupportedPolicyError'
   }
 }
 

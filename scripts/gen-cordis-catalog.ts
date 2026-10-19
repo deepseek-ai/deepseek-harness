@@ -50,6 +50,7 @@ export { REGION_BEGIN, REGION_END }
  * errors, so the partition can never silently drift from the service API.
  */
 export const SERVICE_PAGE: Record<string, string> = {
+  headlessStartup: 'boot.md',
   translator: 'translation.md',
   cotTranslation: 'translation.md',
   speechToText: 'voice-input.md',
@@ -825,6 +826,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ProjectionDefinition: 'session-projection.md',
   SessionProjectionMap: 'session-projection.md',
   SessionProjectionStateMap: 'session-projection.md',
+  ProjectionKeySelection: 'session-projection.md',
   ProjectionChangeListener: 'session-projection.md',
   ProjectionSnapshot: 'session-projection.md',
   ProjectionCheckpoint: 'session-projection.md',
@@ -862,6 +864,7 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
   'Record',
   'Readonly',
   'ReadonlyMap',
+  'ReadonlySet',
   'Request',
   'Response',
   'IncomingMessage',

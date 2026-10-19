@@ -56,10 +56,16 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 
 const config = {
   helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
-  graceMs: 10, textEventIntervalMs: 8, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
+  graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
 const { helperPath: _helperPath, ...automaticConfig } = config
+
+it('defaults the explicit click hold limit to five seconds and accepts a configured zero or larger limit', () => {
+  expect(NativeProvider.Config({}).maxClickHoldMs).toBe(5000)
+  for (const maxClickHoldMs of [0, 7000]) expect(NativeProvider.Config({ maxClickHoldMs }).maxClickHoldMs).toBe(maxClickHoldMs)
+  for (const maxClickHoldMs of [-1, 0.5, 2 ** 31]) expect(() => NativeProvider.Config({ maxClickHoldMs })).toThrow()
+})
 
 class ImageAdapter extends LlmAdapter {
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {

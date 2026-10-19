@@ -26,6 +26,7 @@ import SessionStore, {
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 import Storage from '@deepseek-ai/dsh-storage'
 import {
   apply as storageJsonApply, Config as storageJsonConfig, inject as storageJsonInject, name as storageJsonName,
@@ -45,12 +46,14 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
     'cache-test/count': number
     'cache-test/secret': string
     'cache-test/marks3': MarksState
+    'cache-test/summary-excluded': { n: number }
     title: string | null
   }
   interface SessionProjectionMap {
     'cache-test/marks': { marks: string[] }
     'cache-test/secondary-marks': { marks: string[] }
     'cache-test/marks3': { marks: string[] }
+    'cache-test/summary-excluded': SessionProjectionSummaryExcluded<{ n: number }>
     title: string | null
   }
 }
@@ -109,6 +112,16 @@ const secondaryMarksUnit = {
   },
   stateVersion: 1,
 } satisfies ProjectionDefinition<'cache-test/secondary-marks', MarksState>
+
+/** A summary-excluded unit: its rows must never reach the summary block. */
+const summaryExcludedUnit = {
+  key: 'cache-test/summary-excluded',
+  stateSchema: z.object({ n: z.number() }),
+  init: () => ({ n: 0 }),
+  apply: state => state,
+  wire: { viewSchema: z.object({ n: z.number() }), view: state => state, summary: false },
+  stateVersion: 1,
+} satisfies ProjectionDefinition<'cache-test/summary-excluded', { n: number }>
 
 /** Mirrors the shipped title unit's storage face (stateVersion 1, bare-string state). */
 const titleUnit = {
@@ -807,5 +820,35 @@ describe('SessionProjectionCache cold-read seeding', () => {
     await vi.waitFor(() => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('cold-read write-back for "cold-fail" failed'))
     }, { timeout: 5_000 })
+  })
+})
+
+describe('SessionProjectionCache summary reads', () => {
+  it('serves the summary block from stored rows and excludes the marked unit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
+    roots.push(root)
+    await seedRecord(root, 'summary-watermark', {
+      'cache-test/marks': { ver: 1, seq: SessionSeq(5), val: { marks: ['primary'] } },
+      'cache-test/summary-excluded': { ver: 1, seq: SessionSeq(1), val: { n: 3 } },
+    })
+    const { ctx, cache } = await harness({ root })
+    ctx.sessionProjections.register(summaryExcludedUnit)
+    const summaryKeys = ctx.sessionProjections.summaryKeys()
+
+    // The summary watermark follows the served rows only: the marked row sits
+    // at seq 1, and its absence must not drag the summary block down.
+    expect(cache.cachedSnapshot(headerOf(SessionId('summary-watermark')), summaryKeys)).toEqual({
+      asOfSeq: 5,
+      values: { 'cache-test/marks': { marks: ['primary'] } },
+    })
+    expect(cache.cachedSnapshot(headerOf(SessionId('summary-watermark')))).toEqual({
+      asOfSeq: 1,
+      values: {
+        'cache-test/marks': { marks: ['primary'] },
+        'cache-test/summary-excluded': { n: 3 },
+      },
+    })
+    // No record for this id: a key-subset read reports absence like the complete face.
+    expect(cache.cachedSnapshot(headerOf(SessionId('summary-absent')), summaryKeys)).toBeUndefined()
   })
 })

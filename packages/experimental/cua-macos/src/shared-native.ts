@@ -205,9 +205,10 @@ class SharedNativeChannel implements NativeChannel {
       else ended.resolve()
     })
     socket.once('connect', () => {
-      const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs } = this.config
+      const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs,
+        screenshotTimeoutMs, timeoutMs, graceMs } = this.config
       socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey,
-        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs } }) + '\n')
+        config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, maxClickHoldMs, screenshotTimeoutMs, timeoutMs, graceMs } }) + '\n')
     })
     const receive = (chunk: Buffer): void => {
       const newline = chunk.indexOf(10)

@@ -17,6 +17,7 @@ import type {} from '@deepseek-ai/dsh-session-title/client'
 import { SessionManager } from '../src/client/sessions/manager.ts'
 import { ClientSessions } from '../src/client/sessions/service.ts'
 import type { SessionRemotes } from '../src/client/sessions/remotes.ts'
+import type { SessionProjectionHints } from '../src/types.ts'
 import { entries, plainTurn } from './event-script.client.ts'
 import { FOLLOW, err, followScript, sessionWorld } from './remote/session.client.ts'
 
@@ -1611,5 +1612,32 @@ describe('running facts without UI reminders', () => {
     expect(entry).toMatchObject({ running: false })
     expect(entry).not.toHaveProperty('completed')
     expect(manager.getListSnapshot()).not.toHaveProperty('current')
+  })
+})
+
+describe('Session summary projection replacement', () => {
+  it('drops a stale summary-excluded key when a reconnect refresh replaces the row block', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    // A row block from a verbose Host still carrying an excluded key; the wire
+    // type no longer admits it, so the fixture is parsed as annotated JSON.
+    const verboseBlock = JSON.parse(
+      '{"kind":"cached","asOfSeq":1,"values":{"title":"stale","turnOutline":[]}}',
+    ) as SessionProjectionHints
+    remote.session.list.mockResolvedValueOnce(ok({ items: [{ ...summary(S1), projections: verboseBlock }] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]?.projectionValues).toHaveProperty('turnOutline')
+
+    // A reconnect clears every per-Session value store before pulling again, so
+    // the refreshed summary block is the row's only source: the excluded key
+    // cannot survive the replacement.
+    remote.session.list.mockResolvedValueOnce(ok({
+      items: [{ ...summary(S1), projections: { kind: 'cached', asOfSeq: 2, values: { title: 'fresh' } } }],
+    }))
+    manager.handleConnected()
+    await manager.refreshList()
+    const entry = manager.getListSnapshot().items[0]
+    expect(entry?.projectionValues).toEqual({ title: 'fresh' })
+    expect(entry?.title).toBe('fresh')
   })
 })

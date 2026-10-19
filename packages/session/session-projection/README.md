@@ -68,6 +68,14 @@ A domain that requires projected state declares `sessionProjections` as a Cordis
 
 Every unit's state is checkpointed — client-visible and host-only alike — through `checkpoint(session)`, and the sibling [session-projection-cache](../session-projection-cache/README.md) persists those checkpoints so cold reads skip full log loads. Checkpoint watermarks use `SessionSeqCursor` (`-1` for an empty log), while replay starts use `SessionLogOffset`; `restoreFloor` and `restore` implement the read recipe without conflating an existing event with a log gap.
 
+### Session summaries
+
+A Session summary is every registered client view except the keys whose non-nullish `SessionProjectionMap` entry carries the `SessionProjectionSummaryExcluded<T>` mark. `summaryKeys()` returns that set, derived from the live registrations and stable — the same instance — until a registration or its disposal changes the key table. A summary consumer passes it to the existing key-taking reads — `cachedSnapshot(session, keys)` for live cells, `viewCheckpoint(rows, keys)` for checkpoint rows, and `cachedSnapshot(header, keys)` through the persisted cache — which treat a set as already selected, so there is no summary-specific read face, no copy per read, and no second definition of the set. Because the registry derives it, a summary consumer cannot request an excluded key through the derived set; a complete face still serves an explicitly named key, which is how an opened Session keeps every value. A list row carries the summary projection and never the full projection.
+
+The mark decides the client view type; `wire.summary` decides the runtime key set, and omitting it means `true`. Declare `wire.summary: false` on a key whose map entry carries the mark so the two agree; the field is a plain boolean, not a type-level interlock. A nullable entry keeps `null` outside the wrapper (`SessionProjectionSummaryExcluded<TodoItem[]> | null`) so the pre-first-write value stays expressible. The keys currently marked are `turnOutline`, `sessionStats`, `todos`, and `imageLimits`: an outline grows with the whole log, no list row renders the stats or todo list, and the image limits are one host-wide boot constant every Session shares.
+
+Summaries serve the Session list rows, which list Sessions without opening them. The `@` reference lists Sessions the same way but reads only its `title` and `subagent` label keys through the key-taking `snapshot(session, keys)` and `cachedSnapshot(header, keys)` faces. `snapshot`, `cachedSnapshot`, and `viewCheckpoint` still serve every wire key when called without a key subset, so an opened Session receives every projected value.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -87,7 +95,7 @@ The package is the Service Definition and drive role of a capability seam: the f
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionRegistry` service, `ProjectionDefinition`, snapshot and checkpoint machinery |
-| [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables |
+| [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables, plus the summary-exclusion mark and its derived view and summary types |
 
 ### Drive and checkpoint flow
 
@@ -126,7 +134,7 @@ None; projections never assemble or send provider requests.
 
 These limits define where the projection registry needs care at scale. They are current package constraints, not a task backlog.
 
-- **Every tail page carries every client-visible key** — there is no per-key opt-out or lazy-key request shape yet; acceptable while values are UI-scale whole states, revisit if a domain's value grows large.
+- **Only a key-subset read omits keys; a tail page still carries every client-visible key and there is no lazy per-value request** — a summary omits exactly the keys whose `SessionProjectionMap` entry carries `SessionProjectionSummaryExcluded<T>` and whose registration declares `wire.summary: false`. The opt-out is per key, not per value: no read defers one large value.
 - **The unit table is process-wide, so key presence is not a per-session capability signal** — a key registered by any agent preset appears in every session's snapshot; a client must read the value rather than treat an absent key as absence of the feature.
 - **Eager drive touches every unit per event** — cheap by construction (whole-value rule and state/view reference gates), but a hot path would justify per-unit event-type prefilters.
 - **Registry cells live in memory only** — a restart rebuilds by folding the log on first touch; compositions that mount `dsh-session-projection-cache` seed that fold from persisted rows instead.

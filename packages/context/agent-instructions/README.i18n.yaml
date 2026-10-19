@@ -9,23 +9,23 @@
   en: e88163f21938a7e6
   zh: 17acc4af39bd7df0
 /deepseek-ai-dsh-agent-instructions/summary:
-  en: 9d849b3c7bc5e3b7
-  zh: aee26ccc12e73fe3
+  en: b1a2f5d9e76029fe
+  zh: 1455076337921cec
 /deepseek-ai-dsh-agent-instructions/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent-instructions/use-this-package:
-  en: 76eedbd3c6ae5174
-  zh: ed3fdcd6f2b3f522
+  en: a6f5c0d19634d0e9
+  zh: 74c88e1f76381a30
 /deepseek-ai-dsh-agent-instructions/use-this-package/what-the-agent-gets:
   en: 1435be3e04948c50
   zh: a3946e05a9a221dd
 /deepseek-ai-dsh-agent-instructions/use-this-package/configuration:
-  en: eb827036480985b8
-  zh: 2f237f46eb4b455d
+  en: 3feef2ec59ebd308
+  zh: 2f4c6346ce96f811
 /deepseek-ai-dsh-agent-instructions/use-this-package/observing-the-budget:
-  en: 9797082b1e69b72c
-  zh: d26c00b1b90fe4ea
+  en: e9e2b819a799517e
+  zh: 12bc2a2339eb5b4c
 /deepseek-ai-dsh-agent-instructions/understand-the-implementation:
   en: 724df7ff6d1d9fea
   zh: 91fb1013eb9178ec
@@ -33,8 +33,8 @@
   en: 4708b51bf8fe86f7
   zh: 869fc4b1f78383ee
 /deepseek-ai-dsh-agent-instructions/understand-the-implementation/source-map:
-  en: cb4c1f929ef5a835
-  zh: 3f0fcb7f568a0a5c
+  en: b54bdb371640d989
+  zh: fdf82b545c1a0c6e
 /deepseek-ai-dsh-agent-instructions/understand-the-implementation/main-flow:
   en: d881b9055f823929
   zh: 87b25f0bf8e204e9
@@ -57,8 +57,8 @@
   en: 0ced1c177da6d120
   zh: 6c61efb987e227fe
 /deepseek-ai-dsh-agent-instructions/model-experience/baseline-context/token-effect:
-  en: e7c0cc34065a1113
-  zh: a973ba9fac7a918d
+  en: 0a005863a59a9de1
+  zh: 4e29ade86023db3e
 /deepseek-ai-dsh-agent-instructions/model-experience/baseline-context/kv-cache-effect:
   en: c611902b9f369d86
   zh: d7da1dbe6c1ac7f1
@@ -87,14 +87,14 @@
   en: c78113708e7d7665
   zh: b10dcce1569febae
 /deepseek-ai-dsh-agent-instructions/model-experience/changed-or-removed-instruction-context/token-effect:
-  en: 436f2fb373e7822d
-  zh: 0a3173b4398530bd
+  en: 76b2419177a5de96
+  zh: 2d8ec672911aa125
 /deepseek-ai-dsh-agent-instructions/model-experience/changed-or-removed-instruction-context/kv-cache-effect:
   en: 2fbf2175168e8244
   zh: f681f89596f500f5
 /deepseek-ai-dsh-agent-instructions/known-limitations-and-deferred-work:
-  en: 9b50e4414fac4a79
-  zh: 5957bfd23f79b336
+  en: 4cb0c690ac47f7b7
+  zh: 53dd149f37f4afe2
 /deepseek-ai-dsh-agent-instructions/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

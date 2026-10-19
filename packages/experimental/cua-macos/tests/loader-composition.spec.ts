@@ -28,7 +28,7 @@ const calls = [
   { method: 'getCapabilities', params: {} },
   { method: 'getApp', params: { selector: 'test.fixture' } },
   { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
-  { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementIndex: 0 } },
+  { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementIndex: 0, holdMs: 800 } },
   { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
   { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
 ]
@@ -111,6 +111,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(toolMessages.filter(message => message.isError)).toEqual([])
   expect(JSON.stringify(model.requests[0])).toContain('getCapabilities')
   expect(JSON.stringify(model.requests[0])).toContain('appHandle')
+  expect(JSON.stringify(model.requests[0])).toContain('Maximum click holdMs: 5000 ms.')
   expect(JSON.stringify(model.requests[0])).not.toContain('preloaded')
   expect(JSON.stringify(model.requests[5]?.messages)).toContain('Count: 1')
   const image = toolMessages.at(-1)?.content.find(block => block.type === 'image')
@@ -128,6 +129,8 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(events.filter(event => event.event === 'call').map(event => event.requestId)).toEqual(toolCalls.map(event => event.data.callId))
   expect(events.find(event => event.event === 'state')?.count).toBe(1)
   expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(events.find(event => event.method === 'click')?.params).toMatchObject({ holdMs: 800 })
+  expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
   const direct = await context.tools.execute({ agent, signal: new AbortController().signal,
     callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
