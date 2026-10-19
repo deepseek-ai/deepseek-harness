@@ -1,0 +1,5 @@
+- insert:
+    - id: tencent-meeting
+      name: '@deepseek-ai/dsh-tencent-meeting-cli'
+      config:
+        binDir: !!js process.cwd() + '/tmeet-bin'
