@@ -11893,6 +11893,9 @@ importers:
       '@deepseek-ai/dsh-compaction-tool-result-pruner':
         specifier: workspace:*
         version: link:../../compaction/compaction-tool-result-pruner
+      '@deepseek-ai/dsh-plugin-detail':
+        specifier: workspace:*
+        version: link:../../util/plugin-detail
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill

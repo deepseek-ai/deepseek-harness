@@ -26,31 +26,32 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
       config: {}
 ```
 
-## Display metadata and icon
+## Display metadata, detail document, and icon
 
-Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. Complete this checklist before installation:
+Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. The bundle's page in Plugin Manager shows the detail document that `meta.detail` names, otherwise the package README. Complete this checklist before installation:
 
 - Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin.
+- Write a detail document for users in each locale's language, and name it with `meta.detail` in that locale file: a `/`-separated path relative to the package root, inside a subdirectory so images beside it are published, that ends in `.md`, such as `docs/DETAIL.md` for `en` and `docs/DETAIL.zh.md` for `zh`. Start with one paragraph on what the user gets, then `## How to use` (where to find or trigger the feature, with its exact UI labels) and `## Good to know` (added tokens or model requests, data read or sent elsewhere, risks, and what changes when the plugin is turned off); Chinese documents use `## 使用方法` and `## 注意事项`. State only behavior you implemented and verified. An optional feature image goes on the first line; see `references/artwork.md`. A malformed `meta.detail`, a missing named file, or a document above 1 MiB makes the page show an error, not the README.
 - Create an original icon or use artwork whose license permits redistribution, retaining any required attribution. Read `references/artwork.md` before drawing or revising an icon.
-- Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
+- Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, the detail document's directory, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
 - Check that the icon is a valid image of the declared format and satisfies the path and size limits below. An accepted filename alone does not establish that its bytes render.
 
 For example, the locale file contains:
 
 ```json
-{ "meta": { "title": "My Decoration", "description": "Draws a badge under the composer." } }
+{ "meta": { "title": "My Decoration", "description": "Draws a badge under the composer.", "detail": "docs/DETAIL.md" } }
 ```
 
 ```json
 {
   "exports": { "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg" },
-  "files": ["index.js", "cordis.patch.yml", "locale/*.json", "icon.svg"]
+  "files": ["index.js", "cordis.patch.yml", "locale/*.json", "docs", "icon.svg"]
 }
 ```
 
 A package-root plugin may instead declare a top-level `icon` in `package.json`; it takes priority over `./icon` and is a path relative to the manifest directory. A subpath plugin such as `my-plugins/search` is not a package and never reads a `package.json`; it exports `./search/locale/*.json` and `./search/icon` instead. Icons may be SVG, PNG, JPEG, or WebP up to 256 KiB and must stay inside the package; absolute paths, URLs, and symlinks leaving it are rejected. Missing fields of a package-root plugin fall back to `package.json` `name` and `description`, and missing images use the panel's default artwork; malformed metadata produces a diagnostic and keeps the valid text.
 
-After installation, verify the intended title and description in bundle details and plugin rows, plus the rendered icons, in English and the user's locale where supplied. Check for metadata diagnostics and unintended fallbacks, and that each plugin row shows its own exported icon or, when it has none, the generic artwork. Without browser control, inspect the installed resources and report that rendered display remains unverified; do not claim visual success from installation alone.
+After installation, verify the intended title, description, and detail document in bundle details and plugin rows, plus the rendered icons, in English and the user's locale where supplied. Check for metadata diagnostics and unintended fallbacks, and that each plugin row shows its own exported icon or, when it has none, the generic artwork. Without browser control, inspect the installed resources and report that rendered display remains unverified; do not claim visual success from installation alone.
 
 An existing plugin's metadata may remain unchanged when it still describes the requested result. A disposable test fixture or an explicitly requested metadata-free package may omit resources, but explain each omission in the delivery report. A Host-only or configuration-only bundle still has a visible inventory entry; neither is an exception by itself.
 

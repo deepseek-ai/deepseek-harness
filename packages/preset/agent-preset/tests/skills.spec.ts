@@ -1,6 +1,6 @@
 /**
  * Shipped creator skills: every rendered skill stays below the pruner threshold, referenced
- * files exist, templates parse, and no skill bans reading DSH sources.
+ * files exist, templates parse and show their detail documents, and no skill bans reading DSH sources.
  */
 import { execFileSync } from 'node:child_process'
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs'
@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
+import { languageChain, localFiles, readPackageDocument } from '@deepseek-ai/dsh-plugin-detail'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import { describe, expect, it } from 'vitest'
@@ -117,20 +118,35 @@ describe('the shipped creator skills', () => {
       expect(manifest.exports['./icon']).toBe('./icon.svg')
       const locales = readdirSync(join(dir, 'locale')).map(file => `locale/${file}`)
       expect(locales).toContain('locale/en.json')
+      const details: string[] = []
       for (const file of locales) {
-        const locale = JSON.parse(readFileSync(join(dir, file), 'utf8')) as { meta: { title: string; description: string } }
+        const locale = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
+          meta: { title: string; description: string; detail: string }
+        }
         expect(locale.meta.title).toMatch(/\S/u)
         expect(locale.meta.description).toMatch(/\S/u)
+        expect(locale.meta.detail, file).toMatch(/^[^/]+\/.+\.md$/u)
+        details.push(locale.meta.detail)
       }
       const resources = new Set([...Object.values(manifest.exports).filter(file => !file.includes('*')),
-        ...locales, manifest.dsh.bundle.patch])
+        ...locales, ...details, manifest.dsh.bundle.patch])
       for (const resource of resources) {
         const file = resource.replace(/^\.\//u, '')
         expect(body('cordis-plugin-development'), file).toContain(`\`templates/${name}/${file}\``)
         expect(statSync(join(dir, file)).isFile(), file).toBe(true)
-        if (file !== 'package.json') expect(manifest.files.some(pattern => matchesGlob(file, pattern)), file).toBe(true)
+        // npm `files` publishes a listed directory with its contents.
+        const published = manifest.files.some(pattern => matchesGlob(file, pattern) || file.startsWith(`${pattern}/`))
+        if (file !== 'package.json') expect(published, file).toBe(true)
       }
     }
+  })
+
+  it.for(readdirSync(join(skills, 'cordis-plugin-development', 'templates')))('shows the %s template detail document on its bundle page', async (name) => {
+    const dir = join(skills, 'cordis-plugin-development', 'templates', name)
+    const document = await readPackageDocument(localFiles(dir, '1.0.0'), '', languageChain('en'), 1 << 20, AbortSignal.timeout(10_000))
+    const locale = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: { detail: string } }
+    expect(document).toMatchObject({ origin: 'locale', path: locale.meta.detail })
+    expect(document?.markdown).toMatch(/\n## How to use\n[\s\S]*\n## Good to know\n/u)
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {
