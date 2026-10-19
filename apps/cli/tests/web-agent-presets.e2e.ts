@@ -517,10 +517,10 @@ describe('the shipped Web composition', () => {
       expect(tools).not.toContain('str_replace_editor')
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
 
-      // The preset's own authoring skill registers into ITS layer of the host
-      // registry: the cordis agent's view carries it, the global view does not.
+      // The preset's own authoring skills register into ITS layer of the host
+      // registry: the cordis agent's view carries them, the global view does not.
       const scoped = (await ctx.skills.list({ scope: handle.agent })).map(skill => skill.name)
-      expect(scoped).toContain('editing-cordis-compositions')
+      expect(scoped).toEqual(expect.arrayContaining(['editing-cordis-compositions', 'plugin-artwork']))
       expect((await ctx.skills.list()).map(skill => skill.name)).not.toContain('editing-cordis-compositions')
 
       // The persona is `standard`'s, pinned verbatim so the two declarations

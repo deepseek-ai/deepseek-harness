@@ -31,7 +31,7 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. Complete this checklist before installation:
 
 - Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin.
-- Create an original icon or use artwork whose license permits redistribution, retaining any required attribution.
+- Create an original icon or use artwork whose license permits redistribution, retaining any required attribution. Load the `plugin-artwork` skill before drawing or revising an icon.
 - Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
 - Check that the icon is a valid image of the declared format and satisfies the path and size limits below. An accepted filename alone does not establish that its bytes render.
 
