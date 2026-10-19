@@ -161,7 +161,7 @@ Blast Radius 的 DSH 包装使用当前运行的可执行文件提供 Node 计�
 
 #### 模型看到什么
 
-`prompt.submit` 钩子加入 `e.context` 的字符串成为输入的提示词之后的文本块，位于人类自己的消息内部；改写的 `text` 替换提示词的文本块。`$.prompt.submit({ text })` 排入一条 `user` 来源的消息：`asUser: true` 时只有文本本身，否则按下文框架填入插件名与文本。
+`prompt.submit` 钩子加入 `e.context` 的字符串成为输入的提示词之后的文本块，位于人类自己的消息内部；改写的 `text` 替换提示词的文本块。`$.prompt.submit({ text })` 排入一条 `user` 来源的消息：`asUser: true` 时只有文本本身，否则按下文框架填入插件名与文本。启用 [Auto review](../auto-review/README.zh.md#headless-supervision)时，这些 user-source 提交具有用户指令权威，包括 hook context 和未设置 `asUser: true` 的框架化提交。
 
 ##### 模组提交的提示词的框架
 

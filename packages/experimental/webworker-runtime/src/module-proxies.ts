@@ -64,6 +64,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   'dns/promises': './node/builtin_modules/mock/dns/promises.ts',
   'node:net': './node/builtin_modules/mock/net.ts',
   'node:stream': './node/builtin_modules/implemented/stream.ts',
+  'node:string_decoder': './node/builtin_modules/implemented/string_decoder.ts',
   'node:stream/promises': './node/builtin_modules/implemented/stream/promises.ts',
   'stream/promises': './node/builtin_modules/implemented/stream/promises.ts',
   'node:vm': './node/builtin_modules/mock/vm.ts',
@@ -79,6 +80,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   'got': './node/external_packages/got.ts',
   '@vscode/ripgrep': './node/external_packages/ripgrep.ts',
   '@earendil-works/pi-ai': './node/external_packages/pi-ai.ts',
+  '@earendil-works/pi-coding-agent': './node/external_packages/pi-coding-agent.ts',
   // Node internal modules for callers without `--expose-internals`.
   'node-addon-require-builtin': './node/external_packages/node-addon-require-builtin.ts',
   // Constructible fakes whose methods are never reached.

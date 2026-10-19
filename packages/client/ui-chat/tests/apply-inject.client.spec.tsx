@@ -155,6 +155,11 @@ describe('Chat inject API', () => {
       setCollapseTiming('completion')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion' })
       expect(b.chatSettings.set).toHaveBeenLastCalledWith('collapseTiming', 'completion')
+      const setFoldedReplies = preference.setFoldedReplies as TranscriptViewRowInjected['setFoldedReplies']
+      expect(presentation.getSnapshot()).toMatchObject({ foldedReplies: 'all' })
+      setFoldedReplies('final')
+      expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion', foldedReplies: 'final' })
+      expect(b.chatSettings.set).toHaveBeenLastCalledWith('foldedReplies', 'final')
       expect(b.session.prompt).not.toHaveBeenCalled()
       expect(b.session.cancel).not.toHaveBeenCalled()
     } finally {

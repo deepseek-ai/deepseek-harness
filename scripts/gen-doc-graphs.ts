@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'headlessStartup',
+    pkg: 'headless',
+    title: 'Headless invocation options',
+    mode: 'core',
+    consumers: ['headless'],
+    note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
+  },
+  {
     key: 'cotTranslation',
     pkg: 'experimental-client-ui-cot-translation',
     title: 'Reasoning translation Remote',

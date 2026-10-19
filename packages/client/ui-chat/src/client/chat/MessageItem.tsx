@@ -162,8 +162,8 @@ function TurnMaxTokensItem({ t }: {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels, skillNames,
-  previewAttachments, facts: inputFacts = EMPTY_TEXT_FACTS, interactive = false,
+  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, batchStart = false,
+  referenceLabels, skillNames, previewAttachments, facts: inputFacts = EMPTY_TEXT_FACTS, interactive = false,
 }: {
   content: readonly unknown[]
   renderFactorySlot: PropsRenderFactories['renderFactorySlot']
@@ -173,6 +173,8 @@ function UserStyleBubble({
   pending?: boolean
   /** Whether this is a local submission echo (invisible marker; the echo renders exactly like its durable replacement). */
   echo?: boolean
+  /** Whether this admitted steering row starts its claim's batch and keeps the Turn tail slot above it. */
+  batchStart?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
   /** Skill names the step's `skill-invocation` injections loaded for this message. */
@@ -199,6 +201,7 @@ function UserStyleBubble({
       className={css.userRow}
       data-pending-steering={pending || undefined}
       data-submission-echo={echo || undefined}
+      data-chat-steering-batch={batchStart ? 'start' : undefined}
     >
       {renderFactorySlot('conversation.chat.user.content', {
         content: prepared,
@@ -305,6 +308,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       interactive
       renderFactorySlot={renderFactorySlot}
       loadImage={loadImage}
+      batchStart={node.kind === 'steering' && node.data.batchStart === true}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       actions={text => (

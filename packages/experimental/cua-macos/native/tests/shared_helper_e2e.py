@@ -22,7 +22,7 @@ from native_test_support import BINARY, ROOT, line, stop
 
 
 CONFIG = {"maxRequestBytes": 1024 * 1024, "maxResponseBytes": 32 * 1024 * 1024,
-          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "screenshotTimeoutMs": 5000,
+          "axTimeoutMs": 3000, "textEventIntervalMs": 0.25, "maxClickHoldMs": 5000, "screenshotTimeoutMs": 5000,
           "timeoutMs": 30000, "graceMs": 3000}
 
 

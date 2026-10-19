@@ -165,7 +165,7 @@ export function apply(ctx: Context): void {
     }, LinkOpeningRow))
   })
   const transcriptView = new TranscriptViewPolicy(chatSettings, 'dshDesktop' in globalThis ? 'standard' : DEFAULT_TRANSCRIPT_VIEW_MODE)
-  const presentation = derivePresentationPolicy(transcriptView.mode, transcriptView.collapseTiming)
+  const presentation = derivePresentationPolicy(transcriptView.mode, transcriptView.collapseTiming, transcriptView.foldedReplies)
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
   const performanceUsage = performancePolicy.mode
@@ -192,9 +192,14 @@ export function apply(ctx: Context): void {
     order: 12,
     locale: NS,
     inject: (): TranscriptViewRowInjected => ({
-      hooks: { transcriptView: transcriptView.mode, collapseTiming: transcriptView.collapseTiming },
+      hooks: {
+        transcriptView: transcriptView.mode,
+        collapseTiming: transcriptView.collapseTiming,
+        foldedReplies: transcriptView.foldedReplies,
+      },
       setTranscriptView: (mode) => { transcriptView.setMode(mode) },
       setCollapseTiming: (timing) => { transcriptView.setCollapseTiming(timing) },
+      setFoldedReplies: (replies) => { transcriptView.setFoldedReplies(replies) },
     }),
   }, TranscriptViewRow))
 

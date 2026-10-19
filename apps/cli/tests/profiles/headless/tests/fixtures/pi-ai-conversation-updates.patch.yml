@@ -34,3 +34,9 @@
 - insert:
     - id: dynamic-tool-prompt-updates
       name: '../../../../../../../packages/test-support/session-snapshot/tests/fixtures/dynamic-tool-prompt-updates.ts'
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

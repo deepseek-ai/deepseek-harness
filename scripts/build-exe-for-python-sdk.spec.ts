@@ -174,7 +174,7 @@ describe('Python runtime executable builder CLI', () => {
 
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('exec pkg')
-    expect(result.stdout).toContain('--sea --targets node24-macos-x64')
+    expect(result.stdout).toContain('--sea --compress Brotli --targets node24-macos-x64')
     expect(result.stdout).toContain('keep only node-pty prebuilds darwin-x64')
     expect(result.stdout).toContain('lock optional resource downloads and copy Office skills')
     expect(result.stdout).toContain(join(root, 'dist-exe', 'macos-x64'))

@@ -207,17 +207,9 @@ Client Program
 
 `remote-client` is the Host Program's second emitter, not a third Program or the Client's local face. It contains no Host Cordis merge, Service class, Context class, or implementation code, and it does not enter the Host-local reflection registry.
 
-The Host lib build performs strict Host analysis and emits both the Host-local and Remote consumer artifacts. The Client lib then consumes the Remote DTS. The complete order is:
+Source-only Host analysis writes the Host-local and Remote consumer artifacts before package compilation. [The generation-order decision](../process/2026-10-18-source-first-metadata-builds.md) owns placement and its tradeoffs; [Development](../../../../docs/development.md#typescript-project-layout) owns the command sequence.
 
-```text
-Host lib build
-→ 生成 typert.host.{js,d.ts}
-→ 生成各业务包 lib/typert.remote-client.{js,d.ts,d.ts.map}
-→ 完成 Client lib 和 typert.client 产物
-→ Vite 构建 Web
-```
-
-The top-level `build` runs the step graph in `scripts/build.ts`, which completes the Host bundle and the Remote artifacts before starting Client TypeScript compilation. `build:lib` remains the complete serial lib build for `build:bench`, and its Host half `build:lib:host` serves the vendor release workflows. `typecheck` writes the Remote artifacts through `scripts/generate-typert.ts`, beside Host compilation, before Client TypeScript compilation. A clean build must not depend on stale `.d.ts` files from an earlier build.
+The top-level `build`, declaration-only `typecheck`, and serial `build:lib` share metadata preparation before package compilation. `build:lib` remains the complete serial lib build for `build:bench`; its Host half `build:lib:host` serves the vendor release workflows and retains aggregate checking. A clean build must not depend on stale `.d.ts` files from an earlier build.
 
 Compiler-backed repository gates that resolve the consumer surface have the same prerequisite even when their primary inputs are source files. The public `typecheck`, `lint`, and `doc-typecheck` commands run the Host contract pass first. The gate scheduler may use their `*:contracts-ready` variants only after an explicit Typert-contract or complete-build dependency, so parallel lanes neither read missing declarations nor run concurrent generators against the same outputs.
 

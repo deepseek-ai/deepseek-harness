@@ -14,7 +14,7 @@ Status: implemented
 
 选择 Auto 会写入 `danger-full-access` 与 `ask` 审批策略。已记录的 Auto 选择也匹配 `never` 策略。[进程内委派 child 固定 `never`](../../../../packages/subagent/subagent/README.zh.md)，因此 child 的 Auto 保留最终的 `AutoReviewDeniedError` 拒绝及其理由；按先前 `never` 组合记录的 Session 仍解析为 Auto，而不是 Full access。再次选择 Auto 会写入 `ask`。
 
-Reviewer 失败以 `Auto review of tool "<name>" failed; its body was not executed: <error>` 拒绝调用，不带结构化错误信息。Provider 失败消息包含 finish 类型、失败代码与 provider 消息，因此模型与通用工具卡片显示实际原因。
+Reviewer 失败以 `Auto review of tool "<name>" failed; its body was not executed: <error>` 拒绝调用，带结构化 `AutoReviewFailedError` / `AUTO_REVIEW_FAILED` 信息。[Headless 调用者](2026-10-18-headless-auto-review.zh.md)用该身份区分失败与拒绝。Provider 失败消息包含 finish 类型、失败代码与 provider 消息，因此模型与通用工具卡片显示实际原因。
 
 ## Alternatives considered
 

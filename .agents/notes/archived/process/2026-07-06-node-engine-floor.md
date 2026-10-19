@@ -1,6 +1,7 @@
 # Agent Note: Raise the Node LTS engine floor to 22.19
 
 Status: implemented
+Archived: 2026-10-15
 
 English | [中文](2026-07-06-node-engine-floor.zh.md)
 

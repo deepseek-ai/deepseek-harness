@@ -91,6 +91,18 @@ describe('read-only', () => {
 describe('workspace-write containment', () => {
   beforeEach(() => boot('workspace-write'))
 
+  it('rejects an extra directory replaced by a symlink to an ungranted sibling', async () => {
+    const extra = join(workspace, 'extra')
+    await mkdir(extra)
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [extra] }
+    await fs.writeText(await target(join(extra, 'before.txt')), 'allowed', undefined, undefined, policy)
+    await rm(extra, { recursive: true })
+    await symlink(outside, extra, 'dir')
+    await expect(fs.writeText(await target(join(outside, 'escape.txt')), 'denied', undefined, undefined, policy))
+      .rejects.toMatchObject({ code: 'SANDBOX_INVALID_ROOT' })
+    expect(existsSync(join(outside, 'escape.txt'))).toBe(false)
+  })
+
   it('a write under the workspace lands', async () => {
     const path = join(workspace, 'nested', 'ok.txt')
     const outcome = await fs.writeText(await target(path), 'inside')

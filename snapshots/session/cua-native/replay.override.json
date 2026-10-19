@@ -113,7 +113,7 @@
           "type": "tool-call",
           "id": "cua-native-4",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementIndex\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"snapshotId\":\"fixture-snapshot-1\",\"elementIndex\":0,\"holdMs\":800}}"
         }
       },
       {
@@ -575,7 +575,7 @@
           "type": "tool-call",
           "id": "cua-native-other-window",
           "name": "cua",
-          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-4\",\"x\":0,\"y\":0}}"
+          "arguments": "{\"method\":\"click\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":8,\"snapshotId\":\"fixture-snapshot-4\",\"x\":0,\"y\":0,\"holdMs\":800}}"
         }
       },
       {

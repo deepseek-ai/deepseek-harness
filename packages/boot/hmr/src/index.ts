@@ -1045,13 +1045,13 @@ function namespaceOf(job: ModuleJob | undefined): unknown {
 }
 
 /**
- * The jobs a module job links to. Node 24+ may expose them as an array; Node 22 keeps the job of a failed import
+ * The jobs a module job links to. The v2 loader may expose them as an array; v1 keeps the job of a failed import
  * whose links reject, and such a job contributes no links.
  */
 async function linkedJobs(job: ModuleJob): Promise<ModuleJob[]> {
-  /* v8 ignore next -- CI coverage runs Node 24+, which drops failed jobs from the cache */
+  /* v8 ignore next -- CI coverage uses the v2 loader, which drops failed jobs from the cache */
   const linked = await Promise.resolve(job.linked).catch((_error: unknown) => [])
-  // Node 22 may return a null-prototype array without methods or an iterator.
+  // The v1 loader may return a null-prototype array without methods or an iterator.
   return Array.from(linked)
 }
 

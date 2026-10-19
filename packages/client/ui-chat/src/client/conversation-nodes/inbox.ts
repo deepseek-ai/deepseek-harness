@@ -37,7 +37,12 @@ export interface InboxState {
   /** Message ids in the current claim, shared until the next claim. */
   readonly currentClaimed: ReadonlySet<string>
   readonly claimSeq: number
-  readonly claimedHuman: boolean
+  /**
+   * First human message id of the current claim in Inbox order; undefined
+   * when the claim took no human message. The AgentLoop logs a claim's
+   * messages in this order, so this message is the claim's first steering row.
+   */
+  readonly firstClaimedHuman: string | undefined
 }
 
 const EMPTY_PENDING: PendingState = { kind: 'snapshot', ids: [] }
@@ -91,7 +96,7 @@ function applySplice(
       pending: { kind: 'snapshot', ids: pending },
       currentClaimed: new Set(removed.map(message => message.id)),
       claimSeq: seq,
-      claimedHuman: removed.some(message => message.source.kind === 'user'),
+      firstClaimedHuman: removed.find(message => message.source.kind === 'user')?.id,
     }
   }
   const currentClaimed = withoutInserted(
@@ -108,7 +113,7 @@ function applySplice(
     },
     currentClaimed,
     claimSeq: previous?.state.claimSeq ?? -1,
-    claimedHuman: previous?.state.claimedHuman ?? false,
+    firstClaimedHuman: previous?.state.firstClaimedHuman,
   }
 }
 

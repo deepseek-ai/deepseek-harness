@@ -1,8 +1,8 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
-index 38571b31e143e913c2bf59dad73382982e93664a..950e546197d8e84cb3edfca0012939f1db2488d8 100644
+index befb18b2e7d519b3731f6355921de1cb7892c7ac..7b7da85be215d3f91235ef4c32d4aa0f512ea6a5 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -553,7 +553,6 @@ export const stream = (model, context, options) => {
+@@ -588,7 +588,6 @@
                          const block = blocks[index];
                          if (block && block.type === "toolCall") {
                              block.partialJson += event.delta.partial_json;
@@ -11,10 +11,10 @@ index 38571b31e143e913c2bf59dad73382982e93664a..950e546197d8e84cb3edfca0012939f1
                                  type: "toolcall_delta",
                                  contentIndex: index,
 diff --git a/dist/api/bedrock-converse-stream.js b/dist/api/bedrock-converse-stream.js
-index ca40f1b4a4e99f441503cf364822073a7a6c478a..14c204261b3f6c47f8950cf44f0fb9f86cf2cda7 100644
+index 6ec62d045eab17f1298c39962cbada2073cb1bd3..abe5eeee081f608be3a5eb7c866684e807c0521c 100644
 --- a/dist/api/bedrock-converse-stream.js
 +++ b/dist/api/bedrock-converse-stream.js
-@@ -461,7 +461,6 @@ function handleContentBlockDelta(event, blocks, output, stream) {
+@@ -461,7 +461,6 @@
      }
      else if (delta?.toolUse && block?.type === "toolCall") {
          block.partialJson = (block.partialJson || "") + (delta.toolUse.input || "");
@@ -23,10 +23,10 @@ index ca40f1b4a4e99f441503cf364822073a7a6c478a..14c204261b3f6c47f8950cf44f0fb9f8
      }
      else if (delta?.reasoningContent) {
 diff --git a/dist/api/mistral-conversations.js b/dist/api/mistral-conversations.js
-index 2fc3ad343af090a919f5b71454b29f23b009fc21..64aa8a4ab2461484f22066913455518f69157857 100644
+index 9038a1c498e0ea0d305fcfdc946455e72714683b..afda5ea6c3bed6abee984d0cb308a769636d01a7 100644
 --- a/dist/api/mistral-conversations.js
 +++ b/dist/api/mistral-conversations.js
-@@ -554,7 +554,6 @@ async function consumeChatStream(model, output, stream, mistralStream, onProvide
+@@ -570,7 +570,6 @@
                  ? toolCall.function.arguments
                  : JSON.stringify(toolCall.function.arguments || {});
              block.partialArgs = (block.partialArgs || "") + argsDelta;
@@ -35,10 +35,10 @@ index 2fc3ad343af090a919f5b71454b29f23b009fc21..64aa8a4ab2461484f22066913455518f
                  type: "toolcall_delta",
                  contentIndex: toolBlocksByKey.get(key),
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index a60f39352b776d71497e55b33b3334bacfbeb2f5..6c9b98e35606c52e4f0fb29d8fd0b5ba02d92e09 100644
+index 0eeaffa968628593cf6e9f8648650149a97ed55b..fdafb4cfdee8a65bbef86cd1c3a06317c1d87857 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
-@@ -438,7 +438,6 @@ export const stream = (model, context, options) => {
+@@ -453,7 +453,6 @@
                              if (toolCall.function?.arguments) {
                                  delta = toolCall.function.arguments;
                                  block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
@@ -47,10 +47,10 @@ index a60f39352b776d71497e55b33b3334bacfbeb2f5..6c9b98e35606c52e4f0fb29d8fd0b5ba
                              else if (toolCall.custom?.input) {
                                  const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
-index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..108f599ae1d985d2f465e8cdf99ce0624acea6aa 100644
+index af5f042285334542b9b39239cd9ea540916a1c32..b9f00fbe3a2ba4e7dfabfe4bcca3c54cb2d55f9f 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
-@@ -548,7 +548,6 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -561,7 +561,6 @@
              if (!slot || slot.block.partialJson === undefined)
                  continue;
              slot.block.partialJson += event.delta;
@@ -62,7 +62,7 @@ diff --git a/dist/api/pi-messages.js b/dist/api/pi-messages.js
 index 7da1c45de8a106a68411cf79bec75f553534a1c7..296d131b59b1cf75f2516c39e85bba72972b2c17 100644
 --- a/dist/api/pi-messages.js
 +++ b/dist/api/pi-messages.js
-@@ -155,8 +155,6 @@ function createEventConverter(model) {
+@@ -155,8 +155,6 @@
              case "toolcall_delta": {
                  const json = `${toolJson.get(event.contentIndex) ?? ""}${event.delta}`;
                  toolJson.set(event.contentIndex, json);

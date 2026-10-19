@@ -106,7 +106,7 @@ loopback 始终被绕过——`localhost`、整个 `127.0.0.0/8` 段、`::1`、`
 
 - **不支持 SOCKS、PAC 或操作系统代理探测**——只接受来自环境的 `http(s)://` 代理 URL。不会读取 macOS 或 Windows 的系统代理设置，因此仅在代理软件里拨了开关的用户仍须导出环境变量；SOCKS URL 会被报告，且该协议保持直连，不会借用另一协议的代理。
 - **不支持自定义证书颁发机构**——做 TLS 拦截的企业代理需要在启动前为进程设置 `NODE_EXTRA_CA_CERTS`，本包既不设置也不校验它。
-- **spawn 出的子进程只在足够新的运行时上遵循策略，且仅当它继承的每个值都是 Node 接受的**——它通过 Node 的 `NODE_USE_ENV_PROXY` 读取已发布的环境（22.21+、24+），而 engines 范围允许 22.19 与 22.20，在这两个版本上这样的子进程保持直连。若用户环境里还有 SOCKS 或其他被拒的代理，所有子 Node 都保持直连：不设置该标志，子进程才起得来。子进程还会按 Node 自己的 `NO_PROXY` 规则匹配绕过条目，其分隔符与 IPv4 区间处理与本包不同。本进程内不依赖任何 Node 版本：每一次进程内请求都会落到全局 dispatcher。
+- **spawn 出的子进程只在足够新的运行时上遵循策略，且仅当它继承的每个值都是 Node 接受的**——它通过 Node 的 `NODE_USE_ENV_PROXY` 读取已发布的环境（22.21+、24+）；使用更旧 Node 启动的子进程保持直连。若用户环境里还有 SOCKS 或其他被拒的代理，所有子 Node 都保持直连：不设置该标志，子进程才起得来。子进程还会按 Node 自己的 `NO_PROXY` 规则匹配绕过条目，其分隔符与 IPv4 区间处理与本包不同。本进程内不依赖任何 Node 版本：每一次进程内请求都会落到全局 dispatcher。
 - **遥测按设计直连**——OTLP 导出器通过 `node:http` 投递，全局 dispatcher 触及不到。要让它走代理，要么依赖 `http.Agent` 的 `proxyEnv`，而该选项晚于本项目支持的最低 Node 版本；要么改用 SDK 的 `fetch` 传输，但它没有压缩能力，而随附配置启用了 gzip。遥测是唯一一条丢失后不会让用户付出任何代价的通道，因此维持原状；`DSH_TELEMETRY_MODE=DISABLED` 可关闭它。
 - **模型编写的程序不接收代理配置**——Node ptc-runtime 进程与 workflow worker 不继承可能含有 `user:password` 的代理 URL。其直接请求需要自行配置，并继续受到执行沙箱的约束。
 - **防回归门禁只看源码，看不到依赖内部**——`verify-no-bare-dispatcher` 解析 `packages/*/*/src` 与 `apps/*/src`；测试、脚本以及第三方 SDK 的内部都在其之外。这正是每个出网点还各配一份 `egress.spec.ts` 的原因。

@@ -27,8 +27,11 @@
   en: 6a19c075f826b3f7
   zh: c200277cb58062be
 /deepseek-ai-dsh-session-projection/use-this-package/persisted-checkpoints:
-  en: 45f1c05fb7e08180
-  zh: f8d62c749899651a
+  en: 3bbc61a438aeabd0
+  zh: bd1824f4da278764
+/deepseek-ai-dsh-session-projection/use-this-package/session-summaries:
+  en: bbdefde61fb3b02f
+  zh: c6871e05e63ff4ed
 /deepseek-ai-dsh-session-projection/understand-the-implementation:
   en: 3397f58d6f49bfda
   zh: efb85d382e25574d
@@ -36,8 +39,8 @@
   en: 8afa0fdb49898f6d
   zh: 6b2da34455963935
 /deepseek-ai-dsh-session-projection/understand-the-implementation/source-map:
-  en: b0263d26c5a65d7a
-  zh: 2e58d3181dde901c
+  en: 01b1a2ad7a7cab97
+  zh: bd0436807998dda6
 /deepseek-ai-dsh-session-projection/understand-the-implementation/drive-and-checkpoint-flow:
   en: 00136880bb586403
   zh: bd35f645111c068c
@@ -51,8 +54,8 @@
   en: 8a592dae9bc946ab
   zh: eca939995bb5f8e0
 /deepseek-ai-dsh-session-projection/known-limitations-and-deferred-work:
-  en: 8fd41113832feb7c
-  zh: d50021b135278d77
+  en: dda14db5a0fbe2fa
+  zh: 9675b2a39e7aea8b
 /deepseek-ai-dsh-session-projection/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -38,6 +38,7 @@
     "tests/code-card-layout.e2e.ts",
     "tests/code-language.snapshot.ts",
     "tests/scaffold.ts",
+    "tests/clock.e2e.ts",
     "tests/connection-recovery.e2e.ts",
     "tests/server-restart.e2e.ts",
     "tests/voice-input.e2e.ts",

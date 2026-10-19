@@ -23,7 +23,7 @@
 # restatement keeps the Web values on one ephemeral in-memory index; a
 # deployment enabling content search overrides `openAt` to `first-search` in a
 # later patch layer, which defers the node:sqlite import and in-memory handle
-# to the first search so Node 22 startup stays quiet.
+# to the first search so startup stays quiet.
 - id: session-query-sqlite
   config:
     path: ':memory:'

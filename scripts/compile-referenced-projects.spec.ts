@@ -14,6 +14,7 @@ const compiler = fileURLToPath(import.meta.resolve('typescript/bin/tsc'))
 function fixture(): { root: string; leaf: string } {
   const root = mkdtempSync(join(tmpdir(), 'dsh-referenced-projects-'))
   onTestFinished(() => { removeFixtureSafely(root) })
+  mkdirSync(join(root, 'packages'))
   const leaf = join(root, 'leaf package')
   mkdirSync(join(leaf, 'src'), { recursive: true })
   writeFileSync(join(root, 'package.json'), JSON.stringify({ type: 'module' }))
@@ -110,6 +111,31 @@ describe('internal artifact build order', () => {
     expect(commands()).toEqual(expected.map(args => ({ args, title: 'Inherited Build Title' })))
   })
 
+  it('compiles a Host metadata consumer from a clean tree', () => {
+    const { root } = fixture()
+    const producer = writeTypertWorkspace(root)
+    const commands = recordedCommands(root)
+    const consumer = join(root, 'consumer')
+    mkdirSync(join(consumer, 'src'), { recursive: true })
+    writeFileSync(join(consumer, 'src/index.ts'), 'import { TYPERT } from "../../packages/fixture/probe/lib/typert.host.js"\nexport const value: unknown = TYPERT\n')
+    writeFileSync(join(consumer, 'tsconfig.json'), JSON.stringify({
+      extends: '../tsconfig.base.json', compilerOptions: { rootDir: 'src', outDir: 'lib/types' },
+      include: ['src'], references: [{ path: '../packages/fixture/probe' }],
+    }))
+    writeFileSync(join(root, 'tsconfig.host.json'), JSON.stringify({
+      extends: './tsconfig.base.json', compilerOptions: { noEmit: true }, files: [],
+      references: [{ path: producer }, { path: consumer }],
+    }))
+
+    expect(existsSync(join(producer, 'lib'))).toBe(false)
+    buildLibraryArtifacts(root, true)
+
+    expect(readFileSync(join(consumer, 'lib/types/index.js'), 'utf8')).toContain('TYPERT')
+    expect(commands().map(command => command.args)).toEqual([
+      ['exec', 'tsdown', '--config-loader', 'native', '--env.DSH_BUILD_FACE', 'host'],
+    ])
+  })
+
   it('stops after a failed Host bundler before Desktop and Client builds', () => {
     const { root } = fixture()
     const commands = recordedCommands(root, true)
@@ -174,25 +200,21 @@ describe('bundle-free Host contracts', { timeout: 60_000 }, () => {
     expect(outputs()).toEqual(expect.arrayContaining(['typert.host.d.ts', 'typert.host.js']))
   })
 
-  it('fails when the Typert pass rejects a contributor while Host compilation completes', async () => {
-    const { pkg, run, outputs } = typertWorkspace()
+  it('does not compile Host packages after Typert rejects a contributor', async () => {
+    const { pkg, run } = typertWorkspace()
     setPublishedFiles(pkg, [])
 
     await expect(run()).rejects.toThrow('Host Typert exited with 1')
-    expect(outputs()).toEqual(['types/index.d.ts', 'types/index.js'])
+    expect(existsSync(join(pkg, 'lib'))).toBe(false)
   })
 
-  it('reports both steps when both fail', async () => {
+  it('reports generation before an unrelated compiler error', async () => {
     const { pkg, run } = typertWorkspace('/** @typert schema */\nexport interface Payload { value: string }\nexport const value: number = "invalid"\n')
     setPublishedFiles(pkg, [])
 
     const failure: unknown = await run().then(() => undefined, (error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(AggregateError)
-    expect((failure as AggregateError).errors.map(error => String(error))).toEqual([
-      expect.stringContaining('host compiler exited with'),
-      expect.stringContaining('Host Typert exited with 1'),
-    ])
+    expect(String(failure)).toContain('Host Typert exited with 1')
   })
 })
 

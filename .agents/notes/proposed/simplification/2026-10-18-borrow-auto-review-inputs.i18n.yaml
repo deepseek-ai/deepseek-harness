@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-18-borrow-auto-review-inputs.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-10-18-borrow-auto-review-inputs.md
+/agent-note-borrow-auto-review-inputs-until-serialization:
+  en: 7935a9077525c95c
+  zh: f54640700003b6a3
+/agent-note-borrow-auto-review-inputs-until-serialization/problem:
+  en: ae55e01074cf34e0
+  zh: c9778fdb8fb157e3
+/agent-note-borrow-auto-review-inputs-until-serialization/proposal:
+  en: 67b001f13952f165
+  zh: 09f849fad8817aad
+/agent-note-borrow-auto-review-inputs-until-serialization/alternatives-considered:
+  en: 86495afdbc23ebe1
+  zh: d5c237aea3f14eed
+/agent-note-borrow-auto-review-inputs-until-serialization/acceptance-criteria:
+  en: b193bda5eb966372
+  zh: e493c784adec4f05
+/agent-note-borrow-auto-review-inputs-until-serialization/risks:
+  en: df5aebcbd42a13df
+  zh: 5945aa631bd4e07f

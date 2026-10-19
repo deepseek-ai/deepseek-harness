@@ -35,7 +35,8 @@
     "buffer": "^6.0.3",
     "picomatch": "^4.0.7",
     "readable-stream": "^4.7.0",
-    "@deepseek-ai/dsh-client-web": "workspace:*"
+    "@deepseek-ai/dsh-client-web": "workspace:*",
+    "string_decoder": "^1.3.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

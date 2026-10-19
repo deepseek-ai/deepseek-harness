@@ -532,7 +532,7 @@ describe('session.list projections column', () => {
     expect(row !== undefined && 'projections' in row).toBe(false)
   })
 
-  it('serves every available cold projection hint from the cache with zero log loads', async () => {
+  it('serves the summary projection hints from the cache with zero log loads', async () => {
     const { ctx } = await harness(true)
     const coldId = SessionId('session-cold-listing')
     const load = () => { throw new Error('list must not load event logs') }
@@ -541,10 +541,12 @@ describe('session.list projections column', () => {
       inspect: load,
       open: load,
     }) as never)
+    let seenKeys: unknown
     ctx.provide('sessionProjectionCache', {
       // The carrier hands the listed header through as the identity witness.
-      cachedSnapshot: (meta: { id: unknown; createdAt: number }) =>
-        (meta.id === coldId && meta.createdAt === 5
+      cachedSnapshot: (meta: { id: unknown; createdAt: number }, keys: unknown) => {
+        seenKeys = keys
+        return meta.id === coldId && meta.createdAt === 5
           ? {
             asOfSeq: SessionSeq(7),
             values: {
@@ -553,7 +555,8 @@ describe('session.list projections column', () => {
               title: 'Cached title',
             },
           }
-          : undefined),
+          : undefined
+      },
     } as never)
     const response = await remote(ctx).list(request({}))
     if (!response.ok) throw new Error('unreachable')
@@ -568,6 +571,8 @@ describe('session.list projections column', () => {
         title: 'Cached title',
       },
     })
+    // The cold branch passes the registry's own summary set, not a fresh list.
+    expect(seenKeys).toBe(ctx.sessionProjections.summaryKeys())
   })
 
   it('keeps persisted host-only state out of a cold session.list response', async () => {

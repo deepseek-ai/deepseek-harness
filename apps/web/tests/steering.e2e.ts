@@ -388,6 +388,7 @@ describe('web e2e: composer shortcut follows the swapped busy behavior', () => {
 
 describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
   const releaseReplay = Promise.withResolvers<undefined>()
+  const releaseQuestion = Promise.withResolvers<undefined>()
   let disposeReplayBarrier: (() => void) | undefined
   let scaffold: WebScaffold
   let browser: Browser
@@ -408,7 +409,10 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     })
     disposeReplayBarrier = scaffold.ctx.on('llm/stream', async function* (_options, next) {
       await releaseReplay.promise
-      yield* next()
+      for await (const chunk of next()) {
+        yield chunk
+        if (chunk.type === 'block-start' && chunk.blockType === 'tool-call') await releaseQuestion.promise
+      }
     }, { prepend: true })
     scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event) })
     browser = await chromium.launch()
@@ -423,6 +427,7 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
 
   afterAll(async () => {
     releaseReplay.resolve(undefined)
+    releaseQuestion.resolve(undefined)
     disposeReplayBarrier?.()
     try {
       await browser?.close()
@@ -436,7 +441,6 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-steer-all'))
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
-    const settled = scaffold.whenTurnSettled(30_000)
 
     // Hold the question-tool stream until both rows have been steered, so
     // question-composer takeover cannot race queue publication or the shortcut.
@@ -484,15 +488,17 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     ).toBe(2)
     releaseReplay.resolve(undefined)
     expect(await page.locator('[data-queue-dock]').count()).toBe(0)
-    // The reasoning row streams independently of the steering handoff. Wait
-    // for the block to settle so the mid snapshot does not race its transient
-    // visually-hidden Running label while the question keeps the turn open.
+    // The unnamed tool block makes the reasoning row non-running. Its name and
+    // arguments stay gated so the mid snapshot cannot acquire a preparation row.
     await page.locator('[data-variant="think"][data-state="ok"]').first().waitFor({ state: 'attached', timeout: 10_000 })
+    expect(await page.locator('[data-tool="ask_user_question"][data-state="preparing"]').count()).toBe(0)
     const mid = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(STEER_ALL_MID, mid, MODE)
 
     // Answer the question; the step closes, the loop drains both steerings
     // into one next-step request, and the final reply obeys both markers.
+    const settled = scaffold.whenTurnSettled(30_000)
+    releaseQuestion.resolve(undefined)
     const composer = page.locator('[data-question-key]')
     await composer.waitFor({ timeout: 30_000 })
     await composer.getByRole('radio', { name: 'Yes' }).click()

@@ -206,19 +206,47 @@ test('keeps Task Issues limited to summary and deliverables', () => {
   )
 })
 
-test('structures the pull request template around motivation, changes, and testing', () => {
+test('keeps the pull request template aligned with the dsh-pr-description skill', () => {
   const source = readFileSync(new URL('../pull_request_template.md', import.meta.url), 'utf8')
-  for (const heading of ['## Motivation', '## Changes', '## Testing']) {
-    assert.match(source, new RegExp(`^${heading.replaceAll('#', '\\#')}$`, 'm'))
-  }
+  const skillPath = '.agents/skills/dsh-pr-description/SKILL.md'
+  const skill = readFileSync(new URL(`../../${skillPath}`, import.meta.url), 'utf8')
+  assert.ok(source.startsWith(`<!-- 本 PR 正文按 ${skillPath} 填写。 -->\n`), 'the template points to the skill')
+  assert.deepEqual(source.match(/^## .+$/gm), [
+    '## Motivation',
+    '## Changes',
+    '## Testing',
+    '## Human and Agent Roles',
+  ])
   assert.doesNotMatch(source, /^### /m)
-  assert.match(
-    source,
-    /<!-- 高层次说明命令[^\n]+ -->\n<!-- 高层次说明用户[^\n]+ -->/,
-  )
+  assert.match(source, /^## Motivation\n\n<!-- [^\n]*Fixes #N[^\n]* -->$/m, 'the template prompts for an Issue reference')
   assert.match(source, /- <!-- [^\n]+ -->\n\n  <details>\n  <summary>Proof<\/summary>/)
   assert.equal(source.match(/<details>/g)?.length, 1)
   assert.equal(source.match(/<\/details>/g)?.length, 1)
+
+  const levelLine = /^Levels and Agent autonomy: .+$/m
+  assert.ok(skill.match(levelLine), 'the skill shows the role level line')
+  assert.equal(source.match(levelLine)?.[0], skill.match(levelLine)?.[0], 'the template level line matches the skill')
+  const stagesSection = skill.match(/^### Stages and criteria\n([\s\S]*?)(?=^### )/m)?.[1]
+  assert.ok(stagesSection, 'the skill has a Stages and criteria section')
+  const skillStages = [...stagesSection.matchAll(/^\*\*(.+?)\*\*:/gm)].map(([, stage]) => stage)
+  assert.ok(skillStages.length > 0, 'the skill lists role stages')
+  for (const stage of skillStages) {
+    assert.match(stage, /^[a-z]+ [\u4e00-\u9fff]+$/, `stage name pairs one English word with a Chinese name: ${stage}`)
+  }
+  const reviewStage = 'review 评审处理'
+  assert.equal(skillStages.at(-1), reviewStage, 'review is the last stage')
+  assert.deepEqual(
+    [...source.matchAll(/^- <ins>\*\*(?:待填级别\*\*<\/ins> \?%|n\/a 暂不适用\*\*<\/ins>) · (.+?) — .+$/gm)].map(([, stage]) => stage),
+    skillStages,
+    'the template has one line per skill stage, in skill order',
+  )
+  for (const stage of skillStages.slice(0, -1)) {
+    assert.ok(source.includes(`- <ins>**待填级别**</ins> ?% · ${stage} — 待填说明\n`), `${stage} has a placeholder line`)
+  }
+  assert.ok(
+    source.includes(`- <ins>**n/a 暂不适用**</ins> · ${reviewStage} — 尚无已处理的评审意见。\n`),
+    'the review line starts as n/a, as the skill requires at PR creation',
+  )
 })
 
 test('ignores Issue title, body presentation, and assignee ownership', () => {

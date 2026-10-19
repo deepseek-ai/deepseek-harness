@@ -942,7 +942,10 @@ async function verifyProviderCwdResume(
     })
     const output = records(resumed.stdout)
     expect(output[0]).toEqual({ type: 'session', sessionId: primary?.header.id, cwd: providerCwd })
-    expect(output.at(-1)).toEqual({ type: 'final', text: finalTextFromSession(primary!.content) })
+    expect(output.at(-1)).toEqual({
+      type: 'final', sessionId: primary?.header.id,
+      reason: { kind: 'completed' }, text: finalTextFromSession(primary!.content),
+    })
     const continued = await persistedSessions(cwd)
     expect(continued).toHaveLength(1)
     expect(continued[0]?.header).toEqual(primary?.header)

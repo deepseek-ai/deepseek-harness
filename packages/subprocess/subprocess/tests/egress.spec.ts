@@ -6,16 +6,6 @@ import { clearedProxyEnv, installProxyFromEnvironment } from '@deepseek-ai/dsh-h
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { scrubbedParentEnv } from '../src/index.ts'
 
-/**
- * Whether this runtime honors `NODE_USE_ENV_PROXY`, which is how a child Node receives the policy.
- * Added in Node 24.0 and backported to 22.21; the engines range admits 22.19 and 22.20, where a
- * child stays direct.
- */
-function supportsEnvProxy(): boolean {
-  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number)
-  return major >= 24 || (major === 22 && minor >= 21)
-}
-
 let seen: string[] = []
 let proxy: Server
 let proxyUrl: string
@@ -88,10 +78,7 @@ describe('child process egress', () => {
     }
     expect(childEnv.NODE_USE_ENV_PROXY).toBe('1')
     expect(childEnv.HTTP_PROXY).toBe(proxyUrl)
-    // The flag is what a child Node acts on; an older runtime ignores it and stays direct, which is
-    // the documented seam rather than a defect.
-    if (supportsEnvProxy()) expect(seen.join('|')).toContain('child-probe.invalid')
-    else expect(seen).toEqual([])
+    expect(seen.join('|')).toContain('child-probe.invalid')
   })
 
   it('a child Node reaches a proxy the user gave only as ALL_PROXY', async () => {
@@ -111,8 +98,7 @@ describe('child process egress', () => {
     // own names connects directly while this process proxies. The resolved value fills that gap.
     expect(childEnv.ALL_PROXY).toBe(proxyUrl)
     expect(childEnv.HTTP_PROXY).toBe(proxyUrl)
-    if (supportsEnvProxy()) expect(seen.join('|')).toContain('all-proxy-probe.invalid')
-    else expect(seen).toEqual([])
+    expect(seen.join('|')).toContain('all-proxy-probe.invalid')
   })
 
   it('keeps a proxy the user set for another tool, and fills only a scheme they never named', async () => {

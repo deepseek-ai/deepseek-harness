@@ -29,6 +29,8 @@
     // under its own tsconfig boundary.
     "paths": {
       "@deepseek-ai/dsh-experimental-session-search": ["./packages/experimental/session-search/src/index.ts"],
+      "@deepseek-ai/dsh-experimental-subagent-oar": ["./packages/experimental/subagent-oar/src/index.ts"],
+      "@deepseek-ai/dsh-experimental-tool-subagent-oar": ["./packages/experimental/tool-subagent-oar/src/index.ts"],
       "@deepseek-ai/dsh-experimental-ralph-bundle": ["./packages/experimental/ralph-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-terminal-bundle": ["./packages/experimental/terminal-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-badge-skill-bundle": ["./packages/experimental/badge-skill-bundle/src/index.ts"],

@@ -37,6 +37,8 @@ Application consent precedes launch, observation, capture, and input. Task acces
 
 Actions return `dispatched:true, verified:false`; read fresh state to verify the result. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 1000 after a successful window observation. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to native window points. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
+`click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input for both AX indices and coordinates; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
+
 -----
 
 <a id="understand-the-implementation"></a>

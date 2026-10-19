@@ -68,6 +68,14 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 系统通过 `checkpoint(session)` 为每个单元的状态创建检查点，client-visible 与 host-only 一视同仁；同级包 [session-projection-cache](../session-projection-cache/README.zh.md) 持久化这些检查点，使冷读跳过全量日志加载。检查点水位使用 `SessionSeqCursor`（空日志为 `-1`），回放起点使用 `SessionLogOffset`；`restoreFloor` 与 `restore` 实现读取流程，且不会混淆已有事件与日志间隙。
 
+### Session 摘要
+
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
+
+标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos` 和 `imageLimits`：outline 随整份日志增长，列表行不渲染统计或 todo 清单，而图片上限是每个 Session 共享的同一个宿主级启动常量。
+
+摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot`、`cachedSnapshot` 和 `viewCheckpoint` 在不传 key 子集时仍返回每个 wire key，因此打开的 Session 仍会收到全部投影值。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -87,7 +95,7 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SessionProjectionRegistry` 服务、`ProjectionDefinition`、快照与检查点机制 |
-| [`src/types.ts`](src/types.ts) | 可合并扩展的 `SessionProjectionMap` 与 `SessionProjectionStateMap` 类型表 |
+| [`src/types.ts`](src/types.ts) | 可合并扩展的 `SessionProjectionMap` 与 `SessionProjectionStateMap` 类型表，以及摘要排除标记及其派生的视图与摘要类型 |
 
 ### 驱动与检查点流程
 
@@ -126,7 +134,7 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 这些限制说明投影注册表在大规模下何时需要特别处理。它们是当前包约束，不是任务积压。
 
-- **每个尾页携带每个 client-visible key**——尚无逐 key 的 opt-out 或惰性 key 请求形状；在值都是 UI 量级的全量状态时可以接受，若某领域的值变大再重议。
+- **只有带 key 子集的读取才省略 key；尾页仍携带每个客户端可见 key，也不存在惰性逐值请求**——摘要只省略那些 `SessionProjectionMap` 条目带有 `SessionProjectionSummaryExcluded<T>` 且注册声明了 `wire.summary: false` 的 key。该 opt-out 按 key 生效，不按值生效：没有任何读取会延后加载单个大值。
 - **单元表是进程级的，因此 key 是否存在不能当作逐会话的能力信号**——任何 agent preset 注册的 key 都会出现在每个会话的快照里；客户端必须读值，不能把 key 缺席当作功能缺席。
 - **主动驱动逐事件触达每个单元**——按构造开销很低（全量值规则与 state/view 引用闸门），但若出现热点路径，可加按单元的事件类型预过滤。
 - **注册表 cell 只活在内存里**——重启后首次触达时靠折叠日志重建；挂载了 `dsh-session-projection-cache` 的组合改由持久行播种该折叠。

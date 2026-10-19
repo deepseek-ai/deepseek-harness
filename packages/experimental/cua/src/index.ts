@@ -58,6 +58,8 @@ export interface CuaConfig {
   maxRequestBytes: number
   /** Duration in milliseconds of one same-window drag. */
   dragDurationMs: number
+  /** Maximum explicitly requested mouse-button hold in milliseconds; zero allows immediate release only. */
+  maxClickHoldMs: number
   /** Number of movement segments dispatched during a drag. */
   dragSteps: number
   /** Delay in milliseconds after each Unicode key-down or key-up event. */
@@ -87,6 +89,7 @@ export const CuaConfig = Schema.object({
   pasteReadTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(1000),
   maxRequestBytes: Schema.number().step(1).min(1024).default(1024 * 1024),
   dragDurationMs: Schema.number().step(1).min(1).max(5000).default(400),
+  maxClickHoldMs: Schema.number().step(1).min(0).max(2 ** 31 - 1).default(5000),
   dragSteps: Schema.number().step(1).min(1).max(240).default(20),
   maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
@@ -149,11 +152,12 @@ export interface CuaBackend {
  */
 export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend): void {
   const { helperPath } = backend
+  const guidance = `${backend.guidance}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
     maxRequestBytes: config.maxRequestBytes, maxResponseBytes: config.maxResponseBytes, graceMs: config.graceMs,
-    textEventIntervalMs: config.textEventIntervalMs,
+    textEventIntervalMs: config.textEventIntervalMs, maxClickHoldMs: config.maxClickHoldMs,
   }
   const entryId = ctx.fiber.entry?.options.id
   ctx.inject(['settings'], scope => scope.effect(() => scope.settings.configure({ auto: false }, ctx.fiber)))
@@ -322,7 +326,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     })
     yield ctx.systemPrompt.section({
       name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'),
-      text: () => ctx.get('ptcRuntime')?.programFormat !== 'repl' ? backend.guidance : `${backend.guidance}
+      text: () => ctx.get('ptcRuntime')?.programFormat !== 'repl' ? guidance : `${guidance}
 
 Persistent PTC initialization:
 var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});

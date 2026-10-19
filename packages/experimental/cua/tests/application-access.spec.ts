@@ -31,7 +31,7 @@ vi.mock('../src/native-client.ts', async original => ({
 const unusedConnector = () => { throw new Error('Mocked native client does not connect') }
 
 const nativeConfig = { helperPath: '/fixture', cwd: '/', timeoutMs: 1000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 100,
-  maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100, textEventIntervalMs: 1 }
+  maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100, textEventIntervalMs: 1, maxClickHoldMs: 5000 }
 const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name: 'Test application', executablePath: '/Applications/Fixture.app/Contents/MacOS/Fixture', persistable: true })
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal

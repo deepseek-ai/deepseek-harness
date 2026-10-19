@@ -983,11 +983,11 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
       return found
     }
     expect(historyRole(review('subagent', AUTO_PARENT_AUTHORIZED), AUTO_PARENT_AUTHORIZED))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('subagent', AUTO_PARENT_CONTINUABLE), AUTO_PARENT_CONTINUABLE))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('send_message', AUTO_PARENT_ADJUST), AUTO_PARENT_ADJUST))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_AUTHORIZED), AUTO_CHILD_AUTHORIZED))
       .toBe('direct-parent-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_CONTINUABLE), AUTO_CHILD_CONTINUABLE))

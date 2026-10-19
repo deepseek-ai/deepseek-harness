@@ -61,7 +61,7 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/test-dsh-home") as harness:
 
 仓库贡献者可以选择以下任一开发路径；两者都执行普通的 `dsh --profile sdk` 启动器：
 
-- 设置 `DSH_RUNTIME_MODE=node`，在系统 Node `>=22.19` 上使用已构建的 Node 载体。构建脚本会刷新该载体，但分发物绝不会包含或自动选择它。
+- 设置 `DSH_RUNTIME_MODE=node`，在系统 Node `>=24.9` 上使用已构建的 Node 载体。构建脚本会刷新该载体，但分发物绝不会包含或自动选择它。
 - 将 `dsh_bin` 设置为已构建 `apps/cli/lib/bin.js` 的绝对路径，直接验证当前 checkout 的 CLI。请显式提供 `dsh_home`，并按需提供 `profile` 与有序 `patches`。
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` 使用内部 `_launch_args` 测试适配器，通过 tsx 验证未构建的 TypeScript CLI。公开 SDK 刻意不提供任意 argv 替换。

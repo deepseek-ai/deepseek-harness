@@ -477,7 +477,7 @@ describe('renderToolsSdkPy', () => {
     // ZWNJ carries `XID_Continue` and not `XID_Start`, so the predicate splits
     // on position: bare in a tail, subscripted at a head. Both verdicts are
     // stable across the supported engines — the property arrives in Unicode
-    // 15.1 and the floor (Node 22.19.0, Unicode 16.0) is past it.
+    // 15.1 and the supported engines use Unicode 16.0 or newer.
     //
     // The interpreter side is where this one skews, and it is the same skew the
     // docstring's four other characters record, reached in a tail position
@@ -540,10 +540,8 @@ describe('renderToolsSdkPy', () => {
     // Unlike the other Unicode cases in this file, the table row is recent:
     // U+A7DC and the U+019B uppercase mapping to it both arrive in Unicode
     // 16.0 (`DerivedAge.txt`; CPython 3.12.13's 15.0.0 has neither). The
-    // engines floor sits exactly there with no margin — Node 22.19.0 reports
-    // Unicode 16.0 (ICU 77.1) and maps U+019B to U+A7DC, measured — so an
-    // engine below the floor fails here as a renderer regression whose real
-    // cause is the table version.
+    // supported engines include that mapping. An older Unicode table fails
+    // here as a renderer regression whose cause is the table version.
     const text = renderToolsSdkPy([
       {
         name: 'ƛ',

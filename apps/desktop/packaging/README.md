@@ -67,6 +67,8 @@ The installer embeds `DSH_DESKTOP_UPDATE_CHANNEL` (`nightly` by default, or `lat
 
 ## Configuration and local builds
 
+Unsigned macOS and Windows packages use the same localized **DSH Local Build** label and version/commit badge as local Web builds. Signed packages keep official branding, including test deployments and macOS builds that skip notarization. Native application and installer names are unchanged.
+
 Set `DSH_PACKAGING_CONFIG_DIR` to the absolute machine configuration directory and `DSH_PACKAGING_PRESET` to `test` or `production` for local Windows commands. The loader reads `presets/<preset>.env`; signed commands additionally read `secrets/windows-signing.env`. Relative certificate and SignTool paths resolve beside the file declaring them. Public presets reject credentials, and the signing file cannot override public settings. Missing configuration fails without falling back to `.env.windows`; commands without a preset retain the existing dotenv behavior. Unsigned and preparation-only presets never read the signing file. Cache maintenance also reads only public preset settings. Test signed packages also require the existing download origin and release ID, but no upload credentials. Local preset commands with `--build-version auto` number from local artifacts only; Actions uses its run number and attempt.
 
 Both manual packaging workflows accept `test_release_id`. Blank uses the machine preset; a nonblank value must contain 32 lowercase hexadecimal characters and requires the test preset. The loader applies it through `PACKAGE_TEST_RELEASE_ID` without changing the preset file. Keep the same value for successive upgrade tests on that platform. Rotating the default affects future builds only: installed clients retain their original update address, and old objects remain accessible until separately removed. A random prefix reduces discoverability but does not authenticate downloads.
@@ -206,7 +208,7 @@ To inspect or troubleshoot the prepared host-target resources without invoking e
 pnpm run prepare:desktop
 ```
 
-This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the official build and preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
+This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the build selected by its signing mode and all preparation so it cannot consume stale dsh packages, runtime files, or dsh content.
 
 <a id="local-official-bundles-from-a-loopback-registry"></a>
 

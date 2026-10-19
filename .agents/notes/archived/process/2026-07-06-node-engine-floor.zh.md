@@ -1,6 +1,7 @@
 # Agent Note: 将 Node LTS 引擎下限提升至 22.19
 
 Status: implemented
+Archived: 2026-10-15
 
 [English](2026-07-06-node-engine-floor.md) | 中文
 
