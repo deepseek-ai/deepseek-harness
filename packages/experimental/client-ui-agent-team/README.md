@@ -1,5 +1,5 @@
 ---
-description: "Use and debug the experimental Web Agent Teams roster, shared task board, and teammate navigation panel."
+description: "Inspect the experimental shared task board from the Web conversation header."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package adds an Agent Teams action to the Web conversation header, where a user can inspect the current roster, inspect the shared task board, and navigate into a teammate's conversation. It combines the Lead Session's `agentTeam` and `subagentCatalog` projections from the shared Session store, where Host projection frames keep it current without a refresh control, and keeps ordinary child-history navigation on the stable addressed-subagent path. Choose it through the published experimental Agent Teams bundle. The browser projection does not extend the stable API Proxy, store Team state, or register model-facing input.
+This package adds a shared task-board panel to the Web conversation header. Host projection frames keep task state current without a refresh control. Ordinary subagent navigation owns the member list and teammate conversations. Choose this package through the experimental Agent Teams bundle; it adds no model-facing input.
 
 ## Table of Contents
 
@@ -27,17 +27,11 @@ This package adds an Agent Teams action to the Web conversation header, where a 
 
 Enable this package through [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md), which supplies the Team service, tools, and Web UI together. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 
-### Inspect and navigate the roster
-
-The panel combines the Lead Session’s `agentTeam` and `subagentCatalog` projections from the shared Session store. Its roster includes the Lead, continuable catalog children, and historical members, preferring catalog entries for duplicate ids. Task and roster updates appear while the panel stays open. Opening the panel performs no projection requests. The panel shows a loading notice while the conversation or Session list is loading, and an unavailable notice when either projection is missing afterward.
-
-Roster rows show descriptions and durable phases. Provisioning and running members use the shared ongoing loader, inactive members use a person icon, and failed members use error. Live Session status supplies running activity; the shared `modelSelection` projection supplies a model when available. The current conversation carries a Current chat tag and cannot be selected. Selecting the Lead from a teammate conversation opens the Lead Session directly. Selecting an active teammate opens its ordinary continuable child address. The Host validates the parent, child, and mode when history opens; later human prompts use the same addressed-subagent conversation.
-
 ### Inspect the task board
 
 Ready pending tasks use idle, blocked pending tasks use warning, in-progress tasks use ongoing, and completed tasks use done.
 
-Member rows show descriptions, which may repeat; the Lead label is localized. The read-only task board shows task identity, owner description (or id when absent from the roster), blockers, readiness, advisory write scopes, and overlap warnings. Descriptions longer than two lines have an expand toggle. Section headings show member and task counts; an empty board shows a short description, and a lone member with no tasks uses a single-column panel. Team agents create and update tasks through their tools; the panel provides no task mutation controls. When the projection reports a rejected persisted Team record, the panel shows that failure above the last valid roster and tasks.
+The read-only board shows task identity, owner label, blockers, readiness, advisory write scopes, and overlap warnings. Owner labels reuse existing Session and subagent catalog data, falling back to the Session id. Long descriptions can expand. The heading shows the task count and an empty board has a short explanation. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears above the last valid tasks.
 
 -----
 
@@ -49,12 +43,12 @@ Member rows show descriptions, which may repeat; the Lead label is localized. Th
 
 The Client export registers its locale dictionaries and one conversation-header slot through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes both registrations.
 
-The panel renders outside the conversation container and stays within the viewport. Member cards use the shared elevation stroke for their outlines in resting, selected, and hover states. Hovering the trigger opens the panel after 150ms; leaving both trigger and panel closes it after a 120ms grace period. Clicking the trigger pins the panel and moves focus into it. Outside clicks and Escape dismiss the panel; Escape returns focus to the trigger only when focus was inside the panel. In a narrow header, the trigger becomes an icon and opens only on click. The component derives every row from the `useSessions`, `useSessionStatus`, and `useSession` seats: the Lead id follows the current subagent address and Session list ancestry to the ordinary root; incomplete ancestry leaves the Team unavailable, the Team view from `projectionsBySession[lead].values.agentTeam`, member activity from Session status with the list summary as fallback, and the model from `projectionsBySession[member].values.modelSelection.next`. Each roster row selects its own running state. The only injected callback opens a roster Session using the current and target Session ids. Switching conversations closes the panel and clears a navigation failure.
+The panel renders outside the conversation container and stays within the viewport. Hover opens it after 150ms; leaving the trigger and panel closes it after 120ms. Clicking pins the panel and moves focus into it. Outside clicks and Escape dismiss it; Escape returns focus when focus was inside. A narrow header uses an icon trigger that opens on click. The panel resolves the root through Session ancestry and reads its `agentTeam` projection. Incomplete ancestry or missing projection data leaves the board unavailable; conversation changes close the panel.
 
 | File | Role |
 |---|---|
-| [`src/client/mount.ts`](src/client/mount.ts) | Locale, navigation, and slot registrations |
-| [`src/client/TeamAction.tsx`](src/client/TeamAction.tsx) | Projection-derived roster and task board with panel interaction state |
+| [`src/client/mount.ts`](src/client/mount.ts) | Locale and header-slot registrations |
+| [`src/client/TeamAction.tsx`](src/client/TeamAction.tsx) | Projection-derived task board and panel interaction state |
 | [`src/client/locales.ts`](src/client/locales.ts) | English and Chinese panel copy |
 | [`src/index.ts`](src/index.ts) | Inert Host entry |
 
@@ -66,7 +60,7 @@ The panel renders outside the conversation container and stays within the viewpo
 ## Further Exploration
 
 - [Agent Teams bundle](../agent-team-profile/README.md) — the published opt-in bundle that mounts this Client plugin.
-- [Agent Teams service](../agent-team/README.md) — authoritative roster, task, and projection behavior.
+- [Agent Teams service](../agent-team/README.md) — authoritative task and projection behavior.
 - [Conversation UI](../../client/ui-conversation/README.md) — the stable header slot and addressed-subagent navigation surface.
 - [Experimental packages](../README.md) — incubation status and publication policy.
 
@@ -85,10 +79,10 @@ No direct effect; the Team tools and ordinary conversation submission own any la
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **No mailbox timeline** — the projection view carries roster and tasks only; peer messages are not shown.
+- **No mailbox timeline** — the panel displays tasks, not messages.
 - **Late plugin activation** — after enabling Agent Teams in an already-open conversation, reload the page to receive its Team projection.
-- **Model availability** — a model appears only when the shared store has a durable selection or request for that member. Missing cold-cache values stay absent until normal Session loading or a live update supplies them.
-- **Ordinary child continuation** — a human message sent after navigation uses the stable addressed-subagent prompt path, not the Team peer mailbox.
+- **Missing owner labels** — unread Session or catalog metadata leaves an id label until ordinary loading supplies a description.
+- **Member navigation is separate** — use the ordinary subagent header to open teammate conversations.
 - **No lifecycle or workspace controls** — the panel cannot spawn, rename, delete, or interrupt teammates, and write scopes remain advisory metadata.
 
 <a id="dev-note"></a>

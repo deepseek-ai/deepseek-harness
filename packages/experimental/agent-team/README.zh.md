@@ -1,5 +1,5 @@
 ---
-description: "在实验性 Team 组合中，通过持久共享任务板和变更等待协调子代理。"
+description: "在实验性 Team 组合中通过持久化共享任务板和收件箱通知协调 subagent。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-agent-team` 将代理及其子代理组成共享持久任务板的 Team。标准 subagent 工具负责创建队友并按 id 发消息。Team 增加比较并设置的任务所有权、进度等待和 Web 面板成员列表。模型工具由 `dsh-experimental-tool-agent-team` 提供。该包为实验性功能，成员共享同一工作树。
+`dsh-experimental-agent-team` 为现有 subagent（子智能体）树添加持久化共享任务板。成员使用标准 subagent 工具发现和联系彼此。Team 提供比较并交换的任务归属更新，并在任务变更提交后通知其他在线成员。挂载 `dsh-experimental-tool-agent-team` 可提供任务工具。此包为实验性包，成员共享同一检出目录。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当子代理需要共享工作目录、持久任务板和变更等待时使用此包。与 `@deepseek-ai/dsh-experimental-tool-agent-team` 一起挂载以提供模型工具。
+当 subagent 需要持久化共享任务归属和依赖关系时，添加此包。与 `@deepseek-ai/dsh-experimental-tool-agent-team` 一起挂载可提供模型工具。
 
 ### 何时选择
 
-当被委派的 agent 必须在同一个 checkout 中划分并跟踪共享工作时，选择本包。被委派的工作不需要共享任务板时，普通 subagent 就足够。不支持独立工作目录、跨进程协调和自动释放任务 owner。
+委派 agent 需要划分和跟踪共享工作时选择此包。无需共享任务板时，普通 subagent 已足够。Team 不创建隔离工作目录、不跨进程协调，也不自动释放任务所有者。
 
 ### 最小工作配置
 
@@ -55,29 +55,29 @@ kind: "package-reference"
 
 让 Lead 使用 `description` 描述工作并启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的 Session id 用于寻址队友；描述用于展示，可以重复。
 
-每个根代理领导自己的 Team，其下任意深度的在线子代理都获得 Team 工具。成员列表包含 Lead、其直接可继续子级以及历史 `team/member` 记录。更深的后代按 Session id 使用同一任务板，但不显示为成员行。
+每个根 agent 及其后代组成一个 Team。任务可分配给根 agent 或 subagent 运行时发现的任意深度的可继续执行后代。历史名册记录仍可读取，但不授予分配权限。
 
 ### teammate 之间的消息
 
-成员使用标准 `list_agents` 发现整个 Team，通过 `send_message` 按 Session id联系任意其他成员。子代理运行时负责路由、发送者归属与冷恢复。Team 不存储消息；已接受的消息遵循普通 Agent 持久化。
+成员通过标准 `list_agents` 发现整棵树，并通过 `send_message` 按 Session id 联系另一成员。subagent 运行时负责路由、发送方归属和冷恢复。任务板通知只使用本地在线成员的收件箱，绝不恢复冷成员。
 
 ### 共享任务板
 
 任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有其全部依赖完成后，任务才可 claim。
 
-成员认领任务后开始工作，可以完成、释放或重新打开任务。Lead 可按 Session id 将任务重新分配给自身、直接可继续子级或活跃的历史成员。其他成员自行认领任务。每次变更都使用比较并设置，防止过期更新覆盖新工作。
+成员可认领任务开始工作、完成任务、释放任务或重新打开任务。根 agent 可按 Session id 将任务重新分配给自身或任意可达的可继续执行后代。其他成员自行认领任务。所有变更均采用比较并交换，过期更新无法覆盖较新的工作。
 
 当两个 in-progress 任务计划触及重叠路径时，文件提示会产生警告——它们绝不阻止任何操作。已删除任务保留在历史中，但从活动列表中消失。
 
 ### 等待与中断
 
-成员可以等待下一次 Team 变化——任务更新、成员状态变化，或成员 inbox 接收的消息——而不必反复轮询；等待只报告是否超时，调用方随后重新读取当前状态。
+标准 `wait_agent` 工具等待当前调用者下一步收件箱中的输入，包括任务板通知。无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。任务变更提交后发送不唤醒成员的通知；接收者在行动前重新读取任务板。
 
-祖先使用标准 `interrupt_agent` 工具停止 teammate 的当前轮次，因此只有 Lead 能中断其直接 teammate。中断保留尚未领取的排队消息，任务归属不变。
+祖先通过标准 `interrupt_agent` 工具停止后代的当前轮次。中断保留尚未认领的排队消息，也不改变任务归属。
 
 ### 成功与失败的表现
 
-成功返回更新后的任务修订或等待结果。未知成员 id、未就绪任务、过期修订、未授权变更和任务上限耗尽均报告 `TeamError`，例如 `TEAM_TASK_STALE_REVISION`。不属于在线 Team 的调用方收到 `TEAM_NOT_MEMBER`。
+成功时返回已提交的任务修订。未知所有者、未就绪任务、过期修订、未授权修改和任务数量耗尽会报告类型化错误。`TEAM_TASK_NOTIFICATION_FAILED` 表示任务已经提交：`committedTask` 标识其修订，`failedRecipients` 标识通知投递失败的接收者。恢复前重新读取任务；不要盲目重试任务创建。
 
 -----
 
@@ -93,60 +93,59 @@ kind: "package-reference"
 
 本服务建立在四项承诺之上：
 
-- **成员关系来自谱系。** live Agent registry 与 Lead 的 subagent catalog 定义 Team；Team 自己不存储成员记录。
+- **一棵树、一套身份。** subagent 运行时解析根并发现后代；Team 不维护第二套成员权限来源。
 - **持久日志、派生状态。** Lead 日志拥有任务和子级目录事实；每个目标 Agent 拥有已接受的消息。
 - **显式权限。** 每个服务方法都接收确切的 live 调用方 `Agent`；任务 owner 或 Lead 可以变更任务，只有 Lead 可以 reassign。
 - **超出上限时明确失败。** `maxTasks` 是经过校验的部署值，耗尽时报告类型化错误，而不是复用 id。
 
-[subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责成员关系、roster 与消息决策。[runtime-context 身份决策](../../../.agents/notes/implemented/architecture/2026-10-13-team-identity-runtime-context.zh.md)负责面向模型的身份。
+[任务板与收件箱决策](../../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责说明任务通知及其与普通 subagent 控制工具的职责划分。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、已移除键的拒绝、服务注册、变更通知 |
-| [`src/membership.ts`](src/membership.ts) | 通过 live Agent registry 解析 Lead 与 teammate，以及查找任务分配对象 |
+| [`src/index.ts`](src/index.ts) | 插件入口、配置校验和任务服务注册 |
+| [`src/task-notifications.ts`](src/task-notifications.ts) | 任务提交后合并的不唤醒收件箱通知 |
 | [`src/task-board.ts`](src/task-board.ts) | 任务 CAS 命令、DAG 校验与派生视图 |
 | [`src/journal.ts`](src/journal.ts) | 串行化的 Lead 日志事务与提交通知 |
 | [`src/projection.ts`](src/projection.ts) | 严格回放历史成员、任务和邮箱记录，发布 `agentTeam` 客户端视图 |
 | [`src/task-view.ts`](src/task-view.ts) | 任务板与客户端视图共用的纯任务就绪性和写入重叠推导 |
-| [`src/activity.ts`](src/activity.ts) | 一次性变更等待者与 dispose（资源释放）时的等待解除 |
 
 ### Team 身份与成员关系
 
-自身日志不含子代理描述符的根 Agent 领导以其 Session id 标识的 Team。`tryMembership()` 使用 `subagents.rootOf()` 和 Agent 注册表的运行时所有权；中间创建者可以离线。普通分叉最多携带继承的描述符，因此领导新的 Team。成员身份仅记录根、Team id 和角色。
+subagent 服务通过 `subagents.rootOf()` 解析当前在线调用者的根。中间创建者可以离线。普通 Session fork 会成为一棵新树的根。Team 使用该根 Session 作为任务板所有者，不另设成员对象。
 
-### Roster
+### 任务受让者
 
-任务指派读取 Lead 已有的 `subagentCatalog` 投影，该投影排除继承的目录事实。只有可继续子级和 active 历史成员可被指派。Team 保留历史 `team/member` 记录，但不复制或解析当前子级目录记录。
+重新分配通过与 `list_agents` 相同的发现机制解析根或可继续执行后代。历史 `team/member` 记录仅供解码，不能授权分配。
 
 ### 消息与历史 mailbox
 
-Team 不发送消息。`send_message` 的路由、Steer 投递、冷恢复和发送者前缀都属于 subagent 运行时。历史 `team/message/queued` 与 `team/message/delivered` 记录以及 `team-message` source 仍可解码；Team 从不投递或确认它们，因此目标尚未记录的历史消息保持未投递。
+成员通信、Steer 投递、冷恢复和发送方包装属于 subagent 运行时。Team 仅发送任务板通知。历史 `team/message/queued`、`team/message/delivered` 记录和 `team-message` 来源仍可解码，但绝不再投递或确认。
 
 ### 共享任务板
 
-任务是完整版本化快照；每次变更都携带 `expectedRevision`，陈旧调用方会收到 `TEAM_TASK_STALE_REVISION`，而不会覆盖更新的值。数字 `task-<n>` id 的后缀必须是安全整数，id 空间耗尽时报告 `TEAM_TASK_LIMIT`，而不是复用最后一个 id。已删除任务作为 tombstone 保留以供回放与维持 id 稳定，但不占用 `maxTasks`，也不出现在 `listTasks()` 中。`writeScopes` 是规范化后的 workspace 相对前缀；视图会对与 in-progress 任务的重叠发出警告，但绝不阻止 claim 或授予写权限。Lead reassign 按 Session id 解析根、直接可继续子级或 active 历史成员，其他目标报告 `TEAM_MEMBER_NOT_FOUND`。
+任务是完整的版本化快照。修改必须携带 `expectedRevision`；过期更新报告 `TEAM_TASK_STALE_REVISION`。数字形式的 `task-<n>` id 保持在安全整数范围内。删除的任务保留为重放墓碑，但不占用 `maxTasks`，也不出现在 `listTasks()` 中。规范化的工作区相对 `writeScopes` 会警告进行中工作的重叠，而不阻止认领或授权写入。
 
-### 等待
+### 任务板通知
 
-`waitForChange()` 等待注册之后发生的下一次任务提交、成员 `agent/status` 变化或成员 `agent/inbox/inserted` 边，时长从 10 秒到 1 小时，并且只报告是否超时；卸载服务会释放当前等待。取消会保留 Error reason；非 Error reason 则通过 `TEAM_WAIT_ABORTED` 报告。`hasActivePeer()` 报告是否有另一个 live 成员正在运行轮次，`wait_agent` 据此跳过没有成员能结束的等待。
+成功追加并刷盘后，Team 向树中其他每个本地在线 Agent 注入 `team-task-change` 通知。同一任务板已有待处理通知时，替换其内容并保留收件箱 id。通知既不启动空闲轮次，也不恢复冷成员。提交后投递失败会报告已提交任务及所有失败接收者；任务仍保持已提交状态。
 
 ### 持久性模型
 
-任务变更将 `team/task` 追加到精确的 live Lead 会话，并在报告成功或唤醒等待者之前 flush。Team 事件仅存在于日志：它们从不进入会话表面，因此派生模型历史不受协作记录影响。顺序与时间由会话事件的 `seq` 与 `time` 负责，快照不重复保存。teammate id 与描述保存在 Lead 的 `subagent/catalog` 中，由 subagent 运行时写入。
+任务修改向当前在线根 Session 追加 `team/task`，刷盘后才接纳通知。任务记录仅入日志。已接纳通知使用普通 Agent 收件箱持久化，因此可从接收者 Session 重建其模型可见内容。不重写已提交任务或历史载荷代次。
 
-Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内容中全部已解码 JSON 字段，包括自有 `__proto__` 键。本地字段检查覆盖 `text`、`reasoning`、`image` 和 `tool-call`；获准的未知标签保持不透明。Team 投影缓存版本 6 从 Session 日志重建较早缓存版本的 checkpoint；Session 格式版本保持不变。
+邮箱投影和检查点接纳保留本地声明校验器之外的已解码 JSON 字段，包括自身的 `__proto__` 键。历史载荷代次保持不变；投影缓存版本变化时从 Session 日志重建。
 
 ### Dispose
 
-卸载服务会释放当前等待并注销投影。Team 不拥有任何 Agent：teammate 继续在 subagent 运行时下运行，由后者负责其容量、结算与拆除。
+卸载服务会注销投影。Team 不拥有 Agent：队友仍由 subagent 运行时管理，容量、收尾和拆除均由后者负责。
 
 ### 浏览器投影
 
-`agentTeam` Session 投影发布 Lead 与历史 roster 行（含 phase 与错误）、未删除任务视图，以及最后有效状态旁的 `failure`。其 `apply` 只替换被触及的集合；仅邮箱的变化保留客户端视图引用，不产生 frame。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection) 定义传输类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段为解码兼容性保留，不授予运行时权限。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
-[Web UI](../client-ui-agent-team/README.zh.md) 组合 Lead 的 `subagentCatalog` 与 `agentTeam` 投影，并从 Session 状态叠加活动信息。任务创建与更新由 Team agent 通过服务和模型工具完成。`./client` 导出可供浏览器使用的 roster、任务与投影类型。
+[Web UI](../client-ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签复用 Session 和目录数据，缺失时使用 id。
 
 </details>
 
@@ -158,7 +157,7 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 当包级约定不够用时阅读以下页面。它们从共享子系统类型逐步进入工具表面与设计背后的决策。
 
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。
-- [tool-agent-team 包](../tool-agent-team/README.zh.md)——每个成员获得的任务与等待工具、策略和身份。
+- [tool-agent-team 包](../tool-agent-team/README.zh.md) — 任务工具和共享任务板策略。
 - [Subagent 运行时](../../subagent/subagent/README.zh.md)——teammate 使用的可继续子级、消息、中断与生命周期。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——为何 teammate 是subagent，以及 Team 保留了什么。
 - [升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
@@ -173,15 +172,15 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 
 #### 模型看到什么
 
-模型通过任务工具结果查看 Team 状态；协调事件不进入对话。任务视图通过 `ownerId` 标识负责人。失败以携带 `TeamError` 消息的工具错误显示，过期更新错误包含当前修订。
+模型通过任务工具结果读取任务视图，并通过收件箱接收紧凑的任务板通知。视图以 `ownerId` 标识所有者。过期更新的错误包含当前修订，提交后投递失败的错误包含已提交任务。
 
 #### Token 影响
 
-本领域包自身不增加任何上下文；每个任务工具结果按返回的任务数，每个任务计一个紧凑任务视图。策略、身份与工具 schema 属于 `@deepseek-ai/dsh-experimental-tool-agent-team`。
+每个任务结果增加一个紧凑任务视图。通知在待处理期间合并，减少重复通知文本；接收者查询当前任务状态，不将通知视为任务板快照。
 
 #### KV Cache 影响
 
-任务提交只向 Lead 会话追加仅日志事件，因此从不改变任何成员的请求前缀；任务结果追加在前缀之后。
+任务记录不进入模型历史。已接纳的收件箱通知和任务结果追加在可复用的请求前缀之后。
 
 ## 已知限制与延期工作
 
@@ -190,11 +189,11 @@ Mailbox 投影与 checkpoint 准入保留本地声明的校验器之外获准内
 
 这些限制说明一支团队目前不能做什么、或哪些方面需要特别的运维关注。它们是当前包约束，不是与其他协作机制的对比。
 
-- **完整视图广播** — 每次 roster 或任务变化都会把完整 roster 和未删除任务板（含描述）发给所有已连接浏览器，即使它正在查看其他 Session。
+- **全量视图广播** — 每次任务变更向已连接浏览器发送完整的未删除任务板。
 - **实验原型，无稳定性承诺**——本包公开发布，但孵化期间约定仍可自由变更。
-- **单进程、共享 checkout**——成员共享 cwd，修改立即可见；本包不提供 worktree、远端成员、merge 或文件锁。
+- **单进程** — 成员可观察共享文件系统编辑；此包不提供 worktree、远程成员、合并或文件系统锁。
 - **write scope 仅作提示**——Bash、formatter、代码生成器与直接外部写入可以绕过文件版本检查；Lead 必须协调 owner 并检查最终 diff。
-- **成员列表覆盖直接可继续子级**——更深的后代共享任务和等待，但不显示成员行；它们可按自身 id 认领任务。
+- **通知仅到达本地在线成员** — 不恢复冷成员，空闲成员在被明确恢复前仍保持空闲。
 
 - **通信限定在一棵树内**——成员不能向无关 Team 发消息；只有祖先能中断后代。
 - **成员关系需要在线 Team 根**——中间创建者完成或释放后，成员保留 Team 身份；根缺失时不再属于活动 Team。
@@ -215,6 +214,6 @@ promotion 到产品角色组需要按[实验子树规则](../AGENTS.md)审查公
 
 #### 未来方向
 
-尚未决定的探索方向包括嵌套 Team、自动释放 owner 的策略，以及通过 worktree 实现文件系统隔离；这些都没有承诺。
+尚未决定的方向包括自动释放归属和通过 worktree 隔离文件系统；两者均未承诺。
 
 </details>

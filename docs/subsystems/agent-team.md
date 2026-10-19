@@ -2,11 +2,11 @@
 
 English | [中文](agent-team.zh.md)
 
-Types shared by the experimental implicit-root Team domain, model tools, and host adapters. The [subagent teammates Agent Note](../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) owns the membership, roster, and messaging decisions; this page records the durable and client-visible forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
+Types shared by the experimental task board, model tools, and host adapters. The [task-board and inbox decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
 
-## Identity and roster
+## Identity and historical roster
 
-`TeamId` brands the root `SessionId`; `TeamTaskId` uses `task-<n>`. `TeamMessageId` remains only for historical mailbox records. Team writes no roster records: the browser combines the Lead and historical members from `agentTeam` with direct continuable children from `subagentCatalog`. Descriptions may repeat; ids address members.
+`TeamId` brands the root `SessionId`; `TeamTaskId` uses `task-<n>`. `TeamMessageId` and roster records remain for historical decoding. The subagent runtime resolves the tree and discovers eligible task owners at arbitrary depth; historical roster entries grant no authority.
 
 ```ts type-equiv
 /** Historical roster value written by earlier Team builds on every teammate lifecycle change. */
@@ -21,11 +21,11 @@ interface TeamMemberSnapshot {
 }
 ```
 
-Historical records keep their `provisioning`, `active`, or `failed` phase; direct continuable children are `active`. Turn activity (`running` or `inactive`) is derived separately.
+Historical records retain their recorded `provisioning`, `active`, or `failed` phase. Current turn activity belongs to ordinary subagent discovery and Session status, independently of task completion.
 
 ## Messages and historical mailbox
 
-Members exchange ordinary [subagent messages](subagent.md): the target stores the `agent-message` source with the real sender Session id. Team has no outbox, mailbox, or resend deduplication. The following mailbox types remain readable so historical Lead logs still replay; Team never delivers their pending records.
+Members exchange ordinary [subagent messages](subagent.md), retaining the real sender Session id. Task commits separately enqueue coalesced `team-task-change` notices in other live local members’ next-step inboxes. Notices neither restore cold members nor start idle turns. The following historical mailbox types remain readable; Team never delivers their pending records.
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-The Lead Session publishes `SessionProjectionMap.agentTeam` with the Lead, historical roster rows, and non-deleted task views. The browser combines these rows with continuable entries from `subagentCatalog`, preferring the catalog for duplicate ids. `failure` reports a rejected persisted Team record beside the last valid state. Member activity comes from Session status; model labels come from each member’s `modelSelection` projection.
+The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical `members` fields remain decodable but supply neither assignment authority nor a second browser roster. The task panel labels owners from existing Session and catalog data with id fallback.
 
 ```ts type-equiv
 /**
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays historical roster, tasks, and historical mailbox records selected by `TeamId`. The separate `subagentCatalog` projection owns child discovery and skips inherited catalog facts. Descriptions do not participate in identity checks. Session event `seq` and `time` own ordering and timing. Callers receive roster and task views, not pending mail. The [package README](../../packages/experimental/agent-team/README.md) defines operations, authorization, and limits.
+The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/experimental/agent-team/README.md) defines task operations, notification failures, and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -142,31 +142,11 @@ Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
 /**
- * Resolve one exact live Agent's Team role.
- * @param agent - exact live Agent used as the authority credential.
- * @returns its Lead, Team identity, and role.
- */
-membership(agent: Agent): TeamMembership
-
-/**
- * Resolve a caller without throwing, used by scoped-tool installation and observers.
- * @param agent - candidate exact live Agent.
- * @returns Team membership, or undefined for stale identities and children whose parent left the registry.
- */
-tryMembership(agent: Agent): TeamMembership | undefined
-
-/**
- * Whether another live member of the caller's Team is currently running a turn.
- * @param caller - exact live Team member.
- * @returns whether a peer can still produce a Team change.
- */
-hasActivePeer(caller: Agent): boolean
-
-/**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
  * @returns the revision-one task view.
+ * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
 
@@ -190,17 +170,9 @@ listTasks(caller: Agent): TeamTaskView[]
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
  * @returns the committed next task revision.
+ * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
-
-/**
- * Wait for the next task change, member status change, or message a member's inbox accepts.
- * @param caller - exact live Team member waiting for activity.
- * @param timeoutMs - bounded wait duration from ten seconds through one hour.
- * @param signal - caller cancellation for the wait only.
- * @returns one observed change or a timeout result.
- */
-async waitForChange(caller: Agent, timeoutMs: number, signal: AbortSignal): Promise<TeamWaitResult>
 ```
 
 Types: [Agent](core.md)

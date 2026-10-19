@@ -56,7 +56,7 @@ describe('web e2e: Agent Teams panel', () => {
     if (agent === undefined) throw new Error('connected Team workspace did not create an Agent')
     agent.session.append('turn/start', { turn: 1 })
     agent.session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'Open the Agent Team controls.' }],
+      content: [{ type: 'text', text: 'Open the task board.' }],
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     agent.session.append('step/start', { turn: 1, step: 1 })
@@ -85,10 +85,10 @@ describe('web e2e: Agent Teams panel', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
-    await page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu }).click()
-    const action = page.getByRole('dialog', { name: 'Agent Team', exact: true })
+    await page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true }).click()
+    const action = page.getByRole('dialog', { name: 'Task board', exact: true })
     await action.getByText('No shared tasks yet. Create them through the conversation.').waitFor()
-    await action.getByText('Lead').waitFor()
+    expect(await action.getByRole('heading', { name: 'Members', exact: true }).count()).toBe(0)
     expect(projectionReads).not.toHaveBeenCalled()
 
     expect(await action.getByRole('button', { name: 'New task' }).count()).toBe(0)
@@ -97,7 +97,7 @@ describe('web e2e: Agent Teams panel', () => {
     // Host-side Team mutations reach the open panel through projection frames only.
     const agent = scaffold.ctx.agents.list()[0]!
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
-      subject: 'Agent task', description: 'Created by the Team Lead', writeScopes: ['src/web'],
+      subject: 'Agent task', description: 'Created by the root agent', writeScopes: ['src/web'],
     })
     await action.getByText('Agent task', { exact: true }).waitFor()
     await action.getByText('Owner: Unowned', { exact: true }).waitFor()
@@ -105,7 +105,7 @@ describe('web e2e: Agent Teams panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await action.getByText('In progress', { exact: true }).waitFor()
-    await action.getByText('Owner: Lead', { exact: true }).waitFor()
+    await action.getByText('Owner: Open the task board.', { exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 
@@ -119,13 +119,13 @@ describe('web e2e: Agent Teams panel', () => {
 
   it('keeps the panel inside the viewport and closes on outside click or Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))
-    const panel = page.getByRole('dialog', { name: 'Agent Team', exact: true })
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: /Agent Team/iu })
+    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
+    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
     const viewport = page.viewportSize()!
     await trigger.click()
-    await panel.getByText('Lead', { exact: true }).waitFor()
+    await panel.getByRole('heading', { name: /Shared tasks/u }).waitFor()
     try {
-      for (const size of [{ width: 760, height: 540 }, { width: 600, height: 420 }]) {
+      for (const size of [{ width: 760, height: 540 }, { width: 600, height: 420 }, { width: 390, height: 700 }]) {
         await page.setViewportSize(size)
         await expect.poll(() => panel.evaluate((element) => {
           const rect = element.getBoundingClientRect()
@@ -162,8 +162,8 @@ describe('web e2e: Agent Teams panel', () => {
   })
 
   it('keeps the hovered panel open when the pointer returns directly to its trigger', async () => {
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Agent Team', exact: true })
-    const panel = page.getByRole('dialog', { name: 'Agent Team', exact: true })
+    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
+    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
     await trigger.hover()
     await panel.waitFor()
     await panel.hover()
@@ -182,14 +182,14 @@ describe('web e2e: Agent Teams panel', () => {
       writeScopes: [],
     })
     const viewport = page.viewportSize()!
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Agent Team', exact: true })
-    const panel = page.getByRole('dialog', { name: 'Agent Team', exact: true })
+    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
+    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
     const card = panel.locator('article').filter({ hasText: 'Responsive task' })
     await trigger.click()
     await card.waitFor()
     expect(await card.getByRole('button', { name: 'Show more' }).count()).toBe(0)
     try {
-      await page.setViewportSize({ width: 360, height: 700 })
+      await page.setViewportSize({ width: 390, height: 700 })
       await card.getByRole('button', { name: 'Show more' }).waitFor()
       expect(await card.locator('p').evaluate(p => p.scrollHeight > p.clientHeight)).toBe(true)
       await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, '[data-team-panel]', scaffold.workspaceCwd), MODE)

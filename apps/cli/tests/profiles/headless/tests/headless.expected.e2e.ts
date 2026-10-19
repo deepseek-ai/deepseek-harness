@@ -1001,13 +1001,31 @@ describe('headless stream-json snapshots', () => {
           const text = (name: string) => {
             const value = sections?.find(section => section.name === name)?.text
             if (typeof value !== 'string') throw new Error(`Teammate runtime context has no ${name}`)
-            return value.replaceAll(leadId, '<lead>')
+            return value.replaceAll(log.header.id as string, '<self>').replaceAll(leadId, '<lead>')
           }
-          expect(sections?.some(section => section.name === 'subagent:identity')).toBe(false)
-          return [text('team:identity')]
+          expect(sections?.some(section => section.name === 'team:identity')).toBe(false)
+          return [text('subagent:identity')]
         }).sort()
+        const allRows = logs.flatMap(log => parseJsonl(log.content))
+        const waitIds = new Set(allRows.filter(row => row.type === 'tool/call'
+          && (row.data as JsonObject).name === 'wait_agent').map(row => (row.data as JsonObject).callId))
+        const waitResults = allRows.filter((row) => {
+          if (row.type !== 'tool/result') return false
+          const message = (row.data as JsonObject).message as JsonObject
+          return waitIds.has((message.source as JsonObject).callId)
+        })
+        expect(waitResults).toHaveLength(waitIds.size)
+        for (const row of waitResults) {
+          const message = (row.data as JsonObject).message as JsonObject
+          expect(message.isError).not.toBe(true)
+          const content = message.content as JsonObject[]
+          expect(JSON.parse(content.filter(block => block.type === 'text').map(block => block.text).join('')))
+            .toEqual({ timedOut: false })
+        }
         projection = {
           sessions: logs.length,
+          taskNoticeEntered: rows.some(row => row.type === 'user/message'
+            && ((row.data as JsonObject).source as JsonObject).kind === 'team-task-change'),
           workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
           identities,
           teammates: [...teammates].sort(),
@@ -1020,7 +1038,7 @@ describe('headless stream-json snapshots', () => {
           deliveredMessages: rows.filter(row => row.type === 'team/message/delivered').length,
           waited: rows.some(row => row.type === 'tool/call'
             && (row.data as JsonObject).name === 'wait_agent'),
-          checkedRoster: rows.some(row => row.type === 'tool/call'
+          checkedAgents: rows.some(row => row.type === 'tool/call'
             && (row.data as JsonObject).name === 'list_agents'),
           steerEvidence: {
             nextStepInbox: steeredInboxIndex >= 0,
@@ -1038,11 +1056,11 @@ describe('headless stream-json snapshots', () => {
     })
     expect(projection).toMatchInlineSnapshot(`
       {
-        "checkedRoster": true,
+        "checkedAgents": true,
         "deliveredMessages": 0,
         "identities": [
-          "You are a teammate in the Team led by agent "<lead>".",
-          "You are a teammate in the Team led by agent "<lead>".",
+          "Your agent id is "<self>". Your Team root agent id is "<lead>". Your parent agent id is "<lead>".",
+          "Your agent id is "<self>". Your Team root agent id is "<lead>". Your parent agent id is "<lead>".",
         ],
         "queuedMessages": 0,
         "sessions": 4,
@@ -1052,6 +1070,7 @@ describe('headless stream-json snapshots', () => {
           "messageEntered": true,
           "nextStepInbox": true,
         },
+        "taskNoticeEntered": true,
         "tasks": [
           {
             "revision": 3,

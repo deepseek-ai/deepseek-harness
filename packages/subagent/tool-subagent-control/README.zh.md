@@ -1,5 +1,5 @@
 ---
-description: "供用户与维护者在组合或调试可继续子级控制功能时使用的共享消息、中断与子级发现工具。"
+description: "通过消息、中断、收件箱等待和持久运行时身份发现并协调 subagent 树。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让代理按 Session id发现和联系 Team 中的所有成员。`interrupt_agent` 只停止调用方的后代，并保留其收件箱与子级。`list_agents` 列出整棵树，包含描述、父级 id、深度和活动状态。一个插件实例注册全部三个工具。所有成员继承相同的工具定义与顺序。
+`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。它提供共享协作指导和必需的运行时身份，无需实验性 Team 模式。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个工具作用域挂载本包一次。它要求 `tools`、`subagents` 和 `agents`。
+每个工具作用域挂载一次此包。它需要 `tools`、`subagents`、`agents` 和 `systemPrompt`。
 
 ### 最小配置
 
-在所需服务可用后，加载 subagent 服务、一个后端、委派工具与本包，即可公开全部三个控制和发现工具：
+所需服务可用后，加载 subagent 服务、一个后端、委派工具和此包，即可提供全部四个控制与发现工具：
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -40,7 +40,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-本包不接收任何配置。主入口一起注册 `send_message`、`interrupt_agent` 和 `list_agents`；现有工具限制可以隐藏单个工具。
+此包不接受配置。主入口注册 `send_message`、`interrupt_agent`、`list_agents` 和 `wait_agent`；现有工具限制可隐藏单个工具。
 
 ### send_message
 
@@ -49,6 +49,11 @@ kind: "package-reference"
 ### interrupt_agent
 
 `agent_id` 使用 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
+
+<a id="wait_agent"></a>
+### wait_agent
+
+等待当前调用者的下一步收件箱。已有待处理输入时立即返回；之后到达的输入，包括消息、完成通知、用户引导和任务板通知，会结束等待。排队的下一轮消息、其他收件箱和 Agent 状态变化不会结束等待。工具既不消费输入，也不启动 Agent。`timeout_ms` 默认为 30000，必须是 10000 至 3600000 的整数。结果仅含 `timedOut`；取消、调用者释放或插件卸载会拒绝等待。
 
 ### list_agents
 
@@ -66,7 +71,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-这些工具是 `ctx.subagents.sendMessage()`、`interrupt()` 和列表投影的薄适配层；驻留、冷恢复和授权属于服务。工具使用确切在线的调用 Agent（`exec.agent`）作为发送方和权限凭据，并将 `agent_id` 转为品牌化 Session id。
+通信、中断和发现委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具先订阅当前调用者的收件箱，再检查待处理的下一步输入，并在每次结束时移除监听器和定时器。
 
 ### 投递与信号所有权
 
@@ -80,8 +85,10 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 统一注册全部三个工具 |
-| [`src/list-agents.ts`](src/list-agents.ts) | 全 Team 发现与活动投影 |
+| [`src/index.ts`](src/index.ts) | 共享控制工具和提示注册 |
+| [`src/list-agents.ts`](src/list-agents.ts) | 整个 Team 的发现与活动投影 |
+| [`src/wait-agent.ts`](src/wait-agent.ts) | 当前调用者的收件箱等待和清理 |
+| [`src/collaboration-prompt.ts`](src/collaboration-prompt.ts) | 共享策略和必需的 Agent 身份 |
 
 </details>
 
@@ -101,11 +108,35 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
+### 协作策略与身份
+
+#### 模型看到什么
+
+共享的 `subagent:policy` 段落提供下方策略。必需的 `subagent:identity` 上下文以 `Your agent id is <id>. Your Team root agent id is <root>.` 开头。根添加 `You are the root agent.`；后代添加父 id。根解析不可用时，明确报告该事实并允许独立工作。普通 Session fork 获得自身的根身份。可选上下文抑制不能移除身份；运行时上下文组装会在压缩后恢复它。
+
+##### 协作策略
+
+```markdown
+Your Team is the subagent tree rooted at the root agent. Use list_agents to discover agents and send_message with an agent id to contact another listed agent. A working agent receives the message at its next step; an idle agent starts a new turn. Successful delivery does not mean the recipient has processed the message. A delegated agent's final answer is returned automatically while its parent is online.
+
+Continue independent work while other agents run. When you need more input, use wait_agent to wait for your own inbox. Pending input returns immediately; new messages, completion notifications, and user steering end the wait. The tool does not consume messages or start agents, and queued next-turn messages stay queued. After a wakeup or timeout, assess what work remains. Obtain the results needed for your assigned work before answering; unrelated agents need not finish.
+
+Agents may share files even when their working directories differ. Coordinate overlapping edits. If a file operation returns FS_STALE_VERSION, read the current file, apply your intended change to the updated content, and retry. Coordinate formatters, generators, and shell writes explicitly, then review the combined diff and run relevant checks.
+```
+
+#### Token 影响
+
+共享策略产生固定开销。身份属于完整运行时上下文快照；已保留的稳定上下文不会新增消息。
+
+#### KV Cache 影响
+
+各成员的策略文本相同。身份通过运行时上下文追加，不改变共享系统文本；实际提供方的缓存复用仍为尽力而为。
+
 ### 工具 schema
 
 #### 模型看到什么
 
-生成的[模式](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接收 `agent_id` 和 `message`；`interrupt_agent` 接收 `agent_id`；`list_agents` 不接收参数。地址统一为 Session id；描述用于展示，可以重复。
+生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按 id 寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
 
 #### Token 影响
 

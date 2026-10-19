@@ -14,7 +14,7 @@ Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的�
 
 ## Decision
 
-每个普通根领导以其 `SessionId` 标识的 Team。Lead 行由身份确定；持久任务状态从首个任务事件开始。[子代理队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责创建、消息和中断。根下所有在线子代理都是成员；根的直接可继续子级形成成员列表。普通分叉领导新的 Team，并排除继承的 Team 记录。
+每个普通根及其后代组成以根 `SessionId` 标识的 Team；持久任务状态从首个任务事件开始。[subagent 队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责单一 agent 身份。[任务板收件箱协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)负责任务通知和普通收件箱等待。普通 Session fork 成为一棵新树的根，并排除继承的 Team 权限。
 
 实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件；Team 不注册与 subagent control 同名的工具。共享策略声明 Team 可用，并说明协调责任。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
 
@@ -42,7 +42,7 @@ member 消息使用 subagent 的 `send_message` 操作，它对 running、idle �
 
 共享 task 是带 Team-local id 与单调 revision 的完整快照。每次变更都携带 `expectedRevision`。任意 member 可以创建、读取或 claim ready 且无 owner 的任务；Owner 或 Lead 可以编辑和转换；只有 Lead 可以分配给另一个 member。数字 task id 保持在安全整数分配范围内；该范围耗尽时会失败，不会复用 id。依赖必须指向未删除任务，并形成完整 DAG。删除任务保留为 tombstone。`writeScopes` 是规范化路径前缀，只产生重叠诊断，绝不会阻止 claim 或授予写权限。
 
-`wait_agent` 等待调用注册后发生的下一条 task、member status 或已接收 member 消息边，避免模型轮询。它不会回放更早的边，因此调用方需要在唤醒或超时后重新读取权威状态。interrupt 是 subagent 的祖先操作，因此只有 Lead 能 interrupt teammate；它不改变 task owner。
+`wait_agent` 属于普通 subagent 控制工具，等待当前调用者的下一步收件箱，包括已有待处理输入。任务提交通过该收件箱通知其他本地在线成员，不唤醒空闲成员。[任务板收件箱协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)取代 Team 范围的边沿等待。祖先可中断后代，不改变任务归属。
 
 ## Shared checkout boundary
 
@@ -54,15 +54,15 @@ Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 c
 
 Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影流能持续更新浏览器状态，无需独立的 Team 读取 API。Lead 与 teammate 会话均从共享的跨 Session store 选择值。面板不负责投影读取：Session 加载、列表缓存值与控制基线提供数据。
 
-传输视图携带由 Lead、其可继续目录 child 与带记录 phase 的历史 member 组成的 roster、使用共享就绪与重叠派生逻辑的未删除任务视图，以及最后有效状态旁的 `failure`。实时活动来自 Session 状态。模型选择有自己的持久投影；面板展示共享 store 中可用的值，不打开成员会话。缺少的缓存值保持缺失，直到 Session 加载或实时更新提供它。
+任务面板使用包含就绪和重叠诊断的未删除任务视图，以及最后有效状态旁的 `failure`。历史名册字段仍可解码，但不拥有当前 UI 或分配权限。普通 subagent 导航负责成员发现；任务所有者标签复用 Session 和目录元数据。
 
 发布要求 `apply` 为每个应用的事件返回新状态，且只替换触及的集合。仅邮箱事件保留客户端视图，不发布更新。现有载体向已连接浏览器发送变更后的完整视图；包 README 记录该成本。
 
 ## Alternatives considered
 
-**允许子级跨整棵 Team 树通信。** 共享任务成员身份不授予跨父级消息权限。[子代理队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)使用共同父级权限实现可继续同级通信；任务仍由 Lead 日志持久化。
+**保留独立 Team 通信权限。** 后续的[整树通信决策](../architecture/2026-10-16-tree-wide-agent-communication.zh.md)将路由和授权置于 subagent 运行时；任务板不能授予另一条路由。
 
-**在 Lead 日志入队前把 mail 存入每个 target Session。** 拒绝，因为 Team 提交发送之后，target materialization 与准入仍可能失败。始终 live 的 Lead Session 是事务 owner；target recording 是 acknowledgement 与去重边界。
+**保留持久化 Team 邮箱。** 目标接纳和任务提交是独立操作。历史 Team 邮箱保持可读，当前通信使用目标收件箱，提交后任务通知明确报告投递失败，不撤销任务。
 
 **把 task ownership 或 write scope 当作锁。** 拒绝，因为外部 writer 会绕过它们，崩溃 owner 会持久保留，而路径前缀重叠不能证明语义独立。虚假的互斥保证比明确 warning 更危险。
 
@@ -76,9 +76,9 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 ## Testing
 
-包测试覆盖 Team 成员关系、以目录为来源的 roster 投影、任务转换、等待以及历史 roster 与 mailbox 的可读性。无密钥 Team profile 快照固定 policy、工具与工作流；CLI 组合测试检查持久 Team 和 child 日志。
+包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及提交后通知。普通 subagent 测试覆盖收件箱等待和身份；录制 Team 组合覆盖任务策略和工具。
 
-模型可见的成员身份与可用状态遵循[工具投影说明](../../../../packages/experimental/tool-agent-team/README.zh.md)；服务驻留状态和持久身份仍保持区分。
+模型可见身份和收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；任务策略遵循 [Team 工具参考](../../../../packages/experimental/tool-agent-team/README.zh.md)。
 
 ## Consequences
 

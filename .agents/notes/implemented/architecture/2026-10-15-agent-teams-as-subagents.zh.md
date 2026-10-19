@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-10-15-agent-teams-as-subagents.md) | 中文
 
-邻接消息、发现范围和父子生命周期限制已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
+邻接和父级生命周期限制由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)取代。[任务板收件箱协调](2026-10-19-team-task-board-inbox.zh.md)取代独立名册和 Team 所有的等待；单一 subagent 身份决策仍有效。
 
 ## Problem
 
@@ -14,11 +14,11 @@ Status: implemented
 
 统一使用子代理的 Session id 作为身份。现有 `description` 工具参数提供目录标签和展示文本；描述可以重复，不用于寻址代理。创建不接收成员名称、不预留名称，也不增加目录载荷版本。
 
-确切在线的发送方可向直接可继续子级发消息。驻留的可继续子级还可按 id 联系直接父级或可继续同级。同级投递使用共同在线父级对子级的权限和冷恢复能力；消息保留实际发送方 id。`list_agents` 提供父级和同级 id。中断保留祖先权限和 id 寻址。
+[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)在同一根树内授权当前在线发送方，并保留实际发送方 id。中断保留祖先权限和 id 寻址。
 
-每个根 Agent 领导以自身 Session id 标识的 Team；其下所有在线子代理共享任务板和等待。成员列表投影根、其直接可继续目录子级和历史 `team/member` 记录。Team 不创建代理，也不注册消息、列举或中断工具。Team profile 只增加配置行。父级与分叉子级获得相同 Team 策略和工具模式，角色身份通过必需运行时上下文提供。
+每个根 Agent 及其后代组成以根 Session id 标识的 Team。Team 不创建 agent，仅提供任务工具和任务策略。普通 subagent 控制工具提供发现、通信、中断、收件箱等待和必需运行时身份。父级和 fork 子级接收相同工具 schema 和共享策略。
 
-任务所有权使用 `ownerId`，重新分配接受 Session id。Team 只持久化任务变更。消息使用目标 Agent 收件箱；历史 `team/message/*` 记录仍可读取，但不会被投递或确认。
+任务归属使用 `ownerId`；根重新分配可指定自身或任意可达的可继续执行后代。历史名册记录仅供解码。Team 持久化任务变更，并在提交后接纳不唤醒成员的收件箱通知。历史 `team/message/*` 记录仍可读取，但绝不再投递或确认。
 
 本决策取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的成员列表、创建、恢复和消息决策，以及 [Team 直接收件箱决策](../../archived/simplification/2026-09-26-team-direct-inbox.md)。任务板和共享工作树决策仍有效。[相邻 Agent 消息](2026-08-27-adjacent-agent-steer-messaging.zh.md)纳入同级路由，[必需运行时身份](2026-10-13-team-identity-runtime-context.zh.md)负责角色声明。[升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)列出移除的工具、方法和配置。
 
@@ -32,10 +32,10 @@ Status: implemented
 
 ## Consequences
 
-普通可继续同级可发现彼此并发消息。Team 保留任务所有权、依赖、等待、策略和角色身份。成员数量限制、消息大小限制和 Team 自有释放被移除，改用子代理容量与生命周期。启动失败不留下 Team 成员行。不需要新的 Session 载荷代际，历史成员名称只作为解码数据保留。
+树内成员通过普通控制工具发现和联系彼此。Team 保留任务归属、依赖和任务策略。容量和生命周期遵循 subagent 规则；启动失败不会创建 Team 名册行。现有持久化任务代次保持不变。
 
-更深的后代共享任务和等待，但不显示成员行；消息路由仍限于自己的父级、子级和可继续同级。仍不支持独立工作目录和跨进程协调。
+任意深度后代共享任务板，均可成为任务所有者。历史成员不授予权限。独立工作目录仍由调用者显式选择；不支持跨进程任务协调。
 
 ## Testing
 
-验证同级投递、冷恢复、实际发送方归属和重复描述，并拒绝无关目标。验证 Team 谱系、继承目录隔离、历史读取、任务 CAS、等待和注册释放。录制 Team 会话与 headless profile 验证完整模型工作流以及父级和分叉请求前缀相等。
+验证覆盖具有实际发送方归属的整树投递和冷恢复、任务 CAS 与所有者发现、历史解码、收件箱等待隔离和注册释放。录制会话覆盖模型可见任务策略和普通 subagent 指导。

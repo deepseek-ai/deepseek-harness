@@ -164,7 +164,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-父级投递发送包含子级最终输出中非空文本块的 user-role 状态通知，不受 `send_message` 是否可用或是否调用影响。外部通知还说明不支持后续消息。推理及其他非文本块被排除。每条父级通知都会以 `Structured result: <JSON>` 附带可用的结构化输出，并以独立文本块附带提供方安全诊断。收尾文本为空时，通知使用 `It left no closing message.`。调用方投递不发送通知；清理成功时 SDK 生命周期通知保留完整子级输出。
+父级投递向同树中驻留的直接父级发送 user-role 状态通知，包括空闲父级。它不会恢复离线父级。通知包含子级最终输出中的非空文本块，不受 `send_message` 是否可用或是否调用影响。外部通知还说明不支持后续消息。推理及其他非文本块被排除。每条父级通知都会以 `Structured result: <JSON>` 附带可用的结构化输出，并以独立文本块附带提供方安全诊断。收尾文本为空时，通知使用 `It left no closing message.`。调用方投递不发送通知；清理成功时 SDK 生命周期通知保留完整子级输出。
 
 #### Token 影响
 
@@ -173,6 +173,26 @@ kind: "package-reference"
 #### KV Cache 影响
 
 在父级中仅追加：通知位于其可复用请求前缀之后。到达空闲父级会启动一次独立的模型请求，到达繁忙父级则不会。
+
+### 可继续执行子级的返回指导
+
+#### 模型看到什么
+
+子级初始任务包含以下指导，其中 `<parent-id>` 替换为 JSON 编码的父级 Session id。子级在最终回答中提供结果和证据；中途消息用于报告会改变父级下一步操作的发现。
+
+##### 返回指导
+
+```markdown
+Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ agent_id: <parent-id>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+```
+
+#### Token 影响
+
+每个可继续执行子级的初始任务增加一个指导块，其中两次写出父级 id。
+
+#### KV Cache 影响
+
+指导保留在子级的任务历史中，不改变父级系统提示词。
 
 ### 子级委派范围声明
 

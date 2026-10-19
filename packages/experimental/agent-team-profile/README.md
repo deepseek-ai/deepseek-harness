@@ -1,5 +1,5 @@
 ---
-description: "Enable team collaboration, tools, and the Web roster and task board with one experimental bundle."
+description: "Enable a shared task board, task tools, and Web task panel with one experimental bundle."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team-profile` enables [Agent Teams](../agent-team/README.md) collaboration, tools, and Web UI with one bundle. The Lead starts subagents as teammates that share a task board and wait for each other; Web shows members, shared tasks, and teammate sessions. The base profile's delegation and messaging tools stay available. The bundle ships with dsh switched off. Enable it from the Plugins page or add it to an initialized profile.
+`dsh-experimental-agent-team-profile` adds the [Agent Teams](../agent-team/README.md) task board, task tools, and Web task panel to an existing subagent tree. Base-profile delegation, messaging, waiting, and member navigation stay available independently. The bundle ships with dsh switched off. Enable it from the Plugins page or add it to an initialized profile.
 
 ## Table of Contents
 
@@ -46,9 +46,9 @@ In an existing profile’s `package.json`, keep `@deepseek-ai/dsh-experimental-a
 
 ### What you get
 
-The layer adds the Team domain, task-board and wait tools, and UI, without disabling base rows. The Lead uses `subagent` for fresh context or `subagent_fork` for inherited history, describing the task with `description`. Standard controls use agent ids.
+The layer adds the task domain, four task-board tools, and task UI without disabling base rows. The Lead uses `subagent` for fresh context or `subagent_fork` for inherited history. Standard controls address agents by id.
 
-In Web and Desktop conversations, the [Team UI](../client-ui-agent-team/README.md) displays the member roster and shared task board and opens teammate sessions. The same bundle switch controls the tools and browser UI. The Plugins page reads the bundle's [icon](icon.svg) from its `package.json.icon` declaration, including while the bundle is disabled.
+In Web and Desktop conversations, the [Team UI](../client-ui-agent-team/README.md) displays shared tasks; ordinary subagent navigation opens member conversations. The bundle switch controls task tools and task UI. The Plugins page reads the bundle’s [icon](icon.svg) from `package.json.icon`, including while disabled.
 
 -----
 
@@ -73,9 +73,9 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 ## Further Exploration
 
 - [Experimental packages](../README.md) — incubation status and publication policy.
-- [Agent Teams service](../agent-team/README.md) — Team membership, roster, and the durable task board.
-- [Agent Teams tools](../tool-agent-team/README.md) — the task and wait tools, policy, and identity every member receives.
-- [Agent Teams browser UI](../client-ui-agent-team/README.md) — roster, task board, and teammate session navigation.
+- [Agent Teams service](../agent-team/README.md) — durable shared tasks and inbox notices.
+- [Agent Teams tools](../tool-agent-team/README.md) — task tools and shared-board policy.
+- [Agent Teams browser UI](../client-ui-agent-team/README.md) — the shared task panel.
 - [Base bundle](../../bundle/base/README.md) — the profile layer this patch extends.
 
 -----
@@ -87,11 +87,11 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 
 #### What the model sees
 
-The Team policy, identity, and schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only: every Team member gains the five task and wait tools, while `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` keep their base-profile schemas.
+The task policy and four task schemas belong to [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.md). This bundle changes composition only; ordinary subagent identity, control tools, and inbox waiting remain owned by the base-profile subagent controls.
 
 #### Token effect
 
-The bundle adds the Team policy section, the identity statement, and the five tool schemas described by `@deepseek-ai/dsh-experimental-tool-agent-team`; it adds no prompt text of its own.
+The bundle adds the task policy and four schemas owned by `@deepseek-ai/dsh-experimental-tool-agent-team`; it contributes no prompt text of its own.
 
 #### KV Cache effect
 
@@ -102,7 +102,7 @@ Every member, including `subagent_fork` children, receives the same Team policy 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Opt-in only** — the package ships with the installation switched off; no shipped CLI, Web, SDK, ACP, or Python profile enables it.
-- **Workflow children join the Team** — continuable Workflow `agent()` children receive the same Team tools, policy, and sibling message routes. Direct children of the Lead appear in its roster.
+- **Workflow children share the board** — continuable Workflow `agent()` descendants receive task tools and use ordinary subagent discovery and communication.
 - **Shared checkout** — every teammate observes the same working directory; this bundle adds no worktree isolation or filesystem locking.
 - **Base profile required** — teammates are created and reached through the Subagent services, providers, and tools that `dsh-base` mounts; the layer is not a standalone profile.
 

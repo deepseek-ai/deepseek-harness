@@ -1,13 +1,15 @@
 /** Shared Team task DAG commands and runtime-enriched views. */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { TeamMembers, TeamMembership } from './membership.ts'
+import type { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
-import { TeamId, TeamTaskId } from './types.ts'
+import { TeamTaskId } from './types.ts'
 import type {
   CreateTeamTaskRequest,
   TeamTaskSnapshot,
@@ -26,24 +28,24 @@ const TASK_GRAPH_ERROR_CODES: Record<TeamTaskGraphViolation, string> = {
 /** Owns Team task limits, authorization, transitions, and derived views. */
 export class TeamTaskBoard {
   /**
+   * @param ctx - subagent discovery for task assignees.
    * @param journal - authoritative Lead-log transaction owner.
    * @param maxTasks - maximum non-deleted tasks retained by one Team.
-   * @param members - membership and task-assignee resolver.
    */
   constructor(
+    private readonly ctx: Context,
     private readonly journal: TeamJournal,
     private readonly maxTasks: number,
-    private readonly members: TeamMembers,
   ) {}
 
   /**
    * Create one unowned pending task in the Team Lead log.
-   * @param membership - exact caller membership.
+   * @param caller - exact live Agent creating the task.
+   * @param root - live subagent tree root owning the board.
    * @param request - task text, blockers, and advisory write scopes.
    * @returns the revision-one task view.
    */
-  async create(membership: TeamMembership, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
-    const { root } = membership
+  async create(caller: Agent, root: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView> {
     return this.journal.transact(root.id, async () => {
       const state = this.journal.state(root)
       const active = state.tasks.filter(task => task.status !== 'deleted').length
@@ -64,19 +66,19 @@ export class TeamTaskBoard {
         writeScopes: this.writeScopes(request.writeScopes ?? []),
       }
       this.assertTaskGraph(state, task)
-      await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
+      this.ctx.subagents.rootOf(caller)
+      await this.journal.appendAndFlush(caller, root, task)
       return projectTaskView(state, task)
     })
   }
 
   /**
    * Return one task, including a deleted tombstone.
-   * @param membership - exact caller membership.
+   * @param root - live subagent tree root owning the board.
    * @param id - Team-local task identity.
    * @returns the latest task value and derived readiness diagnostics.
    */
-  get(membership: TeamMembership, id: TeamTaskId): TeamTaskView {
-    const { root } = membership
+  get(root: Agent, id: TeamTaskId): TeamTaskView {
     const state = this.journal.state(root)
     const task = state.tasks.find(candidate => candidate.id === id)
     if (task === undefined) throw new TeamError(`team task "${id}" not found`, 'TEAM_TASK_NOT_FOUND')
@@ -85,11 +87,10 @@ export class TeamTaskBoard {
 
   /**
    * List current non-deleted tasks in numeric creation order.
-   * @param membership - exact caller membership.
+   * @param root - live subagent tree root owning the board.
    * @returns detached current task views.
    */
-  list(membership: TeamMembership): TeamTaskView[] {
-    const { root } = membership
+  list(root: Agent): TeamTaskView[] {
     const state = this.journal.state(root)
     return state.tasks
       .filter(task => task.status !== 'deleted')
@@ -99,16 +100,15 @@ export class TeamTaskBoard {
   /**
    * Compare-and-set one authorized task transition.
    * @param caller - exact live Team member authorizing the mutation.
-   * @param membership - caller role and exact live Lead.
+   * @param root - live subagent tree root owning the board.
    * @param request - task identity, expected revision, action, and action fields.
    * @returns the committed next task revision.
    */
   async update(
     caller: Agent,
-    membership: TeamMembership,
+    root: Agent,
     request: UpdateTeamTaskRequest,
   ): Promise<TeamTaskView> {
-    const root = membership.root
     return this.journal.transact(root.id, async () => {
       const state = this.journal.state(root)
       const current = state.tasks.find(task => task.id === request.taskId)
@@ -120,7 +120,7 @@ export class TeamTaskBoard {
         )
       }
       if (current.status === 'deleted') throw new TeamError(`team task "${current.id}" is deleted`, 'TEAM_TASK_DELETED')
-      const lead = membership.role === 'lead'
+      const lead = caller === root
       const owner = current.ownerId === caller.id
       const authorizeOwner = (): void => {
         if (!lead && !owner) throw new TeamError('task mutation requires its owner or Team Lead', 'TEAM_TASK_UNAUTHORIZED')
@@ -183,7 +183,7 @@ export class TeamTaskBoard {
             break
           }
           if (!taskReady(state, current)) throw new TeamError(`team task "${current.id}" is blocked`, 'TEAM_TASK_BLOCKED')
-          next = { ...current, status: 'in_progress', ownerId: this.members.resolveMember(root, state, request.owner) }
+          next = { ...current, status: 'in_progress', ownerId: await this.resolveAssignee(root, request.owner) }
           break
         }
         case 'delete': {
@@ -205,9 +205,18 @@ export class TeamTaskBoard {
         revision: current.revision + 1,
       }
       this.assertTaskGraph(state, task)
-      await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
+      this.ctx.subagents.rootOf(caller)
+      await this.journal.appendAndFlush(caller, root, task)
       return projectTaskView(state, task)
     })
+  }
+
+  /** Resolve a task owner through the same durable tree used by Agent discovery. */
+  private async resolveAssignee(root: Agent, target: SessionId): Promise<SessionId> {
+    if (target === root.id) return target
+    const descendants = await this.ctx.subagents.listDescendants(root.id)
+    if (descendants.some(entry => entry.kind !== 'diagnostic' && entry.mode === 'continuable' && entry.id === target)) return target
+    throw new TeamError(`agent "${target}" is not a continuable descendant of this task board's root`, 'TEAM_MEMBER_NOT_FOUND')
   }
 
   /** Validate and de-duplicate dependency ids against the current task graph. */

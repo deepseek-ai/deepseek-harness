@@ -1,9 +1,7 @@
-- dialog "Agent Team":
-  - heading "Members" [level=3]
-  - button "Lead Current chat Inactive" [disabled]
+- dialog "Task board":
   - heading "Shared tasks 1" [level=3]
   - article:
     - strong: Agent task
     - text: In progress
-    - paragraph: Created by the Team Lead
-    - text: "task-1Owner: LeadWrite scopes: src/web"
+    - paragraph: Created by the root agent
+    - text: "task-1Owner: Open the task board.Write scopes: src/web"

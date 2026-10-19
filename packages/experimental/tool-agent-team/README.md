@@ -1,5 +1,5 @@
 ---
-description: "Five task-board and wait tools plus coordination guidance for every member of an experimental Team composition."
+description: "Four task-board tools and shared-task guidance for an experimental Team composition."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets every Team member coordinate shared work: create, claim, and complete tasks on the shared board, and wait for teammates instead of polling. Each member also receives the shared-checkout coordination policy and a statement of its role. Creating, messaging, listing, and interrupting teammates stay on the standard subagent tools, so the package adds only five tool schemas. It is published under its experimental name and provides no stability guarantee.
+This package lets every agent in a subagent tree create, claim, and complete shared tasks. It adds four task schemas and shared-board guidance. Ordinary subagent controls own discovery, messaging, interruption, inbox waiting, and agent identity. The package is experimental and provides no stability guarantee.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package lets every Team member coordinate shared work: create, claim, and c
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this package on top of `@deepseek-ai/dsh-experimental-agent-team` when Team members should coordinate through tools. Once mounted, the Lead and every subagent below it, fresh or fork, get the same five tools, the same policy section, and a required runtime-context statement of their role.
+Mount this package with `@deepseek-ai/dsh-experimental-agent-team` when models need the shared board. The root and descendants receive identical task schemas and task policy.
 
 ### When to choose it
 
@@ -46,17 +46,17 @@ Ask the Lead to start a subagent to review the diff, add a review task, and wait
 
 ### What the model can do
 
-The five tools cover two capabilities; the standard subagent tools cover the third:
+The task tools complement the ordinary subagent controls:
 
 - **Manage the task board** — `team_task_create`, `team_task_list`, `team_task_get`, and `team_task_update` add, browse, read, and update shared tasks.
-- **Wait for teammates** — `wait_agent` waits for the next task, member status, or inbox change after the call starts.
+- **Wait for inbox input** — `wait_agent` belongs to `@deepseek-ai/dsh-tool-subagent-control` and remains available without this package.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerId` results use Session ids. Descriptions are display text and may repeat. Any member can use the board; only the Lead reassigns tasks. Updates enforce ownership and revision checks, rejecting stale edits.
+Task `owner` arguments and `ownerId` results use Session ids. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
 ### What success and failure look like
 
-Task tools return compact JSON task views or task pages. A stale `expected_revision`, an unauthorized action, or an unready task is reported as a tool error instead of overwriting newer work. `wait_agent` returns `{ "timedOut": false }` after a change and `{ "timedOut": true }` at its timeout; when no other member is running, it returns `noProgress` with reason `no-active-peer` right away, telling the caller to wake a teammate with `send_message` first.
+Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. A notification failure after commit reports the committed task and failed recipients; read the task before recovery and do not blindly repeat a create call.
 
 -----
 
@@ -72,7 +72,7 @@ This section explains the design decisions behind the adapter and points at the 
 
 The adapter is built on four commitments:
 
-- **Scoped, not global.** Every registration lives on the member Agent's own `ctx`; installation uses the Team membership available when the Agent is published.
+- **Agent-scoped registration.** Every live Agent receives its task tools and policy on its own `ctx`; the service resolves tree authority when called.
 - **One tool family.** Team registers no messaging, listing, or interruption tool; the standard subagent tools serve Leads and teammates alike.
 - **Declared results, compact JSON.** Every tool declares its complete result schema and renders that value as compact JSON, so the compiler checks `execute` against what the model is promised and no result spends tokens on indentation.
 - **The domain owns authority.** Tools delegate to `ctx.agentTeams`, which enforces Lead authority and revision checks; the adapter adds no weaker path.
@@ -83,15 +83,15 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: removed-key rejection, the fixed policy text, identity context, and the five scoped tool registrations |
+| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, task policy, and four scoped task tools |
 
 ### Policy and tools
 
-One `team:policy` section and one required `team:identity` runtime-context entry on the member scope carry the shared coordination rules and the member's role; the fixed text and the five tool registrations are declared in [`src/index.ts`](src/index.ts). The five tool schemas are registered in every scope recognized as a Team member at publication, including fork children, so parent and fork requests list identical tools and system prompts. No registration shares a name with a subagent control, so `send_message`, `list_agents`, and `interrupt_agent` resolve to the global subagent tools in every member scope.
+One `team:policy` section and four task schemas are registered on each Agent scope, including fork children. Identity, communication, waiting, and final-result coordination belong to [subagent controls](../../subagent/tool-subagent-control/README.md). Team-specific runtime identity is not injected.
 
 ### Scoped registration and teardown
 
-`maybeInstall` runs for every live Agent and subscribes to `agent/created`; it skips Agents without Team membership. Disposal of an Agent runs the installed disposer, and plugin HMR disposes every installed scope before reinstall. Each disposer unwinds registrations in reverse order, so a failed install cannot leave a partial scope.
+Installation covers current live Agents and subscribes to `agent/created`. Agent disposal and plugin HMR unwind registrations in reverse order; a failed install cannot leave a partial scope.
 
 </details>
 
@@ -104,7 +104,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
-- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, and interruption by Session id.
+- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — identity, messaging, listing, interruption, and inbox waiting.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team) — every tool schema the model receives.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — model-facing, scoping, and tool-family decisions.
 
@@ -122,13 +122,11 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other listed member with running or inactive status. Descriptions explain responsibilities and may repeat.
+A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
+Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
-
-Use agent ids as task owners. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents includes the root and all reachable continuable descendants, with parent ids and depth; discovery does not grant assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first to wake a required inactive member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.
+Task changes notify other live agents through their inbox. Consecutive updates may share one pending notice. After a task-board notice, read the latest tasks before acting. wait_agent receives these notices through the same inbox as other messages. A notice does not start an idle agent; use send_message when it needs to continue working.
 ```
 
 #### Token effect
@@ -139,29 +137,15 @@ The section is a fixed cost on every request of every Team member.
 
 The text is identical for the Lead and every descendant and does not change while the plugin stays loaded, so it keeps a stable system-prompt prefix, including between a parent and its `subagent_fork` child. Loading or unloading the plugin changes the system prompt of every member and invalidates their cached prefixes.
 
-### Team identity runtime context
+### Task tool schemas
 
 #### What the model sees
 
-Required `team:identity` runtime context states `You are the Team Lead. Your agent id is "<lead id>".` for a root and `You are a teammate in the Team led by agent "<lead id>".` for a subagent. It follows current membership, survives optional-context suppression, and is restored after compaction. An ordinary fork of a teammate is a new root and receives the Lead statement.
+Every member receives the same four task schemas in the [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team). Results are compact JSON task views or pages. Root-only reassignment is enforced at execution, not through different schemas.
 
 #### Token effect
 
-Identity is part of the complete runtime-context snapshot. An unchanged retained snapshot adds no message; changed or removed context causes the loop to append a complete snapshot, including identity.
-
-#### KV Cache effect
-
-Identity arrives in a runtime-context snapshot after the request prefix, so a `subagent_fork` child keeps its parent's system prompt, tools, and inherited messages and appends its teammate statement after them. Actual provider cache hits remain best-effort.
-
-### Task and wait tool schemas
-
-#### What the model sees
-
-Every Team member receives the same five schemas, listed in the [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-agent-team). Results are compact JSON task views, task pages, or wait values. When no other member is running, `wait_agent` returns `noProgress` with reason `no-active-peer` and the message `No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.` Lead-only `reassign` is enforced at execution, not by a different schema.
-
-#### Token effect
-
-The five schemas are a fixed cost on every Team member request. Tool calls add compact JSON results; `team_task_list` returns at most 100 tasks per page.
+The four schemas are a fixed cost per request. Tool results add compact JSON; `team_task_list` returns at most 100 tasks per page.
 
 #### KV Cache effect
 
@@ -174,8 +158,8 @@ The schemas are identical for the Lead and every descendant, including `subagent
 These limits describe what the policy and tools cannot guarantee for a team. They are current package constraints, not a comparison with other collaboration surfaces.
 
 - **Prompt policy is coordination, not confinement** — it cannot stop Bash or external processes from writing overlapping files.
-- **Installation follows publication** — an Agent that is not a Team member when it is published, such as a subagent whose parent is not loaded, receives no Team tools, policy, or identity, even after its parent loads.
-- **No Web controls** — browser roster and task-board presentation is outside this runtime package.
+- **Task authority needs a live root** — tool availability does not guarantee that the caller’s root remains available when an operation executes.
+- **No Web controls** — browser task-board presentation is outside this runtime package.
 - **Experimental prototype with no stability promise** — the package is public, but its schemas can change freely while it incubates.
 
 <a id="dev-note"></a>

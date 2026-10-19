@@ -1,5 +1,5 @@
 ---
-description: "Shared messaging, interruption, and child discovery tools for users and maintainers composing or debugging continuable-child control."
+description: "Discover and coordinate a subagent tree through messaging, interruption, inbox waiting, and durable runtime identity."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message every member of their Team by Session id. `interrupt_agent` stops only the caller’s descendants, retaining their inboxes and children. `list_agents` lists the whole tree with descriptions, parent ids, depth, and activity. One plugin instance registers all three tools. All members inherit the same tool definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. It supplies shared collaboration guidance and required runtime identity, including without experimental Team mode. One plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, and `agents`.
+Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`.
 
 ### Minimal configuration
 
-With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all three control and discovery tools:
+With the required services available, load the subagent service, a backend, the delegation tool, and this package to expose all four control and discovery tools:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
@@ -40,7 +40,7 @@ With the required services available, load the subagent service, a backend, the 
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, and `list_agents` together; existing tool restrictions can hide individual tools.
+This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, `list_agents`, and `wait_agent`; existing tool restrictions can hide individual tools.
 
 ### send_message
 
@@ -49,6 +49,11 @@ Sends a message to another Team member by `agent_id`. The caller must be the liv
 ### interrupt_agent
 
 `agent_id` identifies a descendant by Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+
+<a id="wait_agent"></a>
+### wait_agent
+
+Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, user steering, and task-board notices, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
@@ -66,7 +71,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Thin adapters over `ctx.subagents.sendMessage()`, `interrupt()`, and the list projections; residency, cold resume, and authorization belong to the service. Tools pass the exact live calling Agent (`exec.agent`) as sender and authority, and convert `agent_id` to the branded Session id.
+Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox before checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 
@@ -80,8 +85,10 @@ The execution signal owns work only until inbox acceptance. Accepted messages ca
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Shared registration of all three tools |
+| [`src/index.ts`](src/index.ts) | Shared control-tool and prompt registration |
 | [`src/list-agents.ts`](src/list-agents.ts) | Whole-Team discovery and activity projection |
+| [`src/wait-agent.ts`](src/wait-agent.ts) | Exact-caller inbox wait and cleanup |
+| [`src/collaboration-prompt.ts`](src/collaboration-prompt.ts) | Shared policy and required Agent identity |
 
 </details>
 
@@ -101,11 +108,35 @@ Read these pages when the package-level contract is not enough; they move from t
 <a id="model-experience"></a>
 ## Model Experience
 
+### Collaboration policy and identity
+
+#### What the model sees
+
+The shared `subagent:policy` section supplies the policy below. Required `subagent:identity` context starts with `Your agent id is <id>. Your Team root agent id is <root>.` A root adds `You are the root agent.`; a descendant adds its parent id. If root resolution is unavailable, it explicitly reports that fact and permits independent work. Ordinary Session forks receive their own root identity. Optional-context suppression cannot remove identity; runtime-context assembly restores it after compaction.
+
+##### Collaboration policy
+
+```markdown
+Your Team is the subagent tree rooted at the root agent. Use list_agents to discover agents and send_message with an agent id to contact another listed agent. A working agent receives the message at its next step; an idle agent starts a new turn. Successful delivery does not mean the recipient has processed the message. A delegated agent's final answer is returned automatically while its parent is online.
+
+Continue independent work while other agents run. When you need more input, use wait_agent to wait for your own inbox. Pending input returns immediately; new messages, completion notifications, and user steering end the wait. The tool does not consume messages or start agents, and queued next-turn messages stay queued. After a wakeup or timeout, assess what work remains. Obtain the results needed for your assigned work before answering; unrelated agents need not finish.
+
+Agents may share files even when their working directories differ. Coordinate overlapping edits. If a file operation returns FS_STALE_VERSION, read the current file, apply your intended change to the updated content, and retry. Coordinate formatters, generators, and shell writes explicitly, then review the combined diff and run relevant checks.
+```
+
+#### Token effect
+
+The shared policy has a fixed cost. Identity is part of the full runtime-context snapshot; stable retained context adds no new message.
+
+#### KV Cache effect
+
+Policy text stays identical across members. Identity is appended through runtime context rather than changing shared system text; actual provider cache reuse remains best-effort.
+
 ### Tool schema
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes an `agent_id` and `message`; `interrupt_agent` takes an `agent_id`; `list_agents` takes no arguments. All addresses are Session ids; descriptions are display text and may repeat.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
 
 #### Token effect
 

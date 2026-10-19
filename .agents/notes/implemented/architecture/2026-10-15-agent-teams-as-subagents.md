@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-10-15-agent-teams-as-subagents.zh.md)
 
-The adjacency, discovery, and parent-lifetime restrictions below are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md); the remaining decisions stay active.
+The adjacency and parent-lifetime restrictions are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md). [Task-board inbox coordination](2026-10-19-team-task-board-inbox.md) supersedes the separate roster and Team-owned wait; the single subagent identity decision remains active.
 
 ## Problem
 
@@ -14,11 +14,11 @@ Teammates already use the subagent runtime for creation, Session identity, catal
 
 Use one subagent identity: the Session id. The existing `description` tool argument supplies the catalog label and display text; descriptions may repeat and never address an agent. Creation accepts no member name, reserves no names, and adds no catalog payload version.
 
-An exact live sender may message a direct continuable child. A resident continuable child may additionally message its direct parent or continuable siblings by id. Sibling delivery uses the shared live parent’s child authority and cold resume; the message retains the actual sender’s id. `list_agents` exposes parent and sibling ids. Interruption keeps ancestor authority and id addressing.
+[Tree-wide communication](2026-10-16-tree-wide-agent-communication.md) authorizes an exact live sender within one root tree and preserves the actual sender’s id. Interruption retains ancestor authority and id addressing.
 
-Every root Agent leads the Team identified by its Session id; every live subagent below it shares the task board and waits. The roster projects the root, its direct continuable catalog children, and historical `team/member` records. Team creates no agents and registers no messaging, listing, or interruption tools. The Team profile only adds rows. Parent and fork children receive identical Team policies and tool schemas, with role identity in required runtime context.
+Every root Agent and its descendants form the Team identified by the root Session id. Team creates no agents and contributes only task tools and task policy. Ordinary subagent controls supply discovery, messaging, interruption, inbox waiting, and required runtime identity. Parent and fork children receive identical tool schemas and shared policies.
 
-Task ownership uses `ownerId`, and reassignment accepts a Session id. Team persists only task changes. Messages use the target Agent inbox; historical `team/message/*` records remain readable but are never delivered or acknowledged.
+Task ownership uses `ownerId`; root reassignment accepts itself or any reachable continuable descendant. Historical roster records remain decode-only. Team persists task changes and admits non-waking inbox notices after commit. Historical `team/message/*` records remain readable but are never delivered or acknowledged.
 
 This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
 
@@ -32,10 +32,10 @@ This supersedes the roster, provisioning, recovery, and messaging decisions in [
 
 ## Consequences
 
-Ordinary continuable siblings can discover and message one another. Team retains task ownership, dependencies, waits, policy, and role identity. Its member and message-size limits and Team-owned teardown disappear; subagent capacity and lifecycle apply. Failed starts leave no Team roster row. No new Session payload generation is required, and historical member names remain decode-only data.
+Tree members discover and message one another through ordinary controls. Team retains task ownership, dependencies, and task policy. Subagent capacity and lifecycle apply; failed starts create no Team roster row. Existing durable task generations remain unchanged.
 
-Deeper descendants share tasks and waits but are not roster rows; their message routes remain limited to their own parent, children, and continuable siblings. Separate working directories and cross-process coordination remain unsupported.
+Descendants at any depth share the board and can be task owners. Historical members grant no authority. Separate working directories remain explicit caller choices; cross-process task coordination is unsupported.
 
 ## Testing
 
-Verify sibling delivery and cold resume with actual sender attribution and repeated descriptions; reject unrelated targets. Verify Team lineage, inherited catalog isolation, historical reads, task CAS, waits, and registration disposal. Recorded Team sessions and the headless profile exercise the complete model-facing workflow and parent/fork request-prefix equality.
+Verification covers tree delivery and cold resume with actual sender attribution, task CAS and owner discovery, historical decoding, inbox wait isolation, and registration disposal. Recorded sessions cover model-visible task policy and ordinary subagent guidance.

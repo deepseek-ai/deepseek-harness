@@ -5,6 +5,12 @@ You are a coding assistant powered by the deepseek-v4-flash model.
 Verify your work by running the code or tests. Keep answers brief and factual.
 
 
+Your Team is the subagent tree rooted at the root agent. Use list_agents to discover agents and send_message with an agent id to contact another listed agent. A working agent receives the message at its next step; an idle agent starts a new turn. Successful delivery does not mean the recipient has processed the message. A delegated agent's final answer is returned automatically while its parent is online.
+
+Continue independent work while other agents run. When you need more input, use wait_agent to wait for your own inbox. Pending input returns immediately; new messages, completion notifications, and user steering end the wait. The tool does not consume messages or start agents, and queued next-turn messages stay queued. After a wakeup or timeout, assess what work remains. Obtain the results needed for your assigned work before answering; unrelated agents need not finish.
+
+Agents may share files even when their working directories differ. Coordinate overlapping edits. If a file operation returns FS_STALE_VERSION, read the current file, apply your intended change to the updated content, and retry. Coordinate formatters, generators, and shell writes explicitly, then review the combined diff and run relevant checks.
+
 `run_code` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.
 
 Check the [exit code: N] marker on every bash result; investigate failures before moving on.
@@ -448,6 +454,14 @@ class UpdateGoalOutput2(TypedDict):
     goal: UpdateGoalOutput2Goal
     activation: Literal["armed", "disarmed"]
 
+class WaitAgentArgs(TypedDict):
+    # Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000.
+    timeout_ms: NotRequired[int]
+    # Additional keys beyond those declared are allowed.
+
+class WaitAgentOutput(TypedDict):
+    timedOut: bool
+
 class WebFetchArgs(TypedDict):
     # The HTTP(S) URL to fetch.
     url: str
@@ -551,6 +565,8 @@ class Tools(Protocol):
         """Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done."""
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
+    async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
+        """Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

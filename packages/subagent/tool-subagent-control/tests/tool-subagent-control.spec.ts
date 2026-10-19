@@ -344,7 +344,7 @@ describe('dsh-tool-subagent-control', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(tool)
-    const names = ['send_message', 'interrupt_agent', 'list_agents']
+    const names = ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
@@ -357,7 +357,7 @@ describe('dsh-tool-subagent-control', () => {
   it('has the namespace-plugin export shape (no stray default)', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'agents'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'systemPrompt'])
     expect(typeof tool.apply).toBe('function')
   })
 })

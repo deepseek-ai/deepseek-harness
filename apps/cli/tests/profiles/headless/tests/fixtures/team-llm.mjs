@@ -15,6 +15,12 @@ function latestAssistantCalls(messages) {
   return assistant?.content.filter(block => block.type === 'tool-call').map(block => block.name) ?? []
 }
 
+function hasNewCoordinationInput(messages) {
+  const toolIndex = messages.findLastIndex(message => message.role === 'tool')
+  return messages.some((message, index) => index > toolIndex && message.role === 'user'
+    && ['team-task-change', 'agent-message', 'subagent-settled'].includes(message.source?.kind))
+}
+
 function hasTaskAction(messages, action) {
   return messages.some(message => message.role === 'assistant'
     && message.content.some((block) => {
@@ -103,7 +109,7 @@ function implementer(messages, parentId) {
         write_scopes: ['implementation'],
       } }])
     }
-    if (last.includes('wait_agent')) {
+    if (last.includes('wait_agent') || hasNewCoordinationInput(messages)) {
       return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
     }
     return toolChunks([{ name: 'wait_agent', args: { timeout_ms: 10000 } }])
@@ -114,10 +120,10 @@ function implementer(messages, parentId) {
         task_id: 'task-2', expected_revision: 1, action: 'claim',
       } }])
     }
-    if (last.includes('team_task_get')) {
-      return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
+    if (last.includes('team_task_get') && !hasNewCoordinationInput(messages)) {
+      return toolChunks([{ name: 'wait_agent', args: { timeout_ms: 10000 } }])
     }
-    if (last.includes('wait_agent')) {
+    if (last.includes('wait_agent') || hasNewCoordinationInput(messages)) {
       return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
     }
     return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
@@ -166,15 +172,17 @@ function lead(messages) {
   if (last.includes('team_task_list')) {
     const completed = result.match(/"status":"completed"/gu)?.length ?? 0
     if (completed >= 2) return toolChunks([{ name: 'list_agents', args: {} }])
-    return toolChunks([{ name: 'team_task_list', args: {} }])
+    return toolChunks([{ name: hasNewCoordinationInput(messages) ? 'team_task_list' : 'wait_agent',
+      args: hasNewCoordinationInput(messages) ? {} : { timeout_ms: 10000 } }])
   }
   if (last.includes('list_agents')) {
     const inactive = result.split('\n')
       .filter(row => row.includes('— Own deterministic ') && row.includes('[inactive]')).length
     if (inactive >= 2) return textChunks('TEAM_WORKFLOW_OK: both teammates and dependent tasks completed.')
-    return toolChunks([{ name: 'list_agents', args: {} }])
+    return toolChunks([{ name: hasNewCoordinationInput(messages) ? 'list_agents' : 'wait_agent',
+      args: hasNewCoordinationInput(messages) ? {} : { timeout_ms: 10000 } }])
   }
-  if (last.includes('wait_agent')) return toolChunks([{ name: 'team_task_list', args: {} }])
+  if (last.includes('wait_agent') || hasNewCoordinationInput(messages)) return toolChunks([{ name: 'team_task_list', args: {} }])
   return toolChunks([{ name: 'wait_agent', args: { timeout_ms: 10000 } }])
 }
 
@@ -185,8 +193,8 @@ class TeamFixtureAdapter extends LlmAdapter {
     const workflowChild = initial?.content[0]?.text === 'TEAM_WORKFLOW_CHILD'
     const context = options.messages.findLast(message => message.source?.kind === 'runtime-context')
     const section = name => context?.source.sections?.find(candidate => candidate.name === name)?.text
-    const role = section('team:identity')
-    const parentId = role?.match(/led by agent "([^"]+)"/u)?.[1]
+    const role = section('subagent:identity')
+    const parentId = role?.match(/Your parent agent id is "([^"]+)"/u)?.[1]
     const task = initial?.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
     if (!workflowChild && (!tools.includes('subagent') || !tools.includes('workflow') || !tools.includes('team_task_create'))) {
       throw new Error('Team profile is missing delegation, workflow, or task tools')
@@ -195,7 +203,7 @@ class TeamFixtureAdapter extends LlmAdapter {
     if (workflowChild) chunks = textChunks('Fresh workflow child complete.')
     else if (task?.startsWith('RESEARCHER_MARK:')) chunks = researcher(options.messages)
     else if (task?.startsWith('IMPLEMENTER_MARK:')) chunks = implementer(options.messages, parentId)
-    else if (role?.startsWith('You are the Team Lead.')) chunks = lead(options.messages)
+    else if (role?.includes('You are the root agent.')) chunks = lead(options.messages)
     else throw new Error('Team runtime context is missing a recognized identity')
     for (const chunk of chunks) {
       options.signal?.throwIfAborted()

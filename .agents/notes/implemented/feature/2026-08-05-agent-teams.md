@@ -14,7 +14,7 @@ Agent Teams needs an explicit opt-in composition while its public contracts rema
 
 ## Decision
 
-Every ordinary root leads the Team identified by its `SessionId`. The Lead row exists by identity; durable task state begins with the first task event. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) owns creation, messaging, and interruption. Every live subagent below the root is a member; the root’s direct continuable children form the roster. An ordinary fork leads a new Team and excludes inherited Team records.
+Every ordinary root and its descendants form the Team identified by the root `SessionId`; durable task state begins with the first task event. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) owns the single agent identity. [Task-board inbox coordination](../architecture/2026-10-19-team-task-board-inbox.md) owns task notices and ordinary inbox waiting. An ordinary Session fork leads a new tree and excludes inherited Team authority.
 
 The implementation is split into `@deepseek-ai/dsh-experimental-agent-team`, which owns `ctx.agentTeams` and durable semantics, and `@deepseek-ai/dsh-experimental-tool-agent-team`, which owns scoped schemas and model guidance. Every Team tool declares its complete result schema and renders that value as compact JSON, so the compiler checks each `execute` against what the model is promised and no result spends tokens on indentation. Deployments mount both plugins explicitly; Team registers no tool that shares a name with the subagent controls. The shared policy announces Team availability and describes coordination responsibilities. Both packages are public members of `packages/experimental/`; the [experimental package reference](../../../../packages/experimental/AGENTS.md) owns publication, dependency isolation, and promotion.
 
@@ -42,7 +42,7 @@ Member messages use the subagent `send_message` operation, which steers running,
 
 Shared tasks are complete snapshots with Team-local ids and monotonic revisions. Every mutation carries `expectedRevision`. Any member creates, reads, or claims a ready unowned task; the owner or Lead edits and transitions it, while only the Lead assigns another member. Numeric task ids remain within the safe-integer allocation range, and exhaustion fails without reusing an id. Dependencies must name non-deleted tasks and form a complete DAG. Deleted tasks are retained tombstones. `writeScopes` are normalized path prefixes that produce overlap diagnostics but never block claim or authorize a write.
 
-`wait_agent` blocks on one task, member-status, or accepted member-message edge registered after the call starts instead of encouraging model polling. It does not replay an earlier edge, so callers re-read authoritative state after wakeup or timeout. Interruption is the subagent ancestor operation, so only the Lead interrupts teammates; it does not alter task ownership.
+`wait_agent` belongs to ordinary subagent controls and waits for the exact caller’s next-step inbox, including already-pending input. Task commits notify other live local members through that inbox without waking idle members. [Task-board inbox coordination](../architecture/2026-10-19-team-task-board-inbox.md) supersedes the Team-wide edge wait. Ancestors may interrupt descendants without changing task ownership.
 
 ## Shared checkout boundary
 
@@ -54,15 +54,15 @@ The Team domain does not infer branches, create worktrees, merge changes, or sil
 
 The Web panel reads the Lead Session's `agentTeam` wire projection because the existing projection stream keeps browser state current without a separate Team read API. Both Lead and teammate conversations select values from the shared cross-Session store. The panel owns no projection reads: Session loading, cached list values, and control baselines supply the data.
 
-The wire view carries the roster of the Lead, its continuable catalog children, and historical members with their recorded phases, non-deleted task views with shared readiness and overlap derivation, and `failure` beside the last valid state. Live activity comes from Session status. Model selection has its own durable projection; the panel displays the shared store's available values without opening member conversations. A missing cached value remains absent until Session loading or a live update supplies it.
+The task panel uses non-deleted task views with readiness and overlap diagnostics, plus `failure` beside the last valid state. Historical roster fields remain decodable but have no current UI or assignment authority. Ordinary subagent navigation owns member discovery; task owner labels reuse Session and catalog metadata.
 
 Publication requires `apply` to return a new state per applied event and replace only the touched collection. Mailbox-only events retain the client view and publish nothing. The existing carrier sends each changed complete view to connected browsers; the package README records that cost.
 
 ## Alternatives considered
 
-**Give every child access across the Team tree.** Shared task membership does not grant messaging authority across parents. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) uses the shared parent’s authority for continuable siblings; tasks retain the Lead log as persistence owner.
+**Keep a separate Team communication authority.** The later [tree-wide communication decision](../architecture/2026-10-16-tree-wide-agent-communication.md) places routing and authorization in the subagent runtime; a task board cannot grant another route.
 
-**Store mail in each target Session before Lead-log enqueue.** Rejected because target materialization and acceptance can fail after the Team has committed the send. The always-live Lead Session is the transaction home; target recording is the acknowledgement and de-duplication boundary.
+**Keep a durable Team mailbox.** Target admission and task commit are independent operations. The historical Team mailbox remains readable, while current messaging uses the target inbox and post-commit task notices explicitly report delivery failure without undoing the task.
 
 **Treat task ownership or write scopes as locks.** Rejected because external writers bypass them, crashed owners remain durable, and path-prefix overlap cannot prove semantic independence. False mutual exclusion is more dangerous than an explicit warning.
 
@@ -76,9 +76,9 @@ Publication requires `apply` to return a new state per applied event and replace
 
 ## Testing
 
-Package tests cover Team membership, catalog-backed roster projection, task transitions, waits, and historical roster and mailbox readability. The keyless Team profile snapshot pins the policy, tools, and workflow; the CLI composition test checks persisted Team and child logs.
+Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and post-commit notices. Ordinary subagent tests cover inbox waiting and identity; recorded Team compositions cover task policy and tools.
 
-Model-facing member identities and availability follow the [tool projection reference](../../../../packages/experimental/tool-agent-team/README.md); service residency and durable identity remain distinct.
+Model-facing identity and inbox waiting follow [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); task policy follows the [Team tool reference](../../../../packages/experimental/tool-agent-team/README.md).
 
 ## Consequences
 

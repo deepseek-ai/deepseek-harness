@@ -1,5 +1,5 @@
 ---
-description: "在一个实验性组合包中启用团队协作、工具与 Web 成员和任务看板。"
+description: "通过一个实验性 bundle 启用共享任务板、任务工具和 Web 任务面板。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-agent-team-profile` 让 [Agent Teams](../agent-team/README.zh.md) 的团队协作、工具和 Web 界面通过一个组合包启用。Lead 把subagent 作为 teammate 启动，它们共享任务看板并互相等待；Web 显示成员、共享任务和成员会话。base profile 的委派与消息工具保持可用。本包随 dsh 安装提供，默认关闭，可在插件页开启或添加到已初始化的 profile。
+`dsh-experimental-agent-team-profile` 为现有 subagent（子智能体）树添加 [Agent Teams](../agent-team/README.zh.md) 任务板、任务工具和 Web 任务面板。基础 profile 的委派、通信、等待和成员导航独立保持可用。此 bundle 随 dsh 分发时默认关闭。可从插件页启用，或添加到已初始化的 profile。
 
 ## 目录
 
@@ -46,9 +46,9 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 
 ### 获得的功能
 
-该层增加 Team 领域、任务板和等待工具以及 UI，不禁用基础配置行。Lead 使用 `subagent` 创建全新上下文，或使用 `subagent_fork` 继承历史，通过 `description` 描述任务。标准控制工具使用代理 id。
+此层添加任务域、四个任务板工具和任务 UI，不禁用基础条目。Lead 使用 `subagent` 获取新上下文，或使用 `subagent_fork` 继承历史。标准控制工具按 id 寻址 agent。
 
-在 Web 和 Desktop 会话中，[Team UI](../client-ui-agent-team/README.zh.md) 显示成员列表与共享任务看板，并可打开成员会话。同一个组合包开关控制工具与浏览器 UI。插件页通过组合包的 `package.json.icon` 声明读取其[图标](icon.svg)，组合包禁用时也会显示。
+在 Web 和 Desktop 对话中，[Team UI](../client-ui-agent-team/README.zh.md)显示共享任务；普通 subagent 导航打开成员对话。bundle 开关控制任务工具和任务 UI。插件页从 `package.json.icon` 读取 bundle 的[图标](icon.svg)，禁用时也会显示。
 
 -----
 
@@ -73,9 +73,9 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 ## 进一步探索
 
 - [实验性包](../README.zh.md)——孵化状态与发布规则。
-- [Agent Teams service](../agent-team/README.zh.md)——Team 成员关系、roster 与持久任务板。
-- [Agent Teams 工具](../tool-agent-team/README.zh.md)——每个成员获得的任务与等待工具、策略和身份。
-- [Agent Teams 浏览器 UI](../client-ui-agent-team/README.zh.md)——成员列表、任务看板与成员会话导航。
+- [Agent Teams 服务](../agent-team/README.zh.md) — 持久化共享任务和收件箱通知。
+- [Agent Teams 工具](../tool-agent-team/README.zh.md) — 任务工具和共享任务板策略。
+- [Agent Teams 浏览器 UI](../client-ui-agent-team/README.zh.md) — 共享任务面板。
 - [Base bundle](../../bundle/base/README.zh.md)——本 patch 扩展的 profile 层。
 
 -----
@@ -87,11 +87,11 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
 
 #### 模型会看到什么
 
-Team 策略、身份与 schema 由 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.zh.md) 所有。本 bundle 只改变 composition：每个 Team 成员获得五个任务与等待工具，而 `subagent`、`subagent_fork`、`send_message`、`list_agents` 与 `interrupt_agent` 保持 base profile 的 schema。
+任务策略和四个任务 schema 属于 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../tool-agent-team/README.zh.md)。此 bundle 只改变组合；普通 subagent 身份、控制工具和收件箱等待仍由基础 profile 的 subagent 控制工具负责。
 
 #### Token 影响
 
-本 bundle 会加入 `@deepseek-ai/dsh-experimental-tool-agent-team` 描述的 Team 策略段落、身份声明与五个工具 schema；它自身不增加提示词文本。
+bundle 添加 `@deepseek-ai/dsh-experimental-tool-agent-team` 所有的任务策略和四个 schema；自身不提供提示文本。
 
 #### KV Cache 影响
 
@@ -102,7 +102,7 @@ Team 策略、身份与 schema 由 [`@deepseek-ai/dsh-experimental-tool-agent-te
 <a id="known-limitations-and-deferred-work"></a>
 
 - **仅显式启用**——本包随安装提供但默认关闭；随附 CLI、Web、SDK、ACP 与 Python profile 都不会启用它。
-- **Workflow 子级加入 Team**——可继续的 Workflow `agent()` 子级获得相同的 Team 工具、策略和同级消息路由。Lead 的直接子级出现在其成员列表中。
+- **Workflow 子级共享任务板** — 可继续执行的 Workflow `agent()` 后代接收任务工具，并使用普通 subagent 发现与通信。
 - **共享 checkout**——所有 teammate 都观察同一个工作目录；本 bundle 不提供 worktree 隔离或文件系统锁。
 - **需要 base profile**——teammate 通过 `dsh-base` 挂载的 Subagent 服务、提供方与工具创建和联系；本层不是独立 profile。
 

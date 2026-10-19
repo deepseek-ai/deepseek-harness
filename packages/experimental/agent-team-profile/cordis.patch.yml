@@ -1,6 +1,6 @@
 # Experimental Agent Teams profile layer. Apply after dsh-base: teammates are
 # subagents, so the base delegation and messaging tools stay mounted and
-# this layer only adds the Team task board, wait tool, and panel.
+# this layer only adds the Team task board, task guidance, and panel.
 
 - insert:
     - id: agent-team

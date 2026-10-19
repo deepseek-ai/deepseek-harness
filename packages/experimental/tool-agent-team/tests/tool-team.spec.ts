@@ -41,9 +41,8 @@ const TEAM_TOOLS = [
   'team_task_get',
   'team_task_list',
   'team_task_update',
-  'wait_agent',
 ]
-const leadIdentity = (agent: Agent): string => `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
+const leadIdentity = (agent: Agent): string => `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent id is ${JSON.stringify(agent.id)}.`
 
 const roots: string[] = []
 const contexts = new Set<Context>()
@@ -123,7 +122,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
 async function assembly(ctx: Context, agent: Agent) {
   const scope = scopeOf(agent.ctx)
   if (scope === undefined) throw new Error('expected Agent scope')
-  return ctx.systemPrompt.assemble({ scope })
+  return ctx.systemPrompt.assemble({ scope, agent })
 }
 
 function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
@@ -131,7 +130,7 @@ function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
 }
 
 function teammateIdentity(lead: Agent): string {
-  return `You are a teammate in the Team led by agent ${JSON.stringify(lead.id)}.`
+  return `Your Team root agent id is ${JSON.stringify(lead.id)}.`
 }
 
 async function runTurn(agent: Agent, text: string): Promise<void> {
@@ -151,24 +150,24 @@ async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
   await vi.waitFor(() => { expect(ctx.agents.get(id)).toBeUndefined() }, { timeout: 5_000 })
 }
 
-function interrupt(ctx: Context, lead: Agent, target: SessionId): void {
-  ctx.subagents.interrupt(target, { kind: 'ancestor', agent: lead })
+async function interrupt(ctx: Context, lead: Agent, target: SessionId): Promise<void> {
+  await ctx.subagents.drainChildren(lead, [target])
 }
 
 describe('dsh-tool-team', () => {
-  it('installs task and wait tools with the shared policy for the Lead and every subagent below it', async () => {
+  it('adds only task tools and task policy to the shared subagent controls', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
     const leadPrompt = renderPrompt(leadAssembly)
-    expect(leadPrompt).toContain('Teammates are subagents.')
+    expect(leadPrompt).toContain('Your Team is the subagent tree')
     expect(leadPrompt).toContain('FS_STALE_VERSION')
-    expect(leadPrompt).toContain('Task readiness never starts an owner')
-    expect(leadPrompt).toContain('returns noProgress immediately')
+    expect(leadPrompt).toContain('Task readiness does not start an agent')
+    expect(leadPrompt).toContain('wait for your own inbox')
     expect(renderContextSnapshot(leadAssembly)).toContain(leadIdentity(lead))
     expect(leadAssembly.tools.map(schema => schema.name)).not.toContain('spawn_teammate')
     // Messaging, listing, and interruption stay the global subagent controls.
-    for (const name of ['send_message', 'list_agents', 'interrupt_agent']) {
+    for (const name of ['send_message', 'list_agents', 'interrupt_agent', 'wait_agent']) {
       expect(ctx.tools.get(name, scopeOf(lead.ctx))).toBe(ctx.tools.get(name))
     }
 
@@ -182,8 +181,8 @@ describe('dsh-tool-team', () => {
       expect(renderContextSnapshot(childAssembly)).toContain(teammateIdentity(lead))
       expect(ctx.tools.get('send_message', scopeOf(child.ctx))).toBe(ctx.tools.get('send_message'))
     }
-    interrupt(ctx, lead, namedId)
-    interrupt(ctx, lead, unnamedId)
+    await interrupt(ctx, lead, namedId)
+    await interrupt(ctx, lead, unnamedId)
     await Promise.all([waitNoAgent(ctx, namedId), waitNoAgent(ctx, unnamedId)])
   })
 
@@ -230,7 +229,7 @@ describe('dsh-tool-team', () => {
     expect(runtimeContextText(adapter.requests[1]!)).toContain(leadIdentity(handle.agent))
     expect(JSON.stringify(childRequest.messages)).not.toContain('system-reminder')
     expect(handle.agent.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
-    expect(ctx.agentTeams.membership(handle.agent)).toMatchObject({ role: 'lead' })
+    expect(ctx.subagents.rootOf(handle.agent)).toBe(handle.agent)
     await handle.dispose()
   })
 
@@ -308,37 +307,14 @@ describe('dsh-tool-team', () => {
     expect(runtimeContextText(adapter.requests[0]!)).toContain(teammateIdentity(lead))
   })
 
-  it('returns actionable no-progress output and renders structured wait cancellation', async () => {
-    const inactiveSetup = await setup([textResponse('worker done')])
-    const inactiveId = await spawn(inactiveSetup.ctx, inactiveSetup.lead, 'inactive-worker', 'finish')
-    await waitNoAgent(inactiveSetup.ctx, inactiveId)
-    const noProgress = await execute(inactiveSetup.ctx, inactiveSetup.lead, 'wait_agent', { timeout_ms: 3_600_000 })
-    expect(noProgress.isError).toBe(false)
-    expect(JSON.parse(text(noProgress))).toEqual({
-      timedOut: false,
-      noProgress: {
-        reason: 'no-active-peer',
-        message: 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.',
-      },
-    })
-    for (const timeout_ms of [9_999, 3_600_001, Number.MAX_SAFE_INTEGER + 1]) {
-      const invalid = await execute(inactiveSetup.ctx, inactiveSetup.lead, 'wait_agent', { timeout_ms })
-      expect(invalid.isError).toBe(true)
-      expect(text(invalid)).toContain('timeoutMs must be an integer from 10000 through 3600000')
-    }
-
-    const activeSetup = await setup(['hang'])
-    const activeId = await spawn(activeSetup.ctx, activeSetup.lead, 'active-worker', 'wait')
-    await waitRunning(activeSetup.ctx, activeId)
-    const controller = new AbortController()
-    const waiting = execute(activeSetup.ctx, activeSetup.lead, 'wait_agent', { timeout_ms: 10_000 }, controller.signal)
-    await new Promise(resolve => setTimeout(resolve, 0))
-    controller.abort({ kind: 'user' })
-    const aborted = await waiting
-    expect(aborted.isError).toBe(true)
-    expect(text(aborted)).toBe("Error: wait_agent aborted: { kind: 'user' }")
-    interrupt(activeSetup.ctx, activeSetup.lead, activeId)
-    await waitNoAgent(activeSetup.ctx, activeId)
+  it('keeps ordinary inbox waiting when the task plugin unloads', async () => {
+    const { ctx, lead, fiber } = await setup([])
+    await fiber.dispose()
+    lead.inject(createUserMessage({ content: [{ type: 'text', text: 'pending input' }], source: { kind: 'user' } }))
+    const result = await execute(ctx, lead, 'wait_agent', {})
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(text(result))).toEqual({ timedOut: false })
+    expect(lead.inbox.nextStep).toHaveLength(1)
   })
 
   it('adapts task CAS operations and waits to canonical JSON', async () => {
@@ -374,20 +350,15 @@ describe('dsh-tool-team', () => {
     expect(stale.isError).toBe(true)
     expect(text(stale)).toContain('stale team task')
 
+    lead.inbox.clear()
     const wait = execute(ctx, lead, 'wait_agent', { timeout_ms: 10_000 })
-    const completedCall = new Promise<Awaited<ReturnType<typeof execute>>>((resolve, reject) => {
-      setTimeout(() => {
-        void execute(ctx, child, 'team_task_update', {
-          task_id: task.id,
-          expected_revision: 2,
-          action: 'complete',
-        }).then(resolve, reject)
-      }, 0)
+    const completed = await execute(ctx, child, 'team_task_update', {
+      task_id: task.id, expected_revision: 2, action: 'complete',
     })
-    await expect(wait).resolves.toMatchObject({ isError: false })
-    expect((await completedCall).isError).toBe(false)
+    expect(completed.isError).toBe(false)
+    expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
-    interrupt(ctx, lead, childId)
+    await interrupt(ctx, lead, childId)
     await waitNoAgent(ctx, childId)
   })
 
@@ -448,18 +419,14 @@ describe('dsh-tool-team', () => {
       owner: childId,
     })).isError).toBe(true)
 
-    const wait = execute(ctx, lead, 'wait_agent', {})
-    const wake = new Promise<Awaited<ReturnType<typeof execute>>>((resolve, reject) => {
-      setTimeout(() => {
-        void execute(ctx, lead, 'team_task_create', {
-          subject: 'wake', description: 'wake default wait',
-        }).then(resolve, reject)
-      }, 0)
-    })
-    expect((await wait).isError).toBe(false)
-    expect((await wake).isError).toBe(false)
+    const child = ctx.agents.get(childId)!
+    child.inbox.clear()
+    const wait = execute(ctx, child, 'wait_agent', {})
+    const wake = await execute(ctx, lead, 'team_task_create', { subject: 'wake', description: 'notify waiting child' })
+    expect(wake.isError).toBe(false)
+    expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
-    interrupt(ctx, lead, childId)
+    await interrupt(ctx, lead, childId)
     await waitNoAgent(ctx, childId)
   })
 
@@ -479,9 +446,53 @@ describe('dsh-tool-team', () => {
     const replacement = await ctx.plugin(toolTeam)
     for (const agent of [lead, child]) expect(teamTools(await assembly(ctx, agent))).toEqual(TEAM_TOOLS)
     expect(child.status).toBe('running')
-    interrupt(ctx, lead, childId)
+    await interrupt(ctx, lead, childId)
     await waitNoAgent(ctx, childId)
     await replacement.dispose()
+  })
+
+  it('installs tools once when the plugin activates between Session and Agent creation announcements', async () => {
+    const { ctx, lead, fiber } = await setup([])
+    await fiber.dispose()
+    const id = SessionId('install-during-publication')
+    const stop = ctx.on('session/created', (session) => {
+      if (session.id === id) toolTeam.apply(ctx)
+    })
+    try {
+      const child = await ctx.agents.create({
+        sessionId: id, parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      expect(teamTools(await assembly(ctx, child.agent))).toEqual(TEAM_TOOLS)
+      const created = await execute(ctx, child.agent, 'team_task_create', {
+        subject: 'installed once', description: 'created during the publication overlap',
+      })
+      expect(created.isError).toBe(false)
+      expect(JSON.parse(text(created))).toMatchObject({ id: 'task-1', revision: 1 })
+      await child.dispose()
+    } finally {
+      stop()
+    }
+  })
+
+  it('reports a committed task through the tool after notice delivery fails', async () => {
+    const { ctx, lead } = await setup([])
+    const child = await ctx.agents.create({
+      sessionId: SessionId('tool-notice-recipient'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    const inject = vi.spyOn(child.agent, 'inject').mockImplementation(() => { throw new Error('inbox unavailable') })
+    try {
+      const result = await execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'notice failure' })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('Task task-1 revision 1 was committed')
+      expect(text(result)).toContain(child.agent.id)
+      expect(text(result)).toContain('do not repeat the mutation')
+      const get = await execute(ctx, lead, 'team_task_get', { task_id: 'task-1' })
+      expect(get.isError).toBe(false)
+      expect(JSON.parse(text(get))).toMatchObject({ id: 'task-1', revision: 1, subject: 'committed' })
+    } finally {
+      inject.mockRestore()
+      await child.dispose()
+    }
   })
 
   it('rolls back partial scoped installation after a same-scope collision', async () => {
@@ -527,11 +538,11 @@ describe('dsh-tool-team', () => {
     await vi.waitFor(() => { expect(childRequests()).toHaveLength(2) })
     const firstMessages = childRequests()[0]!.messages
     expect(childRequests()[1]!.messages.slice(0, firstMessages.length)).toEqual(firstMessages)
-    interrupt(ctx, lead, childId)
+    await interrupt(ctx, lead, childId)
     await waitNoAgent(ctx, childId)
   })
 
-  it('installs nothing for a subagent whose parent left the registry', async () => {
+  it('rejects task use by an orphaned subagent', async () => {
     const { ctx } = await setup([textResponse('child done')])
     const parent = await ctx.agents.create({
       sessionId: SessionId('temporary-parent'),
@@ -544,15 +555,17 @@ describe('dsh-tool-team', () => {
       resumeSessionId: childId,
       agentOptions: { provider: 'mock', model: 'mock' },
     })
-    expect(teamTools(await assembly(ctx, orphan.agent))).toEqual([])
+    const result = await execute(ctx, orphan.agent, 'team_task_list', {})
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('agent has no active Team owner')
     await orphan.dispose()
   })
 
   it('fails safely without a calling Agent and has the function-plugin export shape', async () => {
     const { ctx } = await setup([])
-    const result = await execute(ctx, undefined, 'wait_agent', {})
+    const result = await execute(ctx, undefined, 'team_task_list', {})
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('unknown tool "wait_agent"')
+    expect(text(result)).toContain('unknown tool "team_task_list"')
     expect('default' in toolTeam).toBe(false)
     expect(toolTeam.name).toBe('tool-agent-team')
     expect(toolTeam.inject).toEqual(['agents', 'agentTeams', 'tools', 'systemPrompt'])

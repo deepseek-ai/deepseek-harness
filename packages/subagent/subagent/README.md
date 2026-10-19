@@ -164,7 +164,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-Parent delivery emits a user-role status notice containing the child’s nonempty final text blocks, regardless of `send_message` availability or use. External notices also state that further messages are unsupported. Reasoning and other nontext blocks are excluded. Every parent notice includes available structured output as `Structured result: <JSON>` and the provider’s safe diagnostic as a separate text block. Empty closing text is reported as `It left no closing message.` Caller delivery emits no notice; SDK lifecycle notifications retain complete child output when cleanup succeeds.
+Parent delivery sends a user-role status notice to the resident direct parent in the same tree, including an idle parent. It does not restore an offline parent. The notice contains the child’s nonempty final text blocks, regardless of `send_message` availability or use. External notices also state that further messages are unsupported. Reasoning and other nontext blocks are excluded. Every parent notice includes available structured output as `Structured result: <JSON>` and the provider’s safe diagnostic as a separate text block. Empty closing text is reported as `It left no closing message.` Caller delivery emits no notice; SDK lifecycle notifications retain complete child output when cleanup succeeds.
 
 #### Token effect
 
@@ -173,6 +173,26 @@ One notice per settled activation using parent delivery. Caller delivery adds no
 #### KV Cache effect
 
 Append-only in the parent: the notice follows its reusable request prefix. Reaching an idle parent starts one independent model request; reaching a busy one does not.
+
+### Continuable child return guidance
+
+#### What the model sees
+
+The child's initial task includes the guidance below, with `<parent-id>` replaced by its JSON-encoded parent Session id. The child places its result and evidence in its final answer; an intermediate message serves findings that change the parent's next action.
+
+##### Return guidance
+
+```markdown
+Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ agent_id: <parent-id>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+```
+
+#### Token effect
+
+One guidance block in each continuable child's initial task, naming its parent twice.
+
+#### KV Cache effect
+
+The guidance remains in the child's retained task history. It does not change the parent's system prompt.
 
 ### Child delegation-scope statement
 

@@ -179,11 +179,6 @@ export interface UpdateTeamTaskRequest {
   readonly owner?: SessionId
 }
 
-/** Result of waiting for Team activity. */
-export interface TeamWaitResult {
-  readonly timedOut: boolean
-}
-
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /** Historical teammate lifecycle value; new teammates are continuable entries in the Lead's subagent catalog. */

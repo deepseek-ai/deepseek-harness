@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-team-task-board-inbox.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md
+/agent-note-team-tasks-notify-the-ordinary-subagent-inbox:
+  en: 8285030eb3384b40
+  zh: aaba0af95cd8946c
+/agent-note-team-tasks-notify-the-ordinary-subagent-inbox/problem:
+  en: 2ec13c65b7392fe5
+  zh: e693b307e4312a88
+/agent-note-team-tasks-notify-the-ordinary-subagent-inbox/decision:
+  en: 9a086004de6bfed9
+  zh: c5f8ecca5fc4bd72
+/agent-note-team-tasks-notify-the-ordinary-subagent-inbox/alternatives-considered:
+  en: 940aad1284bc7b90
+  zh: a29ea75d77778603
+/agent-note-team-tasks-notify-the-ordinary-subagent-inbox/consequences:
+  en: 36aba90ccf64a969
+  zh: 3c8e77e43b7eb90d

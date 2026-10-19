@@ -2,11 +2,11 @@
 
 [English](agent-team.md) | 中文
 
-实验性隐式 Root Team 领域、模型工具与宿主适配器共享的类型。[subagent teammate Agent Note](../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责成员关系、roster 与消息决策；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的持久与客户端可见形式。
+实验性任务板、模型工具和 host 适配器共享的类型。[任务板与收件箱决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的持久化和客户端可见形式。
 
-## 身份与 roster
+## 身份与历史名册
 
-`TeamId` 为根 `SessionId` 添加品牌；`TeamTaskId` 使用 `task-<n>`。`TeamMessageId` 仅供历史邮箱记录保留。Team 不写成员记录：浏览器将 `agentTeam` 中的 Lead 和历史成员与 `subagentCatalog` 中的直接可继续子级组合。描述可以重复；id 用于寻址成员。
+`TeamId` 品牌化根 `SessionId`；`TeamTaskId` 使用 `task-<n>`。`TeamMessageId` 和名册记录为历史解码保留。subagent 运行时解析树，并发现任意深度的有效任务所有者；历史名册条目不授予权限。
 
 ```ts type-equiv
 /** Historical roster value written by earlier Team builds on every teammate lifecycle change. */
@@ -21,11 +21,11 @@ interface TeamMemberSnapshot {
 }
 ```
 
-历史记录保留 `provisioning`、`active` 或 `failed` 阶段；直接可继续子级为 `active`。轮次活动（`running` 或 `inactive`）单独派生。
+历史记录保留其记录的 `provisioning`、`active` 或 `failed` 阶段。当前轮次活动属于普通 subagent 发现和 Session 状态，与任务完成相互独立。
 
 ## 消息与历史 mailbox
 
-成员之间交换普通的 [subagent 消息](subagent.zh.md)：目标保存包含真实发送者 Session id 的 `agent-message` source。Team 没有 outbox、mailbox 或重发去重。以下 mailbox 类型继续可读，以便历史 Lead 日志仍能回放；Team 从不投递其中的 pending 记录。
+成员交换普通 [subagent 消息](subagent.zh.md)，保留真实发送方 Session id。任务提交另外向其他本地在线成员的下一步收件箱加入合并的 `team-task-change` 通知。通知既不恢复冷成员，也不启动空闲轮次。下列历史邮箱类型保持可读；Team 绝不投递其待处理记录。
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-Lead Session 通过 `SessionProjectionMap.agentTeam` 发布 Lead、历史 roster 行与未删除任务视图。浏览器将这些行与 `subagentCatalog` 中的可继续条目组合，重复 id 优先使用目录条目。`failure` 在最后有效状态旁报告被拒绝的持久 Team 记录。成员活动来自 Session 状态；模型标签来自各成员的 `modelSelection` 投影。
+根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化 Team 记录。历史 `members` 字段仍可解码，但既不提供分配权限，也不提供第二个浏览器名册。任务面板从现有 Session 和目录数据标注所有者，缺失时使用 id。
 
 ```ts type-equiv
 /**
@@ -124,7 +124,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影回放按 `TeamId` 选取的历史成员、任务和历史邮箱记录。独立的 `subagentCatalog` 投影负责子级发现，并跳过继承的目录事实。描述不参与身份校验。Session 事件的 `seq` 和 `time` 负责顺序与时间。调用方获得成员和任务视图，不获得待投递邮件。[包 README](../../packages/experimental/agent-team/README.zh.md)定义操作、授权和限制。
+`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/experimental/agent-team/README.zh.md)定义任务操作、通知失败和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -142,31 +142,11 @@ Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
 /**
- * Resolve one exact live Agent's Team role.
- * @param agent - exact live Agent used as the authority credential.
- * @returns its Lead, Team identity, and role.
- */
-membership(agent: Agent): TeamMembership
-
-/**
- * Resolve a caller without throwing, used by scoped-tool installation and observers.
- * @param agent - candidate exact live Agent.
- * @returns Team membership, or undefined for stale identities and children whose parent left the registry.
- */
-tryMembership(agent: Agent): TeamMembership | undefined
-
-/**
- * Whether another live member of the caller's Team is currently running a turn.
- * @param caller - exact live Team member.
- * @returns whether a peer can still produce a Team change.
- */
-hasActivePeer(caller: Agent): boolean
-
-/**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
  * @returns the revision-one task view.
+ * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
 
@@ -190,17 +170,9 @@ listTasks(caller: Agent): TeamTaskView[]
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
  * @returns the committed next task revision.
+ * @throws TeamTaskNotificationError if the task committed but some inbox notifications failed.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
-
-/**
- * Wait for the next task change, member status change, or message a member's inbox accepts.
- * @param caller - exact live Team member waiting for activity.
- * @param timeoutMs - bounded wait duration from ten seconds through one hour.
- * @param signal - caller cancellation for the wait only.
- * @returns one observed change or a timeout result.
- */
-async waitForChange(caller: Agent, timeoutMs: number, signal: AbortSignal): Promise<TeamWaitResult>
 ```
 
 Types: [Agent](core.zh.md)

@@ -3,32 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/client-ui-agent-team/README.md
 /:
-  en: 6deb254c416ff51b
-  zh: e0913c7be837da78
+  en: ab268088c47877d5
+  zh: d721251ef9c9c473
 /deepseek-ai-dsh-experimental-client-ui-agent-team:
   en: 447e3c2bbf1ea3c6
   zh: 25bba08497976d12
 /deepseek-ai-dsh-experimental-client-ui-agent-team/summary:
-  en: 97e968edc603d1fc
-  zh: 7c18ff243f9a08eb
+  en: 715ca15901c33d8c
+  zh: 98c09a343f4ea680
 /deepseek-ai-dsh-experimental-client-ui-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-experimental-client-ui-agent-team/use-this-package:
   en: ba021754d3ae6d9e
   zh: 18017b40f13e6ffd
-/deepseek-ai-dsh-experimental-client-ui-agent-team/use-this-package/inspect-and-navigate-the-roster:
-  en: 22dd67a91014cac0
-  zh: 81cfe1a3a1040252
 /deepseek-ai-dsh-experimental-client-ui-agent-team/use-this-package/inspect-the-task-board:
-  en: 5c0ec10800cc9fda
-  zh: b80f1e725dbb894a
+  en: 5f3dc9476b3dcd25
+  zh: c77cbab2c4250f3b
 /deepseek-ai-dsh-experimental-client-ui-agent-team/understand-the-implementation:
-  en: 0bdb38c8f75101b1
-  zh: fa31d7a4b1fff12d
+  en: 181b9b035b2cd4a1
+  zh: a22b301e97f5ee3d
 /deepseek-ai-dsh-experimental-client-ui-agent-team/further-exploration:
-  en: 71ac041029c64d5a
-  zh: fef2e4c5dccb8d1b
+  en: 09134c781f6a4ba8
+  zh: 2f9d4582053b3384
 /deepseek-ai-dsh-experimental-client-ui-agent-team/model-experience:
   en: 47ebeba07d72759d
   zh: 8fe8133f6dd845a9
@@ -36,8 +33,8 @@
   en: b51b320f5e4dacfc
   zh: 6695947c3f9fed28
 /deepseek-ai-dsh-experimental-client-ui-agent-team/known-limitations-and-deferred-work:
-  en: 254e4aa2f81037d2
-  zh: 3cdf19dffafb51df
+  en: 4bcd998233424ac6
+  zh: a73617f461e2dcbe
 /deepseek-ai-dsh-experimental-client-ui-agent-team/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -1,5 +1,5 @@
 /**
- * Shared messaging, interruption, and child discovery tools.
+ * Shared messaging, inbox waiting, interruption, and child discovery tools.
  * They perform no lifecycle routing of their own —
  * residency, cold resume, and interrupt authorization belong to the subagent
  * service — and they live apart from the provider-bound
@@ -16,16 +16,20 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { markAdjacentAgentSendMessageTool } from '@deepseek-ai/dsh-subagent/internal'
 import { registerListAgents } from './list-agents.ts'
+import { registerWaitAgent } from './wait-agent.ts'
+import { registerCollaborationPrompt } from './collaboration-prompt.ts'
 
 export const name = 'tool-subagent-control'
-export const inject = ['tools', 'subagents', 'agents']
+export const inject = ['tools', 'subagents', 'agents', 'systemPrompt']
 
 /**
  * Register the shared subagent control and discovery tools.
- * @param ctx - context carrying tools, subagents, and live Agents.
+ * @param ctx - context carrying tools, subagents, live Agents, and prompt assembly.
  */
 export function apply(ctx: Context): void {
   registerListAgents(ctx)
+  registerWaitAgent(ctx)
+  registerCollaborationPrompt(ctx)
   ctx.tools.register(markAdjacentAgentSendMessageTool(defineTool({
     name: 'send_message',
     description:

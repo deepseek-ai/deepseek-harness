@@ -1,4 +1,4 @@
-/** Scoped model-facing task-board and wait tools for the opt-in Agent Teams runtime. */
+/** Scoped model-facing task-board tools for the opt-in Agent Teams runtime. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -23,15 +23,11 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `Agent Teams is available in this session. Teammates are subagents. Use list_agents to discover the entire Team and send_message with an agent id to contact any other listed member with running or inactive status. Descriptions explain responsibilities and may repeat.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
+Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
-
-Use agent ids as task owners. The Lead can reassign to itself, its direct continuable children, or historical members; other descendants claim tasks themselves. list_agents includes the root and all reachable continuable descendants, with parent ids and depth; discovery does not grant assignment authority. inactive means no turn is executing; it does not describe task completion, success, failure, or waiting for other agents. A successful send does not mean the recipient has processed it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, make sure another required member is running; use send_message first to wake a required inactive member. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
-
-const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake a required inactive member before waiting again.'
+Task changes notify other live agents through their inbox. Consecutive updates may share one pending notice. After a task-board notice, read the latest tasks before acting. wait_agent receives these notices through the same inbox as other messages. A notice does not start an idle agent; use send_message when it needs to continue working.`
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -48,23 +44,6 @@ const TASK_VIEW_SCHEMA = {
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
     writeScopeWarnings: { type: 'array', required: true, items: { type: 'string' } },
-  },
-} as const
-
-/** `noProgress` is present only on the model-only shortcut that skips the wait. */
-const WAIT_VALUE_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    timedOut: { type: 'boolean', required: true },
-    noProgress: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        reason: { type: 'string', required: true, const: 'no-active-peer' },
-        message: { type: 'string', required: true },
-      },
-    },
   },
 } as const
 
@@ -112,52 +91,6 @@ function install(agent: Agent, ctx: Context): () => void {
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
       text: TEAM_POLICY,
     }))
-    register(scoped.systemPrompt.context({
-      name: 'team:identity',
-      order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
-      required: true,
-      interpolate: false,
-      text: () => {
-        const { role, root } = ctx.agentTeams.membership(agent)
-        return role === 'lead'
-          ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
-          : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
-      },
-    }))
-
-    register(scoped.tools.register(defineTool({
-      name: 'wait_agent',
-      description: 'Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout instead of polling.',
-      parameters: {
-        timeout_ms: {
-          type: 'integer',
-          description: 'Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000.',
-        },
-      },
-      output: jsonOutput(WAIT_VALUE_SCHEMA),
-      async execute(args, exec) {
-        const caller = callingAgent(exec.agent, 'wait_agent')
-        const timeoutMs = args.timeout_ms ?? 30_000
-        // Preserve TeamService's authoritative timeout validation before the
-        // model-only no-progress shortcut.
-        if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 10_000 || timeoutMs > 3_600_000) {
-          return await ctx.agentTeams.waitForChange(caller, timeoutMs, exec.signal)
-        }
-        // The active-peer read and waiter registration must remain one synchronous
-        // span; awaiting between them can lose the only peer-status edge.
-        if (!ctx.agentTeams.hasActivePeer(caller)) {
-          return {
-            timedOut: false,
-            noProgress: {
-              reason: 'no-active-peer' as const,
-              message: NO_ACTIVE_PEER_MESSAGE,
-            },
-          }
-        }
-        return await ctx.agentTeams.waitForChange(caller, timeoutMs, exec.signal)
-      },
-    })))
-
     register(scoped.tools.register(defineTool({
       name: 'team_task_create',
       description: 'Create one unowned pending task on the shared Team task board.',
@@ -245,7 +178,7 @@ function install(agent: Agent, ctx: Context): () => void {
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Agent id of the Lead or one of its direct continuable children for Lead-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Agent id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
@@ -283,7 +216,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   const installed = new Map<Agent, () => void>()
   const maybeInstall = (agent: Agent): void => {
-    if (installed.has(agent) || ctx.agentTeams.tryMembership(agent) === undefined) return
+    if (installed.has(agent)) return
     installed.set(agent, install(agent, ctx))
   }
   for (const agent of ctx.agents.list()) maybeInstall(agent)

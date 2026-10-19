@@ -693,6 +693,35 @@ function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   }])
 }
 
+/** Keep task commits, coalesced inbox delivery, and waiting observable in the shipped composition. */
+function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(2)
+  const root = parseSessionLog(logs[0]!.content)
+  const child = parseSessionLog(logs[1]!.content)
+  const tasks = root.flatMap(event => event.type === 'team/task' ? [event.data.task] : [])
+  expect(tasks).toMatchObject([
+    { id: 'task-1', revision: 1, status: 'pending' },
+    { id: 'task-1', revision: 2, status: 'in_progress', ownerId: logs[1]!.header.id },
+    { id: 'task-1', revision: 3, status: 'completed', ownerId: logs[1]!.header.id },
+  ])
+  const notices = root.flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'team-task-change' ? [event.data] : [])
+  expect(notices).toHaveLength(1)
+  expect(notices[0]?.source).toEqual({
+    kind: 'team-task-change', form: 'notice', rootSessionId: logs[0]!.header.id,
+    summary: 'Shared task board updated: task-1 revision 3.',
+  })
+  const inserted = root.flatMap(event => event.type === 'agent/inbox/spliced'
+    ? event.data.inserted.filter(message => message.source.kind === 'team-task-change') : [])
+  expect(inserted).toHaveLength(3)
+  expect(new Set(inserted.map(message => message.id)).size).toBe(1)
+  const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(6)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  expect(results.find(result => result.toolCallId === 'wait-inbox')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":false}' }])
+}
+
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
 function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
@@ -1379,6 +1408,7 @@ describe('headless recorded-session snapshots', () => {
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'team-tree-messages') verifyTeamTreeMessage(actualLogs)
+            if (scenario.name === 'team-task-inbox') verifyTeamTaskInbox(actualLogs)
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

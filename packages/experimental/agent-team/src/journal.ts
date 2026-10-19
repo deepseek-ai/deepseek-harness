@@ -2,11 +2,11 @@
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
-import type { TeamEventType, TeamState } from './projection.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { TeamState } from './projection.ts'
 
-type AppendTeamEvent = <T extends TeamEventType>(type: T, data: SessionEventMap[T]) => void
-type MutableTeamEventType = 'team/member' | 'team/task'
+import { TeamId } from './types.ts'
+import type { TeamTaskSnapshot } from './types.ts'
 
 /** Owns per-Lead transaction order and committed Team event publication. */
 export class TeamJournal {
@@ -18,7 +18,7 @@ export class TeamJournal {
    */
   constructor(
     private readonly ctx: Context,
-    private readonly onCommit: (root: Agent) => void,
+    private readonly onCommit: (caller: Agent, root: Agent, task: TeamTaskSnapshot) => void,
   ) {}
 
   /**
@@ -52,22 +52,15 @@ export class TeamJournal {
   }
 
   /**
-   * Append and checkpoint one root-owned Team event before publication.
-   * @param root - exact live Lead whose Session owns the event.
-   * @param type - Team event discriminant.
-   * @param data - payload correlated with the event type.
+   * Commit a task before publishing its inbox notifications.
+   * @param caller - Agent that requested the mutation.
+   * @param root - live tree root whose Session stores the task.
+   * @param task - complete committed task revision.
+   * @throws when persistence fails, or when a committed task's notifications fail.
    */
-  async appendAndFlush<T extends MutableTeamEventType>(
-    root: Agent,
-    type: T,
-    data: SessionEventMap[T],
-  ): Promise<void> {
-    // Team events never enter the conversation surface. This narrower local
-    // capability removes Session.append's conditional surface argument while
-    // preserving the event-key/payload correlation.
-    const append = root.session.append.bind(root.session) as unknown as AppendTeamEvent
-    append(type, data)
+  async appendAndFlush(caller: Agent, root: Agent, task: TeamTaskSnapshot): Promise<void> {
+    root.session.append('team/task', { version: 2, teamId: TeamId(root.id), task })
     await this.ctx.sessions.flush(root.session)
-    this.onCommit(root)
+    this.onCommit(caller, root, task)
   }
 }

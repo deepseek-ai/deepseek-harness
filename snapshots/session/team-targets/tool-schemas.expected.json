@@ -515,7 +515,7 @@
           },
           "owner": {
             "type": "string",
-            "description": "Agent id of the Lead or one of its direct continuable children for Lead-only reassign; omit to unassign."
+            "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
           }
         },
         "required": [
@@ -611,7 +611,7 @@
     },
     {
       "name": "wait_agent",
-      "description": "Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running. Re-list after wakeup or timeout instead of polling.",
+      "description": "Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending. Message contents arrive through your normal input; this tool returns only whether it timed out. Queued next-turn messages do not interrupt this wait. It does not start other agents.",
       "parameters": {
         "type": "object",
         "properties": {
