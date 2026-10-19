@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_root_child",
         "name": "subagent",
-        "argumentsDelta": "{\"description\":\"Start depth one\",\"prompt\":\"Call subagent once. Ask that child to attempt one further subagent call, then report the result.\"}"
+        "argumentsDelta": "{\"description\":\"Start depth one\",\"prompt\":\"Call subagent once. Ask that child to attempt one further subagent call, then report the result.\",\"name\":\"worker-1\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_root_child",
           "name": "subagent",
-          "arguments": "{\"description\":\"Start depth one\",\"prompt\":\"Call subagent once. Ask that child to attempt one further subagent call, then report the result.\"}"
+          "arguments": "{\"description\":\"Start depth one\",\"prompt\":\"Call subagent once. Ask that child to attempt one further subagent call, then report the result.\",\"name\":\"worker-1\"}"
         }
       },
       {

@@ -2073,7 +2073,7 @@ describe('installLlmReplay (per-session keying)', () => {
     await expect(drain(ctx.llm.stream(live('live-parent')))).rejects.toThrow(/used before.*bound/)
   })
 
-  it('learns a background child id from its started-subagent tool result', async () => {
+  it('does not interpret a started subagent name as a bound session identity', async () => {
     const reference: StreamChunk[] = [
       { type: 'text-delta', index: 0, text: '{{session:2}}' },
       { type: 'finish', reason: { kind: 'stop' } },
@@ -2091,10 +2091,7 @@ describe('installLlmReplay (per-session keying)', () => {
       })],
     }
 
-    expect(await drain(ctx.llm.stream(options))).toEqual([
-      { type: 'text-delta', index: 0, text: 'live-child-before-call' },
-      { type: 'finish', reason: { kind: 'stop' } },
-    ])
+    await expect(drain(ctx.llm.stream(options))).rejects.toThrow(/used before.*bound/)
   })
 
   it('ignores started-subagent text after every recorded session has bound', async () => {

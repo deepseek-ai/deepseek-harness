@@ -1,8 +1,8 @@
 /**
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
- * wording. Every delegation starts a managed activation and returns its child
- * id; the subagent runtime owns result delivery and resource cleanup.
+ * wording. Every delegation starts a managed activation and returns its
+ * name; the subagent runtime owns result delivery and resource cleanup.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -209,7 +209,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer.'
+          + ' This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer.'
           + (subagentProvider.prepareContinuable !== undefined
             ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' This backend does not accept follow-up messages.')
@@ -218,6 +218,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
             : ''),
         parameters: {
+          name: {
+            type: 'string',
+            required: true,
+            description: 'Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
+          },
           cwd: {
             type: 'string',
             description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -260,10 +265,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             additionalProperties: false,
             properties: {
               kind: { type: 'string', required: true, const: 'activation' },
-              subagentId: { type: 'string', required: true },
+              name: { type: 'string', required: true },
             },
           },
-          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -323,13 +328,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           }
 
           const started = await runtimeCtx.subagents.startActivation({
+            name: args.name,
             provider: config.provider,
             label: args.description,
             request,
             signal: exec.signal,
             delivery: 'parent',
           })
-          return { kind: 'activation' as const, subagentId: started.childId }
+          return { kind: 'activation' as const, name: started.name }
         },
       })
       const disposeTool = runtimeCtx.effect(() => {

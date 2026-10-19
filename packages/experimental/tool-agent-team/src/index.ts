@@ -3,9 +3,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import { TeamTaskId } from '@deepseek-ai/dsh-experimental-agent-team'
+import { TeamTaskId, type TeamTaskView } from '@deepseek-ai/dsh-experimental-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 
@@ -24,7 +24,7 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -40,7 +40,7 @@ const TASK_VIEW_SCHEMA = {
     subject: { type: 'string', required: true },
     description: { type: 'string', required: true },
     status: { type: 'string', required: true, enum: ['pending', 'in_progress', 'completed', 'deleted'] },
-    ownerId: { type: 'string' },
+    ownerName: { type: 'string' },
     blockedBy: { type: 'array', required: true, items: { type: 'string' } },
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
@@ -74,6 +74,31 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
   }
 }
 
+type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
+
+/** Project task owners from live descriptors or the Team’s direct-child catalog. */
+async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<NamedTaskView[]> {
+  const root = ctx.subagents.rootOf(caller)
+  const names = new Map<SessionId, string>([[root.id, 'lead']])
+  const missing = new Set<SessionId>()
+  for (const { ownerId } of tasks) {
+    if (ownerId === undefined || names.has(ownerId)) continue
+    const agent = ctx.agents.get(ownerId)
+    if (agent === undefined) missing.add(ownerId)
+    else names.set(ownerId, ctx.subagents.nameOf(agent))
+  }
+  if (missing.size > 0) {
+    for (const entry of await ctx.subagents.listDescendants(root.id, signal)) {
+      const parent = names.get(entry.parentId) as string
+      names.set(entry.id, `${parent}/${entry.name ?? `legacy:${entry.id}`}`)
+    }
+  }
+  return tasks.map(({ ownerId, ...view }) => ({
+    ...view,
+    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
+  }))
+}
+
 /** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
   /* v8 ignore next 2 -- Team tools are registered only in an exact Agent scope, so discovery supplies this carrier. */
@@ -101,8 +126,8 @@ function install(agent: Agent, ctx: Context): () => void {
         try {
           const root = ctx.subagents.rootOf(agent)
           return root === agent
-            ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
-            : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
+            ? 'You are the Team Lead. Your name is lead.'
+            : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(root))}.`
         } catch (error: unknown) {
           if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
           const parentId = agent.session.header.parentSession
@@ -126,12 +151,14 @@ function install(agent: Agent, ctx: Context): () => void {
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
-        return await ctx.agentTeams.createTask(callingAgent(exec.agent, 'team_task_create'), {
+        const caller = callingAgent(exec.agent, 'team_task_create')
+        const task = await ctx.agentTeams.createTask(caller, {
           subject: args.subject,
           description: args.description,
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
         })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -144,17 +171,18 @@ function install(agent: Agent, ctx: Context): () => void {
           enum: ['pending', 'in_progress', 'completed'],
           description: 'Optional exact status filter.',
         },
-        owner: { type: 'string', description: 'Optional exact ownerId filter; use unowned for tasks without an owner.' },
+        owner: { type: 'string', description: 'Optional exact ownerName filter; use unowned for tasks without an owner.' },
         ready: { type: 'boolean', description: 'Optional readiness filter.' },
         cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      execute(args, exec) {
+      async execute(args, exec) {
         const status = args.status
-        const filtered = ctx.agentTeams.listTasks(callingAgent(exec.agent, 'team_task_list')).filter(task =>
+        const caller = callingAgent(exec.agent, 'team_task_list')
+        const filtered = (await namedTasks(ctx, caller, ctx.agentTeams.listTasks(caller), exec.signal)).filter(task =>
           (status === undefined || task.status === status)
-          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerId === undefined : task.ownerId === args.owner))
+          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
           && (args.ready === undefined || task.ready === args.ready))
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
@@ -175,10 +203,9 @@ function install(agent: Agent, ctx: Context): () => void {
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
-        return Promise.resolve(ctx.agentTeams.getTask(
-          callingAgent(exec.agent, 'team_task_get'),
-          TeamTaskId(args.task_id),
-        ))
+        const caller = callingAgent(exec.agent, 'team_task_get')
+        const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
 
@@ -198,11 +225,14 @@ function install(agent: Agent, ctx: Context): () => void {
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Agent id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Full agent path of the root or any continuable descendant for root-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
-        return await ctx.agentTeams.updateTask(callingAgent(exec.agent, 'team_task_update'), {
+        const caller = callingAgent(exec.agent, 'team_task_update')
+        const owner = args.owner === undefined ? undefined
+          : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+        const task = await ctx.agentTeams.updateTask(caller, {
           taskId: TeamTaskId(args.task_id),
           expectedRevision: args.expected_revision,
           action: args.action,
@@ -210,8 +240,9 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.description === undefined ? {} : { description: args.description },
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-          ...args.owner === undefined ? {} : { owner: SessionId(args.owner) },
+          ...owner === undefined ? {} : { owner },
         })
+        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
       },
     })))
   } catch (error: unknown) {

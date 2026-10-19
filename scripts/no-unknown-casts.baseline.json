@@ -1829,9 +1829,6 @@
   "packages/subagent/subagent/src/internal.ts": {
     "89b33a57a7c77261a02116dd015c08d9e6a5b1efb5ba0ebf49bc68a21e7f120a": 1
   },
-  "packages/subagent/subagent/src/projection.ts": {
-    "0cd01f87cd1ae24b558cfe5427d45cc016b499579e5ddd3eab125517339b7c71": 1
-  },
   "packages/subagent/subagent/tests/assistant-output.spec.ts": {
     "120a0abb7d737528475c728dd74afab470b668b57e8f5c98d7d4144101547823": 1,
     "626552fb4cfb5f7e891960c71a01258b3f854f02f6978b691a20e826bcc964af": 1,

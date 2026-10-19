@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -47,7 +48,7 @@ async function installDelegationTool(ctx: BridgeHarness['ctx']): Promise<() => b
     name: 'delegate_again', description: 'Run a later child.', parameters: {},
     execute: async (_args, exec) => {
       if (exec.agent === undefined) throw new Error('delegation fixture requires an Agent')
-      const child = await ctx.subagents.startActivation({
+      const child = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
         provider: 'local-test', label: 'later child', delivery: 'caller', signal: exec.signal,
         request: { parent: exec.agent, prompt: [{ type: 'text', text: 'later child task' }] },
       })

@@ -161,8 +161,8 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running. */
   interrupt_agent: {
-    /** The id of an agent created under you: your direct child or a deeper descendant. */
-    agent_id: string;
+    /** The full path (such as lead/explore/alice) of an agent created under you: your direct child or a deeper descendant. */
+    name: string;
   } & Record<string, JsonValue>;
   /** Request cancellation of a running background job. */
   job_kill: {
@@ -182,7 +182,7 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry full agent paths, descriptions, and status; descendant rows carry parent paths and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
@@ -200,8 +200,8 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer. */
   send_message: {
-    /** The agent id of another member of your Team, as shown by list_agents. */
-    agent_id: string;
+    /** The full path (such as lead/reviewer) of another member of your Team, as shown by list_agents. */
+    name: string;
     /** The message to deliver to the agent. */
     message: string;
   } & Record<string, JsonValue>;
@@ -210,8 +210,10 @@ interface ToolArgsMap {
     /** The exact skill name from the available skills list. */
     name: string;
   } & Record<string, JsonValue>;
-  /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer. Use `send_message` to steer it while running or continue its conversation after it finishes. */
+  /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent: {
+    /** Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer. */
+    name: string;
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. */
@@ -219,8 +221,10 @@ interface ToolArgsMap {
     /** The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs. */
     prompt: string;
   } & Record<string, JsonValue>;
-  /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer. Use `send_message` to steer it while running or continue its conversation after it finishes. */
+  /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent_fork: {
+    /** Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer. */
+    name: string;
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. */
@@ -445,18 +449,18 @@ interface ToolOutputMap {
   };
   list_agents: ({
     kind: "root";
-    id: string;
+    name: string;
     status: "running" | "inactive";
   } | {
     kind: "child";
-    id: string;
+    name: string;
     label: string;
     status: "running" | "inactive";
     parent?: string;
     depth?: number;
   } | {
     kind: "diagnostic";
-    id: string;
+    name: string;
     reason: "corrupt" | "unsupported" | "unavailable";
     parent?: string;
     depth?: number;
@@ -507,11 +511,11 @@ interface ToolOutputMap {
   };
   subagent: {
     kind: "activation";
-    subagentId: string;
+    name: string;
   };
   subagent_fork: {
     kind: "activation";
-    subagentId: string;
+    name: string;
   };
   todo_write: {
     todos: ({

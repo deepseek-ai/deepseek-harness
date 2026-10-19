@@ -42,7 +42,7 @@ kind: "package-reference"
 
 设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
 
-让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的 id 用于寻址。
+让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的完整路径用于寻址。
 
 ### 模型能做什么
 
@@ -52,7 +52,7 @@ kind: "package-reference"
 - **等待收件箱输入** — `wait_agent` 属于 `@deepseek-ai/dsh-tool-subagent-control`，无需此包即可使用。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-任务 `owner` 参数和 `ownerId` 结果使用 Session id。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
+任务 `owner` 参数和 `ownerName` 结果使用完整 agent 路径。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
 
 ### 成功与失败的表现
 
@@ -122,7 +122,7 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -141,18 +141,18 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 
 #### 模型看到什么
 
-必需的 `team:identity` 上下文使用以下文本，将 `<agent-id>` 或 `<root-id>` 替换为从 subagent 树派生的 JSON 编码 Session id。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
+必需的 `team:identity` 上下文使用以下文本，将 `<name>` 替换为从 subagent 树派生的 JSON 编码完整路径。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
 
 ##### 根身份
 
 ```markdown
-You are the Team Lead. Your agent id is <agent-id>.
+You are the Team Lead. Your name is lead.
 ```
 
 ##### 队友身份
 
 ```markdown
-You are a teammate in the Team led by agent <root-id>.
+Your name is <name>. You are a teammate in the Team led by "lead".
 ```
 
 #### Token 影响

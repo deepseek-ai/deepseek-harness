@@ -53,19 +53,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Teammates
 
-Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions are display text and may repeat.
+Ask the Lead to start a subagent with a sibling-unique `name` and a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned full path addresses the teammate; descriptions may repeat.
 
 Every root agent and its descendants form one Team. Task assignment accepts the root or any reachable continuable descendant discovered by the subagent runtime, at any depth. Historical roster records remain readable but grant no assignment authority.
 
 ### Messages between teammates
 
-Members use standard `list_agents` to discover the tree and `send_message` to contact another member by Session id. The subagent runtime owns routing, sender attribution, and cold restoration. Task-board signals address all resident Agents in the same tree and never restore a cold member.
+Members use standard `list_agents` to discover the tree and `send_message` to contact another member by full agent path. The subagent runtime owns routing, sender attribution, and cold restoration. Task-board signals address all resident Agents in the same tree and never restore a cold member.
 
 ### Shared task board
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-A member claims a task to start work, completes it, releases it, or reopens it. The root can reassign a task to itself or any reachable continuable descendant by Session id. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
+A member claims a task to start work, completes it, releases it, or reopens it. The root can reassign a task to itself or any reachable continuable descendant by full agent path. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
@@ -173,7 +173,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results. Views identify owners by `ownerId`; stale updates report the current revision. A task-board signal ends an active `wait_agent` call without supplying task contents. The model re-reads current tasks before acting.
+The model reads task views through task-tool results. Model-facing views identify owners by `ownerName`; host views retain `ownerId`; stale updates report the current revision. A task-board signal ends an active `wait_agent` call without supplying task contents. The model re-reads current tasks before acting.
 
 #### Token effect
 

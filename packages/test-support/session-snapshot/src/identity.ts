@@ -5,6 +5,8 @@ const SHORT_JOB_ID_RE = /-[0-9a-f]{16}$/i
 const LEGACY_TOKEN_RE = /^\{\{(?:sessionId|messageId)\}\}$/
 const CANONICAL_TOKEN_RE = /^\{\{(session|message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}$/
 const ID_KEY_RE = /(?:^id$|Id$|Ids$)/
+const WORKFLOW_AGENT_NAME_RE
+  = /^workflow-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\{\{workflow:[1-9]\d*\}\})-[1-9]\d*$/
 
 type IdentityKind = 'session' | 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id'
 
@@ -106,6 +108,11 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
     for (const record of log.records) {
       if (record.type === 'feedback/message-put' && isRecord(record.data) && isRecord(record.data.item)) {
         claim(record.data.item.version, 'id')
+      }
+      // Workflow-owned children embed their run identity even when the caller does not log workflow progress.
+      if ((record.type === 'subagent/catalog' || record.type === 'subagent/descriptor') && isRecord(record.data) && typeof record.data.name === 'string') {
+        const workflow = WORKFLOW_AGENT_NAME_RE.exec(record.data.name)
+        if (workflow !== null) claim(workflow[1], 'workflow')
       }
       collect(record, record.type)
     }

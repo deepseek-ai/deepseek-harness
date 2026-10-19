@@ -76,7 +76,7 @@ import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import type { IdentityState } from './projection.ts'
-import { subagentCatalogProjectionDefinition } from './catalog.ts'
+import { subagentCatalogProjectionDefinition, subagentCatalogEntries, type SubagentCatalogState } from './catalog.ts'
 import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
@@ -202,6 +202,7 @@ export class SubagentRuntime extends TypertRemoteService {
   static inject = ['workingDirectory', 'sessionProjections']
   private providers = new Map<string, SubagentProvider>()
   private manager: SubagentManager | undefined
+  private catalogProjectionHandle!: ProjectionHandle<SubagentCatalogState>
   private identityProjectionHandle!: ProjectionHandle<IdentityState>
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
@@ -215,6 +216,7 @@ export class SubagentRuntime extends TypertRemoteService {
     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentManager(childCtx, {
+        catalogOf: session => subagentCatalogEntries(this.catalogProjectionHandle.stateOf(session)),
         identityOf: session => this.identityProjectionHandle.stateOf(session).identity,
         startExternal: (name, request) => {
           const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'start'>>
@@ -236,7 +238,7 @@ export class SubagentRuntime extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const { sessionProjections } = this.ctx
-    await sessionProjections.register(subagentCatalogProjectionDefinition)
+    this.catalogProjectionHandle = await sessionProjections.register(subagentCatalogProjectionDefinition)
     await sessionProjections.register(subagentTimingProjectionDefinition)
     this.identityProjectionHandle = await sessionProjections.register(subagentIdentityProjectionDefinition)
   }
@@ -288,6 +290,27 @@ export class SubagentRuntime extends TypertRemoteService {
     return provider.prepareContinuable === undefined
       ? manager.startExternal(spec)
       : manager.startLocal(spec)
+  }
+
+  /**
+   * Derive an Agent's full path from creation ancestry and descriptor names.
+   * @param agent - exact live Agent whose name is requested.
+   * @returns lead followed by named or legacy child segments.
+   */
+  nameOf(agent: Agent): string {
+    return this.requireManager().names.nameOf(agent)
+  }
+
+  /**
+   * Resolve a full agent path without granting authority to act on its Agent.
+   * @param caller - exact live Agent selecting the tree.
+   * @param name - a full path returned by creation or discovery.
+   * @param signal - cancellation during historical discovery.
+   * @returns the durable Session identity for the consuming operation to authorize.
+   * @throws when the path is absent or a required ancestor is unavailable.
+   */
+  resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
+    return this.requireManager().names.resolve(caller, name, signal)
   }
 
   /**
@@ -412,7 +435,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * The service owns and releases the live-preferred Session observation.
    * @param parentSessionId - parent whose direct children are requested.
    * @param signal - cancellation forwarded to the Session query.
-   * @returns catalog children in parent event order.
+   * @returns committed catalog children in parent event order.
    * @throws {@link SubagentError} when query or catalog projection is unavailable.
    * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
    */

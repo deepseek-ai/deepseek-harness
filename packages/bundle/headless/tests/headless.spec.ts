@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 /** Direct one-shot Agent driving, exact Session adoption, machine-readable projection, and exit mapping. */
 
 import { Readable } from 'node:stream'
@@ -375,7 +376,7 @@ describe('headless runner', () => {
       async afterPrompt(session, message, parent) {
         turns += 1
         if (turns === 1) {
-          await test.ctx.subagents.startActivation({
+          await test.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
             provider: 'external', label: 'work', delivery: 'parent', signal: new AbortController().signal,
             request: { parent, prompt: [] },
           })

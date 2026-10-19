@@ -10,6 +10,26 @@ const otherId = '66666666-6666-4666-8666-666666666666'
 const proseUuid = '77777777-7777-4777-8777-777777777777'
 
 describe('session snapshot identity redaction', () => {
+  it('preserves workflow child ordinals and explicit names while redacting generated run identities', () => {
+    const source = [
+      { type: 'session', id: parentId },
+      { type: 'subagent/catalog', data: { id: childId, name: `workflow-${runId}-1` } },
+      { type: 'subagent/descriptor', data: { name: `workflow-${runId}-2` } },
+      { type: 'subagent/catalog', data: { name: 'researcher' } },
+      { type: 'subagent/catalog', data: { name: `researcher-${proseUuid}` } },
+      { type: 'example', data: { name: `workflow-${proseUuid}-1` } },
+      { type: 'subagent/catalog', data: {} },
+      { type: 'subagent/catalog' },
+    ].map(record => JSON.stringify(record)).join('\n')
+    const [output] = redactSessionSnapshotIds([source])
+    expect(output).toContain('"name":"workflow-{{workflow:1}}-1"')
+    expect(output).toContain('"name":"workflow-{{workflow:1}}-2"')
+    expect(output).toContain('"name":"researcher"')
+    expect(output).toContain(`"name":"researcher-${proseUuid}"`)
+    expect(output).toContain(`"name":"workflow-${proseUuid}-1"`)
+    expect(redactSessionSnapshotIds([output!])).toEqual([output])
+  })
+
   it('preserves feedback versions and target relationships without redacting unrelated prose', () => {
     const source = [
       { type: 'session', id: parentId },

@@ -9,7 +9,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- text: "Explain event sourcing in one sentence.Your parent agent id is \"session-{{uuid}}\". Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ agent_id: \"session-{{uuid}}\", message: \"<finding>\" }) when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
+- text: "Explain event sourcing in one sentence.Your name is \"lead/interrupt-worker\". Your parent agent name is \"lead\". Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: \"lead\", message: \"<finding>\" }) when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
 - button "Copy"
 - paragraph: partial
 - status: Deep diving

@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 受管理的委派
 
-运行时接受子任务后，每次调用都会返回 `started subagent <childId>`，不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
+每次调用都要求同级内唯一的 `name`，运行时接受子级后返回 `started subagent <full-path>`，不等待结果。名字遵循[子代理命名规则](../subagent/README.zh.md#local-and-external-children)。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
 
 所有后端都由运行时自动递送完成通知及已有的最终回答，前提是子任务结束时调用方 Agent 仍在线。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 
@@ -98,7 +98,7 @@ kind: "package-reference"
 
 ### 结果确认
 
-规范工具结果为 `{ kind: 'activation', subagentId }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
+规范工具结果为 `{ kind: 'activation', name }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
 
 ### 随上下文变化的措辞
 
@@ -207,7 +207,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-调用保留任务描述与提示词。成功返回 `started subagent <childId>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
+调用保留任务描述与提示词。成功返回 `started subagent <full-path>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
 
 #### Token 影响
 

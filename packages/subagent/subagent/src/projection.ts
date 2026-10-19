@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { foldSubagentDescriptor } from './descriptor.ts'
+import { foldSubagentDescriptor, subagentNameSchema } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
 import type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
 
@@ -113,23 +113,25 @@ export interface IdentityState {
   identity?: SubagentIdentityProjection | undefined
 }
 
-// The cast bridges only the optional-label arm: Zod's optional output
-// includes explicit `undefined`, which exactOptionalPropertyTypes excludes
-// from the public interface. The no-value state itself is the serializable
-// `null` arm — never `undefined` — so every registry read and push frame
-// survives JSON.stringify losslessly.
-const identityValueSchema = z.discriminatedUnion('mode', [
+const identityValueSchema: z.ZodType<SubagentIdentityProjection> = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('one-shot'),
+    name: subagentNameSchema.optional(),
     label: z.string().optional(),
     seq: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
   }).strict(),
   z.object({
     mode: z.literal('continuable'),
+    name: subagentNameSchema.optional(),
     label: z.string(),
     seq: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
   }).strict(),
-]) as unknown as z.ZodType<SubagentIdentityProjection>
+]).transform(({ name, ...identity }): SubagentIdentityProjection => {
+  const named = name === undefined ? {} : { name }
+  if (identity.mode === 'continuable') return { ...identity, ...named }
+  const { label, ...oneShot } = identity
+  return { ...oneShot, ...named, ...label === undefined ? {} : { label } }
+})
 
 const identitySchema = identityValueSchema.nullable()
 
@@ -148,13 +150,13 @@ function descriptorIdentity(event: SessionEvent): SubagentIdentityProjection | u
     descriptor = undefined
   }
   if (descriptor === undefined) return undefined
-  return descriptor.mode === 'one-shot'
-    ? {
-      mode: 'one-shot',
-      ...descriptor.label !== undefined ? { label: descriptor.label } : {},
-      seq: event.seq,
-    }
-    : { mode: 'continuable', label: descriptor.label, seq: event.seq }
+  return {
+    ...descriptor.name === undefined ? {} : { name: descriptor.name },
+    ...descriptor.mode === 'one-shot'
+      ? { mode: 'one-shot', ...descriptor.label === undefined ? {} : { label: descriptor.label } } as const
+      : { mode: 'continuable', label: descriptor.label } as const,
+    seq: event.seq,
+  }
 }
 
 /**
@@ -178,7 +180,5 @@ export const subagentIdentityProjectionDefinition = {
     return identity === undefined ? {} : { identity }
   },
   wire: { viewSchema: identitySchema, view: state => state.identity ?? null },
-  // Bumped when the identity gained its `seq` field: an older checkpoint row
-  // would replay into a value the schema rejects, so it must refold instead.
-  stateVersion: 2,
+  stateVersion: 3,
 } satisfies ProjectionDefinition<'subagent', IdentityState>

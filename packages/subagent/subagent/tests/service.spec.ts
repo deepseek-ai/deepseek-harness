@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -96,7 +97,7 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
   const parent = ctx.agents.get(request.parent.id)
     ?? (await ctx.agents.create({ sessionId: request.parent.id })).agent
   const { label, signal, ...options } = request
-  return subagents.startActivation({
+  return subagents.startActivation({ name: `child-${randomUUID()}`,
     provider, label: label ?? provider, request: { ...options, parent }, signal, delivery,
   })
 }
@@ -203,7 +204,7 @@ describe('SubagentRuntime', () => {
 
   it('rejects continuable operations when their runtime services are absent', async () => {
     const { subagents } = await service(false)
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       delivery: 'parent',
       provider: 'unused',
       label: 'unused child',
@@ -222,7 +223,7 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service(false)
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: provider.name,
       label: 'Unavailable runtime',
       request: baseRequest(),
@@ -250,7 +251,7 @@ describe('SubagentRuntime', () => {
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
     const { agent: parent } = await ctx.agents.create({ sessionId: SessionId('reserved-parent') })
-    await expect(subagents.startActivation({
+    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: provider.name,
       label: 'Reserved team child',
       childId: SessionId('reserved-child'),
@@ -305,16 +306,23 @@ describe('SubagentRuntime', () => {
     expect(runIds[0]).toBe(runIds[1])
   })
 
-  it('mints distinct lifecycle identities when provider and child ids repeat', async () => {
+  it('mints distinct lifecycle identities when provider and child ids repeat across roots', async () => {
     const { ctx, subagents } = await service()
-    subagents.registerProvider(new StubProvider('reused'))
+    subagents.registerProvider({
+      name: 'reused', capabilities: NO_CAPS, inheritsParentContext: false,
+      start: async () => ({
+        id: SessionId('reused-child'),
+        result: Promise.resolve({ output: [], stopReason: 'completed' }),
+        async dispose() {},
+      }),
+    })
     const runIds: string[] = []
     ctx.on('subagent/start', info => void runIds.push(info.runId))
 
     const first = await start(subagents, 'reused', baseRequest())
     await first.result
     await first.dispose()
-    const second = await start(subagents, 'reused', baseRequest())
+    const second = await start(subagents, 'reused', baseRequest({ parent: fakeParent('parent-2') }))
     await Promise.all([first.result, second.result])
 
     expect(runIds).toHaveLength(2)
@@ -462,8 +470,8 @@ describe('subagent descriptors', () => {
       provider: 'spawn',
     }
     expect(foldSubagentDescriptor([event(minimal)])).toEqual(minimal)
-    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work' })]))
-      .toEqual({ ...minimal, label: 'child work' })
+    expect(foldSubagentDescriptor([event({ ...minimal, label: 'child work', name: 'worker' })]))
+      .toEqual({ ...minimal, label: 'child work', name: 'worker' })
     expect(snapshotSubagentDescriptor({
       mode: 'continuable', provider: 'spawn', label: 'child',
     })).toEqual({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'child' })
@@ -519,6 +527,7 @@ describe('subagent descriptors', () => {
   })
 
   it.each([
+    ['invalid name', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', name: 'lead/reviewer' }, 'Invalid string'],
     ['string payload', 'invalid', 'payload must be an object'],
     ['null payload', null, 'payload must be an object'],
     ['array payload', [], 'payload must be an object'],
@@ -646,7 +655,7 @@ it('rejects a disposed parent before starting provider execution', async () => {
   subagents.registerProvider(provider)
   const handle = await ctx.agents.create({ sessionId: SessionId('disposed-parent') })
   await handle.dispose()
-  await expect(subagents.startActivation({
+  await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: provider.name, label: 'work', delivery: 'caller', signal: new AbortController().signal,
     request: { parent: handle.agent, prompt: [] },
   })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })

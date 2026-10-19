@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** Host completion races around idle local children with preserved input. */
 import { setImmediate } from 'node:timers/promises'
@@ -49,7 +50,7 @@ async function setup() {
   }
 
   function start(owner = parent, provider = 'local') {
-    const started = ctx.subagents.startActivation({
+    const started = ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider,
       label: 'child task',
       delivery: 'caller',

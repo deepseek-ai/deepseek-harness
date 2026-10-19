@@ -68,7 +68,7 @@ export async function startExternalActivation(
     registry.set(request.parent, parent)
   }
   const { label, signal, ...execution } = request
-  return ctx.subagents.startActivation({
+  return ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider,
     label: label ?? 'External test task',
     request: { ...execution, parent },

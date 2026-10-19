@@ -45,7 +45,7 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     const childPrompt = parseSessionLog(expected[1]!).findLast(event => event.type === 'user/message'
       && event.data.source.kind === 'user')
     if (childPrompt?.type !== 'user/message') throw new Error('child fixture has no user prompt')
-    const activation = await scaffold.ctx.subagents.startActivation({
+    const activation = await scaffold.ctx.subagents.startActivation({ name: 'scheduled-child',
       provider: 'fork', label: 'Check child reminder refusal', delivery: 'caller',
       signal: new AbortController().signal,
       request: { parent, prompt: [...childPrompt.data.content] },

@@ -25,7 +25,7 @@ export type SubagentDescendantListEntry = SubagentListEntry & {
  * @param ctx - context carrying the Session query service.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session observation.
- * @returns direct-child rows in parent catalog event order.
+ * @returns committed direct-child rows in parent catalog event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  */
 export async function listChildren(
@@ -102,13 +102,15 @@ export async function listDescendants(
       const code = error instanceof Error && 'code' in error ? error.code : undefined
       result.push({
         kind: 'diagnostic', id: entry.id, parentId, depth,
+        ...entry.name === undefined ? {} : { name: entry.name },
         reason: code === 'SESSION_QUERY_CORRUPT_SESSION' || code === 'SESSION_QUERY_SOURCE_CONFLICT'
           ? 'corrupt' : 'unavailable',
       })
       continue
     }
     if (entry.mode === 'unknown') {
-      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth, reason: 'unsupported' })
+      result.push({ kind: 'diagnostic', id: entry.id, parentId, depth,
+        ...entry.name === undefined ? {} : { name: entry.name }, reason: 'unsupported' })
     } else {
       const { createdAt: _createdAt, ...identity } = entry
       result.push({

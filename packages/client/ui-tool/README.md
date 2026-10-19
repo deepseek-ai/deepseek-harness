@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Tool calls appear in the conversation as cards: a root call tree with its nested subcalls, each atomic call rendered by its owning view. Every lifecycle state retains the tool's ordinary business glyph; failure and interruption remain explicit through the frozen call/result state, accessible status text, and failure summary. Users can open files or inspect calls through the Host callbacks. A collapsed `web_fetch` row links its http(s) URL, which opens in a new browser tab.
+Tool calls appear in the conversation as cards: a root call tree with its nested subcalls, each atomic call rendered by its owning view. Every lifecycle state retains the tool's ordinary business glyph; failure and interruption remain explicit through the frozen call/result state, accessible status text, and failure summary. Users can open files or inspect calls through the Host callbacks. A collapsed `web_fetch` row links its http(s) URL, which opens in a new browser tab. Control receipts display agent `name` arguments; historical `agent_id` recordings remain readable.
 
 Settled foreground commands with a nonzero exit code, a terminating signal, or an explicit missing exit code keep their description in the ordinary gray text and show a neutral capsule with a red dot immediately after it. The capsule displays only the recorded code, signal, or localized missing-code status and stays on the same line; the description truncates with an ellipsis to reserve its space. Running, successful, and background calls omit it. Generic execution errors and stopped summaries retain their error and warning colors, including on hover.
 

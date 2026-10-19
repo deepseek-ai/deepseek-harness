@@ -29,6 +29,8 @@ interface SubagentCapabilities {
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec {
+  /** Immutable name segment, unique among the parent’s direct children. */
+  readonly name: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -47,6 +49,8 @@ interface SubagentActivationSpec {
 ```ts type-equiv
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 interface SubagentActivation {
+  /** Full path used by model-facing collaboration tools. */
+  readonly name: string
   /** Stable identity of the child. */
   readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */
@@ -173,7 +177,7 @@ interface ContinuableCreateSpec {
 
 ## Messages and interruption
 
-sendMessage requires the exact live sender and a target Session id. Every sender can reach a direct continuable child; a resident continuable child can also reach its direct parent and continuable siblings. Sibling delivery uses the shared live parent’s authority, preserving the actual sender’s id. Running targets receive Steer; absent children and siblings cold-resume. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status through parent settlement notices; caller delivery suppresses those notices. drainDescendants and drainChildren await owned teardown.
+sendMessage requires the exact live root or resident continuable sender and another member’s Session id. Delivery preserves the actual sender, verifies the target’s durable branch, and restores cold continuable ancestors under their recorded parents without delivering the target’s message to them. Running targets receive Steer; inactive targets start a turn. External executions reject follow-ups. Interruption still requires ancestor authority. Local and external executions report final text, structured output, diagnostics, and status through parent settlement notices; caller delivery suppresses those notices. drainDescendants and drainChildren await owned teardown.
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -378,7 +382,7 @@ The model-facing `list_agents` adapter reports current activity as `running` or 
 
 `SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
 
-`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
+`SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable child catalog is observed once; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
@@ -391,6 +395,10 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 ```
 
 
+
+## Agent names
+
+Sibling names are unique under one parent; full paths start at `lead`. Parent catalogs and local child descriptors retain name segments. Temporary reservations belong to the live parent. See the [naming rules](../../packages/subagent/subagent/README.md#local-and-external-children).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -435,6 +443,23 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
  * @returns activation with a message id only for local children.
  */
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
+
+/**
+ * Derive an Agent's full path from creation ancestry and descriptor names.
+ * @param agent - exact live Agent whose name is requested.
+ * @returns lead followed by named or legacy child segments.
+ */
+nameOf(agent: Agent): string
+
+/**
+ * Resolve a full agent path without granting authority to act on its Agent.
+ * @param caller - exact live Agent selecting the tree.
+ * @param name - a full path returned by creation or discovery.
+ * @param signal - cancellation during historical discovery.
+ * @returns the durable Session identity for the consuming operation to authorize.
+ * @throws when the path is absent or a required ancestor is unavailable.
+ */
+resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
 
 /**
  * Resolve the root shared by an Agent and its teammates.
@@ -511,7 +536,7 @@ async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void
  * The service owns and releases the live-preferred Session observation.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
+ * @returns committed catalog children in parent event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
  */

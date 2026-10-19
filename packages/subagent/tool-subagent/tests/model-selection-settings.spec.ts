@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
 
@@ -272,7 +273,7 @@ describe('SubagentModelSelectionConfig', () => {
       signal: new AbortController().signal,
       callId: ToolCallId('disallowed-session-route'),
       name: 'subagent',
-      arguments: {
+      arguments: { name: `child-${randomUUID()}`,
         description: 'forced route',
         prompt: 'do it',
         provider: 'alpha',
@@ -444,12 +445,12 @@ it('reads the saved default depth at each delegation without remounting the tool
     const initial = await ctx.systemPrompt.assemble(assembleContextFor(agent))
     expect(initial.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
       .toBe('')
-    await callSubagent(ctx, { description: 'first', prompt: 'work' })
+    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'first', prompt: 'work' })
     await subagentConfigs.get(ctx)!.update({ maxDepth: 5 })
     const updated = ctx.systemPrompt.refreshContext(initial, assembleContextFor(agent))
     expect(updated.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
       .toBe('')
-    await callSubagent(ctx, { description: 'second', prompt: 'work' })
+    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'second', prompt: 'work' })
     await subagentConfigs.get(ctx)!.update({ maxDepth: 0 })
     const disabled = ctx.systemPrompt.refreshContext(initial, assembleContextFor(agent))
     expect(disabled.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
@@ -460,7 +461,7 @@ it('reads the saved default depth at each delegation without remounting the tool
     expect(ctx.systemPrompt.refreshContext(disabled, assembleContextFor(agent))
       .contexts.find(part => part.name === 'tool:subagent:depth')?.text).toBe('')
     await subagentConfigs.get(ctx)!.update({ maxDepth: 0 })
-    await callSubagent(ctx, { description: 'disabled', prompt: 'work' })
+    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'disabled', prompt: 'work' })
     expect(depths).toEqual([1, 5, 0])
   } finally {
     await ctx.fiber.dispose()

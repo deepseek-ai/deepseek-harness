@@ -3041,6 +3041,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'activation with a message id only for local children.',
       },
       {
+        signature: 'nameOf(agent: Agent): string',
+        description: 'Derive an Agent\'s full path from creation ancestry and descriptor names.',
+        parameters: [{ name: 'agent', description: 'exact live Agent whose name is requested.' }],
+        returns: 'lead followed by named or legacy child segments.',
+      },
+      {
+        signature: 'resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>',
+        description: 'Resolve a full agent path without granting authority to act on its Agent.',
+        parameters: [{ name: 'caller', description: 'exact live Agent selecting the tree.' }, { name: 'name', description: 'a full path returned by creation or discovery.' }, { name: 'signal', description: 'cancellation during historical discovery.' }],
+        returns: 'the durable Session identity for the consuming operation to authorize.',
+        throws: ['when the path is absent or a required ancestor is unavailable.'],
+      },
+      {
         signature: 'rootOf(caller: Agent): Agent',
         description: 'Resolve the root shared by an Agent and its teammates.',
         parameters: [{ name: 'caller', description: 'exact live Agent whose subagent ancestry selects the tree.' }],
@@ -3084,7 +3097,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>',
         description: 'Read the parent\'s durable direct-child catalog without loading or resuming an Agent. The service owns and releases the live-preferred Session observation.',
         parameters: [{ name: 'parentSessionId', description: 'parent whose direct children are requested.' }, { name: 'signal', description: 'cancellation forwarded to the Session query.' }],
-        returns: 'catalog children in parent event order.',
+        returns: 'committed catalog children in parent event order.',
         throws: ['{@link SubagentError} when query or catalog projection is unavailable.', 'SessionQueryError when the parent cannot be read or the query is cancelled.'],
       },
       {
@@ -7857,11 +7870,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentActivation',
-    declaration: 'export interface SubagentActivation {\n    readonly childId: SessionId;\n    readonly messageId?: MessageId;\n    readonly result: Promise<SubagentResult>;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface SubagentActivation {\n    readonly name: string;\n    readonly childId: SessionId;\n    readonly messageId?: MessageId;\n    readonly result: Promise<SubagentResult>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'SubagentActivationSpec',
-    declaration: 'export interface SubagentActivationSpec {\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
+    declaration: 'export interface SubagentActivationSpec {\n    readonly name: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
   },
   {
     name: 'SubagentCapabilities',
@@ -7869,7 +7882,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentCatalogEntry',
-    declaration: 'export type SubagentCatalogEntry = {\n    readonly id: SessionId;\n    readonly createdAt: number;\n} & ({\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n} | {\n    readonly mode: \'external\';\n    readonly label?: string;\n} | {\n    readonly mode: \'continuable\';\n    readonly label: string;\n} | {\n    readonly mode: \'unknown\';\n    readonly label?: string;\n});',
+    declaration: 'export type SubagentCatalogEntry = {\n    readonly name?: string;\n    readonly id: SessionId;\n    readonly createdAt: number;\n} & ({\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n} | {\n    readonly mode: \'external\';\n    readonly label?: string;\n} | {\n    readonly mode: \'continuable\';\n    readonly label: string;\n} | {\n    readonly mode: \'unknown\';\n    readonly label?: string;\n});',
   },
   {
     name: 'SubagentCatalogRow',
@@ -7889,7 +7902,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentListEntry',
-    declaration: 'export type SubagentListEntry = SubagentCatalogRow & {\n    readonly kind: \'child\';\n    readonly hasChildren: boolean;\n} | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n};',
+    declaration: 'export type SubagentListEntry = {\n    readonly name?: string;\n} & (SubagentCatalogRow & {\n    readonly kind: \'child\';\n    readonly hasChildren: boolean;\n} | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n});',
   },
   {
     name: 'SubagentPromptReceipt',
@@ -7929,7 +7942,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    async waitForChildren(parent: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId /* …truncated — full shape in source */',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    nameOf(agent: Agent): string;\n    resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>;\n    rootOf(caller: Agent): Agent;\n    async waitForChildren(parent: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPr /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentSendMessageOptions',

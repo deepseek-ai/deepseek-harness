@@ -129,6 +129,12 @@ describe('restoreReleasedV4Artifact', () => {
       data: { ...data, mode: 'one-shot' } }]), known)).toThrow('duplicate catalog child')
   })
 
+  it('rejects catalog records that do not describe a direct child', () => {
+    const event = { type: 'subagent/catalog', seq: 0, time: 1,
+      data: { version: 3, kind: 'name', name: 'writer', childId: 'grandchild' } }
+    expect(() => restoreReleasedV4Artifact(artifact([event]), new Set([...KNOWN, 'subagent/catalog']))).toThrow()
+  })
+
   it('validates only the envelope in physical mode', () => {
     const unknown = conversation()
     unknown.splice(2, 0, { type: 'campaign/unknown', seq: 0, time: 1, data: { x: 1 } })

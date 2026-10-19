@@ -148,7 +148,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     if (root === undefined) throw new Error('fresh workspace did not publish its parent Agent')
     parent = root
     // The child's first model call claims the primary override and holds.
-    const started = await scaffold.ctx.subagents.startActivation({
+    const started = await scaffold.ctx.subagents.startActivation({ name: 'interrupt-worker',
       delivery: 'parent',
       provider: 'spawn',
       label: LABEL,
@@ -213,7 +213,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
       const input = page.locator('[data-composer-input]').first()
       await input.waitFor({ timeout: 15_000 })
-      await page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /)
+      await page.getByText(/^Explain event sourcing in one sentence\.Your name is /)
         .waitFor({ timeout: 15_000 })
       expect(await input.isDisabled()).toBe(false)
       const stop = page.getByRole('button', { name: 'Stop generating' })
@@ -368,7 +368,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
+    expect(userTexts[1]).toMatch(/^Your name is .+Your parent agent name is .+send_message\(\{ name: /)
     expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
     const imageMessage = events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'image'))

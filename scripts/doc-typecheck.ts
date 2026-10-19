@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
-import { builtDeclarationPath } from './doc-typecheck-paths.ts'
+import { builtDeclarationPath, usesCurrentDocumentApi } from './doc-typecheck-paths.ts'
 import { markdownFences } from './markdown.ts'
 import { partitionPairedMarkdownDerivatives } from './paired-markdown-derivatives.ts'
 import { isArchivedAgentNotePath } from './repo-files.ts'
@@ -204,10 +204,11 @@ function remapBlockPaths(output: string, blocks: Block[]): string {
 
 const markdownGlobs = ['README.md', '.agents/notes/**/*.md', 'docs/**/*.md', 'packages/*/*.md', 'packages/*/*/*.md']
 
+const { version: currentVersion } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }
 const files: string[] = []
 for (const pattern of markdownGlobs) {
   for (const match of globSync(pattern, { cwd: root })) {
-    if (!isArchivedAgentNotePath(match)) files.push(resolve(root, match))
+    if (!isArchivedAgentNotePath(match) && usesCurrentDocumentApi(match, currentVersion)) files.push(resolve(root, match))
   }
 }
 files.sort()

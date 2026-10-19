@@ -108,7 +108,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const parent = scaffold.ctx.agents.get(parentId)
     if (parent === undefined) throw new Error('created parent session did not publish a live Agent')
 
-    const started = await scaffold.ctx.subagents.startActivation({
+    const started = await scaffold.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       delivery: 'parent',
       provider: 'spawn',
       label: 'event-sourcing researcher',
@@ -189,7 +189,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
+    expect(userTexts[1]).toMatch(/^Your name is .+Your parent agent name is .+send_message\(\{ name: /)
     expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')

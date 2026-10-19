@@ -116,7 +116,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
   const started = await ctx.tools.execute({
     agent: parent, signal: new AbortController().signal,
     callId: ToolCallId('background-start'), name: 'subagent',
-    arguments: { description: 'child', prompt: 'wait' },
+    arguments: { name: 'child', description: 'child', prompt: 'wait' },
   })
   expect(started.isError).toBe(false)
   const child = await requestEntered.promise

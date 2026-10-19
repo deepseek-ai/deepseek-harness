@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns a child id, with a later completion notice delivered to the parent.
+Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns a full child path, with a later completion notice delivered to the parent.
 
 ## Table of Contents
 
@@ -48,7 +48,7 @@ With `oar-codex` and `oar-claude` already registered, mount this row in the comp
 | `providers` | required | Nonempty map from model-visible runtime aliases to registered provider names |
 | `toolName` | `subagent_oar` | Tool name; every mounted instance needs a distinct name |
 
-The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns accepted fields and validation. A call requires `runtime`, `description`, and `prompt`; optional `cwd` selects the child directory, with relative paths resolved from the parent's current directory. The prompt must contain the context the child needs. Native installation, authentication, model settings, and permissions belong to the selected provider.
+The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns accepted fields and validation. A call requires a sibling-unique `name` segment, `runtime`, `description`, and `prompt`; optional `cwd` selects the child directory, with relative paths resolved from the parent's current directory. The prompt must contain the context the child needs. Native installation, authentication, model settings, and permissions belong to the selected provider.
 
 -----
 
@@ -80,7 +80,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the tool returns `started subagent <id>`, where `<id>` identifies the child. The shared subagent service later supplies the child's answer or failure notice.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the tool returns `started subagent <name>`, where `<name>` is the full child path. The shared subagent service later supplies the child's answer or failure notice.
 
 #### Token effect
 

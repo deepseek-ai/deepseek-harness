@@ -43,7 +43,7 @@
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`、`ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`ctx.agents`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
 | `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | subagent_oar 工具在为外部提供方配置的别名之间选择。本目录展示 Codex 和 Claude Code 别名；每个部署自行选择提供方。原生模型和权限设置由所选提供方的配置决定。 |
-| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回子代理 id；本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
+| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回唯一的 agent 路径；本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。 |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`、`job_list`、`job_output` | `ctx.tools`、`ctx.jobs`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`user/message via agent.inject() for background completion notices` | - | 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。 |
 | `@deepseek-ai/dsh-experimental-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。可选 Agent Teams profile 在标准子代理委派和控制工具之外增加任务板指导，以及从 subagent 根派生的必需 Team 身份。 |
@@ -2075,12 +2075,16 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `subagent_oar`
 
-将上下文完整的任务委派给已配置的外部 agent。每次调用选择一个运行时。subagent 在独立上下文中工作，无法看到当前对话。工具返回子级 id，后续完成通知包含其最终回答。subagent 不接受后续消息。并发启动相互独立的任务，并在其运行期间继续其他有用工作。只剩等待结果时结束当前轮次，不要轮询。
+将上下文完整的任务委派给已配置的外部 agent。每次调用选择一个运行时。subagent 在独立上下文中工作，无法看到当前对话。工具返回完整 agent 路径，后续完成通知包含其最终回答。subagent 不接受后续消息。并发启动相互独立的任务，并在其运行期间继续其他有用工作。只剩等待结果时结束当前轮次，不要轮询。
 
 ```json
 {
   "type": "object",
   "properties": {
+    "name": {
+      "type": "string",
+      "description": "A sibling-unique name segment: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
+    },
     "runtime": {
       "type": "string",
       "description": "Configured external runtime for this task.",
@@ -2103,6 +2107,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     }
   },
   "required": [
+    "name",
     "runtime",
     "description",
     "prompt"
@@ -2142,12 +2147,16 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `subagent`
 
-将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其 id。如果它结束时你仍在线，运行时会自动递送其完成通知及已有的最终回答。你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。
+将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其名字。如果它结束时你仍在线，运行时会自动递送其完成通知及已有的最终回答。你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。
 
 ```json
 {
   "type": "object",
   "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name unique among your direct children. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+    },
     "cwd": {
       "type": "string",
       "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -2162,6 +2171,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     }
   },
   "required": [
+    "name",
     "description",
     "prompt"
   ]
@@ -2170,7 +2180,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 来源：[`packages/subagent/tool-subagent/src/index.ts`](../packages/subagent/tool-subagent/src/index.ts)
 
-加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回子代理 id；本地子代理接受后续消息，外部后端自动汇报单次执行结果。
+加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回唯一的 agent 路径；本地子代理接受后续消息，外部后端自动汇报单次执行结果。
 
 <a id="deepseek-aidsh-tool-subagent-control"></a>
 
@@ -2178,19 +2188,19 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `interrupt_agent`
 
-根据 agent id 请求取消后台 agent 的当前轮次。目标可以是你的直接子级，也可以是在你下方创建的更深层 agent。对于本地 agent，只有当前轮次会停止：已经排队发给该 agent 的消息会一直搁置到后续的 send_message；它启动的 agent 会继续运行；该 agent 本身仍可接受后续操作。外部执行会永久停止，无法接收后续消息。停止请求被接受后，此调用立即返回，因此目标可能还会短暂运行；中断一个已经完成的 agent 是可接受的空操作。
+根据 agent 完整路径请求取消后台 agent 的当前轮次。目标可以是你的直接子级，也可以是在你下方创建的更深层 agent。对于本地 agent，只有当前轮次会停止：已经排队发给该 agent 的消息会一直搁置到后续的 send_message；它启动的 agent 会继续运行；该 agent 本身仍可接受后续操作。外部执行会永久停止，无法接收后续消息。停止请求被接受后，此调用立即返回，因此目标可能还会短暂运行；中断一个已经完成的 agent 是可接受的空操作。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "agent_id": {
+    "name": {
       "type": "string",
-      "description": "The id of an agent created under you: your direct child or a deeper descendant."
+      "description": "The full path (such as lead/explore/alice) of an agent created under you: your direct child or a deeper descendant."
     }
   },
   "required": [
-    "agent_id"
+    "name"
   ]
 }
 ```
@@ -2199,7 +2209,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-列出整个 Team：根代理和所有可达的可继续后代，包括调用方自身。行包含 id、描述和状态；后代行包含父级 id 和相对根的深度。可以向列为 running 或 inactive 的任意其他 Team 成员发送消息；只能中断自己的后代。running 表示正在工作；inactive 表示当前没有工作。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整个 Team：根代理和所有可达的可继续后代，包括调用方自身。行包含完整 agent 路径、描述和状态；后代行包含父级路径 和相对根的深度。可以向列为 running 或 inactive 的任意其他 Team 成员发送消息；只能中断自己的后代。running 表示正在工作；inactive 表示当前没有工作。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2218,9 +2228,9 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 {
   "type": "object",
   "properties": {
-    "agent_id": {
+    "name": {
       "type": "string",
-      "description": "The agent id of another member of your Team, as shown by list_agents."
+      "description": "The full path (such as lead/reviewer) of another member of your Team, as shown by list_agents."
     },
     "message": {
       "type": "string",
@@ -2228,7 +2238,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     }
   },
   "required": [
-    "agent_id",
+    "name",
     "message"
   ]
 }
@@ -2413,7 +2423,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "owner": {
       "type": "string",
-      "description": "Optional exact ownerId filter; use unowned for tasks without an owner."
+      "description": "Optional exact ownerName filter; use unowned for tasks without an owner."
     },
     "ready": {
       "type": "boolean",
@@ -2487,7 +2497,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "owner": {
       "type": "string",
-      "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
+      "description": "Full agent path of the root or any continuable descendant for root-only reassign; omit to unassign."
     }
   },
   "required": [

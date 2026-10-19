@@ -682,6 +682,11 @@ function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   expect(leaf.filter(event => event.type === 'turn/start')).toHaveLength(2)
   expect(leaf.some(event => event.type === 'assistant/message'
     && event.data.message.content.some(block => block.type === 'text' && block.text === 'LEAF_RESUMED'))).toBe(true)
+  const listing = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  expect(listing).toContain('lead [running] — team lead')
+  expect(listing.split('\n').filter(line => line.startsWith('lead/'))).toHaveLength(2)
+  expect(listing).toContain('depth=2')
+  expect(parseSessionLog(logs[0]!.content).filter(event => event.type === 'subagent/catalog')).toHaveLength(1)
   const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'agent-message' ? [{
       sender: event.data.source.senderSessionId,
@@ -739,7 +744,7 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}`)
+  expect(textOf(2)).toBe('started subagent lead/worker-1')
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,

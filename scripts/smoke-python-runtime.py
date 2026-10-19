@@ -660,6 +660,7 @@ def advanced_tool_followup(
             "advanced-direct-child",
             "subagent",
             {
+                "name": "direct-child",
                 "description": "Check direct child",
                 "prompt": SNAPSHOT_DIRECT_CHILD_PROMPT,
             },

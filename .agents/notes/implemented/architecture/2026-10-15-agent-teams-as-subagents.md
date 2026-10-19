@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-10-15-agent-teams-as-subagents.zh.md)
 
-The adjacency and parent-lifetime restrictions are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md). [Task-board inbox coordination](2026-10-19-team-task-board-inbox.md) supersedes the separate roster and Team-owned wait; the single subagent identity decision remains active.
+The name-free model interface below is superseded by [hierarchical agent names](2026-10-17-hierarchical-agent-names.md). Session identity, lineage authority, and Team reuse remain current. The adjacency and parent-lifetime restrictions are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md). [Task-board inbox coordination](2026-10-19-team-task-board-inbox.md) supersedes the separate roster and Team-owned wait; the single subagent identity decision remains active.
 
 ## Problem
 
@@ -18,7 +18,7 @@ Use one subagent identity: the Session id. The existing `description` tool argum
 
 Every root Agent and its descendants form the Team identified by the root Session id. Team creates no agents and contributes task tools, task policy, and required Team identity. Ordinary subagent controls supply discovery, messaging, interruption, and inbox waiting. Parent and fork children receive identical tool schemas and shared policies.
 
-Task ownership uses `ownerId`; root reassignment accepts itself or any reachable continuable descendant. Historical roster records remain decode-only. Team persists task changes and signals active waits after commit without starting idle turns. Historical `team/message/*` records remain readable but are never delivered or acknowledged.
+Model-facing task ownership uses `ownerName`; host ownership retains `ownerId`; root reassignment accepts itself or any reachable continuable descendant. Historical roster records remain decode-only. Team persists task changes and signals active waits after commit without starting idle turns. Historical `team/message/*` records remain readable but are never delivered or acknowledged.
 
 This supersedes the roster, provisioning, recovery, and messaging decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md) and the [Team direct inbox decision](../../archived/simplification/2026-09-26-team-direct-inbox.md). The task-board and shared-checkout decisions remain active. [Adjacent Agent messaging](2026-08-27-adjacent-agent-steer-messaging.md) includes sibling routing, while [required runtime-context identity](2026-10-13-team-identity-runtime-context.md) owns the role statement. The [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) lists removed tools, methods, and configuration.
 

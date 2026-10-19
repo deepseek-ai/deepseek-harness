@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External execution ownership, result delivery, and process cleanup. */
 
@@ -26,7 +27,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   const controller = new AbortController()
   return {
     ctx, parent, controller,
-    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
+    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
       request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
     }),
@@ -102,7 +103,7 @@ describe('external subagent activations', () => {
         }
       })
       try {
-        await expect(fixture.ctx.subagents.startActivation({
+        await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
           provider: 'external', label: 'Unpublished work', signal: fixture.controller.signal, delivery: 'parent',
           request: { parent, prompt: [{ type: 'text', text: 'Must not publish' }] },
         })).rejects.toMatchObject({ code: change === 'drain' ? 'DRAINING' : 'UNAUTHORIZED' })
@@ -148,7 +149,7 @@ describe('external subagent activations', () => {
     await expect(waiting).resolves.toBe(true)
     await activation.dispose()
     expect(backend.dispose).toHaveBeenCalledTimes(1)
-    expect(fixture.records()).toEqual([])
+    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external' }])
     expect(fixture.parent.inbox.nextTurn).toEqual([])
   })
 
@@ -285,7 +286,7 @@ describe('external subagent activations', () => {
     backend.result.resolve(failed)
     await expect(activation.result).resolves.toEqual(failed)
     await activation.dispose()
-    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{ id: activation.childId, mode: 'external' }] : [])
+    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external' }])
     if (delivery === 'caller') {
       expect(fixture.parent.inbox.nextTurn).toEqual([])
     } else {
@@ -317,9 +318,9 @@ describe('external subagent activations', () => {
     expect((error as Error).message).not.toContain('/private/path')
     await expect(activation.result).resolves.toEqual(completed)
     expect(activation.dispose()).toBe(disposal)
-    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{
-      id: activation.childId, mode: 'external',
-    }] : [])
+    expect(fixture.records()).toMatchObject([{
+      id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external',
+    }])
     expect(ended).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ stopReason: 'error' }))
     if (delivery === 'parent') {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
@@ -365,7 +366,7 @@ it('records external membership at creation without publishing settlement update
 it('refuses a reserved Session id for an external provider before dispatch', async () => {
   const start = vi.fn()
   const fixture = await setup(start)
-  await expect(fixture.ctx.subagents.startActivation({
+  await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
     provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
     signal: fixture.controller.signal, request: { parent: fixture.parent, prompt: [] },
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })

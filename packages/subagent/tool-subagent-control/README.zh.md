@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
+`dsh-tool-subagent-control` 让 agent（智能体）按完整 agent 路径发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
 
 ## 目录
 
@@ -44,11 +44,11 @@ kind: "package-reference"
 
 ### send_message
 
-通过 `agent_id` 向另一个 Team 成员发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
+通过 `name` 向另一个 Team 成员发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知路径、不可用历史和被拒绝的输入都会返回错误。
 
 ### interrupt_agent
 
-`agent_id` 使用 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
+`name` 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级 id与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉领导独立 Team。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级名字与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉领导独立 Team。
 
 -----
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 投递与信号所有权
 
-执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；Team 根管理运行时实例和容量。
+执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-name> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；Team 根管理运行时实例和容量。
 
 ### 列表投影
 
@@ -111,7 +111,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按 id 寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用或收到等待信号时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
+生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按名字寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用或收到等待信号时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
 
 #### Token 影响
 
@@ -125,7 +125,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `interrupt requested for agent <agent_id>`。未授权的调用方——self、sibling、陈旧或非 ancestor——会成为指明拒绝原因的出错结果；目标不存在或已结算仍渲染接受行。
+接受后返回 `interrupt requested for agent <name>`。未知名字或未授权调用方（自身、同级、过期或非祖先）返回错误；已知且已结束的目标仍返回接受提示。
 
 #### Token 影响
 
@@ -139,11 +139,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `message delivered to agent <id>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 Team 或输入被拒绝时，返回错误结果。
+接受时返回 `message delivered to agent <name>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 Team 或输入被拒绝时，返回错误结果。
 
 #### Token 影响
 
-每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的 id向 Team 内成员发送后续消息。
+每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的名字向 Team 内成员发送后续消息。
 
 #### KV Cache 影响
 
@@ -153,7 +153,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — team lead`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成。
+首行为 `<name> [<status>] — team lead`。各可继续后代随后显示为 `<name> [<status>] parent=<name> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不表示任务完成。
 
 #### Token 影响
 

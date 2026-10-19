@@ -42,14 +42,14 @@ it('selects one configured provider per call and exposes only task inputs', asyn
     providers: { codex: 'codex-provider', claude: 'claude-provider', future: 'future-provider' },
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
-  expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
-  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'prompt', 'runtime'])
+  expect(schema?.parameters.required).toEqual(['name', 'runtime', 'description', 'prompt'])
+  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
   for (const runtime of ['codex', 'claude', 'future']) {
     const result = await ctx.tools.execute({
       agent: parent, name: 'subagent_oar', signal: test.signal,
       callId: ToolCallId(randomUUID()),
-      arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task' },
+      arguments: { name: `child-${randomUUID()}`, runtime, description: `Use ${runtime}`, prompt: 'independent task' },
     })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.content).toHaveLength(1)
@@ -62,7 +62,7 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   expect(calls[0]?.request.parent).toBe(parent)
   expect(calls[0]?.request.cwd).toBe(process.cwd())
   expect(ctx.tools.executionMode({
-    name: 'subagent_oar', arguments: { runtime: 'codex', description: 'task', prompt: 'task' },
+    name: 'subagent_oar', arguments: { name: `child-${randomUUID()}`, runtime: 'codex', description: 'task', prompt: 'task' },
     callId: ToolCallId(randomUUID()), signal: test.signal,
   })).toEqual({ kind: 'parallel' })
   await fiber.dispose()
@@ -76,7 +76,7 @@ it('rejects unconfigured runtime names before starting any child', async (test) 
   const result = await ctx.tools.execute({
     agent: parent, name: 'subagent_oar', signal: test.signal,
     callId: ToolCallId(randomUUID()),
-    arguments: { runtime: 'unconfigured', description: 'task', prompt: 'task' },
+    arguments: { name: `child-${randomUUID()}`, runtime: 'unconfigured', description: 'task', prompt: 'task' },
   })
   expect(result.isError).toBe(true)
   expect(calls).toEqual([])
@@ -89,7 +89,7 @@ it('fails visibly when the selected provider disappears', async (test) => {
   const result = await ctx.tools.execute({
     agent: parent, name: 'subagent_oar', signal: test.signal,
     callId: ToolCallId(randomUUID()),
-    arguments: { runtime: 'missing', description: 'task', prompt: 'task' },
+    arguments: { name: `child-${randomUUID()}`, runtime: 'missing', description: 'task', prompt: 'task' },
   })
   expect(result.isError).toBe(true)
   expect(calls).toEqual([])
@@ -113,7 +113,7 @@ it('requires a caller and independently scoped one-shot providers', async (test)
     start: async () => { throw new Error('must not run') },
   })
   await ctx.plugin(externalTool, { providers: { inherited: 'inherited' } })
-  const args = { runtime: 'inherited', description: 'task', prompt: 'task' }
+  const args = { name: 'inspector', runtime: 'inherited', description: 'task', prompt: 'task' }
   const noParent = await ctx.tools.execute({
     name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
@@ -129,7 +129,7 @@ it('passes an explicit child directory and presents the task description', async
   const { ctx, parent, calls } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(externalTool, { providers: { codex: 'codex-provider' } })
-  const args = { runtime: 'codex', description: 'Inspect child', prompt: 'task', cwd: 'packages' }
+  const args = { name: 'inspector', runtime: 'codex', description: 'Inspect child', prompt: 'task', cwd: 'packages' }
   expect(ctx.tools.get('subagent_oar')?.presentCall?.(args)).toEqual({
     card: 'generic', title: 'Inspect child', rawInput: args,
   })

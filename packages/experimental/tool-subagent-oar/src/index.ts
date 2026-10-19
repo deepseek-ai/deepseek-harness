@@ -36,10 +36,15 @@ export function apply(ctx: Context, config: Config): void {
     name: toolName,
     description: 'Delegate a self-contained task to a configured external agent. Choose its runtime for each call. '
       + 'The child works in its own context and does not see this conversation. '
-      + 'This tool returns a child id; a later completion notice includes its final answer. '
+      + 'This tool returns a full agent path; a later completion notice includes its final answer. '
       + 'The child does not accept follow-up messages. Start independent tasks together and continue useful work while they run. '
       + 'When only waiting for their results remains, end your turn instead of polling.',
     parameters: {
+      name: {
+        type: 'string',
+        required: true,
+        description: 'A sibling-unique name segment: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens.',
+      },
       runtime: {
         type: 'string',
         required: true,
@@ -69,10 +74,10 @@ export function apply(ctx: Context, config: Config): void {
         additionalProperties: false,
         properties: {
           kind: { type: 'string', required: true, const: 'activation' },
-          subagentId: { type: 'string', required: true },
+          name: { type: 'string', required: true },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+      render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
     },
     /* jscpd:ignore-end */
     isConcurrencySafe: () => true,
@@ -86,6 +91,7 @@ export function apply(ctx: Context, config: Config): void {
         throw new Error('subagent_oar requires a one-shot provider with independent conversation context')
       }
       const activation = await ctx.subagents.startActivation({
+        name: args.name,
         provider: providerName,
         label: args.description,
         request: {
@@ -96,7 +102,7 @@ export function apply(ctx: Context, config: Config): void {
         signal: exec.signal,
         delivery: 'parent',
       })
-      return { kind: 'activation' as const, subagentId: activation.childId }
+      return { kind: 'activation' as const, name: activation.name }
     },
     presentCall: args => ({ card: 'generic', title: args.description, rawInput: args }),
   }))

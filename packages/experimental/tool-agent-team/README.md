@@ -42,7 +42,7 @@ The plugin takes no configuration; mount it beside the Team domain as in the [ag
 
 A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-agent-team) records the empty configuration.
 
-Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned id addresses it.
+Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned full path addresses it.
 
 ### What the model can do
 
@@ -52,7 +52,7 @@ The task tools complement the ordinary subagent controls:
 - **Wait for inbox input** — `wait_agent` belongs to `@deepseek-ai/dsh-tool-subagent-control` and remains available without this package.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerId` results use Session ids. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
+Task `owner` arguments and `ownerName` results use full agent paths. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
 ### What success and failure look like
 
@@ -122,7 +122,7 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -141,18 +141,18 @@ The text is identical for the Lead and every descendant and does not change whil
 
 #### What the model sees
 
-Required `team:identity` context uses the following text, replacing `<agent-id>` or `<root-id>` with the JSON-encoded Session id derived from the subagent tree. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
+Required `team:identity` context uses the following text, replacing `<name>` with the JSON-encoded full path derived from the subagent tree. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
 
 ##### Root identity
 
 ```markdown
-You are the Team Lead. Your agent id is <agent-id>.
+You are the Team Lead. Your name is lead.
 ```
 
 ##### Teammate identity
 
 ```markdown
-You are a teammate in the Team led by agent <root-id>.
+Your name is <name>. You are a teammate in the Team led by "lead".
 ```
 
 #### Token effect

@@ -3,8 +3,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "call_published_failure", "name": "subagent", "argumentsDelta": "{\"description\":\"Fail published run\",\"prompt\":\"This child prompt must never run.\",\"run_in_background\":false}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_published_failure", "name": "subagent", "arguments": "{\"description\":\"Fail published run\",\"prompt\":\"This child prompt must never run.\",\"run_in_background\":false}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "call_published_failure", "name": "subagent", "argumentsDelta": "{\"description\":\"Fail published run\",\"prompt\":\"This child prompt must never run.\",\"run_in_background\":false,\"name\":\"worker-1\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_published_failure", "name": "subagent", "arguments": "{\"description\":\"Fail published run\",\"prompt\":\"This child prompt must never run.\",\"run_in_background\":false,\"name\":\"worker-1\"}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

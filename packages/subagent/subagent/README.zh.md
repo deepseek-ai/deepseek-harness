@@ -42,7 +42,7 @@ kind: "package-reference"
     toolName: subagent
 ```
 
-工具立即返回子会话 ID，后台 activation 结算后父级收到完成通知。仅挂载服务本身不会启用委派。
+工具要求同级唯一的名字片段，并立即返回子级完整路径。后台 activation 结束时，父级收到完成通知。只挂载服务不会启用委派。
 
 ### 委派设置
 
@@ -56,9 +56,12 @@ kind: "package-reference"
 
 容量耗尽时，新建或冷恢复以 `ACTIVATION_LIMIT_REACHED` 拒绝（浏览器消息返回 `subagent/delivery-unavailable`）：等待子代理完成，或继续使用现有代理。接纳不会排队，避免等待后代的父代理又等待自己占用的名额。名额仅存在于当前进程，不限制累计 Session 历史或 token 用量。
 
+<a id="local-and-external-children"></a>
 ### 本地与外部子级
 
-`startActivation({ provider, label, request, signal, delivery })` 返回 `{ childId, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息并支持冷恢复；外部子级只暴露一次执行，拒绝继续输入。`request.agentOptions` 覆盖后端支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 让工作流等待结果，不发送父级通知，也不附加初始返回指导。本地父级投递需要持久化，调用方投递可以使用临时本地会话；冷恢复需要持久化与 Session 查询服务。
+`startActivation({ name, provider, label, request, signal, delivery })` 返回 `{ childId, name, messageId?, result, dispose }`。提供 `childId` 会选择本地后端，并保证返回 `messageId`。本地子级接受后续消息，支持冷恢复；外部子级只执行一次，拒绝继续执行。`request.agentOptions` 覆盖受支持的子级模型设置。`delivery: 'parent'` 提供面向模型的完成通知；`delivery: 'caller'` 允许 workflow 等待结果，不发送父级通知或初始返回指引。本地 parent 交付要求持久化；caller 交付可使用临时本地会话。冷恢复要求持久化和 Session query。
+
+agent 名字是不可变的路径段，只在同一父级的直接子级中唯一。创建时接受以小写字母开头、后续只含小写字母、数字、下划线或连字符的名字。返回的 `name` 是完整路径：`lead`、`lead/reviewer` 或 `lead/explore/alice`。每个父级的 catalog 和本地子级自身的 descriptor 保留路径段；祖先关系提供前缀。临时名字预留属于在线父级，在创建返回或失败时释放。已写入 catalog 的名字在执行结束后仍被占用。`nameOf(agent)` 从创建祖先关系推导路径；`resolveName()` 只沿完整路径读取 catalog，不授予操作权限。无关的不可读分支不阻止创建或查找。历史无名子级使用 `legacy:<session-id>` 作为路径段。
 
 ### 子级 preset
 
@@ -120,7 +123,7 @@ kind: "package-reference"
 
 本地 Agent 发生失败且后续没有成功提交 `turn/end` 时，会独立于后代以 `error` 结算。未认领的输入不会使该失败 activation 一直驻留。后续成功提交的轮次结束记录会取代实时失败，提供恢复后的结果。
 
-本地创建成功后，无论结果交付给谁，都会向父 Session 追加 `subagent/catalog` 事实。外部创建仅在使用 `delivery: 'parent'` 时追加目录事实；调用方拥有的外部执行保留调用方自己的成员记录。外部条目以 `mode: 'external'` 标记没有本地 Session 的子级。目录仅在创建时记录一次成员关系，不携带执行状态。完整结果交给调用方或父级完成通知。投影排除继承事实。直接列表读取一个父级投影，因此已完成的本地工作流子级仍可被发现、打开或继续。Catalog 载荷 v0 记录本地模式，v1 还接受未知模式，v2 记录外部执行，读取器支持三版。历史迁移在 descriptor 不可用时根据可读子 header 追加 v1 `subagent/catalog`；本地创建保留 v0。其 `mode: 'unknown'` 投影让子会话保持可见，但不表示支持继续执行；已有完整条目仍具有权威性。
+本地与外部创建均向父 Session 追加直接子级 `subagent/catalog` 事实，不受结果交付方式影响。这次追加提交子级名字；嵌套子级无需额外的根记录。追加失败会释放临时名字并清理 activation。本地 descriptor 可能残留，但命名子级只有在直接父级 catalog 含相同名字与 id 时才能恢复。追加成功后，执行或通知失败不会释放名字。持久化 flush 仍独立于同步追加。历史无名子级的继续执行保留原有行为。
 
 <a id="restoring-child-composition"></a>
 ### 恢复子级组装

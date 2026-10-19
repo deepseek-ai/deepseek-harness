@@ -42,7 +42,7 @@ Mount the service with `@deepseek-ai/dsh-session-projection`, a provider, and th
     toolName: subagent
 ```
 
-The tool returns a child session id immediately. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
+The tool requires a sibling-unique name segment and immediately returns the full child path. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
 
 ### Delegation settings
 
@@ -56,9 +56,12 @@ The current `maxActiveSubagents` value is sampled before every new or cold-resum
 
 At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (browser prompts receive `subagent/delivery-unavailable`): wait for a child to finish or continue using the existing agents. Admission does not queue, because a parent waiting for descendants must not wait for its own occupied slot. Slots are process-local and do not constrain cumulative Session history or token usage.
 
+<a id="local-and-external-children"></a>
 ### Local and external children
 
-`startActivation({ provider, label, request, signal, delivery })` returns `{ childId, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `request.agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
+`startActivation({ name, provider, label, request, signal, delivery })` returns `{ childId, name, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `request.agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
+
+Agent names are immutable segments unique among one parent’s direct children. Creation accepts a lower-case letter followed by lower-case letters, digits, underscores, or hyphens. The returned `name` is a full path: `lead`, `lead/reviewer`, or `lead/explore/alice`. Each parent’s catalog and each local child’s descriptor retain the segment; ancestry supplies the prefix. Pending reservations are scoped to the live parent and released when creation returns or fails. Cataloged names remain taken after settlement. `nameOf(agent)` derives the path from creation ancestry; `resolveName()` follows only the catalogs along a full path and grants no operation authority. Unrelated unreadable branches do not block creation or lookup. Historical unnamed children use `legacy:<session-id>` as their path segment.
 
 ### Child presets
 
@@ -120,7 +123,7 @@ The manager reserves child identity and capacity, materializes a local Agent or 
 
 A local Agent failure without a subsequently committed `turn/end` settles as `error` independently of its descendants. Unclaimed input cannot keep that failed activation resident. A later committed turn ending supersedes the live failure and supplies the recovered outcome.
 
-Successful local creation appends a `subagent/catalog` fact to the parent Session regardless of result delivery. External creation appends a catalog fact only with `delivery: 'parent'`; caller-owned external executions retain their caller's membership records. External entries use `mode: 'external'` to identify children without a local Session. Catalog entries record membership once at creation and carry no execution status. Complete results go to the caller or the parent completion notice. Projections exclude inherited facts. Direct lists read one parent projection, so completed local workflow children remain discoverable and can be opened or continued. Catalog payload v0 records local modes; v1 also accepts unknown mode; v2 records external executions. Readers support all three versions. Historical migration appends a v1 `subagent/catalog` from a readable child header when its descriptor is unavailable; local creation retains v0. Its `mode: 'unknown'` projection keeps the child visible without claiming continuation support; an existing complete entry remains authoritative.
+Local and external creation appends a direct-child `subagent/catalog` fact to the parent Session regardless of result delivery. That append commits the child’s name; nested children require no additional root record. A failed append releases the pending name and disposes the activation. A local descriptor can remain, but a named child can resume only when its direct parent catalog contains the same name and id. After the append, execution or notification failure does not release the name. Persistence flush remains separate from the synchronous append. Historical unnamed continuation retains its existing behavior.
 
 <a id="restoring-child-composition"></a>
 ### Restoring child composition

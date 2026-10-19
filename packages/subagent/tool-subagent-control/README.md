@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. One plugin instance registers all four tools; members inherit the same definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by full agent path, interrupt descendants, and wait for their own next-step inbox. One plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -44,11 +44,11 @@ This package takes no configuration. Its main entry registers `send_message`, `i
 
 ### send_message
 
-Sends a message to another Team member by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+Sends a message to another Team member by `name`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown paths, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
-`agent_id` identifies a descendant by Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+`name` identifies a descendant. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -57,7 +57,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate Teams.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent path and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate Teams.
 
 -----
 
@@ -75,7 +75,7 @@ Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, c
 
 ### Delivery and signal ownership
 
-The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the Team root owns runtime instances and capacity.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the Team root owns runtime instances and capacity.
 
 ### Listing projection
 
@@ -111,7 +111,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or a wait signal, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define name-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or a wait signal, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
 
 #### Token effect
 
@@ -125,7 +125,7 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-`interrupt requested for agent <agent_id>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; an absent or settled target still renders the acceptance line.
+`interrupt requested for agent <name>` on acceptance. An unknown name or unauthorized caller — self, sibling, stale, or non-ancestor — returns an error; a known settled target still renders the acceptance line.
 
 #### Token effect
 
@@ -139,11 +139,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s Team or rejected admission produces an errored result.
+`message delivered to agent <name>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s Team or rejected admission produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; replies arrive as separately addressed messages. Use ids from `list_agents` for follow-ups across the Team.
+One short acknowledgement per call; replies arrive as separately addressed messages. Use names from `list_agents` for follow-ups across the Team.
 
 #### KV Cache effect
 
@@ -153,7 +153,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — team lead`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<name> [<status>] — team lead`. Each continuable descendant follows as `<name> [<status>] parent=<name> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion.
 
 #### Token effect
 

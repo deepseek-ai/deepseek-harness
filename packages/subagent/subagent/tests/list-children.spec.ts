@@ -1,4 +1,5 @@
 import { subagentCatalogProjectionDefinition } from '../src/catalog.ts'
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -72,8 +73,9 @@ async function startChild(
   ctx: Context,
   parent: Agent,
   label: string,
+  name = `child-${randomUUID()}`,
 ): Promise<SessionId> {
-  const started = await ctx.subagents.startActivation({ delivery: 'parent',
+  const started = await ctx.subagents.startActivation({ name, delivery: 'parent',
     provider: 'spawn',
     label,
     request: { prompt: [{ type: 'text', text: `task: ${label}` }], parent },
@@ -124,18 +126,18 @@ describe('SubagentRuntime.listChildren', () => {
       signal: testSignal,
     })
     expect(await ctx.subagents.listChildren(parent.id)).toMatchObject([
-      { id: callerOwned.childId, label: 'spawn', mode: 'continuable' },
+      { id: callerOwned.childId, name: callerOwned.name.slice('lead/'.length), label: 'spawn', mode: 'continuable' },
     ])
     await callerOwned.result
     await callerOwned.dispose()
-    const continuableId = await startChild(ctx, parent, 'continuable child')
+    const continuableId = await startChild(ctx, parent, 'continuable child', 'continuable')
     const listSessions = vi.spyOn(ctx.sessionQuery, 'listSessions')
     const observeSession = vi.spyOn(ctx.sessionQuery, 'observeSession')
 
     const children = await ctx.subagents.listChildren(parent.id)
     expect(children.map(({ createdAt: _createdAt, ...child }) => child)).toEqual([
-      { id: callerOwned.childId, label: 'spawn', mode: 'continuable' },
-      { id: continuableId, label: 'continuable child', mode: 'continuable' },
+      { id: callerOwned.childId, name: callerOwned.name.slice('lead/'.length), label: 'spawn', mode: 'continuable' },
+      { id: continuableId, name: 'continuable', label: 'continuable child', mode: 'continuable' },
     ])
     expect(children.every(child => Number.isFinite(child.createdAt))).toBe(true)
     expect(listSessions).not.toHaveBeenCalled()
@@ -336,18 +338,18 @@ describe('SubagentRuntime.listDescendants', () => {
     expect(ctx.sessions.get(id)).toBeUndefined()
   })
 
-  it('traverses one-shot and unknown-mode catalog entries to reach continuable children', async () => {
+  it.each([false, true])('traverses one-shot and unknown-mode entries (named: %s)', async (named) => {
     const { ctx, parent } = await setup([])
     const once = ctx.sessions.create(SessionId('once'))
     const unknown = ctx.sessions.create(SessionId('unknown'))
     const leaf = ctx.sessions.create(SessionId('leaf'))
     catalog(parent.session, [child('once', 'one-shot')])
-    catalog(once, [child('unknown', 'unknown')])
+    catalog(once, [{ ...child('unknown', 'unknown'), ...named ? { name: 'future-child' } : {} }])
     catalog(unknown, [child('leaf')])
     const rows = await ctx.subagents.listDescendants(parent.id)
     expect(rows).toHaveLength(3)
     expect(rows[0]).toMatchObject({ kind: 'child', id: once.id, hasChildren: true })
-    expect(rows[1]).toEqual({ kind: 'diagnostic', id: unknown.id, reason: 'unsupported', parentId: once.id, depth: 2 })
+    expect(rows[1]).toEqual({ kind: 'diagnostic', id: unknown.id, ...named ? { name: 'future-child' } : {}, reason: 'unsupported', parentId: once.id, depth: 2 })
     expect(rows[2]).toMatchObject({ kind: 'child', id: leaf.id, parentId: unknown.id, depth: 3 })
   })
 
@@ -392,7 +394,7 @@ describe('SubagentRuntime.listDescendants', () => {
     const branch = ctx.sessions.create(SessionId('branch'))
     const hidden = ctx.sessions.create(SessionId('hidden'))
     const sibling = ctx.sessions.create(SessionId('sibling'))
-    catalog(parent.session, [child('branch'), child('sibling')])
+    catalog(parent.session, [{ ...child('branch'), name: 'broken-branch' }, child('sibling')])
     catalog(branch, [child('hidden')])
     const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery)
     vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation((id, options) => {
@@ -403,7 +405,7 @@ describe('SubagentRuntime.listDescendants', () => {
       return observe(id, options)
     })
     const rows = await ctx.subagents.listDescendants(parent.id)
-    expect(rows[0]).toEqual({ kind: 'diagnostic', id: branch.id, parentId: parent.id, depth: 1, reason })
+    expect(rows[0]).toEqual({ kind: 'diagnostic', id: branch.id, name: 'broken-branch', parentId: parent.id, depth: 1, reason })
     expect(rows[1]).toMatchObject({ kind: 'child', id: sibling.id })
     expect(rows.some(row => row.id === hidden.id)).toBe(false)
   })

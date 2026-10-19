@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md
 /:
-  en: 1f073189776760d8
-  zh: cfbb0403aea96f84
-/agent-teams-uses-subagents-and-session-ids:
-  en: 703c7766dd80e1d1
-  zh: 157c67164c1cbc7d
-/agent-teams-uses-subagents-and-session-ids/change:
-  en: 16641bbd65e005af
-  zh: ffe57e39b9c33843
-/agent-teams-uses-subagents-and-session-ids/migration:
-  en: 51e3139edc8042dd
-  zh: f022c84d731168fc
+  en: 74f7ef4250caee88
+  zh: 944be1c0a0cb9f74
+/agent-teams-uses-subagents-and-hierarchical-names:
+  en: 8ff32d071efaba78
+  zh: 4bc6f62f6863fca8
+/agent-teams-uses-subagents-and-hierarchical-names/change:
+  en: f603e50bd6aee1fa
+  zh: 82358818c016e017
+/agent-teams-uses-subagents-and-hierarchical-names/migration:
+  en: 5a3eeb5f43980b31
+  zh: 290eda22dac21d29

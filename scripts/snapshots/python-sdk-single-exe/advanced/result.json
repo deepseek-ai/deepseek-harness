@@ -763,7 +763,7 @@
               "type": "tool-call",
               "id": "advanced-direct-child",
               "name": "subagent",
-              "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+              "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
             }
           ],
           "source": {
@@ -818,7 +818,7 @@
             "dt": [],
             "id": "advanced-direct-child",
             "args": [
-              "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+              "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
             ]
           },
           {
@@ -831,7 +831,7 @@
                 "type": "tool-call",
                 "id": "advanced-direct-child",
                 "name": "subagent",
-                "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
               }
             }
           },
@@ -882,7 +882,7 @@
         "step": 3,
         "callId": "advanced-direct-child",
         "name": "subagent",
-        "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+        "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
       }
     },
     {
@@ -894,7 +894,8 @@
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "Check direct child"
+        "label": "Check direct child",
+        "name": "direct-child"
       }
     },
     {
@@ -914,7 +915,7 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent {{child-1}}"
+              "text": "started subagent lead/direct-child"
             }
           ],
           "isError": false,
@@ -966,7 +967,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -980,7 +981,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -1143,7 +1144,8 @@
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "advanced-exe-snapshot child 1"
+        "label": "advanced-exe-snapshot child 1",
+        "name": "workflow-{{workflow-run}}-1"
       }
     },
     {
@@ -1243,7 +1245,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+            "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
           },
           {
             "type": "text",
@@ -1257,7 +1259,7 @@
         "source": {
           "kind": "subagent-settled",
           "form": "notice",
-          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -2443,7 +2445,7 @@
                   "type": "tool-call",
                   "id": "advanced-direct-child",
                   "name": "subagent",
-                  "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                  "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                 }
               ],
               "source": {
@@ -2498,7 +2500,7 @@
                 "dt": [],
                 "id": "advanced-direct-child",
                 "args": [
-                  "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                  "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                 ]
               },
               {
@@ -2511,7 +2513,7 @@
                     "type": "tool-call",
                     "id": "advanced-direct-child",
                     "name": "subagent",
-                    "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                    "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                   }
                 }
               },
@@ -2568,7 +2570,7 @@
             "step": 3,
             "callId": "advanced-direct-child",
             "name": "subagent",
-            "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+            "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
           }
         }
       }
@@ -2708,7 +2710,8 @@
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "Check direct child"
+            "label": "Check direct child",
+            "name": "direct-child"
           }
         }
       }
@@ -2734,7 +2737,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent {{child-1}}"
+                  "text": "started subagent lead/direct-child"
                 }
               ],
               "isError": false,
@@ -3193,7 +3196,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                    "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
                   },
                   {
                     "type": "text",
@@ -3207,7 +3210,7 @@
                 "source": {
                   "kind": "subagent-settled",
                   "form": "notice",
-                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -3533,7 +3536,8 @@
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "advanced-exe-snapshot child 1"
+            "label": "advanced-exe-snapshot child 1",
+            "name": "workflow-{{workflow-run}}-1"
           }
         }
       }
@@ -4081,7 +4085,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
+                "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -4095,7 +4099,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",

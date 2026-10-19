@@ -40,6 +40,8 @@ export class ActivationPool {
  * The manager owns admission, execution handles, and resource release.
  */
 interface ActivationBase {
+  /** Immutable model-facing name retained through teardown. */
+  readonly name: string
   /** Return this epoch's slot after its handle has finished disposal. */
   readonly releaseSlot: () => void
   /** The durable child this Activation is an epoch of. */

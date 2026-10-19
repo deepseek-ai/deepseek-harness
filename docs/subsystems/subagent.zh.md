@@ -29,6 +29,8 @@ interface SubagentCapabilities {
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec {
+  /** Immutable name segment, unique among the parent’s direct children. */
+  readonly name: string
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
@@ -47,6 +49,8 @@ interface SubagentActivationSpec {
 ```ts type-equiv
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 interface SubagentActivation {
+  /** Full path used by model-facing collaboration tools. */
+  readonly name: string
   /** Stable identity of the child. */
   readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */
@@ -173,7 +177,7 @@ interface ContinuableCreateSpec {
 
 ## 消息与中断
 
-sendMessage 要求确切在线发送方和目标 Session id。每个发送方可联系直接可继续子级；驻留的可继续子级还可联系直接父级和可继续同级。同级投递使用共同在线父级的权限，保留实际发送方 id。运行中目标接收 Steer；不在线的子级和同级冷恢复。外部执行拒绝后续输入。本地和外部执行通过父级结算通知报告最终文本、结构化输出、诊断和状态；caller 投递抑制通知。drainDescendants 和 drainChildren 等待所属资源释放。
+sendMessage 要求确切在线的根或驻留可继续发送方，以及另一成员的 Session id。投递保留实际发送方，验证目标持久分支，并按记录的父级恢复冷的可继续祖先，不向祖先投递目标消息。运行中目标接收 Steer；空闲目标开始轮次。外部执行拒绝后续输入。中断仍要求祖先权限。本地和外部执行通过父级结算通知报告最终文本、结构化输出、诊断和状态；caller 投递抑制通知。drainDescendants 和 drainChildren 等待所属资源释放。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -378,7 +382,7 @@ interface SubagentProvider {
 
 `SubagentRuntime.listChildren(parentSessionId, signal?)` 通过优先使用在线 Session 的观察读取父会话的 `subagentCatalog` 视图，并在成功或失败时释放观察。它按父会话事件顺序返回直接子级条目，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影时显式失败。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
 
-`SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。外部条目是没有本地 Session 的叶节点。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。每个可达目录只观察一次，并在下一次读取前释放；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
+`SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。外部条目是没有本地 Session 的叶节点。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。对每个可达子级目录观察一次；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
@@ -393,6 +397,10 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 <a id="the-terminal-result-subagentresult"></a>
 
+
+## Agent 名字
+
+同级名字在一个父级下唯一；完整路径以 `lead` 开头。父级 catalog 与本地子级 descriptor 保留名字路径段。临时预留属于在线父级。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -437,6 +445,23 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
  * @returns activation with a message id only for local children.
  */
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
+
+/**
+ * Derive an Agent's full path from creation ancestry and descriptor names.
+ * @param agent - exact live Agent whose name is requested.
+ * @returns lead followed by named or legacy child segments.
+ */
+nameOf(agent: Agent): string
+
+/**
+ * Resolve a full agent path without granting authority to act on its Agent.
+ * @param caller - exact live Agent selecting the tree.
+ * @param name - a full path returned by creation or discovery.
+ * @param signal - cancellation during historical discovery.
+ * @returns the durable Session identity for the consuming operation to authorize.
+ * @throws when the path is absent or a required ancestor is unavailable.
+ */
+resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
 
 /**
  * Resolve the root shared by an Agent and its teammates.
@@ -513,7 +538,7 @@ async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void
  * The service owns and releases the live-preferred Session observation.
  * @param parentSessionId - parent whose direct children are requested.
  * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
+ * @returns committed catalog children in parent event order.
  * @throws {@link SubagentError} when query or catalog projection is unavailable.
  * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
  */

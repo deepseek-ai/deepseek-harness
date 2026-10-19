@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External activation admission and resource ownership across parent lifetimes. */
 
@@ -25,7 +26,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   })
   return {
     ctx, parent,
-    start: (owner: Agent = parent) => ctx.subagents.startActivation({
+    start: (owner: Agent = parent) => ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
       provider: 'external', label: 'External work', signal: new AbortController().signal, delivery,
       request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
     }),

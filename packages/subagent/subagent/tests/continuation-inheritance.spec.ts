@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /**
  * Continuable-child delegation policy: a fresh continuable start seeds the
@@ -61,6 +62,7 @@ async function setup(script: Script) {
 
 function startSpec(parent: Agent, provider = 'spawn') {
   return {
+    name: `child-${randomUUID()}`,
     provider,
     label: 'child task',
     request: { prompt: [{ type: 'text' as const, text: 'child task' }], parent },

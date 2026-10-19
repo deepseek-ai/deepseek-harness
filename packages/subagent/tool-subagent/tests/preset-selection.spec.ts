@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 /** Deployment configuration and model-facing selection for spawn presets. */
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { Context } from '@deepseek-ai/cordis'
@@ -46,7 +47,7 @@ async function setup(config: Omit<tool.Config, 'provider'>, providerConfig: Part
   return { ctx, onStart, provider, presets }
 }
 
-const args = { description: 'review task', prompt: 'Review this change.' }
+const args = { name: `child-${randomUUID()}`, description: 'review task', prompt: 'Review this change.' }
 
 describe('spawn preset selection', () => {
   it.each([false, true])('selects presets with modelSelection=%s and enforces route authorization', async (modelSelection) => {
