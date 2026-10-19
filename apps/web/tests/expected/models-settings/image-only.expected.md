@@ -49,10 +49,10 @@
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
-            - /placeholder: 256K
+            - /placeholder: 1M
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
-            - /placeholder: 32K
+            - /placeholder: 128K
           - group "输入类型 1":
             - text: 输入类型
             - checkbox "文本"

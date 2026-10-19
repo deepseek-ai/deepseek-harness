@@ -170,7 +170,7 @@ describe('hand-declared providers', () => {
       resolved.get(route)?.piProvider?.getModels() ?? []
 
     expect(modelsOf('acme-gateway')).toMatchObject([
-      { id: 'bare', contextWindow: 262_144, maxTokens: 32_768 },
+      { id: 'bare', contextWindow: 1_000_000, maxTokens: 128_000 },
       { id: 'sized', contextWindow: 8192, maxTokens: 512 },
     ])
     // The fallback is a guess, so a deployment whose gateway serves smaller

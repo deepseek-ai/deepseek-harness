@@ -39,7 +39,6 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
   let prompt: string
   let replayDir: string
   let hostClock: ReturnType<typeof pinHostClock> | undefined
-  let unpinBrowserClock: (() => void) | undefined
 
   beforeAll(async () => {
     // Seeded and live prompt timestamps share the renderer's fixture day, so a run
@@ -64,7 +63,7 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     await seedSession(scaffold, fixture, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch({ headless: true })
     page = await newEnglishPage(browser)
-    if (MODE !== 'record') unpinBrowserClock = await pinBrowserClock(page)
+    if (MODE !== 'record') await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.getByRole('button', { name: 'Account menu', exact: true }).waitFor()
@@ -76,7 +75,6 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
       await browser?.close().catch((error: unknown) => failures.push(error))
       await scaffold?.close().catch((error: unknown) => failures.push(error))
     } finally {
-      unpinBrowserClock?.()
       hostClock?.mockRestore()
     }
     if (replayDir !== undefined) {
