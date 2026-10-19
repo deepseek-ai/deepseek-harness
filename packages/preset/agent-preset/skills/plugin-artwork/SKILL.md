@@ -10,7 +10,7 @@ Draw an icon that is recognizable at row size and belongs beside the icons of in
 ## Establish the subject
 
 - Inspect the feature, its output, and its manifest before drawing. A badge-producing skill may need a tag, not a medal. Reuse assets the user supplies; do not invent a brand mark for a third-party product or copy one whose license does not permit redistribution.
-- Read the icons of two or three installed plugins with related purposes. `cordis_inspect_query` `Config.listConfigs` reports each entry's `packageDir`; a top-level `icon` in its `package.json`, else the `./icon` export (`./<subpath>/icon` for a subpath plugin), names the file. Plugins that Plugin Manager draws itself have no icon file. Borrow one coherent treatment, not every reference's effects.
+- Read the icons of two or three installed plugins with related purposes. `cordis_inspect_query` `Config.listConfigs` reports each entry's `packageDir`; for a package-root plugin, a top-level `package.json` `icon`, else its `./icon` export, names the file; a subpath plugin uses only `./<subpath>/icon`. Plugins that Plugin Manager draws itself have no icon file. Borrow one coherent treatment, not every reference's effects.
 - Plugin Manager resolves the icon and display metadata separately for the bundle package and for each plugin its patch inserts; a subpath plugin or another package does not inherit the bundle's icon. Update every one you intend to change, and only those.
 
 ## Draw and refine
