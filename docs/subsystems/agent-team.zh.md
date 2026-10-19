@@ -75,23 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化 Team 记录。历史 `members` 字段仍可解码，但既不提供分配权限，也不提供第二个浏览器名册。任务面板从现有 Session 和目录数据标注所有者，缺失时使用 id。
-
-```ts type-equiv
-/**
- * One roster row published through the `agentTeam` Session projection: the
- * Lead and each historical roster member. Current children come from `subagentCatalog`.
- */
-interface TeamMemberProjection {
-  readonly id: SessionId
-  /** Delegated responsibility; absent for the Lead. Never used as an address. */
-  readonly description?: string
-  readonly role: 'lead' | 'teammate'
-  /** The Lead and continuable children are always `active`. Turn activity comes from Session status. */
-  readonly phase: TeamMemberPhase
-  readonly error?: string
-}
-```
+根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化 Team 记录。历史成员字段保留在持久化投影状态中，但不发送到浏览器。任务面板将根标记为主代理，其他负责人依次使用目录标签、Session 标题或 id。
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -113,10 +97,9 @@ interface TeamTaskView {
 /**
  * Durable Team state published to browser clients through the Lead Session's
  * `agentTeam` projection. `failure` names the first rejected persisted Team
- * record; members and tasks then stay at the last valid state.
+ * record; tasks then stay at the last valid state.
  */
 interface TeamProjection {
-  readonly members: TeamMemberProjection[]
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }
@@ -145,9 +128,11 @@ Agent Teams service backed by the exact live Lead Session log.
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
  * @param request - task text, blockers, and advisory write scopes.
+ * @param signal - cancellation before the task event is appended; omitted means no cancellation.
  * @returns the revision-one task view.
+ * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
-async createTask(caller: Agent, request: CreateTeamTaskRequest): Promise<TeamTaskView>
+async createTask(caller: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
 
 /**
  * Return one task, including a deleted tombstone.
@@ -168,9 +153,11 @@ listTasks(caller: Agent): TeamTaskView[]
  * Compare-and-set one authorized task transition.
  * @param caller - exact live Team member authorizing the mutation.
  * @param request - task identity, expected revision, action, and action fields.
+ * @param signal - cancellation before the task event is appended; omitted means no cancellation.
  * @returns the committed next task revision.
+ * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
-async updateTask(caller: Agent, request: UpdateTeamTaskRequest): Promise<TeamTaskView>
+async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
 ```
 
 Types: [Agent](core.zh.md)

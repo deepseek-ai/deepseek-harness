@@ -564,7 +564,7 @@ class Tools(Protocol):
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for new input in your own inbox, including agent messages, completion notifications, and user steering. Returns immediately when input is already pending."""
+        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:

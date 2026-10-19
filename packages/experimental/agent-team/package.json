@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team",
-  "description": "Implicit-root Agent Teams roster of subagents, shared task DAG, and change waits",
+  "description": "Shared task DAG and change waits for subagent trees",
   "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
@@ -57,7 +57,6 @@
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",

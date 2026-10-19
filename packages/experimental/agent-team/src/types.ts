@@ -87,26 +87,11 @@ export interface TeamTaskView {
 }
 
 /**
- * One roster row published through the `agentTeam` Session projection: the
- * Lead and each historical roster member. Current children come from `subagentCatalog`.
- */
-export interface TeamMemberProjection {
-  readonly id: SessionId
-  /** Delegated responsibility; absent for the Lead. Never used as an address. */
-  readonly description?: string
-  readonly role: 'lead' | 'teammate'
-  /** The Lead and continuable children are always `active`. Turn activity comes from Session status. */
-  readonly phase: TeamMemberPhase
-  readonly error?: string
-}
-
-/**
  * Durable Team state published to browser clients through the Lead Session's
  * `agentTeam` projection. `failure` names the first rejected persisted Team
- * record; members and tasks then stay at the last valid state.
+ * record; tasks then stay at the last valid state.
  */
 export interface TeamProjection {
-  readonly members: TeamMemberProjection[]
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }

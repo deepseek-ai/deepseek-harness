@@ -137,9 +137,6 @@ for (const backend of backends) {
       })
       const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
       expect(projections.agentTeam).toMatchObject({
-        members: [
-          { id: rootId, role: 'lead', phase: 'active' },
-        ],
         tasks: [{ id: created.id, subject: 'carry over' }],
       })
       expect(projections.subagentCatalog).toMatchObject([
@@ -191,12 +188,7 @@ for (const backend of backends) {
         pendingMessages: [message],
       })
       const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
-      expect(projections.agentTeam).toMatchObject({
-        members: [
-          { id: rootId, role: 'lead' },
-          { id: childId, description: 'historical mailbox target', role: 'teammate', phase: 'active' },
-        ],
-      })
+      expect(projections.agentTeam).toEqual({ tasks: [] })
       expect(second.ctx.agents.get(childId)).toBeUndefined()
       expect(second.adapter.requests).toEqual([])
 

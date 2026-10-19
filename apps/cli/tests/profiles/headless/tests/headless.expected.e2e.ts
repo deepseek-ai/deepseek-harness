@@ -1221,7 +1221,6 @@ describe('headless stream-json snapshots', () => {
         }
         projection = {
           sessions: logs.length,
-          taskNoticeEntered: messageSources.includes('team-task-change'),
           workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
           identities,
           teammates: [...teammates].sort(),
@@ -1266,7 +1265,6 @@ describe('headless stream-json snapshots', () => {
           "messageEntered": true,
           "nextStepInbox": true,
         },
-        "taskNoticeEntered": false,
         "tasks": [
           {
             "revision": 3,

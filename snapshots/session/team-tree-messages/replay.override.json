@@ -1,104 +1,33 @@
-[
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "tool-call"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "tool-call",
-          "id": "desc-1-1",
-          "name": "workflow",
-          "arguments": "{\"meta\":{\"description\":\"Create the nested reviewer.\",\"name\":\"branch\"},\"script\":\"return await agent(\\\"Use workflow to create a nested reviewer that lists the entire Team, sends the Lead a message, and replies LEAF_READY. Then reply BRANCH_READY.\\\");\"}"
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "tool-calls"
-        }
+{
+  "patches": [
+    {
+      "at": 2,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "root-resume-leaf",
+              "name": "send_message",
+              "arguments": "{\"name\":\"{{fromRequest:(lead/[^ ]+) .inactive. parent=[^ ]+ depth=2}}\",\"message\":\"Continue once with LEAF_RESUMED.\"}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
       }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "tool-call"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "tool-call",
-          "id": "root-list",
-          "name": "list_agents",
-          "arguments": "{}"
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "tool-calls"
-        }
-      }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "tool-call"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "tool-call",
-          "id": "root-resume-leaf",
-          "name": "send_message",
-          "arguments": "{\"name\":\"{{fromRequest:(lead/[^ ]+) .inactive. parent=[^ ]+ depth=2}}\",\"message\":\"Continue once with LEAF_RESUMED.\"}"
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "tool-calls"
-        }
-      }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      {
-        "type": "block-start",
-        "index": 0,
-        "blockType": "text"
-      },
-      {
-        "type": "block-end",
-        "index": 0,
-        "block": {
-          "type": "text",
-          "text": "TEAM_TREE_REVIEWED"
-        }
-      },
-      {
-        "type": "finish",
-        "reason": {
-          "kind": "stop"
-        }
-      }
-    ]
-  }
-]
+    }
+  ]
+}

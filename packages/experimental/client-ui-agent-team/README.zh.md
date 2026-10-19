@@ -31,7 +31,7 @@ kind: "package-reference"
 
 可开始的 pending 任务使用 idle 灰点，被依赖阻塞的 pending 任务使用 warning 橙点，in-progress 任务使用 ongoing loading，completed 任务使用 done 绿点。
 
-只读任务板显示任务身份、所有者标签、阻塞项、就绪状态、建议写入范围和重叠警告。所有者标签复用现有 Session 和 subagent 目录数据，缺失时使用 Session id。长描述可展开。标题显示任务数量，空任务板提供简短说明。Agent 通过工具修改任务；面板不提供修改控件。投影失败显示在最后有效任务上方。
+只读任务板显示任务身份、所有者标签、阻塞项、就绪状态、建议写入范围和重叠警告。根负责人显示为“主代理”；其他负责人优先使用 subagent 目录标签，其次为 Session 标题，最后为 Session id。长描述可展开。标题显示任务数量，空任务板提供简短说明。Agent 通过工具修改任务；面板不提供修改控件。投影失败显示在最后有效任务上方。
 
 -----
 

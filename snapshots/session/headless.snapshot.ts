@@ -1426,6 +1426,16 @@ describe('headless recorded-session snapshots', () => {
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'subagent-depth-two-rejection') {
+              expect(actualLogs).toHaveLength(3)
+              const leaf = actualLogs[2]!
+              expect(leaf.content).toContain('DEPTH_REJECTED')
+              for (const ancestor of actualLogs.slice(0, 2)) {
+                const notices = parseSessionLog(ancestor.content).filter(event => event.type === 'user/message'
+                  && event.data.source.kind === 'subagent-settled' && event.data.source.senderSessionId === leaf.header.id)
+                expect(notices).toEqual([])
+              }
+            }
             if (scenario.name === 'team-tree-messages') verifyTeamTreeMessage(actualLogs)
             if (scenario.name === 'team-task-inbox') verifyTeamTaskInbox(actualLogs)
             if (scenario.name === 'session-query-spill') {

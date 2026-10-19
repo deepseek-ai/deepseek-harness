@@ -207,7 +207,7 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Restore a persisted session and repair its interrupted final turn without sending input.
    * Uses the initialized model route while preserving the stored session identity and directory.
-   * Rejects missing, unreadable, or already owned sessions; never creates a replacement.
+   * Rejects subagent, missing, unreadable, or already owned sessions; never creates a replacement.
    * @param params - persisted session identity in the configured persistence store.
    * @returns an empty result after the Agent is ready for prompts.
    */
@@ -388,6 +388,9 @@ export class HarnessSdkJsonRpcServer {
   }
 
   private async createSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
+    if (resume && (await this.ctx.get('sessionPersistence')?.stat(brandString<SessionId>(sessionId)))?.header.origin === 'subagent') {
+      throw new Error(`subagent session "${sessionId}" cannot be resumed directly; resume its root session instead`)
+    }
     // No preset composition: this server's compositions keep the model-facing
     // rows in the host plane, so this agent reads them from the global layer. A
     // deployment that configures a roster has to join one here first

@@ -7,7 +7,6 @@ import type { SessionEvent, SessionEventMap, SessionId } from '@deepseek-ai/dsh-
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {
   TeamId,
-  TeamMemberProjection,
   TeamMemberSnapshot,
   TeamMessageId,
   TeamMessageSnapshot,
@@ -304,14 +303,6 @@ function applyCurrentTeamEvent(state: TeamProjectionState, event: TeamSessionEve
   }
 }
 
-const teamMemberProjectionSchema = z.object({
-  id: sessionIdSchema,
-  description: z.string().optional(),
-  role: z.enum(['lead', 'teammate']),
-  phase: z.enum(['provisioning', 'active', 'failed']),
-  error: z.string().optional(),
-}).strict() as z.ZodType<TeamMemberProjection>
-
 const teamTaskViewSchema = z.object({
   id: teamTaskIdSchema,
   revision: positiveSafeInteger,
@@ -326,28 +317,15 @@ const teamTaskViewSchema = z.object({
 }).strict() as z.ZodType<TeamTaskView>
 
 const teamProjectionSchema = z.object({
-  members: z.array(teamMemberProjectionSchema),
   tasks: z.array(teamTaskViewSchema),
   failure: z.string().optional(),
 }).strict() as z.ZodType<TeamProjection>
 
-/** Client views keyed by the member and task collections they were derived from. */
-const teamProjectionViews = new WeakMap<readonly TeamMemberSnapshot[], WeakMap<readonly TeamTaskSnapshot[], TeamProjection>>()
+/** Client views keyed by their task collection; historical roster and mailbox changes publish nothing. */
+const teamProjectionViews = new WeakMap<readonly TeamTaskSnapshot[], TeamProjection>()
 
 function buildTeamProjection(state: TeamProjectionState): TeamProjection {
-  const rootId = brandString<SessionId>(state.id)
-  const members: TeamMemberProjection[] = [{ id: rootId, role: 'lead', phase: 'active' }]
-  for (const member of state.members) {
-    members.push({
-      id: member.id,
-      description: member.description,
-      role: 'teammate',
-      phase: member.phase,
-      ...member.error === undefined ? {} : { error: member.error },
-    })
-  }
   return {
-    members,
     tasks: state.tasks
       .filter(task => task.status !== 'deleted')
       .map(task => projectTaskView(state, task)),
@@ -356,36 +334,31 @@ function buildTeamProjection(state: TeamProjectionState): TeamProjection {
 }
 
 /**
- * Durable client view of one Team state. Mailbox-only state changes reuse the
+ * Durable client view of one Team state. Historical roster and mailbox changes reuse the
  * previous view reference, so the live drive publishes nothing for them.
  * A failure is terminal: later events retain the failed state reference and
  * do not republish its view.
  * @param state - current Team state.
- * @returns the roster and non-deleted task board, plus any projection failure.
+ * @returns the non-deleted task board, plus any projection failure.
  */
 export function teamProjectionView(state: TeamProjectionState): TeamProjection {
   if (state.failure !== undefined) return buildTeamProjection(state)
-  let byTasks = teamProjectionViews.get(state.members)
-  if (byTasks === undefined) {
-    byTasks = new WeakMap()
-    teamProjectionViews.set(state.members, byTasks)
-  }
-  let view = byTasks.get(state.tasks)
+  let view = teamProjectionViews.get(state.tasks)
   if (view === undefined) {
     view = buildTeamProjection(state)
-    byTasks.set(state.tasks, view)
+    teamProjectionViews.set(state.tasks, view)
   }
   return view
 }
 
 /**
  * Team projection selected by the projected Session identity; the wire view
- * carries the Lead, historical roster, and task board. Current subagents are
+ * carries the task board. Current subagents are
  * supplied separately by the existing `subagentCatalog` projection.
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 6,
+  stateVersion: 4,
   stateSchema: teamProjectionEntrySchema,
   init: (header, _inheritedEventCount) => emptyTeamState(header.id),
   apply: applyProjectionEvent,

@@ -706,7 +706,6 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   TeamTaskId: 'agent-team.md',
   TeamTaskView: 'agent-team.md',
   TeamProjection: 'agent-team.md',
-  TeamMemberProjection: 'agent-team.md',
   UpdateTeamTaskRequest: 'agent-team.md',
   ModDefinition: 'claude-code-mods.md',
   SurfaceSnapshot: 'claude-code-mods.md',

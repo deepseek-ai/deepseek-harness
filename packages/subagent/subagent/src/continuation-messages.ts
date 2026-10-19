@@ -43,7 +43,7 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** Build durable attribution for one adjacent-Agent message. */
+/** Build durable attribution for one Agent message. */
 function agentMessageSource(sender: Agent): AgentMessageSource {
   return {
     kind: 'agent-message',
@@ -53,7 +53,7 @@ function agentMessageSource(sender: Agent): AgentMessageSource {
 }
 
 /**
- * Build the model-visible and durable representation of one adjacent-Agent message.
+ * Build the model-visible and durable representation of one Agent message.
  * @param sender - exact live Agent that authored the message.
  * @param content - model-visible message blocks supplied by the sender.
  * @param senderName - full agent path shown to the recipient.
@@ -74,7 +74,7 @@ export function createAgentMessage(
 }
 
 /**
- * Append adjacent-Agent return guidance to a continuable child's initial task.
+ * Append parent communication guidance to a continuable child's initial task.
  * @param parentName - name of the direct parent.
  * @param childName - name assigned to this child.
  * @param prompt - initial model-visible task blocks.
