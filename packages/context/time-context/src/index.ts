@@ -19,6 +19,7 @@ declare module '@deepseek-ai/dsh-llm' {
 
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
+import { Duration } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
   deriveBrowserTimeZoneContext,
@@ -56,15 +57,17 @@ export const Config: z<Config> = z.object({
   refreshIntervalMs: z.number(),
 })
 
-/** Format a non-negative elapsed millisecond count as compact whole-second units. */
+/**
+ * Format a non-negative elapsed millisecond count as compact whole-second units.
+ *
+ * A backward wall-clock reading is a property of the clock rather than of the
+ * span, so it clamps to zero here; the shared span type then supplies the whole
+ * parts, and this package keeps the wording.
+ */
 function formatDuration(elapsedMs: number): string {
-  let seconds = Math.floor(Math.max(0, elapsedMs) / 1000)
-  const days = Math.floor(seconds / 86_400)
-  seconds %= 86_400
-  const hours = Math.floor(seconds / 3600)
-  seconds %= 3600
-  const minutes = Math.floor(seconds / 60)
-  seconds %= 60
+  const { days, hours, minutes, seconds } = Duration
+    .fromMilliseconds(Math.max(0, elapsedMs))
+    .decompose()
   const parts: string[] = []
   if (days > 0) parts.push(`${days}d`)
   if (hours > 0) parts.push(`${hours}h`)

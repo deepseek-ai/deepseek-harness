@@ -274,6 +274,8 @@ macOS 签名打包在组装 App 时、代码签名前写入 `Contents/Resources/
 
 ## 安装与发布验收
 
+Windows 以不带版本后缀的产品名称显示已安装应用，版本保留在单独的版本字段中。Desktop 的 `package.json` 中的 `author.name` 提供安装包发布者和可执行文件公司名称，与签名证书相互独立。Windows 和 macOS 的版权文本仍使用产品名称。重新构建的安装包在安装或升级时写入新元数据；既有安装在此之前保留原值。
+
 一起保留生成的安装包、版本和打包记录。安装前检查签名与运行时验证结果，再按[已安装更新验收流程](../tests/installed-update/README.zh.md)记录安装后启动及升级证据。[Desktop 测试记录](../tests/README.zh.md)维护验证限制；工作流成功本身不代表 production preset、新工作站或已安装升级验收通过。
 
 ## 开发备注
