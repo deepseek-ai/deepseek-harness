@@ -209,10 +209,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ' This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes.'
+          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer.'
           + (subagentProvider.prepareContinuable !== undefined
-            ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
-            : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
+            ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
+            : ' This backend does not accept follow-up messages.')
           + (modelSelectionEnabled ? selectionDescription : '')
           + (modelSelectionEnabled && subagentProvider.inheritsParentContext
             ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
