@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-experimental-agent-team'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
-  assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
+  acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
@@ -102,11 +102,13 @@ describe('web e2e: Agent Teams panel', () => {
     const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
     expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
     await other.dispose()
+    const beforeReload = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await page.locator('[data-team-action]').waitFor()
     await page.getByRole('button', { name: /^Select model/u }).click()
     expect(await toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
+    acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
 
   it('displays agent-owned task changes through a read-only board without a refresh action', async () => {
