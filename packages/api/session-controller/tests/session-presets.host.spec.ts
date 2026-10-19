@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -64,7 +64,9 @@ async function harness(options: HarnessOptions = {}) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
+  const preset = await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   const presets = options.presets
   const selections: { sessionId: SessionId; agentPreset: string }[] = []
   const resumed: SessionId[] = []
@@ -87,6 +89,7 @@ async function harness(options: HarnessOptions = {}) {
     }
     ctx.provide('agentPresets', {
       defaultId: presets[0],
+      presetForSession: (session: Session) => preset.stateOf(session),
       resolve: (id?: string) => Promise.resolve(id === undefined ? undefined : options.resolving?.get(id))
         .then(() => ({ id: known(id) })),
       mount: (_ctx: Context, id?: string) => Promise.resolve().then(() => ({ id: usable(id) })),
@@ -161,15 +164,13 @@ async function harness(options: HarnessOptions = {}) {
     },
   }
   ctx.agents.setFactory(factory)
-  const remote = createSessionTestRemote(ctx, {
+  const remote = await createSessionTestRemote(ctx, {
     defaultModelSelection: () => ({ provider: 'test', model: 'test-model' }),
     cwd,
   })
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
-  if (presets !== undefined) ctx.sessionProjections.register(agentPresetProjectionDefinition)
   const presetOf = (id: SessionId): string | null | undefined => {
     const session = ctx.sessions.get(id)
-    return session === undefined ? undefined : ctx.sessionProjections.stateOf(session, 'agentPreset')
+    return session === undefined ? undefined : preset.stateOf(session)
   }
   const selectedEvents = (id: SessionId): unknown[] => {
     const session = ctx.sessions.get(id)

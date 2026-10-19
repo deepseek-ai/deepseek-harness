@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在存在实时 agent 的任何地方挂载 `dsh-agent`：它提供 `ctx.agents` 以及插件、UI、钩子和编排器所面向编程的 `Agent` 句柄。在没有驱动器注册工厂之前，该服务保持惰性——随附驱动器是 `dsh-agent-loop`，因此最小的可用组合需要同时加载两者。
+将 `dsh-agent` 与 `dsh-session-projection` 一起挂载：它提供 `ctx.agents`、`Agent` 句柄，以及读取已记录轮次和步骤位置的 `turnBoundaryOf(session)`。创建或恢复 Agent 还需要驱动器注册工厂；随附驱动器是 `dsh-agent-loop`。
 
 ### 创建或恢复 agent
 
@@ -86,7 +86,7 @@ await handle.agent.whenIdle()
 
 ### 持久 inbox
 
-`Agent.inbox` 只暴露结构型 `Inbox` 接口，投影词汇仍位于本包。dsh-agent-loop 持有包内部的 `ReactLoopInbox` 与标准 `inbox` 投影；构造具体 inbox 时会确保投影注册表为持久 `agent/inbox/spliced` fold 持有一份注册。注册表继续作为实时 `{ 'next-turn', 'next-step' }` 状态的唯一所有者。重建过程会拒绝不安全或越界的 splice 坐标，以及跨两份待处理列表重复的 `MessageId`，并报告出错事件的 seq。
+`Agent.inbox` 只暴露结构型 `Inbox` 接口，投影词汇仍位于本包。dsh-agent-loop 持有包内部的 `ReactLoopInbox` 与标准 `inbox` 投影；loop 服务为持久 `agent/inbox/spliced` fold 获取一份注册，并向每个 inbox 提供状态读取回调。注册表继续作为实时 `{ 'next-turn', 'next-step' }` 状态的唯一所有者。重建过程会拒绝不安全或越界的 splice 坐标，以及跨两份待处理列表重复的 `MessageId`，并报告出错事件的 seq。
 
 `Inbox` 暴露待处理的 `nextTurn` 与 `nextStep` 消息，并通过 `append`、`prepend`、`replace`、`remove`、`clear` 与 `splice` 变更它们。普通删除和 `clear()` 都是持久取消。在步骤边界，循环的内部实现会通过纯删除 splice 领取待处理输入。实时通知刻意采用逐消息的最小载荷：`agent/inbox/inserted { message }`、`agent/inbox/claimed { message, turn }` 与 `agent/inbox/discarded { message }`。
 

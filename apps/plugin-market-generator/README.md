@@ -9,7 +9,7 @@ A reference generator for [plugin market index](../../.agents/notes/implemented/
 Write a source list, one entry per line. Blank lines and lines starting with `#` are ignored.
 
 ```text
-# npm packages: every non-deprecated bundle version is listed
+# npm packages: every bundle version that is neither deprecated nor private is listed
 @scope/dsh-example
 dsh-another-plugin
 # Git repositories: release tags and the default branch are listed
@@ -43,9 +43,9 @@ The exit status is 0 when every source was read, 1 when a source could not be re
 
 ## What gets listed
 
-Each package becomes one plugin with one or more versions. A version is listed only when its `package.json` declares `dsh.bundle` with `patch` set to a file path or a list of file paths.
+Each package becomes one plugin with one or more versions. A version is listed only when its `package.json` declares `dsh.bundle` with `patch` set to a file path or a list of file paths, and does not set `"private": true`. A Git package whose `package.json` on the default branch sets `"private": true` is not listed, and neither are its tagged versions.
 
-- **npm package**: every version in the registry document that is not deprecated, declares a bundle, and has a publish time. Versions come from the registry document alone; only the tarball of the highest listed version is downloaded, for its display fields. Its `package.json` must name the requested package and version.
+- **npm package**: every version in the registry document that is neither deprecated nor private, declares a bundle, and has a publish time. Versions come from the registry document alone; only the tarball of the highest listed version is downloaded, for its display fields. Its `package.json` must name the requested package and version.
 - **Git repository**: bundle packages are found on the default branch, in this order:
   1. the root `package.json` declares `dsh.bundle`: the root package only;
   2. `package.json` `workspaces` or `pnpm-workspace.yaml` `packages` match packages that declare `dsh.bundle`: those packages. Each glob segment is a literal name, a name with `*`, or `**`; negated globs are ignored, and a glob that matches nothing is reported;

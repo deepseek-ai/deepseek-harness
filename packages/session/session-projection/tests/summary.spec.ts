@@ -18,11 +18,6 @@ import type {
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    'test/summary-kept': { text: string } | null
-    'test/summary-excluded': number
-    'test/summary-excluded-nullable': string[] | null
-  }
   interface SessionProjectionMap {
     'test/summary-kept': { text: string } | null
     'test/summary-excluded': SessionProjectionSummaryExcluded<number>
@@ -75,9 +70,9 @@ describe('session projection summary keys', () => {
   it('derives the summary set from the registered units and their marks', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(keptUnit())
-      registry.register(excludedUnit())
-      registry.register(excludedNullableUnit())
+      await registry.register(keptUnit())
+      await registry.register(excludedUnit())
+      await registry.register(excludedNullableUnit())
       const keys = registry.summaryKeys()
       expect([...keys]).toEqual(['test/summary-kept'])
       expect(keys.has('test/summary-excluded')).toBe(false)
@@ -91,11 +86,11 @@ describe('session projection summary keys', () => {
   it('refuses a second registration of one key with a different summary membership', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(keptUnit())
-      expect(() => registry.register({
+      await registry.register(keptUnit())
+      await expect(registry.register({
         ...keptUnit(),
         wire: { ...keptUnit().wire, summary: false },
-      })).toThrow(/test\/summary-kept.*already registered with summary=true/)
+      })).rejects.toThrow(/test\/summary-kept.*already registered with summary=true/)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -106,8 +101,8 @@ describe('session projection summary keys', () => {
     try {
       const empty = registry.summaryKeys()
       expect([...empty]).toEqual([])
-      const fiber = await ctx.plugin(Object.assign((hostCtx: Context) => {
-        hostCtx.sessionProjections.register(keptUnit())
+      const fiber = await ctx.plugin(Object.assign(async (hostCtx: Context) => {
+        await hostCtx.sessionProjections.register(keptUnit())
       }, { inject: ['sessionProjections'] }))
       const registered = registry.summaryKeys()
       expect(registered).not.toBe(empty)
@@ -125,9 +120,9 @@ describe('session projection summary keys', () => {
   it('serves a summary-shaped block through the key-taking checkpoint face', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(keptUnit())
-      registry.register(excludedUnit())
-      registry.register(excludedNullableUnit())
+      await registry.register(keptUnit())
+      await registry.register(excludedUnit())
+      await registry.register(excludedNullableUnit())
       const checkpoint: ProjectionCheckpoint = {
         'test/summary-kept': { ver: 1, seq: SessionSeq(3), val: { text: 'kept' } },
         'test/summary-excluded': { ver: 1, seq: SessionSeq(4), val: 7 },
@@ -151,8 +146,8 @@ describe('session projection summary keys', () => {
   it('serves cached summary cells through the key-taking cached face', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(keptUnit())
-      registry.register(excludedUnit())
+      await registry.register(keptUnit())
+      await registry.register(excludedUnit())
       const session = ctx.sessions.create(SessionId('summary-cached'), { meta: { cwd: '/workspace' } })
       session.append('turn/start', { turn: 1 })
 
@@ -172,8 +167,8 @@ describe('session projection summary keys', () => {
   it('reports an empty summary set while the complete face still serves only marked units', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(excludedUnit())
-      registry.register(excludedNullableUnit())
+      await registry.register(excludedUnit())
+      await registry.register(excludedNullableUnit())
       const session = ctx.sessions.create(SessionId('summary-empty'), { meta: { cwd: '/workspace' } })
       session.append('turn/start', { turn: 1 })
 
@@ -191,7 +186,7 @@ describe('session projection summary keys', () => {
   it('keeps the marked nullable entry nullable through the mark', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(excludedNullableUnit())
+      await registry.register(excludedNullableUnit())
       const before = ctx.sessions.create(SessionId('summary-nullable'), { meta: { cwd: '/workspace' } })
       expect(registry.snapshot(before).values['test/summary-excluded-nullable']).toBeNull()
     } finally {
@@ -202,7 +197,7 @@ describe('session projection summary keys', () => {
   it('drops an unmaterialized cell and a version-mismatched checkpoint row', async () => {
     const { ctx, registry } = await mount()
     try {
-      registry.register(keptUnit())
+      await registry.register(keptUnit())
       const session = ctx.sessions.create(SessionId('summary-unmaterialized'), { meta: { cwd: '/workspace' } })
       expect(registry.cachedSnapshot(session, registry.summaryKeys())?.values).toEqual({
         'test/summary-kept': null,

@@ -85,7 +85,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   await writeFile(configPath, Object.keys(modules).flatMap(name => [
     `- name: 'cordis:${name}'`,
     ...name === 'attachments' ? ['  config:', `    dshHome: ${JSON.stringify(root)}`] : [],
-    ...name === 'cua' ? ['  config:', `    helperPath: ${JSON.stringify(helperPath)}`, '    allowedApps: [{"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app"}]'] : [],
+    ...name === 'cua' ? ['  config:', '    agentPreset: false', `    helperPath: ${JSON.stringify(helperPath)}`, '    allowedApps: [{"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app"}]'] : [],
   ]).join('\n') + '\n')
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)

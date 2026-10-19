@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当领域保存客户端应看到、但不应自行重新派生的状态——todo 清单、goal 快照、对话统计——时选择本包。注册表在已提交事件上主动驱动单元，因此任何已注册单元的值按构造即为当前值。当维护的是无客户端读取的 host-only 记账时跳过：不带 `wire` 块的单元保持 host-only。host 读取方要么在插件 `inject` 中声明 `sessionProjections`，要么在注册表或必需 key 缺席时明确失败。贡献方可以继续通过 `ctx.inject(['sessionProjections'], ...)` 保持可选注册。
+当领域保存客户端应看到、但不应自行重新派生的状态——todo 清单、goal 快照、对话统计——时选择本包。注册表在已提交事件上主动驱动单元，因此任何已注册单元的值按构造即为当前值。不带 `wire` 块的单元将状态保留在 host。领域所有者在插件依赖中声明 `sessionProjections`，并等待注册完成后才提供同步服务方法。其他插件通过所属服务调用这些方法。
 
 ### 定义投影单元
 
@@ -55,14 +55,15 @@ const definition = {
 
 ### 注册与读取
 
-`register(definition)` 安装单元；具有相同 key 和 `stateVersion` 的注册方共享其 cell，版本不兼容或 `stateVersion` 非法时会 throw。注册是挂在调用方 fiber 上的 effect，因此最后一个注册方卸载后会移除 key 及其缓存 cell。返回的 disposer 可以 yield 到同一 fiber 上的复合 `ctx.effect()` 中，使单元在依赖它的清理完成前保持可用。载体用 `snapshot(session)` 对每个客户端可见单元读取一致的同步切面——`{ asOfSeq, values }`，其中 `asOfSeq` 是所有值共同反映到的最后一个事件的 seq——并用 `onChanged(listener)` 订阅逐变更通知。`stateOf(session, key)` 读取一个单元的实时只读 host 状态，不计算无关视图。
+`await register(definition)` 从 `stateSchema` 推导宿主状态类型，安装单元，并返回提供同步 `stateOf(session)` 读取和 `dispose(): Promise<void>` 的 handle。等待 `dispose()` 完成即可释放注册；重复调用是安全的。具有相同 key 和 `stateVersion` 的注册方共享 cell；版本不兼容或非法时注册会拒绝。注册归调用方 fiber 所有。最后一个注册方注销后，单元退出全局事件驱动、快照、检查点和变更通知。已有 handle 仍可读取：它保留原有单元，按需折叠新增的 Session 事件，即使同一 key 后来注册了其他版本也不受影响。读取 handle 不会初始化无关单元，也不会重新注册。载体用 `snapshot(session)` 读取一致的客户端视图切面，用 `onChanged(listener)` 订阅已注册单元的变更。
 
 ```text
-const dispose = ctx.sessionProjections.register(definition)
+const todoProjectionHandle = await ctx.sessionProjections.register(definition)
+const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
-必须使用投影状态的领域把 `sessionProjections` 声明为 Cordis 服务依赖；可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
+持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
 ### 持久检查点
 
@@ -95,7 +96,7 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SessionProjectionRegistry` 服务、`ProjectionDefinition`、快照与检查点机制 |
-| [`src/types.ts`](src/types.ts) | 可合并扩展的 `SessionProjectionMap` 与 `SessionProjectionStateMap` 类型表，以及摘要排除标记及其派生的视图与摘要类型 |
+| [`src/types.ts`](src/types.ts) | 可合并扩展的 客户端 `SessionProjectionMap` 类型表，以及摘要排除标记及其派生的视图与摘要类型 |
 
 ### 驱动与检查点流程
 

@@ -4,4 +4,5 @@
     - id: cua
       name: '../src/index.ts'
       config:
+        agentPreset: false
         helperPath: !!js process.env.DSH_CUA_HELPER

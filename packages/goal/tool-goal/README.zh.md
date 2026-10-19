@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### 设计
 
-- **执行时权限。** 每次调用都解析精确活跃 agent、其继承的 `AgentRegistry` initiator、running 状态与开放轮次；`create`、`edit`、`pause` 和 `resume` 还要求运行时根 agent 的当前轮次中存在已接受的 `{ kind: 'user' }` 消息或 steering 事件。持久的 paused goal 会让 `resume` 以 `GOAL_TOOL_RESUME_PAUSED` 失败；面向用户的命令或 Web 控件拥有该转换。持久 fork 谱系不会降低已恢复根 agent 的等级；活跃 subagent 所有权会降低。
+- **执行时权限。** 插件依赖 `agents`，并通过 `turnBoundaryOf(session)` 读取轮次状态。每次调用都解析精确活跃 agent、其继承的 `AgentRegistry` initiator、running 状态与开放轮次；`create`、`edit`、`pause` 和 `resume` 还要求运行时根 agent 的当前轮次中存在已接受的 `{ kind: 'user' }` 消息或 steering 事件。持久的 paused goal 会让 `resume` 以 `GOAL_TOOL_RESUME_PAUSED` 失败；面向用户的命令或 Web 控件拥有该转换。持久 fork 谱系不会降低已恢复根 agent 的等级；活跃 subagent 所有权会降低。
 - **人类输入的宿主证明。** `Agent.followup()` 与 `steer()` 会在调用方省略 source 时分配 `{ kind: 'user' }`，因此插件、调度器与其他非人类生产方必须传入自己的 source，不能继承人类权限。
 - **带配置阈值的系统提示词指引。** 本包注册一个 `tool:goal` 系统提示词章节，其固定文本插入 `blockedAfterConsecutiveRounds`；同一数值就是执行时强制执行的硬下限。
 - **终局 Round 的结束上下文。** 成功的自主 `complete` 或 `blocked` 会延后一条 `<goal_complete>` 或 `<goal_blocked>` 结束指令，让模型在轮次结束前向用户做一次交代；人类直接变更绝不会延后该上下文。

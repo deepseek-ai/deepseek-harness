@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { NativeError, type NativeClient } from './native-client.ts'
 import type { CuaAppHandle } from './types.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
+import type { CuaApplicationState } from './access-types.ts'
 
 /** Native identity admission occurs before any application observation or input. */
 export const ApplicationAuthorizationResult = z.object({
@@ -19,7 +20,7 @@ export interface AccessOptions {
 }
 interface Selection {
   identity: CuaApplicationGrant
-  scope: 'task' | 'persistent'
+  scope: 'session' | 'persistent'
   lifetime: AbortController
 }
 interface ClientSelections {
@@ -37,9 +38,9 @@ interface ActiveOperation {
 /** Owns application consent and cancels operations when saved access is removed. */
 export class ApplicationAccess {
   private readonly clients = new Map<NativeClient, ClientSelections>()
-  private readonly rejected = new Map<Agent, Map<CuaApplicationId, CuaApplicationGrant>>()
+  private readonly decisions = new Map<Agent['id'], Map<CuaApplicationId, { identity: CuaApplicationGrant; allowed: boolean }>>()
   private readonly active = new Set<ActiveOperation>()
-  private readonly selections = new WeakMap<Agent, Map<CuaApplicationId, Promise<void>>>()
+  private readonly selections = new Map<Agent['id'], Map<CuaApplicationId, Promise<void>>>()
   private readonly lifetime = new AbortController()
   private mutationTail: Promise<unknown> = Promise.resolve()
   private disposal: Promise<void> | undefined
@@ -59,13 +60,66 @@ export class ApplicationAccess {
       this.lifetime.abort()
       await Promise.allSettled([this.mutationTail, ...[...this.active].map(operation => operation.done.promise)])
       this.clients.clear()
-      this.rejected.clear()
+      this.decisions.clear()
     })()
   }
 
   /**
+   * Project application decisions without requesting native permissions.
+   * @returns Current saved grants and refused applications for the permission page.
+   */
+  status(): Omit<CuaApplicationState, 'settingsNamespace'> {
+    const allowedApps = [...this.options.grants()]
+    const blockedApps = new Map<CuaApplicationId, CuaApplicationGrant>()
+    for (const decisions of this.decisions.values()) for (const [id, decision] of decisions) {
+      if (decision.allowed || allowedApps.some(grant => grant.id === id)) continue
+      blockedApps.set(id, decision.identity)
+    }
+    return { allowedApps,
+      blockedApps: [...blockedApps.values()], persistentAvailable: this.options.save !== undefined }
+  }
+
+  /**
+   * Remove saved and session consent and cancel affected native operations.
+   * @param id Application identity shown in the permission page.
+   * @returns Completion after persistence and affected operations settle; already dispatched input cannot be undone.
+   */
+  async revoke(id: CuaApplicationId): Promise<void> {
+    this.lifetime.signal.throwIfAborted()
+    let clients: readonly NativeClient[] = []
+    await this.mutate(async () => {
+      const grants = this.options.grants()
+      if (grants.some(grant => grant.id === id)) {
+        const save = this.options.save
+        if (!save) throw new Error('Application permissions cannot be saved in this composition')
+        await save(grants.filter(grant => grant.id !== id))
+      }
+      clients = this.invalidate(id)
+    })
+    const results = await Promise.allSettled([
+      ...clients.map(client => client.dispose()),
+      ...[...this.active].filter(operation => operation.identity.id === id).map(operation => operation.done.promise),
+    ])
+    const errors: unknown[] = []
+    for (const result of results) if (result.status === 'rejected') errors.push(result.reason)
+    if (errors.length) throw new AggregateError(errors, 'Application access was revoked, but helper cleanup failed')
+  }
+
+  /**
+   * Clear explicit refusal; the next getApp still requires a new user decision.
+   * @param id Application identity selected by the human.
+   */
+  retryApproval(id: CuaApplicationId): void {
+    this.lifetime.signal.throwIfAborted()
+    for (const decisions of this.decisions.values()) if (decisions.get(id)?.allowed === false) decisions.delete(id)
+    for (const state of this.clients.values()) for (const [handle, selected] of state.handles) {
+      if (selected.identity.id === id && selected.lifetime.signal.aborted) state.handles.delete(handle)
+    }
+  }
+
+  /**
    * Obtain consent for a freshly selected native handle. Free text never grants access.
-   * @param agent Exact live task requesting access.
+   * @param agent Live agent whose session owns the decision.
    * @param client Helper that issued the handle.
    * @param handle Helper handle for a running instance or an approved pending launch.
    * @param identity Native executable/signing identity.
@@ -79,19 +133,21 @@ export class ApplicationAccess {
       const existing = this.clients.get(client)?.handles.get(handle)
       if (!client.disposed && existing && this.permitted(existing)) return
       const saved = identity.persistable && this.options.grants().some(grant => grant.id === identity.id)
-      let scope: Selection['scope'] = 'persistent'
-      if (!saved && this.rejected.get(agent)?.has(identity.id)) throw this.denied(identity)
+      const decision = this.decisions.get(agent.id)?.get(identity.id)
+      let scope: Selection['scope'] = saved ? 'persistent' : 'session'
+      if (!saved && decision?.allowed === false) throw this.denied(identity)
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
-      if (!saved) {
+      if (!saved && !decision?.allowed) {
         const questions = this.ctx.get('userQuestions')
         if (!questions) throw new NativeError('APP_APPROVAL_UNAVAILABLE', 'No human answerer is available for application access')
-        const options = [{ label: 'Allow for this task' }, { label: 'Deny' }]
+        const options = [{ label: 'Allow for this session' }, { label: 'Deny' }]
         if (identity.persistable && this.options.save) options.push({ label: 'Always allow' })
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
             question: `Allow Computer Use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: `Application: ${identity.executablePath}\nTask access applies to the selected application instance, including its launch if needed. macOS permissions and approval of sensitive actions remain separate. Saved access can be revoked by removing its allowedApps entry from this provider configuration. Task access ends with the task.`, options }] })
+            detail: 'Session access lasts until DSH restarts or Computer Use is disabled.',
+            options }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
             this.invalidate(identity.id, agent)
@@ -105,8 +161,9 @@ export class ApplicationAccess {
         signal.throwIfAborted()
         const answer = result.answers.find(answer => answer.id === 'cua-app-access')
         const chosen = answer && !answer.custom?.trim() && answer.selected.length === 1 ? answer.selected[0] : undefined
-        if (chosen === 'Allow for this task') scope = 'task'
+        if (chosen === 'Allow for this session') scope = 'session'
         else if (chosen === 'Always allow' && identity.persistable && this.options.save) {
+          scope = 'persistent'
           const { persistable: _persistable, ...grant } = identity
           await this.persist((grants) => {
             signal.throwIfAborted()
@@ -129,7 +186,8 @@ export class ApplicationAccess {
       }
       state.handles.set(handle, { identity: grant, scope, lifetime: new AbortController() })
       this.clients.set(client, state)
-      this.rejected.get(agent)?.delete(identity.id)
+      if (scope === 'session') this.decide(agent.id, grant, true)
+      else this.decisions.get(agent.id)?.delete(identity.id)
     }))
   }
 
@@ -155,11 +213,14 @@ export class ApplicationAccess {
   }
 
   private async selectInOrder(agent: Agent, id: CuaApplicationId, select: () => Promise<void>): Promise<void> {
-    const selections = this.selections.get(agent) ?? new Map<CuaApplicationId, Promise<void>>()
-    this.selections.set(agent, selections)
+    const selections = this.selections.get(agent.id) ?? new Map<CuaApplicationId, Promise<void>>()
+    this.selections.set(agent.id, selections)
     const operation = (selections.get(id) ?? Promise.resolve()).then(select, select)
     selections.set(id, operation)
-    try { await operation } finally { if (selections.get(id) === operation) selections.delete(id) }
+    try { await operation } finally {
+      if (selections.get(id) === operation) selections.delete(id)
+      if (selections.size === 0) this.selections.delete(agent.id)
+    }
   }
 
   private async withOperation<T>(agent: Agent, client: NativeClient, identity: CuaApplicationGrant, signal: AbortSignal,
@@ -172,6 +233,9 @@ export class ApplicationAccess {
       const result = await dispatch(lifetime)
       lifetime.throwIfAborted()
       return result
+    } catch (error) {
+      if (operation.controller.signal.aborted) throw operation.controller.signal.reason
+      throw error
     } finally {
       this.active.delete(operation)
       operation.done.resolve()
@@ -179,40 +243,44 @@ export class ApplicationAccess {
   }
 
   /**
-   * Forget the disposed task's transient decisions and selected handles.
-   * @param agent Disposed task whose transient decisions are released.
+   * Release the disposed agent's handles while retaining its session decisions.
+   * @param agent Disposed agent whose selected handles are released.
    */
   forget(agent: Agent): void {
     for (const [client, state] of this.clients) if (state.agent === agent) this.clients.delete(client)
-    this.rejected.delete(agent)
   }
 
   private permitted(selection: Selection): boolean {
     return !selection.lifetime.signal.aborted
-      && (selection.scope === 'task' || this.options.grants().some(grant => grant.id === selection.identity.id))
+      && (selection.scope === 'session' || this.options.grants().some(grant => grant.id === selection.identity.id))
   }
   private denied(identity: CuaApplicationGrant): NativeError {
     return new NativeError('APP_ACCESS_DENIED', `The user denied access to ${identity.name}. Do not retry or use another tool to bypass this decision.`)
   }
-  private reject(agent: Agent, identity: CuaApplicationGrant): void {
-    const rejected = this.rejected.get(agent) ?? new Map<CuaApplicationId, CuaApplicationGrant>()
-    rejected.set(identity.id, { id: identity.id, name: identity.name, executablePath: identity.executablePath })
-    this.rejected.set(agent, rejected)
+  private decide(sessionId: Agent['id'], identity: CuaApplicationGrant, allowed: boolean): void {
+    const decisions = this.decisions.get(sessionId) ?? new Map<CuaApplicationId, { identity: CuaApplicationGrant; allowed: boolean }>()
+    decisions.set(identity.id, { identity: { id: identity.id, name: identity.name, executablePath: identity.executablePath }, allowed })
+    this.decisions.set(sessionId, decisions)
   }
-  private invalidate(id: CuaApplicationId, agent?: Agent): void {
+  private invalidate(id: CuaApplicationId, agent?: Agent): NativeClient[] {
     const clients = new Set<NativeClient>()
+    for (const [sessionId, decisions] of this.decisions) {
+      const decision = decisions.get(id)
+      if (decision && (agent === undefined || sessionId === agent.id)) this.decide(sessionId, decision.identity, false)
+    }
     for (const [client, state] of this.clients) for (const selection of state.handles.values()) if (selection.identity.id === id
-      && (agent === undefined || state.agent === agent)) {
+      && (agent === undefined || state.agent.id === agent.id)) {
       selection.lifetime.abort(new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application'))
-      this.reject(state.agent, selection.identity)
+      this.decide(state.agent.id, selection.identity, false)
       clients.add(client)
     }
-    for (const operation of this.active) if (operation.identity.id === id && (agent === undefined || operation.agent === agent)) {
-      this.reject(operation.agent, operation.identity)
+    for (const operation of this.active) if (operation.identity.id === id && (agent === undefined || operation.agent.id === agent.id)) {
+      this.decide(operation.agent.id, operation.identity, false)
       operation.controller.abort(this.denied(operation.identity))
       clients.add(operation.client)
     }
     for (const client of clients) client.invalidate()
+    return [...clients]
   }
   private reconcile(): void {
     for (const state of this.clients.values()) for (const selection of state.handles.values()) {

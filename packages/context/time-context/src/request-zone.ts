@@ -1,9 +1,8 @@
 /** Browser-zone derivation and model-facing policy text for one open request turn. */
 
+import { canonicalizeTimeZone } from '@deepseek-ai/dsh-util-time'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-
-const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
 
 /** Browser-zone facts derived from user-rpc messages in one open turn. */
 export type BrowserTimeZoneContext =
@@ -11,7 +10,13 @@ export type BrowserTimeZoneContext =
   | { readonly kind: 'mixed'; readonly timeZones: readonly string[] }
   | { readonly kind: 'missing' }
 
-/** Read and validate a Host-canonicalized browser zone from one ordinary user-rpc message. */
+/**
+ * Read and validate a Host-canonicalized browser zone from one ordinary user-rpc message.
+ *
+ * A request may only name a zone another process resolves back to the same
+ * identity, so the shared vocabulary's canonical answer must equal the reported
+ * value; an alias is refused here rather than silently rewritten.
+ */
 function browserTimeZone(message: UserMessage): string | undefined {
   const source = message.source
   const value = source.kind === 'user'
@@ -22,21 +27,27 @@ function browserTimeZone(message: UserMessage): string | undefined {
     ? source.clientTimeZone
     : undefined
   if (value === undefined) return undefined
-  if (value !== 'UTC' && !IANA_TIME_ZONE.test(value)) {
-    throw new TypeError(
-      `browser time zone must be canonical UTC or IANA Area/Location: ${JSON.stringify(value)}`,
-    )
+  const resolved = canonicalizeTimeZone(value)
+  if (resolved.kind === 'accepted') {
+    if (resolved.timeZone !== value) {
+      throw new TypeError(`browser time zone must be canonical: ${JSON.stringify(value)}`)
+    }
+    return value
   }
-  let canonical: string
-  try {
-    canonical = new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone
-  } catch (error: unknown) {
-    throw new TypeError(`browser time zone is unsupported: ${JSON.stringify(value)}`, { cause: error })
+  switch (resolved.reason) {
+    case 'unsupported':
+      throw new TypeError(`browser time zone is unsupported: ${JSON.stringify(value)}`, { cause: resolved.cause })
+    case 'blank':
+    case 'padded':
+    case 'not_area_location':
+      throw new TypeError(`browser time zone must be canonical UTC or IANA Area/Location: ${JSON.stringify(value)}`)
+    /* v8 ignore next 2 -- Intl answers a canonical Area/Location for every name it accepts. */
+    case 'not_canonical_shape':
+      throw new TypeError(`browser time zone must be canonical: ${JSON.stringify(value)}`)
+    /* v8 ignore next 2 -- TimeZoneRejection is closed; this arm only makes adding a reason a compile error. */
+    default:
+      assertNever(resolved.reason, 'TimeZoneRejection')
   }
-  if (canonical !== value) {
-    throw new TypeError(`browser time zone must be canonical: ${JSON.stringify(value)}`)
-  }
-  return value
 }
 
 /**

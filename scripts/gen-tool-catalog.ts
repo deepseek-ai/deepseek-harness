@@ -271,9 +271,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-plan-mode',
     dir: 'plan-mode',
     source: 'packages/plan/plan-mode/src/index.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.userQuestions (execution time, opportunistic)'],
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agents', 'ctx.userQuestions (execution time, opportunistic)'],
     writes: ['tool/call', 'plan/mode inactive on an approved review', 'tool/result'],
     async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(PlanModeController, { section: 'Tool catalog schema harvest.' })
     },
     note:
@@ -301,9 +302,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-present',
     dir: 'tool-present',
     source: 'packages/deliverables/tool-present/src/index.ts',
-    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.sessionProjections'],
+    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.agents'],
     writes: ['tool/call', 'deliverables/presented after a successful final result', 'tool/result'],
     async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(ToolPresent)
     },
     note: 'Deliveries belong to the calling Session; Web ui-deliverables supplies source-file opening and cards.',
@@ -507,10 +509,11 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-session-query',
     dir: 'tool-session-query',
     source: 'packages/experimental/tool-session-query/src/index.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.sessionQuery', 'a calling Agent for workspace authority'],
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.sessionQuery', 'ctx.agents', 'a calling Agent for workspace authority'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
       await ctx.plugin(ToolSessionQuery)
     },

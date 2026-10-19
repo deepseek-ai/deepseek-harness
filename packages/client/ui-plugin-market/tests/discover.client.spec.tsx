@@ -6,7 +6,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 import { DiscoverSection, type DiscoverSectionProps } from '../src/client/DiscoverSection.tsx'
-import type { DiscoverState, ListingState } from '../src/client/market-store.ts'
+import type { DetailsState, DiscoverState, ListingState } from '../src/client/market-store.ts'
 import { INITIAL_QUERY, type DiscoverQuery } from '../src/client/presentation.ts'
 import { en, zh, type PluginMarketLocaleKey } from '../src/client/locales.ts'
 
@@ -86,6 +86,7 @@ function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<Plugin
     ensure: vi.fn(), reload: vi.fn(), select: vi.fn(), search: vi.fn(), more: vi.fn(), refresh: vi.fn(), retry: vi.fn(),
     toggleSources: vi.fn(),
     editDraft: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
+    loadDetail: vi.fn(), retryDetail: vi.fn(), detailImage: vi.fn(() => undefined),
   }
   const install = vi.fn()
   const openPackage = vi.fn()
@@ -94,6 +95,7 @@ function renderTab(state: Partial<DiscoverState> = {}, dictionary: Record<Plugin
     resolveText: (text: string | Record<string, string>) => typeof text === 'string' ? text : text[language] ?? text.en,
     useDiscover: bindSnapshotSelector(store),
     useLocale: bindSnapshotSelector(locale),
+    useDetails: bindSnapshotSelector(createSnapshotStore<DetailsState>({})),
   } as DiscoverSectionProps
   render(<DiscoverSection {...props} />)
   const set = (next: Partial<DiscoverState>): void => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) }
@@ -278,9 +280,11 @@ describe('DiscoverSection', () => {
   })
 
   it('opens an entry page with its source facts and actions, and returns to the list', () => {
-    const { install, openPackage } = renderTab()
+    const { install, openPackage, actions } = renderTab()
     fireEvent.click(card('dsh-a').getByRole('button', { name: 'View Alpha' }))
     const detail = within(document.querySelector('[data-market-detail="dsh-a"]') as HTMLElement)
+    expect(actions.loadDetail).toHaveBeenCalledWith({ url: A, name: 'dsh-a', version: '1.0.0', npm: true }, 'en')
+    expect(detail.getByRole('status', { name: en.detailLoading })).toBeTruthy()
     expect(detail.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
     expect(detail.getByText('dsh-a')).toBeTruthy()
     for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha market']) expect(detail.getByText(value)).toBeTruthy()
@@ -297,6 +301,7 @@ describe('DiscoverSection', () => {
     fireEvent.click(detail.getByRole('button', { name: en.backToList }))
     fireEvent.click(card('dsh-b').getByRole('button', { name: 'View dsh-b' }))
     const git = within(document.querySelector('[data-market-detail="dsh-b"]') as HTMLElement)
+    expect(actions.loadDetail).toHaveBeenLastCalledWith({ url: A, name: 'dsh-b', version: '1.0.0', npm: false }, 'en')
     expect(git.queryByRole('link')).toBeNull()
     for (const value of ['https://github.com/o/r', COMMIT, 'packages/b', 'Themes']) expect(git.getByText(value)).toBeTruthy()
     fireEvent.click(git.getByRole('button', { name: 'View dsh-b in Installed' }))

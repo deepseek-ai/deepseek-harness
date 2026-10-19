@@ -29,7 +29,7 @@ Mount `dsh-session-projection` wherever client carriers need current values of l
 
 ### When to choose it
 
-Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. Skip it for host-only bookkeeping that no client reads: a unit without a `wire` block stays host-only. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject(['sessionProjections'], ...)`.
+Choose it when a domain keeps state that clients should see without re-deriving it — a todo list, a goal snapshot, conversation statistics. The registry drives units eagerly over committed events, so any registered unit's value is current by construction. A unit without a `wire` block keeps its state host-only. Domain owners declare `sessionProjections` in their plugin dependencies and await registration before exposing synchronous service methods. Other plugins read those methods through the owning service.
 
 ### Define a projection unit
 
@@ -55,14 +55,15 @@ const definition = {
 
 ### Register and read
 
-`register(definition)` installs the unit; registrants with the same key and `stateVersion` share its cells, while an incompatible version or invalid `stateVersion` throws. Registration is an effect on the calling fiber, so the last unload removes the key and its cached cells. The returned disposer can be yielded into a composite `ctx.effect()` on the same fiber to keep the unit available through dependent cleanup. Carriers read a consistent synchronous cut over every client-visible unit with `snapshot(session)` — `{ asOfSeq, values }`, where `asOfSeq` is the seq of the last event every value reflects — and subscribe to per-change notifications with `onChanged(listener)`. `stateOf(session, key)` reads one unit's live read-only host state without computing unrelated views.
+`await register(definition)` infers the host state type from `stateSchema`, installs the unit, and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, checkpoints, and change notifications. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut and `onChanged(listener)` for changes to registered units.
 
 ```text
-const dispose = ctx.sessionProjections.register(definition)
+const todoProjectionHandle = await ctx.sessionProjections.register(definition)
+const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
-A domain that requires projected state declares `sessionProjections` as a Cordis service dependency; optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
+A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
 ### Persisted checkpoints
 
@@ -95,7 +96,7 @@ The package is the Service Definition and drive role of a capability seam: the f
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionRegistry` service, `ProjectionDefinition`, snapshot and checkpoint machinery |
-| [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables, plus the summary-exclusion mark and its derived view and summary types |
+| [`src/types.ts`](src/types.ts) | The merge-extensible client `SessionProjectionMap` type table, plus the summary-exclusion mark and its derived view and summary types |
 
 ### Drive and checkpoint flow
 

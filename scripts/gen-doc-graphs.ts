@@ -224,6 +224,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'One provider-owned name per service instance. Each provider also owns its model tools; the service has no common action API, runtime selection, or Session workflow lock.',
   },
   {
+    key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
+    mode: 'core', consumers: ['cua'],
+    note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
+  },
+  {
     key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview'],
     note: 'Authorized Office bytes are converted on the Host using the declared native target engine, or Node WASM when no native target is declared.',

@@ -94,9 +94,6 @@
     "@deepseek-ai/dsh-session-persistence": {
       "optional": true
     },
-    "@deepseek-ai/dsh-session-projection": {
-      "optional": true
-    },
     "@deepseek-ai/dsh-session-query": {
       "optional": true
     },

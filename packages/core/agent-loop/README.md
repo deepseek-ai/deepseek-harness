@@ -109,7 +109,7 @@ The loop deep-freezes each derived message identity on its first request and reu
 
 Creation is one rollback-covered transaction: construct a private session, concrete agent, and scoped context; await optional setup; enter both registries; announce `session/created`; await serial `agent/created` listeners; then release queued input. A caller creating a runtime child sets `options.parentAgent`; the caller Context separately owns the transaction and live handle. Setup, commit, or listener failure and owner disposal roll back the prepared resources. Announcements already delivered remain observable and receive matching disposal notifications. Teardown stops and drains the driver, unwinds the scope, closes the session's write path, detaches the agent, then detaches the session. Every detach binds the exact entered object, so a stale disposer cannot remove a later same-id replacement.
 
-Factory unload retains the inbox and turn-boundary projections through scope cleanup, including cancellation from scoped abort listeners, until every Agent teardown and startup task settles. Cleanup failures do not release those projections early. Caller unload, factory unload, and handle disposal await the same teardown.
+The loop awaits inbox and turn-boundary registration before publishing its factory and passes those handles into synchronous Agent construction. During factory unload, global registrations may disappear before teardown finishes; retained handles remain readable through scope cleanup, including cancellation from scoped abort listeners. Caller unload, factory unload, and handle disposal await the same teardown.
 
 ### Persistence integration
 

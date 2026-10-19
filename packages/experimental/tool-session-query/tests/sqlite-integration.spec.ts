@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
@@ -12,7 +12,6 @@ import SessionStore, {
   type Session,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -33,8 +32,8 @@ function fakeAgent(session: Session): Agent {
   return { id: session.id, session } as unknown as Agent
 }
 
-function registerTurnBoundary(ctx: Context): void {
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+async function registerTurnBoundary(ctx: Context): Promise<void> {
+  await ctx.plugin(AgentRegistry)
 }
 
 describe('tool-session-query with the real SQLite provider', () => {
@@ -45,7 +44,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    registerTurnBoundary(ctx)
+    await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
@@ -118,7 +117,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    registerTurnBoundary(ctx)
+    await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })

@@ -974,6 +974,49 @@ describe('ChatView', () => {
     },
   )
 
+  // jsdom applies no CSS, so the cap is observed through the class that carries `max-height`; the fold
+  // animation measures the body in the commit that closes it.
+  const uncapped = (body: HTMLElement): boolean => body.className.includes('expandedBody')
+
+  it.each(['compact', 'standard'] as const)(
+    'closes a reader-opened running %s group from its height cap with next-input timing', (mode) => {
+      const h = makeCompletionHarness(mode, 'next-input')
+      const view = render(<h.ChatView {...h.props} />)
+      const root = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+      const header = root.querySelector<HTMLButtonElement>('[data-process-activity]')!
+      const body = root.querySelector<HTMLElement>('[data-step-process-body]')!
+      fireEvent.click(header)
+      expect(body.hasAttribute('hidden')).toBe(false)
+      expect(uncapped(body)).toBe(false)
+      fireEvent.click(header)
+      expect(header.getAttribute('aria-expanded')).toBe('false')
+      expect(body.hasAttribute('hidden')).toBe(true)
+      expect(uncapped(body)).toBe(false)
+    },
+  )
+
+  it('closes flat Detailed rows at full height and a reader-opened historical group from its cap', () => {
+    const h = makeCompletionHarness('detailed', 'next-input')
+    const view = render(<h.ChatView {...h.props} />)
+    act(() => { h.complete() })
+    const root = view.container.querySelector<HTMLElement>('[data-chat-group-key][data-chat-turn="2"]')!
+    const header = root.querySelector<HTMLButtonElement>('[data-process-activity]')!
+    const body = root.querySelector<HTMLElement>('[data-step-process-body]')!
+    expect(body.hasAttribute('hidden')).toBe(false)
+    expect(uncapped(body)).toBe(true)
+    act(() => { h.sendNext() })
+    act(() => { h.startNext() })
+    expect(body.hasAttribute('hidden')).toBe(true)
+    expect(uncapped(body)).toBe(true)
+    fireEvent.click(view.container.querySelector<HTMLButtonElement>('[data-turn-process="2"]')!)
+    fireEvent.click(header)
+    expect(body.hasAttribute('hidden')).toBe(false)
+    expect(uncapped(body)).toBe(false)
+    fireEvent.click(header)
+    expect(body.hasAttribute('hidden')).toBe(true)
+    expect(uncapped(body)).toBe(false)
+  })
+
   it.each([
     { initialHeight: 200, closed: true },
     { initialHeight: 600, closed: true },

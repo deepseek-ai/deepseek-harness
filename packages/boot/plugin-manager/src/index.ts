@@ -9,7 +9,13 @@ import { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import z from '@deepseek-ai/schemastery'
-import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
+import semver from 'semver'
+import { TypertRemoteService, Remote, RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
+import { detailImageResponse, NPM_FILE_SOURCES } from '@deepseek-ai/dsh-plugin-detail'
+import type { NpmFileSource } from '@deepseek-ai/dsh-plugin-detail/types'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type {} from '@deepseek-ai/dsh-client-connection'
+import { readBundleDocument, readBundleImage, type BundleDetailOptions } from './bundle-detail.ts'
 import { pluginEntryId, readPluginInventory } from '@deepseek-ai/dsh-host-plugin-inventory'
 import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
@@ -29,10 +35,12 @@ import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
+import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
 import type {
-  BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ManagementError, PackageResult, PluginChange,
-  PluginEntryId, PluginInfo, PluginInspectProblem, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
-  PluginRegistries, PluginSpecInspection, Registry,
+  BundleDetail, BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, ManagementError,
+  PackageResult, PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
+  PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginUpdateStep, PluginVersion, PluginVersionList, Registry,
+  RegistryAttempt, UpdateBundleOptions,
 } from './types.ts'
 export type * from './types.ts'
 export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts'
@@ -60,7 +68,22 @@ export interface Config {
    * unless that is npm's own registry or one of these.
    */
   fallbackRegistries?: string[]
+  /** How many of the newest versions above the installed one a version listing reads and returns. */
+  versionListLimit?: number
+  /** How many single-version registry lookups a version listing runs at once. */
+  versionLookupConcurrency?: number
+  /** Largest bundle detail document, and largest locale file read for one, in bytes. */
+  detailMaxBytes?: number
+  /** Largest image served beside a bundle detail document, in bytes. */
+  detailImageMaxBytes?: number
+  /** Deadline of one npm file CDN request for an offered bundle's detail document. */
+  detailFetchTimeoutMs?: number
+  /** npm file CDNs that offered bundles are read from, in order; a read's `npmFileSources` moves the CDNs it names first. */
+  detailNpmFileSources?: NpmFileSource[]
 }
+
+/** The Fetch route serving images beside bundle detail documents. */
+const DETAIL_FILE_PATH = '/api/plugin-manager/detail-file'
 
 /** An http(s) URL, as pnpm's `--registry` takes it. */
 const REGISTRY_URL = /^https?:\/\/\S+$/
@@ -79,6 +102,9 @@ const protectedModules = new Set([
 
 /** The profile files an installation writes and a failed or cancelled one restores. */
 const RESTORED_FILES = ['package.json', 'pnpm-lock.yaml'] as const
+
+/** The manifest fields an inspection reads for a registry spec. */
+const INSPECT_FIELDS = ['name', 'version', 'description', 'dsh'] as const
 
 /** pnpm's colour escapes, which a JSON answer may be wrapped in. */
 const ANSI_SEQUENCE = /\x1b\[[0-9;]*m/g
@@ -136,8 +162,69 @@ function inspectionOf(kind: 'registry' | 'path', manifest: object, registry: Reg
   }
 }
 
-function refused(problem: PluginInspectProblem, reason: string): PluginSpecInspection {
+function refused(problem: Extract<PluginSpecInspection, { status: 'refused' }>['problem'], reason: string): PluginSpecInspection {
   return { status: 'refused', problem, reason }
+}
+
+/** An installed registry bundle an update can replace, its installed version, and its parsed registry spec. */
+interface UpdateTarget<B> {
+  bundle: B
+  installed: string
+  parsed: Extract<ParsedInstallSpec, { kind: 'registry' }>
+}
+
+/**
+ * Why an update cannot replace a listed bundle, or what it replaces.
+ * @param bundle The listed bundle, or undefined for a name the inventory does not list.
+ * @param name The package name, for the refusal.
+ * @returns The bundle, its installed version, and its registry spec; or the refusal's diagnostic.
+ */
+function updateRefusal<B extends Pick<BundleInfo, 'name' | 'installed' | 'availability' | 'official' | 'version' | 'source' | 'readOnlyReason'>>(
+  bundle: B | undefined, name: string,
+): UpdateTarget<B> | string {
+  if (bundle === undefined || !bundle.installed || bundle.availability !== 'profile' || bundle.official || bundle.source === undefined) {
+    return `${name} is not a third-party package installed in this profile`
+  }
+  // A management bundle cannot be removed, so it cannot be replaced either.
+  if (bundle.readOnlyReason !== undefined) return `${bundle.name} carries plugin management and cannot be removed`
+  const installed = bundle.version
+  if (installed === undefined || semver.valid(installed) === null) return `${bundle.name} declares no semver version`
+  const parsed = parsedForRegistry(bundle.source)
+  // A protocol in the saved range, such as an `npm:` alias, names another package than the dependency.
+  if (parsed.kind !== 'registry' || parsed.name !== bundle.name || parsed.range?.includes(':') === true) {
+    return `${bundle.name} is not installed from a registry under its own name`
+  }
+  return { bundle, installed, parsed }
+}
+
+/** What asking planned registries in turn answered: the parsed output and the registry that gave it, or the last refusal. */
+type RegistryAnswer =
+  | { status: 'answered'; answer: unknown; registry: Registry; attempts: RegistryAttempt[] }
+  | { status: 'refused'; problem: NonNullable<RegistryAttempt['problem']>; reason: string; attempts: RegistryAttempt[] }
+
+/**
+ * Map items with at most `limit` calls in flight, stopping new calls once one answers `stop`.
+ * @param items - the items, in order.
+ * @param limit - the most calls in flight.
+ * @param map - the call for one item.
+ * @param stop - whether an answer ends the remaining calls.
+ * @returns the answers of the calls that ran, in item order; items after a stop stay absent.
+ */
+async function mapConcurrent<T, R>(
+  items: readonly T[], limit: number, map: (item: T) => Promise<R>, stop: (answer: R) => boolean,
+): Promise<(R | undefined)[]> {
+  const answers: (R | undefined)[] = items.map(() => undefined)
+  let next = 0
+  let stopped = false
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (!stopped && next < items.length) {
+      const index = next++
+      const answer = await map(items[index] as T)
+      answers[index] = answer
+      if (stop(answer)) stopped = true
+    }
+  }))
+  return answers
 }
 
 /** The refusal `pnpm view --json` prints on stdout, `{ error: { code, message } }`, as one log line; empty for anything else. */
@@ -215,6 +302,12 @@ export class PluginManager extends TypertRemoteService {
     idleTimeoutMs: z.number().step(1).min(1000).default(600000),
     registry: z.string().pattern(REGISTRY_URL),
     fallbackRegistries: z.array(z.string().pattern(REGISTRY_URL)).default([NPMMIRROR_REGISTRY]),
+    versionListLimit: z.number().step(1).min(1).default(20),
+    versionLookupConcurrency: z.number().step(1).min(1).default(4),
+    detailMaxBytes: z.natural().min(1).default(1024 * 1024),
+    detailImageMaxBytes: z.natural().min(1).default(5 * 1024 * 1024),
+    detailFetchTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(15000),
+    detailNpmFileSources: z.array(z.union(NPM_FILE_SOURCES)).min(1).default([...NPM_FILE_SOURCES]),
   })
   /** Management bundles remain protected if their files become unreadable. */
   private readonly managementBundles = new Set<string>()
@@ -232,11 +325,14 @@ export class PluginManager extends TypertRemoteService {
   private readonly githubConnectionTimeoutMs: number
   private readonly idleTimeoutMs: number
   private readonly pnpmCommand: string
+  private readonly versionListLimit: number
+  private readonly versionLookupConcurrency: number
   private readonly configuredRegistries: Omit<PluginRegistries, 'resolved'>
   private readonly ownerContext: Context
   private readonly abort = new AbortController()
   /** Installations by request id, from their call until it settles. */
   private readonly installs = new Map<PluginInstallRequestId, InstallControl>()
+  private readonly detail: BundleDetailOptions
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'pluginManager')
@@ -250,14 +346,70 @@ export class PluginManager extends TypertRemoteService {
     this.githubConnectionTimeoutMs = (config as Required<Config>).githubConnectionTimeoutMs
     this.idleTimeoutMs = (config as Required<Config>).idleTimeoutMs
     this.pnpmCommand = (config as Required<Config>).pnpmCommand
+    this.versionListLimit = (config as Required<Config>).versionListLimit
+    this.versionLookupConcurrency = (config as Required<Config>).versionLookupConcurrency
     this.configuredRegistries = {
       registry: config.registry === undefined ? null : normalizeRegistry(config.registry),
       fallbackRegistries: (config as Required<Config>).fallbackRegistries.map(normalizeRegistry),
+    }
+    const required = config as Required<Config>
+    this.detail = {
+      profile: this.profile, maxDocumentBytes: required.detailMaxBytes, maxImageBytes: required.detailImageMaxBytes,
+      npmFileSources: required.detailNpmFileSources, timeoutMs: required.detailFetchTimeoutMs, lifetime: this.abort.signal,
     }
     ctx.effect(() => async () => {
       this.abort.abort()
       await Promise.allSettled([...this.packageOperations])
     }, 'plugin-manager: package cancellation')
+    ctx.inject(['connection'], (scope) => {
+      scope.effect(() => scope.connection.fetch.register({
+        path: DETAIL_FILE_PATH, methods: ['GET'], requestBody: 'buffered', fetch: request => this.serveDetailFile(request),
+      }), `plugin-manager: ${DETAIL_FILE_PATH}`)
+    })
+  }
+
+  /**
+   * Read a bundle's long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its
+   * README. An installed bundle is read from its directory without network access; an official bundle the installation
+   * offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.
+   * @param name - the bundle's package name, as `listBundles()` lists it.
+   * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+   * @param options - `npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one
+   *   a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.
+   * @returns the document with its origin and path, or `none`.
+   * @throws {RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or
+   *   `plugin-manager/detail-unavailable`.
+   */
+  @Remote
+  async readBundleDetail(name: string, language: string, options?: { npmFileSources?: NpmFileSource[] }): Promise<BundleDetail> {
+    return await readBundleDocument(await this.listedBundle(name), language, options?.npmFileSources ?? [], this.detail)
+  }
+
+  private async listedBundle(name: string): Promise<BundleInfo> {
+    const bundle = (await this.listBundles()).find(candidate => candidate.name === name)
+    if (bundle === undefined) throw new RemoteError('plugin-manager/unknown-bundle', `No such bundle: ${name}`, { name })
+    return bundle
+  }
+
+  /**
+   * Answer `GET ${DETAIL_FILE_PATH}?bundle=<name>&document=<path>&path=<destination>[&sources=<cdn>,...]` with one image
+   * beside a bundle document; `sources` names npm file CDNs to ask first for an offered bundle, as `readBundleDetail` does.
+   */
+  private async serveDetailFile(request: Request): Promise<Response> {
+    const params = new URL(request.url).searchParams
+    const [bundle, document, path] = [params.get('bundle'), params.get('document'), params.get('path')]
+    // Images are read again on every request, so a reinstalled bundle shows its own.
+    const cache = 'no-store'
+    if (bundle === null || document === null || path === null) return detailImageResponse('invalid', cache)
+    try {
+      const image = await readBundleImage(await this.listedBundle(bundle), document, path, params.get('sources')?.split(',') ?? [], this.detail)
+      return detailImageResponse(image, cache)
+    } catch (error) {
+      const failure = remoteErrorOf(error)
+      if (failure?.code === 'plugin-manager/unknown-bundle') return detailImageResponse(undefined, cache)
+      if (failure?.code === 'plugin-manager/detail-unavailable') return detailImageResponse(failure.details.reason, cache)
+      throw error
+    }
   }
 
   /** Read exact plugin-version exemptions saved in this profile.
@@ -314,6 +466,11 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
+    return Promise.resolve(this.readBundles().map(bundle => ({ ...bundle, updatable: typeof updateRefusal(bundle, bundle.name) !== 'string' })))
+  }
+
+  /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
+  private readBundles(): Omit<BundleInfo, 'updatable'>[] {
     const manifest = readProfileManifest('dsh', this.profile.dir)
     const exemptions = readProfileVersionExemptions(this.profile.dir)
     const selected = bundleSelection(manifest)
@@ -322,7 +479,7 @@ export class PluginManager extends TypertRemoteService {
     const installation = JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest
     const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
     const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
-    const bundles: BundleInfo[] = []
+    const bundles: Omit<BundleInfo, 'updatable'>[] = []
     const runtimeVersion = getDshRuntimeVersion()
     for (const name of names) {
       const installed = dependencies.includes(name)
@@ -382,7 +539,7 @@ export class PluginManager extends TypertRemoteService {
         }
       }
     }
-    return Promise.resolve(bundles)
+    return bundles
   }
 
   /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
@@ -442,45 +599,191 @@ export class PluginManager extends TypertRemoteService {
       }
       case 'registry': {
         if (known.has(parsed.name)) return refused('already-installed', `${parsed.name} is already installed`)
-        const registries: Registry[] = []
-        const refusedBy = (problem: PluginInspectProblem, reason: string): PluginSpecInspection =>
-          ({ status: 'refused', problem, reason, registries })
-        for (const current of plan) {
-          registries.push(current)
-          const view = await viewProfilePackage(this.profile.dir, spec.trim(), {
-            ...this.profile.packageManager ?? { command: this.pnpmCommand },
-            timeoutMs: this.inspectTimeoutMs, ...signal === undefined ? {} : { signal }, registry: current,
-          })
-          const printed = view.stdout.replace(ANSI_SEQUENCE, '').trim()
-          if (view.exitCode !== 0 || view.cause !== undefined || view.timedOut) {
-            // pnpm prints a refusal as `{ error: { code, message } }` on stdout, with nothing on stderr.
-            const log = [view.stderr.trim(), printedError(printed), view.cause === undefined ? '' : messageOf(view.cause)].filter(Boolean).join('\n')
-            const kind = classifyInstallFailure({ log, timedOut: view.timedOut, ...view.cause === undefined ? {} : { cause: view.cause } })
-            // A lookup the caller dropped is not carried to the next registry.
-            if (registries.length < plan.length && signal?.aborted !== true && attributeFailure(kind, log, parsed) === 'registry') continue
-            const reason = view.timedOut ? `pnpm view timed out after ${String(this.inspectTimeoutMs)}ms` : log || printed || `pnpm view exited with ${String(view.exitCode)}`
-            if (kind === 'not-found' || kind === 'no-matching-version') return refusedBy('not-found', reason)
-            if (kind === 'network' || kind === 'timeout') return refusedBy('network', reason)
-            return refusedBy('unknown', reason)
-          }
-          let answer: unknown
-          try {
-            answer = JSON.parse(printed || 'null')
-          } catch (error) {
-            return refusedBy('unknown', `unreadable pnpm view output: ${messageOf(error)}`)
-          }
-          // A range answers one object per matching version, oldest first.
-          const latest: unknown = Array.isArray(answer) ? answer.at(-1) : answer
-          if (typeof latest !== 'object' || latest === null) return refusedBy('unknown', 'pnpm view answered no package')
-          const inspection = inspectionOf('registry', latest, current)
-          const named = inspection.name === undefined ? { ...inspection, name: parsed.name } : inspection
-          if (!named.bundle) return refusedBy('not-a-bundle', `${named.name} declares no dsh.bundle`)
-          return named
-        }
-        /* v8 ignore next -- the plan is never empty: every attempt returns or continues to the next */
-        throw new Error('no registry was asked')
+        const asked = await this.askRegistries(spec.trim(), INSPECT_FIELDS, plan, parsed, signal)
+        const registries = asked.attempts.map(attempt => attempt.registry)
+        if (asked.status === 'refused') return { status: 'refused', problem: asked.problem, reason: asked.reason, registries }
+        // pnpm prints a range's highest match as one object; npm's array of every match is read by its last entry.
+        const latest: unknown = Array.isArray(asked.answer) ? asked.answer.at(-1) : asked.answer
+        if (typeof latest !== 'object' || latest === null) return { status: 'refused', problem: 'unknown', reason: 'pnpm view answered no package', registries }
+        const inspection = inspectionOf('registry', latest, asked.registry)
+        const named = inspection.name === undefined ? { ...inspection, name: parsed.name } : inspection
+        if (!named.bundle) return { status: 'refused', problem: 'not-a-bundle', reason: `${named.name} declares no dsh.bundle`, registries }
+        return named
       }
     }
+  }
+
+  /** Read the published versions newer than an installed registry package's version, from the first registry that answers.
+   * Official bundles follow the DSH version and are not listed.
+   * @param name Installed profile dependency name.
+   * @param options The registry asked first; absent, the one the package was installed from in this process, else the configured one.
+   * @param signal Ends the lookups early.
+   * @returns At most `versionListLimit` newer versions, newest first, with their tags, deprecation, bundle declaration,
+   * and DSH compatibility, and the registry that answered; or why no list could be read, with every registry asked.
+   */
+  @Remote
+  async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList> {
+    const target = updateRefusal((await this.listBundles()).find(bundle => bundle.name === name), name)
+    if (typeof target === 'string') return { status: 'refused', problem: 'not-updatable', reason: target, attempts: [] }
+    const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
+    const listing = await this.askRegistries(name, VERSION_LIST_FIELDS, plan, target.parsed, signal)
+    if (listing.status === 'refused') return listing
+    let newer
+    try { newer = newerVersions(listing.answer, target.installed) }
+    catch (error) { return { status: 'refused', problem: 'unknown', reason: messageOf(error), attempts: listing.attempts } }
+    const listed = newer.slice(0, this.versionListLimit)
+    const exemptions = readProfileVersionExemptions(this.profile.dir)
+    const looked = await mapConcurrent(listed, this.versionLookupConcurrency, async (published) => {
+      const spec = `${name}@${published.version}`
+      const answer = await this.askRegistries(spec, VERSION_FIELDS, [listing.registry], { kind: 'registry', spec, name }, signal)
+      if (answer.status === 'refused') return answer
+      const facts = versionFacts(answer.answer, name, published.version)
+      let compatibility
+      try { compatibility = evaluatePluginCompatibility(facts.manifest, exemptions) }
+      catch (error) { return { status: 'refused' as const, problem: 'unknown' as const, reason: messageOf(error), attempts: answer.attempts } }
+      const version: PluginVersion = {
+        ...published, bundle: facts.bundle, ...facts.deprecated === undefined ? {} : { deprecated: facts.deprecated },
+        ...compatibility === undefined || compatibility.exempted ? {} : { incompatible: incompatiblePlugin(compatibility) },
+      }
+      return { status: 'read' as const, version }
+    }, answer => answer.status === 'refused')
+    const versions: PluginVersion[] = []
+    for (const answer of looked) {
+      /* v8 ignore next -- a lookup stops the rest only by refusing, which returns below */
+      if (answer === undefined) continue
+      if (answer.status === 'refused') return { ...answer, attempts: [...listing.attempts.slice(0, -1), ...answer.attempts] }
+      versions.push(answer.version)
+    }
+    return {
+      status: 'listed', installed: target.installed, registry: listing.registry, attempts: listing.attempts,
+      versions, omitted: newer.length - listed.length,
+    }
+  }
+
+  /**
+   * Replace an installed registry bundle with a newer published version. The target is checked on the registry first:
+   * it must exist, declare a bundle, and accept the running DSH version, or nothing changes. With HMR the installed
+   * version is removed, so its plugins stop, and the target is installed with the same selection; when that
+   * installation fails or is cancelled, the removed version is installed again from the registry it came from.
+   * Without HMR the target is installed over the running version and the result reports the restart.
+   * @param name Installed profile dependency name.
+   * @param version Exact published version newer than the installed one.
+   * @param options The registry asked first, as for `listVersions`, and the request id naming the progress and the
+   * target installation's logs and cancellation.
+   * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
+   */
+  @Remote
+  async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult> {
+    const requestId = options?.requestId
+    const announce = (step: PluginUpdateStep): void => {
+      if (requestId !== undefined) this.ownerContext.emit('plugin-manager/update-state', { requestId, step })
+    }
+    announce('checking')
+    const target = updateRefusal((await this.listBundles()).find(item => item.name === name), name)
+    const from = typeof target === 'string' ? '' : target.installed
+    const refusedBefore = (error: ManagementError): PluginUpdateResult => ({
+      from, to: version, step: 'check',
+      result: { changed: false, application: 'failed', stage: 'install', target: name, error },
+    })
+    if (typeof target === 'string') return refusedBefore({ code: 'invalid-spec', diagnostic: target })
+    const { bundle } = target
+    if (semver.valid(version) === null || !semver.gt(version, from)) {
+      return refusedBefore({ code: 'invalid-spec', diagnostic: `${version} is not a version newer than the installed ${from}` })
+    }
+    const spec = `${name}@${version}`
+    const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
+    const checked = await this.askRegistries(spec, VERSION_FIELDS, plan, { kind: 'registry', spec, name })
+    if (checked.status === 'refused') return refusedBefore({ code: 'operation-error', diagnostic: checked.reason })
+    const facts = versionFacts(checked.answer, name, version)
+    if (!facts.bundle) return refusedBefore({ code: 'not-bundle' })
+    let compatibility
+    try { compatibility = evaluatePluginCompatibility(facts.manifest, readProfileVersionExemptions(this.profile.dir)) }
+    catch (error) { return refusedBefore({ code: 'operation-error', diagnostic: messageOf(error) }) }
+    if (compatibility !== undefined && !compatibility.exempted) {
+      return refusedBefore({ code: 'incompatible-version', incompatible: [incompatiblePlugin(compatibility)] })
+    }
+    const { enabled } = bundle
+    // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
+    const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
+      operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
+    const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
+      saveExact: true, registry: checked.registry, enabled, ...requestId === undefined ? {} : { requestId },
+    }))
+    if (this.ownerContext.get('hmr') === undefined) {
+      announce('installing')
+      return { from, to: version, step: 'install', result: await installTarget() }
+    }
+    // The removed version is installed again where it came from, else over the configured plan, as its removal asks.
+    const previousRegistry = this.installedFrom.get(name)
+    announce('removing')
+    const removal = await settled('remove', name, this.removeBundle(name))
+    if (removal.application === 'failed' || removal.application === 'cancelled') return { from, to: version, step: 'remove', result: removal }
+    announce('installing')
+    const result = await installTarget()
+    if (result.application !== 'failed' && result.application !== 'cancelled') return { from, to: version, step: 'install', result }
+    announce('restoring')
+    // A target that installed but failed to start is still a dependency; it goes before the removed version returns.
+    if (result.stage === 'enable') await settled('remove', name, this.removeBundle(name))
+    // The reinstallation carries no request id, so cancelling the update cannot leave the package removed.
+    const previous = `${name}@${from}`
+    const restore = await settled('install', previous, this.installBundle(previous, {
+      saveExact: true, enabled, ...previousRegistry === undefined ? {} : { registry: previousRegistry },
+    }))
+    return { from, to: version, step: 'install', result, restore }
+  }
+
+  /**
+   * The registry a version listing or an update asks first.
+   * @param name The package name.
+   * @param requested The caller's registry, when it named one.
+   * @returns The requested registry, else the one this process last installed the package from, else undefined for the configured one.
+   */
+  private registryFor(name: string, requested: Registry | undefined): Registry | undefined {
+    return requested !== undefined ? requested : this.installedFrom.get(name)
+  }
+
+  /**
+   * Ask registries in turn through `pnpm view`, moving to the next one while a failure is the registry's: unreachable,
+   * timed out, or without the package or version, which a mirror not yet synced reports.
+   * @param spec The registry spec viewed.
+   * @param fields The manifest fields printed.
+   * @param plan The registries, in order; never empty.
+   * @param parsed The spec's form, which decides whether a failure was the registry's.
+   * @param signal Ends the lookup; a dropped lookup is not carried to the next registry.
+   * @returns The parsed answer and the registry that gave it, or the last refusal, with every registry asked.
+   */
+  private async askRegistries(
+    spec: string, fields: readonly string[], plan: readonly Registry[], parsed: ParsedInstallSpec, signal?: AbortSignal,
+  ): Promise<RegistryAnswer> {
+    const attempts: RegistryAttempt[] = []
+    for (const [index, registry] of plan.entries()) {
+      const view = await viewProfilePackage(this.profile.dir, spec, {
+        ...this.profile.packageManager ?? { command: this.pnpmCommand },
+        fields, timeoutMs: this.inspectTimeoutMs, ...signal === undefined ? {} : { signal }, registry,
+      })
+      const printed = view.stdout.replace(ANSI_SEQUENCE, '').trim()
+      if (view.exitCode !== 0 || view.cause !== undefined || view.timedOut) {
+        // pnpm prints a refusal as `{ error: { code, message } }` on stdout, with nothing on stderr.
+        const log = [view.stderr.trim(), printedError(printed), view.cause === undefined ? '' : messageOf(view.cause)].filter(Boolean).join('\n')
+        const kind = classifyInstallFailure({ log, timedOut: view.timedOut, ...view.cause === undefined ? {} : { cause: view.cause } })
+        const reason = view.timedOut ? `pnpm view timed out after ${String(this.inspectTimeoutMs)}ms` : log || printed || `pnpm view exited with ${String(view.exitCode)}`
+        const problem = kind === 'not-found' || kind === 'no-matching-version' ? 'not-found' : kind === 'network' || kind === 'timeout' ? 'network' : 'unknown'
+        attempts.push({ registry, problem, reason })
+        if (index < plan.length - 1 && signal?.aborted !== true && attributeFailure(kind, log, parsed) === 'registry') continue
+        return { status: 'refused', problem, reason, attempts }
+      }
+      try {
+        const answer: unknown = JSON.parse(printed || 'null')
+        attempts.push({ registry })
+        return { status: 'answered', answer, registry, attempts }
+      } catch (error) {
+        const reason = `unreadable pnpm view output: ${messageOf(error)}`
+        attempts.push({ registry, problem: 'unknown', reason })
+        return { status: 'refused', problem: 'unknown', reason, attempts }
+      }
+    }
+    /* v8 ignore next -- the plan is never empty: every attempt returns or continues to the next */
+    throw new Error('no registry was asked')
   }
 
   /** Persist a plugin entry's desired enablement and apply it on live profiles.

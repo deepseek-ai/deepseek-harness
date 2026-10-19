@@ -82,7 +82,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 持久状态与步骤边界追加
 
-本包持久化一条仅记日志、整值替换的事件 `plan/mode`，最后一条已记录值即为状态。没有轮次开启时，模式变更会立即追加；轮次开启期间，它保持待生效，直到下一个被接受的轮内 pre-step——agent 运行时唯一的追加点——且追加失败不能阻塞轮次。`set`/`get` 服务方法及其确切返回状态见 [`src/index.ts`](src/index.ts)，并读取已注册的 `plan` 投影；注册表或 key 缺失时，第一次依赖它们的访问会显式失败。
+本包持久化一条仅记日志、整值替换的事件 `plan/mode`，最后一条已记录值即为状态。没有轮次开启时，模式变更会立即追加；轮次开启期间，它保持待生效，直到下一个被接受的轮内 pre-step——agent 运行时唯一的追加点——且追加失败不能阻塞轮次。`set`/`get` 服务方法及其确切返回状态见 [`src/index.ts`](src/index.ts)，并通过激活期间取得并保留的 `plan` 投影句柄读取状态。
 
 ### `/plan` 命令
 
@@ -94,7 +94,9 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 会话投影单元
 
-组合了 `ctx.sessionProjections` 时，本包通过可选注入注册 `plan` 单元。该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。plan-mode 读取要求该单元与 `turnBoundary` 单元存在；注册表或任一 key 缺失时都会显式失败。
+本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配会明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
+
+该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。状态读取使用保留的句柄，注销后仍然可用。
 
 ### 源码地图
 

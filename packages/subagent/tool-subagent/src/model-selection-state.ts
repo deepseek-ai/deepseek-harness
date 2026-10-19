@@ -2,7 +2,7 @@
 
 import { z as zod } from 'zod'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { assertAllowedModelRoutes, type AllowedModelRoute } from './model-selection.ts'
 
@@ -18,13 +18,6 @@ declare module '@deepseek-ai/dsh-session/types' {
       /** Exact routes this Session may select explicitly for a child. */
       allowedModels: AllowedModelRoute[]
     }
-  }
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Exact routes authorized for child LLM selection, or null for the parent route. */
-    subagentModelSelectionPolicy: AllowedModelRoute[] | null
   }
 }
 
@@ -55,13 +48,13 @@ export const subagentModelSelectionProjectionDefinition = {
 
 /**
  * Read the exact route list authorized for a Session.
- * @param projections - registry that owns the policy projection.
+ * @param subagentModelSelectionProjectionHandle - registered policy state reader.
  * @param session - session whose durable decision is read.
  * @returns a detached route list, or undefined to restrict selection to the parent route.
  */
 export function subagentModelSelectionPolicy(
-  projections: Pick<SessionProjectionRegistry, 'stateOf'>,
+  subagentModelSelectionProjectionHandle: Pick<ProjectionHandle<AllowedModelRoute[] | null>, 'stateOf'>,
   session: Session,
 ): AllowedModelRoute[] | undefined {
-  return projections.stateOf(session, 'subagentModelSelectionPolicy')?.map(route => ({ ...route }))
+  return subagentModelSelectionProjectionHandle.stateOf(session)?.map(route => ({ ...route }))
 }

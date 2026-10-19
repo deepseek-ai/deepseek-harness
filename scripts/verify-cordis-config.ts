@@ -396,8 +396,8 @@ export function bundlePluginDependencyErrors(
   return missingPluginDependencies(
     // A Bundle may mount its own package (for example, its provider or runtime row).
     references.filter(reference => packageNameFromSpecifier(reference.name) !== manifest.name),
-    manifest.dependencies ?? {},
-    `${manifestPath} dependencies`,
+    { ...manifest.dependencies, ...manifest.optionalDependencies },
+    `${manifestPath} dependencies or optionalDependencies`,
   )
 }
 

@@ -332,6 +332,17 @@ describe('MarkdownText', () => {
     }
   })
 
+  it('omits raw HTML when asked, in settled and streaming renders, and rebuilds the stream when the choice changes', () => {
+    const text = 'Before <b>bold</b> after\n\n<div align="center">block</div>\n\nTail'
+    const view = render(<MarkdownText text={text} omitHtml />)
+    expect(view.container.textContent).toBe('Before bold after\nTail')
+    expect(view.container.querySelector('div[align]')).toBeNull()
+    view.rerender(<MarkdownText text={text} streaming omitHtml />)
+    expect(view.container.textContent).toBe('Before bold after\nTail')
+    view.rerender(<MarkdownText text={text} streaming />)
+    expect(view.container.textContent).toContain('<div align="center">block</div>')
+  })
+
   it('neutralizes raw HTML, unsafe or relative links, and unsupported images', () => {
     const markdown = [
       '<script>globalThis.compromised = true</script>',

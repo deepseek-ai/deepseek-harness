@@ -1,5 +1,6 @@
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -35,6 +36,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(CommandRuntime)
   const session = ctx.sessions.create(SESSION, {
@@ -238,26 +240,39 @@ describe('Session file uploads', () => {
     await expect(uploading).rejects.toMatchObject({ code: 'session/not-found' })
   })
 
-  it('resolves a cold ordinary Agent and releases the resolver registration', async () => {
+  it('resolves a cold ordinary Agent and releases the resolver with its registering fiber', async () => {
     const { ctx, uploads, agent, disposeAgent } = await uploadHarness()
     await disposeAgent()
     const resolveAgent = vi.fn(async () => {
       await ctx.agents.register(agent)
       return agent
     })
-    const disposeResolver = uploads.registerAgentResolver(resolveAgent)
-    expect(() => { uploads.registerAgentResolver(resolveAgent) }).toThrow('already registered')
+    const resolverOwner = {
+      name: 'resolver-owner',
+      inject: ['fileUploads'],
+      apply: (owner: Context) => {
+        owner.effect(() => owner.fileUploads.registerAgentResolver(resolveAgent), 'test: Agent resolver')
+      },
+    }
+    const first = ctx.plugin(resolverOwner)
+    await first
+    expect(() => { ctx.fileUploads.registerAgentResolver(resolveAgent) }).toThrow('already registered')
     await expect(uploads.uploadStream({
       sessionId: SESSION,
       data: (async function* (): AsyncIterable<Uint8Array> { yield Uint8Array.of(1) })(),
     })).resolves.toMatchObject({ file: { bytes: 1 } })
     expect(resolveAgent).toHaveBeenCalledWith(SESSION)
+    await first.dispose()
+    const second = ctx.plugin(resolverOwner)
+    await second
+    expect(second.state).toBe(FiberState.ACTIVE)
+    await second.dispose()
+    const disposeResolver = ctx.fileUploads.registerAgentResolver(resolveAgent)
     disposeResolver()
     const replacement = vi.fn(async () => agent)
-    const disposeReplacement = uploads.registerAgentResolver(replacement)
+    const disposeReplacement = ctx.fileUploads.registerAgentResolver(replacement)
     disposeResolver()
-    expect(() => { uploads.registerAgentResolver(replacement) }).toThrow('already registered')
-    expect(disposeReplacement).toBeTypeOf('function')
+    expect(() => { ctx.fileUploads.registerAgentResolver(replacement) }).toThrow('already registered')
     disposeReplacement()
   })
 
@@ -321,13 +336,10 @@ describe('Session file uploads', () => {
       new AbortController().signal,
     )
     await first.controller.prompt(promptRequest([{ type: 'file', receiptId: observed.receiptId }]), USER_SOURCE)
-    first.ctx.emit('session/event', first.agent.session, {
-      type: 'user/message',
-      data: createUserMessage({
-        content: [{ type: 'text', text: 'extension event' }],
-        source: { kind: 'user', rpcId: 1 } as never,
-      }),
-    } as never)
+    first.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'extension event' }],
+      source: { kind: 'user', rpcId: 1 } as never,
+    }), { surfaceOp: 'append' })
     expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual(observed.file)
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'observed' }],

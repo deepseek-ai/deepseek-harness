@@ -7,6 +7,9 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import PluginMarket, { type Config, type MarketQuery } from '../src/index.ts'
 import { parseIndexBody } from '../src/parse.ts'
 
+/** Clone cache directory of services whose tests read no repository; nothing creates it. */
+const UNUSED_CACHE = '/nonexistent/plugin-market-detail-cache'
+
 // Parse in-process; parse-worker.spec.ts runs the real Worker.
 vi.mock('../src/parse-thread.ts', () => ({
   parseIndexInWorker: async (body: Uint8Array, url: string, signal: AbortSignal) => {
@@ -21,7 +24,7 @@ const URL_B = 'https://other.example/index.json'
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 function bundle(name: string, fields: Partial<BundleInfo>): BundleInfo {
-  return { name, official: false, availability: 'profile', enabled: true, installed: true, optional: false, removable: true, rows: [], overrides: [], ...fields }
+  return { name, official: false, availability: 'profile', enabled: true, installed: true, optional: false, removable: true, updatable: false, rows: [], overrides: [], ...fields }
 }
 
 function index(plugins: unknown[] = []): unknown {
@@ -66,7 +69,7 @@ async function mount(config: Partial<{ indexes: string[]; fetchTimeoutMs: number
       captured = resolved
     }
   }
-  await ctx.plugin(CapturingMarket, { indexes: [URL_A], ...config })
+  await ctx.plugin(CapturingMarket, { indexes: [URL_A], detailCacheDir: UNUSED_CACHE, ...config })
   if (captured === undefined) throw new Error('market did not mount')
   return { ctx, market: ctx.pluginMarket, config: captured }
 }

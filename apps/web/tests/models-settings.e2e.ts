@@ -308,6 +308,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await custom.getByRole('button', { name: '添加模型', exact: true }).click()
     await custom.getByLabel('模型 ID 1').fill('acme-large')
     await custom.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await custom.getByLabel('上下文窗口 1').getAttribute('placeholder')).toBe('1M')
+    expect(await custom.getByLabel('最大输出 token 数 1').getAttribute('placeholder')).toBe('128K')
     expect(await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await custom.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
     // The switch seeds off, low, medium, and high rows; this route serves no medium.
@@ -322,6 +324,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(document).toContain('acme-gateway:')
     expect(document).toContain('reasoningEfforts:')
     await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
+      context: { contextWindow: 1_000_000 },
       inputModalities: ['text', 'image'],
       reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] },
     })

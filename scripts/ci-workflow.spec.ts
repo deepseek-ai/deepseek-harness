@@ -671,15 +671,20 @@ describe('CI workflow', () => {
     expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
   })
 
-  it('generates metadata before the Wine Host TypeScript compile and retains its heap budget', () => {
+  it('splits the Wine Host TypeScript compile and retains its heap budget', () => {
     const wineGates = readFileSync(resolve(root, 'scripts/wine-windows-gates.sh'), 'utf8')
 
-    expect(wineGates).toContain(
-      'wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false',
+    const references = wineGates.indexOf(
+      'wine_node "$scratch/logs/host-references.log" --import tsx/esm scripts/compile-referenced-projects.ts host',
+    )
+    const aggregate = wineGates.indexOf(
+      'wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -p tsconfig.host.json --pretty false',
     )
     const metadata = wineGates.indexOf('wine_node "$scratch/logs/host-typert.log" --import tsx/esm scripts/generate-typert.ts')
     expect(metadata).toBeGreaterThan(-1)
-    expect(metadata).toBeLessThan(wineGates.indexOf('wine_node "$scratch/logs/host-tsc.log"'))
+    expect(references).toBeGreaterThan(metadata)
+    expect(aggregate).toBeGreaterThan(references)
+    expect(wineGates).not.toContain('-b tsconfig.host.json')
   })
 
   it('cancels superseded master runs without changing the post-merge job inventory', () => {

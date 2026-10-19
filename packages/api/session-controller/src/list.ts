@@ -80,8 +80,14 @@ export class ApiSessionList {
    * @param ctx - Host context carrying Session, query, persistence, and projection services.
    * @param workSliceMs - Resolved positive integral list-work budget in milliseconds.
    */
-  constructor(private readonly ctx: Context, private readonly workSliceMs: number) {
-    ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
+  constructor(private readonly ctx: Context, private readonly workSliceMs: number) {}
+
+  /**
+   * Acquire projection readers before exposing dependent operations.
+   * @returns when all required registrations are ready.
+   */
+  async initialize(): Promise<void> {
+    await this.ctx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
       key: 'sessionListMetadata',
       stateSchema: sessionListMetadataSchema,
       init: () => ({ blank: true, lastPromptAt: null }),
@@ -89,19 +95,17 @@ export class ApiSessionList {
       wire: { viewSchema: sessionListMetadataSchema, view: state => state },
       stateVersion: 1,
     })
-    ctx.inject(['attachments'], (attachmentCtx) => {
-      ctx.sessionProjections.register<'imageLimits', null>({
-        key: 'imageLimits',
-        stateSchema: z.null(),
-        init: () => null,
-        apply: state => state,
-        wire: {
-          viewSchema: imageLimitsSchema,
-          view: () => attachmentCtx.attachments.imageLimits,
-          summary: false,
-        },
-        stateVersion: 1,
-      })
+    await this.ctx.sessionProjections.register<'imageLimits', null>({
+      key: 'imageLimits',
+      stateSchema: z.null(),
+      init: () => null,
+      apply: state => state,
+      wire: {
+        viewSchema: imageLimitsSchema,
+        view: () => this.ctx.attachments.imageLimits,
+        summary: false,
+      },
+      stateVersion: 1,
     })
   }
 

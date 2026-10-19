@@ -80,11 +80,14 @@ describe('workspace Bundle discovery and product dependency closures', () => {
     }
     const self = { file, name: '@deepseek-ai/dsh-subagent-example' }
     expect(bundlePluginDependencyErrors(manifestPath, manifest, [self])).toEqual([])
+    expect(bundlePluginDependencyErrors(manifestPath, {
+      ...manifest, optionalDependencies: { '@deepseek-ai/dsh-platform-plugin': 'workspace:*' },
+    }, [{ file, name: '@deepseek-ai/dsh-platform-plugin' }])).toEqual([])
     expect(bundlePluginDependencyErrors(manifestPath, manifest, [
       self,
       { file, name: '@deepseek-ai/dsh-missing-plugin' },
     ])).toEqual([
-      `${file}: @deepseek-ai/dsh-missing-plugin must be declared in ${manifestPath} dependencies`,
+      `${file}: @deepseek-ai/dsh-missing-plugin must be declared in ${manifestPath} dependencies or optionalDependencies`,
     ])
   })
 })

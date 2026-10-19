@@ -388,6 +388,14 @@
   color: var(--dsw-alias-label-caption);
 }
 
+.emptyIllustration {
+  flex: none;
+  width: 110px;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 12px;
+}
+
 /* The mock's `.empty h3 + .btn`: the empty state's action keeps the mock's 16px
    above. */
 .emptyAction {

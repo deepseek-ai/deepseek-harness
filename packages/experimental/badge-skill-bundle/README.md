@@ -64,6 +64,7 @@ The layer adds no request content directly; the capability implementation owns c
 <a id="known-limitations-and-deferred-work"></a>
 
 - A preset must include skill discovery and loading to use the badge. The minimal preset does not gain skill tools from this bundle.
+- The feature preview in [`docs/`](docs/DETAIL.md) has one image per language and no dark-theme variant, so it keeps its light background in dark theme.
 
 -----
 

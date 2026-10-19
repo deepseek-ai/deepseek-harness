@@ -76,8 +76,6 @@ const contexts = new WeakMap<SubagentRuntime, Context>()
 
 async function service(withAgents = true): Promise<{ ctx: Context; subagents: SubagentRuntime }> {
   const ctx = new Context()
-  // The registry is a required injection of SubagentRuntime (its projection
-  // units register in the constructor).
   if (withAgents) {
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
@@ -125,7 +123,7 @@ describe('SubagentRuntime', () => {
 
     await fiber.dispose()
 
-    expect(ctx.sessionProjections.stateOf(parent, 'subagentCatalog')).toBeUndefined()
+    expect(ctx.sessionProjections.snapshot(parent).values.subagentCatalog).toBeUndefined()
   })
 
   it('registers, lists, looks up, starts, and removes providers', async () => {

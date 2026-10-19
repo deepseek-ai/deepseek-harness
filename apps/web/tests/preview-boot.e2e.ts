@@ -681,15 +681,28 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
     }
   })
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
-  expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation' || entry.error !== null)).toEqual([])
+  expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
+  expect(result.optional.filter(entry => entry.error !== null)).toEqual([])
   // Metadata resolves through the Worker's Node internal modules: every optional bundle shows its title and icon.
   expect(result.optional.filter(entry => entry.metaError !== null || entry.title !== 'object' || entry.icon !== 'string')).toEqual([])
   expect(result.inventoryErrors).toEqual([])
   console.info(`preview boot: optional bundle toggles ${JSON.stringify(result.toggles.map(({ name, enable, disable, error }) => ({ name, enable, disable, error })))}`)
-  expect(result.toggles.filter(toggle => toggle.enable !== 'applied' || toggle.disable !== 'applied')
+  const cua = result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')!
+  expect(cua).toMatchObject({
+    enable: 'applied', disable: 'applied',
+    error: null,
+    restored: true,
+  })
+  expect(cua.changed).toBeGreaterThan(0)
+  expect(cua.inactive).toEqual([])
+  expect(cua.plugins).toContainEqual(expect.objectContaining({
+    moduleName: '@deepseek-ai/dsh-experimental-cua-macos', enabled: false, fiberPhase: null,
+  }))
+  const supported = result.toggles.filter(toggle => toggle.name !== '@deepseek-ai/dsh-cua-bundle')
+  expect(supported.filter(toggle => toggle.enable !== 'applied' || toggle.disable !== 'applied')
     .map(({ name, enable, disable }) => ({ name, enable, disable }))).toEqual([])
   // Each bundle changes Loader rows, every enabled row it changes runs, and switching it off restores the prior rows.
-  expect(result.toggles.filter(toggle => toggle.changed === 0 || toggle.inactive.length > 0 || !toggle.restored)
+  expect(supported.filter(toggle => toggle.changed === 0 || toggle.inactive.length > 0 || !toggle.restored)
     .map(({ name, changed, inactive, restored }) => ({ name, changed, inactive, restored }))).toEqual([])
   const pluginsWith = (bundle: string): Array<{ moduleName: string; enabled: boolean; fiberPhase: string | null }> =>
     result.toggles.find(toggle => toggle.name === bundle)?.plugins ?? []

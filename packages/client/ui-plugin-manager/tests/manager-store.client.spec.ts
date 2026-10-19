@@ -9,7 +9,7 @@ import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginTab } from '../src/client/tab-ledger.ts'
 import type { ConfigLedger } from '../src/client/config-ledger.ts'
-import { offeredRegistries, packageView, PluginManagerController, rowKey, sortPackages } from '../src/client/manager-store.ts'
+import { installable, offeredRegistries, packageView, PluginManagerController, rowKey, sortPackages, updateCandidate } from '../src/client/manager-store.ts'
 
 const INCOMPATIBLE = { name: 'dsh-late', version: '2.0.0', runtimeVersion: '0.1.0', requirements: { '@deepseek-ai/dsh': '^0.2.0' } }
 const ROW_ENTRY = 'include:sidebar' as PluginEntryId
@@ -25,6 +25,7 @@ const BUNDLE: BundleInfo = {
   source: 'dsh-better-sidebar@^0.16.0',
   optional: false,
   removable: true,
+  updatable: false,
   rows: [{ rowId: 'sidebar', moduleName: 'dsh-better-sidebar', entryId: ROW_ENTRY }, { rowId: 'theme', moduleName: 'dsh-better-sidebar/theme' }],
   overrides: [],
 }
@@ -122,7 +123,7 @@ describe('packageView', () => {
   it('joins a bundle with the entries its rows run as', () => {
     expect(packageView(BUNDLE, PLUGINS)).toEqual({
       name: 'dsh-better-sidebar', version: '0.16.0', description: 'A sidebar.', source: 'dsh-better-sidebar@^0.16.0',
-      installed: true, official: false, availability: 'profile', optional: false, removable: true, enabled: false,
+      installed: true, official: false, availability: 'profile', optional: false, removable: true, updatable: false, enabled: false,
       rows: [
         { rowId: 'sidebar', moduleName: 'dsh-better-sidebar', entryId: ROW_ENTRY, enabled: true, phase: 'active' },
         { rowId: 'theme', moduleName: 'dsh-better-sidebar/theme', enabled: false, phase: null },
@@ -130,13 +131,13 @@ describe('packageView', () => {
     })
     // A row the inventory no longer lists, a protected row, and a bundle the Host cannot read.
     const protectedBundle: BundleInfo = {
-      name: '@deepseek-ai/dsh-base', enabled: true, installed: false, official: false, availability: 'installation', optional: false, removable: false, readOnlyReason: 'management-required',
+      name: '@deepseek-ai/dsh-base', enabled: true, installed: false, official: false, availability: 'installation', optional: false, removable: false, updatable: false, readOnlyReason: 'management-required',
       error: { code: 'operation-error', diagnostic: 'broken' },
       rows: [{ rowId: 'core', moduleName: '@deepseek-ai/dsh-base', entryId: 'include:core' as PluginEntryId }, { rowId: 'gone', moduleName: 'x', entryId: 'include:gone' as PluginEntryId }],
       overrides: [],
     }
     expect(packageView(protectedBundle, PLUGINS)).toEqual({
-      name: '@deepseek-ai/dsh-base', installed: false, official: false, availability: 'installation', optional: false, removable: false, enabled: true, readOnlyReason: 'management-required',
+      name: '@deepseek-ai/dsh-base', installed: false, official: false, availability: 'installation', optional: false, removable: false, updatable: false, enabled: true, readOnlyReason: 'management-required',
       error: { code: 'operation-error', diagnostic: 'broken' },
       rows: [
         { rowId: 'core', moduleName: '@deepseek-ai/dsh-base', entryId: 'include:core', enabled: true, phase: 'active', readOnlyReason: 'management-required' },
@@ -148,7 +149,7 @@ describe('packageView', () => {
 
 describe('sortPackages', () => {
   it('orders packages by the short name a person reads, not by the Host order or enablement', async () => {
-    const plain = { enabled: true, installed: true, official: false, availability: 'profile' as const, optional: false, removable: true, rows: [], overrides: [] }
+    const plain = { enabled: true, installed: true, official: false, availability: 'profile' as const, optional: false, removable: true, updatable: false, rows: [], overrides: [] }
     const zeta: BundleInfo = { ...plain, name: 'dsh-zeta' }
     const alpha: BundleInfo = { ...plain, name: '@acme/dsh-alpha', enabled: false }
     const views = [zeta, BUNDLE, alpha].map(bundle => packageView(bundle, PLUGINS))
@@ -1832,7 +1833,7 @@ it('reports a successful install with only documented result fields', async () =
 
 const CATALOG: BundleInfo = {
   name: '@deepseek-ai/dsh-subagent-codex', official: true, availability: 'missing', installed: false, optional: false,
-  enabled: false, removable: false, rows: [], overrides: [],
+  enabled: false, removable: false, updatable: false, rows: [], overrides: [],
   installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@2.0.0', version: '2.0.0' },
 }
 
@@ -2047,4 +2048,159 @@ it('deselects a source bundle whose target is unavailable without starting insta
   face.setEnabled(entry.name, false)
   await vi.waitFor(() => { expect(plugins.setBundleEnabled).toHaveBeenCalledWith(entry.name, false) })
   expect(plugins.installBundle).not.toHaveBeenCalled()
+})
+
+describe('version checks and updates', () => {
+  const UPDATABLE: BundleInfo = { ...BUNDLE, updatable: true }
+  const LISTED = {
+    status: 'listed' as const, installed: '0.16.0', registry: MIRROR, omitted: 0,
+    attempts: [{ registry: null, problem: 'network' as const, reason: 'ETIMEDOUT' }, { registry: MIRROR }],
+    versions: [
+      { version: '1.0.0', tags: ['latest'], prerelease: false, bundle: true, incompatible: INCOMPATIBLE },
+      { version: '0.18.0-beta.1', tags: [], prerelease: true, bundle: true },
+      { version: '0.17.1', tags: [], prerelease: false, bundle: true, deprecated: 'broken' },
+      { version: '0.17.0', tags: [], prerelease: false, bundle: true },
+    ],
+  }
+  const UPDATED = { from: '0.16.0', to: '0.17.0', step: 'install' as const, result: { ...APPLIED, version: '0.17.0' } }
+
+  it('offers the newest version that declares a bundle, accepts this DSH, and is neither deprecated nor a prerelease', () => {
+    expect(updateCandidate(LISTED)?.version).toBe('0.17.0')
+    expect(updateCandidate({ ...LISTED, versions: LISTED.versions.slice(0, 3) })).toBeUndefined()
+    expect(updateCandidate({ status: 'refused', problem: 'network', reason: 'down', attempts: [] })).toBeUndefined()
+    expect(installable({ version: '2.0.0', tags: [], prerelease: false, bundle: false })).toBe(false)
+  })
+
+  it('checks a package once on ensure, again on request, and keeps a transport failure as an unknown refusal', async () => {
+    const listVersions = vi.fn().mockResolvedValueOnce(ok(LISTED)).mockResolvedValueOnce(refused('gateway/internal', 'offline'))
+    const { face, state } = bench({ listVersions })
+    face.ensureVersions('dsh-better-sidebar')
+    expect(state().versions['dsh-better-sidebar']).toEqual({ phase: 'checking' })
+    // A check in flight is not started again.
+    face.checkVersions('dsh-better-sidebar')
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']).toMatchObject({ phase: 'done', list: LISTED }) })
+    face.ensureVersions('dsh-better-sidebar')
+    expect(listVersions).toHaveBeenCalledOnce()
+    expect(listVersions).toHaveBeenCalledWith('dsh-better-sidebar', {})
+    face.checkVersions('dsh-better-sidebar')
+    await vi.waitFor(() => {
+      expect(state().versions['dsh-better-sidebar']).toMatchObject({ phase: 'done', list: { status: 'refused', problem: 'unknown', reason: 'offline', attempts: [] } })
+    })
+    expect(listVersions).toHaveBeenCalledTimes(2)
+  })
+
+  it('forgets a check answered for another installed version, or for a package that is no longer updatable', async () => {
+    const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }])))
+    const { controller, face, state } = bench({ listBundles, listVersions: vi.fn(() => Promise.resolve(ok(LISTED))) })
+    await controller.load()
+    face.checkVersions('dsh-better-sidebar')
+    face.checkVersions('dsh-a')
+    await vi.waitFor(() => { expect(state().versions['dsh-a']?.phase).toBe('done') })
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
+    // Another surface reinstalled one package at another version and replaced the other by a linked copy.
+    listBundles.mockResolvedValue(ok([{ ...UPDATABLE, version: '0.17.0' }, { ...UPDATABLE, name: 'dsh-a', updatable: false }]))
+    await controller.load()
+    expect(state().versions).toEqual({})
+  })
+
+  it('checks every updatable package in turn on a manual refresh and keeps the spinner until the checks settle', async () => {
+    const order: string[] = []
+    const last = deferred<ReturnType<typeof ok<typeof LISTED>>>()
+    const listVersions = vi.fn(async (name: string) => { order.push(name); return name === 'dsh-better-sidebar' ? last.promise : ok(LISTED) })
+    const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }, { ...BUNDLE, name: 'dsh-linked' }])))
+    const { face, state } = bench({ listVersions, listBundles })
+    face.refresh()
+    await vi.waitFor(() => { expect(order).toEqual(['dsh-a', 'dsh-better-sidebar']) })
+    expect(state().refreshStatus).toBe('refreshing')
+    last.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
+    expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
+  })
+
+  it('checks no versions after a failed refresh', async () => {
+    const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
+    const listBundles = vi.fn(() => Promise.resolve(refused('gateway/internal', 'offline')))
+    const { face, state } = bench({ listVersions, listBundles })
+    face.refresh()
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('failed') })
+    expect(listVersions).not.toHaveBeenCalled()
+  })
+
+  it('confirms, runs, and keeps an update\'s steps and outcome, then checks the package again', async () => {
+    const answer = deferred<ReturnType<typeof ok<typeof UPDATED>>>()
+    const updateBundle = vi.fn(() => answer.promise)
+    const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
+    const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE])))
+    const { controller, face, state, plugins } = bench({ updateBundle, listVersions, listBundles })
+    await controller.load()
+    // Nothing to confirm before the package's versions are read.
+    face.openUpdate('dsh-better-sidebar', '0.17.0')
+    expect(state().update).toBeNull()
+    face.checkVersions('dsh-better-sidebar')
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
+    face.openUpdate('dsh-better-sidebar', '0.17.0')
+    expect(state().update).toEqual({
+      packageName: 'dsh-better-sidebar', from: '0.16.0', to: '0.17.0', registry: MIRROR, phase: 'confirm', steps: [], result: null, outputOpen: false,
+    })
+    face.closeUpdate()
+    expect(state().update).toBeNull()
+    face.openUpdate('dsh-better-sidebar', '0.17.0')
+    face.runUpdate()
+    expect(state().update).toMatchObject({ phase: 'running' })
+    const requestId = state().update?.requestId as PluginInstallRequestId
+    expect(updateBundle).toHaveBeenCalledWith('dsh-better-sidebar', '0.17.0', { registry: MIRROR, requestId })
+    face.runUpdate()
+    face.closeUpdate()
+    expect(updateBundle).toHaveBeenCalledOnce()
+    expect(state().update?.phase).toBe('running')
+    // Progress of another request, and a repeated step, change nothing.
+    controller.updateProgress({ requestId: 'other' as PluginInstallRequestId, step: 'checking' })
+    controller.updateProgress({ requestId, step: 'checking' })
+    controller.updateProgress({ requestId, step: 'checking' })
+    controller.updateProgress({ requestId, step: 'removing' })
+    expect(state().update?.steps).toEqual(['checking', 'removing'])
+    face.openUpdate('dsh-better-sidebar', '1.0.0')
+    expect(state().update?.to).toBe('0.17.0')
+    // A check of the package being replaced waits for the update.
+    face.checkVersions('dsh-better-sidebar')
+    expect(listVersions).toHaveBeenCalledOnce()
+    const reads = plugins.listBundles.mock.calls.length
+    answer.resolve(ok(UPDATED))
+    await vi.waitFor(() => { expect(state().update).toMatchObject({ phase: 'done', result: UPDATED, steps: ['checking', 'removing'] }) })
+    expect(plugins.listBundles.mock.calls.length).toBeGreaterThan(reads)
+    // The package's versions are read again for the version now installed.
+    await vi.waitFor(() => { expect(listVersions).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
+    controller.updateProgress({ requestId, step: 'installing' })
+    expect(state().update?.steps).toEqual(['checking', 'removing'])
+    face.toggleUpdateOutput()
+    expect(state().update?.outputOpen).toBe(true)
+    face.closeUpdate()
+    expect(state().update).toBeNull()
+    face.toggleUpdateOutput()
+    expect(state().update).toBeNull()
+  })
+
+  it('keeps a lost update answer as unknown and ignores an answer after disposal', async () => {
+    const updateBundle = vi.fn().mockResolvedValueOnce(refused('gateway/internal', 'socket closed'))
+    const listVersions = vi.fn(() => Promise.resolve(ok(LISTED)))
+    const { controller, face, state } = bench({ updateBundle, listVersions, listBundles: vi.fn(() => Promise.resolve(ok([UPDATABLE]))) })
+    await controller.load()
+    face.checkVersions('dsh-better-sidebar')
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
+    face.openUpdate('dsh-better-sidebar', '0.17.0')
+    face.runUpdate()
+    await vi.waitFor(() => { expect(state().update).toMatchObject({ phase: 'done', result: null, lost: 'socket closed' }) })
+    const late = deferred<ReturnType<typeof ok<typeof UPDATED>>>()
+    updateBundle.mockReturnValueOnce(late.promise)
+    await vi.waitFor(() => { expect(listVersions).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(state().versions['dsh-better-sidebar']?.phase).toBe('done') })
+    face.closeUpdate()
+    face.openUpdate('dsh-better-sidebar', '0.17.0')
+    face.runUpdate()
+    controller.dispose()
+    late.resolve(ok(UPDATED))
+    await late.promise
+    expect(state().update?.phase).toBe('running')
+  })
 })

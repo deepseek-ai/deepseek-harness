@@ -66,6 +66,14 @@ Repository contributors can select either development route; both execute the no
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` uses the internal `_launch_args` test adapter to exercise the unbuilt TypeScript CLI under tsx. Arbitrary argv replacement is intentionally absent from the public SDK.
 
+The manual [shutdown example](sdk/tests/manual_sdk_shutdown_smoke.py) uses ordinary SDK calls: run one short real-model turn, close immediately with the default 1-second budget, then open another runtime and restore the same session. Install the SDK/runtime and set `DEEPSEEK_API_KEY` before running:
+
+```sh
+python python/sdk/tests/manual_sdk_shutdown_smoke.py
+```
+
+The example prints the close duration and history files, retains its temporary directory, and lets restoration failures raise normally. Recovery uses a separate 30-second shutdown budget. Reproduction depends on the host and first-turn timing; successful restoration does not establish a shutdown latency bound. This manual example is not collected by pytest.
+
 ## Build distributions
 
 The root `package.json` version is authoritative for both Python distributions. The staging script injects that version into both wheels and pins the SDK to the same `deepseek-harness-runtime-bin` version.

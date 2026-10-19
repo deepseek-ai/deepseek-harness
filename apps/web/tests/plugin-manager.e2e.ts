@@ -690,13 +690,13 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('shows an optional feature preview before activation and leaves other plugin details unchanged', async () => {
+  it('shows a bundle detail document image before activation and leaves other plugin details unchanged', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-preview'))
     const panel = await openPluginsPanel()
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('button', { name: '查看 DSH 徽章技能', exact: true }).click()
     const detail = panel.locator('[data-plugin-detail]')
-    const preview = detail.getByRole('img', { name: 'DSH 徽章技能功能预览', exact: true })
+    const preview = detail.locator('[data-detail-document]').getByRole('img', { name: 'DSH 徽章技能功能预览', exact: true })
     await preview.waitFor()
     await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
     expect(await preview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
@@ -716,7 +716,8 @@ describe('web e2e: plugin manager', () => {
     const chineseSource = await preview.getAttribute('src')
     try {
       await setLanguage('en')
-      const englishPreview = detail.getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
+      const englishPreview = detail.locator('[data-detail-document]')
+        .getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
       await englishPreview.waitFor()
       await englishPreview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
       expect(await englishPreview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
@@ -727,7 +728,8 @@ describe('web e2e: plugin manager', () => {
     expect(await preview.getAttribute('src')).toBe(chineseSource)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
-    // Detail icons have alt=""; only feature previews expose an image role.
+    // Detail icons have alt=""; this bundle's README detail document has no images.
+    await panel.locator('[data-detail-document] h1').waitFor()
     expect(await panel.getByRole('img').count()).toBe(0)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])

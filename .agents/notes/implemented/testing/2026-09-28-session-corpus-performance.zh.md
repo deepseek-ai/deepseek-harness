@@ -37,6 +37,8 @@ Status: implemented
 
 worker 是编译后的纯 Node 进程，每次都针对已播种根目录全新启动。它们组合生产 Session store、投影注册表、JSONL 持久化、使用 `openAt: first-search` 和内存索引的 SQLite Session query、JSON 存储和投影缓存、Web 投影集合、AgentLoop 以及真实的 `SessionController`。传输查找、上传注册、默认模型选择和 Workspace 注册表使用惰性提供者，因为没有被测路径依赖它们。
 
+语料与 projection-list 共用的控制器夹具等待控制器激活，并提供固定附件图片策略。因此快照包含生产 `imageLimits` 单元；附件 I/O 仍不在这些负载中。事件语料、测量端点和预算保持不变。
+
 | 用例 | 语料 | 样本数 | 终点 |
 |---|---|---:|---|
 | 列表 | 3,000 | 3 | Host 启动；首次 `session.list`；同一进程中重复的 `session.list` |

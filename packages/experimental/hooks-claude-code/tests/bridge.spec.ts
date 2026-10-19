@@ -467,12 +467,12 @@ describe('hooks-claude-code bridge — load resilience', () => {
     // "cannot get property … without inject". Guard the shape directly.
     expect('default' in HooksClaude).toBe(false)
     expect(HooksClaude.name).toBe('hooks-claude-code')
-    expect(HooksClaude.inject).toEqual(['shell', 'sessionProjections', 'workingDirectory'])
+    expect(HooksClaude.inject).toEqual(['shell', 'agents', 'workingDirectory'])
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(HooksClaude) as Record<string, unknown>
     expect(unwrapped).toBe(HooksClaude)
     expect(unwrapped.name).toBe('hooks-claude-code')
-    expect(unwrapped.inject).toEqual(['shell', 'sessionProjections', 'workingDirectory'])
+    expect(unwrapped.inject).toEqual(['shell', 'agents', 'workingDirectory'])
     expect(typeof unwrapped.apply).toBe('function')
   })
 })

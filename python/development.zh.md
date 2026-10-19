@@ -66,6 +66,14 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/test-dsh-home") as harness:
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` 使用内部 `_launch_args` 测试适配器，通过 tsx 验证未构建的 TypeScript CLI。公开 SDK 刻意不提供任意 argv 替换。
 
+手动[关闭示例](sdk/tests/manual_sdk_shutdown_smoke.py)只使用普通 SDK 调用：运行一轮真实模型短对话，以默认 1 秒预算立即关闭，再启动另一个运行时恢复同一会话。安装 SDK／运行时并设置 `DEEPSEEK_API_KEY` 后运行：
+
+```sh
+python python/sdk/tests/manual_sdk_shutdown_smoke.py
+```
+
+示例打印关闭耗时和历史文件列表，保留临时目录，并让恢复失败正常抛出异常。恢复进程使用独立的 30 秒关闭预算。能否复现取决于主机和首轮耗时，恢复成功不能确定关闭耗时上限。pytest 不收集此手动示例。
+
 ## 构建分发包
 
 根目录 `package.json` 的版本是两个 Python 分发包的权威版本。暂存脚本会将该版本注入两个 wheel 包，并将 SDK 固定到同版本的 `deepseek-harness-runtime-bin`。

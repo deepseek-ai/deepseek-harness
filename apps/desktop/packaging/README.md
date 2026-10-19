@@ -274,6 +274,8 @@ An unpacked artifact contains Electron, the materialized dsh production tree, pn
 
 ## Installation and release verification
 
+Windows lists the installed application by product name without a version suffix; the version remains in the separate version field. Desktop's `package.json` `author.name` supplies the installer publisher and executable company name, independently of the signing certificate. Windows and macOS retain product-name copyright text. Installation or upgrade with a rebuilt installer applies the new metadata; existing installations retain their previous values until then.
+
 Keep the generated installer, its version and packaging records together. Review signatures and runtime checks before installation, then follow the [installed-update qualification procedure](../tests/installed-update/README.md) for installed launch and upgrade evidence. The [Desktop test record](../tests/README.md) owns verification limits; a successful workflow alone does not establish production preset, new-workstation or installed-upgrade acceptance.
 
 ## Dev Note

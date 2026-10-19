@@ -17,6 +17,7 @@ import SystemPrompt from './packages/core/system-prompt/lib/index.js'
 import ToolRuntime from './packages/core/tools/lib/index.js'
 import { Session, SESSION_FORMAT_VERSION } from './packages/core/session/lib/index.js'
 import * as Present from './packages/deliverables/tool-present/lib/index.js'
+import SessionProjectionRegistry from './packages/session/session-projection/lib/index.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,10 +29,11 @@ try {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: root })
-  ctx.provide('sessionProjections', { stateOf() { return { openTurnStartSeq: 1, lastTurn: 1 } } })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(Present, { maxFiles: 2 })
   const scope = ctx.plugin(() => {})
   const session = Session.create('built-present', [], { version: SESSION_FORMAT_VERSION, id: 'built-present', createdAt: 0, cwd: root, isSeeded: false })
+  session.append('turn/start', { turn: 1 })
   const owner = { id: 'built-present', session, ctx: scope.ctx, options: {}, status: 'idle' }
   await ctx.agents.register(owner)
   const events = []

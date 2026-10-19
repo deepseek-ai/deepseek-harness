@@ -69,6 +69,8 @@ Desktop 的固定快捷键 `Cmd`/`Ctrl` + `+`（或 `=`）和 `Cmd`/`Ctrl` + `-`
 
 菜单图标使用 `--dsw-alias-menu-icon`：浅色模式为 neutral-bluish 800，深色模式为 `label-primary-dimmed`。
 
+`--dsw-alias-illustration-*` token 分别定义分层装饰插画的背景、前层表面、后层、投影、内嵌填充与细节配色。表盘使用内嵌填充。深色配色让前层表面比后层和背景更亮；内嵌填充与投影沿用后层色调。
+
 `base.css` 仅抑制[基础控件焦点工具](../ui-primitives/README.zh.md)通过 `data-dsh-automatic-focus` 标记的聚焦元素外轮廓线；正常键盘焦点样式、边框、阴影及错误状态保持不变。
 
 系统提示使用 `--dsw-alias-toast-bg` 和 `--dsw-alias-toast-label`，在各调用方之间统一背景与文字颜色。文档预览配对使用 `--dsw-alias-bg-document-preview` 与 `--dsw-alias-label-document-preview`，使底色与状态文字遵循相同主题。Tooltip 键帽使用 `--dsw-alias-tooltip-key-bg`，由各主题的 tooltip 背景派生稍浅的填充。开关滑块读取 `--dsw-alias-switch-thumb`：浅色模式为纯白，深色模式为 neutral-bluish 400，使关闭态滑块比轨道更亮，同时避免纯白在暗色下过亮。

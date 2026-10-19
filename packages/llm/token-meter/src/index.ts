@@ -23,26 +23,22 @@ import {
   SessionLogOffset,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
-// Type-only: activates the `ctx.sessionProjections` Context declaration.
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {
+  ContextPressureProjection,
   TokenMeasurement,
   TokenMeasurementBaseline,
   TokenMeterConfig,
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
+import type { ContextPressureState } from './usage-projection.ts'
 import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
 import { priceSurface } from './route-pricing.ts'
 
 export type * from './types.ts'
-// Module-edge re-export: forces the emitted index.d.ts to import the
-// projection-unit modules, so their SessionProjectionStateMap augmentations load
-// in aggregate programs that only import the package root.
-export type * from './usage-projection.ts'
-export type * from './breakdown-projection.ts'
 
 /**
  * Raw anchor facts captured at the latest successful call; the baseline is
@@ -106,20 +102,37 @@ export class TokenMeter extends Service {
   static inject = ['sessionProjections']
 
   private readonly states = new WeakMap<Session, ReplayState>()
+  private contextPressureProjectionHandle!: ProjectionHandle<ContextPressureState>
 
   constructor(ctx: Context, config: TokenMeterConfig = {}) {
     super(ctx, 'tokenMeter')
     validateConfigKeys(config)
+  }
 
-    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    ctx.sessionProjections.register(contextPressureProjectionDefinition)
-    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    await ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+    this.contextPressureProjectionHandle = await ctx.sessionProjections.register(contextPressureProjectionDefinition)
+    await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.
     ctx.on('session/event', (session) => {
       if (this.states.has(session)) this._sync(session)
     })
+  }
+
+  /**
+   * Read the latest logged provider prompt size and route capacity.
+   * @param session - Session whose committed usage and request capacity are read.
+   * @returns context pressure; fields remain absent until their source events are recorded.
+   */
+  contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'> {
+    const { pressureTokens, contextWindow } = this.contextPressureProjectionHandle.stateOf(session)
+    return {
+      ...pressureTokens === undefined ? {} : { pressureTokens },
+      ...contextWindow === undefined ? {} : { contextWindow },
+    }
   }
 
   /**

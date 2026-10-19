@@ -17,12 +17,18 @@
 
   </details>
 
-## Human and Agent Roles
+## AI Usage
 
-Levels and Agent autonomy: <ins>**hint 人工独立**</ins> 0–10%, <ins>**assist 人工主导**</ins> 15–25%, <ins>**pair 人工引导**</ins> 30–50%, <ins>**copilot 人工把关**</ins> 55–85%, <ins>**auto 模型自主**</ins> 90–100%; <ins>**n/a 暂不适用**</ins> marks a stage that does not exist or has not happened yet.
+<!-- ai-declaration:start -->
+[![AI-DECLARATION: 待填级别](https://img.shields.io/badge/䷼%20AI--DECLARATION-待填级别-e5e7eb?labelColor=e5e7eb)](https://ai-declaration.md)
 
-- <ins>**待填级别**</ins> ?% · breakdown 问题拆解 — 待填说明
-- <ins>**待填级别**</ins> ?% · design 方案设计 — 待填说明
-- <ins>**待填级别**</ins> ?% · testing 验收测试 — 待填说明
-- <ins>**待填级别**</ins> ?% · implementation 技术实现 — 待填说明
-- <ins>**n/a 暂不适用**</ins> · review 评审处理 — 尚无已处理的评审意见。
+**AI declaration** ([v0.1.2](https://ai-declaration.md/en/0.1.2)): `待填级别`
+<!-- ai-declaration:end -->
+
+| 阶段 | 级别 | AI 参与度 | 决策记录 |
+|:--|:--|--:|:--|
+| breakdown 问题拆解 | 待填级别 | ?% | 待填说明 |
+| design 方案设计 | 待填级别 | ?% | 待填说明 |
+| testing 验收测试 | 待填级别 | ?% | 待填说明 |
+| implementation 技术实现 | 待填级别 | ?% | 待填说明 |
+| review 评审处理 | n/a 暂不适用 | — | 尚无已处理的评审意见。 |

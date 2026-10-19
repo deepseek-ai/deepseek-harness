@@ -64,6 +64,7 @@ kind: "package-bundle"
 <a id="known-limitations-and-deferred-work"></a>
 
 - 预设必须支持技能发现和加载才能使用徽章。此 bundle 不会为 minimal 预设添加技能工具。
+- [`docs/`](docs/DETAIL.md) 中的功能配图每种语言只有一张，没有深色主题版本，因此在深色主题中仍为浅色背景。
 
 -----
 

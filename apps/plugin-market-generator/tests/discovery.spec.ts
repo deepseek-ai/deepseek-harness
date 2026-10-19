@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { PackageFiles } from '../src/files.ts'
 import { readDisplayMetadata } from '../src/metadata.ts'
-import { dshRange, findBundlePackages, isBundle, readManifest, type Manifest } from '../src/packages.ts'
+import { dshRange, findBundlePackages, isBundle, isPrivate, readManifest, type Manifest } from '../src/packages.ts'
 import { parseSources } from '../src/sources.ts'
 
 /** An in-memory tree from relative path → file contents. */
@@ -52,6 +52,11 @@ describe('isBundle and dshRange', () => {
       { patch: 'a.yml' }, { patch: ['a.yml', 'b.yml'] }, { patch: [] }, { patch: [1] }, {}, [], null, 'a.yml',
     ].map(value => isBundle({ dsh: { bundle: value } }))).toEqual([true, true, true, false, false, false, false, false])
     expect(isBundle(undefined)).toBe(false)
+  })
+
+  it('reads only the boolean true as private', () => {
+    expect([true, 'true', false, 1, undefined].map(value => isPrivate({ private: value }))).toEqual([true, false, false, false, false])
+    expect(isPrivate(undefined)).toBe(false)
   })
 
   it('copies engines.dsh, else joins DSH peer ranges, and refuses ranges installation rejects', () => {

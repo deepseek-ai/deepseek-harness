@@ -297,6 +297,27 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
+  it.each(['workspace', 'flat', 'ungrouped'] as const)('%s Session hover card shows the Session directory with home as ~', (mode) => {
+    vi.useFakeTimers()
+    try {
+      localStorage.clear()
+      const preferences = createWorkspaceViewStore().create()
+      preferences.actions.setGroupBy(mode === 'flat' ? 'flat' : 'workspace')
+      preferences.actions.setGroupExpanded(mode === 'ungrouped' ? UNGROUPED_KEY : 'alpha', true)
+      localStorage.setItem('dsh.workspace.view.v5', JSON.stringify(preferences.getSnapshot()))
+      mount({
+        useSessions: hook(sessionState([summary('located', 1, { cwd: '/home/u/Documents/project' })])),
+        useWorkspaces: hook(workspaceState(mode === 'ungrouped' ? [] : [workspace('alpha', ['located'])])),
+        useHostInfo: selector => selector({ home: '/home/u', isLoopback: true }),
+      })
+      fireEvent.pointerEnter(screen.getByText('located').closest('[role="treeitem"]')?.parentElement as HTMLElement)
+      act(() => { vi.advanceTimersByTime(800) })
+      expect(screen.getByText('~/Documents/project')).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('prunes deleted Workspace view state only after the Workspace baseline is ready', async () => {
     const pending = {
       ...workspaceState([]),
