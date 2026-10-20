@@ -18,6 +18,8 @@ import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { DEFAULT_MAX_INSTRUCTION_BYTES, RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
+
+export { resolveReconnectPolicy } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
 import { registerServerContext } from './server-context.ts'
 import { connectionStatusIn, registerStatusCell } from './status.ts'
@@ -30,6 +32,9 @@ export type { McpResult, McpToolDefinitionOptions } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
 export type { McpConnectionStatusHandle } from './status.ts'
 export type * from './types.ts'
+export { probeServer } from './probe.ts'
+export { assertTemplateSyntax } from './templates.ts'
+export type { McpProbeOptions } from './probe.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
@@ -44,7 +49,7 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 const DEFAULT_CLOSE_TIMEOUT_MS = 5_000
 
 /** Valid `serverName`, kept below the public tool-name budget. */
-const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
+export const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 /**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
@@ -89,6 +94,8 @@ export interface StdioConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
+  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -117,6 +124,8 @@ export interface StreamableHttpConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
+  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
+  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -128,13 +137,18 @@ export interface StreamableHttpConfig {
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs'>>
+type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
+  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
-const Reconnect: z<ReconnectConfig> = z.object({
+/**
+ * Reconnect-policy section schema, exported so a manager composing mcp-client
+ * instances (`dsh-mcp-manager`) validates the same fields, defaults, and
+ * bounds without restating them.
+ */
+export const ReconnectSchema: z<ReconnectConfig> = z.object({
   enabled: z.boolean().default(RECONNECT_DEFAULTS.enabled),
   initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.initialDelayMs),
   maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.maxDelayMs),
@@ -155,9 +169,10 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
     closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CLOSE_TIMEOUT_MS),
+    expandTemplates: z.boolean().default(false),
     failOnStartupError: z.boolean().default(false),
     maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
+    reconnect: ReconnectSchema,
   }),
   z.object({
     transport: z.const('streamable-http'),
@@ -167,9 +182,10 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
     closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CLOSE_TIMEOUT_MS),
+    expandTemplates: z.boolean().default(false),
     failOnStartupError: z.boolean().default(false),
     maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
+    reconnect: ReconnectSchema,
   }),
 ]) as z<ConfigInput, Config>
 /* jscpd:ignore-end */
@@ -208,7 +224,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     names.add(config.serverName)
     status = registerStatusCell(ctx.fiber, (message, error) => {
       ctx.logger.warn(`mcp-client(${config.serverName}): ${message}`)
-      ctx.logger.warn(error)
+      if (!config.expandTemplates) ctx.logger.warn(error)
     })
     return () => {
       if (ctx.fiber.uid === null) status.detach()
@@ -239,7 +255,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // Cordis consumers observe the tools immediately after the fiber activates.
   // When failOnStartupError is true, a failed initial attempt rejects the
   // fiber (Cordis rolls it back); otherwise the error is logged and the
-  // supervisor enters its reconnect loop.
+  // supervisor applies its reconnect or credential-wait policy.
   const outcome = await connection.ready
   if (outcome.error !== undefined && config.failOnStartupError) {
     throw new Error(`mcp-client(${config.serverName}): initial connection or tool synchronization failed`, { cause: outcome.error })

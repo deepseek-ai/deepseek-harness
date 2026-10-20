@@ -668,9 +668,9 @@ const SERVICE_ROLES: ServiceRole[] = [
   {
     key: 'mcpServers',
     pkg: 'mcp-manager',
-    title: 'Plugin-registered MCP server fleet',
+    title: 'Settings-driven MCP server fleet',
     mode: 'core',
-    note: 'Mounts an mcp-client instance per plugin registration, aggregates their connection statuses, and serves restart and watch to management surfaces.',
+    note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
     key: 'schedule',

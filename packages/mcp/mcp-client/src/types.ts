@@ -1,5 +1,5 @@
 /**
- * Client-safe MCP connection status. Types only — no runtime code.
+ * Client-safe MCP connection status and probe outcomes. Types only — no runtime code.
  *
  * @module @deepseek-ai/dsh-mcp-client/types
  */
@@ -15,6 +15,7 @@ export interface McpCloseResult {
 /** Runtime state of one MCP instance and its current connection generation. */
 export type McpConnectionStatus =
   | { state: 'closed'; result: McpCloseResult }
+  | { state: 'waiting-credentials'; lastError: string }
   | {
     /** A connection attempt is in flight. */
     state: 'connecting'
@@ -55,3 +56,32 @@ export type McpConnectionStatus =
     /** Most recent connection failure, when one was observed. */
     lastError?: string
   }
+
+/** Probe phase a failure is attributed to. */
+export type McpProbeStage = 'connect' | 'list'
+
+/** Successful probe: negotiation and any advertised tool listing completed. */
+export interface McpProbeSuccess {
+  ok: true
+  /** Server-reported identity from `initialize`, when the SDK captured one. */
+  serverInfo?: { name: string; version: string }
+  /** Advertised raw tool names, capped at the resolved `maxToolNames`. */
+  toolNames: string[]
+  /** Whether the advertised list was longer than the returned `toolNames`. */
+  truncated: boolean
+  /** Wall-clock duration of negotiation and listing, excluding cleanup, in milliseconds. */
+  durationMs: number
+}
+
+/** Failed probe, attributed to the stage that raised it. */
+export interface McpProbeFailure {
+  ok: false
+  stage: McpProbeStage
+  /** Diagnostic text of the failure. */
+  message: string
+  /** Wall-clock duration until the failure in milliseconds. */
+  durationMs: number
+}
+
+/** Outcome of one MCP server probe. */
+export type McpProbeResult = (McpProbeSuccess | McpProbeFailure) & McpCloseResult

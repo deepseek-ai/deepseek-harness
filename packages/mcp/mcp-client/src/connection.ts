@@ -10,21 +10,23 @@
  * the next disconnect starts a fresh budget while a crash-looping server —
  * even one whose connects briefly succeed — still exhausts the cap instead of
  * restarting forever. Exhaustion unregisters the server's tools and stops;
- * disposal (including HMR) is the only way back from that state.
+ * a changed credential binding or a fresh instance resets that budget.
  *
  * @module
  */
 
 import { Client } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
-import { assertNever, type JsonValue } from '@deepseek-ai/dsh-util-values'
+import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { withDeadline } from './deadline.ts'
-import { describeError, McpLocalError } from './diagnostic.ts'
+import { McpLocalError } from './diagnostic.ts'
 import type { McpStatusCell } from './status.ts'
 import type { McpCloseResult } from './types.ts'
 import { McpGeneration } from './generation.ts'
+import { McpTemplateBinding } from './credentials.ts'
+import { MissingTemplateValue } from './templates.ts'
 import { McpToolRegistrationError, syncTools } from './tools.ts'
 import type { ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
@@ -102,7 +104,7 @@ export interface ConnectionOutcome {
 export interface ConnectionHandle extends ServerContext {
   /**
    * Settles when the first connection attempt completes or the instance is disposed.
-   * The supervisor applies its retry policy; the caller
+   * The supervisor applies its retry or credential-wait policy; the caller
    * decides whether a failed startup is fatal via `failOnStartupError`.
    */
   ready: Promise<ConnectionOutcome>
@@ -127,9 +129,13 @@ export interface ConnectionHandle extends ServerContext {
  */
 export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy, status: McpStatusCell): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
+  const binding = new McpTemplateBinding(ctx, config)
+  const diagnostic = (error: unknown, operation: string): string => binding.diagnostic(error, operation)
+  const lifetime = new AbortController()
   const readiness = Promise.withResolvers<ConnectionOutcome>()
   type Generation = { wire: McpGeneration; connectedAt?: number }
   let current: Generation | undefined
+  let bindingValue: { config?: Config } | undefined
   let disposed = false
   let serverInstructions = ''
   let disposers: ToolDisposers = new Map()
@@ -138,6 +144,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let reconnectTimer: NodeJS.Timeout | undefined
   let failedAttempts = 0
   let closureFailure: McpCloseResult | undefined
+  let checkingCredentials: Promise<void> | undefined
+  let credentialsDirty = false
   const isCurrent = (record: Generation): boolean => !disposed && current === record && !record.wire.lifetime.signal.aborted
 
   function stopTimers(): void {
@@ -149,9 +157,9 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     for (const dispose of disposers.values()) {
       try { dispose() }
       catch (error) {
-        closureFailure = { ...status.closure(), cleanupError: describeError(error) }
+        closureFailure = { ...status.closure(), cleanupError: diagnostic(error, 'tool cleanup') }
         status.recordClosure(closureFailure)
-        ctx.logger.error(`${label}: tool cleanup failed: ${describeError(error)}`)
+        ctx.logger.error(`${label}: tool cleanup failed: ${diagnostic(error, 'tool cleanup')}`)
       }
     }
     disposers = new Map()
@@ -179,6 +187,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
           serverName: config.serverName,
           toolCallTimeoutMs: config.toolCallTimeoutMs,
           signal,
+          ...config.expandTemplates ? { redact: (text: string) => binding.redact(text) } : {},
         }, disposers, () => isCurrent(record))
       })
     })
@@ -227,13 +236,56 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
 
   function isStopped(): boolean { return disposed || closureFailure !== undefined }
 
+  function requestCredentialRefresh(): void {
+    if (isStopped()) return
+    credentialsDirty = true
+    checkingCredentials ??= (async () => {
+      while (credentialsDirty && !isStopped()) {
+        credentialsDirty = false
+        let next: Config | undefined
+        try { next = await binding.resolve(lifetime.signal) }
+        catch (error) {
+          if (!(error instanceof MissingTemplateValue)) throw error
+        }
+        if (disposed || bindingValue !== undefined && deepEqualJson(next, bindingValue.config)) continue
+        stopTimers()
+        const record = current
+        const attempt = settling
+        current = undefined
+        if (record !== undefined) await close(record)
+        await attempt
+        await syncChain
+        stopTimers()
+        clearTools()
+        if (isStopped()) {
+          readiness.resolve({ error: new Error('MCP credential refresh cleanup is incomplete') })
+          return
+        }
+        failedAttempts = 0
+        bindingValue = next === undefined ? {} : { config: next }
+        settling = connectGeneration()
+      }
+    })().catch((error: unknown) => {
+      if (!disposed) ctx.logger.error(`${label}: credential refresh failed: ${diagnostic(error, 'credential refresh')}`)
+    }).finally(() => {
+      checkingCredentials = undefined
+      if (credentialsDirty) requestCredentialRefresh()
+    })
+  }
+
+  if (binding.refs.size > 0) {
+    ctx.on('credentials/reference-updated', (ref) => {
+      if (binding.refs.has(String(ref))) requestCredentialRefresh()
+    })
+  }
+
   async function connectGeneration(): Promise<void> {
     if (isStopped()) return
     const client = new Client({ name: 'dsh-mcp-client', version: '0.0.1' }, {
       capabilities: {}, versionNegotiation: { mode: 'auto' },
       listChanged: { tools: { autoRefresh: false, debounceMs: 0, onChanged: () => { void refreshTools() } } },
     })
-    const record: Generation = { wire: new McpGeneration(client, config.closeTimeoutMs, describeError) }
+    const record: Generation = { wire: new McpGeneration(client, config.closeTimeoutMs, error => diagnostic(error, 'cleanup')) }
     current = record
     status.opened()
     status.update({ state: 'connecting', attempt: failedAttempts })
@@ -249,15 +301,17 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
           status.update({ state: 'connected', toolCount: disposers.size, connectedAt: record.connectedAt })
         }
       } catch (error) {
-        if (error instanceof McpToolRegistrationError) lost(record, describeError(error))
-        else if (isCurrent(record)) ctx.logger.error(`${label}: tool re-sync failed: ${describeError(error)}`)
+        if (error instanceof McpToolRegistrationError) lost(record, diagnostic(error, 'tool synchronization'))
+        else if (isCurrent(record)) ctx.logger.error(`${label}: tool re-sync failed: ${diagnostic(error, 'tool synchronization')}`)
       }
     }
     try {
       const startedAt = Date.now()
       const remaining = (): number | undefined => config.startupTimeoutMs === undefined ? undefined
         : config.startupTimeoutMs - (Date.now() - startedAt)
-      await record.wire.connect(config, remaining())
+      const resolved = await record.wire.run(signal => binding.resolve(signal), remaining())
+      bindingValue = { config: resolved }
+      await record.wire.connect(resolved, remaining())
       if (!isCurrent(record)) return
       const text = client.getInstructions()?.trimEnd() ?? ''
       const instructions = text ? `### MCP server: ${config.serverName}\n\n${text}` : ''
@@ -277,10 +331,15 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       if (current !== record) return
       current = undefined
       const confirmed = await close(record)
-      readiness.resolve({ error })
+      readiness.resolve({ error: config.expandTemplates ? new Error(diagnostic(error, 'startup')) : error })
       if (disposed || !confirmed) return
-      ctx.logger.warn(`${label}: connection attempt failed: ${describeError(error)}`)
-      scheduleReconnect(describeError(error))
+      if (error instanceof MissingTemplateValue) {
+        bindingValue = {}
+        status.update({ state: 'waiting-credentials', lastError: diagnostic(error, 'credential resolution') })
+        return
+      }
+      ctx.logger.warn(`${label}: connection attempt failed: ${diagnostic(error, 'startup')}`)
+      scheduleReconnect(diagnostic(error, 'startup'))
     }
   }
 
@@ -293,30 +352,37 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       async request(request, exec): Promise<JsonValue> {
         const record = current
         if (record?.connectedAt === undefined) throw new Error(`${label}: server is disconnected`)
-        return await record.wire.run(async (signal) => {
-          const options = { signal: AbortSignal.any([signal, exec.signal]), timeout: config.toolCallTimeoutMs }
-          const generation = record.wire.client
-          switch (request.method) {
-            case 'resources/list': return await generation.listResources(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
-            case 'resources/templates/list': return await generation.listResourceTemplates(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
-            case 'resources/read': return await generation.readResource({ uri: request.uri }, options) as JsonValue
-            /* v8 ignore next -- exhaustive over the closed resource request union */
-            default: return assertNever(request)
-          }
-        })
+        try {
+          return await record.wire.run(async (signal) => {
+            const options = { signal: AbortSignal.any([signal, exec.signal]), timeout: config.toolCallTimeoutMs }
+            const generation = record.wire.client
+            switch (request.method) {
+              case 'resources/list': return await generation.listResources(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
+              case 'resources/templates/list': return await generation.listResourceTemplates(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
+              case 'resources/read': return await generation.readResource({ uri: request.uri }, options) as JsonValue
+              /* v8 ignore next -- exhaustive over the closed resource request union */
+              default: return assertNever(request)
+            }
+          })
+        } catch (error) {
+          if (config.expandTemplates) throw new Error(diagnostic(error, request.method))
+          throw error
+        }
       },
     },
     async dispose(): Promise<void> {
       disposed = true
       readiness.resolve({ error: new Error('MCP client disposed') })
+      lifetime.abort(new Error('MCP client disposed'))
       stopTimers()
       const record = current
       current = undefined
       if (record !== undefined) await close(record)
-      // Quiesce, don't just request it: the in-flight attempt enqueues its
-      // sync before settling, so awaiting both leaves `disposers` final.
-      await settling
-      await syncChain
+      try {
+        await withDeadline(Promise.all([settling, syncChain, checkingCredentials]), config.closeTimeoutMs, 'MCP cleanup did not settle')
+      } catch (error) {
+        closureFailure ??= { ...status.closure(), cleanupError: diagnostic(error, 'cleanup') }
+      }
       clearTools()
       const result = closureFailure ?? status.closure()
       status.recordClosure(result)

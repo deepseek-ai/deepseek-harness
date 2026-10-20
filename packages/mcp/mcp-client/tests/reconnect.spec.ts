@@ -11,6 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { TestCredentials } from './credential-fixture.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
@@ -206,16 +207,46 @@ describe('reconnect supervisor', () => {
     }
   })
 
-  it('stops reconnecting after a lost connection whose cleanup fails', async () => {
-    const status = new McpStatusCell(() => {})
-    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'test'), status)
+  it('redacts resolved credentials from tool and resource failures when template expansion is enabled', async () => {
+    await ctx.plugin(McpResources)
+    await ctx.plugin(TestCredentials)
+    ;(ctx.credentials as TestCredentials).values.set('MCP_TOKEN', 'private-token')
+    const config = { ...stdioConfig({ enabled: false }), env: { TOKEN: '${credential:MCP_TOKEN}' }, expandTemplates: true }
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
     try {
       await handle.ready
-      mockClose.mockRejectedValueOnce(new Error('close failed'))
-      instances[0]!.transport?.onclose?.()
-      await vi.waitFor(() => { expect(status.current()).toMatchObject({ state: 'failed', reason: 'unclosed-generation' }) })
-      expect(status.closure()).toEqual({ closeConfirmed: true, cleanupError: 'Error: close failed' })
-      expect(instances).toHaveLength(1)
+      ctx.mcpResources.register('srv', handle.resources)
+      const failure = new Error('transport rejected private-token')
+      mockCallTool.mockRejectedValue(failure)
+      vi.spyOn(instances[0]!, 'listResources').mockRejectedValue(failure)
+      for (const name of ['mcp__srv__remote', 'list_mcp_resources']) {
+        const result = await ctx.tools.execute({
+          name, arguments: name === 'list_mcp_resources' ? { server: 'srv' } : {},
+          callId: nextCallId(), signal: testToolSignal,
+        })
+        expect(result.isError).toBe(true)
+        if (!result.isError) throw new Error('expected transport failure')
+        expect(result.error.message).toContain('transport rejected [redacted]')
+        expect(result.error.message).not.toContain('private-token')
+      }
+    } finally {
+      await handle.dispose()
+    }
+  })
+
+  it.each([true, false])('reports MCP tool error text for expandTemplates=%s, redacting resolved values', async (expandTemplates) => {
+    await ctx.plugin(TestCredentials)
+    ;(ctx.credentials as TestCredentials).values.set('MCP_TOKEN', 'test-secret')
+    const config = { ...stdioConfig({ enabled: false }), env: { TOKEN: '${credential:MCP_TOKEN}' }, expandTemplates }
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
+    try {
+      await handle.ready
+      const message = 'upstream rejected Bearer test-secret'
+      mockCallTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: message }] })
+      const result = await ctx.tools.execute({ name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      expect(result.isError).toBe(true)
+      if (!result.isError) throw new Error('expected MCP failure')
+      expect(result.error.message).toBe(expandTemplates ? 'upstream rejected Bearer [redacted]' : message)
     } finally {
       await handle.dispose()
     }

@@ -247,9 +247,9 @@ describe('connection status surface', () => {
     }
   })
 
-  it('contains observer failures and honors disposal', async () => {
+  it.each([false, true])('contains observer failures with template expansion %s and honors disposal', async (expandTemplates) => {
     const warns = captureWarns(ctx)
-    await apply(ctx, stdioConfig({ reconnect: { initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 } }))
+    await apply(ctx, stdioConfig({ expandTemplates, reconnect: { initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 } }))
     const handle = connectionStatusOf(ctx.fiber)!
     const seen: string[] = []
     handle.onChange(() => { throw new Error('observer exploded') })
@@ -257,7 +257,7 @@ describe('connection status surface', () => {
     instances[0]!.transport?.onclose?.()
     await vi.waitFor(() => { expect(seen.length).toBeGreaterThan(0) })
     expect(warns.some(line => line.includes('onChange status observer failed'))).toBe(true)
-    expect(warns.some(line => line.includes('observer exploded'))).toBe(true)
+    expect(warns.some(line => line.includes('observer exploded'))).toBe(!expandTemplates)
 
     disposeSecond()
     const settled = seen.length
