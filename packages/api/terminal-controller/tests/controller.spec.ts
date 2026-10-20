@@ -18,13 +18,25 @@ import type { TerminalInput, WebTerminalId } from '../src/types.ts'
 
 const roots: Context[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose())) })
-const config: Config = { shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100, unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 }
+const config: Config = { shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxAgentTerminals: 1, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100, unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 }
 const id = 'test-terminal' as WebTerminalId
 const request = { id, cols: 80, rows: 24 }
 const signal = (): AbortSignal => new AbortController().signal
 
 function owner(ctx: Context, id = 'session', cwd?: string): Agent {
   return { id: id as SessionId, ctx, session: { id: id as SessionId, header: { cwd } } } as unknown as Agent
+}
+
+function fakeHandle() {
+  const output = new PassThrough()
+  const done = Promise.withResolvers<{ exitCode: number; signal: null }>()
+  const handle = {
+    pid: 123, output, done: done.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
+    inspectActivity: vi.fn<SubprocessTerminalHandle['inspectActivity']>(async () => ({ state: 'unknown', revision: 0 })),
+    inspectForeground: async () => undefined, signalForeground: async () => 123,
+    terminate: vi.fn(async () => { output.end(); done.resolve({ exitCode: 0, signal: null }) }) }
+  const checked: SubprocessTerminalHandle = handle
+  return { handle, checked }
 }
 
 function fixture(overrides: Partial<Config> = {}) {
@@ -38,14 +50,7 @@ function fixture(overrides: Partial<Config> = {}) {
   }
   ctx.provide('sandboxPolicy', sandboxPolicy as never)
   ctx.provide('workingDirectory', workingDirectory as never)
-  const output = new PassThrough()
-  const done = Promise.withResolvers<{ exitCode: number; signal: null }>()
-  const handle = {
-    pid: 123, output, done: done.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
-    inspectActivity: vi.fn<SubprocessTerminalHandle['inspectActivity']>(async () => ({ state: 'unknown', revision: 0 })),
-    inspectForeground: async () => undefined, signalForeground: async () => 123,
-    terminate: vi.fn(async () => { output.end(); done.resolve({ exitCode: 0, signal: null }) }) }
-  const checked: SubprocessTerminalHandle = handle
+  const { handle, checked } = fakeHandle()
   const subprocess = { terminalEnvironment: vi.fn(async (): Promise<SubprocessTerminalEnvironment> => ({ platform: 'posix', defaultShell: '/bin/bash' })), resolveExecutable: vi.fn(async (path: string) => path), spawnTerminal: vi.fn(async () => checked) }
   ctx.provide('subprocess', subprocess as never)
   const controller = new TerminalController(ctx, { ...config, ...overrides })
@@ -743,3 +748,182 @@ function attachController(
   }
   return agent.ctx.extend({ invocation }).terminalController.attach(agent, terminalId, signal)
 }
+
+describe('Agent terminals', () => {
+  const confined: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/workspace' }
+  const agentRequest = { title: 'dev server', cols: 80, rows: 24, policy: confined, preferredShells: [] as string[] }
+
+  function withSandbox(ctx: Context) {
+    const sandbox = { confine: vi.fn(async (argv: readonly string[]) => ({ argv: ['sandbox-run', ...argv], enforcement: 'full' as const, denialSignatures: [], runnerFailureRules: [] })) }
+    ctx.provide('sandbox', sandbox as never)
+    return sandbox
+  }
+
+  it('opens a confined agent terminal and publishes its origin, control and sandbox mode', async () => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    const sandbox = withSandbox(ctx)
+    const terminal = await controller.openForAgent(agent, agentRequest, signal())
+    expect(sandbox.confine).toHaveBeenCalledWith(['/bin/bash', '--noprofile', '--norc', '-i'], confined, expect.any(AbortSignal))
+    expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      argv: ['sandbox-run', '/bin/bash', '--noprofile', '--norc', '-i'], cwd: '/workspace',
+      env: { DSH_SESSION_ID: 'session', HISTFILE: `/tmp/dsh-agent-history-${terminal.id}` },
+    }))
+    expect(terminal.id).toMatch(/^[\w-]{1,128}$/u)
+    expect(terminal.info).toMatchObject({ title: 'dev server', origin: 'agent', control: 'agent', sandboxMode: 'workspace-write', state: 'running' })
+    expect(controller.list(agent.id)).toEqual([terminal.info])
+  })
+
+  it('starts a full-access agent terminal without confinement or history redirection in the requested directory', async () => {
+    const { controller, agent, subprocess } = fixture()
+    await controller.openForAgent(agent, { ...agentRequest, cwd: '/elsewhere', policy: { mode: 'danger-full-access', workspaceRoot: '/workspace' } }, signal())
+    expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      argv: ['/bin/bash', '--noprofile', '--norc', '-i'], cwd: '/elsewhere', env: { DSH_SESSION_ID: 'session' },
+    }))
+  })
+
+  it('fails before allocation when a confined policy has no sandbox provider', async () => {
+    const { controller, agent, subprocess } = fixture()
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toThrow('require a sandbox provider')
+    expect(subprocess.spawnTerminal).not.toHaveBeenCalled()
+    expect(controller.list(agent.id)).toEqual([])
+  })
+
+  it('prefers the first discovered preferred shell and otherwise uses the default', async () => {
+    const { ctx, controller, agent, subprocess } = fixture({ shell: undefined })
+    withSandbox(ctx)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    subprocess.resolveExecutable.mockImplementation(async (path: string) => {
+      if (path === 'fish') throw new SubprocessExecutableNotFoundError(path)
+      return path === 'zsh' ? '/bin/zsh' : path
+    })
+    const zsh = await controller.openForAgent(agent, { ...agentRequest, preferredShells: ['fish', 'ZSH.exe'] }, signal())
+    expect(zsh.info.shell.path).toBe('/bin/zsh')
+    await zsh.close()
+    const fallback = await controller.openForAgent(agent, { ...agentRequest, preferredShells: ['fish'] }, signal())
+    expect(fallback.info.shell.path).toBe('/bin/bash')
+  })
+
+  it('limits Agent-controlled terminals and frees the slot when the person takes over', async () => {
+    const { ctx, controller, agent, subprocess } = fixture({ maxTerminals: 3 })
+    withSandbox(ctx)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    const first = await controller.openForAgent(agent, agentRequest, signal())
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ code: 'terminal/limit-reached', details: { limit: 1 } })
+    const input = inputChannel<TerminalInput>()
+    const stream = attachController(agent, first.id, signal(), input.source)[Symbol.asyncIterator]()
+    await stream.next()
+    try {
+      input.push({ type: 'write', sequence: 1, data: 'ls\r', typed: true })
+      expect((await stream.next()).value).toMatchObject({ type: 'state', info: { control: 'user' } })
+      await expect(first.close()).rejects.toMatchObject({ code: 'user-control' })
+      await expect(first.write('pwd\r')).rejects.toMatchObject({ code: 'user-control' })
+      const second = await controller.openForAgent(agent, agentRequest, signal())
+      expect(second.info.control).toBe('agent')
+      await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ details: { limit: 1 } })
+    } finally { await stream.return?.() }
+  })
+
+  it('applies the Session limit to agent terminals', async () => {
+    const { ctx, controller, agent, subprocess } = fixture()
+    withSandbox(ctx)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    await controller.create(agent, request, signal())
+    await controller.create(agent, { ...request, id: 'second' as WebTerminalId }, signal())
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ code: 'terminal/limit-reached', details: { limit: 2 } })
+  })
+
+  it('lets the Session limit bound Agent terminals when the Agent limit is larger', async () => {
+    const { ctx, controller, agent, subprocess } = fixture({ maxTerminals: 1, maxAgentTerminals: 4 })
+    withSandbox(ctx)
+    subprocess.spawnTerminal.mockImplementation(async () => fakeHandle().checked)
+    await controller.openForAgent(agent, agentRequest, signal())
+    await expect(controller.openForAgent(agent, agentRequest, signal())).rejects.toMatchObject({ code: 'terminal/limit-reached', details: { limit: 1 } })
+  })
+
+  it('drives its terminal through the handle and closes it while the agent controls it', async () => {
+    const { ctx, controller, agent, handle } = fixture()
+    withSandbox(ctx)
+    const terminal = await controller.openForAgent(agent, agentRequest, signal())
+    await terminal.write('echo ready\r')
+    expect(handle.write).toHaveBeenCalledExactlyOnceWith('echo ready\r')
+    expect(await terminal.signal('SIGINT')).toBe(123)
+    expect(await terminal.inspectForeground()).toBeUndefined()
+    const mark = await terminal.mark()
+    expect(await mark.lines()).toEqual({ lines: [''], truncated: false })
+    mark.dispose()
+    expect(await terminal.read({ offset: 0, count: 10, maxBytes: 100 })).toMatchObject({ text: '', totalLines: 1 })
+    const revision = terminal.revision
+    const changed = terminal.changed(revision, signal())
+    controller.rename(agent, terminal.id, 'server')
+    expect(await changed).toBeGreaterThan(revision)
+    await terminal.close()
+    expect(handle.terminate).toHaveBeenCalledOnce()
+    expect(controller.list(agent.id)).toEqual([])
+  })
+
+  it('reads and observes any terminal of the Session but not another Session', async () => {
+    const { controller, agent, handle, ctx } = fixture()
+    await controller.create(agent, request, signal())
+    handle.inspectActivity.mockResolvedValue({ state: 'busy', revision: 3 })
+    expect(await controller.readScreen(agent, id, { offset: 0, count: 5, maxBytes: 100 })).toMatchObject({ text: '', totalLines: 1 })
+    expect(await controller.inspectActivity(agent, id)).toBe('busy')
+    expect(() => controller.readScreen(owner(ctx, 'other'), id, { offset: 0, count: 5, maxBytes: 100 })).toThrow('no longer exists')
+  })
+
+  it('streams whole rosters on open, state changes and close until cancellation', async () => {
+    const { ctx, controller, agent } = fixture()
+    withSandbox(ctx)
+    const abort = new AbortController()
+    const roster = controller.watch(agent.id, abort.signal)[Symbol.asyncIterator]()
+    expect((await roster.next()).value).toEqual([])
+    const terminal = await controller.openForAgent(agent, agentRequest, signal())
+    expect((await roster.next()).value).toEqual([expect.objectContaining({ id: terminal.id, origin: 'agent' })])
+    controller.rename(agent, terminal.id, 'server')
+    expect((await roster.next()).value).toEqual([expect.objectContaining({ title: 'server' })])
+    await terminal.close()
+    expect((await roster.next()).value).toEqual([])
+    abort.abort()
+    expect(await roster.next()).toEqual({ done: true, value: undefined })
+  })
+})
+
+it('wakes a waiting roster consumer and keeps other watchers when one stops', async () => {
+  const { ctx, controller, agent } = fixture()
+  ctx.provide('sandbox', { confine: async (argv: readonly string[]) => ({ argv, enforcement: 'full', denialSignatures: [], runnerFailureRules: [] }) } as never)
+  const first = new AbortController()
+  const second = new AbortController()
+  const a = controller.watch(agent.id, first.signal)[Symbol.asyncIterator]()
+  const b = controller.watch(agent.id, second.signal)[Symbol.asyncIterator]()
+  expect((await a.next()).value).toEqual([])
+  expect((await b.next()).value).toEqual([])
+  const waiting = a.next()
+  const terminal = await controller.openForAgent(agent, { title: 'agent', cols: 80, rows: 24, policy: { mode: 'workspace-write', workspaceRoot: '/workspace' }, preferredShells: [] }, signal())
+  expect((await waiting).value).toEqual([expect.objectContaining({ id: terminal.id })])
+  second.abort()
+  expect(await b.next()).toEqual({ done: true, value: undefined })
+  const next = a.next()
+  controller.rename(agent, terminal.id, 'still watched')
+  expect((await next).value).toEqual([expect.objectContaining({ title: 'still watched' })])
+  first.abort()
+  expect(await a.next()).toEqual({ done: true, value: undefined })
+})
+
+it.skipIf(process.platform === 'win32')('runs a command typed by the agent in a real shell and renders its output', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'dsh-agent-terminal-'))
+  const ctx = new Context()
+  await ctx.plugin(LocalSubprocessRuntime)
+  ctx.provide('sandboxPolicy', { defaultMode: 'danger-full-access', workspaceRoot: cwd } as never)
+  ctx.provide('workingDirectory', { get: () => cwd, ensure: async () => cwd } as never)
+  const controller = new TerminalController(ctx, { ...config, shell: { path: '/bin/sh', name: 'sh', args: ['-i'] } })
+  try {
+    const terminal = await controller.openForAgent(owner(ctx, 'real-session', cwd), {
+      title: 'agent', cols: 80, rows: 24, policy: { mode: 'danger-full-access', workspaceRoot: cwd }, preferredShells: [],
+    }, signal())
+    await terminal.write('echo agent-$((40 + 2))\r')
+    await expect.poll(async () => (await terminal.read({ offset: 0, count: 20, maxBytes: 4000 })).text, { timeout: 10_000 }).toContain('agent-42')
+    await terminal.close()
+  } finally {
+    await ctx.fiber.dispose()
+    await rm(cwd, { recursive: true, force: true })
+  }
+})

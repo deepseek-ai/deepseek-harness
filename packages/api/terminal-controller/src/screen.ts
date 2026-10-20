@@ -51,7 +51,7 @@ export function pageLines(lines: readonly string[], request: TerminalScreenReque
   let bytes = 0
   let first = selected.length
   while (first > 0) {
-    const next = encoder.encode(selected[first - 1] as string).byteLength + (first === selected.length ? 0 : 1)
+    const next = encoder.encode(selected[first - 1]).byteLength + (first === selected.length ? 0 : 1)
     if (bytes + next > request.maxBytes) break
     bytes += next
     first--
@@ -73,14 +73,14 @@ function bufferRow(buffer: IBuffer, row: number): IBufferLine {
 }
 
 function tailWithin(text: string, maxBytes: number): string {
-  const characters = [...text]
+  const graphemes = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment)
   let bytes = 0
-  let start = characters.length
+  let start = graphemes.length
   while (start > 0) {
-    const size = new TextEncoder().encode(characters[start - 1]).byteLength
+    const size = new TextEncoder().encode(graphemes[start - 1]).byteLength
     if (bytes + size > maxBytes) break
     bytes += size
     start--
   }
-  return characters.slice(start).join('')
+  return graphemes.slice(start).join('')
 }

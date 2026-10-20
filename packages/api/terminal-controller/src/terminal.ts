@@ -3,7 +3,7 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { SerializeAddon as Serializer } from '@xterm/addon-serialize'
-import type { SubprocessTerminalForeground, SubprocessTerminalHandle, SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessTerminalActivity, SubprocessTerminalForeground, SubprocessTerminalHandle, SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
 import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import { AgentTerminalError } from './agent.ts'
 import { lastContentRow, pageLines, renderLines } from './screen.ts'
@@ -33,6 +33,7 @@ export class BrowserTerminal {
   private controller: TerminalFollower | undefined
   private changes = 0
   private readonly waiters = new Set<() => void>()
+  private stateListener: (() => void) | undefined
 
   /**
    * @param handle - allocated terminal process range.
@@ -171,6 +172,21 @@ export class BrowserTerminal {
   private broadcastState(): void {
     for (const follower of this.followers) follower.push({ type: 'state', info: this.info, writable: this.writable(follower) })
     this.advance()
+    this.stateListener?.()
+  }
+
+  /**
+   * Report published state changes to the owner's roster; the listener must not throw.
+   * @param listener - called after each state publication.
+   */
+  onStateChange(listener: () => void): void { this.stateListener = listener }
+
+  /**
+   * Observe shell lifecycle without interpreting output.
+   * @returns idle, busy, or unknown for unsupported shells and incomplete observations.
+   */
+  async inspectActivity(): Promise<SubprocessTerminalActivity['state']> {
+    return (await this.handle.inspectActivity()).state
   }
 
   /** Advances after each applied output chunk and each published state change. */
@@ -185,11 +201,11 @@ export class BrowserTerminal {
   async changed(after: number, signal: AbortSignal): Promise<number> {
     while (this.changes <= after) {
       signal.throwIfAborted()
-      await new Promise<void>((resolve, reject) => {
-        const abort = (): void => { this.waiters.delete(wake); reject(signal.reason) }
-        const wake = (): void => { signal.removeEventListener('abort', abort); resolve() }
+      // Abort only wakes the wait; the loop rethrows the caller's exact reason.
+      await new Promise<void>((resolve) => {
+        const wake = (): void => { signal.removeEventListener('abort', wake); this.waiters.delete(wake); resolve() }
         this.waiters.add(wake)
-        signal.addEventListener('abort', abort, { once: true })
+        signal.addEventListener('abort', wake, { once: true })
       })
     }
     return this.changes
