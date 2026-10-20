@@ -23,7 +23,7 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 
 ## 迁移
 
-1. 删除废弃配置键，以及仅为支持 Team 而禁用 subagent 工具的 patch 行。
+1. 将 `interrupt: false` 从 `tool-agent-team` 移到 `tool-subagent-control`。删除其余废弃键，以及仅为支持 Team 而禁用 subagent 工具的 patch 行。
 2. 将 `spawn_teammate({ name, description, prompt, context })` 替换为 `subagent({ description, prompt })`；继承对话历史时使用 `subagent_fork`。保存返回的 agent id。
 3. 使用 `send_message({ agent_id, message })` 和 `interrupt_agent({ agent_id })`。通过 `list_agents` 查询所有 Team 成员的 id。
 4. 任务的 `owner` 字段传入成员 Session id，结果读取 `ownerId`。以 Lead 的 Session id 取代 `lead` 别名。

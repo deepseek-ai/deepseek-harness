@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。一个插件实例注册全部四个工具；成员继承相同定义和顺序。
+`dsh-tool-subagent-control` 让 agent（智能体）按 Session id 发现和联系其 subagent（子智能体）树、中断后代，并等待自身下一步收件箱。默认情况下，一个插件实例注册全部四个工具；成员继承相同定义和顺序。
 
 ## 目录
 
@@ -40,7 +40,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-此包不接受配置。主入口注册 `send_message`、`interrupt_agent`、`list_agents` 和 `wait_agent`；现有工具限制可隐藏单个工具。
+设置 `config.interrupt: false` 可省略 `interrupt_agent` 及其在 `list_agents` 中的指引。默认值为 `true`。其余三个工具和 `ctx.subagents.interrupt()` 仍然可用。参见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent-control)。
 
 ### send_message
 
@@ -115,7 +115,7 @@ kind: "package-reference"
 
 #### Token 影响
 
-每个请求的模式成本固定，与子级数量或描述无关。
+每个请求的模式成本固定，与子级数量或描述无关；关闭中断会移除其 schema 和发现指引。
 
 #### KV Cache 影响
 

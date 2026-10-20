@@ -176,22 +176,6 @@
       }
     },
     {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent_id": {
-            "type": "string",
-            "description": "The id of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent_id"
-        ]
-      }
-    },
-    {
       "name": "job_kill",
       "description": "Request cancellation of a running background job.",
       "parameters": {
@@ -245,7 +229,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire Team: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other Team member listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}

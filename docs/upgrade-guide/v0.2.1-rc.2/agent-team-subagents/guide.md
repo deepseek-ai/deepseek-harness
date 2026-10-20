@@ -23,7 +23,7 @@ Descriptions label responsibilities; only Session ids identify recipients.
 
 ## Migration
 
-1. Remove the obsolete configuration keys and any patch rows that disable subagent tools solely for Team support.
+1. Move `interrupt: false` from `tool-agent-team` to `tool-subagent-control`. Remove other obsolete keys and any patch rows that disable subagent tools solely for Team support.
 2. Replace `spawn_teammate({ name, description, prompt, context })` with `subagent({ description, prompt })`, or `subagent_fork` for inherited conversation history. Save the returned agent id.
 3. Use `send_message({ agent_id, message })` and `interrupt_agent({ agent_id })`. Discover all Team member ids with `list_agents`.
 4. Pass member Session ids to task `owner` fields and read `ownerId` in results. Use the Lead's Session id instead of the alias `lead`.

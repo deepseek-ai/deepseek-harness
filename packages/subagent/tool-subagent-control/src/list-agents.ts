@@ -58,14 +58,16 @@ function project(
 /**
  * Register the `list_agents` tool.
  * @param ctx - context carrying the tool registry, subagent service, and live Agent registry.
+ * @param interrupt - whether the control plugin exposes interruption.
  */
-export function registerListAgents(ctx: Context): void {
+export function registerListAgents(ctx: Context, interrupt: boolean): void {
   ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
       'List your entire Team: the root agent and all reachable continuable descendants, including yourself. '
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
-      + 'You can message any other Team member listed as running or inactive. You can interrupt only your own descendants. '
+      + 'You can message any other Team member listed as running or inactive. '
+      + (interrupt ? 'You can interrupt only your own descendants. ' : '')
       + 'running means it is working; inactive means it is not currently working. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',

@@ -4186,6 +4186,23 @@ export interface PresetSelectionConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent-control -->
+<a id="deepseek-aidsh-tool-subagent-control"></a>
+
+## `@deepseek-ai/dsh-tool-subagent-control`
+
+- `inject`: `tools` · `subagents` · `agents`
+- `source`: [`packages/subagent/tool-subagent-control/src/index.ts:26`](../packages/subagent/tool-subagent-control/src/index.ts)
+
+```ts config-catalog
+/** Optional subagent control tools. */
+export interface Config {
+  /** Register `interrupt_agent` and its discovery guidance. Defaults to true; false leaves the service API available. */
+  interrupt?: boolean
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent-control -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-terminal -->
 <a id="deepseek-aidsh-tool-terminal"></a>
 
@@ -4790,7 +4807,6 @@ export interface Config {
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
-| `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` · `agents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |

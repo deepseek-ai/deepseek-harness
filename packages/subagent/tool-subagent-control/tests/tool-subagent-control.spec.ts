@@ -336,22 +336,36 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('requires a calling agent')
   })
 
-  it('unregisters with its plugin fiber (HMR safety)', async () => {
+  it.each([{}, { interrupt: true }, { interrupt: false }])('unregisters and reloads with config %j (HMR safety)', async (config) => {
     const ctx = new Context()
     contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    const fiber = await ctx.plugin(tool)
-    const names = ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']
+    const fiber = await ctx.plugin(tool, config)
+    const names = ['send_message', 'list_agents', 'wait_agent']
+    if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    if (config.interrupt === false) {
+      expect(ctx.tools.get('interrupt_agent')).toBeUndefined()
+      expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
+      expect(typeof ctx.subagents.interrupt).toBe('function')
+    }
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
     for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
     const reloaded = await ctx.plugin(tool)
-    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
+      expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    }
     await reloaded.dispose()
+  })
+
+  it('defaults interruption on and rejects non-boolean configuration', () => {
+    expect(tool.Config({})).toEqual({ interrupt: true })
+    expect(tool.Config({ interrupt: false })).toEqual({ interrupt: false })
+    expect(() => tool.Config({ interrupt: 'false' } as never)).toThrow()
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {

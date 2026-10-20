@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

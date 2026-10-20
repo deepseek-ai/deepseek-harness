@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. One plugin instance registers all four tools; members inherit the same definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. By default, one plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ With the required services available, load the subagent service, a backend, the 
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-This package takes no configuration. Its main entry registers `send_message`, `interrupt_agent`, `list_agents`, and `wait_agent`; existing tool restrictions can hide individual tools.
+Set `config.interrupt: false` to omit `interrupt_agent` and its guidance in `list_agents`. The default is `true`. The other three tools and `ctx.subagents.interrupt()` remain available. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-subagent-control).
 
 ### send_message
 
@@ -115,7 +115,7 @@ The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subage
 
 #### Token effect
 
-Fixed schema cost per request, independent of the number or descriptions of children.
+Fixed schema cost per request, independent of the number or descriptions of children; disabling interruption removes its schema and discovery guidance.
 
 #### KV Cache effect
 
