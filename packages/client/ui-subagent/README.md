@@ -29,6 +29,8 @@ The session header uses the session title for ordinary breadcrumbs and the catal
 
 This package registers the `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` resource and builtin Sidebar tab type. The resource retains the child `SessionReference` directly from its address without refreshing the parent catalog, and releases the reference when the tab record closes. The tab renders the shared `conversation.content` Factory through `sidebar.chat.conversation`, fixes the local View to Chat, and omits the main Conversation header and width controls.
 
+The root catalog exposes `conversation.session.header.actions.subagent.footer` for shared tasks. Child and ancestor breadcrumb catalogs show navigation only.
+
 ### Browsing the tree
 
 Hovering a trigger opens its catalog after 150ms; leaving both trigger and catalog closes it after 120ms. Clicking the descendant-count trigger pins its catalog until outside click or Escape. Clicking moves focus into the panel; Escape returns focus when it was inside. Breadcrumb-title clicks navigate to the corresponding conversation.

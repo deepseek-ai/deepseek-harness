@@ -19,7 +19,6 @@ async function bench() {
     name: 'root',
     children: {
       'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' },
-      'conversation.session.header.lineage.subagent.footer': { kind: 'list', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
@@ -31,7 +30,7 @@ async function bench() {
 }
 
 describe('task-board browser plugin', () => {
-  it('registers disposable task-board sections without navigation or Team Remote services', async () => {
+  it('registers a disposable root task-board section without navigation or Team Remote services', async () => {
     const b = await bench()
     expect(inject).toEqual(['slots', 'locale'])
     expect(b.entry()).toMatchObject({
@@ -39,7 +38,6 @@ describe('task-board browser plugin', () => {
       locale: 'agent-team',
     })
     expect(b.entry()!.inject).toBeUndefined()
-    expect(b.ctx.slots.entries('conversation.session.header.lineage.subagent.footer')).toHaveLength(1)
     expect(b.ctx.slots.entries('conversation.session.header.actions')).toHaveLength(0)
     const t = b.ctx.locale.bind('agent-team')
     expect(t('trigger')).toBe('Task board')

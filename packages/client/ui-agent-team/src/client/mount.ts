@@ -44,10 +44,7 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
       }),
     }, TeamModeToggle))
   })
-  for (const name of [
-    'conversation.session.header.actions.subagent.footer',
-    'conversation.session.header.lineage.subagent.footer',
-  ] as const) {
-    ctx.slots.inject(name, () => ctx.slots.register({ name, id: 'agent-team', locale: NS }, TeamBoard))
-  }
+  ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({
+    name: 'conversation.session.header.actions.subagent.footer', id: 'agent-team', locale: NS,
+  }, TeamBoard))
 }

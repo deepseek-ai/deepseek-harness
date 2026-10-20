@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
+import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   type SessionProjectionMap, type SessionSummary,
@@ -25,19 +25,22 @@ type Catalogs = Readonly<Record<SessionId, SubagentCatalogSnapshot>>
 
 /** Business actions supplied by the slot registration. */
 export type SubagentCatalogInjected = {
-  hooks: {
-    /** Whether the catalog footer currently has a registered contributor. */
-    footerAvailable: HostObservable<boolean>
-  }
   openChild: (address: SubagentAddress) => void
   openChildAside: (address: SubagentAddress) => void
   refreshProjection: (parentSessionId: SessionId) => void
 }
 
+/** Root catalog actions and availability of its optional footer. */
+export type SubagentCatalogActionInjected = SubagentCatalogInjected & {
+  hooks: {
+    /** Whether the catalog footer currently has a registered contributor. */
+    footerAvailable: HostObservable<boolean>
+  }
+}
+
 /** Full props for the session-header lineage renderer. */
 export type SubagentHeaderLineageProps =
   PropsRuntime<'conversation.session.header.lineage'> & InjectFace<SubagentCatalogInjected> & PropsLocale<typeof NS>
-  & Omit<PropsRenderSlots<'conversation.session.header.lineage.subagent.footer'>, 'SessionProvider'>
 
 interface CatalogRowsProps {
   parentSessionId: SessionId
@@ -444,13 +447,11 @@ interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected>
   useSessions: SubagentHeaderLineageProps['useSessions']
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
+  withBoard?: boolean
+  renderFooter?: () => ReactNode
 }
 
-type CatalogFooterProps =
-  | ({ footerKind: 'lineage' } & Pick<PropsRenderSlots<'conversation.session.header.lineage.subagent.footer'>, 'renderSlot'>)
-  | ({ footerKind: 'actions' } & Pick<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'renderSlot'>)
-
-type CatalogDropdownProps = CatalogDropdownSharedProps & CatalogFooterProps & (
+type CatalogDropdownProps = CatalogDropdownSharedProps & (
   | {
     /** Descendant-count control. */
     variant: 'count'
@@ -489,7 +490,7 @@ function catalogMenuPosition(trigger: HTMLButtonElement, withBoard: boolean): CS
 function CatalogDropdown(props: CatalogDropdownProps) {
   const {
     rootSessionId, currentSessionId, displayTitle, openTitle, variant,
-    useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t,
+    useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t, withBoard = false,
   } = props
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const projections = useSessions(state => state.projectionsBySession)
@@ -513,8 +514,6 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     }))
   }, [projections, summaries, statuses])
   const catalog = catalogs[rootSessionId]
-  const footerAvailable = useFooterAvailable(value => value)
-  const withBoard = footerAvailable && projections[rootSessionId]?.values.agentTeam?.enabled === true
   const [open, setOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<CSSProperties>()
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
@@ -792,9 +791,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
                 t={t}
               />
             </div>
-            {props.footerKind === 'lineage'
-              ? props.renderSlot('conversation.session.header.lineage.subagent.footer', {})
-              : props.renderSlot('conversation.session.header.actions.subagent.footer', {})}
+            {props.renderFooter?.()}
           </div>
         </MenuSurface>
       ), document.body)}
@@ -804,7 +801,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
 
 /** Full props for the root-session catalog entry in the header actions band. */
 export type SubagentCatalogActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & InjectFace<SubagentCatalogInjected> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions'> & InjectFace<SubagentCatalogActionInjected> & PropsLocale<typeof NS>
   & Omit<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'SessionProvider'>
 
 /**
@@ -815,21 +812,29 @@ export type SubagentCatalogActionProps =
  * @param props - Session standard props plus the catalog actions and translator.
  * @returns The count dropdown, or null on a child session.
  */
-export function SubagentCatalogAction({
-  sessionId, useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t, renderSlot,
+export function SubagentCatalogAction(props: SubagentCatalogActionProps) {
+  const addressedChild = props.useSession(snapshot => snapshot.subagent !== null)
+  const listedChild = props.useSessions(state => state.byId[props.sessionId]?.origin === 'subagent')
+  if (addressedChild || listedChild) return null
+  return <RootCatalogAction {...props} />
+}
+
+/** Bind task-board visibility only in root conversations. */
+function RootCatalogAction({
+  sessionId, useProjection, useSessions, useSessionStatus, useFooterAvailable,
+  openChild, openChildAside, refreshProjection, t, renderSlot,
 }: SubagentCatalogActionProps) {
-  const isChild = useSessions(state => state.byId[sessionId]?.origin === 'subagent')
-  if (isChild) return null
+  const teamEnabled = useProjection('agentTeam', team => team?.enabled === true)
+  const footerAvailable = useFooterAvailable(value => value)
   return (
     <CatalogDropdown
       key={sessionId}
       rootSessionId={sessionId}
       variant="count"
-      footerKind="actions"
-      renderSlot={renderSlot}
+      withBoard={footerAvailable && teamEnabled}
+      renderFooter={() => renderSlot('conversation.session.header.actions.subagent.footer', {})}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}
-      useFooterAvailable={useFooterAvailable}
       openChild={openChild}
       openChildAside={openChildAside}
       refreshProjection={refreshProjection}
@@ -845,7 +850,7 @@ export function SubagentCatalogAction({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, useSession, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t, renderSlot,
+  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, t,
 }: SubagentHeaderLineageProps) {
   const address = useSession(session => session.subagent?.address)
   const parentId = useSessions((state) => {
@@ -856,7 +861,7 @@ export function SubagentHeaderLineage({
     const summary = state.byId[lineageSessionId]
     return summary?.origin === 'subagent' ? summary.parentId : undefined
   })
-  const shared = { useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t }
+  const shared = { useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t }
   // Root sessions carry no breadcrumb; their descendant count lives in the
   // header actions band (SubagentCatalogAction).
   if (parentId === undefined) return null
@@ -867,8 +872,6 @@ export function SubagentHeaderLineage({
         rootSessionId={parentId}
         currentSessionId={lineageSessionId}
         variant="switcher"
-        footerKind="lineage"
-        renderSlot={renderSlot}
         displayTitle={displayTitle}
         {...openTitle === undefined ? {} : { openTitle }}
         {...shared}
@@ -878,8 +881,6 @@ export function SubagentHeaderLineage({
           key={`children:${lineageSessionId}`}
           rootSessionId={lineageSessionId}
           variant="count"
-          footerKind="lineage"
-          renderSlot={renderSlot}
           {...shared}
         />
       )}

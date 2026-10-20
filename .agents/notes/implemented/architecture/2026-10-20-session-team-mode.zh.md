@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-基础 bundle 加载 Team 服务与任务工具，Web bundle 加载 Team UI。相关包归属 subagent 与 client 产品组。根 Session 保存的选择控制整棵树的任务工具、Team 指引与共享任务板；新 Session 默认关闭。普通 subagent 创建、通信与导航继续可用。
+基础 bundle 加载 Team 服务与任务工具，Web bundle 加载 Team UI。相关包归属 subagent 与 client 产品组。根 Session 保存的选择控制整棵树的任务工具与 Team 指引，以及根会话中的共享任务板；新 Session 默认关闭。普通 subagent 创建、通信与导航继续可用。
 
-模型与推理等级菜单承载用户选择。现有 Subagent 面板在成员下方显示共享任务。关闭 Team 保留日志与子智能体；重新开启恢复任务板。没有保存选择的历史任务板保持开启。profile 加载时移除已停用的可选 bundle 选择，保留配置行覆盖。
+模型与推理等级菜单承载用户选择。根会话的 Subagent 面板在成员下方显示共享任务。关闭 Team 保留日志与子智能体；重新开启恢复任务板。没有保存选择的历史任务板保持开启。profile 加载时移除已停用的可选 bundle 选择，保留配置行覆盖。
 
 本决策替代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 中显式选择组合的部分；其持久性、归属与生命周期决策继续有效。[可选 bundle](../process/2026-09-15-shipped-optional-bundles.zh.md)仍约束其他实验性功能。
 

@@ -26,6 +26,9 @@ const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
 const t: SubagentHeaderLineageProps['t'] = makeTranslate(zh)
 
+type HeaderCatalogProps = SubagentHeaderLineageProps
+  & Pick<SubagentCatalogActionProps, 'useFooterAvailable' | 'renderSlot'>
+
 type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentCatalogEntry
   ? Omit<Entry, 'createdAt'> & { activity: 'running' | 'inactive' }
   : never
@@ -124,7 +127,7 @@ function props(
     lineageSessionId: PARENT,
     displayTitle: 'Parent title',
     t,
-  } satisfies SubagentHeaderLineageProps
+  } satisfies HeaderCatalogProps
 }
 
 function summary(id: SessionId, updatedAt: number): SessionSummary {
@@ -150,11 +153,11 @@ function hoverCatalog(trigger: HTMLElement): void {
  * sessions) — exactly one renders per form. The actions seat sees the same
  * session the lineage renders.
  */
-function HeaderCatalog(props: SubagentHeaderLineageProps) {
-  const { __renders: _renders, ...shared } = props
+function HeaderCatalog(props: HeaderCatalogProps) {
   const actionProps: SubagentCatalogActionProps = {
-    ...shared, sessionId: props.lineageSessionId,
-    renderSlot: () => props.renderSlot('conversation.session.header.lineage.subagent.footer', {}),
+    ...props, sessionId: props.lineageSessionId,
+    useProjection: ((_key: 'agentTeam', selector: (value: { enabled: boolean } | undefined) => boolean) =>
+      props.useSessions(state => selector(state.projectionsBySession[props.lineageSessionId]?.values.agentTeam))) as SubagentCatalogActionProps['useProjection'],
   }
   return (
     <>
@@ -209,6 +212,26 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it.each([false, true])('keeps child navigation without reading or rendering a task board (listed: %s)', (listed) => {
+    const input = props(catalog(), {}, listed ? {
+      [CHILD]: { ...summary(CHILD, 1), origin: 'subagent', parentId: PARENT },
+    } : {}, { parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+    const readProjection = vi.fn((): never => { throw new Error('child task-board projection read') })
+    const readFooter = vi.fn((): never => { throw new Error('child footer subscription') })
+    const renderFooter = vi.fn(() => <section aria-label="Shared tasks">Tasks</section>)
+    render(<>
+      <SubagentHeaderLineage {...input} lineageSessionId={CHILD} />
+      <SubagentCatalogAction {...input} sessionId={CHILD}
+        useProjection={readProjection} useFooterAvailable={readFooter} renderSlot={renderFooter} />
+    </>)
+    fireEvent.click(screen.getByRole('button', { name: /切换子智能体/u }))
+    expect(screen.getByRole('tree')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Shared tasks' })).toBeNull()
+    expect(readProjection).not.toHaveBeenCalled()
+    expect(readFooter).not.toHaveBeenCalled()
+    expect(renderFooter).not.toHaveBeenCalled()
+  })
+
   it('leaves task-board keys alone and dismisses the shared panel from outside focus', () => {
     const input = props(catalog())
     render(<><textarea aria-label="Composer" /><HeaderCatalog {...input}
@@ -245,7 +268,7 @@ describe('SubagentHeaderLineage', () => {
     let projections: SessionListState['projectionsBySession'] = {
       [PARENT]: { state: 'idle', error: null, values: {} },
     }
-    const current: SubagentHeaderLineageProps = {
+    const current: HeaderCatalogProps = {
       ...injected,
       useSessions: select => select({ ...initial, projectionsBySession: projections }),
     }

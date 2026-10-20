@@ -14,11 +14,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-subagent/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
 import css from './TeamBoard.module.css'
-import { teamRootId } from './team-root.ts'
 
 /** Full props of the task board below the shared subagent catalog. */
 export type TeamBoardProps =
-  PropsRuntime<'conversation.session.header.actions.subagent.footer' | 'conversation.session.header.lineage.subagent.footer'> & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions.subagent.footer'> & PropsLocale<typeof NS>
 
 function statusKey(status: TeamTask['status']): TeamKey {
   switch (status) {
@@ -102,13 +101,11 @@ function TaskCard({ task, rootId, useSessions, t }: {
   )
 }
 
-/** Render the root Session’s read-only task board from any descendant conversation. */
+/** Render the root conversation's read-only task board from its current projection. */
 export function TeamBoard({
-  sessionId, useSession, useSessions, t,
+  sessionId, useProjection, useSessions, t,
 }: TeamBoardProps) {
-  const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
-  const rootId = useSessions(state => teamRootId(sessionId, parentId, state.byId))
-  const team = useSessions(state => rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam)
+  const team = useProjection('agentTeam')
   if (!team?.enabled) return null
   return (
     <section className={css.board} aria-label={t('trigger')} data-team-panel>
@@ -121,7 +118,7 @@ export function TeamBoard({
         : (
           <div className={css.tasks}>
             {team.tasks.map(task => (
-              <TaskCard key={task.id} task={task} rootId={rootId as SessionId} useSessions={useSessions} t={t} />
+              <TaskCard key={task.id} task={task} rootId={sessionId} useSessions={useSessions} t={t} />
             ))}
           </div>
         )}

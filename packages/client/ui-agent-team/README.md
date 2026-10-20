@@ -25,7 +25,7 @@ This package displays shared tasks below the Subagent tree in one header panel. 
 <a id="use-this-package"></a>
 ## Use this package
 
-In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the Subagent control to see members above shared tasks. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
+In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the root conversation’s Subagent control to see members above shared tasks. Child conversations keep subagent navigation without a task board. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
 
 The [Web bundle](../../bundle/web-app/README.md) loads this package by default. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 
@@ -45,7 +45,7 @@ The read-only board shows task identity, owner label, blockers, readiness, and a
 
 The Client export registers its locale dictionaries and subagent-catalog and model-menu slots through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes its registrations.
 
-The Subagent catalog owns the shared panel, scrolling, hover, keyboard, and dismissal interactions. This package contributes the task section below the tree in root and descendant entries. The board resolves the root through Session ancestry and reads the mode and tasks together from its `agentTeam` projection. It appears only when that projection is available and enabled.
+The Subagent catalog owns the shared panel, scrolling, hover, keyboard, and dismissal interactions. This package contributes the task section only below the root conversation’s tree. The board reads the current Session’s mode and tasks through `useProjection('agentTeam')`. It appears only when that projection is available and enabled.
 
 | File | Role |
 |---|---|

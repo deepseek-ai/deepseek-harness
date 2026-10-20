@@ -12,7 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import {
-  SubagentHeaderLineage, type SubagentCatalogInjected,
+  SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected,
 } from '../src/client/SubagentHeaderLineage.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
@@ -108,15 +108,10 @@ describe('apply', () => {
     expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight'])
   })
 
-  it('keeps both catalog extensions available when optional Sidebar services arrive', async () => {
+  it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
     const { ctx } = await fullBench(FAMILY)
     onTestFinished(() => ctx.fiber.dispose())
-    for (const name of [
-      'conversation.session.header.actions.subagent.footer',
-      'conversation.session.header.lineage.subagent.footer',
-    ] as const) {
-      ctx.slots.register({ name, id: 'test-content' }, () => null)
-    }
+    ctx.slots.register({ name: 'conversation.session.header.actions.subagent.footer', id: 'test-content' }, () => null)
     const registerResource = vi.fn(() => () => {})
     const registerTab = vi.fn(() => () => {})
     ctx.provide('resources', { register: registerResource } as never)
@@ -124,7 +119,6 @@ describe('apply', () => {
     await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
     expect(registerTab).toHaveBeenCalledOnce()
     expect(ctx.slots.entries('conversation.session.header.actions.subagent.footer')).toHaveLength(1)
-    expect(ctx.slots.entries('conversation.session.header.lineage.subagent.footer')).toHaveLength(1)
   })
 
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {
@@ -158,22 +152,20 @@ describe('apply', () => {
     const actionEntry = ctx.slots.entries('conversation.session.header.actions')
       .find(entry => entry.options.id === 'subagent-catalog')!
     expect(actionEntry.options.order).toBe(10)
-    const actionProps = (actionEntry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
-    for (const [name, source] of [
-      ['conversation.session.header.lineage.subagent.footer', actions.hooks.footerAvailable],
-      ['conversation.session.header.actions.subagent.footer', actionProps.hooks.footerAvailable],
-    ] as const) {
-      const changed = vi.fn()
-      const unsubscribe = source.subscribe(changed)
-      expect(source.getSnapshot()).toBe(false)
-      const remove = ctx.slots.register({ name, id: 'test-footer' }, () => null)
-      expect(source.getSnapshot()).toBe(true)
-      await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
-      remove()
-      expect(source.getSnapshot()).toBe(false)
-      await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
-      unsubscribe()
-    }
+    const actionProps = (actionEntry.inject as (id: SessionId) => SubagentCatalogActionInjected)(sid('parent'))
+    const source = actionProps.hooks.footerAvailable
+    const changed = vi.fn()
+    const unsubscribe = source.subscribe(changed)
+    expect(source.getSnapshot()).toBe(false)
+    const remove = ctx.slots.register({
+      name: 'conversation.session.header.actions.subagent.footer', id: 'test-footer',
+    }, () => null)
+    expect(source.getSnapshot()).toBe(true)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
+    remove()
+    expect(source.getSnapshot()).toBe(false)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
+    unsubscribe()
 
     const composerEntry = ctx.slots.entries('conversation.composer')
       .find(entry => entry.component === SubagentReadOnlyComposer)!

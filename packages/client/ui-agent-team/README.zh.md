@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在根会话的模型与推理等级菜单中打开**使用智能体团队**。新 Session 默认关闭。开启后，通过 Subagent 入口同时查看上方的成员树和下方的共享任务；尚无成员时也保留该入口。关闭后保留任务和子代理。开关等待保存后的投影更新，失败由菜单宿主提示。
+在根会话的模型与推理等级菜单中打开**使用智能体团队**。新 Session 默认关闭。开启后，通过根会话的 Subagent 入口同时查看上方的成员树和下方的共享任务。子会话保留子智能体导航，不显示任务板。尚无成员时也保留根会话入口。关闭后保留任务和子代理。开关等待保存后的投影更新，失败由菜单宿主提示。
 
 [Web bundle](../../bundle/web-app/README.zh.md) 默认加载本包。Web Client loader 挂载 `/client` export；root Host export 不执行行为，本包也没有用户配置字段。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 Client export 通过 Cordis effect 注册语言字典、子代理目录与模型菜单 slot；它不挂载 Remote namespace。销毁插件 fiber 会移除这些注册。
 
-Subagent 目录负责共享面板的滚动、悬停、键盘和关闭交互。本包在根会话与后代入口的树下方提供任务区。任务板通过 Session 祖先关系解析根，从其 `agentTeam` 投影一起读取模式与任务；仅在投影可用且已开启时显示。
+Subagent 目录负责共享面板的滚动、悬停、键盘和关闭交互。本包仅在根会话的树下方提供任务区。任务板通过 `useProjection('agentTeam')` 读取当前 Session 的模式与任务；仅在投影可用且已开启时显示。
 
 | 文件 | 职责 |
 |---|---|

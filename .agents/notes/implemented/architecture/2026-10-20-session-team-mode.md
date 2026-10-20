@@ -10,9 +10,9 @@ A plugin-level Team switch requires users to change the shared profile before ch
 
 ## Decision
 
-The base bundle loads the Team service and task tools, and the Web bundle loads the Team UI. The packages belong to the subagent and client product groups. A saved root-Session selection gates task tools, Team guidance, and the shared board throughout the tree; new Sessions default off. Ordinary subagent creation, communication, and navigation remain available.
+The base bundle loads the Team service and task tools, and the Web bundle loads the Team UI. The packages belong to the subagent and client product groups. A saved root-Session selection gates task tools and Team guidance throughout the tree, and the shared board in the root conversation; new Sessions default off. Ordinary subagent creation, communication, and navigation remain available.
 
-The model and reasoning menu owns the user’s selection. The existing Subagent panel displays members above shared tasks. Disabling Team keeps the journal and children; re-enabling restores the board. Historical task boards without a saved selection stay enabled. Profile loading removes the retired optional bundle selection, retaining row overrides.
+The model and reasoning menu owns the user’s selection. The root conversation’s Subagent panel displays members above shared tasks. Disabling Team keeps the journal and children; re-enabling restores the board. Historical task boards without a saved selection stay enabled. Profile loading removes the retired optional bundle selection, retaining row overrides.
 
 This supersedes the explicit-composition choice in [Agent Teams](../feature/2026-08-05-agent-teams.md). Its durability, ownership, and lifecycle decisions remain active. [Optional bundles](../process/2026-09-15-shipped-optional-bundles.md) still governs other experimental features.
 

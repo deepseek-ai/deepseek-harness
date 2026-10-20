@@ -3,7 +3,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { SubagentCatalogAction, SubagentHeaderLineage, type SubagentCatalogInjected } from './SubagentHeaderLineage.tsx'
+import { SubagentCatalogAction, SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected } from './SubagentHeaderLineage.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -25,7 +25,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  SubagentCatalogActionProps, SubagentCatalogInjected, SubagentHeaderLineageProps,
+  SubagentCatalogActionProps, SubagentCatalogInjected, SubagentCatalogActionInjected, SubagentHeaderLineageProps,
 } from './SubagentHeaderLineage.tsx'
 export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
@@ -52,34 +52,30 @@ export function apply(ctx: ClientContext): void {
   ctx.inject(['resources', 'sidebarRightTabs'], (scope) => {
     registerSidebarChat(scope, ctx.locale.bind(NS))
   })
-  const catalogActions = (footer: 'conversation.session.header.lineage.subagent.footer' | 'conversation.session.header.actions.subagent.footer') => {
-    const footerAvailable = {
-      getSnapshot: () => ctx.slots.entries(footer).length > 0,
-      subscribe: (listener: () => void) => ctx.slots.subscribe(footer, listener),
-    }
-    return (_parentSessionId: SessionId): SubagentCatalogInjected => ({
-      hooks: { footerAvailable },
-      openChild(address: SubagentAddress) {
-        ctx.uiWorkspace.openSession(address)
-      },
-      openChildAside(address: SubagentAddress) {
-        ctx.sidebarRight.openResource(subagentChatAddress(address), {
-          kind: 'subagentchat',
-          preferNewPane: true,
-        })
-      },
-      refreshProjection(parentSessionId: SessionId) {
-        void ctx.sessions.refreshProjections(parentSessionId)
-      },
-    })
+  const catalogActions = (_parentSessionId: SessionId): SubagentCatalogInjected => ({
+    openChild(address: SubagentAddress) {
+      ctx.uiWorkspace.openSession(address)
+    },
+    openChildAside(address: SubagentAddress) {
+      ctx.sidebarRight.openResource(subagentChatAddress(address), {
+        kind: 'subagentchat',
+        preferNewPane: true,
+      })
+    },
+    refreshProjection(parentSessionId: SessionId) {
+      void ctx.sessions.refreshProjections(parentSessionId)
+    },
+  })
+  const footerAvailable = {
+    getSnapshot: () => ctx.slots.entries('conversation.session.header.actions.subagent.footer').length > 0,
+    subscribe: (listener: () => void) => ctx.slots.subscribe('conversation.session.header.actions.subagent.footer', listener),
   }
   ctx.slots.inject(
     'conversation.session.header.lineage',
     () => ctx.slots.register({
       name: 'conversation.session.header.lineage',
       locale: NS,
-      inject: catalogActions('conversation.session.header.lineage.subagent.footer'),
-      children: { 'conversation.session.header.lineage.subagent.footer': { kind: 'list', scope: 'session' } },
+      inject: catalogActions,
     }, SubagentHeaderLineage),
   )
   ctx.slots.inject(
@@ -90,7 +86,9 @@ export function apply(ctx: ClientContext): void {
       // Between the preset label (-10) and background tasks (20).
       order: 10,
       locale: NS,
-      inject: catalogActions('conversation.session.header.actions.subagent.footer'),
+      inject: (sessionId): SubagentCatalogActionInjected => ({
+        ...catalogActions(sessionId), hooks: { footerAvailable },
+      }),
       children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
     }, SubagentCatalogAction),
   )

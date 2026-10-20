@@ -678,6 +678,32 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
   })
 
+  it('shows shared tasks only in the root conversation while keeping child navigation', async () => {
+    const parent = scaffold.ctx.agents.get(parentId)
+    if (parent === undefined) throw new Error('task-board fixture requires the live parent')
+    const enabled = scaffold.ctx.agentTeams.isEnabled(parent)
+    onTestFinished(() => scaffold.ctx.agentTeams.setEnabled(parent, enabled))
+    await scaffold.ctx.agentTeams.setEnabled(parent, true)
+    await scaffold.ctx.agentTeams.createTask(parent, {
+      subject: 'Root-only shared task', description: 'Inspect from the root conversation.', writeScopes: [],
+    })
+    await page.getByRole('tree', { name: 'Sessions' })
+      .getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
+    await page.getByRole('button', { name: '2 subagents', exact: true }).click()
+    await page.locator('[data-team-panel]').getByText('Root-only shared task', { exact: true }).waitFor()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText('researcher', { exact: true }).click()
+    const switcher = page.getByRole('button', { name: 'Switch subagent: researcher', exact: true })
+    await switcher.click()
+    const panel = page.locator('[data-subagent-panel]')
+    await panel.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).waitFor()
+    expect(await panel.locator('[data-team-panel]').count()).toBe(0)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/subagent-conversation/navigation-only.expected.md', import.meta.url)),
+      await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd), MODE,
+    )
+    await page.keyboard.press('Escape')
+  })
+
   it('shows caller-delivery external work as a non-navigable catalog leaf', async (test) => {
     const parent = scaffold.ctx.agents.get(parentId)
     if (parent === undefined) throw new Error('external caller fixture requires the live parent')
