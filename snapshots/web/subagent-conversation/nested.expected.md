@@ -10,6 +10,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Give one concrete event sourcing example. {{clock}}
 - button "Copy"
 - status: Completed

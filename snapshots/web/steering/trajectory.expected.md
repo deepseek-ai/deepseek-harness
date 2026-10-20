@@ -1,0 +1,53 @@
+- banner:
+  - navigation "Session hierarchy": Use the ask_user_question tool to
+  - text: Standard mode
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat"
+    - tab "Trajectory" [selected]
+  - button "More conversation views"
+- toolbar "Trajectory toolbar":
+  - button "Use actual duration": Duration
+  - button "Collapse turns": Turns
+  - button "Collapse calls": Calls
+  - searchbox "Search trajectory"
+- region "Trajectory timeline"
+- table:
+  - rowgroup:
+    - row "SYSTEM, Initial System Prompt":
+      - cell "SYSTEM"
+      - cell "Initial System Prompt"
+    - row "USER, Use the ask_user_question tool to ask me exactly one question with id \"checkpoint\", question \"Ready to continue?\", header \"Checkpoint\", and options labeled \"Yes\" and \"No\". After I answer, reply with one short sentence acknowledging my answer and stop.":
+      - cell "Turn 1 USER": USER
+      - cell "Use the ask_user_question tool to ask me exactly one question with id \"checkpoint\", question \"Ready to continue?\", header \"Checkpoint\", and options labeled \"Yes\" and \"No\". After I answer, reply with one short sentence acknowledging my answer and stop."
+    - 'row "CONTEXT, Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}/workspace\". Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"{{cwd}}/workspace\". Some pl…"':
+      - cell "CONTEXT"
+      - 'cell "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current working directory: \"{{cwd}}/workspace\". Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"{{cwd}}/workspace\". Some pl…"'
+    - 'row "CONTEXT, Time sampled while preparing turn 1, step 1: 2026-01-15T{{clock}}+{{clock}}[Asia/Shanghai] Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone. Elapsed since the preceding model-visible message: unavailable."':
+      - cell "CONTEXT"
+      - 'cell "Time sampled while preparing turn 1, step 1: 2026-01-15T{{clock}}+{{clock}}[Asia/Shanghai] Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone. Elapsed since the preceding model-visible message: unavailable."'
+    - row "Request 1, ASSISTANT, (tool call only)":
+      - 'cell "Request #1 ASSISTANT"':
+        - 'button "Request #1"'
+        - text: ASSISTANT
+      - cell "(tool call only)"
+    - 'row "TOOL, ask_user_question {\"questions\":[{\"id\":\"checkpoint\",\"question\":\"Ready to continue?\",\"header\":\"Checkpoint\",\"options\":[{\"label\":\"Yes\"},{\"label\":\"No\"}]}]}"':
+      - cell "TOOL"
+      - 'cell "ask_user_question{\"questions\":[{\"id\":\"checkpoint\",\"question\":\"Ready to continue?\",\"header\":\"Checkpoint\",\"options\":[{\"label\":\"Yes\"},{\"label\":\"No\"}]}]} → {\"answers\":[{\"id\":\"checkpoint\",\"selected\":[\"Yes\"]}]}"'
+    - 'row "USER, Interjection: include the word BANANA in your final reply."':
+      - cell "USER"
+      - 'cell "Interjection: include the word BANANA in your final reply."'
+    - row "Request 2, ASSISTANT, Great, let's move forward. BANANA!":
+      - 'cell "Request #2 ASSISTANT"':
+        - 'button "Request #2"'
+        - text: ASSISTANT
+      - cell "Great, let's move forward. BANANA!"
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message" [disabled]
+- button "1 turns 2 steps · {{throughput}} tok/s": 1 turns 2 steps{{throughput}} tok/s
+- button "30 tok · Cache hit 0%": 30 tokCache hit 0%
+- button "0% of context used": 0%

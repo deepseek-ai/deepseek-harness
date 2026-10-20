@@ -19,13 +19,14 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  FishLogo, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular, isDarwinDesktop, ShortcutKeys, Toast, Tooltip,
-  writeClipboard,
+  FishLogo, IconAppsAddOutlineRegular, IconNewChatOutlineMedium, IconNewChatOutlineRegular, IconPanelLeftOutlineRegular,
+  isDarwinDesktop, Menu, ShortcutKeys, Toast, Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
+  SidebarPanelActionsOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
 } from './contract/slots.ts'
+import { FIXED_PANEL_ID } from './panel-pins.ts'
 import css from './SidebarRoot.module.css'
 
 /** Wide-content unmount delay; matches the 150ms wide-content fade-out. */
@@ -81,6 +82,32 @@ function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: Pa
   )
 }
 
+type PanelMoreMenuProps =
+  Pick<SidebarSectionOwnerProps, 'wide'>
+  & Omit<SidebarPanelActionsOwnerProps, 'onDismiss'>
+  & PropsRenderSlots<'sidebar.panellist.actions'>
+  & { readonly label: string }
+
+/** The panel list's More launcher: a panel-row button whose menu rows come from `sidebar.panellist.actions`. */
+function PanelMoreMenu({ wide, label, entries, onOpen, onPinnedChange, renderSlot }: PanelMoreMenuProps) {
+  const [open, setOpen] = useState(false)
+  const onDismiss = (): void => { setOpen(false) }
+  return (
+    <Menu open={open} onClose={onDismiss} portal autoFocus className={css.moreAnchor} listClassName={css.moreMenu}
+      anchor={(
+        <Tooltip label={label} delayMs={500} disabled={wide}>
+          <button type="button" className={css.panelRow} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+            onClick={() => { setOpen(value => !value) }}>
+            <span className={css.panelGlyph} aria-hidden="true"><IconAppsAddOutlineRegular size={wide ? 16 : 18} /></span>
+            {wide && <span className={clsx(css.panelTitle, css.wide)}>{label}</span>}
+          </button>
+        </Tooltip>
+      )}>
+      {renderSlot('sidebar.panellist.actions', { entries, onOpen, onPinnedChange, onDismiss })}
+    </Menu>
+  )
+}
+
 /**
  * Render the sidebar column shell.
  * @param props - composed slot props (runtime share + injected callbacks, contract/slots.ts).
@@ -92,13 +119,19 @@ export function SidebarRoot({
   startSession,
   toggleSidebar,
   selectPanel,
+  setPinned,
   usePanels,
+  useEntryPins,
+  useEntryActions,
   useShortcuts,
   usePanelInfo,
   t,
   renderSlot,
 }: SidebarRootComponentProps) {
   const panels = usePanels(snapshot => snapshot)
+  const unpinned = useEntryPins(ids => ids)
+  const activePanelId = usePanelInfo(info => info.activePanelId)
+  const hasEntryActions = useEntryActions(registered => registered)
   const shortcut = useShortcuts(rows => rows.find(row => row.id === 'sidebar.left.toggle'))
   const newShortcut = useShortcuts(rows => rows.find(row => row.id === 'session.new'))
   const toggleLabel = collapsed ? t('toggle.open') : t('toggle.collapse')
@@ -297,7 +330,7 @@ export function SidebarRoot({
 
       {panels.length > 0 && (
         <nav className={css.panelList} aria-label={t('panels.label')}>
-          {panels.map(({ id, label }) => (
+          {panels.filter(({ id }) => id === FIXED_PANEL_ID || id === activePanelId || !unpinned.includes(id)).map(({ id, label }) => (
             <PanelRow
               key={id}
               id={id}
@@ -308,6 +341,20 @@ export function SidebarRoot({
               renderSlot={renderSlot}
             />
           ))}
+          {hasEntryActions && (
+            <PanelMoreMenu
+              wide={wide}
+              label={t('panels.more')}
+              entries={panels.filter(({ id }) => id !== FIXED_PANEL_ID)
+                .map(({ id, label }) => ({ id, label, pinned: !unpinned.includes(id) }))}
+              onOpen={(id) => {
+                const panel = panels.find(candidate => candidate.id === id)
+                if (panel !== undefined) selectPanel(panel.id)
+              }}
+              onPinnedChange={setPinned}
+              renderSlot={renderSlot}
+            />
+          )}
         </nav>
       )}
 

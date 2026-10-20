@@ -116,12 +116,13 @@ export function apply(ctx: ClientContext): void {
     void unboundSeat.apply()
     for (const seat of seats.values) void seat.apply()
   }), 'ui-agent-preset: Developer tools gate')
+  const mainBlank = () => Object.values(ctx.sessions.list.getSnapshot().byId)
+    .find((session) => {
+      /* v8 ignore next -- retained source counts omit zero-valued entries. */
+      return session.blank && (session.retainedBy.mainView ?? 0) > 0
+    })
   const mainBlankSeat = (): AgentPresetSeatController | undefined => {
-    const summary = Object.values(ctx.sessions.list.getSnapshot().byId)
-      .find((session) => {
-        /* v8 ignore next -- retained source counts omit zero-valued entries. */
-        return session.blank && (session.retainedBy.mainView ?? 0) > 0
-      })
+    const summary = mainBlank()
     const binding = summary === undefined ? undefined : ctx.sessions.binding(summary.id)
     return binding === undefined ? undefined : seatFor(binding)
   }
@@ -199,8 +200,9 @@ export function apply(ctx: ClientContext): void {
 
     const startCreatorDraft = () => {
       // The Host composes the reused draft or new Session; the stage only drives the chip's display and introduction.
-      const seat = mainBlankSeat() ?? unboundSeat
-      seat.stage('cordis', true)
+      // Navigation opens another blank when the main blank lists a different preset, so that blank is not staged.
+      const listed = mainBlank()?.projectionValues?.agentPreset
+      if (typeof listed !== 'string' || listed === 'cordis') (mainBlankSeat() ?? unboundSeat).stage('cordis', true)
       scope.uiWorkspace.startSession(undefined, { clearPreviousDraft: false, agentPreset: 'cordis' })
     }
 

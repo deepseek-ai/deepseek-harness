@@ -15,6 +15,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "tests"
   ],
   // The web e2e lane (scaffold + replay specs) boots the host spine and reads
@@ -83,6 +84,7 @@
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",
+    "tests/entry-customization.e2e.ts",
     "tests/cua-optin.e2e.ts",
     "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
