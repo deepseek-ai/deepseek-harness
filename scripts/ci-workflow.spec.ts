@@ -1257,7 +1257,7 @@ describe('Weighted approval workflow', () => {
     if (!Array.isArray(recordJob.steps)) throw new TypeError('weighted-approval review event job must define steps')
     const steps = job.steps.filter(isRecord)
     const checkout = steps.find(step => step.name === 'Check out trusted approval policy')
-    const publish = steps.find(step => step.name === 'Publish weighted approval status')
+    const publish = steps.find(step => step.name === 'Publish weighted approval decision')
     const recordSteps = recordJob.steps.filter(isRecord)
     const record = recordSteps.find(step => step.name === 'Record review event')
 
@@ -1272,9 +1272,9 @@ describe('Weighted approval workflow', () => {
     expect(review.types).toEqual(['submitted', 'edited', 'dismissed'])
     expect(reviewEvent.permissions).toEqual({})
     expect(publisher.permissions).toEqual({
+      checks: 'write',
       contents: 'read',
       'pull-requests': 'write',
-      statuses: 'write',
     })
     expect(publisher.concurrency).toEqual({
       group: "weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
@@ -1302,10 +1302,10 @@ describe('Weighted approval workflow', () => {
     const revokeIndex = steps.findIndex(step => step.id === 'revoke')
     expect(revokeIndex).toBeGreaterThan(steps.indexOf(checkout!))
     expect(revokeIndex).toBeLessThan(setupIndex)
-    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs pending')
+    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs revoke')
     expect(steps.at(-1)).toMatchObject({
-      if: "failure() && steps.revoke.outputs.active == 'true'",
-      run: 'node .github/review-ownership/check-approval.mjs error',
+      if: "(failure() || cancelled()) && steps.publish.outputs.concluded == ''",
+      run: 'node .github/review-ownership/check-approval.mjs failure',
     })
     const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'python-sdk')
     expect(pythonJob.steps).toContainEqual({
@@ -1317,6 +1317,7 @@ describe('Weighted approval workflow', () => {
       run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
     })
     expect(publish).toMatchObject({
+      id: 'publish',
       if: "steps.revoke.outputs.active == 'true'",
       env: {
         GITHUB_TOKEN: '${{ github.token }}',

@@ -10,8 +10,9 @@
 /* 76px with its rule: the height of the Sidebar's tab strip and header row
    (ui-dockkit `.tabStrip` 38px + the pane header's 38px), so the two rules
    meet at the column edge. The rows add up to it — 10px top inset, the 30px
-   title row, the tab strip's 10px margin, a 16px tab line, and its 9px bottom
-   inset — so no row below may grow past its figure. */
+   title row, the tab strip's 10px margin, and a 25px view row. When the views
+   and the More launcher do not fit on one row, the row wraps and the header
+   grows past 76px. */
 .header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -188,23 +189,32 @@ button.crumb:hover {
   display: none;
 }
 
-/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned.
-   Positioned above the header's own paint, so the active bar covers the rule. */
+/* The tab row sits above the header paint so the active bar covers its rule. */
 .tabs {
   grid-column: 1 / -1;
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 36px;
+  gap: 16px 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
   margin-top: 10px;
   padding-left: 8px;
 }
 
-/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500). The 2px bar
-   reaches 1px past the tab's box to end flush with the header's bottom edge,
-   sitting over the rule. */
+.viewTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  min-width: 0;
+  min-height: 25px;
+}
+
+/* The 16px text line retains 9px below it. The active bar reaches 1px past
+   the tab box to sit over the header rule. */
 .tab {
   position: relative;
+  min-height: 25px;
   padding: 0 0 9px;
   border: none;
   background: transparent;
@@ -235,6 +245,28 @@ button.crumb:hover {
 
 .tabActive::after {
   background: var(--dsw-alias-state-business-primary);
+}
+
+/* The More launcher centers its 22px box on the tab's 16px text line. */
+.viewsMoreAnchor {
+  flex: none;
+}
+
+.viewsMore {
+  width: 22px;
+  height: 22px;
+  margin-top: -3px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.viewsMore[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.viewsMoreMenu {
+  width: 288px;
+  max-width: calc(100vw - 24px);
 }
 
 .viewArea {

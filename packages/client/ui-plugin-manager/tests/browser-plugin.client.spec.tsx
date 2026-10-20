@@ -15,6 +15,7 @@ import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
+import type { createNavigationStore } from '../src/client/navigation-store.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -87,6 +88,32 @@ describe('ui-plugin-manager browser plugin', () => {
     removeRoot()
     b.selectPanel(null)
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+  })
+
+  it('opens the Plugins list from another panel and resets bundle details without opening installation', async () => {
+    const b = await bench()
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = b.slots.entries('main')[0]!
+    assert(entry.store && 'create' in entry.store)
+    const navigation = entry.store.create() as ReturnType<ReturnType<typeof createNavigationStore>['create']>
+    const injected: object = entry.inject!()
+    const face = injected as PluginManagerFace
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    navigation.actions.setTab('fixture-discover')
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+    expect(b.list).not.toHaveBeenCalled()
   })
 
   it('shares refresh failures with the overlay after navigation and releases both registrations across reloads', async () => {

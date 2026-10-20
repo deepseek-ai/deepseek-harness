@@ -474,6 +474,31 @@ describe('draft documents in the input shell', () => {
     expect(shell.snapshot.attachmentIds).toEqual([attachment])
   })
 
+  it('lets whenDraftExists keep, append to, or replace an existing draft ahead of clearPreviousDraft', () => {
+    const shell = makeShell()
+    const old = documentOf('existing ', session)
+    shell.setDraft(old)
+    expect(shell.requestDraftInitialization({ prompt: 'ignored', clearPreviousDraft: true, whenDraftExists: 'keep' })).toBe('preserved')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ whenDraftExists: 'append' })).toBe('preserved')
+    expect(shell.requestDraftInitialization({ prompt: '\uFFFC', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ prompt: 'next\nline', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: `${old.text}\nnext\nline`, references: old.references })
+    expect(chips(shell)).toHaveLength(1)
+    expect(shell.requestDraftInitialization({ prompt: 'fresh', whenDraftExists: 'replace' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: 'fresh', references: [] })
+  })
+
+  it('appends to an attachment-only draft as its whole text', () => {
+    const shell = makeShell()
+    const attachment = 'draft-image' as DraftAttachmentId
+    shell.addAttachments([attachment])
+    expect(shell.requestDraftInitialization({ prompt: 'describe it', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.snapshot.draft).toBe('describe it')
+    expect(shell.snapshot.attachmentIds).toEqual([attachment])
+  })
+
   it('persists clearing so a persistence rebind and a new shell do not restore references', () => {
     const shell = makeShell()
     shell.setDraft(documentOf(file, ' ', session))
