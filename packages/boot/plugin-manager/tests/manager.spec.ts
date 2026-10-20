@@ -2551,6 +2551,15 @@ it('reports profile read, lock, and disposal failures with error codes', async (
   expect(readFileSync(manifest, 'utf8')).toBe(saved)
 })
 
+it('lists only the named bundles, each as the full listing reports it', async () => {
+  const { manager } = await fixture('startup')
+  const all = await manager.listBundles()
+  expect(all.map(bundle => bundle.name)).toEqual(expect.arrayContaining(['core', 'extra']))
+  expect(await manager.listBundles(['extra', 'not-listed', 'core'])).toEqual(all.filter(bundle => bundle.name === 'core' || bundle.name === 'extra'))
+  expect(await manager.listBundles(['not-listed'])).toEqual([])
+  expect(await manager.listBundles([])).toEqual([])
+})
+
 it('expands a cited installed bundle into model context before the step', async () => {
   const { ctx, dir, profile } = await fixture('startup')
   const id = SessionId('cited-plugin')

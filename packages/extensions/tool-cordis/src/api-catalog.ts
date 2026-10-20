@@ -2492,9 +2492,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
-        signature: '@Remote listBundles(): Promise<BundleInfo[]>',
+        signature: '@Remote listBundles(names?: readonly string[]): Promise<BundleInfo[]>',
         description: 'Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names. A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.',
-        parameters: [],
+        parameters: [{ name: 'names', description: 'package names to read; a name this listing would not include is omitted. Omitted reads every bundle. Each bundle is read independently, so a named bundle\'s record is the one the full listing contains.' }],
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
         throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or installation manifest cannot be read; Remote callers receive `gateway/internal`.'],
       },
