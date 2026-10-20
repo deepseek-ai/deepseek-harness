@@ -42,7 +42,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   expect(beforeRuntime).toBeTypeOf('number')
   expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
   const names = [name]
-  await page.getByRole('button', { name: '更多', exact: true }).click()
+  await page.locator('[data-plugin-group="extensions"]').getByRole('button', { name: '更多', exact: true }).click()
   const cua = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
   await cua.waitFor()
   if (process.platform !== 'darwin') {
