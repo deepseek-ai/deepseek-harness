@@ -16,6 +16,7 @@ export interface NativeExecutableBuild {
   argv: string[]
   outputPath: string
   executablePath: string
+  /** Compiler lock target; shared across outputs that write the same intermediate build files. */
   lockPath: string
   retainedDirectory: string
   binaryName: string

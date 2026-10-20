@@ -14,7 +14,7 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 |---|---|
 | `CuaApplicationId`、`CuaApplicationGrant` | 可执行文件和签名身份，以及显示给用户的已保存决定。 |
 | `CuaSystemPermission` | 用户选择申请的辅助功能或屏幕录制权限。 |
-| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。可选系统查询或应用查找不可用时，省略应用信息。 |
+| `CuaPermissionProcess`、`CuaSystemPermissionState` | 以 `darwin` 或 `win32` 标记的原生访问状态和 helper 进程身份。macOS 包含权限检查、父进程身份和可选的责任应用信息；Windows 包含桌面锁定、截图可用性和提权状态。 |
 | `CuaApplicationState` | 持久授权、拒绝记录，以及能否持久保存。会话授权只保留在 provider 内部。系统权限和应用图标分别查询，页面在各项结果返回后分别显示。 |
 
 ## 选择提供方
@@ -92,7 +92,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Inspect system privileges independently of application decisions and icons.
- * @returns Fresh native preflight and launch metadata.
+ * @returns Platform-tagged access observations and native process metadata.
  */
 @Remote async systemStatus(): Promise<CuaSystemPermissionState>
 

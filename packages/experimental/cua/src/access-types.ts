@@ -10,7 +10,7 @@ export interface CuaPermissionProcess {
   path?: string | undefined
   name?: string | undefined
 }
-/** Fresh permission observations and startup metadata from the shared native helper. */
+/** Native access observations tagged with Node platform identifiers; distinct from model capability platform names. */
 export type CuaSystemPermissionState = {
   platform: 'darwin'
   accessibility: boolean

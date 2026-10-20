@@ -14,7 +14,7 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 |---|---|
 | `CuaApplicationId`, `CuaApplicationGrant` | An executable/signature identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
-| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native privilege checks, observed helper/parent processes, and the application identified by macOS process responsibility at helper startup. Application metadata is absent if the optional system query or application lookup is unavailable. |
+| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `win32`, with helper process identity. macOS includes permission checks, parent identity and optional responsible-application metadata; Windows includes desktop lock, capture availability and elevation status. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
 ## Choose a provider
@@ -92,7 +92,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Inspect system privileges independently of application decisions and icons.
- * @returns Fresh native preflight and launch metadata.
+ * @returns Platform-tagged access observations and native process metadata.
  */
 @Remote async systemStatus(): Promise<CuaSystemPermissionState>
 

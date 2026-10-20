@@ -38,7 +38,7 @@ export interface CuaAxOptions extends CuaObservationOptions {
   disableDiffing?: boolean
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
-  /** Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names. */
+  /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
@@ -47,7 +47,7 @@ export type CuaCapabilities = z.output<typeof CapabilitiesResult>
 export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
 /** An installed application match; running matches include a process identifier. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
-/** Window bounds in global macOS points. Local operations use an origin of [0,0]. */
+/** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
 /** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
@@ -231,8 +231,8 @@ export interface CuaApi {
    */
   listApps(options?: CuaObservationOptions): Promise<CuaAppInfo[]>
   /**
-   * Search standard macOS application directories without launching an app.
-   * @param query - Nonempty name, bundle identifier or absolute application path.
+   * Search the provider's installed application locations without launching an app.
+   * @param query - Nonempty name, provider-specific application identifier or absolute application path.
    * @param options - Output options.
    * @returns Matching installed applications; overly broad queries reject instead of silently truncating.
    */

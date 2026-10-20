@@ -274,7 +274,7 @@
                     "type": "boolean"
                   },
                   "details": {
-                    "description": "Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names.",
+                    "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
                   }
                 },

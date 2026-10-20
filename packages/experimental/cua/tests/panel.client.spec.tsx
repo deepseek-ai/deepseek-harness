@@ -142,14 +142,19 @@ it('shows query failures as unknown while retaining previously displayed apps', 
   expect(screen.queryByRole('button', { name: en.revoke })).toBeNull()
 })
 
-it('keeps unknown initial status distinct from a confirmed missing privilege in Chinese', () => {
+it.each([en, zh])('waits for platform identification before offering system permission actions', (dictionary) => {
   const f = fixture()
-  render(<PermissionPanel {...f.props} t={makeTranslate(zh)} />)
+  render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
+  expect(screen.queryByRole('group', { name: dictionary.accessibility })).toBeNull()
+  expect(screen.queryByText(dictionary.permissionHint)).toBeNull()
   f.publish({ system: { ...f.state.getSnapshot().system, busy: false, error: 'connection lost' }, busy: false })
-  expect(screen.queryByText(zh.granted)).toBeNull()
-  expect(screen.queryByRole('button', { name: zh.request })).toBeNull()
+  expect(screen.getAllByText(dictionary.unknown)).toHaveLength(2)
+  expect(screen.queryByText(dictionary.granted)).toBeNull()
+  expect(screen.queryByRole('button', { name: dictionary.request })).toBeNull()
+  expect(screen.queryByRole('button', { name: dictionary.unknown })).toBeNull()
+  expect(screen.queryByText(dictionary.permissionHint)).toBeNull()
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true, screenRecording: false } }) })
-  fireEvent.click(screen.getByRole('button', { name: zh.request }))
+  fireEvent.click(screen.getByRole('button', { name: dictionary.request }))
   expect(f.props.request).toHaveBeenCalledWith('screenRecording')
 })
 
@@ -281,7 +286,7 @@ it('keeps all four requirements visible before the first permission response', (
   expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
-  for (const permission of [en.accessibility, en.screenRecording]) expect(within(screen.getByRole('group', { name: permission })).queryByRole('button')).toBeNull()
+  for (const permission of [en.applicationInteraction, en.windowsCapture]) expect(within(screen.getByRole('group', { name: permission })).queryByRole('button')).toBeNull()
 })
 
 it('keeps content mounted and disables actions while management changes are pending', () => {
@@ -426,7 +431,7 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
   const capture = screen.getByRole('group', { name: en.windowsCapture })
   expect(within(desktop).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.locked : en.available)).toBeTruthy()
-  expect(within(capture).getByText(sessionLocked === false ? en.available : en.unavailable)).toBeTruthy()
+  expect(within(capture).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.unavailable : en.available)).toBeTruthy()
   expect(screen.getByText(en.standardPrivileges, { exact: false })).toBeTruthy()
   expect(screen.queryByRole('group', { name: en.accessibility })).toBeNull()
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
@@ -449,6 +454,8 @@ it.each([[true, true], [false, true], [false, false], [null, true]] as const)('o
   expect(screen.queryByRole('dialog') !== null).toBe(needsSetup)
   if (needsSetup) {
     expect(screen.getByRole('dialog', { name: en.windowsSetupTitle })).toBeTruthy()
-    expect(screen.getByText(en.windowsSetupBody)).toBeTruthy()
+    const explanation = sessionLocked === null ? en.windowsSessionUnknown
+      : sessionLocked ? en.windowsSetupBody : en.windowsCaptureUnavailable
+    expect(screen.getByText(explanation)).toBeTruthy()
   } else expect(onDismiss).toHaveBeenCalledOnce()
 })

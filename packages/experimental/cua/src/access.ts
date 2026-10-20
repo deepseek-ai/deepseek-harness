@@ -75,7 +75,7 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Inspect system privileges independently of application decisions and icons.
-   * @returns Fresh native preflight and launch metadata.
+   * @returns Platform-tagged access observations and native process metadata.
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {

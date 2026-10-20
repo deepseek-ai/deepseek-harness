@@ -16,7 +16,7 @@ export type NativeArchitecture = 'arm64' | 'x64'
  * @throws When the current host has no native implementation.
  */
 export function nativeHostArchitecture(platform: string, architecture: string): NativeArchitecture {
-  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('Computer Use currently requires macOS on Apple silicon or Intel. Windows support is in development')
+  if (platform !== 'darwin' || (architecture !== 'arm64' && architecture !== 'x64')) throw new Error('The macOS Computer Use provider requires macOS on Apple silicon or Intel')
   return architecture
 }
 

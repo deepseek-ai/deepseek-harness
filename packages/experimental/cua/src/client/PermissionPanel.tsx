@@ -96,38 +96,44 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
   </section>
 }
 
-function PermissionDescription({ application, permission, loading, t }: Pick<PermissionProps, 't'> & {
+function PermissionDescription({ application, permission, t }: Pick<PermissionProps, 't'> & {
   application: Extract<CuaSystemPermissionState, { platform: 'darwin' }>['launchApplication']
   permission: 'accessibility' | 'screenRecording'
-  loading: boolean
 }) {
-  if (!loading && application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+  if (application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
   const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')
   return <p>
     {before}
     <span className={css.applicationBadge}>
-      {application === undefined ? <span className={css.appPlaceholder} aria-hidden /> : <>
-        {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
-        <span>{application.name}</span>
-      </>}
+      {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
+      <span>{application.name}</span>
     </span>
     {after}
   </p>
 }
 
-function PermissionAction({ permission, granted, loading, busy, request, openSettings, t }: Pick<PermissionProps, 'request' | 'openSettings' | 't'> & {
+function PermissionAction({ permission, granted, busy, request, openSettings, t }: Pick<PermissionProps, 'request' | 'openSettings' | 't'> & {
   permission: 'accessibility' | 'screenRecording'
   granted: boolean | null
-  loading: boolean
   busy: boolean
 }) {
-  if (loading) return <span className={css.buttonPlaceholder} aria-hidden />
   if (granted === false) return <Button size="sm" variant="primary" className={css.permissionAction} disabled={busy}
     onClick={() => { request(permission) }}>{t('request')}</Button>
   return <Button size="sm" variant="outline" className={css.permissionAction} disabled={busy}
     title={t('settings')} onClick={() => { openSettings(permission) }}>
     {t(granted === true ? 'granted' : 'unknown')}<IconSettingsOutlineRegular size={14} aria-hidden="true" />
   </Button>
+}
+
+function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: boolean }) {
+  return (['interaction', 'capture'] as const).map(kind => <div className={css.permission} key={kind}
+    role="group" aria-label={t(kind === 'interaction' ? 'applicationInteraction' : 'windowsCapture')}>
+    <div>
+      <strong>{t(kind === 'interaction' ? 'applicationInteraction' : 'windowsCapture')}</strong>
+      <p>{t(kind === 'interaction' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
+    </div>
+    {loading ? <span className={css.buttonPlaceholder} aria-hidden /> : <span>{t('unknown')}</span>}
+  </div>)
 }
 
 function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
@@ -142,7 +148,7 @@ function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
     </div>
     <div className={css.permission} role="group" aria-label={t('windowsCapture')}>
       <div><strong>{t('windowsCapture')}</strong><p>{t('screenRecordingUse')}</p></div>
-      <span>{uncertain ? t('unknown') : t(unlocked && system.captureAvailable ? 'available' : 'unavailable')}</span>
+      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked && system.captureAvailable ? 'available' : 'unavailable')}</span>
     </div>
   </>
 }
@@ -183,21 +189,22 @@ export function PermissionPanel(props: PermissionPanelProps) {
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
         </div>}
-        {observed?.platform === 'win32' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
-          : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
-            role="group" aria-label={t(permission)}>
-            <div>
-              <strong>{t(permission)}</strong>
-              <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
-            </div>
-            <PermissionAction permission={permission}
-              granted={mac === null || state.system.error !== null ? null : mac[permission]}
-              loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
-          </div>)}
+        {observed === null ? <UnknownStatus loading={loading} t={t} />
+          : observed.platform === 'win32' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
+            : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
+              role="group" aria-label={t(permission)}>
+              <div>
+                <strong>{t(permission)}</strong>
+                <PermissionDescription application={application} permission={permission} t={t} />
+              </div>
+              <PermissionAction permission={permission}
+                granted={mac === null || state.system.error !== null ? null : mac[permission]}
+                busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
+            </div>)}
       </div>
-      <p>{observed?.platform === 'win32'
+      {observed !== null && <p>{observed.platform === 'win32'
         ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
-        : t('permissionHint')}</p>
+        : t('permissionHint')}</p>}
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
@@ -234,7 +241,9 @@ export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOp
       <Button variant="ghost" onClick={onDismiss}>{t('later')}</Button>
       <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>{t('openSetup')}</Button>
     </>}>
-    <p>{t(state.error !== null ? 'setupQueryFailed' : state.value?.platform === 'win32' ? 'windowsSetupBody' : 'setupBody')}</p>
+    <p>{t(state.error !== null ? 'setupQueryFailed' : state.value?.platform !== 'win32' ? 'setupBody'
+      : state.value.sessionLocked === null ? 'windowsSessionUnknown'
+        : state.value.sessionLocked ? 'windowsSetupBody' : 'windowsCaptureUnavailable')}</p>
   </Modal>
 }
 

@@ -499,16 +499,7 @@ function unwrapExpr(expr: ts.Expression): ts.Expression {
   return e
 }
 
-/**
- * Statically walk a schemastery schema expression to its key paths plus the
- * packages whose schemas an intersect composes. A key path is the top-level
- * key or a nested path through object/array compositions (`agents[].id`).
- * Handles object/union calls, chained refinements, named const schema imports
- * through public workspace source paths, and `z.intersect([X.Config, …])`; errors on
- * anything else, so a schema the walk cannot see fails the gate instead of
- * silently thinning it. Nested values that are neither `object` nor `array`
- * compositions (primitives, unions, dynamic-key dicts) contribute no paths.
- */
+/** Resolve object fields and ordered spreads through local or imported const aliases. */
 function schemaObjectFields(
   world: World, ctx: FileCtx, expression: ts.Expression, where: string, violations: string[], aliases: Set<string>,
 ): Map<string, { ctx: FileCtx; value?: ts.Expression }> {
@@ -544,6 +535,16 @@ function schemaObjectFields(
   return fields
 }
 
+/**
+ * Statically walk a schemastery schema expression to its key paths plus the
+ * packages whose schemas an intersect composes. A key path is the top-level
+ * key or a nested path through object/array compositions (`agents[].id`).
+ * Handles object/union calls, chained refinements, named const schema imports
+ * through public workspace source paths, and `z.intersect([X.Config, …])`; errors on
+ * anything else, so a schema the walk cannot see fails the gate instead of
+ * silently thinning it. Nested values that are neither `object` nor `array`
+ * compositions (primitives, unions, dynamic-key dicts) contribute no paths.
+ */
 function walkSchemaExpr(
   world: World,
   ctx: FileCtx,

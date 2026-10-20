@@ -35,14 +35,13 @@
 .applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
 .permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
 .permissionAction[data-configured]:disabled { opacity: 1; color: var(--dsw-alias-label-primary); cursor: default; }
-.buttonPlaceholder, .appPlaceholder, .appsPlaceholder {
+.buttonPlaceholder, .appsPlaceholder {
   display: inline-block;
   max-width: 100%;
   border-radius: var(--dsw-radius-xs);
   background: var(--dsw-alias-bg-skeleton);
 }
 .buttonPlaceholder { height: 28px; }
-.appPlaceholder { width: 160px; height: 1.6em; }
 .appsPlaceholder { display: block; color: transparent; }
 
 .iconPlaceholder { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }

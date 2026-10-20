@@ -40,7 +40,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional(),
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
-    details: z.boolean().optional().describe('Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names.'),
+    details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
   }),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
@@ -98,7 +98,7 @@ export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.
 /** Installed application matches keep running and stopped records distinct. */
 export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
   z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
-/** Current windows and their global bounds in macOS points or Windows physical pixels. */
+/** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
   windowId: id, pid, appName: z.string(), title: z.string(), bounds,
   isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
@@ -130,7 +130,7 @@ export const CapabilitiesResult = z.object({
 /** An action has reached native dispatch; application state was not verified. */
 export const ActionResult = z.object({
   dispatched: z.literal(true), verified: z.literal(false),
-  /** Sampled foreground change, when the provider can report it; null means sampling was unavailable. */
+  /** Sampled foreground change; omitted when the provider does not sample this action, null when a requested sample was unavailable. */
   foregroundChanged: z.boolean().nullable().optional(),
 })
 /** Hover reports whether the selected route moved the user's system pointer. */
