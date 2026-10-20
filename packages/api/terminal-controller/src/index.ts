@@ -429,7 +429,7 @@ export class TerminalController extends TypertRemoteService {
     // Confined shells cannot write the person's history file; workspace-write grants /tmp.
     const history = request.policy.mode !== 'danger-full-access' && platform === 'posix' ? { HISTFILE: `/tmp/dsh-agent-history-${id}` } : {}
     return {
-      argv, env: { DSH_SESSION_ID: agent.id, ...history },
+      argv, env: { ...request.env, DSH_SESSION_ID: agent.id, ...history },
       info: {
         id, shell, title: request.title, cwd, cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
         origin: 'agent', control: 'agent', sandboxMode: request.policy.mode,

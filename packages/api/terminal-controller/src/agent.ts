@@ -31,6 +31,8 @@ export interface AgentTerminalRequest {
   readonly policy: SandboxExecutionPolicy
   /** Executable names tried in order among discovered shells before the environment default. */
   readonly preferredShells: readonly string[]
+  /** Variables added to the shell environment; the controller's `DSH_SESSION_ID` and `HISTFILE` take precedence. */
+  readonly env?: Readonly<Record<string, string>>
 }
 
 /**

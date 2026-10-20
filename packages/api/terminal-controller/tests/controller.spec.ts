@@ -773,11 +773,14 @@ describe('Agent terminals', () => {
     expect(controller.list(agent.id)).toEqual([terminal.info])
   })
 
-  it('starts a full-access agent terminal without confinement or history redirection in the requested directory', async () => {
+  it('starts a full-access agent terminal in the requested directory and environment, keeping its own variables', async () => {
     const { controller, agent, subprocess } = fixture()
-    await controller.openForAgent(agent, { ...agentRequest, cwd: '/elsewhere', policy: { mode: 'danger-full-access', workspaceRoot: '/workspace' } }, signal())
+    await controller.openForAgent(agent, {
+      ...agentRequest, cwd: '/elsewhere', policy: { mode: 'danger-full-access', workspaceRoot: '/workspace' },
+      env: { PAGER: 'cat', DSH_SESSION_ID: 'spoofed' },
+    }, signal())
     expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
-      argv: ['/bin/bash', '--noprofile', '--norc', '-i'], cwd: '/elsewhere', env: { DSH_SESSION_ID: 'session' },
+      argv: ['/bin/bash', '--noprofile', '--norc', '-i'], cwd: '/elsewhere', env: { PAGER: 'cat', DSH_SESSION_ID: 'session' },
     }))
   })
 

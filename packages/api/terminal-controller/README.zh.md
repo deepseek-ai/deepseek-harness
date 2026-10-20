@@ -48,7 +48,7 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 
 ### Agent 终端
 
-Host 代码通过 `openForAgent(agent, request, signal)` 为 Session 的 Agent 打开终端。调用方传入它为该 Session 解析出的沙箱策略：`danger-full-access` 直接启动 shell，受限模式通过执行环境的 `ctx.sandbox` provider 包裹 shell，缺少 provider 时在分配前失败。受限的 POSIX shell 把历史写到 `/tmp/dsh-agent-history-<id>`，因为人的历史文件不在可写目录内。`preferredShells` 列出在已探测 shell 中优先尝试的可执行文件，之后才用默认 shell。终端记录 `origin: 'agent'`、`control: 'agent'` 和 `sandboxMode`；它计入 `maxTerminals`，在 Agent 控制期间也计入 `maxAgentTerminals`。
+Host 代码通过 `openForAgent(agent, request, signal)` 为 Session 的 Agent 打开终端。调用方传入它为该 Session 解析出的沙箱策略：`danger-full-access` 直接启动 shell，受限模式通过执行环境的 `ctx.sandbox` provider 包裹 shell，缺少 provider 时在分配前失败。受限的 POSIX shell 把历史写到 `/tmp/dsh-agent-history-<id>`，因为人的历史文件不在可写目录内。`preferredShells` 列出在已探测 shell 中优先尝试的可执行文件，之后才用默认 shell；`env` 向 shell 环境添加变量，但不会替换 `DSH_SESSION_ID` 或 `HISTFILE`。终端记录 `origin: 'agent'`、`control: 'agent'` 和 `sandboxMode`；它计入 `maxTerminals`，在 Agent 控制期间也计入 `maxAgentTerminals`。
 
 返回的 `AgentTerminal` 可以写入输入、把屏幕渲染为文本、标记屏幕位置以便之后渲染新输出、等待输出或状态变化、查询并向前台进程组发信号，以及关闭终端。它的读屏和标记是同步的，只看到已处理的输出；`drain` 会等到调用前收到的输出处理完。Agent 输入既不需要也不抢占 Web 的输入控制权。浏览器第一次发出标记为 `typed` 的写入后，控制权转给人；此后写入、发信号和关闭都会以 `AgentTerminalError` 的 `user-control` 代码失败，读取不受影响。控制器的 `readScreen` 会先等输出处理完再渲染；它和 `inspectActivity` 可读取 Agent 所在 Session 的任意终端，包括人自己打开的终端。
 
