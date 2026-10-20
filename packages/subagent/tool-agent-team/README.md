@@ -149,12 +149,17 @@ Required `team:identity` context uses the following text, replacing `<name>` wit
 
 ```markdown
 You are the Team Lead. Your name is lead.
+Use list_agents({}) to find your teammates and their full names.
+To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
 ```
 
 ##### Teammate identity
 
 ```markdown
 Your name is <name>. You are a teammate in the Team led by "lead".
+To message your Team Lead, use send_message({ name: "lead", message: "..." }).
+Use list_agents({}) to find your teammates and their full names.
+To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
 ```
 
 #### Token effect

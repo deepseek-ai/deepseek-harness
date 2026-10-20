@@ -43,7 +43,9 @@ const TEAM_TOOLS = [
   'team_task_list',
   'team_task_update',
 ]
-const leadIdentity = (_agent: Agent): string => 'You are the Team Lead. Your name is lead.'
+const leadIdentity = (_agent: Agent): string => `You are the Team Lead. Your name is lead.
+Use list_agents({}) to find your teammates and their full names.
+To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
 
 const roots: string[] = []
 const contexts = new Set<Context>()
@@ -148,7 +150,10 @@ function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
 }
 
 function teammateIdentity(_lead: Agent): string {
-  return 'You are a teammate in the Team led by \"lead\".'
+  return `You are a teammate in the Team led by "lead".
+To message your Team Lead, use send_message({ name: "lead", message: "..." }).
+Use list_agents({}) to find your teammates and their full names.
+To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
 }
 
 async function runTurn(agent: Agent, text: string): Promise<void> {
