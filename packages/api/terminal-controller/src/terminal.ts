@@ -3,11 +3,16 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf, type RemoteUplinkWindow } from '@deepseek-ai/dsh-typert-protocol'
 import type { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { SerializeAddon as Serializer } from '@xterm/addon-serialize'
-import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessTerminalForeground, SubprocessTerminalHandle, SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
 import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
+import { AgentTerminalError } from './agent.ts'
+import { lastContentRow, pageLines, renderLines } from './screen.ts'
 import { TerminalFollower } from './stream.ts'
 import { TerminalRetention, type TerminalRetentionPolicy } from './retention.ts'
-import type { TerminalEnvironment, TerminalInput, TerminalFrame, TerminalRetentionFrame, WebTerminalInfo } from './types.ts'
+import type {
+  TerminalEnvironment, TerminalInput, TerminalFrame, TerminalRetentionFrame, TerminalScreenMark, TerminalScreenPage,
+  TerminalScreenRequest, WebTerminalInfo,
+} from './types.ts'
 
 const requireHeadless = createLazyRequire<typeof import('@xterm/headless')>('@xterm/headless', import.meta.url)
 const requireSerialize = createLazyRequire<typeof import('@xterm/addon-serialize')>('@xterm/addon-serialize', import.meta.url)
@@ -23,8 +28,11 @@ export class BrowserTerminal {
   /** Provider completion precedes output drainage and the published exit state. */
   private exited = false
   private closing: Promise<void> | undefined
+  private screenDisposed = false
   private retention: TerminalRetention | undefined
   private controller: TerminalFollower | undefined
+  private changes = 0
+  private readonly waiters = new Set<() => void>()
 
   /**
    * @param handle - allocated terminal process range.
@@ -124,6 +132,11 @@ export class BrowserTerminal {
           switch (command.type) {
             case 'write':
               if (Buffer.byteLength(command.data, 'utf8') > limits.maxInputBytes) throw new Error('Terminal input exceeds the configured limit')
+              // Control passes before the write so queued agent input cannot follow the person's keystrokes.
+              if (command.typed === true && this.info.control === 'agent') {
+                this.info = { ...this.info, control: 'user' }
+                this.broadcastState()
+              }
               this.retention?.invalidate()
               await this.handle.write(command.data)
               break
@@ -157,6 +170,119 @@ export class BrowserTerminal {
 
   private broadcastState(): void {
     for (const follower of this.followers) follower.push({ type: 'state', info: this.info, writable: this.writable(follower) })
+    this.advance()
+  }
+
+  /** Advances after each applied output chunk and each published state change. */
+  get revision(): number { return this.changes }
+
+  /**
+   * Wait until output or state changes after a known revision.
+   * @param after - revision the caller has observed.
+   * @param signal - wait cancellation.
+   * @returns the current revision, which exceeds `after`.
+   */
+  async changed(after: number, signal: AbortSignal): Promise<number> {
+    while (this.changes <= after) {
+      signal.throwIfAborted()
+      await new Promise<void>((resolve, reject) => {
+        const abort = (): void => { this.waiters.delete(wake); reject(signal.reason) }
+        const wake = (): void => { signal.removeEventListener('abort', abort); resolve() }
+        this.waiters.add(wake)
+        signal.addEventListener('abort', abort, { once: true })
+      })
+    }
+    return this.changes
+  }
+
+  private advance(): void {
+    this.changes++
+    const waiters = [...this.waiters]
+    this.waiters.clear()
+    for (const wake of waiters) wake()
+  }
+
+  /**
+   * Write agent input in order with browser input and output.
+   * @param data - text delivered without implicit newline conversion.
+   * @returns after the provider accepts the input.
+   * @throws AgentTerminalError when the user controls the terminal or it is not running.
+   */
+  agentWrite(data: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.requireAgentControl()
+      this.retention?.invalidate()
+      await this.handle.write(data)
+    })
+  }
+
+  /**
+   * Deliver a signal to the foreground process group on the agent's behalf.
+   * @param signal - permitted terminal signal.
+   * @returns the process group that received it.
+   * @throws AgentTerminalError when the user controls the terminal or it is not running.
+   */
+  agentSignal(signal: SubprocessTerminalSignal): Promise<number> {
+    return this.enqueue(async () => {
+      this.requireAgentControl()
+      this.retention?.invalidate()
+      return this.handle.signalForeground(signal)
+    })
+  }
+
+  /**
+   * Inspect the foreground process group without changing input control.
+   * @returns the group and its input-wait fact, or undefined when the provider cannot resolve one.
+   */
+  inspectForeground(): Promise<SubprocessTerminalForeground | undefined> {
+    return this.handle.inspectForeground()
+  }
+
+  /**
+   * Render a newest-relative page after all received output is applied.
+   * @param request - page position and byte bound.
+   * @returns rendered text; alternate-screen applications return their current screen.
+   * @throws AgentTerminalError after the screen is released.
+   */
+  readScreen(request: TerminalScreenRequest): Promise<TerminalScreenPage> {
+    return this.enqueue(() => {
+      this.requireScreen()
+      const buffer = this.screen.buffer.active
+      return pageLines(renderLines(buffer, 0, lastContentRow(buffer) + 1), request)
+    })
+  }
+
+  /**
+   * Mark the cursor row after all received output is applied.
+   * @returns a mark whose lines include the marked row; a change of active buffer renders the whole new buffer.
+   * @throws AgentTerminalError after the screen is released.
+   */
+  markScreen(): Promise<TerminalScreenMark> {
+    return this.enqueue(() => {
+      this.requireScreen()
+      const marked = this.screen.buffer.active.type
+      const marker = this.screen.registerMarker(0)
+      return {
+        lines: () => this.enqueue(() => {
+          this.requireScreen()
+          const active = this.screen.buffer.active
+          const end = lastContentRow(active) + 1
+          if (active.type !== marked || marker === undefined) return { lines: renderLines(active, 0, end), truncated: false }
+          if (marker.isDisposed) return { lines: renderLines(active, 0, end), truncated: true }
+          return { lines: renderLines(active, marker.line, end), truncated: false }
+        }),
+        dispose: () => { marker?.dispose() },
+      }
+    })
+  }
+
+  private requireAgentControl(): void {
+    if (this.exited || this.closing !== undefined || this.info.state !== 'running') throw new AgentTerminalError('not-running', 'The terminal is not running')
+    if (this.info.control !== 'agent') throw new AgentTerminalError('user-control', 'The user has taken over this terminal')
+  }
+
+  private requireScreen(): void {
+    if (this.screenDisposed) throw new AgentTerminalError('unavailable', 'The terminal was closed')
   }
 
   /**
@@ -189,6 +315,7 @@ export class BrowserTerminal {
       await this.drained
       for (const follower of this.followers) follower.finish()
       this.followers.clear()
+      this.screenDisposed = true
       this.screen.dispose()
     })().catch((error: unknown) => { this.closing = undefined; throw error })
     return this.closing
@@ -233,6 +360,7 @@ export class BrowserTerminal {
     await this.enqueue(async () => {
       await new Promise<void>((resolve) => { this.screen.write(data, resolve) })
       this.broadcast({ type: 'output', sequence: ++this.sequence, data })
+      this.advance()
     })
   }
 }

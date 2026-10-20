@@ -69,6 +69,40 @@ export interface WebTerminalInfo {
   readonly sandboxMode?: TerminalSandboxMode
 }
 
+/** A newest-relative page of rendered screen lines. */
+export interface TerminalScreenRequest {
+  /** Lines to skip back from the newest line. */
+  readonly offset: number
+  /** Maximum lines to return. */
+  readonly count: number
+  /** Maximum UTF-8 bytes of the returned text; the newest bytes are kept. */
+  readonly maxBytes: number
+}
+
+/** Rendered screen text: wrapped rows are joined and control sequences are already applied. */
+export interface TerminalScreenPage {
+  readonly text: string
+  /** Logical lines currently retained, including scrollback. */
+  readonly totalLines: number
+  /** Inclusive newest-relative offset of the page. */
+  readonly lineBegin: number
+  /** Exclusive newest-relative offset after the returned lines. */
+  readonly lineEnd: number
+  /** Whether the byte bound dropped lines or cut a line inside the requested range. */
+  readonly truncated: boolean
+}
+
+/** A screen position that follows scrollback trimming, used to render output written after it. */
+export interface TerminalScreenMark {
+  /**
+   * Render logical lines from the marked row through the last content row, after all received output is applied.
+   * @returns the lines; `truncated` means scrollback trimming discarded the marked row and rendering starts at the oldest row.
+   */
+  lines(): Promise<{ readonly lines: readonly string[]; readonly truncated: boolean }>
+  /** Release the emulator marker. */
+  dispose(): void
+}
+
 /** Create is idempotent for an open identity; closed identities cannot be recreated. */
 export interface TerminalCreateRequest {
   /** A path returned by shell discovery; absent selects the execution default. */
