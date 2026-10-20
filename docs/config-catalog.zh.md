@@ -2250,7 +2250,7 @@ export interface LspLocalServerConfig {
 ## `@deepseek-ai/dsh-mcp-client`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/mcp-client/src/index.ts:138`](../packages/mcp/mcp-client/src/index.ts)
+- `source`: [`packages/mcp/mcp-client/src/index.ts:129`](../packages/mcp/mcp-client/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -2280,8 +2280,6 @@ export interface StdioConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
-  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -2310,8 +2308,6 @@ export interface StreamableHttpConfig {
   startupTimeoutMs?: number
   /** Budget for transport closure and local cleanup, in milliseconds (default 5000). */
   closeTimeoutMs: number
-  /** Resolve `${credential:…}` in transport strings at runtime and redact resolved values from diagnostics (default false). */
-  expandTemplates: boolean
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Maximum UTF-8 bytes of attributed server instructions (default 32768). */
@@ -2340,47 +2336,13 @@ export interface ReconnectConfig {
 ## `@deepseek-ai/dsh-mcp-manager`
 
 - `inject`: `tools`
-- `refs`: [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:71`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:39`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
-/** Manager configuration with live server entries. */
+/** Manager configuration. */
 export interface Config {
-  /** Managed servers keyed by `serverName`. */
-  servers: Volatile<Record<string, McpManagedServerEntry>>
-}
-
-/**
- * One managed server entry. Deliberately flat rather than a per-transport
- * union: {@link validateEntries} owns the per-transport field rules, and its
- * write-time refusals name the offending field where a union's shape error
- * would not.
- */
-export interface McpManagedServerEntry {
-  /** Which transport the instance uses. */
-  transport: 'stdio' | 'streamable-http'
-  /** stdio: executable used to start the server; `''` while unset. */
-  command: string
-  /** stdio: arguments passed without shell interpolation. */
-  args: string[]
-  /** stdio: extra child environment; values may use `${credential:…}` templates. */
-  env: Record<string, string>
-  /** stdio: working directory for the child process. */
-  cwd: string
-  /** streamable-http: MCP endpoint URL; `''` while unset. */
-  url: string
-  /** streamable-http: extra request headers; values may use templates. */
-  headers: Record<string, string>
-  /** Durable intent: whether the entry asks for a running instance. */
-  enabled: boolean
-  /** Per-tool-call timeout override in milliseconds; omission uses the mcp-client default. */
-  toolCallTimeoutMs?: number
-  /** Per-attempt startup budget in milliseconds; the manager schema defaults to 30000. */
+  /** Budget for each server's connection attempt plus its initial tool sync, in milliseconds (default 30000). */
   startupTimeoutMs: number
-  /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
-  closeTimeoutMs?: number
-  /** Reconnect policy; the schema fills the mcp-client defaults. */
-  reconnect: ReconnectConfig
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->

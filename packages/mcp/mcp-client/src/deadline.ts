@@ -1,4 +1,4 @@
-/** Shared settlement deadline for the startup and probe budgets. */
+/** Shared settlement deadline for startup, operation, and cleanup budgets. */
 
 import { McpLocalError } from './diagnostic.ts'
 

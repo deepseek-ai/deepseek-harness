@@ -1,26 +1,7 @@
-/**
- * Connection diagnostics retain cause chains. Configurations that resolve
- * secrets replace every known secret value before text leaves the instance.
- */
+/** Connection diagnostics retain cause chains. */
 
-/** Local failure whose message contains no expanded configuration or upstream text. */
+/** Local failure whose message contains no upstream text. */
 export class McpLocalError extends Error {}
-
-/** Placeholder written in place of a known secret value. */
-const REDACTED = '[redacted]'
-
-/**
- * Replace every occurrence of known secret values, longest first so a secret
- * that contains another is replaced whole.
- * @param text - diagnostic or upstream text.
- * @param secrets - non-empty secret values known to the instance.
- * @returns the text with each occurrence replaced by `[redacted]`.
- */
-export function redactSecrets(text: string, secrets: Iterable<string>): string {
-  let out = text
-  for (const secret of [...secrets].sort((left, right) => right.length - left.length)) out = out.replaceAll(secret, REDACTED)
-  return out
-}
 
 /** One readable segment of the chain; generic `Error` names are noise and dropped. */
 function segmentOf(value: unknown): string {

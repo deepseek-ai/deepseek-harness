@@ -2,7 +2,7 @@
 // verbatim, and hostile shapes (cycles, empty messages, bare values) cannot
 // break the status text they feed.
 import { describe, expect, it } from 'vitest'
-import { describeError, redactSecrets } from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
+import { describeError } from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
 
 describe('describeError', () => {
   it('keeps a plain error as its own string', () => {
@@ -52,15 +52,5 @@ describe('describeError', () => {
     const b = new Error('b', { cause: a })
     a.cause = b
     expect(describeError(a)).toBe('Error: a, cause: b')
-  })
-})
-
-describe('redactSecrets', () => {
-  it('replaces every occurrence, longest secret first', () => {
-    expect(redactSecrets('token token-long token', ['token', 'token-long'])).toBe('[redacted] [redacted] [redacted]')
-  })
-
-  it('returns the text unchanged without secrets', () => {
-    expect(redactSecrets('plain', [])).toBe('plain')
   })
 })

@@ -23,7 +23,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { describeError, McpLocalError } from './diagnostic.ts'
+import { McpLocalError } from './diagnostic.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -31,12 +31,6 @@ export interface ToolBridgeOptions {
   toolCallTimeoutMs: number
   /** Generation cancellation combined with each tool execution's signal. */
   signal: AbortSignal
-  /**
-   * Remove secret values from tool-call failures before they reach callers.
-   * @param text - transport or protocol failure text, or MCP `isError` result text.
-   * @returns the text with secret values replaced.
-   */
-  redact?: (text: string) => string
 }
 
 /** Registration failed after the prior generation was removed and partial registrations were rolled back. */
@@ -113,7 +107,7 @@ export function publicToolName(serverName: string, rawName: string): string {
  *
  * @param client - Connected MCP Client instance used to list and call tools.
  * @param ctx - Cordis context providing the `tools` service for registration.
- * @param opts - server namespace, call timeout, generation signal, and optional error formatter.
+ * @param opts - server namespace, call timeout, and generation signal.
  * @param previous - Disposer map from the prior sync generation; disposed
  *   during the swap phase (only after the fetch phase succeeded).
  * @param eligible - Judged again at the commit point, after the listing
@@ -149,20 +143,10 @@ export async function syncTools(
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,
       taskRequired: tool.execution?.taskSupport === 'required',
-      call: async (args, execution) => {
-        try {
-          const result = await client.callTool(
-            { name: tool.name, arguments: args },
-            { signal: AbortSignal.any([execution.signal, opts.signal]),
-              timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
-          )
-          if (result.isError !== true || opts.redact === undefined) return result
-          return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
-        } catch (error) {
-          if (opts.redact === undefined) throw error
-          throw new Error(opts.redact(describeError(error)))
-        }
-      },
+      call: (args, execution) => client.callTool(
+        { name: tool.name, arguments: args },
+        { signal: AbortSignal.any([execution.signal, opts.signal]), timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
+      ),
     }))
   }
 

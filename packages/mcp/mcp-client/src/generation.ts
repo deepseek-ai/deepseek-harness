@@ -25,7 +25,7 @@ export class McpGeneration {
   ) {}
 
   /**
-   * Connect within the caller's remaining startup or probe budget.
+   * Connect within the caller's remaining startup budget.
    * @param config - resolved transport configuration.
    * @param timeoutMs - remaining operation budget; undefined leaves the SDK default.
    * @returns completion of negotiation, or cancellation/deadline rejection.

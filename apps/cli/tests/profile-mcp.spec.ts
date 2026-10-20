@@ -47,7 +47,7 @@ describe('shipped MCP resource composition', () => {
       const profile = loadProfile('dsh', name, installAnchor, home)
       const rows = composeEntries([...profile.layers.map(layer => layer.patches), profile.patches])
       expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-manager')).toEqual(name === 'web'
-        ? [{ id: 'mcp-manager', name: '@deepseek-ai/dsh-mcp-manager', inject: ['credentials'] }]
+        ? [{ id: 'mcp-manager', name: '@deepseek-ai/dsh-mcp-manager' }]
         : [])
     } finally {
       rmSync(home, { recursive: true, force: true })
