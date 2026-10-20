@@ -349,7 +349,7 @@ interface ToolOutputMap {
   } | {
     kind: "child";
     name: string;
-    description: string;
+    label: string;
     status: "running" | "inactive";
     parent?: string;
     depth?: number;

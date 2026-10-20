@@ -153,7 +153,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<name> [<status>] — team lead`。各可继续后代随后显示为 `<name> [<status>] parent=<name> depth=<n> — <description>`。结构化字段 `description` 是创建时提供的任务简介。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不表示任务完成。
+首行为 `<name> [<status>] — team lead`。各可继续后代随后显示为 `<name> [<status>] parent=<name> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<name> [diagnostic: <reason>] parent=<name> depth=<n>`。状态描述轮次活动，不表示任务完成。
 
 #### Token 影响
 

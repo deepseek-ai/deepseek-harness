@@ -16,7 +16,7 @@ type ListAgentsEntry =
   | {
     readonly kind: 'child'
     readonly name: string
-    readonly description: string
+    readonly label: string
     readonly status: 'running' | 'inactive'
     readonly parent?: string
     readonly depth?: number
@@ -50,7 +50,7 @@ function project(
   return {
     kind: 'child',
     name,
-    description: entry.label,
+    label: entry.label,
     status: statusOf(agents, entry.id),
     ...at,
   }
@@ -93,7 +93,7 @@ export function registerListAgents(ctx: Context, interrupt: boolean): void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['child'] },
                 name: { type: 'string', required: true },
-                description: { type: 'string', required: true },
+                label: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
                 parent: { type: 'string' },
                 depth: { type: 'number' },
@@ -121,7 +121,7 @@ export function registerListAgents(ctx: Context, interrupt: boolean): void {
             const at = ` parent=${String(entry.parent)} depth=${String(entry.depth)}`
             return entry.kind === 'diagnostic'
               ? `${entry.name} [diagnostic: ${entry.reason}]${at}`
-              : `${entry.name} [${entry.status}]${at} — ${entry.description}`
+              : `${entry.name} [${entry.status}]${at} — ${entry.label}`
           }).join('\n'),
         }]
       },

@@ -153,7 +153,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<name> [<status>] — team lead`. Each continuable descendant follows as `<name> [<status>] parent=<name> depth=<n> — <description>`. The structured `description` is the task description supplied at creation. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<name> [<status>] — team lead`. Each continuable descendant follows as `<name> [<status>] parent=<name> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<name> [diagnostic: <reason>] parent=<name> depth=<n>`. Status describes turn activity, not task completion.
 
 #### Token effect
 
