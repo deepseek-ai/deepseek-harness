@@ -68,8 +68,8 @@ describe('control detail adapters', () => {
     const agents = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review', { scope: 'descendants' })
     expect(agents?.summary).toBe('2 agents')
     expect(agents?.items).toEqual([
-      { title: 'Build', subtitle: 'a1', badge: { label: 'Running', tone: 'info' }, fields: [] },
-      { title: 'Review', subtitle: 'a2', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
+      { title: 'a1', subtitle: 'Build', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'a2', subtitle: 'Review', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
     ])
     expect(details('list_agents', '(no subagents)')?.empty).toBe('No results')
     expect(details('job_list', 'j1 [bash] running — Build')?.items[0]?.fields).toContainEqual({ label: 'Type', value: 'bash' })

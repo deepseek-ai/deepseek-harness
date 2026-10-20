@@ -29,12 +29,12 @@ function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetails
     const [, id, state, title] = match
     if (id === undefined || state === undefined) return null
     items.push({
-      title: title ?? id, ...(title === undefined ? {} : { subtitle: id }),
+      title: id, ...(title === undefined ? {} : { subtitle: title }),
       badge: detailBadge(state, t),
       fields: [],
     })
   }
-  return detailList(items, t('detail.agents.count', { count: items.length }), t)
+  return { ...detailList(items, t('detail.agents.count', { count: items.length }), t), compact: true }
 }
 
 function jobList(text: string, t: DetailTranslate): ToolDetailsModel | null {

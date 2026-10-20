@@ -116,7 +116,7 @@ describe('web e2e: Agent Teams panel', () => {
       }),
     }))
     const member = await scaffold.ctx.subagents.startActivation({
-      name: 'researcher', provider: 'team-panel-member', label: 'Researcher', delivery: 'caller', signal: test.signal,
+      name: 'researcher', provider: 'team-panel-member', label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(), delivery: 'caller', signal: test.signal,
       request: { parent: agent, prompt: [{ type: 'text', text: 'Research the task' }] },
     })
     onTestFinished(() => member.dispose())
@@ -189,6 +189,18 @@ describe('web e2e: Agent Teams panel', () => {
               .every(([x, y]) => element.contains(document.elementFromPoint(x!, y!)))
         })).toBe(true)
       }
+      const description = panel.getByRole('button', { name: 'Expand description for researcher', exact: true })
+      const preview = description.locator('span')
+      expect(await preview.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+      await description.focus()
+      await page.keyboard.press('Enter')
+      const expanded = panel.getByRole('button', { name: 'Collapse description for researcher', exact: true })
+      expect(await expanded.getAttribute('aria-expanded')).toBe('true')
+      expect(await expanded.locator('span').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      expect(await expanded.evaluate(element => element === document.activeElement)).toBe(true)
+      await expanded.click()
+      expect(await description.getAttribute('aria-expanded')).toBe('false')
       await panel.getByRole('heading', { name: /Shared tasks/u }).click()
       expect(await panel.count()).toBe(1)
       await page.mouse.click(2, 2)

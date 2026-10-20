@@ -11,6 +11,7 @@ import { detailsCardModel, todosDetail } from '../src/client/tool/models/details
 import { DetailsRow, detailsToolview } from '../src/client/tool/toolviews/details-row.tsx'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { ToolDetails } from '../src/client/tool/components/ToolDetails.tsx'
 
 const t = makeTranslate(en, commonEn)
 const goal = { id: 'goal-1', revision: 2, objective: 'Ship compact cards', phase: 'active', roundsStarted: 2, maxGoalRounds: 8 }
@@ -111,6 +112,21 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
+  it('puts agent names first and lets a compact description expand and collapse', () => {
+    const description = 'Verify every construction bound. '.repeat(20)
+    const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `lead/tree-checker [running] parent=lead depth=1 — ${description}` }] }
+    const model = detailsCardModel(block, t, 'en')!
+    render(<ToolDetails model={model} t={t} />)
+    const name = screen.getByText('lead/tree-checker')
+    const toggle = screen.getByRole('button', { name: 'Expand lead/tree-checker' })
+    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(toggle.textContent).toBe(description)
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse lead/tree-checker' }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('expands fields with the keyboard and keeps Inspect available', () => {
     const inspect = vi.fn()
     render(<DetailsRow {...{ useDisclosure, toolName: 'get_goal', block: result('get_goal', { goal, activation: 'armed' }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)

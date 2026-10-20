@@ -210,6 +210,7 @@ function CatalogRows({
   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
   const [now, setNow] = useState(() => Date.now())
+  const [expandedDescriptions, setExpandedDescriptions] = useState<ReadonlySet<SessionId>>(() => new Set())
   const running = catalog.entries.some(entry => entry.activity === 'running')
   useEffect(() => {
     if (!running) return
@@ -251,7 +252,9 @@ function CatalogRows({
         const childLoading = childCatalog === undefined
           || (childCatalog.state === 'loading' && childCatalog.entries.length === 0)
         const summary = summaries[entry.id]
-        const label = entry.label ?? entry.id
+        const label = entry.name ?? entry.label ?? entry.id
+        const description = entry.name === undefined ? summary?.title : entry.label
+        const descriptionExpanded = expandedDescriptions.has(entry.id)
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const completed = !external && entry.activity === 'inactive'
@@ -261,7 +264,7 @@ function CatalogRows({
           : completed
             ? t('activity.completed')
             : t('activity.inactive')
-        const secondary = [summary?.title, requiresOpening ? t('catalog.migrationRequired') : mode, activity]
+        const secondary = [description, requiresOpening ? t('catalog.migrationRequired') : mode, activity]
           .filter(value => value !== undefined)
           .join(' · ')
         const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)
@@ -345,7 +348,28 @@ function CatalogRows({
                 </span>
                 <span className={css.content}>
                   <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{label}</span>
-                  <span className={css.summary}>{secondary}</span>
+                  {description !== undefined && (
+                    <button
+                      type="button"
+                      className={css.description}
+                      aria-expanded={descriptionExpanded}
+                      aria-disabled={external ? false : undefined}
+                      aria-label={t(descriptionExpanded ? 'description.collapse' : 'description.expand', { name: label })}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setExpandedDescriptions((current) => {
+                          const next = new Set(current)
+                          if (next.has(entry.id)) next.delete(entry.id)
+                          else next.add(entry.id)
+                          return next
+                        })
+                      }}
+                      onKeyDown={(event) => { event.stopPropagation() }}
+                    >
+                      <span>{description}</span><IconChevronRightOutlineRegular size={12} />
+                    </button>
+                  )}
+                  {requiresOpening && <span className={css.summary}>{t('catalog.migrationRequired')}</span>}
                 </span>
                 {metrics !== '' && (
                   <span className={css.metrics}>

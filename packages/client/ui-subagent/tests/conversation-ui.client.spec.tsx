@@ -165,6 +165,26 @@ function HeaderCatalog(props: SubagentHeaderLineageProps) {
 }
 
 describe('SubagentHeaderLineage', () => {
+  it('shows the sibling name above its description and expands it without navigating', () => {
+    const description = 'Check the construction and all bounds. '.repeat(20)
+    const input = props(catalog({
+      entries: [{ id: CHILD, name: 'tree-checker', mode: 'continuable', label: description, activity: 'running' }],
+    }))
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
+    const row = screen.getByRole('treeitem', { name: /tree-checker/ })
+    const name = within(row).getByText('tree-checker')
+    const toggle = within(row).getByRole('button', { name: '展开 tree-checker 的描述' })
+    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(toggle.textContent).toBe(description)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(input.openChild).not.toHaveBeenCalled()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('keeps the shared panel reachable with no children while Team mode is enabled', () => {
     const input = props(catalog({ entries: [] }))
     const initial = input.useSessions(state => state)
@@ -300,8 +320,8 @@ describe('SubagentHeaderLineage', () => {
 
     expect(input.refreshProjection).not.toHaveBeenCalled()
     expect(screen.getAllByRole('treeitem')).toHaveLength(2)
-    expect(screen.getByText('正在扫描项目文件 · 可继续 · 正在运行')).toBeTruthy()
-    expect(screen.getByText('一次性 · 当前未运行')).toBeTruthy()
+    expect(screen.getByText('正在扫描项目文件')).toBeTruthy()
+    expect(screen.getByRole('treeitem', { name: /reviewer 一次性 · 当前未运行/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '展开 worker 的下级子智能体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '展开 reviewer 的下级子智能体' })).toBeTruthy()
 
@@ -559,7 +579,7 @@ describe('SubagentHeaderLineage', () => {
     render(<HeaderCatalog {...input} />)
     hoverCatalog(screen.getByRole('button', { name: /子智能体/ }))
     const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
-    expect(row.textContent).toContain('模式未知')
+    expect(row.getAttribute('aria-label')).toContain('模式未知')
     fireEvent.keyDown(row, { key: 'Enter' })
     expect(input.openChild).toHaveBeenCalledWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'unknown' })
   })
