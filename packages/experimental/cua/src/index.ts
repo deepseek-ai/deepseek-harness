@@ -77,8 +77,8 @@ export interface CuaConfig {
   maxDepth: number
 }
 
-/** Validated host configuration; no driver is downloaded at runtime. */
-export const CuaConfig = Schema.object({
+/** Shared configuration fields extended by native platform providers. */
+export const CuaConfigFields = {
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
@@ -102,7 +102,10 @@ export const CuaConfig = Schema.object({
   graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
   maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
   maxDepth: Schema.number().step(1).min(1).max(100).default(25),
-}) satisfies Schema<Record<string, unknown>, CuaConfig>
+}
+
+/** Validate shared configuration for native providers. */
+export const CuaConfig = Schema.object(CuaConfigFields) satisfies Schema<Record<string, unknown>, CuaConfig>
 
 
 function executionAgent(execution: Readonly<ToolExecution>): Agent {
@@ -147,7 +150,6 @@ export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
   guidance: string
-  description: string
 }
 
 /**
@@ -279,7 +281,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       return result
     }
     const tool: ToolDefinition = {
-      name: 'cua', description: backend.description,
+      name: 'cua', description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
       parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {

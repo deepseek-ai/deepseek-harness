@@ -269,7 +269,7 @@ it('keeps Agent disposal pending until its helper cleanup completes', async () =
 
 it('retains the computer-use registration until permission helper cleanup settles', async () => {
   const f = await setup()
-  native.request.mockResolvedValue({ accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  native.request.mockResolvedValue({ platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
   await f.ctx.cuaAccess.systemStatus()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   native.dispose.mockImplementation(async () => { entered.resolve(undefined); await release.promise })
@@ -684,7 +684,7 @@ async function permissionProfile(allowedApps: Array<{ id: string; name: string; 
   await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
   await f.ctx.loader.await()
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { platform: 'darwin' as const, accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   expect((await f.ctx.cuaAccess.applications()).persistentAvailable).toBe(true)
   await f.ctx.plugin(Settings)
   await f.ctx.plugin(Timer)
@@ -721,7 +721,7 @@ it('stores signed application consent separately from configuration', async () =
   const stored = files.find(file => file.startsWith('cua_permissions_'))!
   expect(await readFile(join(profile.home, 'storages', stored), 'utf8')).toContain(authorization.id)
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { platform: 'darwin' as const, accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   const permission = await f.ctx.cuaAccess.applications()
   expect(permission.allowedApps).toHaveLength(1)
   await f.ctx.cuaAccess.revoke(permission.allowedApps[0]!.id)

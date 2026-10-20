@@ -40,7 +40,7 @@ export const Request = z.discriminatedUnion('method', [
   operation('listWindows', app),
   operation('getState', { ...app, windowId: id.optional(),
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
-    details: z.boolean().optional().describe('Include identifiers, global-point bounds and complete action names.'),
+    details: z.boolean().optional().describe('Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names.'),
   }),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
@@ -98,7 +98,7 @@ export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.
 /** Installed application matches keep running and stopped records distinct. */
 export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
   z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
-/** Current windows and their global point bounds. */
+/** Current windows and their global bounds in macOS points or Windows physical pixels. */
 export const WindowsResult = z.array(z.object({
   windowId: id, pid, appName: z.string(), title: z.string(), bounds,
   isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
@@ -111,10 +111,11 @@ export const StateResult = z.object({
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
 })
-/** Original native PNG and window-point geometry before Host image preparation. */
+/** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
-  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }), coordinateSpace: z.literal('window-points'),
+  bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }),
+  coordinateSpace: z.enum(['window-points', 'window-pixels']),
 })
 /** Encoded model-request image; default input coordinates use these pixel dimensions. */
 export const ScreenshotResult = NativeScreenshotResult.extend({
@@ -127,7 +128,11 @@ export const CapabilitiesResult = z.object({
   methods: z.array(z.string()), coordinateSpace: z.literal('screenshot-pixels'), browser: z.literal(false),
 })
 /** An action has reached native dispatch; application state was not verified. */
-export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.literal(false) })
+export const ActionResult = z.object({
+  dispatched: z.literal(true), verified: z.literal(false),
+  /** Sampled foreground change, when the provider can report it; null means sampling was unavailable. */
+  foregroundChanged: z.boolean().nullable().optional(),
+})
 /** Hover reports whether the selected route moved the user's system pointer. */
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */

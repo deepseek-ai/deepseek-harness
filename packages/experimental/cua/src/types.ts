@@ -38,7 +38,7 @@ export interface CuaAxOptions extends CuaObservationOptions {
   disableDiffing?: boolean
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
-  /** Include identifiers, global-point bounds and complete action names. */
+  /** Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names. */
   details?: boolean
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */

@@ -17,7 +17,6 @@ export type Config = CuaConfig
 /** Validate the shared configuration before preparing the macOS helper. */
 export const Config: typeof CuaConfig = CuaConfig
 
-const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 
 /**
  * Mount logged native operations with separate Agent connections to the shared helper.
@@ -28,7 +27,7 @@ const description = 'Inspect macOS permissions, select an application and window
 export async function apply(ctx: Context, config: Config): Promise<void> {
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
-    installCua(ctx, config, { helperPath: config.helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+    installCua(ctx, config, { helperPath: config.helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE })
     return
   }
   const architecture = nativeHostArchitecture(process.platform, process.arch)
@@ -45,5 +44,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'dsh-cua.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  installCua(ctx, config, { helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+  installCua(ctx, config, { helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE })
 }

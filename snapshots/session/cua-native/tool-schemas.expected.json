@@ -67,7 +67,7 @@
     },
     {
       "name": "cua",
-      "description": "Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
+      "description": "Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
       "parameters": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
@@ -274,7 +274,7 @@
                     "type": "boolean"
                   },
                   "details": {
-                    "description": "Include identifiers, global-point bounds and complete action names.",
+                    "description": "Include identifiers, global bounds in macOS points or Windows physical pixels and complete action names.",
                     "type": "boolean"
                   }
                 },
