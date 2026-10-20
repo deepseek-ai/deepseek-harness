@@ -226,7 +226,7 @@ export class TerminalView {
    * @param data - input from the terminal emulator; never replayed after disconnection.
    * @param typed - whether the person produced the input, as opposed to a terminal-protocol reply.
    */
-  write(data: string, typed = false): void {
+  write(data: string, typed: boolean = false): void {
     const state = this.state.getSnapshot()
     const attachment = this.attachment
     if (!state.writable || state.info === undefined || attachment === undefined || attachment.signal.aborted) return

@@ -1007,6 +1007,10 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   TerminalFrame: 'Browser terminal stream frames are owned by packages/api/terminal-controller/README.md',
   TerminalRetentionFrame: 'Browser terminal window holds are owned by packages/api/terminal-controller/README.md',
   WebTerminalId: 'Browser terminal identity is owned by packages/api/terminal-controller/README.md',
+  AgentTerminal: 'Agent terminal handles are owned by packages/api/terminal-controller/README.md',
+  AgentTerminalRequest: 'Agent terminal allocation fields are owned by packages/api/terminal-controller/README.md',
+  TerminalScreenRequest: 'Browser terminal screen reads are owned by packages/api/terminal-controller/README.md',
+  TerminalScreenPage: 'Browser terminal screen reads are owned by packages/api/terminal-controller/README.md',
 }
 
 /** Repository data policy consumed by the Cordis catalog projector. */

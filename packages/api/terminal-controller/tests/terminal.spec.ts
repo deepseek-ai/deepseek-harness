@@ -18,7 +18,7 @@ function fixture(overrides: Partial<WebTerminalInfo> = {}) {
   const handle = {
     pid: 123, output, done: outcome.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
     inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
-    inspectForeground: async () => undefined, signalForeground: async () => 123,
+    inspectForeground: async (): ReturnType<SubprocessTerminalHandle['inspectForeground']> => undefined, signalForeground: async () => 123,
     terminate: vi.fn(async () => { output.end(); outcome.resolve({ exitCode: 0, signal: null }) }),
   }
   const checked: SubprocessTerminalHandle = handle
