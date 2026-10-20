@@ -27,7 +27,7 @@ Application consent uses the fixed approval presentation of User Questions and r
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the [macOS provider](../cua-macos/README.md) to enable native operations. External PTC hosts import `connectCua` from `@deepseek-ai/dsh-cua/bridge` and supply the current `tools.cua` binding. Source compositions and native preparation belong to the provider.
+Mount the [macOS provider](../cua-macos/README.md) to enable native operations on macOS. External PTC hosts import `connectCua` from `@deepseek-ai/dsh-cua/bridge` and supply the current `tools.cua` binding. Source compositions and native preparation belong to the provider.
 
 Use App methods for a single-window task. `getApp` reads initial accessibility state; `getWindows` and `getWindow` select an explicit window when needed. Re-reading one app/window scope replaces its element indices without invalidating another window's snapshot. Keyboard input follows the application's focus. Invalid request arguments reject before dispatch with a readable method, parameter and requirement.
 
@@ -37,7 +37,7 @@ Observation methods emit and return their result. Use `void await app.getAXState
 
 Application consent precedes launch, observation, capture, and input. Session access is stored by conversation and application identity and survives DSH restart and Computer Use disablement. Other conversations require their own consent. Saved grants require platform-verified executable identity. Refusal and revocation close affected Agent connections, so their old objects require fresh selection. No input is replayed after cancellation, timeout, or reconnect.
 
-Actions return `dispatched:true, verified:false`; read fresh state to verify the result. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 1000 after a successful window observation. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to native window points. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
+Actions return `dispatched:true, verified:false`; read fresh state to verify the result. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 1000 after a successful window observation. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to native window coordinates: macOS points or Windows physical pixels. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
 `click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input for both AX indices and coordinates; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
 
@@ -57,6 +57,8 @@ The Host marker has no configurable fields; platform providers own native config
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
+
+Permission responses identify their platform: macOS supplies system permission observations, while Windows supplies desktop lock, capture availability and elevation status. The shared page renders the corresponding controls. Native providers reuse compilation coordination and request-schema generation through explicit exports.
 
 <details>
 <summary>Shared execution and platform ownership</summary>
@@ -114,7 +116,7 @@ Results append to history. Retaining objects does not rewrite previous messages;
 <a id="known-limitations-and-deferred-work"></a>
 
 - Conversation decisions have no automatic retention limit or deletion when a conversation is removed. Revocation removes permission, while its generation remains to reject older handles and pending approvals.
-- Native execution currently uses the macOS provider. Windows support is planned as a separate provider package with a C# helper, retaining the shared app/window API, authorization, snapshot validity, and action-result semantics. Its implementation must document system-specific limitations and distinguish cross-compilation evidence from Windows desktop validation.
+- Native behavior and desktop validation are platform-owned; consult each provider for supported applications, input restrictions and measured coverage.
 - Persistent variables do not reserve an application across a sequence of operations. Other Agents and the user can change its state. Hover and observations do not restore the previous pointer position; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) uses no cross-call ownership.
 - The package stays in `experimental` until Windows support and platform validation permit promotion to the `computer-use` group.
 
