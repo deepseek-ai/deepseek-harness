@@ -76,7 +76,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-tool-team-'))
   roots.push(storageRoot)
   await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
-  await ctx.plugin(TestSessionQuery)
+  const queryFiber = await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
   await ctx.plugin(ToolSubagentControl)
@@ -87,7 +87,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const lead = await ctx.agentLoop.create(SessionId('tool-team-lead'), { provider: 'mock', model: 'mock' })
-  return { ctx, lead, fiber, adapter }
+  return { ctx, lead, fiber, adapter, queryFiber }
 }
 
 function execute(
@@ -169,6 +169,26 @@ async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
 
 async function interrupt(ctx: Context, lead: Agent, target: SessionId): Promise<void> {
   await ctx.subagents.drainChildren(lead, [target])
+}
+
+/** Assign a task to a child whose name must be read from its durable catalog. */
+async function taskWithSettledOwner(ctx: Context, lead: Agent) {
+  const activation = await ctx.subagents.startActivation({
+    name: 'worker', provider: 'spawn', label: 'Review',
+    request: { parent: lead, prompt: [{ type: 'text', text: 'Review the change' }] },
+    signal: SIGNAL, delivery: 'caller',
+  })
+  try {
+    await activation.result
+  } finally {
+    await activation.dispose()
+  }
+  expect(ctx.agents.get(activation.childId)).toBeUndefined()
+  const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Review the change' })
+  const task = await ctx.agentTeams.updateTask(lead, {
+    taskId: created.id, expectedRevision: created.revision, action: 'reassign', owner: activation.childId,
+  })
+  return { task, ownerName: activation.name }
 }
 
 describe('dsh-tool-team', () => {
@@ -508,6 +528,113 @@ describe('dsh-tool-team', () => {
     expect((await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: 2, action: 'reassign', owner: `legacy:${id}`,
     })).isError).toBe(true)
+  })
+
+  it('leaves a task unchanged when its owner name cannot be read before an edit', async () => {
+    const { ctx, lead, queryFiber } = await setup([textResponse('done')])
+    const { task } = await taskWithSettledOwner(ctx, lead)
+    await queryFiber.dispose()
+
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
+    })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('listing subagents requires the sessionQuery service')
+    expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
+    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
+    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(2)
+  })
+
+  it('returns the committed task when Session queries unload during the commit', async () => {
+    const { ctx, lead, queryFiber } = await setup([textResponse('done')])
+    const { task, ownerName } = await taskWithSettledOwner(ctx, lead)
+    const flush = ctx.sessions.flush.bind(ctx.sessions)
+    vi.spyOn(ctx.sessions, 'flush').mockImplementationOnce(async (session) => {
+      const flushed = await flush(session)
+      await queryFiber.dispose()
+      return flushed
+    })
+
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
+    })
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', revision: task.revision + 1, ownerName })
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
+  })
+
+  it('rejects an edit if another writer changes the task while its owner name is being read', async () => {
+    const { ctx, lead } = await setup([textResponse('done')])
+    const { task } = await taskWithSettledOwner(ctx, lead)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const discover = ctx.subagents.listDescendants.bind(ctx.subagents)
+    vi.spyOn(ctx.subagents, 'listDescendants').mockImplementationOnce(async (...args) => {
+      const entries = await discover(...args)
+      entered.resolve(undefined)
+      await release.promise
+      return entries
+    })
+    const result = execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Delayed edit',
+    })
+    try {
+      await entered.promise
+      expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
+      await ctx.agentTeams.updateTask(lead, {
+        taskId: task.id, expectedRevision: task.revision, action: 'edit', subject: 'Concurrent edit',
+      })
+    } finally {
+      release.resolve(undefined)
+    }
+    expect((await result).isError).toBe(true)
+    expect(text(await result)).toContain('stale team task')
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({
+      subject: 'Concurrent edit', revision: task.revision + 1,
+    })
+  })
+
+  it('reads owner names only for rows surviving filters and pagination', async () => {
+    const { ctx, lead } = await setup([textResponse('done')])
+    const unowned = await ctx.agentTeams.createTask(lead, { subject: 'First', description: 'Unowned' })
+    const { task, ownerName } = await taskWithSettledOwner(ctx, lead)
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    for (const filter of [{ owner: 'unowned' }, { status: 'pending' }, { ready: true }, { limit: 1 }]) {
+      const result = await execute(ctx, lead, 'team_task_list', filter)
+      expect(result.isError).toBe(false)
+      expect(JSON.parse(text(result)).tasks).toMatchObject([{ id: unowned.id }])
+      expect(observe).not.toHaveBeenCalled()
+    }
+    for (const filter of [{ cursor: 2 }, { status: 'completed' }]) {
+      expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', filter)))).toEqual({ tasks: [] })
+      expect(observe).not.toHaveBeenCalled()
+    }
+    for (const filter of [{ cursor: -1 }, { limit: 101 }]) {
+      expect((await execute(ctx, lead, 'team_task_list', filter)).isError).toBe(true)
+      expect(observe).not.toHaveBeenCalled()
+    }
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: ownerName, limit: 1 }))))
+      .toMatchObject({ tasks: [{ id: task.id, ownerName }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: ownerName, cursor: 1 }))))
+      .toEqual({ tasks: [] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'lead/absent' }))))
+      .toEqual({ tasks: [] })
+  })
+
+  it.each(['release', 'reassign', 'reopen'] as const)('does not read the old owner for %s', async (action) => {
+    const { ctx, lead, queryFiber } = await setup([textResponse('done')])
+    const { task } = await taskWithSettledOwner(ctx, lead)
+    const current = action === 'reopen'
+      ? await ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: task.revision, action: 'complete' })
+      : task
+    await queryFiber.dispose()
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: current.revision, action,
+      ...action === 'reassign' ? { owner: 'lead' } : {},
+    })
+    expect(result.isError).toBe(false)
+    if (action === 'reassign') expect(JSON.parse(text(result))).toMatchObject({ ownerName: 'lead' })
+    else expect(JSON.parse(text(result))).not.toHaveProperty('ownerName')
   })
 
   it('retains an uncataloged historical task owner as a legacy id', async () => {

@@ -56,7 +56,7 @@ kind: "package-reference"
 
 ### 成功与失败的表现
 
-任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。
+任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。更新会在修改前解析结果中的负责人名称；名称查询失败时任务保持不变，已提交结果无需再查询名称。
 
 -----
 
@@ -76,6 +76,8 @@ kind: "package-reference"
 - **一个工具族。** Team 不注册消息、列表或中断工具；标准 subagent 工具同样服务 Lead 与 teammate。
 - **声明式结果，紧凑 JSON。** 每个工具都声明完整结果 schema，并把该值渲染为紧凑 JSON，因此编译器会对照向模型承诺的结果检查 `execute`，任何结果都不会在缩进上消耗 token。
 - **领域掌握裁决权。** 工具委托给 `ctx.agentTeams`，后者强制执行 Lead 权限与 revision 校验；适配器不添加更弱的路径。
+
+任务列表先按状态、就绪情况和未分配条件筛选，再解析名称。没有精确负责人名称筛选时，只解析请求页中的名称；按精确负责人名称筛选时，在分页前解析剩余候选任务的负责人名称。
 
 [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责模型侧与 scoping 决策。
 

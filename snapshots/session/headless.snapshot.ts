@@ -722,12 +722,14 @@ function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
       || event.type === 'agent/inbox/spliced' && event.data.inserted.length > 0)).toBe(false)
   }
   const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-  expect(results).toHaveLength(7)
+  expect(results).toHaveLength(8)
   expect(results.every(result => result.isError === false)).toBe(true)
   expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
   expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":false}' }])
+  expect(results.find(result => result.toolCallId === 'read-unowned')?.content)
+    .toEqual([{ type: 'text', text: '{"tasks":[]}' }])
 }
 
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */

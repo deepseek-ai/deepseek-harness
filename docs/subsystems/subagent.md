@@ -230,7 +230,7 @@ type SubagentInterruptAuthority =
 
 ## Durable enumeration
 
-`listChildren` reads the parent-owned catalog of all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes direct continuable children with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
+`listChildren` reads the parent-owned catalog of all local and external children, including caller-delivery work. Caller delivery leaves result collection to the caller; catalog membership remains discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes the root and its full descendant tree, including external leaves and diagnostics for unreadable children; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
 
 ## Results and backend handles
 

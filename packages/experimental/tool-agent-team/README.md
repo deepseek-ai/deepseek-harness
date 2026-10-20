@@ -56,7 +56,7 @@ Task `owner` arguments and `ownerName` results use full agent paths. The root ma
 
 ### What success and failure look like
 
-Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors.
+Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. Updates resolve result-owner names before mutation; a name lookup failure leaves the task unchanged, and a committed result needs no further name lookup.
 
 -----
 
@@ -76,6 +76,8 @@ The adapter is built on four commitments:
 - **One tool family.** Team registers no messaging, listing, or interruption tool; the standard subagent tools serve Leads and teammates alike.
 - **Declared results, compact JSON.** Every tool declares its complete result schema and renders that value as compact JSON, so the compiler checks `execute` against what the model is promised and no result spends tokens on indentation.
 - **The domain owns authority.** Tools delegate to `ctx.agentTeams`, which enforces Lead authority and revision checks; the adapter adds no weaker path.
+
+Task listing applies status, readiness, and unowned filters before resolving names. Without an exact owner-name filter, only the requested page needs name resolution; an exact owner-name filter resolves the remaining candidates before pagination.
 
 The [subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) owns the model-facing and scoping decisions.
 

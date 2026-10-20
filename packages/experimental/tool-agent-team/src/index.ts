@@ -76,12 +76,14 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 
 type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
 
-/** Project task owners from live activations or parent catalogs. */
-async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<NamedTaskView[]> {
+/** Read immutable owner names before a mutation or for the requested result rows. */
+async function taskOwnerNames(
+  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[], signal: AbortSignal,
+): Promise<ReadonlyMap<SessionId, string>> {
   const root = ctx.subagents.rootOf(caller)
   const names = new Map<SessionId, string>([[root.id, 'lead']])
   const missing = new Set<SessionId>()
-  for (const { ownerId } of tasks) {
+  for (const ownerId of owners) {
     if (ownerId === undefined || names.has(ownerId)) continue
     const agent = ctx.agents.get(ownerId)
     if (agent === undefined) missing.add(ownerId)
@@ -92,10 +94,15 @@ async function namedTasks(ctx: Context, caller: Agent, tasks: readonly TeamTaskV
       names.set(entry.id, `lead/${entry.path}`)
     }
   }
-  return tasks.map(({ ownerId, ...view }) => ({
+  return names
+}
+
+/** Format a task without querying mutable services after its commit. */
+function namedTask({ ownerId, ...view }: TeamTaskView, names: ReadonlyMap<SessionId, string>): NamedTaskView {
+  return {
     ...view,
     ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
-  }))
+  }
 }
 
 /** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
@@ -155,7 +162,7 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
         }, exec.signal)
-        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
+        return namedTask(task, new Map())
       },
     })))
 
@@ -175,20 +182,23 @@ function install(agent: Agent, ctx: Context): () => void {
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
       async execute(args, exec) {
-        const status = args.status
-        const caller = callingAgent(exec.agent, 'team_task_list')
-        const filtered = (await namedTasks(ctx, caller, ctx.agentTeams.listTasks(caller), exec.signal)).filter(task =>
-          (status === undefined || task.status === status)
-          && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerName === undefined : task.ownerName === args.owner))
-          && (args.ready === undefined || task.ready === args.ready))
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
         if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
-        return Promise.resolve({
-          tasks: filtered.slice(cursor, cursor + limit),
+        const caller = callingAgent(exec.agent, 'team_task_list')
+        let filtered = ctx.agentTeams.listTasks(caller).filter(task =>
+          (args.status === undefined || task.status === args.status)
+          && (args.owner !== 'unowned' || task.ownerId === undefined)
+          && (args.ready === undefined || task.ready === args.ready))
+        const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
+        const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
+        const names = await taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId), exec.signal)
+        if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
+        return {
+          tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
           ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
-        })
+        }
       },
     })))
 
@@ -202,7 +212,8 @@ function install(agent: Agent, ctx: Context): () => void {
       async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_get')
         const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
+        const names = await taskOwnerNames(ctx, caller, [task.ownerId], exec.signal)
+        return namedTask(task, names)
       },
     })))
 
@@ -227,10 +238,17 @@ function install(agent: Agent, ctx: Context): () => void {
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_update')
+        const taskId = TeamTaskId(args.task_id)
+        const current = ctx.agentTeams.getTask(caller, taskId)
         const owner = args.owner === undefined ? undefined
           : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+        const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
+        // Names are immutable; the service still checks the revision and authority after these reads.
+        const names = await taskOwnerNames(ctx, caller, [
+          caller.id, owner, keepsOwner ? current.ownerId : undefined,
+        ], exec.signal)
         const task = await ctx.agentTeams.updateTask(caller, {
-          taskId: TeamTaskId(args.task_id),
+          taskId,
           expectedRevision: args.expected_revision,
           action: args.action,
           ...args.subject === undefined ? {} : { subject: args.subject },
@@ -239,7 +257,7 @@ function install(agent: Agent, ctx: Context): () => void {
           ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
           ...owner === undefined ? {} : { owner },
         }, exec.signal)
-        return (await namedTasks(ctx, caller, [task], exec.signal))[0] as NamedTaskView
+        return namedTask(task, names)
       },
     })))
   } catch (error: unknown) {
