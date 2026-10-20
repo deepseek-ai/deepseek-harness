@@ -3046,6 +3046,9 @@ importers:
       '@deepseek-ai/dsh-cordis-host-runner':
         specifier: workspace:*
         version: link:../../extensions/cordis-host-runner
+      '@deepseek-ai/dsh-deliverable-file-references':
+        specifier: workspace:*
+        version: link:../../deliverables/deliverable-file-references
       '@deepseek-ai/dsh-file-reference':
         specifier: workspace:*
         version: link:../../context/file-reference
