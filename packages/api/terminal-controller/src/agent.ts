@@ -49,6 +49,9 @@ export class AgentTerminal {
   /** Host identity of the sidebar terminal. */
   get id(): WebTerminalId { return this.terminal.info.id }
 
+  /** Top-level process id; an unconfined or exec-confined shell leads its own process group with it. */
+  get pid(): number { return this.terminal.pid }
+
   /** Current metadata, including control and process state. */
   get info(): WebTerminalInfo { return this.terminal.info }
 
@@ -85,7 +88,7 @@ export class AgentTerminal {
   read(request: TerminalScreenRequest): TerminalScreenPage { return this.terminal.readScreen(request) }
 
   /**
-   * Mark the cursor row of the screen as applied so far, so later output can be rendered from it.
+   * Mark the start of the cursor's logical line on the screen as applied so far, so later output can be rendered from it.
    * @returns the screen mark.
    * @throws AgentTerminalError `unavailable` after the terminal is closed.
    */

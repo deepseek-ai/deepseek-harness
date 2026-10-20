@@ -15,6 +15,17 @@ export function lastContentRow(buffer: IBuffer): number {
 }
 
 /**
+ * First row of the logical line that holds the cursor.
+ * @param buffer - active emulator buffer.
+ * @returns absolute index of the row where the cursor's wrapped line begins.
+ */
+export function cursorLineStart(buffer: IBuffer): number {
+  let row = buffer.baseY + buffer.cursorY
+  while (row > 0 && bufferRow(buffer, row).isWrapped) row--
+  return row
+}
+
+/**
  * Join wrapped rows into logical lines and trim each line's trailing cell padding.
  * @param buffer - active emulator buffer.
  * @param from - first absolute row, inclusive.

@@ -382,6 +382,17 @@ describe('agent access', () => {
     mark.dispose()
   })
 
+  it('marks the start of a wrapped cursor line and reports the process id', async () => {
+    const { terminal, output } = fixture({ ...agentInfo, cols: 10 })
+    output.write(Buffer.from('$ 0123456789abcdefghij'))
+    await expect.poll(() => terminal.revision).toBeGreaterThan(0)
+    await terminal.drain()
+    const mark = terminal.markScreen()
+    output.write(Buffer.from('\r\nok\r\n$ '))
+    await expect.poll(() => mark.lines().lines).toEqual(['$ 0123456789abcdefghij', 'ok', '$'])
+    expect(terminal.pid).toBe(123)
+  })
+
   it('renders the whole alternate screen after the application switches buffers', async () => {
     const { terminal, output } = fixture(agentInfo)
     output.write(Buffer.from('$ vim notes\r\n'))

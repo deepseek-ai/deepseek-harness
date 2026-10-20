@@ -6,7 +6,7 @@ import type { SerializeAddon as Serializer } from '@xterm/addon-serialize'
 import type { SubprocessTerminalActivity, SubprocessTerminalForeground, SubprocessTerminalHandle, SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
 import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import { AgentTerminalError } from './agent.ts'
-import { lastContentRow, pageLines, renderLines } from './screen.ts'
+import { cursorLineStart, lastContentRow, pageLines, renderLines } from './screen.ts'
 import { TerminalFollower } from './stream.ts'
 import { TerminalRetention, type TerminalRetentionPolicy } from './retention.ts'
 import type {
@@ -189,6 +189,9 @@ export class BrowserTerminal {
     return (await this.handle.inspectActivity()).state
   }
 
+  /** Top-level terminal process id reported by the provider. */
+  get pid(): number { return this.handle.pid }
+
   /** Advances after each applied output chunk and each published state change. */
   get revision(): number { return this.changes }
 
@@ -275,14 +278,15 @@ export class BrowserTerminal {
   }
 
   /**
-   * Mark the cursor row of the screen as applied so far; {@link drain} first to place it after received output.
-   * @returns a mark whose lines include the marked row; a change of active buffer renders the whole new buffer.
+   * Mark the start of the cursor's logical line on the screen as applied so far; {@link drain} first to place it after received output.
+   * @returns a mark whose lines begin with that logical line; a change of active buffer renders the whole new buffer.
    * @throws AgentTerminalError after the screen is released.
    */
   markScreen(): TerminalScreenMark {
     this.requireScreen()
-    const marked = this.screen.buffer.active.type
-    const marker = this.screen.registerMarker(0)
+    const buffer = this.screen.buffer.active
+    const marked = buffer.type
+    const marker = this.screen.registerMarker(cursorLineStart(buffer) - buffer.baseY - buffer.cursorY)
     return {
       lines: () => {
         this.requireScreen()

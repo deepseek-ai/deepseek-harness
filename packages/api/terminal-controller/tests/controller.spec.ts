@@ -847,6 +847,7 @@ describe('Agent terminals', () => {
     const { ctx, controller, agent, handle } = fixture()
     withSandbox(ctx)
     const terminal = await controller.openForAgent(agent, agentRequest, signal())
+    expect(terminal.pid).toBe(123)
     await terminal.write('echo ready\r')
     expect(handle.write).toHaveBeenCalledExactlyOnceWith('echo ready\r')
     expect(await terminal.signal('SIGINT')).toBe(123)

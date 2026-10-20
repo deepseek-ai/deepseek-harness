@@ -1,7 +1,7 @@
 /** Rendered screen text and newest-relative pages over a real headless emulator. */
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it } from 'vitest'
-import { lastContentRow, pageLines, renderLines } from '../src/screen.ts'
+import { cursorLineStart, lastContentRow, pageLines, renderLines } from '../src/screen.ts'
 
 const terminals: Terminal[] = []
 afterEach(() => { for (const terminal of terminals.splice(0)) terminal.dispose() })
@@ -38,6 +38,14 @@ describe('renderLines', () => {
   it('renders an empty range as no lines', async () => {
     const terminal = await screen('one')
     expect(renderLines(terminal.buffer.active, 3, 3)).toEqual([])
+  })
+
+  it('finds the first row of the wrapped line holding the cursor', async () => {
+    const wrapped = await screen('done\r\n$ 0123456789abcdefghij', 10)
+    expect(wrapped.buffer.active.cursorY).toBe(3)
+    expect(cursorLineStart(wrapped.buffer.active)).toBe(1)
+    const top = await screen('0123456789abcdefghij', 10)
+    expect(cursorLineStart(top.buffer.active)).toBe(0)
   })
 
   it('keeps the cursor row when trailing rows are blank', async () => {
