@@ -342,10 +342,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>',
-        description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. Tasks already admitted finish before the selection commits. Subsequent task calls use the new mode, and current waits end after the selection is flushed.',
-        parameters: [{ name: 'caller', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before appending a queued selection.' }],
+        description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. The selection takes effect before awaiting consumers or persistence. Task mutations check the current mode when their queued operation starts; admitted operations finish. Current waits end after the selection is flushed.',
+        parameters: [{ name: 'caller', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before changing the selection.' }],
         returns: 'fulfillment after the selection flushes and scoped consumers update.',
-        throws: ['when called by a descendant or persistence fails. An appended selection remains active; retrying the same selection synchronizes consumers and flushes without a duplicate event.'],
+        throws: ['when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active; retrying the same selection synchronizes consumers and flushes without a duplicate event.'],
       },
       {
         signature: 'async createTask(caller: Agent, request: CreateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>',
@@ -4583,9 +4583,9 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'team/mode-changed',
     mode: 'parallel',
     signature: '\'team/mode-changed\'(root: Agent): void',
-    summary: 'A root Session\'s Team selection changed in memory; descendants observe the same mode.',
-    description: 'A root Session\'s Team selection changed in memory; descendants observe the same mode.',
-    parameters: [{ name: 'root', description: 'exact live root whose selection changed.' }],
+    summary: 'Synchronize scoped consumers with the root\'s current Team selection, including retries.',
+    description: 'Synchronize scoped consumers with the root\'s current Team selection, including retries.',
+    parameters: [{ name: 'root', description: 'exact live root whose current selection consumers must read.' }],
   },
   {
     name: 'tools/change',

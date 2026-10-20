@@ -27,9 +27,9 @@ export { TeamError } from './error.ts'
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
-     * A root Session's Team selection changed in memory; descendants observe the same mode.
+     * Synchronize scoped consumers with the root's current Team selection, including retries.
      * @mode parallel
-     * @param root - exact live root whose selection changed.
+     * @param root - exact live root whose current selection consumers must read.
      */
     'team/mode-changed'(root: Agent): void
   }
@@ -122,30 +122,28 @@ export class TeamService extends Service {
 
   /**
    * Save a root Session's Team selection without stopping children or deleting tasks.
-   * Tasks already admitted finish before the selection commits. Subsequent task calls
-   * use the new mode, and current waits end after the selection is flushed.
+   * The selection takes effect before awaiting consumers or persistence. Task mutations
+   * check the current mode when their queued operation starts; admitted operations finish.
+   * Current waits end after the selection is flushed.
    * @param caller - exact live root whose tree receives the selection.
    * @param enabled - selected Team mode.
-   * @param signal - cancellation checked before appending a queued selection.
+   * @param signal - cancellation checked before changing the selection.
    * @returns fulfillment after the selection flushes and scoped consumers update.
-   * @throws when called by a descendant or persistence fails. An appended selection remains active;
+   * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
    * retrying the same selection synchronizes consumers and flushes without a duplicate event.
    */
   async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void> {
     const root = this.ctx.subagents.rootOf(caller)
     if (root !== caller) throw new TeamError('change Team mode from the root Session', 'TEAM_LEAD_REQUIRED')
-    await this.journal.transact(root.id, async () => {
-      signal?.throwIfAborted()
-      this.ctx.subagents.rootOf(caller)
-      if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
-      await this.ctx.parallel('team/mode-changed', root)
-      await this.ctx.sessions.flush(root.session)
-      for (const agent of this.ctx.agents.list()) {
-        if (agent === root || this.ctx.agents.isOwnedBy(agent.id, root)) {
-          emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
-        }
+    signal?.throwIfAborted()
+    if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
+    await this.ctx.parallel('team/mode-changed', root)
+    await this.ctx.sessions.flush(root.session)
+    for (const agent of this.ctx.agents.list()) {
+      if (agent === root || this.ctx.agents.isOwnedBy(agent.id, root)) {
+        emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
       }
-    })
+    }
   }
 
   /**

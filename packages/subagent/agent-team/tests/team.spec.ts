@@ -124,6 +124,70 @@ describe('Tree-owned task boards', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
   })
 
+  it.each(['create', 'claim'] as const)('disables queued %s while an admitted reassignment finishes', async (action) => {
+    const { ctx, lead } = await setup(['hang'])
+    const childId = await spawn(ctx, lead, 'worker')
+    const child = await waitRunning(ctx, childId)
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'work', description: 'retained assignment' })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const discover = ctx.subagents.listDescendants.bind(ctx.subagents)
+    vi.spyOn(ctx.subagents, 'listDescendants').mockImplementationOnce(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return discover(...args)
+    })
+    const admitted = ctx.agentTeams.updateTask(lead, {
+      taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: childId,
+    })
+    await entered.promise
+    const queued = action === 'create'
+      ? ctx.agentTeams.createTask(child, { subject: 'queued', description: 'must not start' })
+      : ctx.agentTeams.updateTask(child, { taskId: task.id, expectedRevision: 2, action: 'claim' })
+    const rejected = expect(queued).rejects.toMatchObject({ code: 'TEAM_DISABLED' })
+    const disabling = ctx.agentTeams.setEnabled(lead, false)
+    try {
+      expect(ctx.agentTeams.isEnabled(child)).toBe(false)
+      await disabling
+      expect(ctx.agents.get(childId)).toBe(child)
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([admitted, rejected, disabling])
+    }
+    await expect(admitted).resolves.toMatchObject({ revision: 2, ownerId: childId })
+    await rejected
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(ctx.agentTeams.listTasks(lead)).toEqual([expect.objectContaining({ id: task.id, revision: 2, ownerId: childId })])
+  })
+
+  it('admits queued work using the latest selection after off then on', async () => {
+    const { ctx, lead } = await setup([])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const flush = ctx.sessions.flush.bind(ctx.sessions)
+    vi.spyOn(ctx.sessions, 'flush').mockImplementationOnce(async (session) => {
+      entered.resolve(undefined)
+      await release.promise
+      return await flush(session)
+    })
+    const admitted = ctx.agentTeams.createTask(lead, { subject: 'first', description: 'awaiting persistence' })
+    await entered.promise
+    const queued = ctx.agentTeams.createTask(lead, { subject: 'second', description: 'uses latest mode' })
+    const disabling = ctx.agentTeams.setEnabled(lead, false)
+    const enabling = ctx.agentTeams.setEnabled(lead, true)
+    try {
+      expect(ctx.agentTeams.isEnabled(lead)).toBe(true)
+      expect(lead.session.ownEvents().filter(event => event.type === 'team/mode').map(event => event.data.enabled))
+        .toEqual([false, true])
+      await Promise.all([disabling, enabling])
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([admitted, queued, disabling, enabling])
+    }
+    await expect(queued).resolves.toMatchObject({ subject: 'second' })
+    expect(ctx.agentTeams.listTasks(lead).map(task => task.subject)).toEqual(['first', 'second'])
+  })
+
   it('rejects reads and mutations after a Team projection fails', async () => {
     const { ctx, lead } = await setup([])
     lead.session.append('team/task', {

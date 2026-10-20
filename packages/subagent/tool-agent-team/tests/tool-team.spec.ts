@@ -718,6 +718,54 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
   })
 
+  it('finishes a dispatched task tool after disabling removes its registration', async () => {
+    const { ctx, lead } = await setup([])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const flush = ctx.sessions.flush.bind(ctx.sessions)
+    vi.spyOn(ctx.sessions, 'flush').mockImplementationOnce(async (session) => {
+      entered.resolve(undefined)
+      await release.promise
+      return await flush(session)
+    })
+    const creating = execute(ctx, lead, 'team_task_create', { subject: 'started', description: 'finishes after off' })
+    await entered.promise
+    const disabling = ctx.agentTeams.setEnabled(lead, false)
+    try {
+      expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
+      await disabling
+      const built = await assembly(ctx, lead)
+      expect(teamTools(built)).toEqual([])
+      expect(renderPrompt(built)).not.toContain('A shared task board is available')
+      expect(built.contexts.some(context => context.name === 'team:identity')).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([creating, disabling])
+    }
+    const result = await creating
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'started' })
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(ctx.agentTeams.listTasks(lead)).toEqual([expect.objectContaining({ subject: 'started' })])
+  })
+
+  it('retries failed tool installation without appending another selection', async () => {
+    const { ctx, lead } = await setup([], false)
+    const removeCollision = lead.ctx.tools.register(defineContentToolFixture({
+      name: 'team_task_create',
+      description: 'intentional collision',
+      parameters: {},
+      async execute() { return [{ type: 'text', text: 'collision' }] },
+    }))
+    await expect(ctx.agentTeams.setEnabled(lead, true)).rejects.toBeInstanceOf(AggregateError)
+    expect(ctx.agentTeams.isEnabled(lead)).toBe(true)
+    expect((await assembly(ctx, lead)).contexts.some(context => context.name === 'team:identity')).toBe(false)
+    removeCollision()
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+  })
+
   it('installs Team scope before a cold-resumed teammate request', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
     const childId = await spawn(ctx, lead, 'cold-worker', 'finish once')

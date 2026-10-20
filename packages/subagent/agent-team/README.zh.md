@@ -27,6 +27,8 @@ kind: "package-reference"
 
 新 Session 默认关闭 Team 模式。参见[会话模式升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)。在模型与推理等级菜单中打开**使用智能体团队**，或在根 Session 执行 `/team on`。`/team off` 移除整棵树的 Team 工具和提示词，同时保留任务与子代理。选择重启后仍有效；没有保存选择的历史任务板保持开启。部署可设置 `enabledByDefault: true`，为未保存选择且没有历史任务的 Session 指定初始模式。
 
+模式切换无需等待排队中的任务修改即可生效。每项修改在开始时检查当前模式：已经进入执行的操作继续完成，仍在排队的操作若开始时 Team 仍关闭则被拒绝。重新开启允许后续操作继续。同步或保存失败时，已经追加的选择仍然有效；重试同一选择会重新同步工具并保存，不重复记录模式。
+
 当 subagent 需要持久化共享任务归属和依赖关系时，添加此包。与 `@deepseek-ai/dsh-tool-agent-team` 一起挂载可提供模型工具。
 
 ### 何时选择

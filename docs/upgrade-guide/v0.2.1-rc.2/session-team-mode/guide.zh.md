@@ -11,7 +11,7 @@ description: "Agent Teams 在新 Session 中默认关闭，并使用按 Session 
 
 Agent Teams 随基于 base 的 profile 提供；新 Session 默认关闭。插件页不再提供独立的智能体团队开关。根 Session 的选择控制整棵子代理树中的任务工具和 Team 提示词。模型与推理等级菜单提供**使用智能体团队**开关，开启后通过 Subagent 页头入口，在同一面板中查看上方成员与下方共享任务。
 
-关闭 Team 保留任务和子代理。选择在重启后仍有效。没有保存选择的历史任务板保持开启。必读事件 `team/mode` 记录选择；旧读取器会拒绝该未知事件。参见[持久化变更确认](../../../persistence-changes/2026-10-19-session-team-mode.zh.md)。
+关闭 Team 保留任务和子代理。已经进入执行的任务操作继续完成；排队中的操作在开始时检查当前模式。选择在重启后仍有效。没有保存选择的历史任务板保持开启。必读事件 `team/mode` 记录选择；旧读取器会拒绝该未知事件。参见[持久化变更确认](../../../persistence-changes/2026-10-19-session-team-mode.zh.md)。
 
 ## 迁移
 

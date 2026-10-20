@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 Agent Teams ships with base-backed profiles; new Sessions default to off. The Plugins page has no separate Agent Teams switch. The root Session’s selection controls task tools and Team guidance throughout its subagent tree. The model and reasoning menu offers **Use Agent Teams**, and the Subagent header control opens members above shared tasks in one panel while enabled.
 
-Disabling Team retains tasks and subagents. The selection survives restart. A historical task board without a saved selection remains enabled. The required `team/mode` event records selections; older readers reject this unfamiliar event. See the [persistence acknowledgement](../../../persistence-changes/2026-10-19-session-team-mode.md).
+Disabling Team retains tasks and subagents. Admitted task operations finish; queued operations check the current mode when they start. The selection survives restart. A historical task board without a saved selection remains enabled. The required `team/mode` event records selections; older readers reject this unfamiliar event. See the [persistence acknowledgement](../../../persistence-changes/2026-10-19-session-team-mode.md).
 
 ## Migration
 

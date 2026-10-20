@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 New Sessions default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the model and reasoning menu, or run `/team on` in the root Session. `/team off` removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled. Deployments may set `enabledByDefault: true` for Sessions without a saved selection or historical tasks.
 
+Mode changes take effect without waiting for queued task mutations. Each mutation checks the current mode when it starts: an admitted operation finishes, while queued work is rejected if Team is still off when it starts. Enabling again permits subsequent operations. A failed synchronization or save leaves an appended selection active; retrying the same selection synchronizes tools and saves without another mode record.
+
 Add this package when subagents need durable shared task ownership and dependencies. Mount it with `@deepseek-ai/dsh-tool-agent-team` for model tools.
 
 ### When to choose it
