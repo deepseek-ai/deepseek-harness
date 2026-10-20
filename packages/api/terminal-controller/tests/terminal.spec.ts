@@ -7,7 +7,7 @@ import { inputChannel } from './input.ts'
 import { TerminalFollower } from '../src/stream.ts'
 import type { TerminalInput, TerminalFrame, WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
-const info: WebTerminalInfo = { id: 'terminal-test' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null }
+const info: WebTerminalInfo = { id: 'terminal-test' as WebTerminalId, title: 'bash', shell: { path: '/bin/bash', name: 'bash', args: ['-i'] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null, origin: 'user', control: 'user' }
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(close => close())) })
 

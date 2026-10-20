@@ -40,6 +40,15 @@ export interface TerminalEnvironment {
   readonly scrollback: number
 }
 
+/** The party that created a terminal or controls its input. */
+export type TerminalParty = 'user' | 'agent'
+
+/**
+ * Sandbox mode of an agent terminal. Kept member-identical to `SandboxMode` in
+ * `@deepseek-ai/dsh-sandbox` without a wire dependency on it; change both together.
+ */
+export type TerminalSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+
 /** Host-owned terminal state; process exit never creates a replacement shell. */
 export interface WebTerminalInfo {
   readonly id: WebTerminalId
@@ -52,6 +61,12 @@ export interface WebTerminalInfo {
   readonly state: 'running' | 'exited' | 'failed'
   readonly exitCode: number | null
   readonly error?: string
+  /** Party that created the terminal. */
+  readonly origin: TerminalParty
+  /** Input owner; an agent terminal passes to the user on the user's first typed input and never returns. */
+  readonly control: TerminalParty
+  /** Sandbox mode an agent terminal started under; user terminals run with system-user permissions and omit it. */
+  readonly sandboxMode?: TerminalSandboxMode
 }
 
 /** Create is idempotent for an open identity; closed identities cannot be recreated. */
@@ -63,9 +78,12 @@ export interface TerminalCreateRequest {
   readonly rows: number
 }
 
-/** Commands are numbered consecutively from one within each attachment; acknowledgements never authorize replay. */
+/**
+ * Commands are numbered consecutively from one within each attachment; acknowledgements never authorize replay.
+ * `typed` marks keyboard, paste, IME or pointer input from the person, as opposed to terminal-protocol replies.
+ */
 export type TerminalInput =
-  | { readonly type: 'write'; readonly sequence: number; readonly data: string }
+  | { readonly type: 'write'; readonly sequence: number; readonly data: string; readonly typed?: boolean }
   | { readonly type: 'resize'; readonly sequence: number; readonly cols: number; readonly rows: number }
 
 /**

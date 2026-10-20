@@ -326,6 +326,7 @@ export class TerminalController extends TypertRemoteService {
     const info: WebTerminalInfo = {
       id: request.id, shell, title: shell.name, cwd,
       cols: request.cols, rows: request.rows, state: 'running', exitCode: null,
+      origin: 'user', control: 'user',
     }
     try {
       signal.throwIfAborted()

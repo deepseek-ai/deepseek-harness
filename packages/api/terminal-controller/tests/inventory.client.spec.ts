@@ -4,7 +4,7 @@ import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol
 import { TerminalInventory } from '../src/client/inventory.ts'
 import type { WebTerminalId, WebTerminalInfo } from '../src/types.ts'
 
-const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, title: 'bash', shell: { name: 'bash', path: '/bin/bash', args: [] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null }
+const info: WebTerminalInfo = { id: 'terminal' as WebTerminalId, title: 'bash', shell: { name: 'bash', path: '/bin/bash', args: [] }, cwd: '/workspace', cols: 80, rows: 24, state: 'running', exitCode: null, origin: 'user', control: 'user' }
 const success = (value: WebTerminalInfo[]): RemoteResult<WebTerminalInfo[]> => ({ ok: true, value })
 
 it('retains an empty list and a discovery failure until an explicit shared retry', async () => {
