@@ -342,19 +342,27 @@ it.each(titleSurfaces)('shows saved and attached terminal names in the $name', (
   expect(title.container.querySelector('svg rect')).toBeNull()
 })
 
-it.each(titleSurfaces)('badges agent-controlled terminals and their sandbox in the $name until the person takes over', (surface) => {
+it.each(titleSurfaces)('badges agent control in the $name and, after takeover, a confined sandbox', (surface) => {
   const agentInfo = { ...info, origin: 'agent' as const, control: 'agent' as const, sandboxMode: 'workspace-write' as const }
   const h = mount({ ...idle, info: agentInfo })
   const chip = () => surface.wrap(<TerminalTitle {...h.props} />)
   const title = render(chip())
-  expect(title.container.textContent).toBe(`bash${en['badge.agent']}${en['badge.workspaceWrite']}`)
-  expect(title.getByText(en['badge.agent']).closest('[title]')?.getAttribute('title')).toBe(en['badge.agentHint'])
+  const hint = (text: string) => title.getByText(text).closest('[title]')?.getAttribute('title')
+  expect(title.container.textContent).toBe(`${en['badge.agent']}bash`)
+  expect(hint(en['badge.agent'])).toBe(`${en['badge.agentHint']} ${en['badge.workspaceWriteHint']}`)
+  h.update({ ...idle, info: { ...agentInfo, control: 'user' } })
+  title.rerender(chip())
+  expect(title.container.textContent).toBe(`${en['badge.sandbox']}bash`)
+  expect(hint(en['badge.sandbox'])).toBe(en['badge.workspaceWriteHint'])
   h.update({ ...idle, info: { ...agentInfo, control: 'user', sandboxMode: 'read-only' } })
   title.rerender(chip())
-  expect(title.container.textContent).toBe(`bash${en['badge.readOnly']}`)
+  expect(hint(en['badge.sandbox'])).toBe(en['badge.readOnlyHint'])
   h.update({ ...idle, info: { ...agentInfo, sandboxMode: 'danger-full-access' } })
   title.rerender(chip())
-  expect(title.container.textContent).toBe(`bash${en['badge.agent']}`)
+  expect(hint(en['badge.agent'])).toBe(en['badge.agentHint'])
+  h.update({ ...idle, info: { ...agentInfo, control: 'user', sandboxMode: 'danger-full-access' } })
+  title.rerender(chip())
+  expect(title.container.textContent).toBe('bash')
 })
 
 it.each(titleSurfaces)('renames from the $name pointer target, preserving dragging and isolating editor shortcuts', (surface) => {

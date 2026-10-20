@@ -17,6 +17,7 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
   const title = useTerminal(tab.id, state => state?.info?.title ?? state?.title) ?? tab.title
   const agentControl = useTerminal(tab.id, state => state?.info?.origin === 'agent' && state.info.control === 'agent')
   const sandboxMode = useTerminal(tab.id, state => state?.info?.origin === 'agent' ? state.info.sandboxMode : undefined)
+  const sandboxHint = sandboxMode === 'read-only' ? t('badge.readOnlyHint') : sandboxMode === 'workspace-write' ? t('badge.workspaceWriteHint') : undefined
   const [editing, setEditing] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const label = useRef<HTMLSpanElement>(null)
@@ -40,6 +41,13 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
   }, [editing])
   return <>
     <TerminalIcon />
+    {/* The badge precedes the name because the tab's close button covers the end of the title. One badge at a time:
+        Agent control first, then the sandbox of a taken-over terminal. */}
+    {agentControl
+      ? <span className={css.badge} title={sandboxHint === undefined ? t('badge.agentHint') : `${t('badge.agentHint')} ${sandboxHint}`}>
+        <Tag tone="info">{t('badge.agent')}</Tag>
+      </span>
+      : sandboxHint !== undefined && <span className={css.badge} title={sandboxHint}><Tag tone="neutral">{t('badge.sandbox')}</Tag></span>}
     {editing ? <input ref={input} className={css.name} defaultValue={title} maxLength={120} aria-label={t('rename')}
       onPointerDown={(event) => { event.stopPropagation() }}
       onClick={(event) => { event.stopPropagation() }}
@@ -59,9 +67,5 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
         } else if (event.key === 'Enter') event.currentTarget.blur()
       }} />
       : <span ref={label} className={css.title}>{title}</span>}
-    {agentControl && <span className={css.badge} title={t('badge.agentHint')}><Tag tone="info">{t('badge.agent')}</Tag></span>}
-    {(sandboxMode === 'read-only' || sandboxMode === 'workspace-write') && <span className={css.badge} title={t('badge.sandboxHint')}>
-      <Tag tone="neutral">{t(sandboxMode === 'read-only' ? 'badge.readOnly' : 'badge.workspaceWrite')}</Tag>
-    </span>}
   </>
 }
