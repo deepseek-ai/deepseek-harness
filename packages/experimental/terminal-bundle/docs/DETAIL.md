@@ -1,17 +1,19 @@
 ![A dev server keeps running in the agent's terminal; a later tool call reads its new output](preview.svg)
 
-This plugin gives the agent terminal tools that keep a persistent background and environment: processes keep running in the background, and the current directory, exported variables, and shell functions carry over between tool calls. The agent can start a dev server, a file watcher, a debugger, or a REPL, make other tool calls while it runs, and come back later to read new output or type more input.
+This plugin lets the agent open terminals in the sidebar beside the conversation. Each one is a real shell that you can watch: processes keep running between tool calls, and the current directory, exported variables and shell functions carry over. The agent can start a dev server, a file watcher, a debugger or a REPL, keep working while it runs, and come back later to read new output or type more input. The agent can also read terminals you opened yourself, for example when you ask about an error you just saw.
 
 ## How to use
 
 - Ask for work that keeps running, for example "start the dev server in a terminal and check its output after the edit".
-- Each terminal step appears in the conversation as a tool call: **Open terminal**, a terminal card with the text sent and its output, **Read terminal**, **Signal terminal**, **List terminals**, and **Close terminal**.
-- The terminals belong to the agent: you see them through these tool calls and cannot type into them yourself. The sidebar terminal is separate: it is your own shell, and the agent does not see it. Only the agent that opened a terminal can use it. macOS and Linux use Bash; Windows uses PowerShell.
+- The terminal opens as a sidebar tab with an **Agent** badge, expanding the sidebar if it is collapsed. Each step also appears in the conversation as a tool call.
+- To take a terminal over, type or paste into it. The **Agent** badge disappears, and from then on the agent can only read that terminal; it opens a new one for further commands.
+- Ask the agent to look at a terminal you opened, such as "check the error in my terminal". It reads the screen and never types into your own terminals.
 
 ## Good to know
 
-- A terminal starts in the session's current folder and runs under its access mode. While a terminal is open, you cannot switch to an access mode with different file access; have the agent close its terminals first.
-- Output the agent reads is added to the conversation and uses tokens; each result is capped at 256 KB by default.
-- Full-screen terminal programs are not supported.
+- An agent terminal starts in the session's current folder under the session's access mode; hover its badge to see the mode. Commands you type in it run under the same access mode, and after you take over, a restricted terminal keeps a **Sandbox** badge; open your own terminal for unrestricted commands. Changing the access mode later leaves open terminals as they are.
+- When a command asks for a password or a one-time code, type it yourself; the agent is told never to.
+- Screen text the agent reads, including your own terminals, is added to the conversation and sent to the model. To stop the agent reading your terminals, set `readUserTerminals: false` on the `optional-terminal-panel` row in your profile patch.
+- Only the main conversation's agent opens terminals; subagents cannot.
 - Terminals stop when DSH restarts or this plugin is turned off. Keep results that must last in files.
 - Turning this plugin on or off changes the tools of open sessions. Their next request cannot reuse the prompt cache, so it is slower and costs more once.

@@ -9455,12 +9455,12 @@ importers:
 
   packages/experimental/terminal-bundle:
     dependencies:
+      '@deepseek-ai/dsh-experimental-terminal-panel':
+        specifier: workspace:*
+        version: link:../terminal-panel
       '@deepseek-ai/dsh-terminal':
         specifier: workspace:*
         version: link:../../terminal/terminal
-      '@deepseek-ai/dsh-terminal-bash':
-        specifier: workspace:*
-        version: link:../../terminal/terminal-bash
       '@deepseek-ai/dsh-tool-terminal':
         specifier: workspace:*
         version: link:../tool-terminal

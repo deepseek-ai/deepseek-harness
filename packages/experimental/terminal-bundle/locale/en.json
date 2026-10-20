@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Persistent terminals",
-    "description": "Keep shell processes alive across tool calls.",
+    "description": "Let the agent run long-lived commands in terminals you can watch in the sidebar.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "持久终端",
-    "description": "让 shell 进程在多次工具调用之间保持运行。",
+    "description": "让智能体在侧栏中你能看到的终端里运行长时间命令。",
     "detail": "docs/DETAIL.zh.md"
   }
 }
