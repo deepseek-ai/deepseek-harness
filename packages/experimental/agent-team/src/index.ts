@@ -4,6 +4,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-session-persistence'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition } from './projection.ts'
@@ -41,7 +42,7 @@ function positiveLimit(name: string, value: number): number {
 
 /** Agent Teams service backed by the exact live Lead Session log. */
 export class TeamService extends Service {
-  static inject = ['agents', 'sessions', 'sessionProjections', 'subagents']
+  static inject = ['agents', 'sessions', 'sessionPersistence', 'sessionProjections', 'subagents']
 
   static Config: z<Config> = z.object({
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
