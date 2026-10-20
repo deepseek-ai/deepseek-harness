@@ -106,7 +106,7 @@ export function installPluginReference(ctx: ClientContext, t: Translate): void {
   const load = (): Promise<readonly BundleInfo[]> => {
     if (pending === undefined) {
       pending = (async () => {
-        const result = await ctx.remote.pluginManager.listBundles(undefined)
+        const result = await ctx.remote.pluginManager.listBundles({})
         if (!result.ok) throw new Error(`pluginManager.listBundles failed: ${result.error.code}: ${result.error.message}`)
         return result.value
       })()

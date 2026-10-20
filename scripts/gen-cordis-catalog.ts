@@ -353,6 +353,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   PluginUpdateProgress: 'boot.md',
   PluginUpdateResult: 'boot.md',
   PluginVersionList: 'boot.md',
+  ListBundlesOptions: 'boot.md',
   ListVersionsOptions: 'boot.md',
   UpdateBundleOptions: 'boot.md',
   PluginRegistries: 'boot.md',

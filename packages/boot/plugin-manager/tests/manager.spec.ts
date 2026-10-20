@@ -2555,9 +2555,10 @@ it('lists only the named bundles, each as the full listing reports it', async ()
   const { manager } = await fixture('startup')
   const all = await manager.listBundles()
   expect(all.map(bundle => bundle.name)).toEqual(expect.arrayContaining(['core', 'extra']))
-  expect(await manager.listBundles(['extra', 'not-listed', 'core'])).toEqual(all.filter(bundle => bundle.name === 'core' || bundle.name === 'extra'))
-  expect(await manager.listBundles(['not-listed'])).toEqual([])
-  expect(await manager.listBundles([])).toEqual([])
+  expect(await manager.listBundles({})).toEqual(all)
+  expect(await manager.listBundles({ names: ['extra', 'not-listed', 'core'] })).toEqual(all.filter(bundle => bundle.name === 'core' || bundle.name === 'extra'))
+  expect(await manager.listBundles({ names: ['not-listed'] })).toEqual([])
+  expect(await manager.listBundles({ names: [] })).toEqual([])
 })
 
 it('expands a cited installed bundle into model context before the step', async () => {
