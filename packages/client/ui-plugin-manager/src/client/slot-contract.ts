@@ -100,7 +100,7 @@ export interface PluginTabProps {
    */
   readonly install: (target: PluginTabInstall) => void
   /**
-   * Switch to the Installed tab and open a bundle's page.
+   * Switch to the Installed tab and open a bundle's page, whose back button returns to the calling tab.
    * @param packageName - npm package name of the bundle.
    */
   readonly openPackage: (packageName: string) => void
@@ -160,7 +160,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'plugins.detail.badge': { kind: 'list'; scope: 'root'; owner: PluginDetailProps }
     /**
-     * Sections under a detail page's own content: after the rows on a bundle's
+     * Sections under a detail page's own content: after the source on a bundle's
      * page, after the configuration on a row's or an official plugin's page.
      * An entry draws its own section chrome and renders null for a subject it
      * has nothing for.

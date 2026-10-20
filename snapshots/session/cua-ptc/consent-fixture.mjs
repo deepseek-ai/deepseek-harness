@@ -15,6 +15,6 @@ export async function apply(ctx) {
     try { await close() } finally { await unlink(helper) }
   })
   ctx.on('user-questions/request', async request => ({ answers: request.questions.map(question => ({
-    id: question.id, selected: ['Allow for this task'],
+    id: question.id, selected: ['Allow for this session'],
   })) }))
 }

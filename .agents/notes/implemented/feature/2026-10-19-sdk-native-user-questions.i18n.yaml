@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-19-sdk-native-user-questions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-19-sdk-native-user-questions.md
+/agent-note-sdk-native-user-questions:
+  en: b506991bd07d87dc
+  zh: 9f3e1ecb42163d72
+/agent-note-sdk-native-user-questions/problem:
+  en: b3dbcdb4b5bce2d1
+  zh: 60df882dc253fcf5
+/agent-note-sdk-native-user-questions/decision:
+  en: 0f7b71f0ef58f5f8
+  zh: 07bb12acad27d2fc
+/agent-note-sdk-native-user-questions/consequences:
+  en: 46e3a450c6dce54e
+  zh: 9f99efc6f8d2ab8d
+/agent-note-sdk-native-user-questions/alternatives-considered:
+  en: 9861066ae00e7bde
+  zh: 0dec00f4e3c692e0
+/agent-note-sdk-native-user-questions/verification:
+  en: c16fb364fe8ec13b
+  zh: fa23c162348ba682

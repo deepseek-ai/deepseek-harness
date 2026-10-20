@@ -4,6 +4,8 @@
  *
  * - `GET /__boot__` answers from tunnel glue, never from the host API surface,
  *   because the page needs the boot payload before its Cordis tree exists.
+ *   `GET /__assets__` answers the same way with every package asset of the
+ *   image, which the page maps before any Client bundle runs.
  * - Privileged `/api` methods take that same direct entry. The method set is not
  *   restated here: a 401 or 403 from the route lane is retried on the direct
  *   lane because the page owns the worker and needs no network authentication.
@@ -91,6 +93,8 @@ export interface TunnelSeams {
   readonly directFetch: (request: Request) => Promise<Response>
   /** Boot payload for `GET /__boot__`: the structured index injection table. */
   readonly bootPayload: () => unknown
+  /** Archive for `GET /__assets__`: every package asset of the image, named by its unencoded `plugins/<package>/assets/<path>`. */
+  readonly packageAssets: () => Uint8Array
   /** Open one decoded Gateway Remote stream without another network carrier; `uplink` carries the page's items. */
   readonly openStream: (
     endpoint: string,
@@ -421,6 +425,7 @@ export class TunnelServer {
     try {
       const { frame: routed, path } = this.pathFrame(frame)
       if (path === '/__boot__') {  this.serveBoot(frame, sink); return }
+      if (path === '/__assets__') {  this.servePackageAssets(frame, sink); return }
       if (path.startsWith(`${API_PREFIX}/`)) {  await this.serveApi(frame, routed, path, sink); return }
       this.dispatch(routed, sink)
     } catch (reason) {
@@ -489,6 +494,15 @@ export class TunnelServer {
       return
     }
     buffered.flushTo(sink)
+  }
+
+  private servePackageAssets(frame: TunnelRequestFrame, sink: ResponseSink): void {
+    if (this.seams === undefined) throw new Error('webworker tunnel: package assets requested before the host tree is serving')
+    if (frame.method !== 'GET') {
+      sink.end({ status: 405, headers: { allow: 'GET' } })
+      return
+    }
+    sink.end({ status: 200, headers: { 'content-type': 'application/x-tar', 'cache-control': 'no-store' }, body: this.seams.packageAssets() })
   }
 
   private serveBoot(frame: TunnelRequestFrame, sink: ResponseSink): void {

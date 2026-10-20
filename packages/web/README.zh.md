@@ -31,7 +31,7 @@ kind: "package-group"
 | [`web-search-perplexity/`](web-search-perplexity/README.zh.md) | 通过 Perplexity 搜索 web | 注册到 `ctx.web` |
 | [`web-search-deepseek/`](web-search-deepseek/README.zh.md) | 通过 DeepSeek Messages 搜索网页 | 注册到 `ctx.web` |
 | [`web-deepseek-api/`](web-deepseek-api/README.zh.md) | 通过 DeepSeek Search 与 Fetch API 搜索和抓取网页 | 注册到 `ctx.web` |
-| [`web-fetch-http/`](web-fetch-http/README.zh.md) | 匿名抓取公共 HTTP(S) 页面 | 注册到 `ctx.web` |
+| [`web-fetch-http/`](web-fetch-http/README.zh.md) | 匿名抓取 HTTP(S) 页面 | 注册到 `ctx.web` |
 | [`tool-web/`](tool-web/README.zh.md) | 向模型公开 `web_search` 与 `web_fetch` | 注册到 `ctx.tools` |
 
 -----
@@ -41,7 +41,7 @@ kind: "package-group"
 
 先从子系统参考文档了解共享词汇，再看单一提供方选择服务背后的设计决策。
 
-- [web 子系统](../../docs/subsystems/web.zh.md)——搜索与抓取的请求和结果、提供方可用性、`WebError` 与公开地址强制规则。
+- [web 子系统](../../docs/subsystems/web.zh.md)——搜索与抓取的请求和结果、提供方可用性、`WebError` 与抓取网络策略。
 - [web 能力 seam 决策](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)——搜索与抓取为何共用一项提供方选择服务。
 
 <a id="dev-note"></a>

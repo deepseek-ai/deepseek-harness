@@ -87,10 +87,10 @@ describe('session projection summary keys', () => {
     const { ctx, registry } = await mount()
     try {
       await registry.register(keptUnit())
-      await expect(registry.register({
+      await expect(Promise.resolve(registry.register({
         ...keptUnit(),
         wire: { ...keptUnit().wire, summary: false },
-      })).rejects.toThrow(/test\/summary-kept.*already registered with summary=true/)
+      }))).rejects.toThrow(/test\/summary-kept.*already registered with summary=true/)
     } finally {
       await ctx.fiber.dispose()
     }

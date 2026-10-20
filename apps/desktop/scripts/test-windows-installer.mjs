@@ -58,10 +58,12 @@ try {
     join(appRoot, 'scripts', 'prepare-windows-installer.ps1'), '-OutputDirectory', join(output, 'ui'), '-CompileProgressOnly'], childOptions)
   const progressTest = join(output, 'ui', 'progress-test.exe')
   const presentationTest = join(output, 'ui', 'presentation-test.exe')
+  const renderTest = join(output, 'ui', 'render-test.exe')
   const cleanupTest = join(output, 'ui', 'data-cleanup-test.exe')
   if (sign) {
     await sign({ path: progressTest, hash: 'sha256', isNest: false })
     await sign({ path: presentationTest, hash: 'sha256', isNest: false })
+    await sign({ path: renderTest, hash: 'sha256', isNest: false })
     await sign({ path: cleanupTest, hash: 'sha256', isNest: false })
     await sign({ path: join(output, 'ui', 'window-frame.dll'), hash: 'sha256', isNest: false })
     installWindowsNsisBootstrapSigner({ sign })
@@ -69,6 +71,23 @@ try {
   if (!uninstallOnly) {
     await execute(progressTest, [], childOptions)
     await execute(presentationTest, [], childOptions)
+    const renderResults = []
+    const themeSource = await readFile(join(appRoot, 'installer', 'theme.nsh'), 'utf8')
+    const captionColor = (name) => {
+      const match = themeSource.match(new RegExp(`^!define ${name} (0x[0-9A-Fa-f]{8})\\r?$`, 'm'))
+      if (!match) throw new Error(`Missing installer caption color: ${name}`)
+      return match[1]
+    }
+    for (const dpi of [96, 192]) {
+      for (const theme of ['light', 'dark']) {
+        const brand = theme === 'dark' ? 'brand-dark-2x.bmp' : 'brand-2x.bmp'
+        const prefix = theme === 'dark' ? 'INSTALLER_DARK_CONTROL' : 'INSTALLER_CONTROL'
+        const result = await execute(renderTest, [join(output, 'ui', brand), String(dpi), theme,
+          captionColor(`${prefix}_HOVER`), captionColor(`${prefix}_PRESSED`)], childOptions)
+        renderResults.push(result.stdout)
+      }
+    }
+    await writeFile(join(output, 'render-results.log'), renderResults.join(''))
   }
   await execute(cleanupTest, [join(output, 'ui', `cleanup-${id}`)], childOptions)
   const payloadSource = join(output, 'payload.nsi')

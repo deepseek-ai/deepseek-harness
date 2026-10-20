@@ -31,6 +31,7 @@ import {
   remoteErrorOf,
   type RemoteResult,
 } from '@deepseek-ai/dsh-typert-protocol'
+import AgentController from '@deepseek-ai/dsh-agent-controller'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import SessionController from '../src/index.ts'
 import type {
@@ -293,6 +294,7 @@ async function installControllers(
     } as never)
   }
   installSessionReadTestServices(ctx)
+  if (ctx.get('agentController') === undefined) new AgentController(ctx)
   if (ctx.get('remoteAccess') === undefined) new RemoteAccessService(ctx)
   const cwd = vi.spyOn(process, 'cwd').mockReturnValue(defaults.cwd)
   class TestController extends SessionController {

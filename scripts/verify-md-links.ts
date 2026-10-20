@@ -24,6 +24,8 @@ const PATTERNS = [
   'packages/*.md',
   'packages/*/*.md',
   'packages/*/*/*.md',
+  // Plugin detail documents that locale `meta.detail` names.
+  'packages/*/*/docs/*.md',
   'AGENTS.md',
   '.agents/skills/**/*.md',
 ]

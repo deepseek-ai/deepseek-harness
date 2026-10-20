@@ -18,6 +18,8 @@ export interface DshPackageManifest {
   private?: boolean
   /** Packages installed alongside this package. */
   dependencies?: Record<string, string>
+  /** Packages that may be absent when installation or platform checks skip them. */
+  optionalDependencies?: Record<string, string>
   /** Compatible versions of packages supplied by the consuming project. */
   peerDependencies?: Record<string, string>
   /** Runtime requirements; DSH compatibility is declarative until a reader enforces it. */

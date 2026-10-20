@@ -291,6 +291,14 @@
   margin-top: 16px;
 }
 
+.detailDocument {
+  margin-top: 16px;
+}
+
+.detailDocument:empty {
+  display: none;
+}
+
 .sectionTitle {
   margin: 0;
   font-size: 14px;

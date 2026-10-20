@@ -98,6 +98,21 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
+  it.each([false, true])('keeps Team unavailable without storage (flush observer: %s)', async (hasFlushObserver) => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    await ctx.plugin(SubagentService)
+    if (hasFlushObserver) ctx.on('session/flush', () => undefined)
+    const session = ctx.sessions.create()
+    expect(await ctx.sessions.flush(session)).toBe(hasFlushObserver)
+
+    await ctx.plugin(TeamService)
+
+    expect(ctx.get('sessionPersistence')).toBeUndefined()
+    expect(ctx.get('agentTeams') === undefined).toBe(true)
+  })
+
   it('rejects reads and mutations after a Team projection fails', async () => {
     const { ctx, lead } = await setup([])
     lead.session.append('team/task', {
@@ -684,6 +699,24 @@ describe('Task-board wait notifications', () => {
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
+    expect(notified).toEqual([])
+  })
+
+  it('reports unconfirmed task revisions without notifications when no flush listener participates', async () => {
+    const { ctx, lead } = await setup([])
+    const notified: Agent[] = []
+    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
+    vi.spyOn(ctx.sessions, 'flush').mockResolvedValue(false)
+
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'unconfirmed', description: 'read before retrying' }))
+      .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
+    const taskId = TeamTaskId('task-1')
+    expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ subject: 'unconfirmed', revision: 1 })
+    expect(notified).toEqual([])
+
+    await expect(ctx.agentTeams.updateTask(lead, { taskId, expectedRevision: 1, action: 'claim' }))
+      .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
+    expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ revision: 2, ownerId: lead.id })
     expect(notified).toEqual([])
   })
 

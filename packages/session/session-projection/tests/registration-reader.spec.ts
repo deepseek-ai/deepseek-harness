@@ -83,7 +83,7 @@ describe('retained projection readers', () => {
   it('rejects initialization when the owner unloads before the handle is returned', async () => {
     const { ctx, owner, session } = await setup()
     const registration = owner.ctx.sessionProjections.register(definition)
-    const rejected = expect(registration).rejects.toThrow()
+    const rejected = expect(Promise.resolve(registration)).rejects.toThrow()
     await owner.dispose()
     await rejected
     expect(ctx.sessionProjections.checkpoint(session)).toEqual({})

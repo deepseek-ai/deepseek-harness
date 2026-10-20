@@ -26,6 +26,8 @@ interface ProjectionHandle<S> {
 }
 ```
 
+The [compatibility rules](../../packages/session/session-projection/README.md#deprecated-plugin-compatibility) define legacy disposal, keyed reads, and their once-per-key deprecation warnings.
+
 ## The unit
 
 `ProjectionDefinition<K, S>` carries each unit's host state type locally; registration infers `S` from `stateSchema` and returns `ProjectionHandle<S>`. Only client-visible keys merge into `SessionProjectionMap`, which types their whole values. A `wire` block makes a unit client-visible, and rendering belongs to the slot system, never this layer:
@@ -314,7 +316,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
  * Retained handles remain readable after release.
  * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns a ready handle with synchronous state reads and the effect disposer.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
 register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
 
@@ -323,7 +325,7 @@ register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDe
  * and always checkpointed like every other unit.
  * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns a ready handle with synchronous state reads and the effect disposer.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
 register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>
 

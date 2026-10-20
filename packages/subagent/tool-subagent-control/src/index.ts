@@ -9,6 +9,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-subagent'
@@ -19,12 +20,25 @@ import { registerWaitAgent } from './wait-agent.ts'
 export const name = 'tool-subagent-control'
 export const inject = ['tools', 'subagents', 'agents']
 
+/** Optional subagent control tools. */
+export interface Config {
+  /** Register `interrupt_agent` and its discovery guidance. Defaults to true; false leaves the service API available. */
+  interrupt?: boolean
+}
+
+/** Loader schema for optional subagent control tools. */
+export const Config: z<Config> = z.object({
+  interrupt: z.boolean().default(true),
+})
+
 /**
  * Register the shared subagent control and discovery tools.
  * @param ctx - context carrying tools, subagents, and live Agents.
+ * @param config - optional tool registration settings.
  */
-export function apply(ctx: Context): void {
-  registerListAgents(ctx)
+export function apply(ctx: Context, config: Config = {}): void {
+  const interrupt = config.interrupt !== false
+  registerListAgents(ctx, interrupt)
   registerWaitAgent(ctx)
   ctx.tools.register(markAdjacentAgentSendMessageTool(defineTool({
     name: 'send_message',
@@ -72,6 +86,7 @@ export function apply(ctx: Context): void {
     },
   })))
 
+  if (!interrupt) return
   ctx.tools.register(defineTool({
     name: 'interrupt_agent',
     description:

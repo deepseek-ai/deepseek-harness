@@ -20,7 +20,7 @@ The install dialog put a spec straight into `pnpm add` and showed pnpm's termina
 
 **Cancellation is the manager's, not the signal's.** The dialog generates a request id for each run; the Host streams the run's output and phases under it, and `cancelInstall` answers only after pnpm exited and the files are back. The dialog waits for that answer before offering the spec again; an aborted RPC or a lost connection is not a confirmation. Only the check takes a trailing `AbortSignal`: going back or closing drops a registry lookup, whose settlement nothing waits for.
 
-**Enabling comes after the fact.** The run installs with `enabled: false`; the finished screen offers **Enable now** for the bundle it added, and the dialog closes and the list scrolls to it. Nothing is enabled before the person has seen what was installed.
+**Enabling comes after the fact.** The run installs with `enabled: false`; the finished screen offers **Enable now** for the bundle it added; the dialog closes, and the list scrolls to it when its card is on the current page. Nothing is enabled before the person has seen what was installed.
 
 **Outcomes of the moment are toasts.** A change that waits for the next start, one a higher layer overrides, a cancelled run, and a refused action each toast and retire; nothing stays on the page.
 

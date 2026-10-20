@@ -72,10 +72,12 @@
 
 .toolbar {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 8px 16px;
+  min-width: 0;
   white-space: nowrap;
 }
 
@@ -465,7 +467,7 @@
    and the outline hover rebinds to a red wash instead of the gray one. */
 .danger {
   color: var(--dsw-alias-state-error-primary);
-  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 30%, transparent);
+  --dsh-button-outline-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 30%, transparent);
   --dsw-alias-interactive-bg-hover: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
 }
 
@@ -1307,17 +1309,6 @@ label.registryOption {
   margin-top: 12px;
 }
 
-.packagePreview {
-  display: block;
-  align-self: flex-start;
-  max-width: 100%;
-  max-height: 320px;
-  margin-top: 24px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: var(--dsw-radius-lg);
-  object-fit: contain;
-}
-
 .detailSections {
   display: flex;
   flex-direction: column;
@@ -1541,4 +1532,413 @@ label.registryOption {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* The list toolbar's sentence about the last update check. */
+.updatesNote {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.updatesNote[data-tone='info'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.updatesNote[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* A bundle's Versions section: one summary row that unfolds into the newer versions or the registries asked. */
+.versionPanel {
+  container-type: inline-size;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill);
+}
+
+.versionSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.versionSummary {
+  cursor: pointer;
+}
+
+button.versionSummary:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.versionSummary[aria-expanded='true'] {
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+button.versionSummary:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.versionSummary[aria-expanded='true'] .detailsChevron,
+.versionSummaryEnd [aria-expanded='true'] .detailsChevron {
+  transform: rotate(180deg);
+}
+
+.versionGlyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  corner-shape: round;
+}
+
+.versionGlyph[data-tone='info'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.versionGlyph[data-tone='success'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.versionGlyph[data-tone='warn'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.versionGlyph[data-tone='error'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.versionSummaryText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.versionSummaryTitle {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.versionSummarySub {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.versionSummaryEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.versionBody {
+  padding: 0 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.versionRows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.versionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content 56px;
+  align-items: center;
+  gap: 16px;
+  min-height: 28px;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.versionRow:last-child {
+  border-bottom: 0;
+}
+
+.versionMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.versionTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.versionNumber {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.versionRow[data-blocked] .versionNumber,
+.versionNumber[data-old] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.versionNote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.versionNote[data-tone='warn'] {
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warn-primary));
+}
+
+.versionDate {
+  flex: none;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.versionAction {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  min-width: 56px;
+}
+
+.versionLog {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.versionMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.versionFact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.versionFact dt {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.versionFact dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.versionHint {
+  display: inline-flex;
+  border-radius: 999px;
+  corner-shape: round;
+}
+
+.versionHint:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.versionSpacer {
+  flex: 1;
+}
+
+/* The update dialog: the versions it moves between, then the Host's steps and the outcome. */
+.updateDialog {
+  width: min(460px, 100%);
+}
+
+.updateBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.updateVersions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 16px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.updateVersions .versionNumber {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.updateVersions .versionNumber[data-old] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.updateText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.updateOutcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.updateOutput {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-family: var(--ds-font-family-code);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.updateSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  list-style: none;
+}
+
+.updateStep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.updateStep > :last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.updateStepDot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--dsw-alias-label-secondary);
+  corner-shape: round;
+}
+
+.updateStep[data-state='done'] .updateStepDot {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.updateStep[data-state='failed'] .updateStepDot {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.updateStep[data-state='unknown'] .updateStepDot {
+  border: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+@container (max-width: 460px) {
+  .versionRow {
+    grid-template-columns: minmax(0, 1fr) 56px;
+    gap: 4px 12px;
+  }
+
+  .versionMain {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .versionDate {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .versionAction {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .versionMeta {
+    gap: 8px 16px;
+  }
+
+  .versionMeta > label {
+    flex-basis: 100%;
+  }
+
+  .versionSpacer {
+    display: none;
+  }
 }

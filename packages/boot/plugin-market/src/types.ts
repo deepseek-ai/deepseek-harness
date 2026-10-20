@@ -1,7 +1,9 @@
 /** JSON-safe records and events of the plugin market Remote namespace. */
 import type { MarketIndexMetadata, MarketInstallTarget, MarketPlugin, MarketVersion } from '@deepseek-ai/dsh-plugin-market-index'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-typert-protocol'
+import type { DetailFailureReason } from '@deepseek-ai/dsh-plugin-detail/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -17,6 +19,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'plugin-market/invalid-query': { readonly field: string; readonly reason: string }
     /** Index sources cannot be saved without the settings service and this service's profile entry. */
     'plugin-market/settings-unavailable': Record<string, never>
+    /** The index lists no such plugin or version. */
+    'plugin-market/unknown-plugin': { readonly name: string; readonly version: string }
+    /**
+     * A detail document exists but cannot be read: `too-large` beyond a size limit, `network` when a source cannot be
+     * reached, `denied` when Git refuses the repository with the user's credentials, `git-unavailable` when the
+     * repository must be cloned and Git cannot run, `invalid` for a malformed locale file or `meta.detail`, or a named
+     * file that does not exist.
+     */
+    'plugin-market/detail-unavailable': { readonly reason: DetailFailureReason }
   }
 }
 
@@ -126,6 +137,27 @@ export interface MarketSearchResult {
   /** `offset` of the next page, or null after the last. */
   readonly nextOffset: number | null
 }
+
+/** Opaque id of a read detail document; image requests name it to read files beside the document. */
+export type PluginDetailDocumentId = Branded<'PluginDetailDocumentId'>
+
+/**
+ * Where a detail document comes from: `locale` for the file `meta.detail` names, `readme` for the package's README, and
+ * `repository` for the README of the directory the package's `repository` names.
+ */
+export type PluginDetailOrigin = 'locale' | 'readme' | 'repository'
+
+/** A plugin's long description, or `none` when no source provides one. */
+export type PluginDetail =
+  | {
+    readonly status: 'found'
+    readonly origin: PluginDetailOrigin
+    /** Markdown text, decoded as UTF-8. */
+    readonly markdown: string
+    /** Relative image paths of the document resolve beside it through `GET /api/plugin-market/detail-file`. */
+    readonly document: PluginDetailDocumentId
+  }
+  | { readonly status: 'none' }
 
 declare module '@deepseek-ai/cordis' {
   interface Events {

@@ -41,7 +41,7 @@ kind: "package-reference"
 
 `proxyRouteFor` 给出的不只是答案，还有该答案所假定的传输：走代理的那一支携带着此刻正按该策略路由的 dispatcher。若调用方先读策略、再自建传输，卸载就可能落在两次读取之间，把请求发往其分支从未放行的去处。
 
-构造 `new Agent(...)` 再作为 `dispatcher` 传入会覆盖全局 dispatcher，从而静默绕开代理。`verify-no-bare-dispatcher` 会在本包之外拒绝该写法。有一处调用点确实自有传输——`web-fetch-http` 会把请求钉在它已校验过的地址上，而这是进程级 dispatcher 无法承载的单次请求状态——它在该行用 `proxy-exempt:` 注释说明。
+构造 `new Agent(...)` 再作为 `dispatcher` 传入会覆盖全局 dispatcher，从而静默绕开代理。`verify-no-bare-dispatcher` 会在本包之外拒绝该写法。确实自有传输的调用点（因为它携带进程级 dispatcher 无法承载的单次请求状态）要在该行用 `proxy-exempt:` 注释说明。
 
 该门禁看不进 SDK 内部，因此每个出网点都配有 `egress.spec.ts`，通过假代理驱动实际传输并检查观察到的路由。每个新的出网点必须包含该传输测试。遥测断言其直连例外。这些测试可发现调用点不变但依赖变更改变路由的情况。
 

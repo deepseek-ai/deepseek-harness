@@ -64,10 +64,11 @@
 
 /* The flow slot's display:contents anchor preserves layout but not selector ancestry.
    `hidden="until-found"` retains a searchable zero-height box; hidden and empty
-   Seats do not contribute spacing. */
+   Seats do not contribute spacing. The older-history control precedes the anchor;
+   an ancestor :has() here also invalidates the history on unrelated descendant edits. */
 :is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
   ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
-.column:has(> .older) > :global([data-slot="conversation.chat.flow"])
+.column > .older + :global([data-slot="conversation.chat.flow"])
   > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
   margin-top: var(--dsh-chat-flow-gap, 6px);
 }
@@ -326,7 +327,7 @@
     .runningWhaleAnimated {
       display: block;
       background: currentColor;
-      mask: url('./running-whale@2x.png') center / 100% 100% no-repeat;
+      mask: url('../assets/running-whale@2x.png') center / 100% 100% no-repeat;
       mask-mode: alpha;
       /* Keep animated-mask repaints on an icon-sized composited layer. */
       will-change: transform;

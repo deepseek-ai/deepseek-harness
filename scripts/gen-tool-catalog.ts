@@ -15,6 +15,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
 import GoalService from '@deepseek-ai/dsh-goal'
@@ -115,6 +116,20 @@ class CatalogWorkflowEngine extends WorkflowEngine {
   start(_request: WorkflowStartRequest): WorkflowRun {
     throw new Error('gen-tool-catalog: workflow execution is unavailable during schema harvest')
   }
+}
+
+/** Schema collection needs the persistence service but must never access stored Sessions. */
+class CatalogSessionPersistence extends SessionPersistence {
+  create = unavailableCatalogPersistence
+  open = unavailableCatalogPersistence
+  flush = unavailableCatalogPersistence
+  stat = unavailableCatalogPersistence
+  list = unavailableCatalogPersistence
+}
+
+/** Storage operations are unreachable during schema collection. */
+function unavailableCatalogPersistence(): never {
+  throw new Error('gen-tool-catalog: persistence access is unavailable during schema harvest')
 }
 
 /**
@@ -597,6 +612,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SubagentRuntime)
+      await ctx.plugin(CatalogSessionPersistence)
       await ctx.plugin(TeamService)
       const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
       let agent!: Agent

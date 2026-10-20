@@ -14,7 +14,7 @@ $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudi
 if (-not $visualStudio) { throw 'Visual Studio C++ Build Tools are missing.' }
 $vcvars = Join-Path $visualStudio 'VC/Auxiliary/Build/vcvars32.bat'
 $compileScript = Join-Path $output 'compile-frame.cmd'
-$compileLines = @('@echo off', ('call "{0}" >nul' -f $vcvars), 'if errorlevel 1 exit /b %errorlevel%', ('cl /nologo /LD /MT /O1 /W4 /WX /EHsc "{0}" /Fo"{1}" /link /OUT:"{2}" /IMPLIB:"{3}" user32.lib comctl32.lib dwmapi.lib gdiplus.lib ole32.lib shell32.lib uuid.lib advapi32.lib' -f $source, (Join-Path $output 'window-frame.obj'), $library, (Join-Path $output 'window-frame.lib')))
+$compileLines = @('@echo off', ('call "{0}" >nul' -f $vcvars), 'if errorlevel 1 exit /b %errorlevel%', ('cl /nologo /LD /MT /O1 /W4 /WX /EHsc "{0}" /Fo"{1}" /link /OUT:"{2}" /IMPLIB:"{3}" user32.lib gdi32.lib comctl32.lib dwmapi.lib gdiplus.lib ole32.lib shell32.lib uuid.lib advapi32.lib' -f $source, (Join-Path $output 'window-frame.obj'), $library, (Join-Path $output 'window-frame.lib')))
 [IO.File]::WriteAllLines($compileScript, $compileLines, [Text.Encoding]::Default)
 & $env:ComSpec /d /c $compileScript
 if ($LASTEXITCODE -ne 0) { throw 'Native installer helper compilation failed.' }
@@ -50,6 +50,12 @@ if ($TestProgress -or $CompileProgressOnly) {
         & $presentationExecutable
         if ($LASTEXITCODE -ne 0) { throw 'Installer presentation regression failed.' }
     }
+    $renderSource = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../tests/windows-installer-render.cpp'))
+    $renderExecutable = Join-Path $output 'render-test.exe'
+    $renderScript = Join-Path $output 'compile-render-test.cmd'
+    [IO.File]::WriteAllLines($renderScript, @('@echo off', ('call "{0}" >nul' -f $vcvars), 'if errorlevel 1 exit /b %errorlevel%', ('cl /nologo /MT /W4 /WX /EHsc "{0}" /Fo"{1}" /Fe"{2}" /link "{3}" user32.lib gdi32.lib' -f $renderSource, (Join-Path $output 'render-test.obj'), $renderExecutable, (Join-Path $output 'window-frame.lib'))), [Text.Encoding]::Default)
+    & $env:ComSpec /d /c $renderScript
+    if ($LASTEXITCODE -ne 0) { throw 'Installer render test compilation failed.' }
     $reportSource = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../tests/windows-installer-extract-report.cpp'))
     $reportExecutable = Join-Path $output 'extract-report-test.exe'
     $reportScript = Join-Path $output 'compile-extract-report-test.cmd'

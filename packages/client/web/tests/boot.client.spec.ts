@@ -13,7 +13,7 @@ const PROVIDER_CLIENT_ID = 'provider/client'
 const RUNTIME_CLIENT_ID = 'runtime/client'
 const win = globalThis as DshWindow
 const transportGlobal = globalThis as {
-  __DSH_TRANSPORT__?: { loadBundle(url: string): Promise<void> }
+  __DSH_TRANSPORT__?: { loadBundle(url: string): Promise<void>; resolveAsset?(reference: string): string }
 }
 const moduleFace = modulesClient as Record<string, unknown>
 
@@ -166,12 +166,14 @@ describe('plugin activation', () => {
         factory: require => ({
           apply: () => {
             expect((require(RUNTIME_CLIENT_ID) as { marker: string }).marker).toBe('provider')
+            // The transport's asset resolver reaches every bundle factory.
+            expect((require(PROVIDER_CLIENT_ID) as { asset: string }).asset).toBe('blob:plugins/provider/assets/a.svg')
           },
         }),
       },
       {
         id: 'provider',
-        factory: () => ({ apply: () => {}, marker: 'provider' }),
+        factory: require => ({ apply: () => {}, marker: 'provider', asset: require.asset('plugins/provider/assets/a.svg') }),
       },
       {
         id: 'runtime',
@@ -190,6 +192,7 @@ describe('plugin activation', () => {
       },
     ]
     transportGlobal.__DSH_TRANSPORT__ = {
+      resolveAsset: reference => `blob:${reference}`,
       loadBundle: async (url) => {
         loaded.push(url)
         if (url !== applicationUrl) throw new Error(`missing fixture batch ${url}`)

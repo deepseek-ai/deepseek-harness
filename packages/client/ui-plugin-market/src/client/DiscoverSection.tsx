@@ -11,6 +11,7 @@ import type { DiscoverFace, DiscoverState, ListingFailure, ListingState, SourceF
 import {
   displayDeclarations, indexLabel, presentedVersion, sourceFacts, withText, type DiscoverQuery, type DisplayDeclaration, type SourceFact,
 } from './presentation.ts'
+import { PluginDetailSection } from './PluginDetailSection.tsx'
 import css from './DiscoverSection.module.css'
 
 /** Props of the Discover tab. */
@@ -183,11 +184,13 @@ function VersionRow({ entry, version, title, t, language, onInstall }: {
   )
 }
 
-function EntryDetail({ entry, listing, t, face, language, onBack, onInstall, onOpenInstalled }: {
+function EntryDetail({ entry, listing, t, face, hooks, language, onBack, onInstall, onOpenInstalled }: {
   readonly entry: MarketListingEntry
   readonly listing: MarketSearchResult
   readonly t: Translate
   readonly face: DiscoverActions
+  /** The detail section's bound hooks. */
+  readonly hooks: Pick<DiscoverSectionProps, 'useDetails' | 'useLocale'>
   readonly language: string
   readonly onBack: () => void
   readonly onInstall: (version: MarketListingVersion) => void
@@ -229,6 +232,19 @@ function EntryDetail({ entry, listing, t, face, language, onBack, onInstall, onO
           </span>
         </p>
       )}
+      <div className={css.detailDocument}>
+        <PluginDetailSection request={{ url: listing.url, name: entry.name, version: version.version, npm: version.source.type === 'npm' }} t={t}
+          loadDetail={face.loadDetail} retryDetail={face.retryDetail} detailImage={face.detailImage}
+          useDetails={hooks.useDetails} useLocale={hooks.useLocale} />
+      </div>
+      <section className={css.detailSection}>
+        <h4 className={css.sectionTitle}>{t('versionsTitle')}</h4>
+        <ul className={css.versions} aria-label={t('versionsLabel', { name: title })}>
+          {entry.versions.map(item => (
+            <VersionRow key={item.version} entry={entry} version={item} title={title} t={t} language={language} onInstall={onInstall} />
+          ))}
+        </ul>
+      </section>
       <section className={css.detailSection}>
         <h4 className={css.sectionTitle}>{t('factSource')}</h4>
         <dl className={css.facts}>
@@ -258,14 +274,6 @@ function EntryDetail({ entry, listing, t, face, language, onBack, onInstall, onO
           )}
           <div><dt>{t('factMarket')}</dt><dd>{face.resolveText(listing.title)}</dd></div>
         </dl>
-      </section>
-      <section className={css.detailSection}>
-        <h4 className={css.sectionTitle}>{t('versionsTitle')}</h4>
-        <ul className={css.versions} aria-label={t('versionsLabel', { name: title })}>
-          {entry.versions.map(item => (
-            <VersionRow key={item.version} entry={entry} version={item} title={title} t={t} language={language} onInstall={onInstall} />
-          ))}
-        </ul>
       </section>
     </div>
   )
@@ -386,11 +394,12 @@ function unfiltered(query: DiscoverQuery): boolean {
   return query.text.trim() === '' && query.category === null && query.labels.length === 0
 }
 
-function Browser({ state, listing, t, face, language, onInstall, openPackage }: {
+function Browser({ state, listing, t, face, hooks, language, onInstall, openPackage }: {
   readonly state: DiscoverState
   readonly listing: ListingState
   readonly t: Translate
   readonly face: DiscoverActions
+  readonly hooks: Pick<DiscoverSectionProps, 'useDetails' | 'useLocale'>
   readonly language: string
   readonly onInstall: (choice: InstallChoice) => void
   readonly openPackage: (name: string) => void
@@ -413,7 +422,7 @@ function Browser({ state, listing, t, face, language, onInstall, openPackage }: 
   const openEntry = opened === null ? undefined : value?.entries.find(entry => entry.name === opened.name) ?? opened
   if (openEntry !== undefined && value !== null) {
     return (
-      <EntryDetail entry={openEntry} listing={value} t={t} face={face} language={language} onBack={() => { setOpened(null) }}
+      <EntryDetail entry={openEntry} listing={value} t={t} face={face} hooks={hooks} language={language} onBack={() => { setOpened(null) }}
         onInstall={(version) => { onInstall({ entry: openEntry, version }) }} onOpenInstalled={() => { openPackage(openEntry.name) }} />
     )
   }
@@ -580,7 +589,8 @@ export function DiscoverSection(props: DiscoverSectionProps): ReactNode {
     )
   } else {
     body = (
-      <Browser key={state.listing.url} state={state} listing={state.listing} t={t} face={face} language={language}
+      <Browser key={state.listing.url} state={state} listing={state.listing} t={t} face={face}
+        hooks={{ useDetails: props.useDetails, useLocale: props.useLocale }} language={language}
         onInstall={(choice) => { setConfirming(choice) }} openPackage={openPackage} />
     )
   }

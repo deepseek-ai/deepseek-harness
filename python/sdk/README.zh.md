@@ -87,6 +87,12 @@ with DeepSeekHarness(
 
 随附的 `sdk-minimal` profile 是独立显式配置树，而不是 `dsh-base` 上的 overlay。使用 `profile="sdk-minimal"` 选择它；普通 `model` 参数是唯一运行时模型选择，也适用于不在适配器建议目录中的模型 ID。它提供按平台选择的持久 shell、`read_image`、`working_directory`、本地执行、JSONL 会话和自动压缩。文本文件工具、设置、托管凭据、遥测、Web 工具与完整默认工具清单仍由独立的完整 `sdk` 与 `web` profile 提供。SDK 提示词文本不会执行 `/compact`。
 
+## 原生用户问答
+
+向 `DeepSeekHarnessConfig`、`DeepSeekHarness` 或 `HarnessConfig` 传入 `on_user_question`，即可通过原生 SDK 协议回答内建的 `ask_user_question` 工具。回调接收 `UserQuestionRequest`（包含 `request_id`、`session_id` 和原始 `questions`）以及表示取消的 `threading.Event`。返回 `UserQuestionAnswer`，或形如 `{"answers": [{"id": "question-id", "selected": ["option label"], "custom": "optional free text"}]}` 的 JSON 对象。每个原问题 id 必须恰好出现一次。应用自行提供 UI 或模拟用户策略；SDK 不选择答案。
+
+回调在独立线程执行，读取线程仍可处理取消和其他请求。回调可以并发执行，也可以再次调用客户端请求。取消 Event 置位时应释放回调拥有的工作。客户端关闭会通知所有待决回调，并给其工作线程总计 0.5 秒的 join 窗口；忽略取消的回调可能继续执行，但晚到答案不会发送到运行时或后续新进程。回调异常转为协议错误；未提供回调时保留原生回答方，或报告 `NO_PROVIDER`。
+
 ## 结果与通知
 
 `Session.run()` 的活动区间从提示词被持久 inbox 接收时开始，到整个 agent 下一次进入空闲状态时结束，并返回 `RunResult(session_id, final_response, finish_reason, events, notifications)`。`final_response` 是该区间内根会话最后提交的助手文本。`finish_reason` 是最后一个根会话 `turn/end` 的 `kind`，例如 `completed`、`max-tokens` 或 `error`；没有轮次结束时为 `None`。缺少字符串 `data.reason.kind` 的 `turn/end` 违反协议，并会抛出 `SdkProtocolError`。

@@ -602,7 +602,7 @@ describe('dsh-tool-team', () => {
     for (const filter of [{ owner: 'unowned' }, { status: 'pending' }, { ready: true }, { limit: 1 }]) {
       const result = await execute(ctx, lead, 'team_task_list', filter)
       expect(result.isError).toBe(false)
-      expect(JSON.parse(text(result)).tasks).toMatchObject([{ id: unowned.id }])
+      expect(JSON.parse(text(result))).toMatchObject({ tasks: [{ id: unowned.id }] })
       expect(observe).not.toHaveBeenCalled()
     }
     for (const filter of [{ cursor: 2 }, { status: 'completed' }]) {

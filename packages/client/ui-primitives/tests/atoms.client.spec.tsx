@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button, ConnectionIndicator, Input, Menu, MenuItemButton, Modal, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
+import buttonCss from '../src/Button.module.css'
 
 afterEach(cleanup)
 
@@ -34,9 +35,27 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
-  it('outline variant renders a bordered cancel-style button', () => {
-    render(<Button variant="outline">Cancel</Button>)
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined()
+  it('selects the outline stylesheet for outlined actions only', () => {
+    const { rerender } = render(<Button variant="outline">Cancel</Button>)
+    const button = screen.getByRole('button', { name: 'Cancel' })
+    expect(button.classList.contains(buttonCss.outline!)).toBe(true)
+    for (const variant of ['primary', 'ghost', 'toolbar'] as const) {
+      rerender(<Button variant={variant}>Cancel</Button>)
+      expect(button.classList.contains(buttonCss.outline!)).toBe(false)
+    }
+  })
+
+  it('keeps the native element and focus when the variant changes', () => {
+    const ref = createRef<HTMLButtonElement>()
+    const { rerender } = render(<Button ref={ref} variant="outline">Open</Button>)
+    const button = screen.getByRole('button')
+    button.focus()
+    rerender(<Button ref={ref} variant="primary">Open</Button>)
+    expect(ref.current).toBe(button)
+    expect(document.activeElement).toBe(button)
+    rerender(<Button ref={ref} variant="outline">Open</Button>)
+    expect(ref.current).toBe(button)
+    expect(document.activeElement).toBe(button)
   })
 })
 

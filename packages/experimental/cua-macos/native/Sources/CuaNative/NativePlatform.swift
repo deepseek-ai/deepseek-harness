@@ -36,6 +36,22 @@ struct ApplicationCatalogSnapshot: Sendable {
         }
         return ApplicationCatalogSnapshot(applications: apps, frontPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
     }
+    /// A bounded PNG for human recognition; authorization continues to use executable/signing identity.
+    static func icon(at path: String) -> String? {
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64,
+                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = context
+        var url = URL(fileURLWithPath: path)
+        while url.path != "/" && url.pathExtension != "app" { url.deleteLastPathComponent() }
+        let iconPath = url.pathExtension == "app" ? url.path : path
+        NSWorkspace.shared.icon(forFile: iconPath).draw(in: NSRect(x: 0, y: 0, width: 64, height: 64),
+                                                   from: .zero, operation: .copy, fraction: 1)
+        return bitmap.representation(using: .png, properties: [:]).map { "data:image/png;base64," + $0.base64EncodedString() }
+    }
     static func activate(_ identity: ProcessIdentity) throws {
         try NativePlatform.verify(identity)
         guard let app = NSRunningApplication(processIdentifier: identity.pid), !app.isTerminated else {
@@ -47,9 +63,18 @@ struct ApplicationCatalogSnapshot: Sendable {
 }
 
 enum NativePlatform {
+    /// Optional libSystem SPI: unavailable attribution stays unknown rather than guessing from parentage.
+    static func responsiblePID(_ pid: Int32) -> Int32? {
+        typealias Resolve = @convention(c) (pid_t) -> pid_t
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") else { return nil }
+        let resolve = unsafeBitCast(symbol, to: Resolve.self)
+        let responsible = resolve(pid)
+        return responsible > 0 ? responsible : nil
+    }
     static func executablePath(_ pid: Int32) -> String? {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-        return proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 ? String(cString: buffer) : nil
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
     static func identity(_ pid: Int32) throws -> ProcessIdentity {
         var info = proc_bsdinfo()

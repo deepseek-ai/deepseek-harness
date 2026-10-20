@@ -41,7 +41,7 @@ kind: "package-reference"
 
 已选择但无法加载的组合包仍会出现在 `listBundles` 中，并携带 `error`；`enabled` 表示保存的选择，不代表加载成功。插件页面显示错误并允许取消选择。损坏的组合包无法启用。管理组合包的文件变得不可读后仍受保护。
 
-`listBundles` 为各组合包及其声明的插件行提供可选的展示 `meta`，包括已禁用的组合包。Client 从这些值中选择语言。单独的 `description` 字段是该组合包原始的 `package.json.description`；元信息诊断不会阻止管理操作。`source` 以 `pnpm add` 接受的 spec 给出 profile 依赖：git 地址或 URL 按记录给出，但去掉 http(s) URL 的 user information（查询字符串保持原样）；`file:` 或 `link:` 路径按 profile 目录解析为绝对路径，`~` 展开为主目录；注册表版本范围、标签或别名接在包名的 `@` 之后，以别名安装的包的 spec 也是如此。安装提供的组合包没有该字段，即使 profile 也依赖它，因为实际加载的是安装中的副本。`plugin_manager` 工具的列表结果不包含 UI 展示元信息。
+`listBundles` 为各组合包及其声明的插件行提供可选的展示 `meta`，包括已禁用的组合包。Client 从这些值中选择语言。单独的 `description` 字段是该组合包原始的 `package.json.description`；元信息诊断不会阻止管理操作。`source` 以 `pnpm add` 接受的 spec 给出 profile 依赖：git 地址或 URL 按记录给出，但去掉 http(s) URL 的 user information（查询字符串保持原样）；`file:` 或 `link:` 路径按 profile 目录解析为绝对路径，`~` 展开为主目录；注册表版本范围、标签或别名接在包名的 `@` 之后，以别名安装的包的 spec 也是如此。安装提供的组合包没有该字段，即使 profile 也依赖它，因为实际加载的是安装中的副本。`plugin_manager` 工具的列表结果不包含 UI 展示元信息和更新资格。
 
 `listBundles` 将随附可选组合包和按需目录项标为 `official`，与包的安装状态独立。`availability` 表示可读取的安装随附包、profile 包，或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 仅表示 profile 是否声明该依赖。尚未安装的按需条目携带内嵌的本地化元信息，以及 Host 生成、包含当前 DSH 版本与安装 spec 的 `installTarget`，无需访问注册表。profile 已声明但文件不可读的包保留依赖声明，并展示原有错误。
 
@@ -50,6 +50,10 @@ kind: "package-reference"
 已发布的安装提供 `package@<当前 DSH 版本>`。源码 Web 与开发 Desktop 提供 `link:<工作区包的绝对目录>`，目录来自当前 CLI 的安装位置，包括其开发符号链接。包名通过工作区清单解析；当前工作目录和预发布版本后缀不用于选择 checkout。包、bundle patch 或已构建入口缺失时报告诊断，不回退到注册表。使用 `pnpm install` 和 `pnpm run build` 准备 checkout。链接包使用该 checkout 的依赖与 peer；代码改变后仍需重新构建并重启。即使版本相同，注册表副本或其他 checkout 的链接也可能需要替换。
 
 官方按需安装调用和其他组合包相同的 `installBundle` 操作。注册表目标使用 `saveExact: true`；开发目标保留普通 `link:` 依赖。显式更新先删除已安装的包，再以当前 `enabled` 选择状态安装目标；没有 HMR 时，自启动起运行的组合包无法删除，因此安装直接覆盖它并报告 `restart-required`。删除之后安装失败或被取消时，该包保持未安装，重新安装的组合包排在选择列表末尾。关闭仅取消选择配置层，移除使用原有移除检查。安装失败恢复 profile 清单和锁文件；安装成功后激活失败可能保留已保存的依赖和选择。原有 peer 兼容性检查继续生效，不增加仅针对官方条目的版本准入规则。
+
+`listVersions(name, options)` 读取 `listBundles` 标为 `updatable` 的已安装组合包的新版本：以自身包名、按注册表 spec 保存（不是 `npm:` 别名）的第三方 profile 依赖，清单声明 semver 版本，且不承载插件管理。一次 `pnpm view <name> versions time dist-tags` 按注册表计划询问，计划从 `options.registry` 开始，否则从本进程上次安装该包所用的注册表开始，否则从配置的注册表开始。随后从作答的注册表逐个读取比已安装版本新的最新 `versionListLimit` 个版本，每个版本一次 `pnpm view <name>@<version>`，同时最多 `versionLookupConcurrency` 个，因为 pnpm 对范围只打印最高的匹配版本。列表按从新到旧排列，带有各版本的 dist-tag、发布时间、预发布标记、弃用说明、是否声明组合包，以及在其 `engines.dsh` 或 DSH peer 拒绝当前运行版本且没有豁免时的 `incompatible` 记录；`omitted` 统计未列出的新版本数，`attempts` 列出问过的每个注册表及其失败原因。拒绝为 `not-updatable`、`not-found`、`network` 或 `unknown`；任一版本查询失败都会拒绝整个列表。官方组合包跟随 DSH 版本，不会列出。
+
+`updateBundle(name, version, options)` 把可更新的组合包替换为一个更新的确切版本；更旧的版本会被拒绝。目标版本先按与 `listVersions` 相同的计划查询，版本不存在、未声明组合包，或其 `engines.dsh` 或 DSH peer 拒绝当前 DSH 时，更新停在 `step: 'check'`，profile 保持不变。有 HMR 时，更新先移除已安装版本，使其插件停止，再以 `saveExact` 和当前的选中状态从作答的注册表安装 `name@version`。该安装失败、被取消，或已安装但无法启动时，先移除仍留下的目标版本，再从本进程安装被移除版本所用的注册表重新安装它，没有记录时按配置的计划安装，与移除的做法一致，结果以 `restore` 报告；重新安装也失败时，包处于未安装状态。移除或安装被拒绝（例如锁等待超时）时，报告为该步骤失败。没有 HMR 时，目标版本直接安装在运行中的版本之上，结果报告 `restart-required`。`plugin-manager/update-state` 以调用方的 `requestId` 通告 `checking`、`removing`、`installing` 与 `restoring`；目标版本的安装以同一 id 流式输出日志并接受 `cancelInstall`，重新安装不带 id，因此取消无法中止它。
 
 `installBundle` 在启动 pnpm 前通过 `git ls-remote` 检查 GitHub 仓库，使用 profile 目录及安装器的 Git 与代理配置。`githubConnectionTimeoutMs` 默认为 5000 毫秒，只限制这次检查，不限制包下载或构建。检查禁用凭据助手和认证提示；只有网络失败与超时会停止安装，通过现有失败类型与诊断日志返回，并标记 `failedAt: 'spec-host'`。认证、仓库查找及其他失败继续交给 pnpm，包括其 HTTPS 到 SSH 的回退。取消安装或销毁管理器会停止检查及其子进程。注册表包、本地路径、压缩包和其他 Git 主机跳过此检查。仓库可达后，下载或组合包验证仍可能失败。
 
@@ -85,7 +89,24 @@ CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version 
 | `fallbackRegistries` | `['https://registry.npmmirror.com/']` | 前一个注册表不可达或没有该包副本时依次询问的注册表，http(s) URL；pnpm 自身的注册表只在它指向 npm 官方源或这里的某一个时才进入顺序。 |
 | `outputBytes` | `16384` | 每次操作返回的 pnpm 诊断字节上限；完整输出保留在返回的日志路径中。 |
 | `lockWaitMs` | `120000` | 获取 profile 写锁的最长等待毫秒数。 |
+| `versionListLimit` | `20` | 版本列表读取并返回的、比已安装版本新的最新版本个数。 |
+| `versionLookupConcurrency` | `4` | 版本列表同时运行的单版本注册表查询个数。 |
 | `idleTimeoutMs` | `600000` | service 包操作允许持续无捕获输出的最长毫秒数，达到即被管理器终止；继承描述符运行的 `dsh plugin` 不受此上界约束。 |
+| `detailMaxBytes` | `1048576` | 组合包详细介绍文档的最大大小，以及为读取它而读取的 locale 文件的最大大小，单位字节。 |
+| `detailImageMaxBytes` | `5242880` | 与组合包详细介绍文档一同提供的图片的最大大小，单位字节。 |
+| `detailFetchTimeoutMs` | `15000` | 为读取当前安装提供、尚未安装的组合包的详细介绍文档而发出的单次 npm 文件 CDN 请求的时限。 |
+| `detailNpmFileSources` | `['jsdelivr', 'unpkg', 'npmmirror']` | 读取当前安装提供、尚未安装的组合包时按顺序使用的 npm 文件 CDN；一次读取的 `npmFileSources` 把其中列出的 CDN 移到最前。 |
+
+<a id="bundle-detail-documents"></a>
+### 组合包详细介绍文档
+
+`readBundleDetail(name, language, { npmFileSources? })` 为 `listBundles()` 列出的组合包读取**插件**页中该组合包页面显示的详细介绍：locale `meta.detail` 文件，否则为 README，即[文档顺序](../../util/plugin-detail/README.zh.md#document-order)第 1 步和第 2 步的定义。两者都没有时，结果为 `{ status: 'none' }`；不读取组合包声明的仓库。`npmFileSources` 按顺序列出读取当前安装提供、尚未安装的组合包时先请求的 npm 文件 CDN；它未列出的已配置 CDN 排在其后，`detailNpmFileSources` 未列出的 CDN 不会被请求。找到的文档携带其 `origin`（`locale` 或 `readme`）、在包内的 `path`，以及去掉开头 YAML front matter 块后的 Markdown 内容。
+
+已安装的组合包从其目录读取，不访问网络。当前安装提供、尚未安装的官方组合包按其提供的版本从 npm 文件 CDN 读取；以开发链接形式提供的组合包没有文档。结果不被缓存，因此重新安装的组合包显示其自身的文档。
+
+`GET /api/plugin-manager/detail-file?bundle=<name>&document=<path>&path=<destination>`（加上 `&sources=<cdn>,...` 时先请求这些 CDN）向已通过认证的 owner 连接提供组合包文档旁的图片。目标路径相对于该文档；以 `/` 开头时相对于包根目录。只提供包内的 PNG、JPEG、GIF、WebP、AVIF 和 SVG 文件，响应带有 `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` 和 `Cache-Control: no-store`；其他路径或未列出的组合包返回 404。
+
+失败：`listBundles()` 未列出或无法解析其目录的组合包为 `plugin-manager/unknown-bundle`；无效语言为 `plugin-manager/invalid-language`；`plugin-manager/detail-unavailable` 携带 `reason`，取值为 `too-large`、`network`，或在 locale 文件或 `meta.detail` 格式错误、指定的文件不存在时为 `invalid`。图片路由对这些失败依次返回 404、413、502 和 400。
 
 -----
 
@@ -138,6 +159,9 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 
 - Web 一次批准显示出来的整组待决定包，没有逐包选择。
 - 命令改动锁文件时，pnpm 按默认注册表校验锁文件中的每个 tarball URL。某个包从其他注册表安装后，使用默认注册表安装另一个包，或在重启后删除该包，可能以 `ERR_PNPM_TARBALL_URL_MISMATCH` 失败。
+- 更新把目标保存为确切版本，失败后的重新安装也把原版本保存为确切版本，即使 profile 原先保存的是范围。有 HMR 时，重新安装的组合包排到选中列表末尾，这可能改变哪个组合包的配置优先。
+- 更新把移除与安装作为两次 profile 操作运行，其他操作可能在两者之间运行。
+- 依赖需要新的构建脚本批准的新版本会更新失败，并重新安装为原版本；移除该包后通过普通安装批准其脚本。
 - 没有 HMR 时，替换包需要重启进程。在 Plugin Manager 之外重新链接仍处于安装状态的包，需要等待重启。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。
 - 管理器不能关闭自身所需的管理组件、修改其他 profile 或编辑 agent 预设组合。

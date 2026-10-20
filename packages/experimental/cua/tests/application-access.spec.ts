@@ -36,7 +36,7 @@ const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
-async function setup(choice = 'Allow for this task', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
+async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
   native.instances.length = 0
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
@@ -63,7 +63,7 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-it('retains task consent for the exact helper handle without saving it', async () => {
+it('reuses session consent across application handles and connections without saving it', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
   await expect(f.access.run(f.client, handle, signal, async () => 'read')).resolves.toBe('read')
@@ -72,6 +72,11 @@ it('retains task consent for the exact helper handle without saving it', async (
   expect(f.save).not.toHaveBeenCalled()
   const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await expect(f.access.run(replacement, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
+  await f.access.select(f.agent, replacement, 'fresh-app' as CuaAppHandle, identity, signal)
+  await f.access.select(f.agent, replacement, 'restarted-app' as CuaAppHandle, identity, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
+  await expect(f.access.run(replacement, 'restarted-app' as CuaAppHandle, signal, async () => 'read')).resolves.toBe('read')
 })
 
 it('does not repeatedly ask after an application is denied', async () => {
@@ -120,10 +125,10 @@ it('reuses only saved signed identities when a task or helper is replaced', asyn
 
 it.each([
   { answers: [] },
-  { answers: [{ id: 'another-question', selected: ['Allow for this task'] }] },
-  { answers: [{ id: 'cua-app-access', selected: ['Allow for this task', 'Deny'] }] },
+  { answers: [{ id: 'another-question', selected: ['Allow for this session'] }] },
+  { answers: [{ id: 'cua-app-access', selected: ['Allow for this session', 'Deny'] }] },
   { answers: [{ id: 'cua-app-access', selected: [], custom: 'Always allow' }] },
-  { answers: [{ id: 'cua-app-access', selected: ['Allow for this task'], custom: 'different scope' }] },
+  { answers: [{ id: 'cua-app-access', selected: ['Allow for this session'], custom: 'different scope' }] },
 ])('does not interpret an incomplete or free-text answer as consent: %j', async (answer) => {
   const f = await setup()
   f.answer.mockResolvedValueOnce(answer)
@@ -199,8 +204,8 @@ it('reuses one accepted question for duplicate selections', async () => {
   f.answer.mockImplementationOnce(() => { entered.resolve(); return answer.promise })
   const first = f.access.select(f.agent, f.client, handle, identity, signal)
   await entered.promise
-  const second = f.access.select(f.agent, f.client, handle, identity, signal)
-  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] })
+  const second = f.access.select(f.agent, f.client, 'another-handle' as CuaAppHandle, identity, signal)
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
   await Promise.all([first, second])
   expect(f.answer).toHaveBeenCalledOnce()
   await expect(f.access.run(f.client, handle, signal, async () => 'allowed')).resolves.toBe('allowed')
@@ -244,7 +249,7 @@ it('cancels native work when saved consent is removed from configuration', async
     entered.resolve(undefined)
     return done.promise
   })
-  const rejected = expect(pending).rejects.toThrow('native cancelled')
+  const rejected = expect(pending).rejects.toThrow('APP_ACCESS_DENIED')
   await entered.promise
   await f.save([])
   f.ctx.emit('loader/volatile-update', [['allowedApps']])
@@ -279,7 +284,7 @@ it('rejects an answer for a helper that exits while the human question is pendin
   const rejected = expect(selected).rejects.toThrow('NATIVE_CLOSED')
   await entered.promise
   f.client.invalidate()
-  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this task'] }] })
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
   await rejected
 })
 
@@ -316,4 +321,58 @@ it('keeps an active task operation running when a different task denies the same
     release.resolve(null)
     await expect(pending).resolves.toBeNull()
   } finally { release.resolve(null); await pending }
+})
+
+
+it.each(['Allow for this session', 'Deny'])('retains %s when the same session gets a new agent', async (choice) => {
+  const f = await setup(choice)
+  const select = f.access.select(f.agent, f.client, handle, identity, signal)
+  if (choice === 'Deny') await expect(select).rejects.toThrow('APP_ACCESS_DENIED')
+  else await select
+  await f.owner.dispose()
+  f.access.forget(f.agent)
+  const owner = await f.ctx.agents.create({ sessionId: f.agent.id })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  const resumed = f.access.select(owner.agent, client, handle, identity, signal)
+  if (choice === 'Deny') await expect(resumed).rejects.toThrow('APP_ACCESS_DENIED')
+  else {
+    await resumed
+    await expect(f.access.run(client, handle, signal, async () => 'resumed')).resolves.toBe('resumed')
+  }
+  expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it('asks separately for another session and a changed application identity', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  const owner = await f.ctx.agents.create({ sessionId: SessionId('separate-session') })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  await f.access.select(owner.agent, client, handle, identity, signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
+  await f.access.select(f.agent, f.client, 'changed-app' as CuaAppHandle,
+    { ...identity, id: 'b'.repeat(64) as typeof identity.id }, signal)
+  expect(f.answer).toHaveBeenCalledTimes(3)
+})
+
+it('revokes session consent even after its agent and connection are released', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  f.access.forget(f.agent)
+  await f.access.revoke(identity.id)
+  const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  await expect(f.access.select(f.agent, replacement, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.answer).toHaveBeenCalledOnce()
+  f.access.retryApproval(identity.id)
+  await f.access.select(f.agent, replacement, handle, identity, signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
+})
+
+it('clears session consent when the provider is disabled and recreated', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  await f.access.dispose()
+  const access = new ApplicationAccess(f.ctx, { grants: f.grants, save: f.save })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  await access.select(f.agent, client, handle, identity, signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
 })

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use",
+    "description": "Currently supports macOS; Windows support is in development. Loads Computer Use for existing and new PTC sessions. Switch to PTC mode and grant Accessibility and Screen Recording permissions to use it."
+  }
+}

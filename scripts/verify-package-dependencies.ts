@@ -10,6 +10,7 @@ import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { WorkspaceTypertGenerator } from '../packages/typert/generator/src/workspace.ts'
+import { PACKAGE_ASSET_EXPORT } from '../packages/client/modules/src/assets.ts'
 import { writeModuleGraph } from './gen-module-graph.ts'
 import {
   hasClientDeclaration,
@@ -363,7 +364,10 @@ function generatedHostSources(root: string, packages: readonly WorkspacePackageM
   return sources
 }
 
-/** Source-backed Node exports; generated Typert artifacts have no standalone source entry. */
+/**
+ * Source-backed Node exports. Generated Typert artifacts have no standalone source entry; `./client`, `./src`, and
+ * package-asset subpaths publish no Host code.
+ */
 function hostSourceEntries(root: string, pkg: WorkspacePackageManifest): string[] {
   const entry = resolve(root, pkg.dir, 'src/index.ts')
   if (!existsSync(entry)) {
@@ -373,7 +377,8 @@ function hostSourceEntries(root: string, pkg: WorkspacePackageManifest): string[
   const exports = pkg.manifest.exports
   if (exports === null || typeof exports !== 'object') return [...entries]
   for (const [subpath, declaration] of Object.entries(exports as Record<string, unknown>)) {
-    if (subpath === '.' || subpath === './package.json' || /^\.\/(?:client|src)(?:\/|$)/.test(subpath)) continue
+    if (subpath === '.' || subpath === './package.json' || subpath === PACKAGE_ASSET_EXPORT
+      || /^\.\/(?:client|src)(?:\/|$)/.test(subpath)) continue
     const types = declaration !== null && typeof declaration === 'object' && 'types' in declaration
       ? declaration.types
       : undefined
