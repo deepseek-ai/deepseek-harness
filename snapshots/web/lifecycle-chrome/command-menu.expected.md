@@ -9,3 +9,4 @@
   - option "Permission Switch the permission preset (sandbox mode + approval policy)"
   - option "Model Select the model for this conversation"
   - option "Export Download this Session log as a ZIP archive"
+  - option "team Enable or disable Agent Teams for this Session"
