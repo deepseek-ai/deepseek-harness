@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-`agentTeamMode.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. Mode writes serialize with task mutations, synchronize tools before flushing, and wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. Mode writes take effect before awaiting tool synchronization or persistence. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
 The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical member fields remain in persisted projection state but are omitted from the browser view. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
@@ -102,6 +102,7 @@ interface TeamTaskView {
  * record; tasks then stay at the last valid state.
  */
 interface TeamProjection {
+  readonly enabled: boolean
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }

@@ -1013,7 +1013,7 @@ Source: [`packages/core/session/src/types.ts:331`](../packages/core/session/src/
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMemberSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/subagent/agent-team/src/types.ts:186`](../packages/subagent/agent-team/src/types.ts)
+Source: [`packages/subagent/agent-team/src/types.ts:173`](../packages/subagent/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -1031,7 +1031,7 @@ Source: [`packages/subagent/agent-team/src/types.ts:186`](../packages/subagent/a
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageId](subsystems/agent-team.md)
 
-Source: [`packages/subagent/agent-team/src/types.ts:192`](../packages/subagent/agent-team/src/types.ts)
+Source: [`packages/subagent/agent-team/src/types.ts:179`](../packages/subagent/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -1044,7 +1044,7 @@ Source: [`packages/subagent/agent-team/src/types.ts:192`](../packages/subagent/a
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/subagent/agent-team/src/types.ts:190`](../packages/subagent/agent-team/src/types.ts)
+Source: [`packages/subagent/agent-team/src/types.ts:177`](../packages/subagent/agent-team/src/types.ts)
 
 <a id="teammode--log-only"></a>
 
@@ -1055,7 +1055,7 @@ Source: [`packages/subagent/agent-team/src/types.ts:190`](../packages/subagent/a
 'team/mode': { enabled: boolean }
 ```
 
-Source: [`packages/subagent/agent-team/src/types.ts:184`](../packages/subagent/agent-team/src/types.ts)
+Source: [`packages/subagent/agent-team/src/types.ts:171`](../packages/subagent/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -1068,7 +1068,7 @@ Source: [`packages/subagent/agent-team/src/types.ts:184`](../packages/subagent/a
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamTaskSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/subagent/agent-team/src/types.ts:188`](../packages/subagent/agent-team/src/types.ts)
+Source: [`packages/subagent/agent-team/src/types.ts:175`](../packages/subagent/agent-team/src/types.ts)
 
 ### `todo/*`
 
@@ -4996,7 +4996,7 @@ Sources: [`packages/subagent/agent-team/src/types.ts:50`](../packages/subagent/a
 
 SHA-256: `2eafefdc6f79a4922d68a787a09eaf4dd2b2369c3777fba4c05e800b5678ac8e`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:107`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:108`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5016,7 +5016,7 @@ Sources: [`packages/subagent/agent-team/src/types.ts:107`](../packages/subagent/
 
 SHA-256: `2152caf1a71e588e4df2358a806dea24936c1c47131134f01a12939d12cdc0c0`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:116`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:117`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6211,7 +6211,7 @@ Sources: [`packages/experimental/hook-protocol/src/types.ts:19`](../packages/exp
 
 SHA-256: `c2a13242efc3bea4b36a843ddf1524ff4d33c765a71b582fa1fdbfa4fa148434`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:184`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:171`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7744,7 +7744,7 @@ Sources: [`packages/web/web-search-deepseek/src/provider.ts:61`](../packages/web
 
 SHA-256: `b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:186`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:173`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7772,7 +7772,7 @@ Sources: [`packages/core/session/src/types.ts:331`](../packages/core/session/src
 
 SHA-256: `ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:190`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:177`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7786,7 +7786,7 @@ Sources: [`packages/subagent/agent-team/src/types.ts:190`](../packages/subagent/
 
 SHA-256: `0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:192`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:179`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7932,7 +7932,7 @@ Sources: [`packages/compaction/compaction-image-offload/src/projection.ts:25`](.
 
 SHA-256: `a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c`
 
-Sources: [`packages/subagent/agent-team/src/types.ts:188`](../packages/subagent/agent-team/src/types.ts)
+Sources: [`packages/subagent/agent-team/src/types.ts:175`](../packages/subagent/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|

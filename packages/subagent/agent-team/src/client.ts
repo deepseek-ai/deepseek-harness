@@ -3,7 +3,6 @@
 export type {
   TeamMemberPhase,
   TeamProjection,
-  TeamModeProjection,
   TeamTaskId,
   TeamTaskStatus,
   TeamTaskView,

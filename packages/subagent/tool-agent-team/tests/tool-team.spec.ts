@@ -68,7 +68,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabledByDefault = true) {
+async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabled = true) {
   const ctx = new Context()
   contexts.add(ctx)
   await mountAgentLoopTestDependencies(ctx)
@@ -82,11 +82,12 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabl
   await ctx.plugin(ToolSubagentControl)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  await ctx.plugin(TeamService, { enabledByDefault })
+  await ctx.plugin(TeamService)
   const fiber = await ctx.plugin(toolTeam)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const lead = await ctx.agentLoop.create(SessionId('tool-team-lead'), { provider: 'mock', model: 'mock' })
+  if (enabled) await ctx.agentTeams.setEnabled(lead, true)
   return { ctx, lead, fiber, adapter }
 }
 
@@ -312,6 +313,7 @@ describe('dsh-tool-team', () => {
       signal: SIGNAL,
     })
     try {
+      await ctx.agentTeams.setEnabled(handle.agent, true)
       const inheritedHistory = structuredClone(handle.agent.session.deriveMessages())
       await runTurn(handle.agent, 'Continue independently')
       const original = serializeRequest(adapter.requests.find(request => request.sessionId === teammateId)!)

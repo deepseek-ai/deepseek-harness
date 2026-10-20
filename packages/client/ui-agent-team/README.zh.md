@@ -45,7 +45,7 @@ kind: "package-reference"
 
 Client export 通过 Cordis effect 注册语言字典、子代理目录与模型菜单 slot；它不挂载 Remote namespace。销毁插件 fiber 会移除这些注册。
 
-Subagent 目录负责共享面板的滚动、悬停、键盘和关闭交互。本包在根会话与后代入口的树下方提供任务区。任务板通过 Session 祖先关系解析根并读取其 `agentTeam` 投影；祖先关系不完整时不显示任务板，投影数据缺失时显示可用性状态。
+Subagent 目录负责共享面板的滚动、悬停、键盘和关闭交互。本包在根会话与后代入口的树下方提供任务区。任务板通过 Session 祖先关系解析根，从其 `agentTeam` 投影一起读取模式与任务；仅在投影可用且已开启时显示。
 
 | 文件 | 职责 |
 |---|---|

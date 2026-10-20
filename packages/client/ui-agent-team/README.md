@@ -45,7 +45,7 @@ The read-only board shows task identity, owner label, blockers, readiness, and a
 
 The Client export registers its locale dictionaries and subagent-catalog and model-menu slots through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes its registrations.
 
-The Subagent catalog owns the shared panel, scrolling, hover, keyboard, and dismissal interactions. This package contributes the task section below the tree in root and descendant entries. The board resolves the root through Session ancestry and reads its `agentTeam` projection; incomplete ancestry withholds the board, and missing projection data shows its availability state.
+The Subagent catalog owns the shared panel, scrolling, hover, keyboard, and dismissal interactions. This package contributes the task section below the tree in root and descendant entries. The board resolves the root through Session ancestry and reads the mode and tasks together from its `agentTeam` projection. It appears only when that projection is available and enabled.
 
 | File | Role |
 |---|---|

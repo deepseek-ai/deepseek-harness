@@ -188,8 +188,8 @@ describe('SubagentHeaderLineage', () => {
   it('keeps the shared panel reachable with no children while Team mode is enabled', () => {
     const input = props(catalog({ entries: [] }))
     const initial = input.useSessions(state => state)
-    const mode = { enabled: true }
-    const values = { ...initial.projectionsBySession[PARENT]!.values, agentTeamMode: mode }
+    const mode = { enabled: true, tasks: [] }
+    const values = { ...initial.projectionsBySession[PARENT]!.values, agentTeam: mode }
     const current = {
       ...input,
       useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select({

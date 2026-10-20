@@ -24,7 +24,7 @@ export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options
  * @returns the Team switch when the capability projection is available.
  */
 export function TeamModeToggle({ useProjection, locked, reportFailure, selectTeamMode, t }: TeamModeToggleProps) {
-  const mode = useProjection('agentTeamMode')
+  const mode = useProjection('agentTeam')
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {

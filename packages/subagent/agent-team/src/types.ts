@@ -92,13 +92,14 @@ export interface TeamTaskView {
  * record; tasks then stay at the last valid state.
  */
 export interface TeamProjection {
+  readonly enabled: boolean
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Durable roster and non-deleted task board of the Team rooted at the projected Session. */
+    /** Saved selection and non-deleted task board of the Team rooted at the projected Session. */
     agentTeam: TeamProjection
   }
 }
@@ -127,22 +128,8 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/** Persisted Team selection, shared by a root Session and its descendants. */
-export interface TeamModeProjection {
-  readonly enabled: boolean
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionMap {
-    /** Whether the root Session enables the shared task board and Team guidance. */
-    agentTeamMode: TeamModeProjection
-  }
-}
-
-/** Team-service deployment limits and initial mode. */
+/** Team-service deployment limits. */
 export interface Config {
-  /** Team mode before a Session records a selection or a shared task. Defaults to false. */
-  readonly enabledByDefault?: boolean
   /** Maximum non-deleted tasks retained by one Team. */
   readonly maxTasks?: number
 }

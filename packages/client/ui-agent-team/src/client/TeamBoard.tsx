@@ -109,35 +109,22 @@ export function TeamBoard({
   const parentId = useSession(snapshot => snapshot.subagent?.address.parentSessionId)
   const rootId = useSessions(state => teamRootId(sessionId, parentId, state.byId))
   const team = useSessions(state => rootId === undefined ? undefined : state.projectionsBySession[rootId]?.values.agentTeam)
-  const enabled = useSessions(state => rootId !== undefined && state.projectionsBySession[rootId]?.values.agentTeamMode?.enabled === true)
-  const opening = useSession(snapshot => snapshot.openState === 'loading')
-  const listing = useSessions(state => state.phase === 'pending')
-  if (!enabled) return null
+  if (!team?.enabled) return null
   return (
     <section className={css.board} aria-label={t('trigger')} data-team-panel>
-      <h3>{t('tasks')}{team !== undefined && <span className={css.count}>{team.tasks.length}</span>}</h3>
-      {team === undefined && (
-        <div className={css.notice} role="status">
-          <StateDot state={opening || listing ? 'ongoing' : 'warning'} />
-          {t(opening || listing ? 'loading' : 'unavailable')}
-        </div>
+      <h3>{t('tasks')}<span className={css.count}>{team.tasks.length}</span></h3>
+      {team.failure !== undefined && (
+        <div className={css.error} role="alert"><StateDot state="error" />{t('failure', { message: team.failure })}</div>
       )}
-      {team !== undefined && (
-        <>
-          {team.failure !== undefined && (
-            <div className={css.error} role="alert"><StateDot state="error" />{t('failure', { message: team.failure })}</div>
-          )}
-          {team.tasks.length === 0
-            ? <p className={css.emptyNotice}>{t('empty')}</p>
-            : (
-              <div className={css.tasks}>
-                {team.tasks.map(task => (
-                  <TaskCard key={task.id} task={task} rootId={rootId as SessionId} useSessions={useSessions} t={t} />
-                ))}
-              </div>
-            )}
-        </>
-      )}
+      {team.tasks.length === 0
+        ? <p className={css.emptyNotice}>{t('empty')}</p>
+        : (
+          <div className={css.tasks}>
+            {team.tasks.map(task => (
+              <TaskCard key={task.id} task={task} rootId={rootId as SessionId} useSessions={useSessions} t={t} />
+            ))}
+          </div>
+        )}
     </section>
   )
 }

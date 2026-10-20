@@ -17,7 +17,6 @@ Agent Teams 随基于 base 的 profile 提供；新 Session 默认关闭。插�
 
 1. 启动每个已有 profile 一次。加载时会移除已停用的 `@deepseek-ai/dsh-experimental-agent-team-profile` 组合选项；base 与 Web 组合提供对应插件。保留 `agent-team`、`tool-agent-team` 与 `ui-agent-team` 行覆盖。自定义组合将包名 `@deepseek-ai/dsh-experimental-agent-team`、`@deepseek-ai/dsh-experimental-tool-agent-team`、`@deepseek-ai/dsh-experimental-client-ui-agent-team` 分别替换为 `@deepseek-ai/dsh-agent-team`、`@deepseek-ai/dsh-tool-agent-team`、`@deepseek-ai/dsh-client-ui-agent-team`。
 2. 在根会话的模型与推理等级菜单中打开**使用智能体团队**，或执行 `/team on`。使用 `/team off` 关闭。
-3. 需要自动开启的部署可将 `agent-team` 插件的 `config.enabledByDefault` 设为 `true`。已保存的选择和历史任务板优先。
-4. 确认开启后通过 Subagent 入口在树下方查看共享任务板，并提供四个任务工具。重新加载 Session，确认选择已保存。关闭后再开启会恢复已有任务。
+3. 确认开启后通过 Subagent 入口在树下方查看共享任务板，并提供四个任务工具。重新加载 Session，确认选择已保存。关闭后再开启会恢复已有任务。
 
 Client 插件消费者将 `TeamActionProps` 替换为 `TeamBoardProps`；任务内容注册到 Subagent 目录的 footer 插槽，而非页头操作插槽。

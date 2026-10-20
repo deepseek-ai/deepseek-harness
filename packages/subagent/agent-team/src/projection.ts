@@ -128,6 +128,8 @@ const teamMessageDeliveredEventSchema = z.object({
  * touched; untouched collections keep their references.
  */
 export interface TeamState {
+  /** Saved selection; absent until an explicit selection or historical task. */
+  readonly enabled?: boolean
   readonly id: TeamId
   /** Historical roster records written by earlier Team builds. */
   readonly members: readonly TeamMemberSnapshot[]
@@ -158,7 +160,10 @@ export interface TeamProjectionState extends TeamState {
   readonly failure?: string
 }
 
+const teamModeSchema = z.object({ enabled: z.boolean() }).strict()
+
 const teamProjectionEntrySchema = z.object({
+  enabled: z.boolean().optional(),
   id: teamIdSchema,
   members: z.array(teamMemberSnapshotSchema),
   tasks: z.array(teamTaskSnapshotSchema),
@@ -217,6 +222,7 @@ function parseCurrentTeamEvent(event: TeamSessionEvent): TeamSessionEvent {
 }
 
 function applyProjectionEvent(state: TeamProjectionState, event: SessionEvent): TeamProjectionState {
+  if (event.type === 'team/mode') return { ...state, ...teamModeSchema.parse(event.data) }
   if (state.failure !== undefined) return state
   if (!isTeamEvent(event)) return state
   try {
@@ -281,7 +287,7 @@ function applyCurrentTeamEvent(state: TeamProjectionState, event: TeamSessionEve
           number === Number.MAX_SAFE_INTEGER ? number : number + 1,
         )
       }
-      return { ...state, tasks: replaceAt(state.tasks, index, task), nextTaskNumber }
+      return { ...state, enabled: state.enabled ?? true, tasks: replaceAt(state.tasks, index, task), nextTaskNumber }
     }
     case 'team/message/queued': {
       const message = event.data.message
@@ -317,6 +323,7 @@ const teamTaskViewSchema = z.object({
 }).strict() as z.ZodType<TeamTaskView>
 
 const teamProjectionSchema = z.object({
+  enabled: z.boolean(),
   tasks: z.array(teamTaskViewSchema),
   failure: z.string().optional(),
 }).strict() as z.ZodType<TeamProjection>
@@ -326,6 +333,7 @@ const teamProjectionViews = new WeakMap<readonly TeamTaskSnapshot[], TeamProject
 
 function buildTeamProjection(state: TeamProjectionState): TeamProjection {
   return {
+    enabled: state.enabled === true,
     tasks: state.tasks
       .filter(task => task.status !== 'deleted')
       .map(task => projectTaskView(state, task)),
@@ -336,15 +344,14 @@ function buildTeamProjection(state: TeamProjectionState): TeamProjection {
 /**
  * Durable client view of one Team state. Historical roster and mailbox changes reuse the
  * previous view reference, so the live drive publishes nothing for them.
- * A failure is terminal: later events retain the failed state reference and
- * do not republish its view.
+ * A task-board failure retains the last valid tasks; mode selections still apply.
  * @param state - current Team state.
- * @returns the non-deleted task board, plus any projection failure.
+ * @returns the saved selection and non-deleted task board, plus any projection failure.
  */
 export function teamProjectionView(state: TeamProjectionState): TeamProjection {
   if (state.failure !== undefined) return buildTeamProjection(state)
   let view = teamProjectionViews.get(state.tasks)
-  if (view === undefined) {
+  if (view === undefined || view.enabled !== (state.enabled === true)) {
     view = buildTeamProjection(state)
     teamProjectionViews.set(state.tasks, view)
   }
@@ -353,12 +360,12 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
 
 /**
  * Team projection selected by the projected Session identity; the wire view
- * carries the task board. Current subagents are
+ * carries the selection and task board. Current subagents are
  * supplied separately by the existing `subagentCatalog` projection.
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema: teamProjectionEntrySchema,
   init: (header, _inheritedEventCount) => emptyTeamState(header.id),
   apply: applyProjectionEvent,

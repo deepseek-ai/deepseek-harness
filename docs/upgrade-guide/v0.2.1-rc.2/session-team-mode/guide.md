@@ -17,7 +17,6 @@ Disabling Team retains tasks and subagents. Admitted task operations finish; que
 
 1. Start each existing profile once. Profile loading removes the retired `@deepseek-ai/dsh-experimental-agent-team-profile` bundle selection; the base and Web bundles supply its plugins. Keep `agent-team`, `tool-agent-team`, and `ui-agent-team` row overrides. Custom compositions replace package names `@deepseek-ai/dsh-experimental-agent-team`, `@deepseek-ai/dsh-experimental-tool-agent-team`, and `@deepseek-ai/dsh-experimental-client-ui-agent-team` with `@deepseek-ai/dsh-agent-team`, `@deepseek-ai/dsh-tool-agent-team`, and `@deepseek-ai/dsh-client-ui-agent-team`.
 2. Enable **Use Agent Teams** in the root conversation’s model and reasoning menu, or execute `/team on`. Use `/team off` to disable it.
-3. Deployments requiring automatic enablement may set the `agent-team` plugin’s `config.enabledByDefault` to `true`. Saved selections and historical task boards take precedence.
-4. Verify that enabling shows shared tasks below the Subagent tree in the same panel and exposes four task tools. Reload the Session to confirm the saved selection. Re-enabling after disabling restores the existing tasks.
+3. Verify that enabling shows shared tasks below the Subagent tree in the same panel and exposes four task tools. Reload the Session to confirm the saved selection. Re-enabling after disabling restores the existing tasks.
 
 Client plugin consumers replace `TeamActionProps` with `TeamBoardProps`; task content registers in the Subagent catalog footer slots instead of the header actions slot.

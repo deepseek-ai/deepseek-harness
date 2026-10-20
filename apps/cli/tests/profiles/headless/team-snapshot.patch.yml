@@ -21,11 +21,6 @@
     root: './.sessions'
     compression: none
 
-- id: agent-team
-  config:
-    enabledByDefault: true
-    maxTasks: 256
-
 - insert:
     - id: team-fixture-llm
       name: './tests/fixtures/team-llm.mjs'

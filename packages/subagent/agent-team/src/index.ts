@@ -5,12 +5,11 @@ import z from '@deepseek-ai/schemastery'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import type {} from '@deepseek-ai/dsh-commands'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import { teamModeProjection, type TeamModeState } from './mode.ts'
 import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
-import { teamProjectionDefinition } from './projection.ts'
+import { teamProjectionDefinition, type TeamProjectionState } from './projection.ts'
 import { TeamTaskBoard } from './task-board.ts'
 import { TeamTaskId } from './types.ts'
 import type {
@@ -56,12 +55,10 @@ export class TeamService extends Service {
   static inject = ['agents', 'sessions', 'sessionProjections', 'subagents']
 
   static Config: z<Config> = z.object({
-    enabledByDefault: z.boolean().default(false),
     maxTasks: z.number().step(1).min(1).default(DEFAULT_MAX_TASKS),
   })
 
-  private readonly enabledByDefault: boolean
-  private mode!: ProjectionHandle<TeamModeState>
+  private projection!: ProjectionHandle<TeamProjectionState>
   private readonly maxTasks: number
   private journal!: TeamJournal
   private tasks!: TeamTaskBoard
@@ -76,22 +73,20 @@ export class TeamService extends Service {
         )
       }
     }
-    this.enabledByDefault = config.enabledByDefault ?? false
     this.maxTasks = positiveLimit('maxTasks', config.maxTasks ?? DEFAULT_MAX_TASKS)
   }
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    this.mode = await ctx.sessionProjections.register(teamModeProjection(this.enabledByDefault))
-    const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => {
+    this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
+    this.journal = new TeamJournal(ctx, this.projection, (root) => {
       for (const agent of ctx.agents.list()) {
         if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) {
           emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
         }
       }
     })
-    this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks, root => this.isEnabled(root))
+    this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
     ctx.inject(['commands'], (scope) => {
       scope.commands.register({
         definitionId: CommandDefinitionId('@deepseek-ai/dsh-experimental-agent-team'),
@@ -117,7 +112,7 @@ export class TeamService extends Service {
    */
   isEnabled(caller: Agent): boolean {
     const root = this.ctx.subagents.rootOf(caller)
-    return this.mode.stateOf(root.session).enabled ?? this.enabledByDefault
+    return this.projection.stateOf(root.session).enabled === true
   }
 
   /**

@@ -95,6 +95,60 @@ function message(overrides: Partial<TeamMessageSnapshot> = {}): TeamMessageSnaps
 }
 
 describe('Agent Teams projection events', () => {
+  it('keeps mode and tasks together through explicit selections and legacy task events', () => {
+    const initial = project(ROOT, [])
+    expect(teamProjectionView(initial)).toEqual({ enabled: false, tasks: [] })
+    const legacy = teamProjectionDefinition.apply(initial, event('team/task', {
+      version: 2, teamId: TEAM, task: task(),
+    }, SessionSeq(0)))
+    expect(teamProjectionView(legacy).enabled).toBe(true)
+    const off = teamProjectionDefinition.apply(legacy, event('team/mode', { enabled: false }, SessionSeq(1)))
+    expect(off.tasks).toBe(legacy.tasks)
+    expect(teamProjectionView(off)).toMatchObject({ enabled: false, tasks: [{ id: 'task-1' }] })
+    const completed = teamProjectionDefinition.apply(off, event('team/task', {
+      version: 2, teamId: TEAM, task: task({ revision: 2, status: 'completed' }),
+    }, SessionSeq(2)))
+    expect(teamProjectionView(completed)).toMatchObject({ enabled: false, tasks: [{ status: 'completed' }] })
+    const on = teamProjectionDefinition.apply(completed, event('team/mode', { enabled: true }, SessionSeq(3)))
+    expect(on.tasks).toBe(completed.tasks)
+    expect(teamProjectionView(on)).toMatchObject({ enabled: true, tasks: [{ status: 'completed' }] })
+    expect(teamProjectionView(on)).toBe(teamProjectionView(on))
+    expect(() => teamProjectionDefinition.apply(on, JSON.parse('{"type":"team/mode","data":{"enabled":"yes"}}') as SessionEvent)).toThrow()
+    expect(() => teamProjectionDefinition.stateSchema.parse({ ...on, enabled: 'yes' })).toThrow()
+  })
+
+  it('rebuilds version-4 checkpoints with the saved mode and historical tasks', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.sessionProjections.register(teamProjectionDefinition)
+    const savedTask = event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(0))
+    const oldState = { ...project(ROOT, []), tasks: [task()], nextTaskNumber: 2 }
+    for (const records of [[savedTask], [savedTask, event('team/mode', { enabled: false }, SessionSeq(1))]]) {
+      const restored = ctx.sessionProjections.restore(
+        { agentTeam: { ver: 4, seq: records.at(-1)!.seq, val: oldState } },
+        records,
+        SessionLogOffset(0),
+        { version: SESSION_FORMAT_VERSION, id: ROOT, createdAt: 0, isSeeded: false },
+        SessionLogOffset(0),
+      )
+      const state = teamProjectionDefinition.stateSchema.parse(restored.checkpoint['agentTeam']!.val)
+      expect(teamProjectionView(state)).toMatchObject({ enabled: records.length === 1, tasks: [{ id: 'task-1' }] })
+    }
+  })
+
+  it('allows disabling tools after a task-board failure without discarding its error', () => {
+    const failed = project(ROOT, [
+      event('team/task', { version: 2, teamId: TEAM, task: task() }, SessionSeq(0)),
+      event('team/task', { version: 2, teamId: TEAM, task: task({ revision: 3 }) }, SessionSeq(1)),
+    ])
+    const off = teamProjectionDefinition.apply(failed, event('team/mode', { enabled: false }, SessionSeq(2)))
+    expect(off.failure).toBe(failed.failure)
+    expect(off.tasks).toBe(failed.tasks)
+    expect(teamProjectionView(off).enabled).toBe(false)
+    expect(teamProjectionView(off).failure).toContain('not contiguous')
+  })
+
   it('rejects retired tool-result content when restoring a native V4 Team checkpoint', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
@@ -439,7 +493,7 @@ describe('Agent Teams projection events', () => {
     const state = project(ROOT, [])
     const next = teamProjectionDefinition.apply(state, catalog('child', 0))
     expect(next).toBe(state)
-    expect(teamProjectionView(next)).toEqual({ tasks: [] })
+    expect(teamProjectionView(next)).toEqual({ enabled: false, tasks: [] })
   })
 
   describe('copy-on-write state and client view', () => {
@@ -511,6 +565,7 @@ describe('Agent Teams projection events', () => {
       const view = teamProjectionView(state)
       expect(teamProjectionDefinition.wire.viewSchema.parse(view)).toEqual(view)
       expect(view).toEqual({
+        enabled: true,
         tasks: [
           {
             id: 'task-1', revision: 2, subject: 'subject', description: 'description', status: 'in_progress',
@@ -558,6 +613,7 @@ describe('Agent Teams projection events', () => {
       const lead = ctx.sessions.create(ROOT)
       const other = ctx.sessions.create(SessionId('other-root'))
       expect(ctx.sessionProjections.snapshot(lead).values['agentTeam']).toEqual({
+        enabled: false,
         tasks: [],
       })
 

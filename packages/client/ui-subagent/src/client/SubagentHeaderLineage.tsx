@@ -514,7 +514,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   }, [projections, summaries, statuses])
   const catalog = catalogs[rootSessionId]
   const footerAvailable = useFooterAvailable(value => value)
-  const withBoard = footerAvailable && projections[rootSessionId]?.values.agentTeamMode?.enabled === true
+  const withBoard = footerAvailable && projections[rootSessionId]?.values.agentTeam?.enabled === true
   const [open, setOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<CSSProperties>()
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())

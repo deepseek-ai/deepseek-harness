@@ -44,6 +44,6 @@
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
 
-- id: agent-team
-  config:
-    enabledByDefault: true
+- insert:
+    - id: enable-team-fixture
+      name: ../../../packages/subagent/agent-team/tests/enable-team-fixture.ts

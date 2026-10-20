@@ -31,18 +31,17 @@ export class TeamTaskBoard {
    * @param ctx - subagent discovery for task assignees.
    * @param journal - authoritative Lead-log transaction owner.
    * @param maxTasks - maximum non-deleted tasks retained by one Team.
-   * @param enabled - whether the root permits task-board operations.
    */
   constructor(
     private readonly ctx: Context,
     private readonly journal: TeamJournal,
     private readonly maxTasks: number,
-    private readonly enabled: (root: Agent) => boolean,
   ) {}
 
   private state(root: Agent) {
-    if (!this.enabled(root)) throw new TeamError('enable Agent Teams for this Session before using the task board', 'TEAM_DISABLED')
-    return this.journal.state(root)
+    const state = this.journal.state(root)
+    if (state.enabled !== true) throw new TeamError('enable Agent Teams for this Session before using the task board', 'TEAM_DISABLED')
+    return state
   }
 
   /**

@@ -22662,7 +22662,7 @@
       "digest": "0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1",
       "names": [],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:192"
+        "packages/subagent/agent-team/src/types.ts:179"
       ]
     },
     {
@@ -23042,7 +23042,7 @@
         "packages/subagent/agent-team/src/types.ts#TeamMessageSource"
       ],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:116"
+        "packages/subagent/agent-team/src/types.ts:117"
       ]
     },
     {
@@ -23222,7 +23222,7 @@
         "packages/subagent/agent-team/src/types.ts#TeamMessageSnapshot"
       ],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:107"
+        "packages/subagent/agent-team/src/types.ts:108"
       ]
     },
     {
@@ -24989,7 +24989,7 @@
       "digest": "a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c",
       "names": [],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:188"
+        "packages/subagent/agent-team/src/types.ts:175"
       ]
     },
     {
@@ -25236,7 +25236,7 @@
       "digest": "b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1",
       "names": [],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:186"
+        "packages/subagent/agent-team/src/types.ts:173"
       ]
     },
     {
@@ -25501,7 +25501,7 @@
       "digest": "c2a13242efc3bea4b36a843ddf1524ff4d33c765a71b582fa1fdbfa4fa148434",
       "names": [],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:184"
+        "packages/subagent/agent-team/src/types.ts:171"
       ]
     },
     {
@@ -25957,7 +25957,7 @@
       "digest": "ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403",
       "names": [],
       "sources": [
-        "packages/subagent/agent-team/src/types.ts:190"
+        "packages/subagent/agent-team/src/types.ts:177"
       ]
     },
     {

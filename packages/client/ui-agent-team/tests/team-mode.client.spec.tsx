@@ -10,7 +10,7 @@ afterEach(cleanup)
 
 function props(enabled: boolean | undefined, selectTeamMode = vi.fn(async () => null as string | null)): TeamModeToggleProps {
   return {
-    useProjection: () => enabled === undefined ? undefined : { enabled },
+    useProjection: () => enabled === undefined ? undefined : { enabled, tasks: [] },
     locked: false, reportFailure: vi.fn(), selectTeamMode,
     t: makeTranslate(zh),
   } as TeamModeToggleProps

@@ -50,6 +50,7 @@ function durable(agent: Agent): TeamProjectionState {
 async function setup(
   script: ConstructorParameters<typeof MockAdapter>[0],
   config: ConstructorParameters<typeof TeamService>[1] = {},
+  enabled = true,
 ) {
   const ctx = new Context()
   contexts.push(ctx)
@@ -63,10 +64,11 @@ async function setup(
   await ctx.plugin(SubagentService)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  const teamFiber = await ctx.plugin(TeamService, { enabledByDefault: true, ...config })
+  const teamFiber = await ctx.plugin(TeamService, config)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const lead = await ctx.agentLoop.create(SessionId('team-root'), { provider: 'mock', model: 'mock' })
+  if (enabled) await ctx.agentTeams.setEnabled(lead, true)
   return { ctx, lead, adapter, storageRoot, teamFiber }
 }
 
@@ -100,7 +102,7 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 
 describe('Tree-owned task boards', () => {
   it('executes root mode commands and rejects unknown selections without changing mode', async () => {
-    const { ctx, lead } = await setup([], { enabledByDefault: false })
+    const { ctx, lead } = await setup([], {}, false)
     await ctx.plugin(Commands)
     expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
     await expect(ctx.commands.execute(lead, '/team maybe', [], SIGNAL)).resolves.toMatchObject({ result: { kind: 'error' } })
@@ -112,7 +114,7 @@ describe('Tree-owned task boards', () => {
   })
 
   it('rejects disabled task access and descendant mode changes without appending', async () => {
-    const { ctx, lead } = await setup([], { enabledByDefault: false })
+    const { ctx, lead } = await setup([], {}, false)
     const child = await resident(ctx, lead, 'mode-child')
     expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
     expect(() => ctx.agentTeams.listTasks(lead)).toThrow('enable Agent Teams')
@@ -178,7 +180,7 @@ describe('Tree-owned task boards', () => {
     try {
       expect(ctx.agentTeams.isEnabled(lead)).toBe(true)
       expect(lead.session.ownEvents().filter(event => event.type === 'team/mode').map(event => event.data.enabled))
-        .toEqual([false, true])
+        .toEqual([true, false, true])
       await Promise.all([disabling, enabling])
     } finally {
       release.resolve(undefined)
@@ -292,7 +294,7 @@ describe('Tree-owned task boards', () => {
   })
 
   it('constructs with the default task limit and serializes concurrent task commits', async () => {
-    const { ctx, lead, teamFiber } = await setup([])
+    const { ctx, lead, teamFiber } = await setup([], {}, false)
     await teamFiber.dispose()
     class DirectTeamService extends TeamService {
       initialize(): Promise<void> { return this[Service.init]() }
@@ -375,6 +377,7 @@ describe('Tree-owned task boards', () => {
       meta: { parentSession: SessionId('absent-parent') },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
+    await ctx.agentTeams.setEnabled(rootWithOfflineSource.agent, true)
     expect(ctx.agentTeams.listTasks(rootWithOfflineSource.agent)).toEqual([])
     await rootWithOfflineSource.dispose()
   })

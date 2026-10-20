@@ -14,7 +14,7 @@ import SubagentService from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
-import TeamService, { TeamId, TeamMessageId } from '../src/index.ts'
+import TeamService, { TeamId, TeamMessageId, TeamTaskId } from '../src/index.ts'
 import { teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamMemberSnapshot, TeamMessageSnapshot, TeamTaskSnapshot } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
@@ -87,7 +87,6 @@ async function stack(
   backend: PersistenceMount,
   root: string,
   script: ConstructorParameters<typeof MockAdapter>[0],
-  enabledByDefault = true,
 ) {
   const ctx = new Context()
   contexts.add(ctx)
@@ -98,7 +97,7 @@ async function stack(
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
-  await ctx.plugin(TeamService, { enabledByDefault })
+  await ctx.plugin(TeamService)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   return {
@@ -114,17 +113,18 @@ for (const backend of backends) {
       const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-mode-'))
       roots.push(storageRoot)
       const id = SessionId('saved-mode')
-      const first = await stack(backend, storageRoot, [], false)
+      const first = await stack(backend, storageRoot, [])
       const lead = await first.ctx.agentLoop.create(id, { provider: 'mock', model: 'mock' })
       expect(first.ctx.agentTeams.isEnabled(lead)).toBe(false)
       await first.ctx.agentTeams.setEnabled(lead, true)
       const task = await first.ctx.agentTeams.createTask(lead, { subject: 'saved', description: 'retained while off' })
       await first.ctx.agentTeams.setEnabled(lead, false)
       await first.dispose()
-      const second = await stack(backend, storageRoot, [], true)
+      const second = await stack(backend, storageRoot, [])
       const resumed = await second.ctx.agents.resume({ resumeSessionId: id, agentOptions: { provider: 'mock', model: 'mock' } })
       expect(second.ctx.agentTeams.isEnabled(resumed.agent)).toBe(false)
-      expect(second.ctx.sessionProjections.snapshot(resumed.agent.session).values.agentTeamMode).toEqual({ enabled: false })
+      expect(second.ctx.sessionProjections.snapshot(resumed.agent.session).values.agentTeam)
+        .toMatchObject({ enabled: false, tasks: [task] })
       await second.ctx.agentTeams.setEnabled(resumed.agent, true)
       expect(second.ctx.agentTeams.listTasks(resumed.agent)).toEqual([task])
     })
@@ -146,11 +146,12 @@ for (const backend of backends) {
         delivery: 'caller',
       })
       await vi.waitFor(() => { expect(first.ctx.agents.get(started.childId)).toBeUndefined() }, { timeout: 5_000 })
-      const created = await first.ctx.agentTeams.createTask(firstLead, { subject: 'carry over', description: 'survives restart' })
+      const created = { id: TeamTaskId('task-1'), revision: 1, subject: 'carry over', description: 'survives restart', status: 'pending' as const, blockedBy: [], writeScopes: [] }
+      firstLead.session.append('team/task', { version: 2, teamId: TeamId(rootId), task: created })
       await first.ctx.sessions.flush(firstLead.session)
       await first.dispose()
 
-      const second = await stack(backend, storageRoot, [], false)
+      const second = await stack(backend, storageRoot, [])
       const rootHandle = await second.ctx.agents.resume({
         resumeSessionId: rootId,
         agentOptions: { provider: 'mock', model: 'mock' },
@@ -208,7 +209,7 @@ for (const backend of backends) {
         pendingMessages: [message],
       })
       const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
-      expect(projections.agentTeam).toEqual({ tasks: [] })
+      expect(projections.agentTeam).toEqual({ enabled: false, tasks: [] })
       expect(second.ctx.agents.get(childId)).toBeUndefined()
       expect(second.adapter.requests).toEqual([])
 
