@@ -710,6 +710,35 @@ describe('dsh-tool-team', () => {
     await other.dispose()
   })
 
+  it('updates model requests when Team is switched on and off within a turn', async () => {
+    const { ctx, lead, adapter } = await setup([
+      toolCallResponse('before-team', 'list_agents', {}),
+      toolCallResponse('with-team', 'list_agents', {}),
+      textResponse('ordinary work continues'),
+    ], false)
+    ctx.on('tools/execute', async (exec, next) => {
+      const result = await next()
+      await ctx.agentTeams.setEnabled(lead, exec.callId === 'before-team')
+      return result
+    })
+
+    await runTurn(lead, 'Inspect agents while switching Team on and off.')
+
+    expect(adapter.requests).toHaveLength(3)
+    const ordinaryTools = adapter.requests[0]!.tools
+    for (const [index, request] of adapter.requests.entries()) {
+      const enabled = index === 1
+      const tools = request.tools ?? []
+      expect(tools.filter(tool => TEAM_TOOLS.includes(tool.name)).map(tool => tool.name).sort())
+        .toEqual(enabled ? TEAM_TOOLS : [])
+      expect(tools.filter(tool => !TEAM_TOOLS.includes(tool.name))).toEqual(ordinaryTools)
+      const system = request.messages.find(message => message.role === 'system')
+      const prompt = system?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+      expect(prompt?.includes('A shared task board is available')).toBe(enabled)
+      expect(runtimeContextText(request)?.includes(leadIdentity(lead)) ?? false).toBe(enabled)
+    }
+  })
+
   it('keeps tools consistent with an appended selection if flushing fails, and permits retry', async () => {
     const { ctx, lead } = await setup([], false)
     const failure = new Error('storage unavailable')
