@@ -1,6 +1,7 @@
 /** Live terminal names in docked and floating tab chrome. */
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TerminalIcon } from './TerminalIcon.tsx'
 import type { TerminalInjected } from './face.ts'
 import type {} from './locales.ts'
@@ -14,6 +15,8 @@ import css from './TerminalTitle.module.css'
 export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime<'sidebar.right.pane.tab.title'> & PropsLocale<'sidebarTerminal'> & InjectFace<TerminalInjected>): ReactNode {
   const { tab } = useTabInfo()
   const title = useTerminal(tab.id, state => state?.info?.title ?? state?.title) ?? tab.title
+  const agentControl = useTerminal(tab.id, state => state?.info?.origin === 'agent' && state.info.control === 'agent')
+  const sandboxMode = useTerminal(tab.id, state => state?.info?.origin === 'agent' ? state.info.sandboxMode : undefined)
   const [editing, setEditing] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const label = useRef<HTMLSpanElement>(null)
@@ -56,5 +59,9 @@ export function TerminalTitle({ useTabInfo, useTerminal, view, t }: PropsRuntime
         } else if (event.key === 'Enter') event.currentTarget.blur()
       }} />
       : <span ref={label} className={css.title}>{title}</span>}
+    {agentControl && <span className={css.badge} title={t('badge.agentHint')}><Tag tone="info">{t('badge.agent')}</Tag></span>}
+    {(sandboxMode === 'read-only' || sandboxMode === 'workspace-write') && <span className={css.badge} title={t('badge.sandboxHint')}>
+      <Tag tone="neutral">{t(sandboxMode === 'read-only' ? 'badge.readOnly' : 'badge.workspaceWrite')}</Tag>
+    </span>}
   </>
 }

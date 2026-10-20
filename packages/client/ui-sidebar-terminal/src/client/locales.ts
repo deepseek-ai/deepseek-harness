@@ -23,6 +23,8 @@ export const zh = {
   attachmentEnded: '终端连接已结束，请重新连接。',
   invalidOutput: '终端画面传输异常，请重新连接。',
   terminalLimit: '终端数量已达上限，请关闭不用的终端后重试。已退出的终端也计入数量。',
+  'badge.agent': 'Agent', 'badge.agentHint': '由 Agent 打开。你一输入就由你接管，Agent 之后只能读取。',
+  'badge.readOnly': '只读沙箱', 'badge.workspaceWrite': '工作区沙箱', 'badge.sandboxHint': '命令在 Agent 的沙箱里运行，包括你在这里输入的命令。',
 } satisfies Record<string, string>
 
 /** English terminal copy. */
@@ -41,4 +43,6 @@ export const en = {
   attachmentEnded: 'The terminal connection ended. Reconnect to continue.',
   invalidOutput: 'The terminal screen could not be received. Reconnect to recover it.',
   terminalLimit: 'The terminal limit has been reached. Close unused terminals and try again. Exited terminals also count toward the limit.',
+  'badge.agent': 'Agent', 'badge.agentHint': 'Opened by the agent. Typing here takes over; the agent can then only read it.',
+  'badge.readOnly': 'Read-only sandbox', 'badge.workspaceWrite': 'Workspace sandbox', 'badge.sandboxHint': 'Commands run in the agent sandbox, including commands you type here.',
 } satisfies Record<keyof typeof zh, string>

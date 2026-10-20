@@ -69,6 +69,13 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }: Ter
   )
 }
 
+/**
+ * xterm.js reports the person's input and terminal-protocol replies through the same data event, so input that
+ * follows a person's gesture within this window counts as typed; IME commits arrive in a later task.
+ */
+const TYPED_INPUT_WINDOW_MS = 250
+const INPUT_GESTURES = ['keydown', 'beforeinput', 'paste', 'compositionend', 'drop', 'wheel', 'mousedown', 'touchstart'] as const
+
 /* oxlint-disable typescript/no-non-null-assertion -- React sets the DOM ref, then these effects initialize and use the emulator. */
 function TerminalScreen({ state, model, visible, label, theme }: {
   state: TerminalViewState
@@ -103,7 +110,10 @@ function TerminalScreen({ state, model, visible, label, theme }: {
     terminal.current = xterm
     fit.current = addon
     lastRevision.current = 0
-    const input = xterm.onData((data) => { model.write(data) })
+    let gestureAt = Number.NEGATIVE_INFINITY
+    const gesture = (): void => { gestureAt = performance.now() }
+    for (const type of INPUT_GESTURES) node.addEventListener(type, gesture, { capture: true, passive: true })
+    const input = xterm.onData((data) => { model.write(data, performance.now() - gestureAt < TYPED_INPUT_WINDOW_MS) })
     const measure = (): void => {
       if (!current.current.visible || !current.current.state.writable || node.clientWidth === 0 || node.clientHeight === 0) return
       fitScreen(xterm, addon, current.current.state, model)
@@ -112,6 +122,7 @@ function TerminalScreen({ state, model, visible, label, theme }: {
     observer.observe(node)
     return () => {
       observer.disconnect()
+      for (const type of INPUT_GESTURES) node.removeEventListener(type, gesture, { capture: true })
       input.dispose()
       cursor.dispose()
       palette.dispose()

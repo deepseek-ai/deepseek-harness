@@ -17,6 +17,7 @@ import { apply as hostApply } from '../src/index.ts'
 import { TerminalGuide, type TerminalGuideInjected } from '../src/client/TerminalGuide.tsx'
 import { LazyTerminalBody } from '../src/client/LazyTerminalBody.tsx'
 import { TerminalTitle } from '../src/client/TerminalTitle.tsx'
+import { AgentTerminalOpener, type AgentTerminalOpenerInjected } from '../src/client/AgentTerminalOpener.tsx'
 import type { TerminalBodyInjected } from '../src/client/face.ts'
 import { en, zh } from '../src/client/locales.ts'
 
@@ -43,15 +44,28 @@ async function mountPlugin() {
   const dictionaries = new Map<string, unknown>()
   let closeHandler: SidebarRightCloseHandler | undefined
   const model = { state: {} }
+  const represented = new Set<WebTerminalId>()
+  const rosterListeners = new Map<SessionId, (terminals: readonly WebTerminalInfo[]) => void>()
+  const releaseRoster = vi.fn()
   const terminals = {
     retainTabs: vi.fn(), view: vi.fn(() => model), close: vi.fn(), closeFailures: {}, retryClose: vi.fn(),
     launchShells: vi.fn(async () => ({ shells: [], selectedShell: undefined })), selectShell: vi.fn(),
     recover: vi.fn(async (_sessionId: SessionId): Promise<WebTerminalInfo[]> => []),
+    watch: vi.fn((sessionId: SessionId, listener: (terminals: readonly WebTerminalInfo[]) => void) => {
+      rosterListeners.set(sessionId, listener)
+      return releaseRoster
+    }),
+    isRepresented: vi.fn((_sessionId: SessionId, id: WebTerminalId) => represented.has(id)),
+    bind: vi.fn((_sessionId: SessionId, _contentId: string, id: WebTerminalId) => { represented.add(id) }),
   }
   let params: { terminalId: WebTerminalId } | { shellPath: string } | undefined
   const occurrence = vi.fn(() => ({ navigation: { getSnapshot: () => ({ params, address: 'sidebar://terminal/content' }) } }))
-  const openTabIn = vi.fn()
-  const tabsIn = vi.fn(() => [] as { id: string; kind: string }[])
+  const sidebarTabs: { id: string; kind: string; contentId: string }[] = []
+  let adopted = true
+  const openTabIn = vi.fn(() => {
+    if (adopted) sidebarTabs.push({ id: `tab-${sidebarTabs.length + 1}`, kind: 'terminal', contentId: `sidebar://terminal/${sidebarTabs.length + 1}` })
+  })
+  const tabsIn = vi.fn(() => [...sidebarTabs])
   const openTabs = createSnapshotStore<readonly SidebarRightOpenTab[]>([])
   const commandTarget = vi.fn(), openTabFromTarget = vi.fn()
   const commands: ShortcutCommand[] = []
@@ -77,7 +91,8 @@ async function mountPlugin() {
   const fiber = await ctx.plugin({ inject, apply })
   return {
     tabs, entries, dictionaries, terminals, model, occurrence, openTabIn, tabsIn, openTabs, theme,
-    commandTarget, openTabFromTarget, commands,
+    commandTarget, openTabFromTarget, commands, represented, rosterListeners, releaseRoster,
+    setAdopted(next: boolean) { adopted = next },
     emitTheme() { ctx.emit('theme/change', theme) },
     get closeHandler() { return closeHandler },
     setParams(next: typeof params) { params = next },
@@ -85,7 +100,7 @@ async function mountPlugin() {
   }
 }
 
-it('registers terminal views without recovery or cleanup slots, then releases contributions on unload', async () => {
+it('registers terminal views and the agent terminal opener without recovery or cleanup slots, then releases contributions on unload', async () => {
   expect(hostApply).not.toThrow()
   const h = await mountPlugin()
   try {
@@ -102,6 +117,7 @@ it('registers terminal views without recovery or cleanup slots, then releases co
       ['sidebar.right.tab.guide.entry', TerminalGuide, 'sidebarTerminal'],
       ['sidebar.right.pane.tab', LazyTerminalBody, 'sidebarTerminal'],
       ['sidebar.right.pane.tab.title', TerminalTitle, 'sidebarTerminal'],
+      ['conversation.session.header.actions', AgentTerminalOpener, 'sidebarTerminal'],
     ])
     const sessionId = 'session' as SessionId
     const launcher = h.entries[0]!.inject(sessionId) as TerminalGuideInjected
@@ -152,6 +168,7 @@ it('opens a terminal for the command target and refuses without a selected Sessi
   const h = await mountPlugin()
   try {
     const command = h.commands[0]!
+    expect(command.label()).toBe('new')
     const input = { region: 'page', modal: null, target: null } as const
     expect(command.resolve(input)).toEqual({ status: 'blocked', reason: 'shortcut.noSession' })
     const target = { sessionId: 'terminal-session' }
@@ -180,4 +197,41 @@ it('retains terminal metadata from dormant layouts and releases its inventory su
   h.openTabs.set([terminal])
   await Promise.resolve()
   expect(h.terminals.retainTabs).toHaveBeenCalledTimes(calls)
+})
+
+it('opens each running agent terminal once, binds its new tab and skips other terminals', async () => {
+  const h = await mountPlugin()
+  try {
+    const sessionId = 'session' as SessionId
+    const entry = h.entries.find(item => item.name === 'conversation.session.header.actions')!
+    const opener = entry.inject(sessionId) as AgentTerminalOpenerInjected
+    expect(entry.inject(sessionId)).toBe(opener)
+    const release = opener.watchAgentTerminals()
+    expect(release).toBe(h.releaseRoster)
+    const listener = h.rosterListeners.get(sessionId)!
+    const base: WebTerminalInfo = {
+      id: 'user' as WebTerminalId, title: 'zsh', shell: { path: '/bin/zsh', name: 'zsh', args: ['-i'] }, cwd: '/workspace',
+      cols: 80, rows: 24, state: 'running', exitCode: null, origin: 'user', control: 'user',
+    }
+    const agent: WebTerminalInfo = { ...base, id: 'agent' as WebTerminalId, origin: 'agent', control: 'agent', sandboxMode: 'workspace-write' }
+    const exited: WebTerminalInfo = { ...agent, id: 'exited' as WebTerminalId, state: 'exited', exitCode: 0 }
+    h.represented.add('shown' as WebTerminalId)
+    listener([base, exited, { ...agent, id: 'shown' as WebTerminalId }, agent])
+    expect(h.openTabIn).toHaveBeenCalledExactlyOnceWith(sessionId, 'terminal', { params: { terminalId: 'agent' } })
+    expect(h.terminals.bind).toHaveBeenCalledExactlyOnceWith(sessionId, 'sidebar://terminal/1', 'agent')
+    listener([agent])
+    expect(h.openTabIn).toHaveBeenCalledOnce()
+    h.setAdopted(false)
+    const pending: WebTerminalInfo = { ...agent, id: 'pending' as WebTerminalId }
+    listener([pending])
+    expect(h.openTabIn).toHaveBeenCalledTimes(2)
+    expect(h.terminals.bind).toHaveBeenCalledOnce()
+    const props = { watchAgentTerminals: opener.watchAgentTerminals } as Parameters<typeof AgentTerminalOpener>[0]
+    const view = render(createElement(AgentTerminalOpener, props))
+    expect(view.container.innerHTML).toBe('')
+    view.unmount()
+    await waitFor(() => { expect(h.releaseRoster).toHaveBeenCalledOnce() })
+  } finally {
+    await h.dispose()
+  }
 })

@@ -148,7 +148,7 @@ it('keeps one emulator across rename and locale updates, applies snapshots and o
   expect(h.model.acknowledge).toHaveBeenCalledWith(1)
   expect(terminal.focus).toHaveBeenCalledOnce()
   terminal.input?.('help\t')
-  expect(h.model.write).toHaveBeenCalledWith('help\t')
+  expect(h.model.write).toHaveBeenCalledWith('help\t', false)
   h.update({ ...snapshot, render: { revision: 2, frame: { type: 'output', sequence: 1, data: 'live' } } })
   expect(terminal.write).toHaveBeenCalledWith('live', expect.any(Function))
   h.update({ ...snapshot, render: { revision: 2, frame: { type: 'output', sequence: 1, data: 'duplicate' } } })
@@ -161,6 +161,28 @@ it('keeps one emulator across rename and locale updates, applies snapshots and o
   expect(terminal.dispose).toHaveBeenCalledOnce()
   expect(terminal.disposeInput).toHaveBeenCalledOnce()
   expect(disconnect).toHaveBeenCalledOnce()
+})
+
+it('marks emulator input as typed only shortly after a person gesture', () => {
+  const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  const snapshot: TerminalViewState = { ...idle, info, phase: 'connected', writable: true }
+  const h = mount(snapshot)
+  const terminal = fake.terminals[0]!
+  terminal.input?.('\x1b[?1;2c')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[?1;2c', false)
+  fireEvent.keyDown(terminal.textarea!, { key: 'l' })
+  now.mockReturnValue(1100)
+  terminal.input?.('l')
+  expect(h.model.write).toHaveBeenLastCalledWith('l', true)
+  now.mockReturnValue(1400)
+  terminal.input?.('\x1b[I')
+  expect(h.model.write).toHaveBeenLastCalledWith('\x1b[I', false)
+  fireEvent.paste(terminal.textarea!)
+  terminal.input?.('pasted')
+  expect(h.model.write).toHaveBeenLastCalledWith('pasted', true)
+  h.view.unmount()
+  now.mockReturnValue(1450)
+  fireEvent.keyDown(terminal.textarea!, { key: 'x' })
 })
 
 it('displays disconnect, close and exit states and offers explicit reconnection and takeover', () => {
@@ -318,6 +340,21 @@ it.each(titleSurfaces)('shows saved and attached terminal names in the $name', (
   expect(title.container.textContent).toBe('bash')
   expect(title.container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
   expect(title.container.querySelector('svg rect')).toBeNull()
+})
+
+it.each(titleSurfaces)('badges agent-controlled terminals and their sandbox in the $name until the person takes over', (surface) => {
+  const agentInfo = { ...info, origin: 'agent' as const, control: 'agent' as const, sandboxMode: 'workspace-write' as const }
+  const h = mount({ ...idle, info: agentInfo })
+  const chip = () => surface.wrap(<TerminalTitle {...h.props} />)
+  const title = render(chip())
+  expect(title.container.textContent).toBe(`bash${en['badge.agent']}${en['badge.workspaceWrite']}`)
+  expect(title.getByText(en['badge.agent']).closest('[title]')?.getAttribute('title')).toBe(en['badge.agentHint'])
+  h.update({ ...idle, info: { ...agentInfo, control: 'user', sandboxMode: 'read-only' } })
+  title.rerender(chip())
+  expect(title.container.textContent).toBe(`bash${en['badge.readOnly']}`)
+  h.update({ ...idle, info: { ...agentInfo, sandboxMode: 'danger-full-access' } })
+  title.rerender(chip())
+  expect(title.container.textContent).toBe(`bash${en['badge.agent']}`)
 })
 
 it.each(titleSurfaces)('renames from the $name pointer target, preserving dragging and isolating editor shortcuts', (surface) => {

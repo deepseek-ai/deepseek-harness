@@ -31,6 +31,7 @@ function failure(message: string): RemoteResult<never> {
 }
 
 function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void, inputWindow?: RemoteUplinkWindow) {
+  const rosterFrames: WebTerminalInfo[][] = []
   const attachments: StreamHandle[] = []
   const sent: TerminalInput[][] = []
   const mock = RemoteMock.create().stream('terminal/attach', async (args, stream) => {
@@ -52,6 +53,13 @@ function fixture(prepareStream?: <Item>(stream: RemoteStream<Item>) => void, inp
     environment: vi.fn<TerminalRemote['environment']>(async () => success(environment)), list: vi.fn<TerminalRemote['list']>(async () => success([])),
     create: vi.fn<TerminalRemote['create']>(async (_sessionId, request) => success({ ...info, id: request.id })),
     close: vi.fn<TerminalRemote['close']>(async () => success(undefined)), rename: vi.fn<TerminalRemote['rename']>(async () => success(undefined)),
+    watch: vi.fn<TerminalRemote['watch']>(streamMethod<TerminalRemote['watch']>(async function* (_session, signal) {
+      yield* rosterFrames
+      await new Promise<void>((resolve) => {
+        if (signal?.aborted) resolve()
+        else signal?.addEventListener('abort', () => { resolve() }, { once: true })
+      })
+    })),
     attach: mock.remote.terminal.attach,
   }
   const options: RemoteStreamOptions<unknown>[] = []

@@ -1,7 +1,7 @@
 /** Register interactive terminal tabs and explicit process cleanup with the sidebar. */
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
+import type { WebTerminalId, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller/types'
 import type { SidebarRightTabParamsMap, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller/client'
@@ -14,6 +14,7 @@ import { PluginArtworkTerminal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TerminalGuide, type TerminalGuideInjected } from './TerminalGuide.tsx'
 import { LazyTerminalBody } from './LazyTerminalBody.tsx'
 import { TerminalTitle } from './TerminalTitle.tsx'
+import { AgentTerminalOpener, type AgentTerminalOpenerInjected } from './AgentTerminalOpener.tsx'
 // import { TerminalRecovery, type TerminalRecoveryInjected } from './TerminalRecovery.tsx'
 // import { TerminalCleanup, type TerminalCleanupInjected } from './TerminalCleanup.tsx'
 import type { TerminalBodyInjected, TerminalInjected } from './face.ts'
@@ -99,6 +100,30 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab.title', key: id, locale: namespace, inject }, TerminalTitle,
   )), 'ui-sidebar-terminal.title')
+  const openAgentTerminals = (sessionId: SessionId, terminals: readonly WebTerminalInfo[]): void => {
+    for (const info of terminals) {
+      if (info.origin !== 'agent' || info.state !== 'running' || ctx.webTerminals.isRepresented(sessionId, info.id)) continue
+      const before = new Set(ctx.sidebarRight.tabsIn(sessionId).map(tab => tab.id))
+      ctx.sidebarRight.openTabIn(sessionId, 'terminal', { params: { terminalId: info.id } })
+      // Binding before the body mounts keeps the tab attached to this terminal across reload.
+      const opened = ctx.sidebarRight.tabsIn(sessionId).find(tab => tab.kind === 'terminal' && !before.has(tab.id))
+      if (opened !== undefined) ctx.webTerminals.bind(sessionId, opened.contentId, info.id)
+    }
+  }
+  const watches = new Map<SessionId, AgentTerminalOpenerInjected>()
+  ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions', id: `${id}.agent-terminals`, locale: namespace,
+    inject: (sessionId): AgentTerminalOpenerInjected => {
+      let watch = watches.get(sessionId)
+      if (watch === undefined) {
+        watch = {
+          watchAgentTerminals: () => ctx.webTerminals.watch(sessionId, (terminals) => { openAgentTerminals(sessionId, terminals) }),
+        }
+        watches.set(sessionId, watch)
+      }
+      return watch
+    },
+  }, AgentTerminalOpener)), 'ui-sidebar-terminal.agent-terminals')
   // ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
   //   name: 'conversation.session.header.actions', id, locale: namespace,
   //   inject: (sessionId): TerminalRecoveryInjected => ({
