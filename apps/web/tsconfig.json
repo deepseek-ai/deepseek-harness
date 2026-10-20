@@ -15,6 +15,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "tests"
   ],
   // The web e2e lane (scaffold + replay specs) boots the host spine and reads
@@ -22,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
     "tests/notice-wake-tail.e2e.ts",
     "tests/fold-blank-matrix.e2e.ts",
@@ -83,6 +85,7 @@
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",
+    "tests/entry-customization.e2e.ts",
     "tests/cua-optin.e2e.ts",
     "tests/bundle-platform.e2e.ts",
     "tests/cua-permissions.e2e.ts",

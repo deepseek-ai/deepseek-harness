@@ -163,11 +163,12 @@ describe.skipIf(mode === 'record')('web e2e: workspace shortcuts', () => {
     const newSessionBody = await newSessionResponse.json() as { result: { ok: boolean; value: { sessionId: string } } }
     expect(newSessionBody.result.ok).toBe(true)
     const newSessionId = newSessionBody.result.value.sessionId
-    expect(previousSessionIds).not.toContain(newSessionId)
+    // The added Workspace's only member is still blank, so New Session returns to it.
+    expect(previousSessionIds).toEqual([newSessionId])
+    expect(newSessionResponse.request().postDataJSON()).toHaveProperty('payload.args.request.sessionId', newSessionId)
     await page.locator(`[data-conversation-session="${newSessionId}"]`).waitFor()
     await expect.poll(() => page.getByRole('treeitem', { selected: true }).textContent()).toContain('New Session')
-    await expect.poll(() => workspace.sessionIds).toHaveLength(previousSessionIds.length + 1)
-    expect(workspace.sessionIds).toEqual(expect.arrayContaining([...previousSessionIds, newSessionId]))
+    expect(workspace.sessionIds).toEqual(previousSessionIds)
 
     await bind('Open locally')
     await page.keyboard.press('Meta+Shift+Comma')

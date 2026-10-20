@@ -7,16 +7,34 @@
   padding: 0 8px;
   padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   color: var(--dsw-alias-label-primary);
 }
 
-.projectRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .projectRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .sessionRow.selected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dragPreview {
+  position: fixed;
+  top: 0;
+  /* WebKit fills transparent snapshot pixels white, including rounded corners. */
+  background: var(--dsw-specific-sidebar-fill);
+  pointer-events: none;
+}
+
+.dragPreview > :first-child {
+  box-sizing: border-box;
+  margin: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .searchResultRow {
@@ -35,8 +53,10 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.searchResultRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .searchResultRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchResultRow.selected {
@@ -141,8 +161,11 @@
 
 /* Project leading slot: folder by default, expand arrow on row hover. */
 .projectRow .chevron { display: none; }
-.projectRow:hover .chevron { display: inline-flex; }
-.projectRow:hover .folder { display: none; }
+@media (hover: hover) {
+  .projectRow:hover .chevron { display: inline-flex; }
+
+  .projectRow:hover .folder { display: none; }
+}
 
 /* Expand arrow (filled triangle): points right closed, rotates to point down open. */
 .arrow {
@@ -259,8 +282,13 @@
   gap: 15px;
 }
 
-.projectRow:hover .rowActions,
-.searchResultRow:hover .rowActions,
+@media (hover: hover) {
+  .projectRow:hover .rowActions,
+  .searchResultRow:hover .rowActions {
+    display: inline-flex;
+  }
+}
+
 .projectRow.menuOpen .rowActions {
   display: inline-flex;
 }
@@ -315,6 +343,8 @@
 }
 
 @media (hover: none) {
+  .projectRow .rowActions,
+  .searchResultRow .rowActions,
   .sessionRow .rowActions {
     display: inline-flex;
   }
@@ -430,8 +460,10 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.iconButton:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Chevrons ride the caption grey (#ADB2B8); the folder glyph stays one step

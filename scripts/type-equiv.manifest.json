@@ -2526,21 +2526,6 @@
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionKeySelection",
       "source": "packages/session/session-projection/src/index.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "DeliveryMode",
-      "source": "packages/core/agent-controller/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "DeliveryRequest",
-      "source": "packages/core/agent-controller/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/core.md",
-      "symbol": "AdmissionDecision",
-      "source": "packages/core/agent-controller/src/types.ts"
     }
   ]
 }

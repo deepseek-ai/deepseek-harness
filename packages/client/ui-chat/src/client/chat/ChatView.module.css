@@ -187,7 +187,7 @@
 @media (prefers-reduced-motion: no-preference) {
   :where(.column > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
     .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-    [data-chat-group-key]
+  [data-chat-group-key]
   )) ~ .running {
     animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -199,6 +199,7 @@
      turning a switch on completes a running move at once. The structural rules
      above are wrapped in :where() so these rules outrank them. An input fold
      runs both moves at zero duration. */
+
   .column[data-input-fold] .running {
     animation-duration: 0s;
   }
@@ -207,9 +208,10 @@
      status keeps its on-screen position, so the first-output slide runs at zero
      duration. Admitted steering still passes its pending echo below the status,
      so the steering entrance keeps its duration. */
+
   .column[data-chat-tail-pinned] > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
     .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-    [data-chat-group-key]
+  [data-chat-group-key]
   ) ~ .running {
     animation-duration: 0s;
   }
@@ -415,8 +417,10 @@
   pointer-events: auto;
 }
 
-.toBottom:hover {
-  background: var(--dsw-alias-button-floating-hover);
+@media (hover: hover) {
+  .toBottom:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }
 
 /* Host open-path refusal: same dialog family as the workspace folder error. */

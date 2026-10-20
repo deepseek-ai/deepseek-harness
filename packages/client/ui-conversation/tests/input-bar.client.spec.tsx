@@ -990,7 +990,7 @@ describe('running and lock semantics', () => {
         t: makeTranslate(messages, {}),
       })
       const stop = view.getByRole('button', { name: label })
-      if (trigger === 'hover') fireEvent.mouseEnter(stop)
+      if (trigger === 'hover') fireEvent.pointerEnter(stop)
       else fireEvent.focus(stop)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe(`${label} Esc Esc`)
@@ -1005,7 +1005,7 @@ describe('running and lock semantics', () => {
     vi.useFakeTimers()
     try {
       const { button, view, session } = bench({ running: true })
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(view.getByRole('tooltip').getAttribute('aria-label')).toBe('停止生成 Esc Esc')
 

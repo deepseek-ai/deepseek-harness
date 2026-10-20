@@ -1079,7 +1079,7 @@ describe('ui-agent-preset apply', () => {
     conversation()
   })
 
-  it('lets the new-session flow compose the creator preset on a blank main Session', async () => {
+  it('stages Creator only on a main blank that does not list another preset', async () => {
     const { ctx, slots, calls } = await bench()
     declareRoot(slots)
     const conversation = declareConversation(slots)
@@ -1103,10 +1103,19 @@ describe('ui-agent-preset apply', () => {
     section.startCreatorDraft?.()
     expect(uiWorkspace.starts).toEqual([{ workspaceId: undefined, options: { clearPreviousDraft: false, agentPreset: 'cordis' } }])
 
-    // The Host composes the reused Session; the chip only follows its projection.
+    // Navigation opens another blank for Creator, so the Standard main blank is neither staged nor switched.
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
+    sessions.notify()
+    await Promise.resolve()
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
+    expect(calls).not.toContain('select:cordis')
+
+    // A blank whose listed preset is already Creator is staged and follows its projection.
     state.byId.s1 = { id: 's1', blank: true, projectionValues: { agentPreset: 'cordis' } }
     sessions.notify()
+    section.startCreatorDraft?.()
     await vi.waitFor(() => { expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('cordis') })
+    expect(seat.hooks.agentPresetSeat.getSnapshot().introduce).toBe(true)
     expect(calls).not.toContain('select:cordis')
     conversation()
   })

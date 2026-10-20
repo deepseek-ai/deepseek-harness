@@ -41,6 +41,7 @@ export const zh = {
   'dock.drop.top': '上分栏',
   'dock.drop.bottom': '下分栏',
   'tab.guide.title': '开始',
+  'tab.guide.more': '更多工具',
   'tab.unavailable': '这类内容还没有可用的查看方式。',
 } satisfies Record<string, string>
 
@@ -82,5 +83,6 @@ export const en = {
   'dock.drop.top': 'Add top split',
   'dock.drop.bottom': 'Add bottom split',
   'tab.guide.title': 'Start',
+  'tab.guide.more': 'More tools',
   'tab.unavailable': 'Nothing here can view this kind of content yet.',
 } satisfies Record<SidebarRightKey, string>

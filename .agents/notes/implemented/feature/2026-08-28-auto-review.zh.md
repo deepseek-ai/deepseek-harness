@@ -30,19 +30,20 @@ Reviewer 从既有 Session 事实派生权威。`source.kind === 'user'` 的文�
 
 ### 一次完整 reviewer 请求
 
-Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求固定包含五个分区：
+Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求由固定 system prompt 和其后的 user 消息组成：
 
-| 分区 | 保留输入 |
+| 部分 | 保留输入 |
 | --- | --- |
-| `REVIEW_POLICY` | 固定分类、来源权威与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
-| `ENVIRONMENT` | 仅既有 Session header `cwd` |
-| `PROJECT_INSTRUCTIONS` | 可见项目指令，保留原始来源并赋予约束角色 |
-| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的用户／直接父级消息、checkpoint、图片／附件事实，以及历史调用名称与日志参数 |
-| `PENDING_ACTION` | 工具名称、描述、参数 schema 与解析后的 arguments |
+| System prompt `REVIEW_POLICY` | 固定分类、来源权威、消息布局与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
+| 第一条 user 消息 `ENVIRONMENT` | 仅既有 Session header `cwd` |
+| 每个保留条目一条 user 消息 | 当前 compaction surface 中带来源的用户／直接父级消息、带约束角色的项目指令、checkpoint、图片／附件事实、历史调用名称与日志参数，以及在首次使用某个已审 schema 的调用之前出现的 `tool-schema` 条目，按 surface 顺序排列 |
+| 最后一条 user 消息 | 待审调用及其日志参数；其之前同 mode 与名称的最新 `tool-schema` 条目给出工具描述与参数 schema |
 
-reviewer 从 Session 的完整动作历史构建这两个动作分节：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。
+每个条目各占一条消息，并在后续评审中保持相同文本：待审调用会变成历史调用，integration 为每个存活 Session 记住每次已审调用展示的 schema，使其在同一位置再次出现。因此一次评审的消息以上一次评审的全部消息开头。只在消息结尾缓存的 provider（如 GPT-5.6 及以后的 OpenAI 隐式断点），或在末尾标记处向前回溯的 provider（如 Anthropic `cache_control`），都能复用上一次评审；单条不断增长的 user 消息只能让它们复用策略。Schema 记忆只在进程内，因此重启后的第一次评审会缺少先前的 schema，并有一次缓存未命中。
 
-主 agent 的 V3 `system/message` 节点、assistant 正文／reasoning 与 tool results 全部排除。当前调用必须属于 `step/start` 记录的开放 step；缺少 step 归属时拒绝执行。该调用只在 `PENDING_ACTION` 出现；尚未开始的 sibling 没有历史调用事实。原生 schema 来自最新 request header。PTC 在 binding 构造时捕获冻结 schema，经由调度器传入 `ToolExecution`；描述与参数 schema 不进入开始／结算事件或 Session／SDK wire。动作事实缺失、不一致或有歧义时拒绝调用，不查询 live registry。超窗请求直接拒绝，不做摘要、截断、额外 compaction 或设置小型输出 token 预算。
+reviewer 从 Session 的完整动作历史构建历史与待审调用：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。
+
+主 agent 的 V3 `system/message` 节点、assistant 正文／reasoning 与 tool results 全部排除。当前调用必须属于 `step/start` 记录的开放 step；缺少 step 归属时拒绝执行。该调用只作为最后一条消息出现；尚未开始的 sibling 没有历史调用事实。原生 schema 来自最新 request header。PTC 在 binding 构造时捕获冻结 schema，经由调度器传入 `ToolExecution`；描述与参数 schema 不进入开始／结算事件或 Session／SDK wire。动作事实缺失、不一致或有歧义时拒绝调用，不查询 live registry。超窗请求直接拒绝，不做摘要、截断、额外 compaction 或设置小型输出 token 预算。
 
 ### 结果与取消
 

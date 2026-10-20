@@ -36,6 +36,7 @@
     "@deepseek-ai/dsh-web": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-output-retention": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@joplin/turndown-plugin-gfm": "^1.0.67",

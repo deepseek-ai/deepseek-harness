@@ -33,9 +33,6 @@
       "path": "../../core/agent"
     },
     {
-      "path": "../../core/agent-controller"
-    },
-    {
       "path": "../../core/agent-default-model"
     },
     {

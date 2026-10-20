@@ -175,6 +175,31 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
         expect(await opened()).toHaveLength(count + 1)
         expect((await opened()).at(-1)).toEqual({ action: 'open', path: await realpath(join(cwd, name)), content: bytes })
       }
+      const success = row.locator('[data-presented-file]').filter({ hasText: '说明.txt' }).locator('[data-success]')
+      await success.waitFor()
+      const animation = await success.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const fade = element.getAnimations()[0]
+        if (fade === undefined) throw new Error('Successful file feedback has no fade animation')
+        // Seek the CSS animation so the 200 ms fade does not race the assertion.
+        fade.pause()
+        fade.currentTime = 5100
+        return {
+          delay: style.animationDelay, duration: style.animationDuration,
+          fill: style.animationFillMode, opacity: Number(getComputedStyle(element).opacity),
+        }
+      })
+      expect(animation.delay).toBe('5s')
+      expect(animation.duration).toBe('0.2s')
+      expect(animation.fill).toBe('forwards')
+      expect(animation.opacity).toBeGreaterThan(0)
+      expect(animation.opacity).toBeLessThan(1)
+      try {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        expect(await success.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      } finally {
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
+      }
     }
     expect(downloads).toEqual([])
     const response = await page.request.get(new URL(`/api/session.export?sessionId=${sessionId}`, scaffold.authenticatedUrl).href)

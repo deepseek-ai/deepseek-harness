@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {
   ChatFlowDataInjected, ChatFlowInjected, ChatNodeInjected, ChatScrollPosition, ChatViewInjected,
   QuotaNoticeInjected, QuotaNoticeState, TurnTailOwnerProps,
@@ -74,7 +75,7 @@ export const CHAT_NODE_INJECT: ChatNodeInjected = {
 /** Services required by the Chat target and its presentation registrations. */
 export const inject = [
   'slots', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'locale',
-  'configForms', 'remote', 'remote.session', 'sidebarRight',
+  'configForms', 'connection', 'remote', 'remote.session', 'sidebarRight',
 ]
 
 /**
@@ -203,7 +204,8 @@ export function apply(ctx: Context): void {
     }),
   }, TranscriptViewRow))
 
-  const nodeSources = (binding: SessionBinding): ChatFlowDataInjected => {
+  const connectionState = (ctx.get('connection') as ConnectionHandle).state
+  const nodeSources = (binding: SessionBinding): Pick<ChatViewInjected, 'hooks' | 'keyedHooks'> => {
     const chat = chatSource(binding)
     const conversation = ctx.uiConversation.binding(binding)
     return {
@@ -225,7 +227,8 @@ export function apply(ctx: Context): void {
     inject: (sessionId: SessionId): ChatFlowDataInjected => {
       const binding = ctx.sessions.binding(sessionId)
       if (binding === undefined) throw new Error(`ui-chat: unknown session "${sessionId}"`)
-      return nodeSources(binding)
+      const sources = nodeSources(binding)
+      return { ...sources, hooks: { ...sources.hooks, connectionState } }
     },
   }, ChatFlow))
 

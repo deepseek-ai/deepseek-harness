@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, watchConsole, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot } from './support.ts'
 import { installNativeFixture, startFixtureHost } from '../../../packages/experimental/cua-macos/tests/native-fixture.ts'
 
 const bundle = fileURLToPath(new URL('../../../packages/experimental/cua-bundle', import.meta.url))
@@ -193,13 +193,13 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await trace.evaluate((value) => { value.layouts.length = 0; value.documents.length = 0 })
       for (let cycle = 0; cycle < 3; cycle++) {
         await toggle.click()
-        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-        await expect.poll(() => toggle.isEnabled()).toBe(true)
+        await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
+        await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
         await toggle.click()
-        await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+        await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
         const setup = page.getByRole('dialog', { name: 'Set up Computer Use before use', exact: true })
         await setup.getByRole('button', { name: 'Later', exact: true }).click()
-        await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+        await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
         expect(await trace.evaluate(value => value.errors)).toEqual([])
       }
       const layouts = await trace.evaluate(value => value.layouts)
@@ -221,17 +221,16 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const diagnosticText = await diagnostic.innerText()
   const height = await panel.evaluate(element => element.getBoundingClientRect().height)
   const rowToggle = plugins.getByRole('switch', { name: 'Enable component @deepseek-ai/dsh-experimental-cua-macos', exact: true })
-  const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
   const changeRow = scaffold.ctx.pluginManager.setPluginEnabled.bind(scaffold.ctx.pluginManager)
   let changing: ReturnType<typeof changeRow> | undefined
   const hold = vi.spyOn(scaffold.ctx.pluginManager, 'setPluginEnabled').mockImplementationOnce((entryId, enabled) => {
-    entered.resolve(undefined)
     changing = release.promise.then(() => changeRow(entryId, enabled))
     return changing
   })
   try {
     await rowToggle.click()
-    await entered.promise
+    await expect.poll(() => hold.mock.calls.length, { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(1)
     await expect.poll(() => panel.getAttribute('aria-busy')).toBe('true')
     expect(await diagnostic.innerText()).toBe(diagnosticText)
     expect(await diagnostic.getByRole('button', { name: 'Retry', exact: true }).isEnabled()).toBe(false)
@@ -241,12 +240,12 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     hold.mockRestore()
     await changing
   }
-  await expect.poll(() => rowToggle.getAttribute('aria-checked')).toBe('false')
-  await expect.poll(() => rowToggle.isEnabled()).toBe(true)
+  await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
+  await expect.poll(() => rowToggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
   await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
   await rowToggle.click()
-  await expect.poll(() => rowToggle.getAttribute('aria-checked')).toBe('true')
-  await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+  await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
+  await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   await diagnostic.waitFor({ state: 'hidden' })
   expect(tripwire.pageErrors).toEqual([])
-}, 60_000)
+})

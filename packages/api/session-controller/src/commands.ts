@@ -5,15 +5,14 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
-import type { ADMISSION_AGENT_GONE, ADMISSION_REJECTED_CODE, AgentAdmissionRejected } from '@deepseek-ai/dsh-agent-controller'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {
   AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef,
 } from '@deepseek-ai/dsh-attachment'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
-import type { PromptFileBinding } from '@deepseek-ai/dsh-client-file-upload'
+import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
-  ReasoningEffortId, assistantStreamChunks, freezeMessage,
+  ReasoningEffortId, assistantStreamChunks, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
@@ -311,72 +310,56 @@ export class SessionCommandController {
   }
 
   /**
-   * Deliver one prompt through the Agent controller, whose admission stage
-   * may hold or refuse it; the Remote method has already validated the
-   * content and built the durable message source. The controller runs this
-   * Session's content preparation (image model check, upload receipts,
-   * attachment storage) in the Agent's delivery order and binds the upload
-   * receipts immediately before the message enters the inbox. A repeated
-   * request identity is acknowledged without delivering it again. An image
-   * prompt takes the Session's image admission turn when its preparation
-   * starts and keeps it until the prompt settles, so a model selection lands
-   * either before its image check or after it entered the inbox; a selection
-   * waits while a listener holds that image prompt.
+   * Admit one prompt after Agent and attachment validation; the Remote method
+   * has already validated the content and built the durable message source.
    * @param request - Session identity, prompt content, and delivery mode.
    * @param source - the `user-rpc` source recorded on the accepted message.
-   * @param signal - the requesting client's cancellation; it stops a prompt that waits for its turn or is held at the admission stage.
    * @returns acknowledgement that the Agent accepted the prompt.
-   * @throws `session/prompt-rejected` when an admission listener refuses the prompt or fails.
    */
-  async prompt(request: SessionPromptRequest, source: MessageSource, signal: AbortSignal): Promise<SessionPromptValue> {
+  async prompt(request: SessionPromptRequest, source: MessageSource): Promise<SessionPromptValue> {
     const agent = await this.resolveAgent(request.sessionId)
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
     const hasImage = request.content.some(part => part.type === 'image')
-    const uploads: { receiptIds: readonly FileUploadReceiptId[]; binding?: PromptFileBinding } = { receiptIds: [] }
-    const imageTurn: { release?: () => void } = {}
-    try {
-      await this.ctx.agentController.deliver(agent, {
-        mode: request.mode === 'steer' ? 'steer' : 'followup',
-        source,
-        signal,
-        prepare: async (preparing) => {
-          if (hasImage) {
-            // Taken in the Agent's delivery order, so a waiting image prompt keeps its place among the others.
-            imageTurn.release = await this.agents.acquireImageAdmission(agent, preparing)
-            await this.requireImageInput(agent)
+    const admit = async (): Promise<SessionPromptValue> => {
+      try {
+        if (hasImage) {
+          const current = this.agents.selectionFor(agent).current
+          const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
+          if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {
+            throw new RemoteError(
+              'session/attachment-invalid',
+              `Model "${current.model}" does not support image input.`,
+              { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+            )
           }
-          const admission = resolvePromptFileReceipts(
-            request.content,
-            receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+        }
+        const admission = resolvePromptFileReceipts(
+          request.content,
+          receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+        )
+        const content = await this.ctx.attachments.admitPromptContent(admission.content)
+        const message: UserMessage = createUserMessage({ content, source })
+        if (this.ctx.agents.get(agent.id) !== agent) {
+          throw new RemoteError(
+            'session/not-found',
+            `session "${agent.id}" was disposed during prompt admission`,
+            { sessionId: agent.id },
           )
-          uploads.receiptIds = admission.receiptIds
-          return await this.ctx.attachments.admitPromptContent(admission.content)
-        },
-        beforeInsert: () => {
-          uploads.binding = this.ctx.fileUploads.bindPrompt(agent, uploads.receiptIds, request.requestId)
-        },
-      })
-      uploads.binding?.commit()
-    } catch (error) {
-      throw promptFailure(agent, error, signal)
-    } finally {
-      uploads.binding?.[Symbol.dispose]()
-      imageTurn.release?.()
+        }
+        using binding = this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId)
+        if (request.mode === 'steer') agent.steer(message)
+        else agent.followup(message)
+        binding.commit()
+      } catch (error) {
+        if (remoteErrorOf(error) !== undefined) throw error
+        if (error instanceof AttachmentError) {
+          throw new RemoteError('session/attachment-invalid', error.message, { reason: error.code })
+        }
+        throw new RemoteError('session/agent-busy', 'prompt rejected', { reason: String(error) })
+      }
+      return { accepted: true }
     }
-    return { accepted: true }
-  }
-
-  /** Refuse an image prompt when the Session's current model does not declare image input. */
-  private async requireImageInput(agent: Agent): Promise<void> {
-    const current = this.agents.selectionFor(agent).current
-    const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
-    if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {
-      throw new RemoteError(
-        'session/attachment-invalid',
-        `Model "${current.model}" does not support image input.`,
-        { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
-      )
-    }
+    return hasImage ? this.agents.serializeImageAdmission(agent, admit) : admit()
   }
 
   private async requireModel(selection: Pick<AgentModelSelection, 'provider' | 'model'>): Promise<void> {
@@ -575,36 +558,6 @@ export class SessionCommandController {
     }
     return undefined
   }
-}
-
-// Typed by the agent-controller constants, so a changed value fails this module's build while it imports no agent-controller value.
-const ADMISSION_REJECTED: typeof ADMISSION_REJECTED_CODE = 'AGENT_ADMISSION_REJECTED'
-const AGENT_GONE: typeof ADMISSION_AGENT_GONE = 'agent-controller/agent-gone'
-
-/** Recognize an admission refusal by the code that the error of every copy of the agent-controller module carries. */
-function isAdmissionRejected(error: unknown): error is AgentAdmissionRejected {
-  return error instanceof Error && 'code' in error && error.code === ADMISSION_REJECTED
-}
-
-/**
- * Map a failed prompt admission onto the Session Remote's failures: Remote
- * failures and the client's own cancellation pass unchanged, and an admission
- * refusal keeps its reason and whether its plugin presents it.
- */
-function promptFailure(agent: Agent, error: unknown, signal: AbortSignal): unknown {
-  if (remoteErrorOf(error) !== undefined || signal.aborted) return error
-  if (isAdmissionRejected(error)) {
-    if (error.reason === AGENT_GONE) {
-      return new RemoteError('session/not-found', `session "${agent.id}" was disposed during prompt admission`, {
-        sessionId: agent.id,
-      })
-    }
-    return new RemoteError('session/prompt-rejected', error.message, { reason: error.reason, presented: error.presented })
-  }
-  if (error instanceof AttachmentError) {
-    return new RemoteError('session/attachment-invalid', error.message, { reason: error.code })
-  }
-  return new RemoteError('session/agent-busy', 'prompt rejected', { reason: String(error) })
 }
 
 function resolvePromptFileReceipts(

@@ -46,9 +46,9 @@ function searchResponse() {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('mapSearchResponse', () => {
-  it('maps source titles, snippets and nullable dates in provider order', () => {
+  it('maps source titles, snippets, summaries and nullable dates in provider order', () => {
     expect(mapSearchResponse(searchResponse())).toEqual({ sources: [
-      { url: 'https://a.test', title: 'A', snippet: 'excerpt for A', publishedAt: '2026-02-02T16:00:00+00:00' },
+      { url: 'https://a.test', title: 'A', snippet: 'excerpt for A', summary: 'longer summary for A', publishedAt: '2026-02-02T16:00:00+00:00' },
       { url: 'https://b.test', title: 'B' },
     ], truncated: false })
   })
@@ -63,6 +63,7 @@ describe('mapSearchResponse', () => {
     { results: [{ url: 'https://a.test', title: 1, snippet: '', date: null }] },
     { results: [{ url: 'https://a.test', title: '', snippet: 1, date: null }] },
     { results: [{ url: 'https://a.test', title: '', snippet: '', date: 1 }] },
+    { results: [{ url: 'https://a.test', title: '', snippet: '', summary: 1, date: null }] },
   ])('rejects malformed remote JSON %j', (body) => {
     expect(() => mapSearchResponse(body)).toThrow(expect.objectContaining({ code: 'WEB_PROVIDER_ERROR' }))
   })

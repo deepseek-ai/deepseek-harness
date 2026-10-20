@@ -79,7 +79,12 @@
   opacity: 0;
 }
 
-.stepper:hover .arrows,
+@media (hover: hover) {
+  .stepper:hover .arrows {
+    opacity: 1;
+  }
+}
+
 .stepper:focus-within .arrows {
   opacity: 1;
 }
@@ -101,8 +106,10 @@
   cursor: pointer;
 }
 
-.arrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .arrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .arrow:disabled {
@@ -125,8 +132,10 @@
   cursor: pointer;
 }
 
-.expander:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .expander:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .expander svg {

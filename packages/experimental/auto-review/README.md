@@ -77,7 +77,7 @@ A final denial uses the ordinary tool card. The collapsed row identifies Auto re
 
 [`cordis.patch.yml`](cordis.patch.yml) inserts the package itself as the `auto-review` row. [`src/index.ts`](src/index.ts) requires the approval, LLM, permission, Session, and tools services, then installs the preset contribution and prepended pre-execute listener in one effect. After the review settles, a denial reads the Session's approval policy: under `never` it is final; under `ask` the listener delegates to later pre-execute listeners and returns the tools pipeline's `ask` decision only when they allow the call, so a later denial, cancellation, or `ask` (with its own reason) takes precedence. The `ask` decision carries an English audited reason and localized prompt text that keeps the raw reviewer reason. The [permission owner](../../interaction/permission-presets/README.md) supplies the current identity and process catalog; Auto uses Full access's sandbox value with the `ask` approval policy and does not change tool definitions.
 
-The reviewer reconstructs five sections from the current Session surface and pending execution: fixed policy, cwd-only environment, sourced project constraints, filtered sourced history, and the complete pending action. Native schema comes from the latest request header. A PTC binding freezes its schema and carries it through the scheduler into transient execution metadata; start and settle events never serialize description or parameters. Main-agent `system/message` nodes, assistant text and reasoning, and tool results are excluded. The outer review input is a frozen `RequestUserInput` without durable identity or source; retained history keeps its original source attribution in the review text. [The decision record](../../../.agents/notes/implemented/feature/2026-08-28-auto-review.md) owns authority, lifecycle, and child-inheritance rationale.
+The reviewer sends the fixed policy as its system prompt, then one user message for the cwd-only environment, one per retained Session item in surface order, and the pending call last. Project instructions appear where they entered the surface, with the constraint role. A `tool-schema` item precedes the first call that used each reviewed schema; the integration remembers each reviewed call's schema for the live Session so that later reviews repeat it at the same position. Native schema comes from the latest request header. A PTC binding freezes its schema and carries it through the scheduler into transient execution metadata; start and settle events never serialize description or parameters. Main-agent `system/message` nodes, assistant text and reasoning, and tool results are excluded. The outer review input is a frozen `RequestUserInput` without durable identity or source; retained history keeps its original source attribution in the review text. [The decision record](../../../.agents/notes/implemented/feature/2026-08-28-auto-review.md) owns authority, lifecycle, and child-inheritance rationale.
 
 Unloading closes selection and review admission. If the application root remains active, unload then migrates live Auto Sessions to Full access through the existing preset writer; this includes plugin removal and reload. The migration writes the `never` approval policy without queuing a policy-change notice; the model sees the new policy in the next runtime-context snapshot. The sandbox value and persistent terminals survive the migration. Application shutdown preserves the selected preset and approval policy. Both paths abort and drain reviews before withdrawing the listener and contribution. A persisted Auto Session cannot publish without the complete integration, even when the reopening request selects another preset. Load the integration again before reopening. Reinstalling the layer restores the option but does not switch live Sessions back to Auto.
 
@@ -102,7 +102,7 @@ Unloading closes selection and review admission. If the application root remains
 
 #### What the model sees
 
-The reviewer uses the latest `request/header.config` provider and model with the shipped adapter's default reasoning. Its fixed `REVIEW_POLICY` replaces human approval for exactly one action: allow executes immediately with Full access. The other four sections contain only the retained facts described above. It returns one strict JSON text object with `risk` and `decision`; deny may include a string `reason`. Reasoning blocks may precede that single text block. Only `low + allow`, `medium + allow/deny`, and `high + deny` are valid.
+The reviewer uses the latest `request/header.config` provider and model with the shipped adapter's default reasoning. Its fixed `REVIEW_POLICY` replaces human approval for exactly one action: allow executes immediately with Full access. The user messages contain only the retained facts described above. It returns one strict JSON text object with `risk` and `decision`; deny may include a string `reason`. Reasoning blocks may precede that single text block. Only `low + allow`, `medium + allow/deny`, and `high + deny` are valid.
 
 #### Token effect
 
@@ -110,7 +110,7 @@ One additional model request per supported call, without caching, retries, trunc
 
 #### KV Cache effect
 
-The fixed reviewer policy can share a prefix; retained history and the pending action vary per call. Auto adds no dedicated runtime context or mode-switch prompt to the main agent.
+Each review's messages begin with all messages of the previous review, including its pending call, so routes that cache by prompt prefix, at message ends, or at a final marker with lookback reuse the policy and earlier history. Compaction, a cwd change, an earlier item leaving the surface, and the first review after a restart end that reuse once. Auto adds no dedicated runtime context or mode-switch prompt to the main agent.
 
 ### Tool denial
 
@@ -136,6 +136,7 @@ The denial appends an ordinary tool result; it does not rewrite earlier context 
 - Model classification can be wrong. There are no deterministic tool exemptions, persistent grants, configurable policy, or retry layer.
 - In-process Auto children review their own calls. Out-of-process children retain their native permission systems after the parent delegation call is allowed.
 - The reviewer reads the Session action history through the deprecated synchronous `snapshotEvents()` reader under a line-scoped waiver. Prior calls, PTC starts, and the direct parent's initial prompt have no projection or paged reader yet, so the migration stays deferred by [the synchronous-read decision](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md).
+- Review requests carry no `sessionId`, so OpenAI routes receive no `prompt_cache_key`. Passing it would also attach the DeepSeek session-log upload and session headers to review requests, which first needs a request-purpose decision.
 
 <a id="dev-note"></a>
 ### Dev Note

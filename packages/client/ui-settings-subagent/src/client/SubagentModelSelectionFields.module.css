@@ -107,8 +107,10 @@
   cursor: pointer;
 }
 
-.model:hover {
-  background: var(--dsw-alias-bg-layer-4);
+@media (hover: hover) {
+  .model:hover {
+    background: var(--dsw-alias-bg-layer-4);
+  }
 }
 
 .modelName,

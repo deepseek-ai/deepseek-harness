@@ -60,10 +60,12 @@
   padding: 14px 16px;
 }
 
-.reject:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
-  border-color: transparent;
+@media (hover: hover) {
+  .reject:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-primary);
+    --dsh-button-outline-color: transparent;
+  }
 }
 
 .subject {

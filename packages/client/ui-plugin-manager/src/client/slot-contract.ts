@@ -100,7 +100,7 @@ export interface PluginTabProps {
    */
   readonly install: (target: PluginTabInstall) => void
   /**
-   * Switch to the Installed tab and open a bundle's page.
+   * Switch to the Installed tab and open a bundle's page, whose back button returns to the calling tab.
    * @param packageName - npm package name of the bundle.
    */
   readonly openPackage: (packageName: string) => void

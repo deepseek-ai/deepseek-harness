@@ -212,12 +212,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/projections-unavailable': Record<string, never>
     'session/writer-held': { readonly sessionId: SessionId }
     'session/agent-busy': { readonly reason: string }
-    'session/prompt-rejected': {
-      /** Code of the refusal, owned by the plugin that refused, such as `forgePanel/worktree-missing`. */
-      readonly reason: string
-      /** Whether the refusing plugin shows its own explanation, so the client adds no notice. */
-      readonly presented: boolean
-    }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
     'agent-preset/conflict': {

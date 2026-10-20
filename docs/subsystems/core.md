@@ -15,10 +15,9 @@ A turn flows through the six packages in one loop: the driver in [`agent-loop`](
 | `tools/` | The scoped tool registry and guarded execution pipeline (`ctx.tools`) | [tools.md](tools.md) |
 | `agent/` | The `Agent` interface, live registry, initiator scope, and `agent/*` event vocabulary (`ctx.agents`) | this page |
 | `agent-loop/` | The concrete driver implementing the public `Agent` contract (`ctx.agentLoop`) | this page |
-| `agent-controller/` | Delivery of messages from outside an Agent through the `agent-controller/admission` stage (`ctx.agentController`) | this page |
 | `scope/` | The scoped-registration primitive the registries and loop build per-agent scoping on | [scope.md](scope.md) |
 
-`scope/` is the one non-service package: a dependency-free library (`createScope`/`scopeOf`/`scopeTarget`) that sits below `session/` and `system-prompt/` in the module graph precisely so they can consume it without a cycle. `agent-loop` is the one concrete implementation of the public `Agent` contract and lives here because it is the harness's default product loop; it runs each driver inside `ctx.agents.withInitiator()`. Extension plugins depend on `agent` — including when they need the initiating Agent — and never on `agent-loop` directly, so the loop stays swappable. `agent-controller` sits in front of the loop: a sender that brings a message on someone's behalf delivers it through `ctx.agentController` instead of appending to the inbox itself. [`dsh-base`](../../packages/bundle/base/README.md) is the default product composition, while [`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.md) declares a smaller standalone tree.
+`scope/` is the one non-service package: a dependency-free library (`createScope`/`scopeOf`/`scopeTarget`) that sits below `session/` and `system-prompt/` in the module graph precisely so they can consume it without a cycle. `agent-loop` is the one concrete implementation of the public `Agent` contract and lives here because it is the harness's default product loop; it runs each driver inside `ctx.agents.withInitiator()`. Extension plugins depend on `agent` — including when they need the initiating Agent — and never on `agent-loop` directly, so the loop stays swappable. [`dsh-base`](../../packages/bundle/base/README.md) is the default product composition, while [`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.md) declares a smaller standalone tree.
 
 ## Creation and ownership
 
@@ -306,65 +305,6 @@ The [event taxonomy](../architecture.md#events) owns the `agent/*` lifecycle, ch
 
 The process-local initiator carried by `ctx.agents` is the exact `Agent` above, not a separate frame or copied identity. Ambient presence is neither liveness proof nor authorization; the [initiator-scope decision](../../.agents/notes/implemented/architecture/2026-07-15-agent-initiator-scope.md) defines its lifetime and scope rules.
 
-## Messages from outside an Agent
-
-A sender that brings a message on someone's behalf, such as the Web Session Remote, calls `ctx.agentController.deliver` from [`agent-controller`](../../packages/core/agent-controller/README.md) instead of `followup()` or `steer()`. The controller prepares the content in the Agent's delivery order, asks the `agent-controller/admission` waterfall for a decision, and appends an admitted message; messages the Agent's own machinery produces enter without the stage. The [delivery decision](../../.agents/notes/implemented/architecture/2026-10-17-agent-controller-message-delivery.md) explains why the stage lives outside `agent`.
-
-Source: [`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
-
-```ts type-equiv
-/** How a delivered message enters the inbox: `followup` for its own turn, `steer` for the nearest step. */
-type DeliveryMode = 'followup' | 'steer'
-```
-
-```ts type-equiv
-/** One message a sender delivers on someone's behalf. */
-interface DeliveryRequest {
-  /** Where the message enters once it is admitted. */
-  readonly mode: DeliveryMode
-  /** Durable attribution recorded on the message. */
-  readonly source: MessageSource
-  /** The sender's cancellation; it ends the sender's wait at once and stops a message that has not entered the inbox. */
-  readonly signal: AbortSignal
-  /**
-   * Turn the sender's content into durable message content, such as by
-   * storing attachments. It runs in the Agent's delivery order, after the
-   * earlier messages to the same Agent settled; its failure reaches the
-   * sender unchanged.
-   * @param signal - aborted when the sender cancels or the controller stops; controller disposal waits for the preparation to settle.
-   * @returns the content of the message.
-   */
-  readonly prepare: (signal: AbortSignal) => Promise<UserMessage['content']>
-  /**
-   * Record what the sender needs before the Agent wakes. It runs
-   * synchronously after admission, immediately before the message enters the
-   * inbox. A throw keeps the message out of the inbox and reaches the sender
-   * unchanged; the sender reverts its own effects when `deliver` rejects.
-   * @param message - the admitted message.
-   */
-  readonly beforeInsert?: (message: UserMessage) => void
-}
-```
-
-A listener admits by returning the decision of `next()`, holds the message by awaiting before `next()`, and refuses it by returning a `reject` decision:
-
-```ts type-equiv
-/** The outcome of the admission stage for one message. */
-type AdmissionDecision =
-  /** The message enters the inbox. */
-  | { readonly kind: 'admit' }
-  /** The message stays out of the inbox. */
-  | {
-    readonly kind: 'reject'
-    /** Code of the refusal, owned by its source, such as `forge/worktree-missing`. */
-    readonly reason: string
-    /** Explanation for a sender that shows nothing of the refusing plugin. */
-    readonly message: string
-    /** Whether the refusing plugin explains the refusal in its own interface. */
-    readonly presented: boolean
-  }
-```
-
 ## Interception decisions
 
 Pre-step decisions use the same identified `UserMessage` type as durable user-role input. The entered batch is authoritative and preserves every message's `id` and `source`. Hook bridges map their native decision fields onto this typed result.
@@ -496,33 +436,6 @@ interface TurnBoundaryProjection {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
-
-<a id="ctxagentcontroller--agentcontroller"></a>
-
-### `ctx.agentController` — `AgentController`
-
-Delivers the messages that senders, such as the Web Session Remote, bring on someone's behalf. Messages to one Agent are prepared, decided, and appended one at a time in arrival order; messages to different Agents do not wait for each other. Disposal stops every message that has not entered an inbox and finishes once each delivery it stopped has settled.
-
-```ts cordis-catalog
-/**
- * Deliver one message from outside the Agent: prepare its content, ask the
- * `agent-controller/admission` stage for a decision, then append an
- * admitted message with `followup` or `steer`.
- * @param agent - the receiving Agent.
- * @param request - delivery mode, source, cancellation, and the sender's content preparation.
- * @returns the id of the message once it is in the inbox.
- * @throws {@link AgentAdmissionRejected} when a listener rejects the message
- * or throws, or when the Agent left the registry first; the error of
- * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the sender's
- * cancellation reason as soon as it cancels, also while the message waits
- * behind another one; the stop reason once the controller stops.
- */
-async deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId>
-```
-
-Types: [MessageId](llm-streaming.md)
-
-Source: [`packages/core/agent-controller/src/index.ts`](../../packages/core/agent-controller/src/index.ts)
 
 <a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
 
@@ -1185,43 +1098,6 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 Types: [Scoped](scope.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agent-controller-events"></a>
-
-### `agent-controller/*` events
-
-<a id="agent-controlleradmission--waterfall"></a>
-
-#### `agent-controller/admission` — waterfall
-
-Decide whether one message from outside an Agent enters its inbox. `ctx.agentController.deliver` runs this stage and appends the message only after the whole chain admitted it; messages the Agent's own machinery produces enter through `followup`, `steer`, or `inject` without it. Listeners run in registration order, and messages to one Agent are decided one at a time in arrival order. A listener admits by returning the decision of `next()`, whose last step admits; awaiting before `next()` holds the message, and returning a `reject` decision refuses it without asking later listeners. A thrown error means the listener's check itself failed. A listener must not wait for a person when the message source is unattended, such as a schedule or a webhook.
-
-```ts cordis-catalog
-/**
- * Decide whether one message from outside an Agent enters its inbox.
- * `ctx.agentController.deliver` runs this stage and appends the message
- * only after the whole chain admitted it; messages the Agent's own
- * machinery produces enter through `followup`, `steer`, or `inject`
- * without it. Listeners run in registration order, and messages to one
- * Agent are decided one at a time in arrival order. A listener admits by
- * returning the decision of `next()`, whose last step admits; awaiting
- * before `next()` holds the message, and returning a `reject` decision
- * refuses it without asking later listeners. A thrown error means the
- * listener's check itself failed. A listener must not wait for a person
- * when the message source is unattended, such as a schedule or a webhook.
- * @param payload.agent - the receiving Agent.
- * @param payload.message - the message as it will enter the inbox.
- * @param payload.signal - aborted when the sender cancels or the controller stops; a holding
- * listener must settle once it aborts, because controller disposal waits for it.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.
- * @mode waterfall
- */
-'agent-controller/admission'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage; signal: AbortSignal }, next: () => Promise<AdmissionDecision>): Promise<AdmissionDecision>
-```
-
-Types: [Scoped](scope.md) · [UserMessage](session.md)
-
-Source: [`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
 
 <a id="agent-loop-events"></a>
 

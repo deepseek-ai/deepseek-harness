@@ -15,10 +15,9 @@
 | `tools/` | 带作用域的工具注册表与受保护的执行流水线（`ctx.tools`） | [tools.md](tools.zh.md) |
 | `agent/` | `Agent` 接口、实时注册表、发起者作用域与 `agent/*` 事件词汇（`ctx.agents`） | 本页 |
 | `agent-loop/` | 实现公开 `Agent` 约定的具体 driver（`ctx.agentLoop`） | 本页 |
-| `agent-controller/` | 外部消息经 `agent-controller/admission` 阶段投递进 Agent（`ctx.agentController`） | 本页 |
 | `scope/` | 注册表与循环用于构建按 agent 作用域的注册原语 | [scope.md](scope.zh.md) |
 
-`scope/` 是这里唯一的非服务包：一个零依赖库（`createScope`/`scopeOf`/`scopeTarget`），在模块图中位于 `session/` 与 `system-prompt/` 之下，正是为了让它们消费它而不形成环。`agent-loop` 是公开 `Agent` 约定的唯一具体实现，放在这里因为它是 harness 的默认产品循环；它在 `ctx.agents.withInitiator()` 内运行每个 driver。扩展插件依赖 `agent`——包括需要发起 Agent 时——而绝不直接依赖 `agent-loop`，因此循环保持可替换。`agent-controller` 位于循环之前：代表他人送来消息的发送方经 `ctx.agentController` 投递，而不是自己写入收件箱。[`dsh-base`](../../packages/bundle/base/README.zh.md) 是默认产品组合，[`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.zh.md) 则声明一棵更小的独立配置树。
+`scope/` 是这里唯一的非服务包：一个零依赖库（`createScope`/`scopeOf`/`scopeTarget`），在模块图中位于 `session/` 与 `system-prompt/` 之下，正是为了让它们消费它而不形成环。`agent-loop` 是公开 `Agent` 约定的唯一具体实现，放在这里因为它是 harness 的默认产品循环；它在 `ctx.agents.withInitiator()` 内运行每个 driver。扩展插件依赖 `agent`——包括需要发起 Agent 时——而绝不直接依赖 `agent-loop`，因此循环保持可替换。[`dsh-base`](../../packages/bundle/base/README.zh.md) 是默认产品组合，[`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.zh.md) 则声明一棵更小的独立配置树。
 
 <a id="creation-and-ownership"></a>
 
@@ -312,67 +311,6 @@ cause 是由 TypeScript 强制约束的同进程输入。活跃的取消持有�
 
 `ctx.agents` 携带的进程本地 initiator 就是上面的确切 `Agent`，不是单独的 frame 或复制的标识。环境中存在该值既不能证明存活，也不代表授权；[initiator 作用域决策](../../.agents/notes/implemented/architecture/2026-07-15-agent-initiator-scope.zh.md)定义其生命周期和作用域规则。
 
-<a id="messages-from-outside-an-agent"></a>
-
-## 来自 Agent 外部的消息
-
-代表他人送来消息的发送方（例如 Web Session Remote）调用 [`agent-controller`](../../packages/core/agent-controller/README.zh.md) 的 `ctx.agentController.deliver`，而不是 `followup()` 或 `steer()`。控制器按该 Agent 的投递顺序准备内容，向 `agent-controller/admission` waterfall 请求决定，再放入被接纳的消息；Agent 自身机制产生的消息不经过这个阶段。[投递决策](../../.agents/notes/implemented/architecture/2026-10-17-agent-controller-message-delivery.zh.md)说明了这个阶段为什么不放在 `agent` 里。
-
-源码：[`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
-
-```ts type-equiv
-/** How a delivered message enters the inbox: `followup` for its own turn, `steer` for the nearest step. */
-type DeliveryMode = 'followup' | 'steer'
-```
-
-```ts type-equiv
-/** One message a sender delivers on someone's behalf. */
-interface DeliveryRequest {
-  /** Where the message enters once it is admitted. */
-  readonly mode: DeliveryMode
-  /** Durable attribution recorded on the message. */
-  readonly source: MessageSource
-  /** The sender's cancellation; it ends the sender's wait at once and stops a message that has not entered the inbox. */
-  readonly signal: AbortSignal
-  /**
-   * Turn the sender's content into durable message content, such as by
-   * storing attachments. It runs in the Agent's delivery order, after the
-   * earlier messages to the same Agent settled; its failure reaches the
-   * sender unchanged.
-   * @param signal - aborted when the sender cancels or the controller stops; controller disposal waits for the preparation to settle.
-   * @returns the content of the message.
-   */
-  readonly prepare: (signal: AbortSignal) => Promise<UserMessage['content']>
-  /**
-   * Record what the sender needs before the Agent wakes. It runs
-   * synchronously after admission, immediately before the message enters the
-   * inbox. A throw keeps the message out of the inbox and reaches the sender
-   * unchanged; the sender reverts its own effects when `deliver` rejects.
-   * @param message - the admitted message.
-   */
-  readonly beforeInsert?: (message: UserMessage) => void
-}
-```
-
-监听器返回 `next()` 的决定即放行，在 `next()` 之前 await 即暂留消息，返回 `reject` 决定即拒绝：
-
-```ts type-equiv
-/** The outcome of the admission stage for one message. */
-type AdmissionDecision =
-  /** The message enters the inbox. */
-  | { readonly kind: 'admit' }
-  /** The message stays out of the inbox. */
-  | {
-    readonly kind: 'reject'
-    /** Code of the refusal, owned by its source, such as `forge/worktree-missing`. */
-    readonly reason: string
-    /** Explanation for a sender that shows nothing of the refusing plugin. */
-    readonly message: string
-    /** Whether the refusing plugin explains the refusal in its own interface. */
-    readonly presented: boolean
-  }
-```
-
 <a id="interception-decisions"></a>
 
 ## 拦截决策
@@ -510,33 +448,6 @@ interface TurnBoundaryProjection {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
-
-<a id="ctxagentcontroller--agentcontroller"></a>
-
-### `ctx.agentController` — `AgentController`
-
-Delivers the messages that senders, such as the Web Session Remote, bring on someone's behalf. Messages to one Agent are prepared, decided, and appended one at a time in arrival order; messages to different Agents do not wait for each other. Disposal stops every message that has not entered an inbox and finishes once each delivery it stopped has settled.
-
-```ts cordis-catalog
-/**
- * Deliver one message from outside the Agent: prepare its content, ask the
- * `agent-controller/admission` stage for a decision, then append an
- * admitted message with `followup` or `steer`.
- * @param agent - the receiving Agent.
- * @param request - delivery mode, source, cancellation, and the sender's content preparation.
- * @returns the id of the message once it is in the inbox.
- * @throws {@link AgentAdmissionRejected} when a listener rejects the message
- * or throws, or when the Agent left the registry first; the error of
- * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the sender's
- * cancellation reason as soon as it cancels, also while the message waits
- * behind another one; the stop reason once the controller stops.
- */
-async deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId>
-```
-
-Types: [MessageId](llm-streaming.zh.md)
-
-Source: [`packages/core/agent-controller/src/index.ts`](../../packages/core/agent-controller/src/index.ts)
 
 <a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
 
@@ -1199,43 +1110,6 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agent-controller-events"></a>
-
-### `agent-controller/*` events
-
-<a id="agent-controlleradmission--waterfall"></a>
-
-#### `agent-controller/admission` — waterfall
-
-Decide whether one message from outside an Agent enters its inbox. `ctx.agentController.deliver` runs this stage and appends the message only after the whole chain admitted it; messages the Agent's own machinery produces enter through `followup`, `steer`, or `inject` without it. Listeners run in registration order, and messages to one Agent are decided one at a time in arrival order. A listener admits by returning the decision of `next()`, whose last step admits; awaiting before `next()` holds the message, and returning a `reject` decision refuses it without asking later listeners. A thrown error means the listener's check itself failed. A listener must not wait for a person when the message source is unattended, such as a schedule or a webhook.
-
-```ts cordis-catalog
-/**
- * Decide whether one message from outside an Agent enters its inbox.
- * `ctx.agentController.deliver` runs this stage and appends the message
- * only after the whole chain admitted it; messages the Agent's own
- * machinery produces enter through `followup`, `steer`, or `inject`
- * without it. Listeners run in registration order, and messages to one
- * Agent are decided one at a time in arrival order. A listener admits by
- * returning the decision of `next()`, whose last step admits; awaiting
- * before `next()` holds the message, and returning a `reject` decision
- * refuses it without asking later listeners. A thrown error means the
- * listener's check itself failed. A listener must not wait for a person
- * when the message source is unattended, such as a schedule or a webhook.
- * @param payload.agent - the receiving Agent.
- * @param payload.message - the message as it will enter the inbox.
- * @param payload.signal - aborted when the sender cancels or the controller stops; a holding
- * listener must settle once it aborts, because controller disposal waits for it.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.
- * @mode waterfall
- */
-'agent-controller/admission'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage; signal: AbortSignal }, next: () => Promise<AdmissionDecision>): Promise<AdmissionDecision>
-```
-
-Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
-
-Source: [`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
 
 <a id="agent-loop-events"></a>
 

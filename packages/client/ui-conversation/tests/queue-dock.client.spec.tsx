@@ -384,7 +384,7 @@ describe('QueueDock', () => {
       const single = snapshotWith([row('i-tip', 'queued draft')])
       const source = liveSession(single)
       const view = render(<QueueDock {...kitFor(single)} useSession={source.useSession} useProjection={source.useProjection} />)
-      fireEvent.mouseEnter(view.getByLabelText('删除排队消息'))
+      fireEvent.pointerEnter(view.getByLabelText('删除排队消息'))
       act(() => { vi.advanceTimersByTime(500) })
       const tooltip = view.getByRole('tooltip')
       expect(tooltip.textContent).toBe('删除排队消息')

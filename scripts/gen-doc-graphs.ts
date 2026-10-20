@@ -642,14 +642,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation.',
   },
   {
-    key: 'agentController',
-    pkg: 'agent-controller',
-    title: 'Outside-message delivery',
-    mode: 'core',
-    consumers: ['api-session-controller'],
-    note: 'Prepares, admits through the agent-controller/admission stage, and appends messages that senders bring on someone\'s behalf, one at a time per Agent.',
-  },
-  {
     key: 'agentDefaultModel',
     pkg: 'agent-default-model',
     title: 'Default Agent model selection',

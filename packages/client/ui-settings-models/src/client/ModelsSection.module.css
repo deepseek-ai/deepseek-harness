@@ -156,8 +156,10 @@
   color: var(--dsw-alias-label-primary-foreground);
 }
 
-.primaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
+@media (hover: hover) {
+  .primaryButton:hover:not(:disabled) {
+    background: var(--dsw-alias-button-primary-hover);
+  }
 }
 
 .secondaryButton,
@@ -167,13 +169,15 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.secondaryButton:hover:not(:disabled),
-.addButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+@media (hover: hover) {
+  .secondaryButton:hover:not(:disabled),
+  .addButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.secondaryButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+  .secondaryButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .dangerButton {
@@ -193,8 +197,10 @@
   cursor: pointer;
 }
 
-.dangerButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
+@media (hover: hover) {
+  .dangerButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+  }
 }
 
 /* Provider-row controls use the compact Button size. */
@@ -291,10 +297,16 @@
   cursor: help;
 }
 
-.helpButton:hover,
 .helpButton:focus-visible {
   color: var(--dsw-alias-label-primary);
   border-color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .helpButton:hover {
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-label-tertiary);
+  }
 }
 
 .linkButton {
@@ -313,9 +325,11 @@
   cursor: pointer;
 }
 
-.linkButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .linkButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .advancedHint {
@@ -436,8 +450,10 @@
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
-.customizedSummary:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .customizedSummary:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .customizedBody {
@@ -518,9 +534,11 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:disabled {
@@ -529,9 +547,11 @@
 }
 
 /* The delete glyph keeps the danger tint the rest of the section uses. */
-.iconButtonDanger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
+@media (hover: hover) {
+  .iconButtonDanger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 .modelAdvanced {
@@ -638,8 +658,10 @@
   cursor: pointer;
 }
 
-.addModelButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .addModelButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .input {
@@ -700,8 +722,10 @@ select.input {
   cursor: pointer;
 }
 
-.keyToggle:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .keyToggle:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .keyToggle:focus-visible {
@@ -740,12 +764,14 @@ select.input {
 }
 
 .deleteConfirm:not(:disabled) {
-  border-color: var(--dsw-alias-state-error-primary);
+  --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
   color: var(--dsw-alias-state-error-primary);
 }
 
-.deleteConfirm:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
+@media (hover: hover) {
+  .deleteConfirm:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+  }
 }
 
 /* Icon-button label seat: named for assistive tech and for the tests that

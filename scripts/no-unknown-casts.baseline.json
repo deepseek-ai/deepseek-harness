@@ -97,7 +97,6 @@
     "d0d869812e25f9b60a88de7207566804dc7d1f38c74e0c1d67a7b25fee5af3e9": 1
   },
   "apps/web/tests/shipped-composition.e2e.ts": {
-    "5bb6193769cfbb9fc09abd705fed714917784de269546fde14ac1171fb00644b": 1,
     "c0a4d4dd9b52881eb8190c56fb8ea5a25a70590b78b1e4a0996defab767699f0": 1
   },
   "apps/web/tests/smoke-real.e2e.ts": {
@@ -751,9 +750,7 @@
     "24334994394c1d4336d192b2f38986beadcd0f6b235108370c3a736c34eebe98": 1,
     "33e462c9f8d9ef55f1b54a408f047caaa9467facc4fc88887fa5979fdce6c09f": 1,
     "455072902745ebd120bdeaaebf1b00b2d747a300409066715375263bcc4e8a63": 1,
-    "4df26af834cb4f8d55bb6908736ddeb6971b4c4c1cbd5a9ace2f9cfe9c0b94e4": 1,
     "6078d7e1390a0c3c94892edd74526a76e6cbbda8360656bf9f97d367371c0c4c": 1,
-    "71b9c7a18658556ab36c9af394f29dac5885fab402304b0b6f4d5127d6acdeff": 1,
     "9117562f15005ef8ec18dbad9c29cdc723c4af2c6a9c217af3cd7d8380de999b": 1,
     "98169406d3c872458f70f3f8f70abdd6eeaca296816ce91cdcf8392cfa6a77bf": 1,
     "afecf8092cd8de095ffbe00a1df00816897e8205854fd33a9d2beeaee88eca95": 1,
@@ -1025,9 +1022,6 @@
   "packages/experimental/agent-team/tests/team.spec.ts": {
     "3ae979a4364fe22772c89133e79ea216cdb4f3163c7cb02c47eb1a5d4788e661": 3,
     "ae5776af8c1e9965a4eca94bcbc07b65da8d2e9e24e4570d2141b34d60b4f90f": 1
-  },
-  "packages/experimental/auto-review/tests/auto-review.spec.ts": {
-    "5bb6193769cfbb9fc09abd705fed714917784de269546fde14ac1171fb00644b": 1
   },
   "packages/experimental/browser-use-runtime/src/index.ts": {
     "04bc8a44533574365dfedf563e2356458bcf95f990a00906938c977c1d683356": 1
@@ -2058,9 +2052,6 @@
   },
   "packages/web/tool-web/tests/spill.spec.ts": {
     "ecf3420d023d28e1cbc687d438bb66ee49d55a4ae4cb0828dd0f59b926363903": 1
-  },
-  "packages/web/web-fetch-http/tests/fetch-http.spec.ts": {
-    "366f13ff1ff2522ad824a1d4333085e2c771c0b7ca22783aa41ca2e23233b259": 1
   },
   "packages/web/web-search-deepseek/tests/deepseek.spec.ts": {
     "37c9617ff75d6a383f58dd63f939a88803e4ff5e1676bfe7e1c0cc340fc65014": 5,

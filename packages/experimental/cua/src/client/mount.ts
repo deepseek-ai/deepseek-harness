@@ -36,6 +36,11 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     ctx.effect(() => ctx.locale.register(NS, { en, zh }))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
+    ctx.slots.inject('conversation.composer', () => ctx.slots.register({
+      name: 'conversation.composer', priority: -1, locale: NS,
+      select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),
+      inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
+    }, ApplicationApproval))
     ctx.inject(['pluginChanges'], (scope) => {
       const changes = scope.pluginChanges.bundle('@deepseek-ai/dsh-cua-bundle')
       const synchronize = () => { controller.setChanging(changes.getSnapshot()) }
@@ -45,11 +50,6 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
         return () => { unsubscribe(); controller.setChanging(false) }
       })
     })
-    ctx.slots.inject('conversation.composer', () => ctx.slots.register({
-      name: 'conversation.composer', priority: -1, locale: NS,
-      select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),
-      inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
-    }, ApplicationApproval))
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,

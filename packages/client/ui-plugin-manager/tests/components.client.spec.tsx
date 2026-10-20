@@ -266,10 +266,14 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
     expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' } })
     expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
-    // A detail page hides the tabs; a contributed tab that leaves the ledger falls back to Installed.
+    // A detail page hides the tabs; its back button returns to the tab that opened it.
     expect(screen.queryByRole('tablist')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    expect(screen.getByRole('tab', { name: 'Discover' }).getAttribute('aria-selected')).toBe('true')
+    // A contributed tab that leaves the ledger falls back to Installed.
     act(() => { navigation.actions.setView({ kind: 'list' }); navigation.actions.setTab('discover') })
     setTabs([])
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
@@ -290,7 +294,7 @@ describe('PluginManagerPage', () => {
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
   })
 
-  it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {
+  it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
     const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
     const { navigation, set } = renderTab({ status: 'loading', packages: [] }, {}, {
       'plugins.tab:discover': (_view, owner) => (
@@ -309,8 +313,37 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
     expect(document.querySelector(`[data-plugin-detail="${worktree}"]`)).not.toBeNull()
+    // An official plugin of the More list opened from Discover returns to Discover, not to the More list.
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+    act(() => { navigation.actions.setView({ kind: 'more' }) })
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', worktree) }))
     fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+  })
+
+  it('keeps the opening tab through a row page opened from a bundle page', () => {
+    const { navigation, setTabs } = renderTab({ packages: [pkg({ rows: [row()] })] }, { rows: new Set(['dsh-better-sidebar#sidebar']) }, {
+      'plugins.tab:discover': (_view, owner) => (
+        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage('dsh-better-sidebar') }}>Discover open</button>
+      ),
+      'plugins.row.config:dsh-better-sidebar#sidebar': view => view === 'summary' ? 'Config summary' : <form aria-label="row settings" />,
+    }, {}, [{ id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
+    fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') }))
+    expect(navigation.getSnapshot().view).toEqual({ kind: 'row', name: 'dsh-better-sidebar', rowId: 'sidebar', returnTab: 'discover' })
+    fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', 'dsh-better-sidebar') }))
+    expect(navigation.getSnapshot().view).toEqual({ kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' })
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    // A calling tab that left the ledger while the page was open falls back to Installed.
+    fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
+    setTabs([])
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot().tab).toBe('installed')
+    expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
   })
 
   it('shows a confirmed version by name above its spec, as a check and a refusal with retry, without the spec form or another registry', () => {

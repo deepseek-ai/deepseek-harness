@@ -388,27 +388,6 @@ export class ApiSessionAgentController {
   }
 
   /**
-   * Take the image admission turn for one Agent: wait until earlier image
-   * admissions and model selections settled, then hold the turn until the
-   * returned release runs.
-   * @param agent - live Agent that owns the serialization chain.
-   * @param signal - the waiting caller's cancellation; a caller cancelled by its turn passes the turn on.
-   * @returns the release, which the caller runs once its image prompt settled.
-   * @throws the cancellation reason when the caller was cancelled by its turn.
-   */
-  acquireImageAdmission(agent: Agent, signal: AbortSignal): Promise<() => void> {
-    const previous = this.imageAdmissionChains.get(agent) ?? Promise.resolve()
-    const held = Promise.withResolvers<undefined>()
-    this.imageAdmissionChains.set(agent, previous.then(() => held.promise))
-    const release = (): void => { held.resolve(undefined) }
-    return previous.then(() => {
-      if (signal.aborted) release()
-      signal.throwIfAborted()
-      return release
-    })
-  }
-
-  /**
    * Resolve the preset id and pre-publication Agent setup for a create or resume.
    * @param presetId - requested preset or the configured default when omitted.
    * @returns the resolved preset identity and Agent setup callback.
