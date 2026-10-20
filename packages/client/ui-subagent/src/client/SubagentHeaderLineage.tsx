@@ -7,12 +7,14 @@ import {
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, StateDot, Tooltip,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, MenuSurface, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
+import type {} from '@deepseek-ai/dsh-agent-team/client'
+import type {} from './slots.ts'
 import css from './SubagentHeaderLineage.module.css'
 
 type SubagentCatalogSnapshot = Omit<SessionProjectionSnapshot, 'values' | 'state'> & {
@@ -22,7 +24,11 @@ type SubagentCatalogSnapshot = Omit<SessionProjectionSnapshot, 'values' | 'state
 type Catalogs = Readonly<Record<SessionId, SubagentCatalogSnapshot>>
 
 /** Business actions supplied by the slot registration. */
-export interface SubagentCatalogInjected {
+export type SubagentCatalogInjected = {
+  hooks: {
+    /** Whether the catalog footer currently has a registered contributor. */
+    footerAvailable: HostObservable<boolean>
+  }
   openChild: (address: SubagentAddress) => void
   openChildAside: (address: SubagentAddress) => void
   refreshProjection: (parentSessionId: SessionId) => void
@@ -30,7 +36,8 @@ export interface SubagentCatalogInjected {
 
 /** Full props for the session-header lineage renderer. */
 export type SubagentHeaderLineageProps =
-  PropsRuntime<'conversation.session.header.lineage'> & SubagentCatalogInjected & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.lineage'> & InjectFace<SubagentCatalogInjected> & PropsLocale<typeof NS>
+  & Omit<PropsRenderSlots<'conversation.session.header.lineage.subagent.footer'>, 'SessionProvider'>
 
 interface CatalogRowsProps {
   parentSessionId: SessionId
@@ -407,7 +414,7 @@ function CatalogRows({
   )
 }
 
-interface CatalogDropdownSharedProps extends SubagentCatalogInjected {
+interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected> {
   /** Session whose direct catalog roots the tree. */
   rootSessionId: SessionId
   useSessions: SubagentHeaderLineageProps['useSessions']
@@ -415,7 +422,11 @@ interface CatalogDropdownSharedProps extends SubagentCatalogInjected {
   t: TranslateNS<typeof NS>
 }
 
-type CatalogDropdownProps = CatalogDropdownSharedProps & (
+type CatalogFooterProps =
+  | ({ footerKind: 'lineage' } & Pick<PropsRenderSlots<'conversation.session.header.lineage.subagent.footer'>, 'renderSlot'>)
+  | ({ footerKind: 'actions' } & Pick<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'renderSlot'>)
+
+type CatalogDropdownProps = CatalogDropdownSharedProps & CatalogFooterProps & (
   | {
     /** Descendant-count control. */
     variant: 'count'
@@ -438,9 +449,9 @@ type CatalogDropdownProps = CatalogDropdownSharedProps & (
 const MENU_VIEWPORT_MARGIN = 16
 
 /** Place a portaled catalog below its trigger without crossing the viewport edge. */
-function catalogMenuPosition(trigger: HTMLButtonElement): CSSProperties {
+function catalogMenuPosition(trigger: HTMLButtonElement, withBoard: boolean): CSSProperties {
   const rect = trigger.getBoundingClientRect()
-  const width = Math.min(336, window.innerWidth - MENU_VIEWPORT_MARGIN * 2)
+  const width = Math.min(withBoard ? 500 : 336, window.innerWidth - MENU_VIEWPORT_MARGIN * 2)
   return {
     top: rect.bottom + 5,
     left: Math.min(
@@ -451,10 +462,11 @@ function catalogMenuPosition(trigger: HTMLButtonElement): CSSProperties {
 }
 
 /** One trigger-plus-tree dropdown over the catalog rooted at `rootSessionId`. */
-function CatalogDropdown({
-  rootSessionId, currentSessionId, displayTitle, openTitle, variant,
-  useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t,
-}: CatalogDropdownProps) {
+function CatalogDropdown(props: CatalogDropdownProps) {
+  const {
+    rootSessionId, currentSessionId, displayTitle, openTitle, variant,
+    useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t,
+  } = props
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const projections = useSessions(state => state.projectionsBySession)
   const summaries = useSessions(state => state.byId)
@@ -477,6 +489,8 @@ function CatalogDropdown({
     }))
   }, [projections, summaries, statuses])
   const catalog = catalogs[rootSessionId]
+  const footerAvailable = useFooterAvailable(value => value)
+  const withBoard = footerAvailable && projections[rootSessionId]?.values.agentTeamMode?.enabled === true
   const [open, setOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<CSSProperties>()
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
@@ -498,7 +512,7 @@ function CatalogDropdown({
   const runningCount = directChildren.filter(entry => entry.activity === 'running').length
   const totalCountKey = directCount === 1 ? 'count.total.one' : 'count.total.other'
   const runningCountKey = runningCount === 1 ? 'count.running.one' : 'count.running.other'
-  const presentedCatalog: SubagentCatalogSnapshot | undefined = catalog ?? (variant === 'switcher'
+  const presentedCatalog: SubagentCatalogSnapshot | undefined = catalog ?? (variant === 'switcher' || withBoard
     ? { entries: [], state: 'loading', error: null }
     : undefined)
 
@@ -522,7 +536,7 @@ function CatalogDropdown({
       /* v8 ignore next -- a queued callback can outlive the trigger */
       if (trigger === null) return
       setOpen(true)
-      setMenuPosition(catalogMenuPosition(trigger))
+      setMenuPosition(catalogMenuPosition(trigger, withBoard))
     }
     else {
       pinnedRef.current = false
@@ -588,7 +602,16 @@ function CatalogDropdown({
       }
     }
     document.addEventListener('pointerdown', closeOutside)
-    return () => { document.removeEventListener('pointerdown', closeOutside) }
+    const dismiss = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      changeOpen(false, menuRef.current?.contains(document.activeElement) === true)
+    }
+    document.addEventListener('keydown', dismiss)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', dismiss)
+    }
   }, [open])
 
   useEffect(() => {
@@ -597,26 +620,26 @@ function CatalogDropdown({
       const trigger = triggerRef.current
       /* v8 ignore next -- native resize or scroll can outlive the trigger */
       if (trigger === null) return
-      setMenuPosition(catalogMenuPosition(trigger))
+      setMenuPosition(catalogMenuPosition(trigger, withBoard))
     }
+    placeMenu()
     window.addEventListener('resize', placeMenu)
     document.addEventListener('scroll', placeMenu, true)
     return () => {
       window.removeEventListener('resize', placeMenu)
       document.removeEventListener('scroll', placeMenu, true)
     }
-  }, [open])
+  }, [open, withBoard])
 
   useEffect(() => () => {
     cancelHoverOpen()
     cancelHoverClose()
   }, [])
 
-  // Visibility needs catalog evidence of children or a failed load worth retrying.
-  // An empty loading catalog is not evidence of children.
+  // An enabled board stays reachable before the first child is created.
   const visible = presentedCatalog !== undefined
     && (variant === 'switcher'
-      || presentedCatalog.state === 'error'
+      || withBoard || presentedCatalog.state === 'error'
       || presentedCatalog.entries.length > 0)
   useEffect(() => {
     if (visible) return
@@ -637,12 +660,11 @@ function CatalogDropdown({
   }
 
   const navigate = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.target instanceof Element
+      && event.target !== triggerRef.current && event.target.closest('[role="tree"]') === null) return
     const items = treeItems(menuRef.current)
     const index = items.indexOf(document.activeElement as HTMLElement)
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      changeOpen(false, true)
-    } else if (event.key === 'Home') {
+    if (event.key === 'Home') {
       event.preventDefault()
       focusAt(0)
     } else if (event.key === 'End') {
@@ -661,6 +683,7 @@ function CatalogDropdown({
     <div
       className={`${css.root} ${variant === 'switcher' ? css.switcherRoot : ''}`}
       ref={rootRef}
+      data-subagent-action
       onKeyDown={navigate}
       onMouseLeave={scheduleHoverClose}
     >
@@ -671,7 +694,7 @@ function CatalogDropdown({
         className={variant === 'switcher'
           ? `${css.switcherTrigger} ${ancestorSwitcher ? css.ancestorSwitcherTrigger : ''}`
           : css.trigger}
-        aria-haspopup="tree"
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={variant === 'switcher'
           ? t('switcher.aria', { title: switcherDisplayTitle })
@@ -685,6 +708,7 @@ function CatalogDropdown({
             cancelHoverClose()
             pinnedRef.current = true
             if (!open) changeOpen(true)
+            queueMicrotask(() => { menuRef.current?.focus() })
           }
           : () => {
             cancelHoverOpen()
@@ -715,31 +739,40 @@ function CatalogDropdown({
           : <IconChevronDownOutlineRegular className={open ? css.triggerOpen : undefined} />}
       </button>
       {open && createPortal((
-        <div
+        <MenuSurface
           ref={menuRef}
-          className={css.menu}
+          className={`${css.menu} ${withBoard ? css.menuWithBoard : ''}`}
           style={menuPosition}
+          role="dialog"
+          tabIndex={-1}
+          aria-label={t('tree.aria')}
+          data-subagent-panel
           onMouseEnter={cancelHoverClose}
           onMouseLeave={scheduleHoverClose}
         >
-          <div className={css.menuBody} role="tree" aria-label={t('tree.aria')}>
-            <CatalogRows
-              parentSessionId={rootSessionId}
-              currentSessionId={currentSessionId}
-              catalog={presentedCatalog}
-              catalogs={catalogs}
-              summaries={summaries}
-              expanded={expanded}
-              level={1}
-              openChild={openChild}
-              openChildAside={openChildAside}
-              refreshProjection={refreshProjection}
-              toggleBranch={toggleBranch}
-              closeCatalog={() => { changeOpen(false) }}
-              t={t}
-            />
+          <div className={css.menuBody}>
+            <div role="tree" aria-label={t('tree.aria')}>
+              <CatalogRows
+                parentSessionId={rootSessionId}
+                currentSessionId={currentSessionId}
+                catalog={presentedCatalog}
+                catalogs={catalogs}
+                summaries={summaries}
+                expanded={expanded}
+                level={1}
+                openChild={openChild}
+                openChildAside={openChildAside}
+                refreshProjection={refreshProjection}
+                toggleBranch={toggleBranch}
+                closeCatalog={() => { changeOpen(false) }}
+                t={t}
+              />
+            </div>
+            {props.footerKind === 'lineage'
+              ? props.renderSlot('conversation.session.header.lineage.subagent.footer', {})
+              : props.renderSlot('conversation.session.header.actions.subagent.footer', {})}
           </div>
-        </div>
+        </MenuSurface>
       ), document.body)}
     </div>
   )
@@ -747,7 +780,8 @@ function CatalogDropdown({
 
 /** Full props for the root-session catalog entry in the header actions band. */
 export type SubagentCatalogActionProps =
-  PropsRuntime<'conversation.session.header.actions'> & SubagentCatalogInjected & PropsLocale<typeof NS>
+  PropsRuntime<'conversation.session.header.actions'> & InjectFace<SubagentCatalogInjected> & PropsLocale<typeof NS>
+  & Omit<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'SessionProvider'>
 
 /**
  * Session-header catalog action for root sessions: the descendant count and
@@ -758,7 +792,7 @@ export type SubagentCatalogActionProps =
  * @returns The count dropdown, or null on a child session.
  */
 export function SubagentCatalogAction({
-  sessionId, useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t,
+  sessionId, useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t, renderSlot,
 }: SubagentCatalogActionProps) {
   const isChild = useSessions(state => state.byId[sessionId]?.origin === 'subagent')
   if (isChild) return null
@@ -767,8 +801,11 @@ export function SubagentCatalogAction({
       key={sessionId}
       rootSessionId={sessionId}
       variant="count"
+      footerKind="actions"
+      renderSlot={renderSlot}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}
+      useFooterAvailable={useFooterAvailable}
       openChild={openChild}
       openChildAside={openChildAside}
       refreshProjection={refreshProjection}
@@ -784,7 +821,7 @@ export function SubagentCatalogAction({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, t,
+  useSessions, useSession, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t, renderSlot,
 }: SubagentHeaderLineageProps) {
   const address = useSession(session => session.subagent?.address)
   const parentId = useSessions((state) => {
@@ -795,7 +832,7 @@ export function SubagentHeaderLineage({
     const summary = state.byId[lineageSessionId]
     return summary?.origin === 'subagent' ? summary.parentId : undefined
   })
-  const shared = { useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t }
+  const shared = { useSessions, useSessionStatus, useFooterAvailable, openChild, openChildAside, refreshProjection, t }
   // Root sessions carry no breadcrumb; their descendant count lives in the
   // header actions band (SubagentCatalogAction).
   if (parentId === undefined) return null
@@ -806,6 +843,8 @@ export function SubagentHeaderLineage({
         rootSessionId={parentId}
         currentSessionId={lineageSessionId}
         variant="switcher"
+        footerKind="lineage"
+        renderSlot={renderSlot}
         displayTitle={displayTitle}
         {...openTitle === undefined ? {} : { openTitle }}
         {...shared}
@@ -815,6 +854,8 @@ export function SubagentHeaderLineage({
           key={`children:${lineageSessionId}`}
           rootSessionId={lineageSessionId}
           variant="count"
+          footerKind="lineage"
+          renderSlot={renderSlot}
           {...shared}
         />
       )}

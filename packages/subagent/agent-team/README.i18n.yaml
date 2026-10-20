@@ -1,0 +1,100 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/subagent/agent-team/README.md
+/:
+  en: 03bfe939e62d80aa
+  zh: 9db4ba086a4ed6f4
+/deepseek-ai-dsh-agent-team:
+  en: 80b485e2799df851
+  zh: 31770395bc932701
+/deepseek-ai-dsh-agent-team/summary:
+  en: 308b7d3adf3dc2ea
+  zh: 08406c822fbc8b4b
+/deepseek-ai-dsh-agent-team/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent-team/use-this-package:
+  en: 71f23f135c89f3f4
+  zh: ba886d534675837b
+/deepseek-ai-dsh-agent-team/use-this-package/when-to-choose-it:
+  en: 41e193fafb0b96f9
+  zh: 3265330fe77b3707
+/deepseek-ai-dsh-agent-team/use-this-package/smallest-working-setup:
+  en: b3fb4a4c7a3d5277
+  zh: 4cae69ad39027a21
+/deepseek-ai-dsh-agent-team/use-this-package/teammates:
+  en: a52935db7fa328e1
+  zh: 6081f1e8bb75d0ca
+/deepseek-ai-dsh-agent-team/use-this-package/messages-between-teammates:
+  en: ea0bf3fb3213feef
+  zh: 0af8ce3160d2fd5d
+/deepseek-ai-dsh-agent-team/use-this-package/shared-task-board:
+  en: 8ace88f5b3c32eeb
+  zh: 2e0111b4a7f72651
+/deepseek-ai-dsh-agent-team/use-this-package/waiting-and-interruption:
+  en: 2a8172e07ec20808
+  zh: 8aa93e8556517b92
+/deepseek-ai-dsh-agent-team/use-this-package/what-success-and-failure-look-like:
+  en: 36814f2b06dc2359
+  zh: c46af795bc89942f
+/deepseek-ai-dsh-agent-team/understand-the-implementation:
+  en: 6a18034f1ccc247a
+  zh: e08b0eb0ccb41ea8
+/deepseek-ai-dsh-agent-team/understand-the-implementation/design-philosophy:
+  en: 8b9ed8b31facd102
+  zh: fe6678ab9e2b2c0f
+/deepseek-ai-dsh-agent-team/understand-the-implementation/source-map:
+  en: fdb608bd196db6c3
+  zh: e699bbb116af6b4c
+/deepseek-ai-dsh-agent-team/understand-the-implementation/team-identity-and-membership:
+  en: 6edb88f9d3fde16a
+  zh: 7918022f3e09ef46
+/deepseek-ai-dsh-agent-team/understand-the-implementation/task-assignees:
+  en: fb370a3606dfe1bf
+  zh: 67e3de3c5ebe0758
+/deepseek-ai-dsh-agent-team/understand-the-implementation/messages-and-historical-mailbox:
+  en: 813078d6f281ebc0
+  zh: 106887aaf0760e95
+/deepseek-ai-dsh-agent-team/understand-the-implementation/shared-task-board:
+  en: a3eaccd15b02cc8f
+  zh: c2829d437a1dfe57
+/deepseek-ai-dsh-agent-team/understand-the-implementation/task-board-wait-signals:
+  en: 027a7ccc996435f5
+  zh: 3b95dc637691c03b
+/deepseek-ai-dsh-agent-team/understand-the-implementation/durability-model:
+  en: 6a157930f0bef14a
+  zh: c29b976450c1fded
+/deepseek-ai-dsh-agent-team/understand-the-implementation/disposal:
+  en: a8baf51f2fcd6d49
+  zh: 357c8db36823fe0e
+/deepseek-ai-dsh-agent-team/understand-the-implementation/browser-projection:
+  en: 40bbc604de932447
+  zh: 19dcd492551792c5
+/deepseek-ai-dsh-agent-team/further-exploration:
+  en: 84b5ec5de64726da
+  zh: 25305f7dc054336f
+/deepseek-ai-dsh-agent-team/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-agent-team/model-experience/task-views-and-errors:
+  en: 8b29cb821f80db40
+  zh: 43e402736a553ce5
+/deepseek-ai-dsh-agent-team/model-experience/task-views-and-errors/what-the-model-sees:
+  en: bc7d5135ea812e71
+  zh: 24fd4df413683aad
+/deepseek-ai-dsh-agent-team/model-experience/task-views-and-errors/token-effect:
+  en: f8857619242bb16e
+  zh: aca99dc785e83d56
+/deepseek-ai-dsh-agent-team/model-experience/task-views-and-errors/kv-cache-effect:
+  en: 28354a0f44ef61aa
+  zh: e3007733c50e5514
+/deepseek-ai-dsh-agent-team/known-limitations-and-deferred-work:
+  en: ee7ee8f5c77955cd
+  zh: 24fec7209490ede1
+/deepseek-ai-dsh-agent-team/known-limitations-and-deferred-work/dev-note:
+  en: 498e4cf9fe5741a7
+  zh: 9d2bab630e655c99
+/deepseek-ai-dsh-agent-team/known-limitations-and-deferred-work/dev-note/future-directions:
+  en: 39d7ee66217a58eb
+  zh: 229016fb44c10ce5

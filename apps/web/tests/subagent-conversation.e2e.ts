@@ -560,7 +560,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const clickArea = nestedRow.locator(':scope > div')
     expect(await clickArea.count()).toBe(1)
     const [menuBox, clickAreaBox] = await Promise.all([
-      tree.locator('..').boundingBox(),
+      page.locator('[data-subagent-panel]').boundingBox(),
       clickArea.boundingBox(),
     ])
     expect(menuBox).not.toBeNull()

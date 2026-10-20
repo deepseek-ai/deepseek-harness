@@ -28,8 +28,8 @@
 
 - insert:
     - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
+      name: '@deepseek-ai/dsh-agent-team'
     - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      name: '@deepseek-ai/dsh-tool-agent-team'
     - id: team-session-mode-fixture
-      name: ../../../packages/experimental/agent-team/tests/session-mode-fixture.ts
+      name: ../../../packages/subagent/agent-team/tests/session-mode-fixture.ts

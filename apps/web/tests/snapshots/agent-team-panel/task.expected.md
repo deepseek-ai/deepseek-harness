@@ -1,7 +1,10 @@
-- dialog "Task board":
-  - heading "Shared tasks 1" [level=3]
-  - article:
-    - strong: Agent task
-    - text: In progress
-    - paragraph: Created by the root agent
-    - text: "task-1Owner: LeadWrite scopes: src/web"
+- dialog "Subagent sessions":
+  - tree "Subagent sessions":
+    - treeitem "Researcher External task" [disabled] [level=1]
+  - region "Task board":
+    - heading "Shared tasks 1" [level=3]
+    - article:
+      - strong: Agent task
+      - text: In progress
+      - paragraph: Created by the root agent
+      - text: "task-1Owner: LeadWrite scopes: src/web"

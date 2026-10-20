@@ -114,11 +114,13 @@ function props(
     ...standard,
     sessionId: PARENT,
     useSessions,
+    useFooterAvailable: <T,>(select: (available: boolean) => T): T => select(true),
     useSessionStatus: <T,>(select: (snapshot: SessionStatusSnapshot) => T): T => select(statuses),
     useSession: <T,>(select: (snapshot: SessionSnapshot) => T): T => select(snapshot),
     openChild: vi.fn(),
     openChildAside: vi.fn(),
     refreshProjection: vi.fn(),
+    renderSlot: vi.fn(() => null),
     lineageSessionId: PARENT,
     displayTitle: 'Parent title',
     t,
@@ -149,7 +151,11 @@ function hoverCatalog(trigger: HTMLElement): void {
  * session the lineage renders.
  */
 function HeaderCatalog(props: SubagentHeaderLineageProps) {
-  const actionProps: SubagentCatalogActionProps = { ...props, sessionId: props.lineageSessionId }
+  const { __renders: _renders, ...shared } = props
+  const actionProps: SubagentCatalogActionProps = {
+    ...shared, sessionId: props.lineageSessionId,
+    renderSlot: () => props.renderSlot('conversation.session.header.lineage.subagent.footer', {}),
+  }
   return (
     <>
       <SubagentHeaderLineage {...props} />
@@ -159,6 +165,47 @@ function HeaderCatalog(props: SubagentHeaderLineageProps) {
 }
 
 describe('SubagentHeaderLineage', () => {
+  it('keeps the shared panel reachable with no children while Team mode is enabled', () => {
+    const input = props(catalog({ entries: [] }))
+    const initial = input.useSessions(state => state)
+    const mode = { enabled: true }
+    const values = { ...initial.projectionsBySession[PARENT]!.values, agentTeamMode: mode }
+    const current = {
+      ...input,
+      useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select({
+        ...initial, projectionsBySession: { [PARENT]: { state: 'ready', error: null, values } },
+      }),
+      renderSlot: () => <section aria-label="Shared tasks">No tasks</section>,
+    }
+    const view = render(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '0 个子智能体' }))
+    const tree = screen.getByRole('tree')
+    const board = screen.getByRole('region', { name: 'Shared tasks' })
+    expect(tree.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    mode.enabled = false
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('leaves task-board keys alone and dismisses the shared panel from outside focus', () => {
+    const input = props(catalog())
+    render(<><textarea aria-label="Composer" /><HeaderCatalog {...input}
+      renderSlot={() => <button type="button">Expand task</button>}
+    /></>)
+    fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
+    const expand = screen.getByRole('button', { name: 'Expand task' })
+    expand.focus()
+    fireEvent.keyDown(expand, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(expand)
+    const composer = screen.getByRole('textbox')
+    composer.focus()
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(composer)
+  })
+
   it('shows current catalog-only child status before Host list discovery', () => {
     const input = props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: 'worker', activity: 'inactive' }] }))
     const initial = input.useSessions(state => state)
@@ -349,7 +396,7 @@ describe('SubagentHeaderLineage', () => {
     await advance(149)
     expect(screen.queryByRole('tree')).toBeNull()
     await advance(1)
-    const menu = screen.getByRole('tree').parentElement!
+    const menu = screen.getByRole('dialog')
     expect(menu.style.top).toBe('45px')
     expect(menu.style.left).toBe('50px')
     triggerRect.mockReturnValue({ bottom: 60, left: 70 } as DOMRect)
@@ -416,13 +463,13 @@ describe('SubagentHeaderLineage', () => {
     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
     fireEvent.mouseOver(trigger, { relatedTarget: document.body })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
-    const menu = screen.getByRole('tree').parentElement!
+    const menu = screen.getByRole('dialog')
     fireEvent.mouseOut(trigger, { relatedTarget: menu })
     fireEvent.mouseOver(menu, { relatedTarget: trigger })
     fireEvent.mouseOut(menu, { relatedTarget: trigger })
     fireEvent.mouseOver(trigger, { relatedTarget: menu })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
-    expect(screen.getByRole('tree').parentElement).toBe(menu)
+    expect(screen.getByRole('dialog')).toBe(menu)
   })
 
   it('cancels pending hover dismissal when the catalog trigger is activated from the keyboard', async () => {
@@ -443,7 +490,7 @@ describe('SubagentHeaderLineage', () => {
     const bounds = vi.spyOn(trigger, 'getBoundingClientRect')
     bounds.mockReturnValue({ bottom: 20, left: 30 } as DOMRect)
     hoverCatalog(trigger)
-    const menu = screen.getByRole('tree').parentElement!
+    const menu = screen.getByRole('dialog')
     expect(menu.style.top).toBe('25px')
     expect(menu.style.left).toBe('30px')
 

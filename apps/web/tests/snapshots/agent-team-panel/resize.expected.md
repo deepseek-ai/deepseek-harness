@@ -1,13 +1,16 @@
-- dialog "Task board":
-  - heading "Shared tasks 2" [level=3]
-  - article:
-    - strong: Agent task
-    - text: In progress
-    - paragraph: Created by the root agent
-    - text: "task-1Owner: LeadWrite scopes: src/web"
-  - article:
-    - strong: Responsive task
-    - text: Pending
-    - paragraph: Check the task description before you start work. Check the task description before you start work. Check the task description before you start work.
-    - button "Show more"
-    - text: "task-2Owner: UnownedReady"
+- dialog "Subagent sessions":
+  - tree "Subagent sessions":
+    - treeitem "Researcher External task" [disabled] [level=1]
+  - region "Task board":
+    - heading "Shared tasks 2" [level=3]
+    - article:
+      - strong: Agent task
+      - text: In progress
+      - paragraph: Created by the root agent
+      - text: "task-1Owner: LeadWrite scopes: src/web"
+    - article:
+      - strong: Responsive task
+      - text: Pending
+      - paragraph: Check the task description before you start work. Check the task description before you start work. Check the task description before you start work.
+      - button "Show more"
+      - text: "task-2Owner: UnownedReady"

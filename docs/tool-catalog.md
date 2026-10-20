@@ -42,7 +42,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`, `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt`, `ctx.sessionProjections`, `ctx.llm for model discovery and selected-route validation` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a unique agent path promptly; local children accept follow-ups, while external backends report their single execution automatically. |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message`, `wait_agent` | `ctx.tools`, `ctx.subagents`, `ctx.agents` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`, `job_list`, `job_output` | `ctx.tools`, `ctx.jobs`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `user/message via agent.inject() for background completion notices` | - | The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`. |
-| `@deepseek-ai/dsh-experimental-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. The optional Agent Teams profile adds task-board guidance and required Team identity derived from the subagent root, alongside standard subagent delegation and control tools. |
+| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. The optional Agent Teams profile adds task-board guidance and required Team identity derived from the subagent root, alongside standard subagent delegation and control tools. |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed. |
 | `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout. |
@@ -2331,9 +2331,9 @@ Source: [`packages/jobs/tool-jobs/src/index.ts`](../packages/jobs/tool-jobs/src/
 
 The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`.
 
-<a id="deepseek-aidsh-experimental-tool-agent-team"></a>
+<a id="deepseek-aidsh-tool-agent-team"></a>
 
-## `@deepseek-ai/dsh-experimental-tool-agent-team`
+## `@deepseek-ai/dsh-tool-agent-team`
 
 ### `team_task_create`
 
@@ -2373,7 +2373,7 @@ Create one unowned pending task on the shared Team task board.
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2394,7 +2394,7 @@ Read the complete latest value of one shared task before changing or executing i
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2433,7 +2433,7 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2500,7 +2500,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 Four task-board tools share the subagent tree’s root Session. The optional Agent Teams profile adds task-board guidance and required Team identity derived from the subagent root, alongside standard subagent delegation and control tools.
 

@@ -46,7 +46,7 @@
 | `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回唯一的 agent 路径；本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。 |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`、`job_list`、`job_output` | `ctx.tools`、`ctx.jobs`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`user/message via agent.inject() for background completion notices` | - | 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。 |
-| `@deepseek-ai/dsh-experimental-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。可选 Agent Teams profile 在标准子代理委派和控制工具之外增加任务板指导，以及从 subagent 根派生的必需 Team 身份。 |
+| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。可选 Agent Teams profile 在标准子代理委派和控制工具之外增加任务板指导，以及从 subagent 根派生的必需 Team 身份。 |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | 读取或改变调用方 Session 的目录。已有 shell 和进程保留自己的目录；原始元数据和权限根目录保持不变。 |
 | `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | 仅通过显式实验组合加载。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。 |
@@ -2337,9 +2337,9 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。
 
-<a id="deepseek-aidsh-experimental-tool-agent-team"></a>
+<a id="deepseek-aidsh-tool-agent-team"></a>
 
-## `@deepseek-ai/dsh-experimental-tool-agent-team`
+## `@deepseek-ai/dsh-tool-agent-team`
 
 ### `team_task_create`
 
@@ -2379,7 +2379,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2400,7 +2400,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2439,7 +2439,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2506,7 +2506,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
 
 四个任务板工具共享 subagent 树的根 Session。可选 Agent Teams profile 在标准子代理委派和控制工具之外增加任务板指导，以及从 subagent 根派生的必需 Team 身份。
 

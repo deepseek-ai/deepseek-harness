@@ -1013,7 +1013,7 @@
   "packages/document/office-to-pdf/tests/queue.spec.ts": {
     "bbe31b89b81048bb47c7158e78670deec5f2973286f9abc591290a8fdd851cf1": 1
   },
-  "packages/experimental/agent-team/tests/projection-events.spec.ts": {
+  "packages/subagent/agent-team/tests/projection-events.spec.ts": {
     "71ffbcca0bb71d3b595143632491d4c5d580aaf6ac384c22116e038995b2f2b5": 1,
     "a66c8967969859328890e6049a0bd9e90403861eb19ed5d6937da5505aa79c05": 1,
     "bd3a42d7bc38a7deb366d7ad1364f2ab01be2af077aae04e49b9c8a61b9e1c7d": 1,

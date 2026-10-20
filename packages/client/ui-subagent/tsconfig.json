@@ -58,6 +58,9 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../subagent/agent-team"
     }
   ]
 }

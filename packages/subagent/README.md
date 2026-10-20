@@ -24,6 +24,8 @@ The subagent package family lets an agent delegate a task to a child, continue t
 
 | Package | Role | ctx key |
 |---|---|---|
+| [`agent-team/`](agent-team/README.md) | Shared task board and saved Team mode for a subagent tree | `ctx.agentTeams` |
+| [`tool-agent-team/`](tool-agent-team/README.md) | Exposes shared task tools while Team mode is enabled | registers on `ctx.tools` |
 | [`subagent/`](subagent/README.md) | Defines the delegation service: provider registry, one-shot runs, continuable children, and discovery | `ctx.subagents` |
 | [`subagent-spawn-in-process/`](subagent-spawn-in-process/README.md) | Runs a fresh in-process child | registers on `ctx.subagents` |
 | [`subagent-fork-in-process/`](subagent-fork-in-process/README.md) | Runs an in-process child seeded from the parent's completed history | registers on `ctx.subagents` |

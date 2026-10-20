@@ -1,16 +1,14 @@
-// Keyless assembled-browser coverage for the opt-in Agent Teams bundle
+// Keyless assembled-browser coverage for per-Session Agent Teams
 // over the real Host projection frame flow.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { readFileSync } from 'node:fs'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
-import * as yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
-import type {} from '@deepseek-ai/dsh-experimental-agent-team'
+import type {} from '@deepseek-ai/dsh-agent-team'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
@@ -20,24 +18,7 @@ import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './suppor
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/agent-team-panel', import.meta.url))
 const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'task.expected.md')
 const RESIZE_EXPECTED = join(SNAPSHOT_DIR, 'resize.expected.md')
-const OVERLAY = fileURLToPath(new URL('./agent-team-panel.overlay.yml', import.meta.url))
-const TEAM_PATCH = fileURLToPath(new URL('../../../packages/experimental/agent-team-profile/cordis.patch.yml', import.meta.url))
-const INSTALL_ANCHORS = [
-  fileURLToPath(new URL('../../../packages/experimental/agent-team-profile/package.json', import.meta.url)),
-]
 const MODE = webSnapshotMode()
-
-function profileEntries(path: string): unknown[] {
-  const parsed = yaml.load(readFileSync(path, 'utf8'), { schema: entryListSchema })
-  if (!Array.isArray(parsed)) throw new Error(`profile layer at ${path} must be a list`)
-  return parsed
-}
-
-describe('Agent Teams panel overlay', () => {
-  it('matches the shipped Agent Teams bundle', () => {
-    expect(profileEntries(OVERLAY)).toEqual(profileEntries(TEAM_PATCH))
-  })
-})
 
 describe('web e2e: Agent Teams panel', () => {
   let scaffold: WebScaffold
@@ -46,7 +27,7 @@ describe('web e2e: Agent Teams panel', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY, extraInstallAnchors: INSTALL_ANCHORS })
+    scaffold = await launchWebScaffold()
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -84,7 +65,7 @@ describe('web e2e: Agent Teams panel', () => {
 
   it('defaults off and saves a Session selection in the model menu', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-mode'))
-    expect(await page.locator('[data-team-action]').count()).toBe(0)
+    expect(await page.locator('[data-subagent-action]').count()).toBe(0)
     await page.getByRole('button', { name: /^Select model/u }).click()
     const toggle = page.getByRole('switch', { name: 'Use Agent Teams', exact: true })
     await toggle.waitFor()
@@ -97,26 +78,26 @@ describe('web e2e: Agent Teams panel', () => {
     await page.keyboard.press('Space')
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
-    await page.locator('[data-team-action]').waitFor()
+    await page.locator('[data-subagent-action]').waitFor()
     const agent = scaffold.ctx.agents.list()[0]!
     const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
     expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
     await other.dispose()
     const beforeReload = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.locator('[data-team-action]').waitFor()
+    await page.locator('[data-subagent-action]').waitFor()
     await page.getByRole('button', { name: /^Select model/u }).click()
     expect(await toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
 
-  it('displays agent-owned task changes through a read-only board without a refresh action', async () => {
+  it('opens the member tree and live read-only tasks in one panel', async (test) => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
-    await page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true }).click()
-    const action = page.getByRole('dialog', { name: 'Task board', exact: true })
+    await page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u }).click()
+    const action = page.locator('[data-subagent-panel]')
     await action.getByText('No shared tasks yet. Create them through the conversation.').waitFor()
     expect(await action.getByRole('heading', { name: 'Members', exact: true }).count()).toBe(0)
     expect(projectionReads).not.toHaveBeenCalled()
@@ -126,6 +107,28 @@ describe('web e2e: Agent Teams panel', () => {
 
     // Host-side Team mutations reach the open panel through projection frames only.
     const agent = scaffold.ctx.agents.list()[0]!
+    onTestFinished(scaffold.ctx.subagents.registerProvider({
+      name: 'team-panel-member', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
+      start: async () => ({
+        id: SessionId('team-panel-researcher'),
+        result: Promise.resolve({ output: [{ type: 'text', text: 'Research complete' }], stopReason: 'completed' }),
+        dispose: async () => {},
+      }),
+    }))
+    const member = await scaffold.ctx.subagents.startActivation({
+      name: 'researcher', provider: 'team-panel-member', label: 'Researcher', delivery: 'caller', signal: test.signal,
+      request: { parent: agent, prompt: [{ type: 'text', text: 'Research the task' }] },
+    })
+    onTestFinished(() => member.dispose())
+    await member.result
+    await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
+    expect(await page.locator('[data-subagent-panel]').count()).toBe(1)
+    expect(await page.getByRole('button', { name: 'Task board', exact: true }).count()).toBe(0)
+    expect(await action.evaluate((element) => {
+      const tree = element.querySelector('[role="tree"]')!
+      const board = element.querySelector('[data-team-panel]')!
+      return Boolean(tree.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING)
+    })).toBe(true)
     const task = await scaffold.ctx.agentTeams.createTask(agent, {
       subject: 'Agent task', description: 'Created by the root agent', writeScopes: ['src/web'],
     })
@@ -139,7 +142,7 @@ describe('web e2e: Agent Teams panel', () => {
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 
-    const snapshot = await captureStableAria(page, '[data-team-panel]', scaffold.workspaceCwd)
+    const snapshot = await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)
     expect(projectionReads).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
@@ -152,19 +155,25 @@ describe('web e2e: Agent Teams panel', () => {
     const toggle = page.getByRole('switch', { name: 'Use Agent Teams', exact: true })
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await page.locator('[data-team-action]').count()).toBe(0)
+    expect(await page.locator('[data-subagent-action]').count()).toBe(1)
+    await page.keyboard.press('Escape')
+    await page.locator('[data-subagent-action]').getByRole('button', { name: '1 subagent', exact: true }).click()
+    await page.getByRole('treeitem', { name: /Researcher/u }).waitFor()
+    expect(await page.locator('[data-team-panel]').count()).toBe(0)
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: /^Select model/u }).click()
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
     await page.keyboard.press('Escape')
-    await page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true }).click()
-    await page.getByRole('dialog', { name: 'Task board', exact: true }).getByText('Agent task', { exact: true }).waitFor()
+    await page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u }).click()
+    await page.locator('[data-subagent-panel]').getByText('Agent task', { exact: true }).waitFor()
     await page.keyboard.press('Escape')
   })
 
   it('keeps the panel inside the viewport and closes on outside click or Escape', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel-keyboard'))
-    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
+    const panel = page.locator('[data-subagent-panel]')
+    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
     const viewport = page.viewportSize()!
     await trigger.click()
     await panel.getByRole('heading', { name: /Shared tasks/u }).waitFor()
@@ -206,8 +215,8 @@ describe('web e2e: Agent Teams panel', () => {
   })
 
   it('keeps the hovered panel open when the pointer returns directly to its trigger', async () => {
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
-    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
+    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
+    const panel = page.locator('[data-subagent-panel]')
     await trigger.hover()
     await panel.waitFor()
     await panel.hover()
@@ -226,8 +235,8 @@ describe('web e2e: Agent Teams panel', () => {
       writeScopes: [],
     })
     const viewport = page.viewportSize()!
-    const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
-    const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
+    const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
+    const panel = page.locator('[data-subagent-panel]')
     const card = panel.locator('article').filter({ hasText: 'Responsive task' })
     await trigger.click()
     await card.waitFor()
@@ -236,7 +245,7 @@ describe('web e2e: Agent Teams panel', () => {
       await page.setViewportSize({ width: 390, height: 700 })
       await card.getByRole('button', { name: 'Show more' }).waitFor()
       expect(await card.locator('p').evaluate(p => p.scrollHeight > p.clientHeight)).toBe(true)
-      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, '[data-team-panel]', scaffold.workspaceCwd), MODE)
+      await compareOrRefreshGolden(RESIZE_EXPECTED, await captureStableAria(page, '[data-subagent-panel]', scaffold.workspaceCwd), MODE)
       await card.getByRole('button', { name: 'Show more' }).click()
       expect(await card.locator('p').evaluate(p => p.scrollHeight === p.clientHeight)).toBe(true)
       await card.getByRole('button', { name: 'Show less' }).click()

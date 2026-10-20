@@ -45,11 +45,5 @@
               - id: deepseek-v4-pro
 
 - insert:
-    - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
-    - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
-
-- insert:
     - id: team-session-mode-fixture
-      name: ../../../packages/experimental/agent-team/tests/session-mode-fixture.ts
+      name: ../../../packages/subagent/agent-team/tests/session-mode-fixture.ts

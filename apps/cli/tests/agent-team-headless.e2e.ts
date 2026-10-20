@@ -27,15 +27,12 @@ describe('dsh run with Agent Teams enabled', () => {
       await writeFile(join(profileDir, 'package.json'), JSON.stringify({
         name: 'dsh-profile-headless',
         private: true,
-        dependencies: {
-          '@deepseek-ai/dsh-experimental-agent-team-profile': 'workspace:^',
-        },
+        dependencies: {},
         dsh: {
           profile: {
             bundles: [
               '@deepseek-ai/dsh-base',
               '@deepseek-ai/dsh-headless',
-              '@deepseek-ai/dsh-experimental-agent-team-profile',
             ],
           },
         },

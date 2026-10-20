@@ -44,10 +44,6 @@
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
 
-- insert:
-    - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
-      config:
-        enabledByDefault: true
-    - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+- id: agent-team
+  config:
+    enabledByDefault: true

@@ -156,6 +156,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-preset-registry -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-agent-team -->
+<a id="deepseek-aidsh-agent-team"></a>
+
+## `@deepseek-ai/dsh-agent-team`
+
+- `inject`: `agents` · `sessions` · `sessionProjections` · `subagents`
+- `source`: [`packages/subagent/agent-team/src/types.ts:143`](../packages/subagent/agent-team/src/types.ts)
+
+```ts config-catalog
+/** Team-service deployment limits and initial mode. */
+export interface Config {
+  /** Team mode before a Session records a selection or a shared task. Defaults to false. */
+  readonly enabledByDefault?: boolean
+  /** Maximum non-deleted tasks retained by one Team. */
+  readonly maxTasks?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-team -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-agent-tool-presentation -->
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -841,25 +860,6 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account-platform -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-agent-team -->
-<a id="deepseek-aidsh-experimental-agent-team"></a>
-
-## `@deepseek-ai/dsh-experimental-agent-team`
-
-- `inject`: `agents` · `sessions` · `sessionProjections` · `subagents`
-- `source`: [`packages/experimental/agent-team/src/types.ts:143`](../packages/experimental/agent-team/src/types.ts)
-
-```ts config-catalog
-/** Team-service deployment limits and initial mode. */
-export interface Config {
-  /** Team mode before a Session records a selection or a shared task. Defaults to false. */
-  readonly enabledByDefault?: boolean
-  /** Maximum non-deleted tasks retained by one Team. */
-  readonly maxTasks?: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-agent-team -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-api-speech-to-text -->
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
 
@@ -1291,20 +1291,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-subagent-oar -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-tool-agent-team -->
-<a id="deepseek-aidsh-experimental-tool-agent-team"></a>
-
-## `@deepseek-ai/dsh-experimental-tool-agent-team`
-
-- `inject`: `agents` · `agentTeams` · `subagents` · `tools` · `systemPrompt`
-- `source`: [`packages/experimental/tool-agent-team/src/index.ts:18`](../packages/experimental/tool-agent-team/src/index.ts)
-
-```ts config-catalog
-/** The Team tool plugin takes no configuration. */
-export type Config = Record<never, never>
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-tool-agent-team -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-tool-subagent-oar -->
 <a id="deepseek-aidsh-experimental-tool-subagent-oar"></a>
@@ -3737,6 +3723,20 @@ export type TokenMeterConfig = Record<string, never>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-token-meter -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-agent-team -->
+<a id="deepseek-aidsh-tool-agent-team"></a>
+
+## `@deepseek-ai/dsh-tool-agent-team`
+
+- `inject`: `agents` · `agentTeams` · `subagents` · `tools` · `systemPrompt`
+- `source`: [`packages/subagent/tool-agent-team/src/index.ts:18`](../packages/subagent/tool-agent-team/src/index.ts)
+
+```ts config-catalog
+/** The Team tool plugin takes no configuration. */
+export type Config = Record<never, never>
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-agent-team -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-ask-user -->
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -4666,6 +4666,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-modules` | `loader` | [`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts) |
 | `@deepseek-ai/dsh-client-resources` | — | [`packages/client/resources/src/index.ts`](../packages/client/resources/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-agent-preset` | — | [`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-agent-team` | — | [`packages/client/ui-agent-team/src/index.ts`](../packages/client/ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-approval` | — | [`packages/client/ui-approval/src/index.ts`](../packages/client/ui-approval/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-attachment` | — | [`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-brand-official` | — | [`packages/client/ui-brand-official/src/index.ts`](../packages/client/ui-brand-official/src/index.ts) |
@@ -4724,7 +4725,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` · `workingDirectory` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
-| `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-claude-code-mods` | — | [`packages/experimental/client-ui-claude-code-mods/src/index.ts`](../packages/experimental/client-ui-claude-code-mods/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | `computerUse` · `tools` · `systemPrompt` | [`packages/experimental/computer-use-cua-driver-native/src/index.ts`](../packages/experimental/computer-use-cua-driver-native/src/index.ts) |
@@ -4811,7 +4811,6 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-cmdline` | — | [`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts) |
 | `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
 | `@deepseek-ai/dsh-deque` | — | [`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts) |
-| `@deepseek-ai/dsh-experimental-agent-team-profile` | — | [`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-badge-skill-bundle` | — | [`packages/experimental/badge-skill-bundle/src/index.ts`](../packages/experimental/badge-skill-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |

@@ -207,6 +207,7 @@ const RETIRED_BUNDLES: ReadonlySet<string> = new Set([
   // The Web composition mounts Schedule itself
   // ([upgrade guide](../../../../docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.md)).
   '@deepseek-ai/dsh-experimental-schedule-bundle',
+  '@deepseek-ai/dsh-experimental-agent-team-profile',
 ])
 
 /** The bundle list a `dsh plugin` init uses for a name with no shipped template. */
@@ -226,7 +227,6 @@ export const OPTIONAL_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
-  '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',

@@ -31,6 +31,8 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
 
 Start the GUI, open your browser, and start talking to the agent. The flags fine-tune the invocation.
 
+[Agent Teams UI](../../client/ui-agent-team/README.md) loads with this bundle. Enable it per Session in the model and reasoning menu; shared tasks open below the member tree from the Subagent control.
+
 ### Starting the Web GUI
 
 ```sh

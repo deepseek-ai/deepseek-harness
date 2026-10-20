@@ -22662,7 +22662,7 @@
       "digest": "0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:192"
+        "packages/subagent/agent-team/src/types.ts:192"
       ]
     },
     {
@@ -23039,10 +23039,10 @@
     {
       "digest": "2152caf1a71e588e4df2358a806dea24936c1c47131134f01a12939d12cdc0c0",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamMessageSource"
+        "packages/subagent/agent-team/src/types.ts#TeamMessageSource"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:116"
+        "packages/subagent/agent-team/src/types.ts:116"
       ]
     },
     {
@@ -23219,10 +23219,10 @@
     {
       "digest": "2eafefdc6f79a4922d68a787a09eaf4dd2b2369c3777fba4c05e800b5678ac8e",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamMessageSnapshot"
+        "packages/subagent/agent-team/src/types.ts#TeamMessageSnapshot"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:107"
+        "packages/subagent/agent-team/src/types.ts:107"
       ]
     },
     {
@@ -23657,9 +23657,6 @@
         "packages/attachment/attachment/src/brand.ts#AttachmentId",
         "packages/compaction/compaction/src/brand.ts#CompactionId",
         "packages/core/session/src/types.ts#SessionId",
-        "packages/experimental/agent-team/src/types.ts#TeamId",
-        "packages/experimental/agent-team/src/types.ts#TeamMessageId",
-        "packages/experimental/agent-team/src/types.ts#TeamTaskId",
         "packages/experimental/webhook/src/brand.ts#WebhookDeliveryId",
         "packages/experimental/webhook/src/brand.ts#WebhookRuleId",
         "packages/experimental/webhook/src/brand.ts#WebhookSourceId",
@@ -23676,6 +23673,9 @@
         "packages/schedule/schedule/src/types.ts#ScheduleId",
         "packages/session/session-title/src/index.ts#SessionTitleProviderId",
         "packages/session/session-title/src/types.ts#SessionTitleProviderId",
+        "packages/subagent/agent-team/src/types.ts#TeamId",
+        "packages/subagent/agent-team/src/types.ts#TeamMessageId",
+        "packages/subagent/agent-team/src/types.ts#TeamTaskId",
         "packages/workflow/workflow/src/types.ts#WorkflowRunId"
       ],
       "sources": [
@@ -23683,9 +23683,6 @@
         "packages/attachment/attachment/src/brand.ts:6",
         "packages/compaction/compaction/src/brand.ts:4",
         "packages/core/session/src/types.ts:21",
-        "packages/experimental/agent-team/src/types.ts:20",
-        "packages/experimental/agent-team/src/types.ts:32",
-        "packages/experimental/agent-team/src/types.ts:8",
         "packages/experimental/webhook/src/brand.ts:12",
         "packages/experimental/webhook/src/brand.ts:6",
         "packages/experimental/webhook/src/brand.ts:9",
@@ -23702,6 +23699,9 @@
         "packages/schedule/schedule/src/types.ts:14",
         "packages/session/session-title/src/index.ts:42",
         "packages/session/session-title/src/types.ts:17",
+        "packages/subagent/agent-team/src/types.ts:20",
+        "packages/subagent/agent-team/src/types.ts:32",
+        "packages/subagent/agent-team/src/types.ts:8",
         "packages/workflow/workflow/src/types.ts:13"
       ]
     },
@@ -23774,10 +23774,10 @@
     {
       "digest": "51edec100659da3a9bd9c3f6ba1180f5e64ec9a1585e5057080df45c180bd357",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamTaskSnapshot"
+        "packages/subagent/agent-team/src/types.ts#TeamTaskSnapshot"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:64"
+        "packages/subagent/agent-team/src/types.ts:64"
       ]
     },
     {
@@ -24053,10 +24053,10 @@
     {
       "digest": "6598cd6da253948d6b207c6374a45335804c79b576866d6215649c2d1bc85e25",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamMemberSnapshot"
+        "packages/subagent/agent-team/src/types.ts#TeamMemberSnapshot"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:50"
+        "packages/subagent/agent-team/src/types.ts:50"
       ]
     },
     {
@@ -24989,7 +24989,7 @@
       "digest": "a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:188"
+        "packages/subagent/agent-team/src/types.ts:188"
       ]
     },
     {
@@ -25236,7 +25236,7 @@
       "digest": "b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:186"
+        "packages/subagent/agent-team/src/types.ts:186"
       ]
     },
     {
@@ -25262,10 +25262,10 @@
     {
       "digest": "b2d2a01e51341a3bfec809198952c8c830a7899f4cb6ecd3c1dc0b5d9a2af943",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamTaskStatus"
+        "packages/subagent/agent-team/src/types.ts#TeamTaskStatus"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:61"
+        "packages/subagent/agent-team/src/types.ts:61"
       ]
     },
     {
@@ -25501,7 +25501,7 @@
       "digest": "c2a13242efc3bea4b36a843ddf1524ff4d33c765a71b582fa1fdbfa4fa148434",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:184"
+        "packages/subagent/agent-team/src/types.ts:184"
       ]
     },
     {
@@ -25818,10 +25818,10 @@
     {
       "digest": "dfce5db4aa42b7ebe0bb79eca92553587287e18c06b9eba85cbfb9d332e26acd",
       "names": [
-        "packages/experimental/agent-team/src/types.ts#TeamMemberPhase"
+        "packages/subagent/agent-team/src/types.ts#TeamMemberPhase"
       ],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:47"
+        "packages/subagent/agent-team/src/types.ts:47"
       ]
     },
     {
@@ -25957,7 +25957,7 @@
       "digest": "ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403",
       "names": [],
       "sources": [
-        "packages/experimental/agent-team/src/types.ts:190"
+        "packages/subagent/agent-team/src/types.ts:190"
       ]
     },
     {

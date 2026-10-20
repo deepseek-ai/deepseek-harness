@@ -64,8 +64,8 @@ import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
 import * as StagehandBrowserTools from '@deepseek-ai/dsh-experimental-browser-use-stagehand-native'
-import TeamService from '@deepseek-ai/dsh-experimental-agent-team'
-import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
+import TeamService from '@deepseek-ai/dsh-agent-team'
+import * as ToolTeam from '@deepseek-ai/dsh-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import type PluginManager from '@deepseek-ai/dsh-plugin-manager'
 import * as PluginManagerTools from '@deepseek-ai/dsh-plugin-manager/tools'
@@ -588,9 +588,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers\' `ctx.jobs.start()`.',
   },
   {
-    pkg: '@deepseek-ai/dsh-experimental-tool-agent-team',
+    pkg: '@deepseek-ai/dsh-tool-agent-team',
     dir: 'tool-agent-team',
-    source: 'packages/experimental/tool-agent-team/src/index.ts',
+    source: 'packages/subagent/tool-agent-team/src/index.ts',
     requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'ctx.subagents', 'an exact live Team member Agent'],
     writes: ['tool/call', 'team/task', 'tool/result'],
     async mount(ctx) {

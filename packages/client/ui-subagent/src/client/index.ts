@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { en, NS, zh, type SubagentKey } from './locales.ts'
+export type * from './slots.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -51,26 +52,34 @@ export function apply(ctx: ClientContext): void {
   ctx.inject(['resources', 'sidebarRightTabs'], (scope) => {
     registerSidebarChat(scope, ctx.locale.bind(NS))
   })
-  const catalogActions = (_parentSessionId: SessionId): SubagentCatalogInjected => ({
-    openChild(address: SubagentAddress) {
-      ctx.uiWorkspace.openSession(address)
-    },
-    openChildAside(address: SubagentAddress) {
-      ctx.sidebarRight.openResource(subagentChatAddress(address), {
-        kind: 'subagentchat',
-        preferNewPane: true,
-      })
-    },
-    refreshProjection(parentSessionId: SessionId) {
-      void ctx.sessions.refreshProjections(parentSessionId)
-    },
-  })
+  const catalogActions = (footer: 'conversation.session.header.lineage.subagent.footer' | 'conversation.session.header.actions.subagent.footer') => {
+    const footerAvailable = {
+      getSnapshot: () => ctx.slots.entries(footer).length > 0,
+      subscribe: (listener: () => void) => ctx.slots.subscribe(footer, listener),
+    }
+    return (_parentSessionId: SessionId): SubagentCatalogInjected => ({
+      hooks: { footerAvailable },
+      openChild(address: SubagentAddress) {
+        ctx.uiWorkspace.openSession(address)
+      },
+      openChildAside(address: SubagentAddress) {
+        ctx.sidebarRight.openResource(subagentChatAddress(address), {
+          kind: 'subagentchat',
+          preferNewPane: true,
+        })
+      },
+      refreshProjection(parentSessionId: SessionId) {
+        void ctx.sessions.refreshProjections(parentSessionId)
+      },
+    })
+  }
   ctx.slots.inject(
     'conversation.session.header.lineage',
     () => ctx.slots.register({
       name: 'conversation.session.header.lineage',
       locale: NS,
-      inject: catalogActions,
+      inject: catalogActions('conversation.session.header.lineage.subagent.footer'),
+      children: { 'conversation.session.header.lineage.subagent.footer': { kind: 'list', scope: 'session' } },
     }, SubagentHeaderLineage),
   )
   ctx.slots.inject(
@@ -81,7 +90,8 @@ export function apply(ctx: ClientContext): void {
       // Between the preset label (-10) and background tasks (20).
       order: 10,
       locale: NS,
-      inject: catalogActions,
+      inject: catalogActions('conversation.session.header.actions.subagent.footer'),
+      children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
     }, SubagentCatalogAction),
   )
   ctx.slots.inject(
