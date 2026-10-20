@@ -171,7 +171,7 @@ describe('TeamBoard', () => {
   it('applies later projection frames without a refresh action', () => {
     const b = bench()
     render(<TeamBoard {...b.props} />)
-    expect(screen.getByText('write scopes overlap with task-2')).toBeTruthy()
+    expect(screen.queryByText('write scopes overlap with task-2')).toBeNull()
     expect(screen.queryByRole('button', { name: /刷新|Refresh/u })).toBeNull()
     setProjection(b.sessions, SESSION, {
       ...team,

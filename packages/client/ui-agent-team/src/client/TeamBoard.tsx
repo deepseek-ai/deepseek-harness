@@ -97,7 +97,6 @@ function TaskCard({ task, rootId, useSessions, t }: {
         {task.status === 'pending' && <span>{task.ready ? t('ready') : t('blocked')}</span>}
         {task.blockedBy.length > 0 && <span>{t('blockedBy')}: {task.blockedBy.join(', ')}</span>}
         {task.writeScopes.length > 0 && <span>{t('writeScopes')}: {task.writeScopes.join(', ')}</span>}
-        {task.writeScopeWarnings.map(warning => <span key={warning} className={css.warning}>{warning}</span>)}
       </div>
     </article>
   )

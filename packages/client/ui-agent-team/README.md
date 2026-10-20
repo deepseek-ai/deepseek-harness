@@ -33,7 +33,7 @@ The [Web bundle](../../bundle/web-app/README.md) loads this package by default. 
 
 Ready pending tasks use idle, blocked pending tasks use warning, in-progress tasks use ongoing, and completed tasks use done.
 
-The read-only board shows task identity, owner label, blockers, readiness, advisory write scopes, and overlap warnings. The root owner is labeled Lead; other owners use the subagent catalog label, then the Session title, then the Session id. Long descriptions can expand. The heading shows the task count and an empty board has a short explanation. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears above the last valid tasks.
+The read-only board shows task identity, owner label, blockers, readiness, and advisory write scopes. The root owner is labeled Lead; other owners use the subagent catalog label, then the Session title, then the Session id. Long descriptions can expand. The heading shows the task count and an empty board has a short explanation. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears above the last valid tasks.
 
 -----
 

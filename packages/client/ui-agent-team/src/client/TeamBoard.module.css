@@ -39,8 +39,7 @@
   font-size: 11px;
 }
 
-.error,
-.warning {
+.error {
   color: var(--dsw-alias-state-error-primary);
 }
 

@@ -24,17 +24,14 @@ function agentList(text: string, json: unknown, t: DetailTranslate): ToolDetails
   if (text === '(no subagents)') return detailList([], t('detail.agents.count', { count: 0 }), t)
   const items: DetailItem[] = []
   for (const line of text.split('\n')) {
-    const match = /^(\S+) \[([^\]]+)\](?: parent=(\S+) depth=(\d+))?(?: — (.*))?$/u.exec(line)
+    const match = /^(\S+) \[([^\]]+)\](?: parent=\S+ depth=\d+)?(?: — (.*))?$/u.exec(line)
     if (match === null) return null
-    const [, id, state, parent, depth, title] = match
+    const [, id, state, title] = match
     if (id === undefined || state === undefined) return null
     items.push({
       title: title ?? id, ...(title === undefined ? {} : { subtitle: id }),
       badge: detailBadge(state, t),
-      fields: parent === undefined ? [] : [
-        { label: t('detail.field.parent'), value: parent },
-        { label: t('detail.field.depth'), value: depth ?? '' },
-      ],
+      fields: [],
     })
   }
   return detailList(items, t('detail.agents.count', { count: items.length }), t)
