@@ -255,41 +255,45 @@ export class BrowserTerminal {
   }
 
   /**
-   * Render a newest-relative page after all received output is applied.
+   * Wait until output received before the call, and input queued before it, are applied.
+   * @returns after the queued work settles, whether or not it failed.
+   */
+  async drain(): Promise<void> {
+    await this.enqueue(() => undefined)
+  }
+
+  /**
+   * Render a newest-relative page of the screen as applied so far; {@link drain} first to include received output.
    * @param request - page position and byte bound.
    * @returns rendered text; alternate-screen applications return their current screen.
    * @throws AgentTerminalError after the screen is released.
    */
-  readScreen(request: TerminalScreenRequest): Promise<TerminalScreenPage> {
-    return this.enqueue(() => {
-      this.requireScreen()
-      const buffer = this.screen.buffer.active
-      return pageLines(renderLines(buffer, 0, lastContentRow(buffer) + 1), request)
-    })
+  readScreen(request: TerminalScreenRequest): TerminalScreenPage {
+    this.requireScreen()
+    const buffer = this.screen.buffer.active
+    return pageLines(renderLines(buffer, 0, lastContentRow(buffer) + 1), request)
   }
 
   /**
-   * Mark the cursor row after all received output is applied.
+   * Mark the cursor row of the screen as applied so far; {@link drain} first to place it after received output.
    * @returns a mark whose lines include the marked row; a change of active buffer renders the whole new buffer.
    * @throws AgentTerminalError after the screen is released.
    */
-  markScreen(): Promise<TerminalScreenMark> {
-    return this.enqueue(() => {
-      this.requireScreen()
-      const marked = this.screen.buffer.active.type
-      const marker = this.screen.registerMarker(0)
-      return {
-        lines: () => this.enqueue(() => {
-          this.requireScreen()
-          const active = this.screen.buffer.active
-          const end = lastContentRow(active) + 1
-          if (active.type !== marked || marker === undefined) return { lines: renderLines(active, 0, end), truncated: false }
-          if (marker.isDisposed) return { lines: renderLines(active, 0, end), truncated: true }
-          return { lines: renderLines(active, marker.line, end), truncated: false }
-        }),
-        dispose: () => { marker?.dispose() },
-      }
-    })
+  markScreen(): TerminalScreenMark {
+    this.requireScreen()
+    const marked = this.screen.buffer.active.type
+    const marker = this.screen.registerMarker(0)
+    return {
+      lines: () => {
+        this.requireScreen()
+        const active = this.screen.buffer.active
+        const end = lastContentRow(active) + 1
+        if (active.type !== marked || marker === undefined) return { lines: renderLines(active, 0, end), truncated: false }
+        if (marker.isDisposed) return { lines: renderLines(active, 0, end), truncated: true }
+        return { lines: renderLines(active, marker.line, end), truncated: false }
+      },
+      dispose: () => { marker?.dispose() },
+    }
   }
 
   private requireAgentControl(): void {

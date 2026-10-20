@@ -368,14 +368,17 @@ describe('agent access', () => {
     expect(handle.write).not.toHaveBeenCalled()
   })
 
-  it('renders pages and marked output after queued output is applied', async () => {
+  it('renders pages and marked output once draining applies queued output', async () => {
     const { terminal, output } = fixture(agentInfo)
     output.write(Buffer.from('$ earlier\r\n'))
     await expect.poll(() => terminal.revision).toBeGreaterThan(0)
-    const mark = await terminal.markScreen()
+    await terminal.drain()
+    const mark = terminal.markScreen()
     output.write(Buffer.from('$ make\r\nprogress 10%\rprogress 100%\r\n$ '))
-    await expect.poll(async () => (await mark.lines()).lines).toEqual(['$ make', 'progress 100%', '$'])
-    expect(await terminal.readScreen({ offset: 0, count: 2, maxBytes: 1000 })).toEqual({ text: 'progress 100%\n$', totalLines: 4, lineBegin: 0, lineEnd: 2, truncated: false })
+    await expect.poll(() => terminal.revision).toBeGreaterThan(1)
+    await terminal.drain()
+    expect(mark.lines().lines).toEqual(['$ make', 'progress 100%', '$'])
+    expect(terminal.readScreen({ offset: 0, count: 2, maxBytes: 1000 })).toEqual({ text: 'progress 100%\n$', totalLines: 4, lineBegin: 0, lineEnd: 2, truncated: false })
     mark.dispose()
   })
 
@@ -383,9 +386,9 @@ describe('agent access', () => {
     const { terminal, output } = fixture(agentInfo)
     output.write(Buffer.from('$ vim notes\r\n'))
     await expect.poll(() => terminal.revision).toBeGreaterThan(0)
-    const mark = await terminal.markScreen()
+    const mark = terminal.markScreen()
     output.write(Buffer.from('\x1b[?1049h\x1b[Hediting notes'))
-    await expect.poll(async () => await mark.lines()).toEqual({ lines: ['editing notes'], truncated: false })
+    await expect.poll(() => mark.lines()).toEqual({ lines: ['editing notes'], truncated: false })
   })
 
   it('reports foreground process facts without taking control', async () => {
@@ -397,10 +400,11 @@ describe('agent access', () => {
 
   it('reports a mark trimmed out of scrollback as truncated', async () => {
     const { terminal, output } = fixture(agentInfo)
-    const mark = await terminal.markScreen()
+    const mark = terminal.markScreen()
     output.write(Buffer.from(Array.from({ length: 200 }, (_, index) => `line ${index}`).join('\r\n')))
-    await expect.poll(async () => (await mark.lines()).truncated).toBe(true)
-    expect((await mark.lines()).lines.at(-1)).toBe('line 199')
+    await expect.poll(() => mark.lines().truncated).toBe(true)
+    await terminal.drain()
+    expect(mark.lines().lines.at(-1)).toBe('line 199')
   })
 
   it('wakes revision waiters on output and state changes and honors cancellation', async () => {
@@ -420,8 +424,11 @@ describe('agent access', () => {
 
   it('refuses screen reads after the screen is released', async () => {
     const { terminal } = fixture(agentInfo)
+    const mark = terminal.markScreen()
     await terminal.close()
-    await expect(terminal.readScreen({ offset: 0, count: 10, maxBytes: 100 })).rejects.toMatchObject({ code: 'unavailable' })
-    await expect(terminal.markScreen()).rejects.toMatchObject({ code: 'unavailable' })
+    await terminal.drain()
+    expect(() => terminal.readScreen({ offset: 0, count: 10, maxBytes: 100 })).toThrow(expect.objectContaining({ code: 'unavailable' }))
+    expect(() => terminal.markScreen()).toThrow(expect.objectContaining({ code: 'unavailable' }))
+    expect(() => mark.lines()).toThrow(expect.objectContaining({ code: 'unavailable' }))
   })
 })

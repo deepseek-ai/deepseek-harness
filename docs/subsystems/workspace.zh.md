@@ -283,7 +283,7 @@ async openForAgent(agent: Agent, request: AgentTerminalRequest, signal: AbortSig
  * @param agent - Session owner.
  * @param id - terminal identity.
  * @param request - page position and byte bound.
- * @returns rendered screen text.
+ * @returns rendered screen text, including output received before the call.
  */
 readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage>
 

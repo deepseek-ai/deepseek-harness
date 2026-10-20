@@ -69,17 +69,25 @@ export class AgentTerminal {
   write(data: string): Promise<void> { return this.terminal.agentWrite(data) }
 
   /**
-   * Render a newest-relative page of the screen.
-   * @param request - page position and byte bound.
-   * @returns rendered text.
+   * Wait until output received before the call is applied to the screen.
+   * @returns after queued output and input settle.
    */
-  read(request: TerminalScreenRequest): Promise<TerminalScreenPage> { return this.terminal.readScreen(request) }
+  drain(): Promise<void> { return this.terminal.drain() }
 
   /**
-   * Mark the cursor row so later output can be rendered from it.
-   * @returns the screen mark.
+   * Render a newest-relative page of the screen as applied so far.
+   * @param request - page position and byte bound.
+   * @returns rendered text.
+   * @throws AgentTerminalError `unavailable` after the terminal is closed.
    */
-  mark(): Promise<TerminalScreenMark> { return this.terminal.markScreen() }
+  read(request: TerminalScreenRequest): TerminalScreenPage { return this.terminal.readScreen(request) }
+
+  /**
+   * Mark the cursor row of the screen as applied so far, so later output can be rendered from it.
+   * @returns the screen mark.
+   * @throws AgentTerminalError `unavailable` after the terminal is closed.
+   */
+  mark(): TerminalScreenMark { return this.terminal.markScreen() }
 
   /**
    * Inspect the foreground process group.

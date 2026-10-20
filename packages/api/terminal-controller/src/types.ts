@@ -95,10 +95,11 @@ export interface TerminalScreenPage {
 /** A screen position that follows scrollback trimming, used to render output written after it. */
 export interface TerminalScreenMark {
   /**
-   * Render logical lines from the marked row through the last content row, after all received output is applied.
+   * Render logical lines from the marked row through the last content row of the screen as applied so far.
    * @returns the lines; `truncated` means scrollback trimming discarded the marked row and rendering starts at the oldest row.
+   * @throws AgentTerminalError `unavailable` after the screen is released.
    */
-  lines(): Promise<{ readonly lines: readonly string[]; readonly truncated: boolean }>
+  lines(): { readonly lines: readonly string[]; readonly truncated: boolean }
   /** Release the emulator marker. */
   dispose(): void
 }

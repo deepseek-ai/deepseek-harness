@@ -848,10 +848,11 @@ describe('Agent terminals', () => {
     expect(handle.write).toHaveBeenCalledExactlyOnceWith('echo ready\r')
     expect(await terminal.signal('SIGINT')).toBe(123)
     expect(await terminal.inspectForeground()).toBeUndefined()
-    const mark = await terminal.mark()
-    expect(await mark.lines()).toEqual({ lines: [''], truncated: false })
+    await terminal.drain()
+    const mark = terminal.mark()
+    expect(mark.lines()).toEqual({ lines: [''], truncated: false })
     mark.dispose()
-    expect(await terminal.read({ offset: 0, count: 10, maxBytes: 100 })).toMatchObject({ text: '', totalLines: 1 })
+    expect(terminal.read({ offset: 0, count: 10, maxBytes: 100 })).toMatchObject({ text: '', totalLines: 1 })
     const revision = terminal.revision
     const changed = terminal.changed(revision, signal())
     controller.rename(agent, terminal.id, 'server')
@@ -920,7 +921,7 @@ it.skipIf(process.platform === 'win32')('runs a command typed by the agent in a 
       title: 'agent', cols: 80, rows: 24, policy: { mode: 'danger-full-access', workspaceRoot: cwd }, preferredShells: [],
     }, signal())
     await terminal.write('echo agent-$((40 + 2))\r')
-    await expect.poll(async () => (await terminal.read({ offset: 0, count: 20, maxBytes: 4000 })).text, { timeout: 10_000 }).toContain('agent-42')
+    await expect.poll(() => terminal.read({ offset: 0, count: 20, maxBytes: 4000 }).text, { timeout: 10_000 }).toContain('agent-42')
     await terminal.close()
   } finally {
     await ctx.fiber.dispose()

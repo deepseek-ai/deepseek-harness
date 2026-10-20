@@ -50,7 +50,7 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 
 Host 代码通过 `openForAgent(agent, request, signal)` 为 Session 的 Agent 打开终端。调用方传入它为该 Session 解析出的沙箱策略：`danger-full-access` 直接启动 shell，受限模式通过执行环境的 `ctx.sandbox` provider 包裹 shell，缺少 provider 时在分配前失败。受限的 POSIX shell 把历史写到 `/tmp/dsh-agent-history-<id>`，因为人的历史文件不在可写目录内。`preferredShells` 列出在已探测 shell 中优先尝试的可执行文件，之后才用默认 shell。终端记录 `origin: 'agent'`、`control: 'agent'` 和 `sandboxMode`；它计入 `maxTerminals`，在 Agent 控制期间也计入 `maxAgentTerminals`。
 
-返回的 `AgentTerminal` 可以写入输入、把屏幕渲染为文本、标记屏幕位置以便之后渲染新输出、等待输出或状态变化、查询并向前台进程组发信号，以及关闭终端。Agent 输入既不需要也不抢占 Web 的输入控制权。浏览器第一次发出标记为 `typed` 的写入后，控制权转给人；此后写入、发信号和关闭都会以 `AgentTerminalError` 的 `user-control` 代码失败，读取不受影响。`readScreen` 和 `inspectActivity` 可读取 Agent 所在 Session 的任意终端，包括人自己打开的终端。
+返回的 `AgentTerminal` 可以写入输入、把屏幕渲染为文本、标记屏幕位置以便之后渲染新输出、等待输出或状态变化、查询并向前台进程组发信号，以及关闭终端。它的读屏和标记是同步的，只看到已处理的输出；`drain` 会等到调用前收到的输出处理完。Agent 输入既不需要也不抢占 Web 的输入控制权。浏览器第一次发出标记为 `typed` 的写入后，控制权转给人；此后写入、发信号和关闭都会以 `AgentTerminalError` 的 `user-control` 代码失败，读取不受影响。控制器的 `readScreen` 会先等输出处理完再渲染；它和 `inspectActivity` 可读取 Agent 所在 Session 的任意终端，包括人自己打开的终端。
 
 <a id="understand-the-implementation"></a>
 ## 了解实现
@@ -60,7 +60,7 @@ Host 代码通过 `openForAgent(agent, request, signal)` 为 Session 的 Agent �
 
 Host 通过 `ctx.subprocess.spawnTerminal` 创建 `TERM=xterm-256color` 的终端，不启动桌面终端应用。流式 UTF-8 解码保留跨块字符和开头的 BOM，并在 EOF 将不完整的尾部字节替换为替代字符。双工 `attach` Remote 流通过 Gateway mux 传输输出和有序的 `write`/`resize` 命令。每条命令使用附件内连续递增的序号；`ack` 确认提供者已接受操作，或报告控制权拒绝。快照和状态帧携带接收附件的 `writable` 标记。Headless xterm 和序列化 addon 在此前输出写入后生成初始屏幕，后续增量携带单调序号。过慢的订阅者明确失败；重新连接恢复当前屏幕。
 
-Agent 终端复用同一套分配、回滚和保留流程，标识由 Host 生成。Agent 输入与浏览器输入和输出一起排队，但不经过附件的输入控制权。读屏在已排队的输出处理完后渲染 headless 缓冲区：软换行的行会拼接，备用屏按当前显示读取，分页在调用方给出的字节上限内保留最新内容。屏幕标记使用模拟器的 marker，因此滚动缓冲区截掉标记行时会报告截断。每处理一段输出或发布一次状态，变更版本号就加一，`changed` 据此等待。Client 只在键盘、粘贴、输入法、拖放、滚轮、指针或触摸操作之后的短时间窗口内把写入标记为 `typed`，因为 xterm.js 通过同一个数据事件报告终端协议应答。
+Agent 终端复用同一套分配、回滚和保留流程，标识由 Host 生成。Agent 输入与浏览器输入和输出一起排队，但不经过附件的输入控制权。读屏渲染 headless 缓冲区：软换行的行会拼接，备用屏按当前显示读取，分页在调用方给出的字节上限内保留最新内容。屏幕标记使用模拟器的 marker，因此滚动缓冲区截掉标记行时会报告截断。每处理一段输出或发布一次状态，变更版本号就加一，`changed` 据此等待。Client 只在键盘、粘贴、输入法、拖放、滚轮、指针或触摸操作之后的短时间窗口内把写入标记为 `typed`，因为 xterm.js 通过同一个数据事件报告终端协议应答。
 
 最新连接持有输入和尺寸控制权。断开连接只释放输入权，不结束进程。显式关闭等待进程清理和最后输出；清理失败时保留资源以便重试。Session 记住已关闭的标识并拒绝迟到或重复的创建请求，包括关闭到达时仍在进行的创建。新终端使用新标识。取消创建且清理失败时，已分配的进程仍有所有者。Session owner 和 controller 卸载也会终止所拥有的进程。改变 Session 的沙箱模式时，用户终端继续以原有权限运行。控制权转移或进程退出后被拒绝的输入和尺寸请求保留输出连接并禁用输入，不重发被拒绝的输入。提供者完成时即禁用输入，无须等待输出排空；迟到的输入失败不能丢弃已正常结束的订阅者所保留的尾部帧。
 

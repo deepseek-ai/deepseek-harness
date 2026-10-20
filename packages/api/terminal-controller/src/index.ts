@@ -226,10 +226,11 @@ export class TerminalController extends TypertRemoteService {
    * @param agent - Session owner.
    * @param id - terminal identity.
    * @param request - page position and byte bound.
-   * @returns rendered screen text.
+   * @returns rendered screen text, including output received before the call.
    */
   readScreen(agent: Agent, id: WebTerminalId, request: TerminalScreenRequest): Promise<TerminalScreenPage> {
-    return this.terminal(agent, id).readScreen(request)
+    const terminal = this.terminal(agent, id)
+    return terminal.drain().then(() => terminal.readScreen(request))
   }
 
   /**
