@@ -15,6 +15,7 @@
     { "path": "../../core/session" },
     { "path": "../../core/agent" },
     { "path": "../subagent" },
+    { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" }
   ]
 }

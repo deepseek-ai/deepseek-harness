@@ -10,9 +10,12 @@ import {
   collectRuntimeLocalSourceSpecifiers,
   collectRuntimeSourcePackageUses,
   collectRuntimeSourceSpecifiers,
+  collectSourceAssetSpecifiers,
   collectSourcePackageUses,
+  collectStylesheetAssetUrls,
   fixClientPackageManifests,
   readClientDeclarations,
+  readStylesheetAssetReferences,
   type ClientDeclaration,
   type ClientPackage,
   type ClientPackageFacts,
@@ -33,10 +36,13 @@ function declaration(
     name: short.startsWith('@') ? short : '@deepseek-ai/dsh-client-' + short,
     manifest: 'packages/client/' + short.replace(/^.*\//, '') + '/package.json',
     dynamic: true,
+    platform: 'web',
     external: [],
     inject: [],
     runtimeSourceUses: {},
     runtimeSourceSpecifiers: {},
+    assetExport: undefined,
+    assetReferences: [],
     ...fields,
   }
 }
@@ -282,6 +288,164 @@ describe('module requests', () => {
     const found = collectClientPackageViolations(facts([], { declarations: [a, b] }))
     expect(found).toHaveLength(1)
     expect(found[0]).toContain('synchronous dsh.client.external cycle')
+  })
+})
+
+describe('package assets', () => {
+  const art = { file: 'packages/client/ui/src/client/View.tsx', reference: '"./assets/art.webp"' }
+  const mask = { file: 'packages/client/ui/src/client/View.module.css', reference: 'url("../assets/mask.png")' }
+
+  it('collects relative runtime module specifiers with a package-asset extension', () => {
+    expect([...collectSourceAssetSpecifiers('View.tsx', [
+      "import art from './assets/art.webp'",
+      "import back from '../assets/icons/back.SVG'",
+      "import './assets/side-effect.png'",
+      "export { default as photo } from './assets/photo.jpeg'",
+      "const lazy = () => import('./assets/lazy.jpg')",
+      "const legacy = require('./assets/legacy.svg')",
+      "import type Art from './assets/type-only.webp'",
+      "import styles from './View.module.css'",
+      "import font from './assets/font.woff2'",
+      "import raw from './assets/raw.svg?raw'",
+      "import shared from '@deepseek-ai/dsh-client-other/assets/shared.svg'",
+      "import rooted from '/assets/rooted.svg'",
+    ].join('\n'))]).toEqual([
+      './assets/art.webp',
+      '../assets/icons/back.SVG',
+      './assets/side-effect.png',
+      './assets/photo.jpeg',
+      './assets/lazy.jpg',
+      './assets/legacy.svg',
+    ])
+  })
+
+  it.each(['View.module.css', 'global.css'])('collects relative url() values from %s', (path) => {
+    expect(collectStylesheetAssetUrls(path, [
+      ".plain { background: url('./x.png'); }",
+      '.parent { mask: url("../assets/x.png") center / 100% no-repeat; }',
+      '.bare { background: url(./bare.svg); }',
+      ".empty { background: url(''); }",
+      '.inline { background: url("data:image/svg+xml,%3Csvg%3E%3C/svg%3E"); }',
+      ".fragment { filter: url('#frag'); }",
+      ".rooted { background: url('/abs/x.png'); }",
+      '.network { background: url(//cdn.example.com/x.png); }',
+      ".remote { background: url('https://example.com/x.png'); }",
+      "@supports (mask-image: url('')) { .nested { mask: url(./nested.svg); } }",
+      ".set { background-image: image-set(url('./set@1x.png') 1x, url('data:image/png;base64,AA==') 2x); }",
+    ].join('\n'))).toEqual(['./x.png', '../assets/x.png', './bare.svg', './nested.svg', './set@1x.png'])
+  })
+
+  it('rejects an unparsable stylesheet with its path', () => {
+    expect(() => collectStylesheetAssetUrls('src/View.module.css', '.a { composes: b; } .c .d { composes: a; }'))
+      .toThrow('verify-client-packages: cannot parse stylesheet src/View.module.css: The `composes` property')
+  })
+
+  it('reads url() references only from package stylesheets that Client sources import', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-package-assets-'))
+    roots.push(root)
+    const files: Record<string, string> = {
+      'packages/client/ui/src/client/View.module.css': ".view { mask: url('../assets/mask.png'); background: url(data:,x); }",
+      'packages/client/ui/src/client/global.css': '.global { background: url(./assets/global.svg); }',
+      'packages/client/ui/src/client/text.css': '.text { background: url("./assets/text.webp"); }',
+      'packages/client/ui/src/styles/static.css': '@font-face { src: url(./static.woff2); }',
+      'packages/client/ui/styles/outside.css': '.outside { background: url(./outside.png); }',
+    }
+    for (const [path, value] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), value)
+    }
+
+    expect(readStylesheetAssetReferences(root, 'packages/client/ui', new Map([
+      ['packages/client/ui/src/client/View.tsx', ['./View.module.css', './global.css', './assets/art.webp']],
+      ['packages/client/ui/src/client/lazy.ts', ['./text.css?inline', '../../styles/outside.css', './View.module.css']],
+      ['packages/client/ui/src/index.ts', ['katex/dist/katex.css', './client/missing.css.ts']],
+    ]))).toEqual({
+      stylesheets: [
+        'packages/client/ui/src/client/View.module.css',
+        'packages/client/ui/src/client/global.css',
+        'packages/client/ui/src/client/text.css',
+      ],
+      references: [
+        { file: 'packages/client/ui/src/client/View.module.css', reference: 'url("../assets/mask.png")' },
+        { file: 'packages/client/ui/src/client/global.css', reference: 'url("./assets/global.svg")' },
+        { file: 'packages/client/ui/src/client/text.css', reference: 'url("./assets/text.webp")' },
+      ],
+    })
+  })
+
+  it('reads the Web platform and the raw asset export from manifests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-package-asset-manifests-'))
+    roots.push(root)
+    const files: Record<string, unknown> = {
+      'packages/g/web/package.json': {
+        name: '@f/web', dsh: { client: { platform: 'web' } }, exports: { './assets/*': './lib/assets/*' },
+      },
+      'packages/g/conditional/package.json': {
+        name: '@f/conditional', exports: { './assets/*': { default: './lib/assets/*' } },
+      },
+      'packages/g/none/package.json': { name: '@f/none', dsh: { client: { platform: 1 } }, exports: './lib/index.js' },
+    }
+    for (const [path, value] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), JSON.stringify(value))
+    }
+
+    expect(readClientDeclarations(root).declarations.map(entry => [entry.name, entry.platform, entry.assetExport]))
+      .toEqual([
+        ['@f/conditional', undefined, { default: './lib/assets/*' }],
+        ['@f/none', undefined, undefined],
+        ['@f/web', 'web', './lib/assets/*'],
+      ])
+  })
+
+  it('accepts referenced assets with the export and unreferenced packages without it', () => {
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [
+        declaration('ui', { assetExport: './lib/assets/*', assetReferences: [mask, art] }),
+        declaration('plain'),
+        declaration('shell', { dynamic: false, platform: undefined }),
+      ],
+    }))).toEqual([])
+  })
+
+  it.each([
+    ['./lib/assets/**', '"./lib/assets/**"'],
+    [{ default: './lib/assets/*' }, '{"default":"./lib/assets/*"}'],
+    [null, 'null'],
+  ])('rejects the asset export target %j', (target, shown) => {
+    const ui = declaration('ui', { assetExport: target, assetReferences: [art] })
+    expect(collectClientPackageViolations(facts([], { declarations: [ui] }))).toEqual([
+      ui.manifest + ': exports["./assets/*"] is ' + shown + '; it must be exactly "./lib/assets/*"',
+    ])
+  })
+
+  it.each([
+    ['a statically linked package', { dynamic: false, platform: undefined }],
+    ['a row for another platform', { platform: 'desktop' }],
+    ['a row without a platform', { platform: undefined }],
+  ] as const)('rejects the asset export on %s', (_label, fields) => {
+    const ui = declaration('ui', { ...fields, assetExport: './lib/assets/*', assetReferences: [art] })
+    expect(collectClientPackageViolations(facts([], { declarations: [ui] }))).toEqual([
+      ui.manifest + ': ' + ui.name + ' declares exports["./assets/*"] without a dsh.client row for platform "web";'
+      + ' only dynamic Web Client packages publish package assets',
+    ])
+  })
+
+  it('rejects a referenced asset without the export and names the first reference', () => {
+    const ui = declaration('ui', { assetReferences: [mask, art] })
+    expect(collectClientPackageViolations(facts([], { declarations: [ui] }))).toEqual([
+      ui.manifest + ': ' + ui.name + ' references package asset url("../assets/mask.png") in '
+      + 'packages/client/ui/src/client/View.module.css but declares no exports["./assets/*"];'
+      + ' add "./assets/*": "./lib/assets/*" and publish "lib/assets"',
+    ])
+  })
+
+  it('rejects an unused asset export', () => {
+    const ui = declaration('ui', { assetExport: './lib/assets/*' })
+    expect(collectClientPackageViolations(facts([], { declarations: [ui] }))).toEqual([
+      ui.manifest + ': ' + ui.name + ' declares an unused ./assets/* export;'
+      + ' no Client source or stylesheet it imports references a package asset',
+    ])
   })
 })
 

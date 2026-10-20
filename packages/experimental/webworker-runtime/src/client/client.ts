@@ -6,6 +6,7 @@
  * The worker's unsolicited `view-text` frame opens the page's text viewer.
  */
 
+import { packageAssetResolver } from '../package-assets.ts'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type {
   TunnelAbortFrame as AbortFrame,
@@ -363,6 +364,18 @@ export class WorkerTunnel {
       throw new Error(`web-preview tunnel: boot payload failed with HTTP ${String(response.status)}: ${await response.text()}`)
     }
     return await response.json() as BootPayload
+  }
+
+  /**
+   * Read every package asset of the image and map each reference to a Blob URL.
+   * @returns The synchronous resolver the module system calls for `require.asset`.
+   */
+  async packageAssets(): Promise<(reference: string) => string> {
+    const response = await this.fetch('/__assets__')
+    if (!response.ok) {
+      throw new Error(`web-preview tunnel: package assets failed with HTTP ${String(response.status)}: ${await response.text()}`)
+    }
+    return packageAssetResolver(new Uint8Array(await response.arrayBuffer()))
   }
 
   /**

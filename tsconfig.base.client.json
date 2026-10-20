@@ -1,12 +1,13 @@
 {
   // Client-side compiler shape shared by tsconfig.client.json and every
-  // packages/client/* package: browser library API, React JSX, no ambient
+  // packages/client/* package: browser library API, React JSX, build-time
+  // environment values and package-image module declarations, no ambient
   // node types (packages that need them override locally).
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2024", "DOM", "DOM.Iterable", "ESNext.Disposable"],
     "typeRoots": ["./scripts/types", "./node_modules/@types"],
-    "types": ["client-build-environment"]
+    "types": ["client-build-environment", "client-assets"]
   }
 }

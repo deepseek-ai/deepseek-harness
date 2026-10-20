@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "持久终端",
-    "description": "让 shell 进程在多次工具调用之间保持运行。"
+    "description": "让 shell 进程在多次工具调用之间保持运行。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

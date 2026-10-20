@@ -81,8 +81,13 @@ export const NativeResourceParameters = {
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }
-/** Executor-only continuation after application consent; absent from the model Request union. */
-export const NativeOnlyOperations = [operation('launchApp', app)] as const
+/** Host-only launch continuation and user-facing system permission controls; absent from model arguments. */
+export const NativeOnlyOperations = [
+  operation('launchApp', app), operation('permissionStatus', {}),
+  operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
+  operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
+  operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
+] as const
 
 /** Process identity returned only after a successful app selection. */
 export const AppResult = z.object({
@@ -127,3 +132,6 @@ export const ActionResult = z.object({ dispatched: z.literal(true), verified: z.
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */
 export const ShowResult = ActionResult.extend({ windowId: id.nullable(), foregroundChanged: z.boolean().nullable() })
+
+/** Bounded native PNG thumbnail for human presentation, excluded from model results and saved grants. */
+export const ApplicationIcon = z.string().max(65536).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/)

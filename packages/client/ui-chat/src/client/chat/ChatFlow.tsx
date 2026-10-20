@@ -25,12 +25,13 @@ function isTranscriptEcho(item: PendingInput): boolean {
 /** Render the flow without adding a DOM parent or changing keyed row positions. */
 export const ChatFlow = memo(function ChatFlow({
   entries, pendingInputs, lastInputTurn, deferCollapse,
-  useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation,
+  useSession, useChat, useChatNode, useChatNodeBottom, useChatNodeProcess, useChatGroup, usePresentation, useConnectionState,
   useStore, actions, renderSlot, renderFactorySlot, t, useGroupAction, useGroupHeaderAction,
   cwd, openFile, inspectCall, forkAt, loadImage, fileMentions,
 }: ChatFlowSlotProps) {
   const nodeStore = useChat(snapshot => snapshot.nodes)
   const running = useSession(snapshot => snapshot.running)
+  const disconnected = useConnectionState(state => state === 'disconnected' || state === 'connecting')
   const latestTurnAnchor = useChat(snapshot => snapshot.navigation.items().at(-1)?.anchorKey)
   const runningStartTime = useChatNode(latestTurnAnchor ?? '', (node) => {
     const location = node?.location
@@ -85,7 +86,7 @@ export const ChatFlow = memo(function ChatFlow({
   // Rows enter before the keyed status and echoes after it, so React never moves its DOM node.
   return [
     ...rows, ...leadingRows, ...openingRows,
-    ...running ? [<RunningStatus key="running" startTime={runningStartTime} t={t} />] : [],
+    ...running ? [<RunningStatus key="running" startTime={runningStartTime} paused={disconnected} t={t} />] : [],
     ...pendingRows,
   ]
 })

@@ -20,6 +20,68 @@ function scheduleEvent(data: unknown, seq: number): SessionEvent {
 }
 
 describe('shared Schedule management', () => {
+  it('delivers overdue tasks when the Web controller mounts and remounts', async () => {
+    const test = await harness({ sessionController: false })
+    tests.push(test)
+    const agent = agentFor(test.ctx)
+    test.resolve.mockResolvedValue({ agent })
+    const warn = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+    const controller = {
+      apply(ctx: typeof test.ctx) {
+        ctx.provide('sessionController', { resolveAgent: test.resolve } as never)
+      },
+    }
+    try {
+      await test.service.create(agent.session.id, { prompt: 'First', title: 'First', after_seconds: 1 })
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(agent.followup).not.toHaveBeenCalled()
+      const first = await test.ctx.plugin(controller)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(agent.followup).toHaveBeenCalledOnce()
+      expect(await test.service.list({ sessionId: agent.session.id })).toEqual([])
+
+      await first.dispose()
+      await test.service.create(agent.session.id, { prompt: 'Second', title: 'Second', after_seconds: 1 })
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(agent.followup).toHaveBeenCalledOnce()
+      await test.ctx.plugin(controller)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(agent.followup).toHaveBeenCalledTimes(2)
+      expect(await test.service.list({ sessionId: agent.session.id })).toEqual([])
+    } finally { warn.mockRestore() }
+  })
+
+  it('does not resume delivery after Schedule unload when the Web controller arrives', async () => {
+    const test = await harness({ sessionController: false })
+    tests.push(test)
+    const agent = agentFor(test.ctx)
+    test.resolve.mockResolvedValue({ agent })
+    await test.service.create(agent.session.id, { prompt: 'Stopped', title: 'Stopped', after_seconds: 1 })
+    await test.fiber.dispose()
+    await test.ctx.plugin({
+      apply(ctx: typeof test.ctx) {
+        ctx.provide('sessionController', { resolveAgent: test.resolve } as never)
+      },
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(test.resolve).not.toHaveBeenCalled()
+    expect(agent.followup).not.toHaveBeenCalled()
+  })
+
+  it('keeps an active task when the injected Web controller refuses restoration', async () => {
+    const test = await setup()
+    const warn = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+    test.resolve.mockResolvedValueOnce({ error: new Error('Web restoration unavailable') } as never)
+    try {
+      const sessionId = SessionId('refused-web-restoration')
+      const record = await test.service.create(sessionId, { prompt: 'Keep', title: 'Keep', after_seconds: 1 })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(test.resolve).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Web restoration unavailable'))
+      expect((await test.service.list({ sessionId })).map(task => task.id)).toEqual([record.id])
+    } finally { warn.mockRestore() }
+  })
+
   it('initializes a new task with empty known delivery history', async () => {
     const { service, pool } = await setup()
     const sessionId = SessionId('new-history')

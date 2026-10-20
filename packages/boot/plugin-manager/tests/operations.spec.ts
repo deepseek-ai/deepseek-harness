@@ -8,6 +8,9 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { getDshRuntimeVersion, initProfile, readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { anchorPathSpec, readProfileRegistry, runPluginCommand, runProfilePnpm, viewProfilePackage } from '../src/operations.ts'
 
+/** The manifest fields an inspection prints. */
+const VIEW_FIELDS = ['name', 'version', 'description', 'dsh'] as const
+
 /** What execa resolves for a run that settled, including the buffered output the pre-install lookup is read for. */
 interface FakeOutcome {
   exitCode: number | undefined
@@ -936,26 +939,26 @@ it('asks the registry through pnpm view in the profile directory, without pnpm\'
   const { dir } = fixture()
   const answer = (value: object) => command.run.mockResolvedValueOnce(value as never)
   answer({ exitCode: 0, stdout: '{"name":"x"}', stderr: '', timedOut: false, isCanceled: false })
-  expect(await viewProfilePackage(dir, 'x@^1', { timeoutMs: 5 })).toEqual({ exitCode: 0, stdout: '{"name":"x"}', stderr: '', timedOut: false })
+  expect(await viewProfilePackage(dir, 'x@^1', { fields: VIEW_FIELDS, timeoutMs: 5 })).toEqual({ exitCode: 0, stdout: '{"name":"x"}', stderr: '', timedOut: false })
   expect(command.run).toHaveBeenLastCalledWith('pnpm', ['view', 'x@^1', 'name', 'version', 'description', 'dsh', '--json', '--config.fetch-retries=0'],
     expect.objectContaining({ cwd: dir, timeout: 5, reject: false, stdin: 'ignore' }))
   expect((command.run.mock.lastCall as unknown[])[2]).not.toHaveProperty('cancelSignal')
   // A registry asked by URL goes on the command line; null leaves the choice to pnpm's own configuration.
   answer({ exitCode: 0, stdout: '{"name":"x"}', stderr: '', timedOut: false, isCanceled: false })
-  await viewProfilePackage(dir, 'x', { timeoutMs: 5, registry: 'https://registry.npmmirror.com/' })
+  await viewProfilePackage(dir, 'x', { fields: VIEW_FIELDS, timeoutMs: 5, registry: 'https://registry.npmmirror.com/' })
   expect((command.run.mock.lastCall as unknown[])[1]).toEqual(['view', 'x', 'name', 'version', 'description', 'dsh', '--json', '--registry=https://registry.npmmirror.com/', '--config.fetch-retries=0'])
   answer({ exitCode: 0, stdout: '{"name":"x"}', stderr: '', timedOut: false, isCanceled: false })
-  await viewProfilePackage(dir, 'x', { timeoutMs: 5, registry: null })
+  await viewProfilePackage(dir, 'x', { fields: VIEW_FIELDS, timeoutMs: 5, registry: null })
   expect((command.run.mock.lastCall as unknown[])[1]).toEqual(['view', 'x', 'name', 'version', 'description', 'dsh', '--json', '--config.fetch-retries=0'])
   const signal = AbortSignal.abort()
   answer({ exitCode: undefined, stdout: '', stderr: '', timedOut: true, isCanceled: false })
-  expect(await viewProfilePackage(dir, 'x', { timeoutMs: 5, signal })).toEqual({ exitCode: null, stdout: '', stderr: '', timedOut: true })
+  expect(await viewProfilePackage(dir, 'x', { fields: VIEW_FIELDS, timeoutMs: 5, signal })).toEqual({ exitCode: null, stdout: '', stderr: '', timedOut: true })
   expect((command.run.mock.lastCall as unknown[])[2]).toMatchObject({ cancelSignal: signal })
   answer({ exitCode: undefined, stdout: '', stderr: '', timedOut: false, isCanceled: true })
-  expect(await viewProfilePackage(dir, 'x', { command: 'node', timeoutMs: 5 })).toEqual({ exitCode: null, stdout: '', stderr: '', timedOut: false })
+  expect(await viewProfilePackage(dir, 'x', { command: 'node', fields: VIEW_FIELDS, timeoutMs: 5 })).toEqual({ exitCode: null, stdout: '', stderr: '', timedOut: false })
   expect((command.run.mock.lastCall as unknown[])[0]).toBe('node')
   answer({ exitCode: undefined, stdout: '', stderr: '', timedOut: false, isCanceled: false, code: 'ENOENT', shortMessage: 'spawn pnpm ENOENT' })
-  const missing = await viewProfilePackage(dir, 'x', { timeoutMs: 5 })
+  const missing = await viewProfilePackage(dir, 'x', { fields: VIEW_FIELDS, timeoutMs: 5 })
   expect(missing).toMatchObject({ exitCode: null, timedOut: false })
   expect(missing.cause).toMatchObject({ message: 'spawn pnpm ENOENT', code: 'ENOENT' })
 })
@@ -967,7 +970,7 @@ it('uses application-owned executable arguments and environment for package oper
   expect(command.run.mock.calls[0]).toEqual([runtime.command, [...runtime.args, 'add', resolve(context.cwd, 'extra')],
     expect.objectContaining({ env: expect.objectContaining(runtime.env) as unknown })])
   command.run.mockResolvedValueOnce(Object.assign({ exitCode: 0, failed: false }, { stdout: '{}', stderr: '', timedOut: false }))
-  await viewProfilePackage(dir, 'example', { ...runtime, timeoutMs: 1000 })
+  await viewProfilePackage(dir, 'example', { ...runtime, fields: VIEW_FIELDS, timeoutMs: 1000 })
   expect(command.run).toHaveBeenLastCalledWith(runtime.command,
     [...runtime.args, 'view', 'example', 'name', 'version', 'description', 'dsh', '--json', '--config.fetch-retries=0'],
     expect.objectContaining({ env: expect.objectContaining(runtime.env) as unknown }))

@@ -136,9 +136,9 @@ subagent 服务通过 `subagents.rootOf()` 解析当前在线调用者的根。�
 
 ### 持久性模型
 
-`Service.init` 等待 `agentTeam` 投影注册完成后才发布服务就绪状态。日志持有返回的 handle，通过 `stateOf(session)` 读取任务状态；调用者使用 Team 服务，不另行注册 reader。
+Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `agentTeam` 投影注册完成后才发布服务就绪状态。日志持有返回的 handle，通过 `stateOf(session)` 读取任务状态；调用者使用 Team 服务，不另行注册 reader。
 
-任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后刷盘并发出等待信号。取消不能撤回已追加的记录。刷盘失败以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知。重试前先读取该任务。任务记录仅保留在日志中；信号不是消息，也不是持久化事件。等待工具通过普通工具流水线记录结果。不重写已提交任务或历史载荷代次。
+任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后刷盘并发出等待信号。取消不能撤回已追加的记录。刷盘失败或没有监听器参与时，以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知，且不发出等待信号。重试前先读取该任务。任务记录仅保留在日志中；信号不是消息，也不是持久化事件。等待工具通过普通工具流水线记录结果。不重写已提交任务或历史载荷代次。
 
 邮箱投影和检查点接纳保留本地声明校验器之外的已解码 JSON 字段，包括自身的 `__proto__` 键。历史载荷代次保持不变；投影缓存版本变化时从 Session 日志重建。
 

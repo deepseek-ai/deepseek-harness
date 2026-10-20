@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Persistent terminals",
-    "description": "Keep shell processes alive across tool calls."
+    "description": "Keep shell processes alive across tool calls.",
+    "detail": "docs/DETAIL.md"
   }
 }

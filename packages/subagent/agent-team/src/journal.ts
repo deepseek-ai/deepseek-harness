@@ -59,12 +59,13 @@ export class TeamJournal {
    * Commit a task before notifying current waits in its tree.
    * @param root - live tree root whose Session stores the task.
    * @param task - complete committed task revision.
-   * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED after append when durability cannot be confirmed; read the task before retrying.
+   * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED after append when flush fails or has no listener; read the task before retrying.
    */
   async appendAndFlush(root: Agent, task: TeamTaskSnapshot): Promise<void> {
     root.session.append('team/task', { version: 2, teamId: TeamId(root.id), task })
     try {
-      await this.ctx.sessions.flush(root.session)
+      const participated = await this.ctx.sessions.flush(root.session)
+      if (!participated) throw new Error('No session durability listener participated')
     } catch (error: unknown) {
       throw new TeamError(
         `task "${task.id}" revision ${task.revision} is visible, but persistence was not confirmed; read the task before retrying`,

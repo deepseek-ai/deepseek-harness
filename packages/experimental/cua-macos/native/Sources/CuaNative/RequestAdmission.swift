@@ -26,6 +26,13 @@ struct RequestParameters: Sendable {
         guard let value = values[key]?.string else { throw Self.invalid("\(key) must be a string") }
         return value
     }
+    func strings(_ key: String) throws -> [String] {
+        guard let raw = values[key], case .array(let items) = raw else { throw Self.invalid("\(key) must be a string array") }
+        return try items.map { value in
+            guard let path = value.string, !path.isEmpty else { throw Self.invalid("\(key) must contain nonempty strings") }
+            return path
+        }
+    }
     func optionalString(_ key: String) throws -> String? { contains(key) ? try string(key) : nil }
     func optionalBoolean(_ key: String) throws -> Bool? {
         guard let raw = values[key] else { return nil }

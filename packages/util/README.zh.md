@@ -28,6 +28,7 @@ kind: "package-group"
 |---|---|
 | [`brand/`](brand/README.zh.md) | 提供名义字符串类型及其无状态构造函数 |
 | [`package-manifest/`](package-manifest/README.zh.md) | 包 manifest（元数据清单）的共享 TypeScript 声明 |
+| [`plugin-detail/`](plugin-detail/README.zh.md) | 选择插件详细介绍文档，并从本地包和 npm 文件 CDN 读取它们 |
 | [`plugin-market-index/`](plugin-market-index/README.zh.md) | 校验插件市场索引格式 1，并生成锁定版本的安装参数 |
 | [`crypto/`](crypto/README.zh.md) | 基于跨运行时 `crypto.getRandomValues` 原语生成 RFC 9562 v4 UUID |
 | [`deque/`](deque/README.zh.md) | 提供摊销常数时间的队列操作和有界空闲存储 |

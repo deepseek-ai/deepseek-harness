@@ -5,6 +5,7 @@ Accessibility/Screen Recording grants are required unless --without-desktop is s
 """
 import argparse
 import concurrent.futures
+from contextlib import ExitStack
 import fcntl
 import hashlib
 import json
@@ -128,6 +129,15 @@ def main():
             assert a.ready == b.ready == ready[0]
             for client in clients:
                 client.call("protocol-unsupported", {}, error="UNSUPPORTED")
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as invalid:
+                invalid.settimeout(15)
+                invalid.connect(str(socket_path))
+                invalid.sendall(b'{"type":"hello","protocol":2}\n')
+                with invalid.makefile("rb") as reader:
+                    failure = json.loads(reader.readline())
+                    assert failure["type"] == "error" and failure["code"] == "NATIVE_PROTOCOL", failure
+                    assert reader.readline() == b"", "Rejected handshake retained its connection"
+            b.call("protocol-after-invalid-hello", {}, error="UNSUPPORTED")
             # Coalesced frames retain socket order, including cancellation before execution starts.
             a.socket.sendall(b'{"id":"coalesced","method":"listApps","params":{}}\n'
                              b'{"type":"cancel","id":"coalesced"}\n')
@@ -218,20 +228,39 @@ def main():
             wait_released(lock_path, owner_pid)
             owner_pid = None
 
-            daemon = subprocess.Popen([base[0], "--serve", *base[1:]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            try:
-                assert select.select([daemon.stdout], [], [], 15)[0], "Daemon did not report ready"
-                signalled_ready = json.loads(daemon.stdout.readline())
-                assert signalled_ready["type"] == "ready", signalled_ready
-                daemon.send_signal(signal.SIGTERM)
-                status = daemon.wait(timeout=15)
-                assert status == 128 + signal.SIGTERM, (status, daemon.stderr.read())
-                wait_released(lock_path, daemon.pid)
-            finally:
-                stop(daemon)
-                daemon.stdout.close()
-                daemon.stderr.close()
-            print("PASS: concurrent launch, shared PID, client isolation, cleanup/lock release and SIGTERM")
+            for shutdown in ["signal", "incomplete-hello", "idle"]:
+                serve_options = base[1:] if shutdown != "idle" else [*base[1:-1], "100"]
+                daemon = subprocess.Popen([base[0], "--serve", *serve_options], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                try:
+                    with ExitStack() as connections:
+                        assert select.select([daemon.stdout], [], [], 15)[0], "Daemon did not report ready"
+                        signalled_ready = json.loads(daemon.stdout.readline())
+                        assert signalled_ready["type"] == "ready", signalled_ready
+                        if shutdown == "incomplete-hello":
+                            pending = connections.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
+                            pending.settimeout(15)
+                            pending.connect(str(socket_path))
+                            pending.sendall(b'{"type":"hello"')
+                            # A later completed handshake observes the accept loop progressing past this socket.
+                            active = Connection(socket_path, key)
+                            connections.callback(active.socket.close)
+                            connections.callback(active.reader.close)
+                        if shutdown != "idle":
+                            daemon.send_signal(signal.SIGTERM)
+                        status = daemon.wait(timeout=15)
+                        expected_status = 0 if shutdown == "idle" else 128 + signal.SIGTERM
+                        assert status == expected_status, (status, daemon.stderr.read())
+                        wait_released(lock_path, daemon.pid)
+                        # The forced-exit deadline does not unlink these files; require normal cleanup.
+                        assert not socket_path.exists(), "Shutdown left its listening socket"
+                        assert not (runtime / (key + ".ready")).exists(), "Shutdown left its ready record"
+                        if shutdown == "incomplete-hello":
+                            assert pending.recv(1) == b"", "Signal shutdown retained an incomplete handshake"
+                finally:
+                    stop(daemon)
+                    daemon.stdout.close()
+                    daemon.stderr.close()
+            print("PASS: concurrent launch, shared PID, client isolation, rejected/incomplete handshakes, cleanup/lock release, SIGTERM and idle exit")
         finally:
             errors = []
             for client in reversed(clients):

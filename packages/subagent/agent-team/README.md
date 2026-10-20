@@ -136,9 +136,9 @@ After a successful append and flush, Team emits an Agent-scoped in-memory signal
 
 ### Durability model
 
-`Service.init` awaits registration of the `agentTeam` projection before publishing service readiness. The journal retains the returned handle and reads task state through `stateOf(session)`; callers use the Team service rather than registering another reader.
+Team requires `sessionPersistence` before activation. `Service.init` awaits registration of the `agentTeam` projection before publishing service readiness. The journal retains the returned handle and reads task state through `stateOf(session)`; callers use the Team service rather than registering another reader.
 
-Task mutations honor cancellation before appending `team/task` to the exact live root Session, then flush before emitting wait signals. Cancellation cannot retract an appended record. A flush failure raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown. Read that task before retrying. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
+Task mutations honor cancellation before appending `team/task` to the exact live root Session, then flush before emitting wait signals. Cancellation cannot retract an appended record. A failed flush or one with no participating listener raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown, and no wait signal is emitted. Read that task before retrying. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
 
 Mailbox projection and checkpoint admission preserve decoded JSON fields outside locally declared validators, including an own `__proto__` key. Historical payload generations remain unchanged; projection caches rebuild from the Session log when their cache version changes.
 

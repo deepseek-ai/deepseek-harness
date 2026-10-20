@@ -80,6 +80,15 @@ export const zh = {
   versionPrerelease: '预发布',
   confirmTitle: '安装「{name}」？',
   installTrust: '插件在本机以你的权限运行。请确认你信任它的来源',
+  detailTitle: '详细介绍',
+  detailLoading: '正在读取详细介绍',
+  detailTooLarge: '详细介绍或它所在的仓库超过大小限制，未加载',
+  detailNetwork: '无法连接到详细介绍的来源',
+  detailDenied: '无法访问详细介绍所在的仓库，请检查 Git 凭据',
+  detailGitUnavailable: '详细介绍所在的仓库需要用 Git 读取，但无法运行 Git。请安装 Git 后重试',
+  detailInvalid: '插件声明的详细介绍文件无效',
+  detailFailed: '无法读取详细介绍',
+  footnotes: '脚注',
 } as const
 
 /** Dictionary keys owned by this plugin. */
@@ -165,4 +174,13 @@ export const en = {
   versionPrerelease: 'Prerelease',
   confirmTitle: 'Install "{name}"?',
   installTrust: 'Plugins run on this machine with your permissions. Make sure you trust where this one comes from.',
+  detailTitle: 'Details',
+  detailLoading: 'Reading details',
+  detailTooLarge: 'The details or their repository exceed the size limit and were not loaded.',
+  detailNetwork: 'Could not reach the source of the details.',
+  detailDenied: 'Could not access the repository of the details. Check your Git credentials.',
+  detailGitUnavailable: 'The details are in a repository that must be read with Git, and Git could not run. Install Git, then retry.',
+  detailInvalid: 'The plugin declares an invalid details file.',
+  detailFailed: 'Could not read the details.',
+  footnotes: 'Footnotes',
 } satisfies Record<PluginMarketLocaleKey, string>

@@ -12,6 +12,8 @@ import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, writeCo
 const SUMMARY = `Next paragraph: ${'inspect the loaded context and pending tools '.repeat(8).trim()}`
 const DELTAS = ['First paragraph', `\nDetails\n\n\n${SUMMARY}`, '\nMore detail']
 const UI_EXPECTED = fileURLToPath(new URL('./expected/reasoning-preview/running.expected.md', import.meta.url))
+/** Computed mask of the animated whale: the ui-chat package asset URL, whose `@` is percent-encoded. */
+const WHALE_MASK = /^url\("([^"]*\/plugins\/@deepseek-ai\/dsh-client-ui-chat\/assets\/running-whale%402x-[0-9a-f]{12}\.png)"\)$/
 
 class PausedReasoningAdapter extends LlmAdapter {
   override async listModels(provider: string) { return [{ provider, id: 'paused', name: `${provider}/paused` }] }
@@ -96,14 +98,14 @@ it('shows completed paragraph first lines across blank lines with a right-edge f
         await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' })
         await expect.poll(() => animatedWhale.isVisible()).toBe(true)
         expect(await animatedWhale.evaluate(element => getComputedStyle(element).maskMode)).toBe('alpha')
-        const imageSize = await animatedWhale.evaluate(async (element) => {
-          const source = getComputedStyle(element).maskImage.match(/^url\("?(data:image\/png;base64,[A-Za-z0-9+/=]+)"?\)$/)?.[1]
-          if (source === undefined) throw new Error('Running whale mask must use the bundled PNG data URL')
+        const imageSize = await animatedWhale.evaluate(async (element, mask) => {
+          const source = getComputedStyle(element).maskImage.match(new RegExp(mask))?.[1]
+          if (source === undefined) throw new Error('Running whale mask must use the ui-chat package asset URL')
           const image = new Image()
           image.src = source
           await image.decode()
           return [image.naturalWidth, image.naturalHeight]
-        })
+        }, WHALE_MASK.source)
         expect(imageSize).toEqual([28, 28])
         expect(await restingWhale.isVisible()).toBe(false)
         const firstWhaleFrame = await whale.screenshot({ animations: 'allow' })

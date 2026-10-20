@@ -50,11 +50,13 @@
     - id: cua-native
       name: '@deepseek-ai/dsh-experimental-cua-macos'
       config:
+        agentPreset: false
         helperPath: !!js process.cwd() + '/native-helper.mjs'
+        allowedApps: [{"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app"}]
 
 - id: user-questions
   name: '@deepseek-ai/dsh-user-questions'
 
 - insert:
-    - id: cua-consent-fixture
-      name: './consent-fixture.mjs'
+    - id: cua-permission-fixture
+      name: './permission-fixture.mjs'

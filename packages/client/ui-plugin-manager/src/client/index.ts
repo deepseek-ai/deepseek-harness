@@ -40,6 +40,8 @@ declare module '@deepseek-ai/cordis' {
        * @param packageName - npm package name of the bundle.
        */
       openBundle(packageName: string): void
+      /** Open the Plugins main list without opening a dialog or changing the current Session. */
+      openList(): void
     }
   }
 }
@@ -84,12 +86,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     // A page never rendered holds no snapshot to refresh.
     const refresh = (): void => {
+      // A profile change can replace a bundle's files, and a restarted Host is read afresh.
+      controller.details.reset()
       if (controller.getSnapshot().status !== 'idle') void controller.load()
     }
     const disposers = [
       ctx.remote.$on('plugin-manager/changed', refresh),
       ctx.remote.$on('plugin-manager/install-log', (chunk) => { controller.appendLog(chunk) }),
       ctx.remote.$on('plugin-manager/install-state', (progress) => { controller.installProgress(progress) }),
+      ctx.remote.$on('plugin-manager/update-state', (progress) => { controller.updateProgress(progress) }),
       ctx.on('connection/reset', refresh),
     ]
     return () => { for (const dispose of disposers) dispose() }
@@ -133,6 +138,11 @@ export function apply(ctx: ClientContext): void {
       if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
     })
     const disposeNavigation = ctx.reflect.provide('pluginNavigation', {
+      openList: () => {
+        ctx.layout.selectPanel(PANEL_ID)
+        instance.actions.setTab('installed')
+        instance.actions.setView({ kind: 'list' })
+      },
       openBundle: (packageName: string) => {
         ctx.layout.selectPanel(PANEL_ID)
         instance.actions.setTab('installed')

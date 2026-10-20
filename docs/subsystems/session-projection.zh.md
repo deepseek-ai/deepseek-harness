@@ -26,6 +26,8 @@ interface ProjectionHandle<S> {
 }
 ```
 
+[兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取及其每个键一次的弃用警告。
+
 ## 投影单元
 
 `ProjectionDefinition<K, S>` 在各单元内部携带宿主状态类型；注册从 `stateSchema` 推导 `S`，并返回 `ProjectionHandle<S>`。只有客户端可见的 key 合并到 `SessionProjectionMap`，由它约束对应的全量值。`wire` 块使单元对客户端可见，渲染归 slot 体系管，永远不归本层：
@@ -314,7 +316,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
  * Retained handles remain readable after release.
  * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns a ready handle with synchronous state reads and the effect disposer.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
 register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
 
@@ -323,7 +325,7 @@ register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDe
  * and always checkpointed like every other unit.
  * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns a ready handle with synchronous state reads and the effect disposer.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
 register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>
 

@@ -108,6 +108,23 @@ export function shortName(name: string): string {
   return unscoped.replace(/^dsh-(?:host-|client-)?/, '')
 }
 
+/** Official bundles that display the Experimental badge. */
+const EXPERIMENTAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-cua-bundle',
+  '@deepseek-ai/dsh-experimental-agent-team-profile',
+  '@deepseek-ai/dsh-experimental-voice-input-bundle',
+  '@deepseek-ai/dsh-experimental-auto-review',
+  '@deepseek-ai/dsh-experimental-inspector-profile',
+  '@deepseek-ai/dsh-experimental-tool-worktree',
+  '@deepseek-ai/dsh-experimental-cot-translation-bundle',
+  '@deepseek-ai/dsh-experimental-terminal-bundle',
+  '@deepseek-ai/dsh-experimental-session-search',
+  '@deepseek-ai/dsh-experimental-session-titles-bundle',
+  '@deepseek-ai/dsh-experimental-badge-skill-bundle',
+  '@deepseek-ai/dsh-experimental-ralph-bundle',
+  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
+]
+
 /**
  * Resolve installed package metadata without changing its technical identity.
  * @param pkg - package identity and local metadata.
@@ -120,7 +137,7 @@ export function packageText(
   return {
     title: pkg.meta?.title === undefined ? pkg.name : resolveText(pkg.meta.title),
     description: pkg.meta?.description === undefined ? undefined : resolveText(pkg.meta.description) || undefined,
-    beta: pkg.name.startsWith('@deepseek-ai/dsh-experimental-'),
+    beta: EXPERIMENTAL_BUNDLES.includes(pkg.name),
   }
 }
 

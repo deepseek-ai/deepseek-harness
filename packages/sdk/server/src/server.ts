@@ -7,12 +7,14 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
+import { SdkUserQuestionBridge } from './user-questions.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-schedule'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
@@ -86,6 +88,10 @@ export class HarnessSdkJsonRpcServer {
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
   private initialized = false
+  private readonly userQuestions: SdkUserQuestionBridge
+  private readonly initialization = Promise.withResolvers<void>()
+  /** Restored by a reminder and available for the client's first resume. */
+  private readonly scheduledSessions = new Map<string, Promise<SessionRecord>>()
 
   constructor(
     private readonly ctx: Context,
@@ -93,6 +99,28 @@ export class HarnessSdkJsonRpcServer {
     private readonly options: HarnessSdkJsonRpcServerOptions = {},
   ) {
     const serverOptions = this.options
+    this.userQuestions = new SdkUserQuestionBridge(ctx, transport, agent =>
+      this.sessions.get(agent.session.id)?.handle.agent === agent)
+    this.disposers.push(ctx.on('schedule/resolve-agent', async (sessionId) => {
+      // Startup delivery must wait for the SDK model route and output limit.
+      await this.initialization.promise
+      if (this.shuttingDown) throw new Error('SDK server is shutting down')
+      const existing = this.sessions.get(sessionId)
+      const pending = this.sessionCreations.get(sessionId)
+      if (existing !== undefined) {
+        this.assertLiveAgent(existing, sessionId)
+        return existing.handle.agent
+      }
+      if (pending !== undefined) return (await pending).handle.agent
+      const restoration = this.openSession(sessionId, true)
+      this.scheduledSessions.set(sessionId, restoration)
+      try {
+        return (await restoration).handle.agent
+      } catch (error) {
+        this.scheduledSessions.delete(sessionId)
+        throw error
+      }
+    }))
     this.disposers.push(ctx.on('session/event', (session, event) => {
       const record = this.sessions.get(session.id)
       if (event.type === 'turn/end' && record?.handle.agent.session === session
@@ -176,7 +204,9 @@ export class HarnessSdkJsonRpcServer {
     this.model = model
     this.reasoningEffort = reasoningEffort
     this.maxTokens = params.maxTokens
+    this.userQuestions.enabled = params.capabilities?.userQuestions === true
     this.initialized = true
+    this.initialization.resolve()
     return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
   }
 
@@ -215,6 +245,13 @@ export class HarnessSdkJsonRpcServer {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
     const sessionId = params.sessionId
+    const restoration = this.scheduledSessions.get(sessionId)
+    if (restoration !== undefined) {
+      this.scheduledSessions.delete(sessionId)
+      const record = await restoration
+      this.assertLiveAgent(record, sessionId)
+      return {}
+    }
     if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) {
       throw new Error(`SDK session is already open or opening: ${sessionId}`)
     }
@@ -294,9 +331,12 @@ export class HarnessSdkJsonRpcServer {
 
   private async performShutdown(): Promise<Record<string, never>> {
     this.shuttingDown = true
+    this.userQuestions.close()
+    this.initialization.resolve()
     const pendingCreations = [...this.sessionCreations.values()]
     await Promise.allSettled(pendingCreations)
     this.sessionCreations.clear()
+    this.scheduledSessions.clear()
     const records = [...this.sessions.values()]
     this.sessions.clear()
     const failures: unknown[] = []
@@ -370,6 +410,7 @@ export class HarnessSdkJsonRpcServer {
 
   private async getOrCreateSession(sessionId: string): Promise<SessionRecord> {
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    this.scheduledSessions.delete(sessionId)
     const existing = this.sessions.get(sessionId)
     if (existing) return existing
     const pending = this.sessionCreations.get(sessionId)

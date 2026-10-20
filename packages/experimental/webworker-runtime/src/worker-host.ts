@@ -36,6 +36,7 @@ import { inflateImage, inflateImageStream } from './storage/image-gzip.ts'
 import { loadVfsImage, loadVfsOverlay, MemoryVfs } from './storage/memory.ts'
 import { setActiveVfs } from './storage/active.ts'
 import { setTextViewer } from './shell/process/xdg-open.ts'
+import { packPackageAssets } from './package-assets.ts'
 import {
   DEFAULT_ROOT, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_MANIFEST_PATH, LOWERING_VERSION,
 } from './image-layout.ts'
@@ -273,6 +274,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       tunnel.serve({
         directFetch: (request: Request) => handler.fetch(request, peer),
         bootPayload: () => readBootPayload(ctx),
+        packageAssets: () => packPackageAssets(mounted, root),
         openStream: (endpoint, payload, uplink, signal) =>
           typertGateway.wireStream.open(endpoint, payload, uplink, peer, signal),
         streamFailure: typertGateway.wireStream.failure,

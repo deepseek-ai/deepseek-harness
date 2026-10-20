@@ -1656,3 +1656,31 @@ export const IconMicrophoneOutlineRegular = (props: IconProps) => (
 export const IconMicrophoneOutlineMedium = (props: IconProps) => (
   <IconMicrophoneOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
 )
+
+/** `compact` moves the tiles 0.5px inward, for glyphs drawn at card size. */
+type AppsAddIconProps = IconProps & { readonly compact?: boolean | undefined }
+
+const IconAppsAddOutlineArtwork = ({ size = 16, className, strokeWidth, compact = false }: AppsAddIconProps & { strokeWidth: number }) => {
+  const near = compact ? 2.75 : 2.25
+  const far = compact ? 9.25 : 9.75
+  const plusX = far + 2
+  const plusY = near + 2
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth={strokeWidth} aria-hidden="true">
+      <rect x={near} y={near} width={4} height={4} rx={1} />
+      <rect x={near} y={far} width={4} height={4} rx={1} />
+      <rect x={far} y={far} width={4} height={4} rx={1} />
+      <path d={`M${plusX} ${plusY - 2.5}v5M${plusX - 2.5} ${plusY}h5`} />
+    </svg>
+  )
+}
+
+/** Three entry tiles and an add mark with one-pixel strokes. */
+export const IconAppsAddOutlineRegular = (props: AppsAddIconProps) => (
+  <IconAppsAddOutlineArtwork {...props} strokeWidth={ICON_REGULAR_STROKE} />
+)
+
+/** Three entry tiles and an add mark with 1.3px strokes. */
+export const IconAppsAddOutlineMedium = (props: AppsAddIconProps) => (
+  <IconAppsAddOutlineArtwork {...props} strokeWidth={ICON_MEDIUM_STROKE} />
+)

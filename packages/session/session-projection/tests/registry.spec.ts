@@ -481,14 +481,14 @@ describe('SessionProjectionRegistry drive', () => {
     // The one incompatibility a runtime comparison can name: the versioned
     // contract says the cached state shape differs, so the two cannot share
     // cells. Everything else about a definition is functions.
-    await expect(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 9 }))
+    await expect(Promise.resolve(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 9 })))
       .rejects.toThrow(/already registered at stateVersion 1; refusing to share it with stateVersion 9/)
   })
 
   it('rejects a non-integer or negative stateVersion at register time', async () => {
     const { ctx } = await harness()
-    await expect(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: -1 })).rejects.toThrow(/stateVersion/)
-    await expect(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 1.5 })).rejects.toThrow(/stateVersion/)
+    await expect(Promise.resolve(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: -1 }))).rejects.toThrow(/stateVersion/)
+    await expect(Promise.resolve(ctx.sessionProjections.register({ ...marksUnit(), stateVersion: 1.5 }))).rejects.toThrow(/stateVersion/)
   })
 
   it('register() disposer removes the key (with its cells) and frees it for re-registration', async () => {

@@ -23,9 +23,9 @@ Full paths rooted at `lead` identify recipients; descriptions label responsibili
 
 ## Migration
 
-1. Remove obsolete configuration keys and patches disabling subagent tools solely for Team support.
-2. Replace `spawn_teammate({ name, description, prompt, context })` with `subagent({ name, description, prompt })`; use `subagent_fork` to inherit conversation history. Save the returned path. `subagent_oar` also accepts optional `name` and returns a path.
+1. Move `tool-agent-team.interrupt: false` to `tool-subagent-control`. Remove other obsolete keys and patches disabling subagent tools solely for Team support.
+2. Replace `spawn_teammate` with `subagent({ name, description, prompt })`, or `subagent_fork` to inherit history. Save the returned path. `subagent_oar` also accepts optional `name`.
 3. Use `send_message({ name, message })` and `interrupt_agent({ name })`; discover member paths with `list_agents`.
-4. Task `owner` fields accept paths; results expose `ownerName`. Use `lead` for the root. Host operations retain Session ids. `startActivation()` accepts optional `name` and returns the full path in `activation.name`; retain `childId` for id-based operations.
-5. Every activation enters its parent catalog, including external `delivery: 'caller'` work. Discovery and the Web child list therefore include those entries; delivery only controls result routing. Verify scripts that count children.
+4. Task `owner` accepts paths; results expose `ownerName`. The root is `lead`. Host operations retain Session ids; `startActivation()` accepts optional `name`, returning `activation.name` and `childId`.
+5. All activations enter the parent catalog, including external `delivery: 'caller'` work. Discovery and the Web child list include them; delivery only controls result routing. Check scripts counting children.
 6. Replace removed services with `ctx.subagents`. SDK `session/resume` rejects subagent Sessions; resume the root. Verify navigation, task assignment and active-wait wakeups; re-read tasks after waiting.

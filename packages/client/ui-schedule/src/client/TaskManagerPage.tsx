@@ -13,6 +13,7 @@ import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail
 import { useRelativeClock } from './relative-clock.ts'
 import { formatScheduleFrequency, nextRunParts, taskName, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
+import { ScheduleEmptyIllustration } from './ScheduleEmptyIllustration.tsx'
 import css from './TaskManagerPage.module.css'
 
 /** Injected catalog and task actions for the management page. */
@@ -151,7 +152,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
             <div className={css.list}>
               {selected === undefined && <CatalogFeedback status={status} populated={rows.length > 0} onRetry={onRetry} t={t} />}
               {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
-                <IconClockOutlineRegular size={24} className={css.emptyGlyph} />
+                <ScheduleEmptyIllustration className={css.emptyIllustration} />
                 <h2>{t(emptyTitle)}</h2>
                 <Button variant="outline" className={css.emptyAction} onClick={onNewTask}>
                   {t('empty.action')}

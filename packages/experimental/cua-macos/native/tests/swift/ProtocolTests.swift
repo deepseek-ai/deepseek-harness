@@ -116,3 +116,9 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
         #expect(throws: NativeFailure.self) { try params.optionalBoolean("includeMenus") }
     }
 }
+
+@Test(arguments: ["null", "true", "[1]", "[\"\"]"])
+func rejectsMalformedApplicationIconPaths(_ value: String) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"icons\",\"method\":\"applicationIcons\",\"params\":{\"paths\":\(value)}}".utf8))
+    #expect(throws: NativeFailure.self) { try RequestParameters(request).strings("paths") }
+}

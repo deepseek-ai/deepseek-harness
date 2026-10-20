@@ -23,9 +23,9 @@ description: "Agent Teams 使用标准 subagent 工具和分层名字；移除 T
 
 ## 迁移
 
-1. 删除废弃配置键，以及仅为支持 Team 而禁用 subagent 工具的 patch。
-2. 将 `spawn_teammate({ name, description, prompt, context })` 替换为 `subagent({ name, description, prompt })`；使用 `subagent_fork` 继承对话历史。保存返回的路径。`subagent_oar` 也接受可选的 `name` 并返回路径。
+1. 将 `tool-agent-team.interrupt: false` 移到 `tool-subagent-control`。删除其余废弃键，以及仅为支持 Team 而禁用 subagent 工具的 patch。
+2. 将 `spawn_teammate` 替换为 `subagent({ name, description, prompt })`；使用 `subagent_fork` 继承历史。保存返回的路径。`subagent_oar` 也接受可选的 `name`。
 3. 使用 `send_message({ name, message })` 和 `interrupt_agent({ name })`；通过 `list_agents` 查询成员路径。
-4. 任务的 `owner` 字段接受路径，结果提供 `ownerName`。根使用 `lead`。Host 操作保留 Session id。`startActivation()` 接受可选的 `name`，通过 `activation.name` 返回完整路径；按 id 操作时保留 `childId`。
-5. 所有 activation 都进入父级 catalog，包括外部 `delivery: 'caller'` 工作。发现接口和 Web 子级列表因此包含这些条目；delivery 只控制结果投递。检查统计子级的脚本。
+4. 任务的 `owner` 接受路径，结果提供 `ownerName`。根为 `lead`。Host 操作保留 Session id；`startActivation()` 接受可选的 `name`，返回 `activation.name` 和 `childId`。
+5. 所有 activation 都进入父级 catalog，包括外部 `delivery: 'caller'` 工作。发现接口和 Web 子级列表包含这些条目；delivery 只控制结果投递。检查统计子级的脚本。
 6. 将已移除服务替换为 `ctx.subagents`。SDK `session/resume` 拒绝子级 Session；请恢复根。验证导航、任务分配和当前等待的唤醒；等待后重新读取任务。

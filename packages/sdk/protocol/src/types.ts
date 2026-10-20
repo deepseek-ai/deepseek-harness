@@ -11,6 +11,7 @@
 import type { ContentBlock, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SubagentStopReason } from '@deepseek-ai/dsh-subagent'
+import type { AskUserQuestionAnswer, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'
 
 /** Parameters for the process-wide SDK handshake. */
 export interface InitializeParams {
@@ -24,6 +25,34 @@ export interface InitializeParams {
   reasoningEffort?: ReasoningEffortId
   /** Optional positive output-token cap inherited by SDK-created agents and their in-process descendants. */
   maxTokens?: number
+  /** Host-provided capabilities; omission retains native in-process answerers. */
+  capabilities?: { userQuestions?: boolean }
+}
+
+/** Runtime-to-host request for one SDK-owned Session's structured user input. */
+export interface SdkUserQuestionRequest {
+  /** Correlates cancellation with this request independently of the JSON-RPC id. */
+  requestId: string
+  /** Session whose tool or approval is waiting. */
+  sessionId: string
+  /** Original questions, including any plan-review detail and presentation intent. */
+  questions: AskUserQuestionItem[]
+}
+
+/** Host answers, one item per original question id. */
+export type SdkUserQuestionAnswer = AskUserQuestionAnswer
+
+/** Runtime cancellation of a pending host question. Late answers are ignored. */
+export interface SdkUserQuestionCancelled {
+  /** Identity from the original question request. */
+  requestId: string
+  /** Session that stopped waiting. */
+  sessionId: string
+}
+
+/** Runtime-to-host requests, handled independently of outbound Session requests. */
+export interface HarnessSdkHostRequestMap {
+  'user-question/ask': { params: SdkUserQuestionRequest; result: SdkUserQuestionAnswer }
 }
 
 /** Wire-stable server identity returned by initialization. */
@@ -135,6 +164,7 @@ export interface SubagentFinishedNotification {
 
 /** Server-to-client notifications by JSON-RPC method name. */
 export interface HarnessSdkNotificationMap {
+  'user-question.cancelled': SdkUserQuestionCancelled
   'session.event': SessionEventNotification
   'session.status': SessionStatusNotification
   'subagent.started': SubagentStartedNotification

@@ -10,7 +10,8 @@ import { authorCreditPoints, countMergedAuthorPulls } from './author-weight.mjs'
 const API_VERSION = '2026-03-10'
 const MAX_PULL_REQUEST_RECORDS = 3_000
 const PAGE_SIZE = 100
-const STATUS_CONTEXT = 'weighted approval'
+const CHECK_NAME = 'weighted approval decision'
+const PASSING_CONCLUSIONS = new Set(['success', 'neutral', 'skipped'])
 const WRITABLE_PERMISSIONS = new Set(['admin', 'write'])
 const REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING'])
 
@@ -209,13 +210,13 @@ function timestamp(value, subject) {
 /**
  * Evaluate approval points from current reviews and repository permissions.
  * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs.
- * @returns {Promise<{pull: {repository: string, number: number, headSha: string}, state: 'pending' | 'success', description: string, points: number, authorCredit: {mergedCount: number, points: number} | null, requiredPoints: number, approvals: Array<{login: string, points: number, delegatedTo?: string, ownership?: {ownedLines: number, totalLines: number}}>, delegations: Array<{login: string, delegatedTo: string, commentId: number, reviewIds: number[], approved: boolean}>, blockers: string[], ignoredReviewers: string[]}>} Approval decision and status payload fields; approval login owns the points, delegatedTo supplies its decision, delegations contains eligible active commands and their superseded decision review IDs, and null author credit means history was not evaluated.
+ * @returns {Promise<{pull: {repository: string, number: number, headSha: string}, state: 'action_required' | 'success', description: string, points: number, authorCredit: {mergedCount: number, points: number} | null, requiredPoints: number, approvals: Array<{login: string, points: number, delegatedTo?: string, ownership?: {ownedLines: number, totalLines: number}}>, delegations: Array<{login: string, delegatedTo: string, commentId: number, reviewIds: number[], approved: boolean}>, blockers: string[], ignoredReviewers: string[]}>} Approval decision and check-run output fields; approval login owns the points, delegatedTo supplies its decision, delegations contains eligible active commands and their superseded decision review IDs, and null author credit means history was not evaluated.
  */
 export async function evaluateApproval({ event, policySource, api, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls }) {
   const pull = pullRequestFromEvent(event)
   const policy = parseApprovalPolicy(policySource)
   if (pull.draft) {
-    return approvalResult(pull, policy.requiredPoints, [], [], [], 'pending', 'draft pull request')
+    return approvalResult(pull, policy.requiredPoints, [], [], [], 'action_required', 'draft pull request')
   }
 
   const reviews = await listPullRequestReviews(api, pull.repository, pull.number)
@@ -286,11 +287,11 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
     return next
   }, authorCredit?.points ?? 0)
   if (blockers.length > 0) {
-    return approvalResult(pull, policy.requiredPoints, approvals, blockers, ignoredReviewers, 'pending',
+    return approvalResult(pull, policy.requiredPoints, approvals, blockers, ignoredReviewers, 'action_required',
       `${blockers.length} blocking change request${blockers.length === 1 ? '' : 's'}`, authorCredit, activeDelegations)
   }
   // Tolerate floating-point addition error without rounding approval scores.
-  const state = points + 1e-12 >= policy.requiredPoints ? 'success' : 'pending'
+  const state = points + 1e-12 >= policy.requiredPoints ? 'success' : 'action_required'
   return approvalResult(
     pull,
     policy.requiredPoints,
@@ -305,13 +306,12 @@ export async function evaluateApproval({ event, policySource, api, getOwnership 
 }
 
 /**
- * Evaluate and publish the required commit status, publishing an error status when evaluation fails.
- * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, write?: (line: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs.
+ * Evaluate and publish the required check run, concluding it as failure when evaluation fails.
+ * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, write?: (line: string) => void, record?: (conclusion: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs; record receives each conclusion the run publishes.
  * @returns {Promise<Awaited<ReturnType<typeof evaluateApproval>>>} Published approval decision.
  */
-export async function runApprovalCheck({ event, policySource, api, runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
+export async function runApprovalCheck({ event, policySource, api, runUrl, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`), record = () => {} }) {
   const pull = pullRequestFromEvent(event)
-  await publishStatus(api, pull, 'pending', 'Evaluating approval points.', runUrl)
   let result
   try {
     result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
@@ -331,7 +331,8 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
       result = await evaluateApproval({ event, policySource, api, getOwnership, getMergedCount })
     }
   } catch (error) {
-    await publishStatus(api, pull, 'error', 'Approval evaluation failed.', runUrl)
+    await publishCheck(api, pull, 'failure', 'Approval evaluation failed.', runUrl)
+    record('failure')
     throw error
   }
   write(result.authorCredit
@@ -342,8 +343,9 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
     `@${login}: ${points}${delegatedTo ? ` (delegated to @${delegatedTo})` : ''}${ownership ? ` (${ownership.ownedLines}/${ownership.totalLines} old production lines)` : ''}`))
   writeList(write, 'Blocking change requests', result.blockers.map(login => `@${login}`))
   writeList(write, 'Ignored reviewers without write access', result.ignoredReviewers.map(login => `@${login}`))
-  await publishStatus(api, pull, result.state, result.description, runUrl)
-  write(`Published ${JSON.stringify(STATUS_CONTEXT)} status ${JSON.stringify(result.state)}.`)
+  await publishCheck(api, pull, result.state, result.description, runUrl)
+  record(result.state)
+  write(`Published ${JSON.stringify(CHECK_NAME)} check run ${JSON.stringify(result.state)}.`)
   try {
     await requestDelegatedReviews(result, api, write)
   } catch (error) {
@@ -353,14 +355,15 @@ export async function runApprovalCheck({ event, policySource, api, runUrl, getOw
 }
 
 /**
- * Revoke a previous success before dependency installation, or report its failure.
- * @param {{event: unknown, api: (path: string, options: object) => Promise<unknown>, runUrl: string, phase: string}} options Publication inputs.
- * @returns {Promise<void>} Completion of the status write.
+ * Revoke a published success before dependency installation, or conclude a failed setup.
+ * @param {{event: unknown, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, runUrl: string, phase: string}} options Publication inputs.
+ * @returns {Promise<void>} Completion of the check-run write.
  */
 export async function publishApprovalPhase({ event, api, runUrl, phase }) {
-  if (!['pending', 'error'].includes(phase)) throw new Error('invalid approval setup phase')
-  await publishStatus(api, pullRequestFromEvent(event), phase,
-    phase === 'pending' ? 'Preparing approval evaluation.' : 'Approval setup or evaluation failed.', runUrl)
+  const pull = pullRequestFromEvent(event)
+  if (phase === 'revoke') return revokeApproval(api, pull, runUrl)
+  if (phase === 'failure') return publishCheck(api, pull, 'failure', 'Approval setup or evaluation failed.', runUrl)
+  throw new Error('invalid approval setup phase')
 }
 
 /**
@@ -414,7 +417,7 @@ export async function approvalEventFromComment({ event, api }) {
 }
 
 /**
- * Refresh a pull-request event before any status write; closed PRs and stale heads are skipped.
+ * Refresh a pull-request event before any check-run write; closed PRs and stale heads are skipped.
  * @param {{event: unknown, api: (path: string) => Promise<unknown>}} options Pull-request event and API caller.
  * @returns {Promise<Record<string, unknown> | null>} Live event, or null for a closed PR or superseded head.
  */
@@ -467,18 +470,60 @@ async function reviewerPermission(api, repository, login) {
   return response.permission.toLowerCase()
 }
 
-async function publishStatus(api, pull, state, description, runUrl) {
+// One decision per head keeps branch rules and CI watchers unambiguous; the head's existing GitHub
+// Actions run is updated and a run is created only when none exists.
+async function publishCheck(api, pull, conclusion, title, runUrl) {
+  requireHttpsRunUrl(runUrl)
+  const body = { status: 'completed', conclusion, details_url: runUrl, output: { title, summary: `${title} [Workflow run](${runUrl})` } }
+  const runs = await decisionRuns(api, pull)
+  if (runs.length === 0) {
+    await api(`/repos/${pull.repository}/check-runs`, { method: 'POST', body: { name: CHECK_NAME, head_sha: pull.headSha, ...body } })
+    return
+  }
+  for (const { id } of runs) {
+    if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
+    await api(`/repos/${pull.repository}/check-runs/${id}`, { method: 'PATCH', body })
+  }
+}
+
+// A head without a decision starts in progress; a published success becomes action_required, so an
+// interrupted evaluation cannot leave a success that its current inputs no longer support.
+async function revokeApproval(api, pull, runUrl) {
+  requireHttpsRunUrl(runUrl)
+  const title = 'Preparing approval evaluation.'
+  const output = { title, summary: `${title} [Workflow run](${runUrl})` }
+  const runs = await decisionRuns(api, pull)
+  if (runs.length === 0) {
+    await api(`/repos/${pull.repository}/check-runs`, {
+      method: 'POST',
+      body: { name: CHECK_NAME, head_sha: pull.headSha, status: 'in_progress', details_url: runUrl, output },
+    })
+    return
+  }
+  for (const { id, conclusion } of runs) {
+    if (!Number.isSafeInteger(id)) throw new Error('check run has no valid id')
+    // Revoke every conclusion a required check accepts, not only the success this publisher writes:
+    // a workflow job added by the pull request can produce a same-named passing check run.
+    if (!PASSING_CONCLUSIONS.has(conclusion)) continue
+    await api(`/repos/${pull.repository}/check-runs/${id}`, {
+      method: 'PATCH',
+      body: { status: 'completed', conclusion: 'action_required', details_url: runUrl, output },
+    })
+  }
+}
+
+// A check run that reached completed never returns to in_progress: GitHub answers 200 and leaves the
+// run completed, so a published decision can only be replaced by another conclusion.
+async function decisionRuns(api, pull) {
+  const listed = await api(`/repos/${pull.repository}/commits/${pull.headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&filter=all&per_page=${PAGE_SIZE}`)
+  if (!isRecord(listed) || !Array.isArray(listed.check_runs) || listed.total_count !== listed.check_runs.length) {
+    throw new Error('check-run list response is invalid or incomplete')
+  }
+  return listed.check_runs.filter(run => isRecord(run) && isRecord(run.app) && run.app.slug === 'github-actions')
+}
+
+function requireHttpsRunUrl(runUrl) {
   if (!/^https:\/\/[^\s]+$/u.test(runUrl)) throw new Error('workflow run URL must use HTTPS')
-  if (description.length > 140) throw new Error('commit status description exceeds 140 characters')
-  await api(`/repos/${pull.repository}/statuses/${pull.headSha}`, {
-    method: 'POST',
-    body: {
-      state,
-      context: STATUS_CONTEXT,
-      description,
-      target_url: runUrl,
-    },
-  })
 }
 
 function pullRequestFromEvent(event) {
@@ -571,7 +616,7 @@ async function main() {
   const phase = process.argv[2]
   if (phase) {
     await publishApprovalPhase({ event, api, runUrl: process.env.GITHUB_RUN_URL ?? '', phase })
-    if (phase === 'pending' && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'active=true\n')
+    if (phase === 'revoke' && process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'active=true\n')
     return
   }
   await runApprovalCheck({
@@ -579,6 +624,9 @@ async function main() {
     policySource,
     api,
     runUrl: process.env.GITHUB_RUN_URL ?? '',
+    record: (conclusion) => {
+      if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `concluded=${conclusion}\n`)
+    },
   })
 }
 

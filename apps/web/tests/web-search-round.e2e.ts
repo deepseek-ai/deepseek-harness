@@ -50,6 +50,16 @@ function resultSnippet(queryIndex: number, ordinal: number): string {
   return `Snapshot search ${queryIndex + 1} excerpt ${ordinal}: the harness replays this source list from a local endpoint.`
 }
 
+/** One provider result's multi-line model-facing summary, by 1-based provider order. */
+function resultSummary(queryIndex: number, ordinal: number): string {
+  return `Snapshot search ${queryIndex + 1} summary ${ordinal}:\n\nthe model reads this longer excerpt\nfrom the Search API.`
+}
+
+/** The rendered summary: whitespace collapsed to single spaces. */
+function renderedSummary(queryIndex: number, ordinal: number): string {
+  return resultSummary(queryIndex, ordinal).replace(/\s+/gu, ' ')
+}
+
 /** One provider result's publication date, by 1-based provider order (July 2026 days 01..12). */
 function resultPageAge(ordinal: number): string {
   return `2026-07-${String(ordinal).padStart(2, '0')}`
@@ -65,6 +75,11 @@ const KEPT_SOURCES = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map((_query, que
   snippet: resultSnippet(queryIndex, ordinal),
   publishedAt: resultPageAge(ordinal),
 }))).slice(0, WEB_SEARCH_MAX_RESULTS)
+
+/** Model-visible source lines for the kept sources: the summary replaces the display snippet. */
+const KEPT_SOURCE_LINES = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map((_query, queryIndex) =>
+  `- [${resultTitle(queryIndex, ordinal)}](${resultUrl(queryIndex, ordinal)}) — ${renderedSummary(queryIndex, ordinal)} (${resultPageAge(ordinal)})`,
+)).slice(0, WEB_SEARCH_MAX_RESULTS)
 
 /** URLs omitted after the combined source cap is reached. */
 const DROPPED_SOURCE_URLS = RESULT_ORDINALS.flatMap(ordinal => QUERIES.map(
@@ -107,6 +122,7 @@ async function startSearchServer(captured: CapturedSearchRequest[]): Promise<{ s
           url: resultUrl(queryIndex, ordinal),
           title: resultTitle(queryIndex, ordinal),
           snippet: resultSnippet(queryIndex, ordinal),
+          summary: resultSummary(queryIndex, ordinal),
           content: '', site_name: null, site_icon: null,
           date: resultPageAge(ordinal),
         })),
@@ -212,16 +228,18 @@ describe('web e2e: opt-in Search API web search', () => {
     const rendered = message.content.filter(block => block.type === 'text').map(block => block.text).join('')
     // The tool interleaves sources from both seam results before applying the
     // combined cap, so each query remains represented in model-visible output.
-    for (const source of KEPT_SOURCES) {
-      expect(rendered).toContain(`[${source.title}](${source.url})`)
+    for (const line of KEPT_SOURCE_LINES) {
+      expect(rendered).toContain(line)
     }
+    expect(rendered).not.toContain(resultSnippet(0, 1))
     for (const url of DROPPED_SOURCE_URLS) {
       expect(rendered).not.toContain(url)
     }
     expect(rendered).toContain(
       `(Showing the first ${WEB_SEARCH_MAX_RESULTS} sources. Refine the query for more.)`,
     )
-    expect(searchResult.data.meta).toMatchObject({
+    // The card keeps the display snippet; the summary reaches only the model.
+    expect(searchResult.data.meta).toEqual({
       sources: KEPT_SOURCES,
       truncated: true,
     })

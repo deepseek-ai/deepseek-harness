@@ -781,11 +781,13 @@ export class ChatViewport {
 
   /**
    * Mark the column while the tail is pinned: the reader follows the floor with no unsampled reader
-   * movement, the test fold batches use for a tail landing, and the content overflows, so following scrolls
-   * absorb output growth and the status keeps its on-screen position. The first-output slide runs at zero
-   * duration there. A resize calls this after its own follow scroll, before paint, so a slide that starts in
-   * that frame finishes before it is drawn; scroll and scrollend call it after delivering the sample, and
-   * follow-intent commits call it with the latest measurement. The attribute changes only with the pin.
+   * movement, the test fold batches use for a tail landing, and the content overflows with no fold room
+   * below it, so following scrolls absorb output growth and the status keeps its on-screen position. Fold
+   * room, like the empty space below content that fits, takes growth before any scroll, so the status moves
+   * there. The first-output slide runs at zero duration while pinned. A resize calls this after its own
+   * follow scroll, before paint, so a slide that starts in that frame finishes before it is drawn; scroll and
+   * scrollend call it after delivering the sample, and follow-intent commits call it with the latest
+   * measurement. The attribute changes only with the pin.
    * @param overflowing - a fresh overflow measurement; omitted, the latest one is reused.
    */
   refreshTailPin(overflowing = this.overflowing): void {
@@ -793,7 +795,7 @@ export class ChatViewport {
     const elements = this.elements
     if (elements === null) return
     const reader = this.reader
-    const pinned = overflowing && reader !== null && reader.follow.active && !reader.pending()
+    const pinned = overflowing && this.spacerHeight() === 0 && reader !== null && reader.follow.active && !reader.pending()
     if (pinned === this.tailPinned) return
     this.tailPinned = pinned
     if (pinned) elements.column.dataset.chatTailPinned = ''

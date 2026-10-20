@@ -137,8 +137,8 @@ function failureMessage(error: unknown): string {
 export class SubagentManager {
   /** Agent paths and parent-local pending creation reservations. */
   readonly names: SubagentNames
-  /** Paths supplied to Agent initialization before its Activation is published. */
-  private readonly initializing = new Map<SessionId, Pick<MaterializeBase, 'name' | 'root' | 'ancestors'>>()
+  /** Names available to creation listeners before their Activation is published. */
+  private readonly initializingNames = new Map<SessionId, string>()
   /** Child session id → its live Activation. Process-local, never durable. */
   private readonly resident = new Map<SessionId, Activation>()
   /** Root identities retain their pool across child settlement without retaining dead roots. */
@@ -168,8 +168,9 @@ export class SubagentManager {
       catalogOf: session => this.host.catalogOf(session),
       residencyOf: (agent) => {
         const activation = this.resident.get(agent.id)
-        return activation?.kind === 'local' && activation.handle.agent === agent ? activation : this.initializing.get(agent.id)
+        return activation?.kind === 'local' && activation.handle.agent === agent ? activation : undefined
       },
+      initializingNameOf: agent => this.initializingNames.get(agent.id),
     })
     // Drain managed instances before Cordis releases their owning scope.
     const scope = ctx.plugin(function activationOwner() {})
@@ -683,11 +684,11 @@ export class SubagentManager {
     inputs.signal.throwIfAborted()
     const pool = this.rootPool(inputs.root)
     const releaseSlot = pool.reserve(this.maxActiveSubagents())
-    this.initializing.set(inputs.childId, inputs)
+    this.initializingNames.set(inputs.childId, inputs.name)
     return this.materializeTracked(inputs, releaseSlot).catch((error: unknown) => {
       releaseSlot()
       throw error
-    }).finally(() => { this.initializing.delete(inputs.childId) })
+    }).finally(() => { this.initializingNames.delete(inputs.childId) })
   }
 
   /** Keep Team shutdown and host waits joined to preparation, publication, and rollback. */

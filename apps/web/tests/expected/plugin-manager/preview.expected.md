@@ -5,7 +5,9 @@
 - paragraph:
   - code: "@deepseek-ai/dsh-experimental-badge-skill-bundle"
 - paragraph: 让 Agent 为文档、PR 等产出添加「powered by dsh」徽章。
-- img "DSH 徽章技能功能预览"
+- region "详细介绍":
+  - paragraph:
+    - img "DSH 徽章技能功能预览"
 - heading "包含的组件" [level=4]
 - text: 共 1 个 · 1 已停用
 - list:

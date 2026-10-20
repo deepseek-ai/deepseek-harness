@@ -36,7 +36,7 @@ This keeps `proxyForUrl()` and the dispatcher answering from one set of values. 
 
 **Rejection is quiet, and never reroutes the refused scheme.** A slot the user filled and this package refused keeps that scheme direct rather than falling through to `ALL_PROXY` or the HTTP proxy, so the diagnostic and the route agree. A SOCKS URL, an unparseable string, or an unsupported scheme is reported on stderr and skipped — the variable may have been exported for other tools, and a typo in it must not stop the agent from starting. The environment is the only source, so no configuration surface exists where `AGENTS.md`'s fail-loud rule would apply instead.
 
-**Through a proxy, `web_fetch` stops resolving and pinning.** The provider validates a public address set and pins the connection to it. Through a proxy there is nothing to pin — the proxy performs the origin's DNS — and a pinned direct connection would bypass the proxy entirely. So a proxied hop skips resolution, and configuring a proxy is a statement that the proxy is trusted with destination selection. A hop the policy bypasses, which includes every loopback and every `NO_PROXY` entry, takes the resolved-and-pinned path unchanged. Kimi Code and Claude Code reached this same conclusion independently.
+**`web_fetch` uses the installed dispatcher.** The provider sends every request through the process-wide dispatcher, so a proxied hop goes through the proxy, which performs the origin's DNS, and a hop the policy bypasses, which includes every loopback and every `NO_PROXY` entry, connects directly. The provider does not restrict destination addresses ([web capability seam](2026-06-24-web-capability-seam.md#restrict-fetch-to-public-addresses)).
 
 The URL-level policy is untouched: `http(s)` only, no embedded credentials, the length cap, and the cross-origin redirect refusal all still apply on every hop.
 
@@ -54,7 +54,7 @@ Weighed against that, telemetry is the one outbound channel whose loss costs the
 
 **Every call site carries an egress test.** Each owning package's `egress.spec.ts` drives its actual transport through a fake proxy and checks the observed route. These tests cover search backends, pi-ai discovery, MCP over HTTP, child Node processes, worker threads and telemetry's direct-route exception. They detect dependency transport changes that a static call-site check cannot observe.
 
-**A gate keeps the defect from returning.** `verify-no-bare-dispatcher` parses the TypeScript AST — `scripts/AGENTS.md` requires syntax-aware discovery, and a line-wise regex missed both the `{ dispatcher }` shorthand this repository already uses and a `new Alias(...)` behind a renamed import. It rejects an undici agent construction and an explicit `dispatcher` option outside the owning package. `proxyRouteFor(url)` is the sanctioned replacement, and the one call site that genuinely owns its transport — `web-fetch-http`, pinning a request to addresses it validated — says so with a `proxy-exempt:` comment. The rule exists because `web-fetch-http`'s original `new Agent` was entirely reasonable when it was written — proxying simply did not exist yet, and nothing would have caught it.
+**A gate keeps the defect from returning.** `verify-no-bare-dispatcher` parses the TypeScript AST — `scripts/AGENTS.md` requires syntax-aware discovery, and a line-wise regex missed both the `{ dispatcher }` shorthand this repository already uses and a `new Alias(...)` behind a renamed import. It rejects an undici agent construction and an explicit `dispatcher` option outside the owning package. `proxyRouteFor(url)` is the sanctioned replacement, and a call site that genuinely owns its transport says so with a `proxy-exempt:` comment. The rule exists because `web-fetch-http`'s original `new Agent` was entirely reasonable when it was written — proxying simply did not exist yet, and nothing would have caught it.
 
 ## Alternatives considered
 
@@ -78,8 +78,6 @@ A user who exports `HTTPS_PROXY`, or writes it into `$DSH_HOME/.env`, is proxied
 
 Because the operating system's settings are not read, the user-facing documentation is now load-bearing rather than supplementary: a user who only toggled "system proxy" in a proxy application gets nothing and no diagnostic. `docs/user/guide/network-proxy.md` therefore states which variables to export and why a browser is proxied when a terminal is not — the three-mechanism confusion is the single most common report, and it is not specific to this harness.
 
-`web_fetch`'s safety story now has two shapes, and its README says so: direct hops keep address validation and pinning, proxied hops delegate destination selection to a proxy the operator configured. This is the one outward-facing security promise the change alters.
-
 Reaching Node's built-in `fetch` from a userland undici depends on both writing the legacy `Symbol.for('undici.globalDispatcher.1')` slot. That is an implicit cross-version coupling rather than a contract — corepack#834 records it breaking — so `tests/install.spec.ts` drives a real request through a loopback proxy. A version bump that breaks the coupling fails there instead of in the field.
 
 The suite is hermetic against the developer's own environment: every Vitest configuration runs `scripts/test-proxy-environment.ts`, which clears all eight proxy names in both casings before any test, and `install.spec.ts` restores the machine's values around each case that sets its own. It has to. An exported lowercase `all_proxy` decided a test's outcome during development, because resolution reads lowercase first.
@@ -88,7 +86,7 @@ The suite is hermetic against the developer's own environment: every Vitest conf
 
 `packages/util/http-proxy` holds 84 tests at 100% per-file coverage. Resolution covers precedence, the `ALL_PROXY` fallback, blank-shadowing, the SOCKS and malformed diagnostics, and the HTTPS-only environment that leaves `http:` direct; routing covers the whole loopback range structurally, and bypass matching covers suffixes, ports, both IPv6 spellings, and the CIDR entry that deliberately does not match. Installation drives a real loopback proxy and asserts the absolute-form request arrives, that a bypassed target does not, and that disposal restores the dispatcher, the policy, and the environment. Every case installs through `installProxyFromEnvironment`, so no test can assert a policy object a real launch could not produce.
 
-`packages/web/web-fetch-http/tests/proxy.spec.ts` asserts the decision that matters most: under a proxy the public-address resolver is never called, while a bypassed hop still calls it exactly once, and the cross-origin redirect refusal survives on the proxied path.
+`packages/web/web-fetch-http/tests/proxy.spec.ts` asserts that a proxied hop reaches the proxy, a bypassed hop connects directly, and the cross-origin redirect refusal survives on the proxied path.
 
 `verify-no-bare-dispatcher.spec.ts` proves the gate rejects the exact shape this package was introduced to fix, accepts `proxyRouteFor`, accepts an annotated exemption, and passes on the current tree.
 

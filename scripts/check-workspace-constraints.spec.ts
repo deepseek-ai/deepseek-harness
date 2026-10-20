@@ -16,6 +16,7 @@ import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   checkExperimentalNameExceptions,
+  detailDocumentFiles,
   expectedDshPackageFiles,
   readWorkspaceManifests,
   type WorkspaceManifest,
@@ -327,6 +328,54 @@ describe('package payload constraints', () => {
     ])
   })
 
+  it('publishes the directory of each locale detail document after the locale resources', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
+    onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+    mkdirSync(join(dir, 'docs/guide'), { recursive: true })
+    mkdirSync(join(dir, 'locale'))
+    writeFileSync(join(dir, 'docs/DETAIL.md'), '')
+    writeFileSync(join(dir, 'docs/guide/DETAIL.zh.md'), '')
+    writeFileSync(join(dir, 'docs/DETAIL.fr.md'), '')
+    writeFileSync(join(dir, 'locale/en.json'), JSON.stringify({ meta: { title: 'T', detail: 'docs/DETAIL.md' } }))
+    writeFileSync(join(dir, 'locale/zh.json'), JSON.stringify({ meta: { title: 'T', detail: 'docs/guide/DETAIL.zh.md' } }))
+    writeFileSync(join(dir, 'locale/fr.json'), JSON.stringify({ meta: { title: 'T', detail: 'docs/DETAIL.fr.md' } }))
+    writeFileSync(join(dir, 'locale/de.json'), JSON.stringify({ meta: { title: 'T' } }))
+    writeFileSync(join(dir, 'locale/ja.json'), '{')
+    const detailFiles = detailDocumentFiles(dir)
+    expect(detailFiles).toEqual(['docs'])
+    expect(expectedDshPackageFiles({ exports: { './locale/*.json': './locale/*.json' } }, detailFiles)).toEqual([
+      'locale/*.json', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it('rejects a detail document that is missing, outside the package, or at the package root', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-invalid-'))
+    onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
+    mkdirSync(join(dir, 'locale'))
+    const declare = (detail: unknown): void => {
+      writeFileSync(join(dir, 'locale/en.json'), JSON.stringify({ meta: { detail } }))
+    }
+    declare('docs/DETAIL.md')
+    expect(() => detailDocumentFiles(dir)).toThrow(/DETAIL\.md.*does not exist/)
+    mkdirSync(join(dir, 'docs'))
+    writeFileSync(join(dir, 'docs/DETAIL.md'), '')
+    expect(detailDocumentFiles(dir)).toEqual(['docs'])
+    declare('DETAIL.md')
+    expect(() => detailDocumentFiles(dir)).toThrow(/must name a file in a subdirectory/)
+    declare('../DETAIL.md')
+    expect(() => detailDocumentFiles(dir)).toThrow(/must be a relative path inside the package/)
+    writeFileSync(join(dir, 'locale/en.json'), 'null')
+    expect(detailDocumentFiles(dir)).toEqual([])
+  })
+
+  it('rejects a bundle whose locale detail document is missing from its publication files', () => {
+    const dir = 'packages/experimental/badge-skill-bundle'
+    const manifest = JSON.parse(readFileSync(join(import.meta.dirname, '..', dir, 'package.json'), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    const files = (manifest.files ?? []).filter(file => file !== 'docs')
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }).join('\n')).toContain('"docs"')
+  })
+
   it('does not infer locale payloads from unrelated or non-JSON exports', () => {
     expect(expectedDshPackageFiles({
       exports: {
@@ -393,6 +442,67 @@ describe('package payload constraints', () => {
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
   })
+
+  it.each([
+    { './assets/*': './lib/assets/*' },
+    { './assets/*': { default: './lib/assets/*' } },
+  ])('publishes built package assets after the browser Client entries: %j', (assets) => {
+    expect(expectedDshPackageFiles({
+      exports: {
+        './client': { types: './lib/types/client/index.d.ts', node: './lib/client.node.js', default: './lib/client.js' },
+        './loader': './lib/loader.js',
+        ...assets,
+      },
+    })).toEqual([
+      'lib/index.js', 'lib/client.js', 'lib/client.node.js', 'lib/assets', 'lib/loader.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it.each([
+    {},
+    { './assets/*': './assets/*' },
+    { './assets/*': { types: './lib/assets/*' } },
+    { './assets/extra': './lib/assets/*' },
+  ])('does not publish package assets without the exact asset export target: %j', (assets) => {
+    expect(expectedDshPackageFiles({ exports: { './client': './lib/client.js', ...assets } }))
+      .toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts'])
+  })
+
+  it('rejects a package-asset export whose payload omits the built assets', () => {
+    const dir = 'packages/client/probe'
+    const manifest = {
+      name: '@deepseek-ai/dsh-client-probe',
+      type: 'module',
+      main: 'lib/index.js',
+      types: 'lib/types/index.d.ts',
+      exports: {
+        '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+        './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+        './assets/*': './lib/assets/*',
+      },
+      files: ['lib/index.js', 'lib/client.js', 'lib/assets', 'lib/types/**/*.d.ts'],
+      peerDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+      devDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+    } satisfies WorkspaceManifest['manifest']
+    const payloadErrors = (candidate: WorkspaceManifest['manifest']): string[] =>
+      checkWorkspaceManifest({ dir, manifest: candidate }).filter(error => error.includes('package.json files must be'))
+    expect(payloadErrors(manifest)).toEqual([])
+    expect(payloadErrors({ ...manifest, files: manifest.files.filter(file => file !== 'lib/assets') })).toEqual([
+      expect.stringContaining('@deepseek-ai/dsh-client-probe: package.json files must be '
+        + '["lib/index.js","lib/client.js","lib/assets","lib/types/**/*.d.ts"]'),
+    ])
+  })
+
+  it.each(['ui-chat', 'ui-settings-account'])(
+    'accepts the published package assets for %s and rejects their omission', (name) => {
+      const dir = `packages/client/${name}`
+      const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+      expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== 'lib/assets'),
+      } })).toEqual([expect.stringContaining('package.json files must be')])
+    },
+  )
 })
 
 it('publishes CLI runtime declarations and rejects a payload that omits them', () => {

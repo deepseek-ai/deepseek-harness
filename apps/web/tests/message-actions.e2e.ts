@@ -15,7 +15,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, realizeSeedFixture, renderSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, newEnglishPage, pinBrowserClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { openSettings, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -191,6 +191,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold()
@@ -211,6 +212,10 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await seedSession(scaffold, raw, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME - 90_000 })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    // Fork summaries use Host time; placeholders use browser time. Each pin
+    // starts at the fixture date, so keep these calls adjacent: setup between
+    // them can create enough clock skew to reverse the fork order.
+    hostClock = pinHostClock()
     await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -218,8 +223,12 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+      await scaffold?.close()
+    } finally {
+      hostClock?.mockRestore()
+    }
   })
 
   it.skipIf(MODE === 'record')('enables branch only on the completed transcript tail', async () => {

@@ -57,7 +57,10 @@ export class FileUploads extends TypertRemoteService {
   static inject = ['agents', 'attachments', 'commands', 'connection']
 
   private readonly stagedFiles = new WeakMap<Session, Map<FileUploadReceiptId, StagedFileUpload>>()
-  private agentResolver: AgentResolver | undefined
+  // Inside a method called through `ctx.fileUploads`, Cordis returns a new proxy
+  // for every function-valued property read from `this`, so `===` against the
+  // registered resolver would always be false; a plain object is returned as is.
+  private readonly agentResolution: { resolver: AgentResolver | undefined } = { resolver: undefined }
 
   /** @param ctx - Host context carrying Agent, attachment, command, and Connection services. */
   constructor(ctx: Context) {
@@ -87,10 +90,10 @@ export class FileUploads extends TypertRemoteService {
    * @returns disposer removing this resolver.
    */
   registerAgentResolver(resolve: AgentResolver): () => void {
-    if (this.agentResolver !== undefined) throw new Error('file-upload: Agent resolver is already registered')
-    this.agentResolver = resolve
+    if (this.agentResolution.resolver !== undefined) throw new Error('file-upload: Agent resolver is already registered')
+    this.agentResolution.resolver = resolve
     return () => {
-      if (this.agentResolver === resolve) this.agentResolver = undefined
+      if (this.agentResolution.resolver === resolve) this.agentResolution.resolver = undefined
     }
   }
 
@@ -212,7 +215,7 @@ export class FileUploads extends TypertRemoteService {
   private async resolveAgent(sessionId: SessionId): Promise<Agent> {
     const live = this.ctx.agents.get(sessionId)
     if (live !== undefined) return live
-    const resolver = this.agentResolver
+    const resolver = this.agentResolution.resolver
     if (resolver === undefined) {
       throw new RemoteError('session/not-found', `session "${sessionId}" is not attached`, { sessionId })
     }

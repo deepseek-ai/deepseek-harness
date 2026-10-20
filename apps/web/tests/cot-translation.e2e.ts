@@ -212,6 +212,8 @@ it.skipIf(MODE === 'record')('persists Bing reasoning translation across reopen 
   await panel.getByText('展开的思考内容会发送给所选翻译服务，可能包含私有代码或对话细节。', { exact: true }).waitFor()
   await panel.getByText(`v${bundleVersion}`, { exact: true }).waitFor()
   await panel.getByText(bundleVersion, { exact: true }).waitFor()
+  // The bundle's detail document is shown between its components and its source.
+  await panel.locator('[data-detail-document]').getByRole('heading', { name: '使用方法', exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'preferences.expected.md'),
     await captureStableAria(settings, '[data-plugin-panel]', scaffold.workspaceCwd, {
       replacements: [[BUNDLE, '{{bundle}}'], [bundleVersion, '{{version}}']],

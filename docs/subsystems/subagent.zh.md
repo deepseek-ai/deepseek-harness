@@ -230,7 +230,7 @@ type SubagentInterruptAuthority =
 
 ## 持久枚举
 
-`listChildren` 读取父级拥有的目录，其中包含所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示可继续的直接子级，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
+`listChildren` 读取父级拥有的目录，其中包含所有本地和外部子级，包括 caller 投递的任务。caller 投递由调用方收集结果；目录成员关系在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根及其完整后代树，包括外部叶子和不可读子级的诊断；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
 
 ## 结果与后端句柄
 

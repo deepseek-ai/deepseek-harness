@@ -18,6 +18,10 @@ describe('native protocol generation', () => {
     { method: 'paste', params: { appHandle: 'app', text: 'text', pasteReadTimeoutMs: 1000 } },
     { method: 'findApps', params: { query: 'Editor', maxAppMatches: 1 } },
     { method: 'launchApp', params: { appHandle: 'pending' } },
+    { method: 'applicationIcons', params: { paths: ['/Applications/Fixture.app'] } },
+    { method: 'permissionStatus', params: {} },
+    { method: 'requestPermission', params: { permission: 'accessibility' } },
+    { method: 'openPermissionSettings', params: { permission: 'screenRecording' } },
   ])('rejects Host-only request data at model admission: $method', (request) => {
     expect(Request.safeParse(request).success).toBe(false)
   })

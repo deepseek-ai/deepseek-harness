@@ -26,7 +26,8 @@
     "dev": "vite",
     "watch": "vite build --watch --no-emptyOutDir",
     "build:preview": "pnpm --filter @deepseek-ai/dsh-experimental-webworker-runtime exec tsdown && pnpm --filter @deepseek-ai/dsh-experimental-webworker-packer exec tsdown && vite build && dsh-pack-vfs-image --out dist/preview/vfs-image.tar.gz",
-    "serve:preview": "http-server dist -a 0.0.0.0 -p 4173 -c-1"
+    "serve:preview": "http-server dist -a 0.0.0.0 -p 4173 -c-1",
+    "render:app-icons": "tsx scripts/render-app-icons.ts"
   },
   "license": "MIT",
   "devDependencies": {
@@ -56,6 +57,7 @@
     "playwright": "^1.49.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "sharp": "0.35.5",
     "typescript": "^6.0.3",
     "vite": "^6.4.3",
     "vitest": "^4.1.11",

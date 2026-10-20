@@ -15,6 +15,7 @@ import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
+import type { createNavigationStore } from '../src/client/navigation-store.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -41,6 +42,7 @@ async function bench() {
       listBundles: vi.fn(() => Promise.resolve({ ok: true as const, value: [] })),
       listPlugins: vi.fn(() => Promise.resolve({ ok: true as const, value: [] })),
       registries: vi.fn(() => Promise.resolve({ ok: true as const, value: { registry: null, fallbackRegistries: [], resolved: null } })),
+      readBundleDetail: vi.fn(() => Promise.resolve({ ok: true as const, value: { status: 'none' as const } })),
     },
   })
   const panelInfo = createSnapshotStore<PanelInfo>({ activePanelId: null })
@@ -86,6 +88,32 @@ describe('ui-plugin-manager browser plugin', () => {
     removeRoot()
     b.selectPanel(null)
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+  })
+
+  it('opens the Plugins list from another panel and resets bundle details without opening installation', async () => {
+    const b = await bench()
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = b.slots.entries('main')[0]!
+    assert(entry.store && 'create' in entry.store)
+    const navigation = entry.store.create() as ReturnType<ReturnType<typeof createNavigationStore>['create']>
+    const injected: object = entry.inject!()
+    const face = injected as PluginManagerFace
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    navigation.actions.setTab('fixture-discover')
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+    expect(b.list).not.toHaveBeenCalled()
   })
 
   it('shares refresh failures with the overlay after navigation and releases both registrations across reloads', async () => {
@@ -186,8 +214,15 @@ describe('ui-plugin-manager browser plugin', () => {
     face.ensure()
     await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
     expect(b.list).toHaveBeenCalledTimes(1)
+    // Bundle detail reads go to the Host by name; a profile change forgets them.
+    face.loadDetail('dsh-a', '1.0.0', 'en', false)
+    await vi.waitFor(() => { expect(face.hooks.bundleDetails.getSnapshot()).not.toEqual({}) })
+    face.retryDetail('dsh-a', '1.0.0', 'en', false)
+    expect(face.detailImage('dsh-a', 'README.md', 'a.png', false)).toContain('api/plugin-manager/detail-file?bundle=dsh-a')
+    expect(face.hooks.locale.getSnapshot().active).toBe('zh')
     b.remote.emit('plugin-manager/changed', [{ reason: 'bundle' }])
     await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(2) })
+    expect(face.hooks.bundleDetails.getSnapshot()).toEqual({})
     b.ctx.emit('connection/reset')
     await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(3) })
 
@@ -197,6 +232,9 @@ describe('ui-plugin-manager browser plugin', () => {
     b.remote.emit('plugin-manager/install-log', [{ jobId: 'j', argv: ['pnpm', 'add', 'pkg'], cwd: '/p', stream: 'stdout', text: 'early' }])
     b.remote.emit('plugin-manager/install-state', [{ requestId: 'foreign', phase: 'installing' }])
     expect(face.hooks.pluginManager.getSnapshot().install.runs).toEqual([])
+    // Update progress reaches only the update this page started.
+    b.remote.emit('plugin-manager/update-state', [{ requestId: 'foreign', step: 'checking' }])
+    expect(face.hooks.pluginManager.getSnapshot().update).toBeNull()
 
     await fiber.dispose()
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
