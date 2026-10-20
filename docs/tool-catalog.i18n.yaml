@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 19883cdd5d6181cb
-  zh: 7d0cac18206184ec
+  en: 2c4f455aab84260e
+  zh: 26ed38dfa27a9fbb
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -162,8 +162,17 @@
   en: 60a8805611533884
   zh: 50e4ac6e7f7b9b0a
 /tool-schema-catalog/deepseek-ai-dsh-tool-terminal/terminal-signal:
-  en: 0191964f5be70426
-  zh: 501c2769633a2a0b
+  en: 6513dce283725b37
+  zh: 28e52fc13a8e1379
+/tool-schema-catalog/deepseek-ai-dsh-experimental-terminal-panel:
+  en: 968a7c0ea2d32bea
+  zh: 968a7c0ea2d32bea
+/tool-schema-catalog/deepseek-ai-dsh-experimental-terminal-panel/user-terminal-list:
+  en: 8a999f4b549a59ec
+  zh: df9795bf005ae431
+/tool-schema-catalog/deepseek-ai-dsh-experimental-terminal-panel/user-terminal-read:
+  en: 6b8d370041d6f3be
+  zh: 4328fb5d662b4942
 /tool-schema-catalog/deepseek-ai-dsh-tool-goal:
   en: 74fff3741e7c13de
   zh: 74fff3741e7c13de

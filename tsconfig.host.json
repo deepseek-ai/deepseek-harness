@@ -424,6 +424,7 @@
     { "path": "./packages/shell/tool-bash-persistent" },
     { "path": "./packages/shell/tool-pwsh-persistent" },
     { "path": "./packages/experimental/tool-terminal" },
+    { "path": "./packages/experimental/terminal-panel" },
     { "path": "./packages/ptc-runtime/ptc-runtime" },
     { "path": "./packages/experimental/ptc-runtime-python" },
     { "path": "./packages/ptc-runtime/ptc-runtime-node" },
