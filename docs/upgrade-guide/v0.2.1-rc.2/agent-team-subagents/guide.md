@@ -25,7 +25,7 @@ Full paths rooted at `lead` identify recipients; descriptions label responsibili
 
 1. Move `tool-agent-team.interrupt: false` to `tool-subagent-control`. Remove other obsolete keys and patches disabling subagent tools solely for Team support.
 2. Replace `spawn_teammate` with `subagent({ name, description, prompt })`, or `subagent_fork` to inherit history. Save the returned path. `subagent_oar` also accepts optional `name`.
-3. Use `send_message({ name, message })` and `interrupt_agent({ name })`; discover member paths with `list_agents`.
+3. Use `send_message({ name, message })` and `interrupt_agent({ name })`; discover paths with `list_agents`. Read child task descriptions from `description`, replacing `label`.
 4. Task `owner` accepts paths; results expose `ownerName`. The root is `lead`. Host operations retain Session ids; `startActivation()` accepts optional `name`, returning `activation.name` and `childId`.
 5. All activations enter the parent catalog, including external `delivery: 'caller'` work. Discovery and the Web child list include them; delivery only controls result routing. Check scripts counting children.
 6. Replace removed services with `ctx.subagents`. SDK `session/resume` rejects subagent Sessions; resume the root. Verify navigation, task assignment and active-wait wakeups; re-read tasks after waiting.

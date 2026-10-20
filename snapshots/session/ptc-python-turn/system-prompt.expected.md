@@ -275,7 +275,7 @@ class ListAgentsOutput1(TypedDict):
 class ListAgentsOutput2(TypedDict):
     kind: Literal["child"]
     name: str
-    label: str
+    description: str
     status: Literal["running", "inactive"]
     parent: NotRequired[str]
     depth: NotRequired[float]

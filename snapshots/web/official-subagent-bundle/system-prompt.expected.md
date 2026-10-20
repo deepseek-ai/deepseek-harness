@@ -523,7 +523,7 @@ interface ToolOutputMap {
   } | {
     kind: "child";
     name: string;
-    label: string;
+    description: string;
     status: "running" | "inactive";
     parent?: string;
     depth?: number;
