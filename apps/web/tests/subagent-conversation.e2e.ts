@@ -421,7 +421,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).click()
     await page.getByText(NESTED_PROMPT).waitFor()
     const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
-    await hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true }).waitFor()
+    await hierarchy.getByRole('button', { name: 'Switch subagent: researcher', exact: true }).waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
     await hierarchy.getByRole('button').first().click()
@@ -463,7 +463,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       throw new Error(`viewing the child activated it; API calls: ${apiCalls.join(', ')}`)
     }
     const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
-    await hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}` }).waitFor()
+    await hierarchy.getByRole('button', { name: 'Switch subagent: researcher' }).waitFor()
     const sidebar = await captureStableAria(
       page,
       '[role="tree"][aria-label="Sessions"]',
@@ -494,7 +494,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       expect(await page.getByRole('navigation', { name: 'Session hierarchy' }).count()).toBe(0)
       expect(await page.getByText(/^Explain event sourcing in one sentence\.Your name is /).count()).toBe(0)
       releaseCatalog()
-      await page.getByRole('button', { name: `Switch subagent: ${LABEL}` }).waitFor({ timeout: 15_000 })
+      await page.getByRole('button', { name: 'Switch subagent: researcher' }).waitFor({ timeout: 15_000 })
       const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
       await input.waitFor({ timeout: 15_000 })
       await expect.poll(() => input.isEnabled(), { timeout: 15_000 }).toBe(true)
@@ -580,7 +580,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).isEnabled()).toBe(true)
     const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
     const crumbs = await hierarchy.getByRole('button').allTextContents()
-    expect(crumbs.slice(-2)).toEqual([LABEL, NESTED_LABEL])
+    expect(crumbs.slice(-2)).toEqual(['researcher', NESTED_LABEL])
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
     await compareOrRefreshGolden(

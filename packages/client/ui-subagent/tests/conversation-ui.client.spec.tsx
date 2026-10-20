@@ -1119,10 +1119,11 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('combines the current subagent title and chevron into the parent-catalog trigger', () => {
+  it('combines the current subagent name and chevron into the parent-catalog trigger', () => {
     const sibling = 'child-2' as SessionId
+    const entries = catalog().entries.map(entry => entry.id === CHILD ? { ...entry, name: 'tree-checker' } : entry)
     const input = {
-      ...props(catalog(), {}, {
+      ...props(catalog({ entries }), {}, {
         [CHILD]: {
           ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const,
         },
@@ -1136,9 +1137,9 @@ describe('SubagentHeaderLineage', () => {
     }
     render(<HeaderCatalog {...input} />)
 
-    const switcher = screen.getByRole('button', { name: '切换子智能体：worker' })
+    const switcher = screen.getByRole('button', { name: '切换子智能体：tree-checker' })
     expect(switcher.className).toContain('switcherTrigger')
-    expect(within(switcher).getByText('worker')).toBeTruthy()
+    expect(within(switcher).getByText('tree-checker')).toBeTruthy()
     expect(switcher.querySelector('svg')).not.toBeNull()
 
     const switcherIcon = switcher.querySelector('svg')
@@ -1147,9 +1148,9 @@ describe('SubagentHeaderLineage', () => {
 
     hoverCatalog(switcher)
     expect(input.refreshProjection).not.toHaveBeenCalled()
-    const current = screen.getByRole('treeitem', { name: /worker/ })
+    const current = screen.getByRole('treeitem', { name: /tree-checker/ })
     expect(current.getAttribute('aria-current')).toBe('true')
-    expect(within(current).getByText('worker').className).toContain('currentLabel')
+    expect(within(current).getByText('tree-checker').className).toContain('currentLabel')
     fireEvent.click(screen.getByRole('treeitem', { name: /reviewer/ }))
     expect(input.openChild).toHaveBeenCalledWith({
       parentSessionId: PARENT,

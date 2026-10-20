@@ -529,7 +529,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     ? undefined
     : projections[rootSessionId]?.values.subagentCatalog?.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
-    ? currentEntry.label ?? currentEntry.id
+    ? currentEntry.name ?? currentEntry.label ?? currentEntry.id
     : displayTitle
   const directChildren = catalog?.entries ?? []
   const directCount = directChildren.length
