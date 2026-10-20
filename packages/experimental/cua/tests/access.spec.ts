@@ -22,7 +22,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -158,15 +158,15 @@ it('checks native permissions without converting an OS request into a grant', as
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ accessibility: false })
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin' as const, accessibility: false, screenRecording: false })
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ platform: 'darwin' as const, accessibility: false })
   await f.ctx.cuaAccess.openSettings('screenRecording')
   const transport = native.instances[1]!
   expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { permission: 'screenRecording' }, expect.any(AbortSignal))
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
   transport.disposed = true
-  expect((await f.ctx.cuaAccess.systemStatus()).screenRecording).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', screenRecording: false })
   expect(transport.dispose).toHaveBeenCalledOnce()
   await f.access.dispose()
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow()
@@ -373,7 +373,7 @@ it('skips native icon work for an empty application list and propagates icon fai
   native.instances.at(-1)!.request.mockRejectedValueOnce(new Error('icons unavailable'))
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
-  expect((await f.ctx.cuaAccess.systemStatus()).accessibility).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
 })
 
 it('preserves captured launch metadata separately from the current helper parent', async () => {
@@ -381,7 +381,7 @@ it('preserves captured launch metadata separately from the current helper parent
   await f.ctx.cuaAccess.systemStatus()
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
-  control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
+  control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })

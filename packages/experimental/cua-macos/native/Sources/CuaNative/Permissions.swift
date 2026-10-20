@@ -12,6 +12,7 @@ import Foundation
 
     func status() -> JSONValue {
         var result: [String: JSONValue] = [
+            "platform": .string("darwin"),
             "accessibility": .bool(AXIsProcessTrusted()),
             "screenRecording": .bool(CGPreflightScreenCaptureAccess()),
             "helper": Self.process(getpid()),

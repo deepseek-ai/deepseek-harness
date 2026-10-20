@@ -18,10 +18,13 @@ interface ControlOptions extends AccessOptions {
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
-const systemPermissions = z.object({
-  accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+const systemPermissions = z.discriminatedUnion('platform', [z.object({
+  platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
-})
+}), z.object({
+  platform: z.literal('win32'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
+  elevated: z.boolean(), helper: permissionProcess,
+})])
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

@@ -31,7 +31,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const state = join(root, 'permissions.json'), audit = join(root, 'helper-events.jsonl')
   const launchApplication = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app',
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
-  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
   const fixturePatch = join(root, 'native-fixture.yml')
   // Keep the external helper override above bundle order changes when CUA is re-enabled.
@@ -128,7 +128,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
-  await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: true, screenRecording: false, launchApplication }))
   // Headless pages retain document focus; model returning from System Settings at the window-event boundary.
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()

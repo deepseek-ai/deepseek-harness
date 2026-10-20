@@ -18,7 +18,7 @@ const provider = {
     installCua(ctx, config, {
       helperPath: resolve('unused-cua-helper'),
       createChannel() { throw new Error('Scope tests must not start a native helper') },
-      description: 'Fixture computer interaction', guidance: 'Fixture CUA guidance',
+      guidance: 'Fixture CUA guidance',
     })
   },
 }

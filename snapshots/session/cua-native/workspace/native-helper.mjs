@@ -129,7 +129,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
-      return { ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
+      return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
     if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
