@@ -181,6 +181,8 @@ describe('SubagentHeaderLineage', () => {
     expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(toggle.textContent).toBe(description)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.keyDown(toggle, { key: 'Enter' })
+    expect(input.openChild).not.toHaveBeenCalled()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(input.openChild).not.toHaveBeenCalled()
