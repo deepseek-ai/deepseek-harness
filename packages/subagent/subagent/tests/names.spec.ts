@@ -25,6 +25,7 @@ async function setup() {
   const sources = {
     catalogOf: (session: typeof parent.session) => subagentCatalogEntries(catalog.stateOf(session)),
     residencyOf: () => undefined,
+    initializingNameOf: () => undefined,
   }
   return { ctx, parent, sources, names: new SubagentNames(ctx, sources) }
 }

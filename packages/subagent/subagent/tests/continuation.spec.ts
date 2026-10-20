@@ -674,6 +674,29 @@ describe('SubagentRuntime.startActivation', () => {
     })
   })
 
+  it.each([false, true])('clears an initialization name after startup (failed: %s)', async (failed) => {
+    const { ctx, parent } = await setup([textResponse('done')], { persistence: false })
+    const childId = SessionId('ephemeral-child')
+    const disposeListener = ctx.on('agent/created', ({ agent }) => {
+      if (agent.id !== childId) return
+      expect(ctx.subagents.nameOf(agent)).toBe('lead/reviewer')
+      if (failed) throw new Error('creation listener failed')
+    })
+    try {
+      const starting = ctx.subagents.startActivation({
+        ...startSpec(parent), childId, name: 'reviewer', delivery: 'caller',
+      })
+      if (failed) await expect(starting).rejects.toThrow('creation listener failed')
+      else await (await starting).result
+    } finally {
+      disposeListener()
+    }
+
+    expect(ctx.agents.get(childId)).toBeUndefined()
+    const root = await ctx.agentLoop.create(childId, { provider: 'mock', model: 'mock' })
+    expect(ctx.subagents.nameOf(root)).toBe('lead')
+  })
+
   it('rolls the child back when the signal aborts between publication and acceptance', async () => {
     const { ctx, parent } = await setup([textResponse('unused')])
     const controller = new AbortController()
@@ -1104,6 +1127,7 @@ describe('direct-child Queue residency routing', () => {
     const restored = new SubagentNames(ctx, {
       catalogOf: session => subagentCatalogEntries(catalog.stateOf(session)),
       residencyOf: () => undefined,
+      initializingNameOf: () => undefined,
     })
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
     const reservations = await Promise.allSettled([

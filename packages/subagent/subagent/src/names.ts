@@ -10,7 +10,7 @@ import { subagentNameSchema, subagentNameSegment } from './catalog.ts'
 import { SubagentError } from './error.ts'
 import { listChildren } from './list-children.ts'
 
-/** Service-owned projections and current managed residency. */
+/** Service-owned catalogs, published Activations, and names during initialization. */
 interface NameSources {
   catalogOf(session: Session): SubagentCatalogEntry[]
   residencyOf(agent: Agent): {
@@ -18,6 +18,7 @@ interface NameSources {
     readonly root: Agent
     readonly ancestors: readonly SessionId[]
   } | undefined
+  initializingNameOf(agent: Agent): string | undefined
 }
 
 /** Pending names belong to their live parent; committed names belong to its catalog. */
@@ -95,8 +96,8 @@ export class SubagentNames {
    */
   nameOf(agent: Agent): string {
     const lineage = this.lineage(agent)
-    const resident = this.sources.residencyOf(agent)
-    if (resident !== undefined) return resident.name
+    const name = this.sources.residencyOf(agent)?.name ?? this.sources.initializingNameOf(agent)
+    if (name !== undefined) return name
     return lineage.map((member, index) => {
       if (index === 0) return 'lead'
       const parent = lineage[index - 1] as Agent
@@ -143,11 +144,12 @@ export class SubagentNames {
       throw new SubagentError('agent naming requires the exact live caller', 'UNAUTHORIZED')
     }
     const resident = this.sources.residencyOf(caller)
-    if (resident !== undefined) {
-      if (this.ctx.agents.get(resident.root.id) !== resident.root) {
+    if (resident !== undefined || this.sources.initializingNameOf(caller) !== undefined) {
+      const root = resident?.root ?? this.ctx.agents.roots().find(owner => this.ctx.agents.isOwnedBy(caller.id, owner))
+      if (root === undefined || this.ctx.agents.get(root.id) !== root) {
         throw new SubagentError('agent naming requires the live Team root', 'AGENT_TREE_UNAVAILABLE')
       }
-      return [resident.root, caller]
+      return [root, caller]
     }
     const lineage: [Agent, ...Agent[]] = [caller]
     let current = caller
