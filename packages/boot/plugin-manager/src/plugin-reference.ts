@@ -42,8 +42,8 @@ declare module '@deepseek-ai/dsh-llm' {
  * and a failed inventory read omits live row state.
  */
 export interface PluginReferenceReader {
-  /** The manager's bundle list, the same list the `@` menu offers. */
-  readonly listBundles: () => Promise<readonly BundleInfo[]>
+  /** The manager's records for the named bundles, as the `@` menu lists them; names the profile does not list are omitted. */
+  readonly listBundles: (names: readonly string[]) => Promise<readonly BundleInfo[]>
   /** Live Loader entries, joined to bundle rows by entry id. */
   readonly readInventory: () => Promise<PluginInventorySnapshot>
   /** Installed package directory of a bundle; throws when it cannot be resolved. */
@@ -222,14 +222,14 @@ export async function expandPluginReferenceMessages(
     : [])
   const references = uniqueReferences(parsed)
   if (references.length === 0) return [...messages]
+  const selected = references.slice(0, MAX_REFERENCES)
+  const omitted = references.length - selected.length
   signal.throwIfAborted()
   const [bundles, inventory] = await Promise.all([
-    reader.listBundles().catch(() => undefined),
+    reader.listBundles(selected.map(reference => reference.packageName)).catch(() => undefined),
     reader.readInventory().catch((): PluginInventorySnapshot => ({ entries: [] })),
   ])
   signal.throwIfAborted()
-  const selected = references.slice(0, MAX_REFERENCES)
-  const omitted = references.length - selected.length
   const text = renderPluginReferenceContext(selected, bundles, inventory, reader, cwd)
     + (omitted === 0 ? '' : `\n\nThe message omitted ${String(omitted)} additional plugin reference(s).`)
   const context = createUserMessage({

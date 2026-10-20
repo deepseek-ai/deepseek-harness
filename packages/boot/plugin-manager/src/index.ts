@@ -399,7 +399,7 @@ export class PluginManager extends TypertRemoteService {
     ctx.effect(() => installPluginReference(
       { on: (event, listener, options) => ctx.on(event, listener, options) },
       {
-        listBundles: () => this.listBundles(),
+        listBundles: names => Promise.resolve(this.bundles(new Set(names))),
         readInventory: () => readPluginInventory(ctx),
         bundleDir: name => resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir),
         profile: this.profile,
@@ -514,14 +514,23 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
-    return Promise.resolve(this.readBundles().map((bundle) => {
-      const target = updateRefusal(bundle, bundle.name)
-      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
-    }))
+    return Promise.resolve(this.bundles())
   }
 
-  /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
-  private readBundles(): Omit<BundleInfo, 'update'>[] {
+  /**
+   * The listed bundles with their update eligibility, which is derived from each bundle alone.
+   * @param only - names to read; a name the profile does not list is omitted. Omitted reads every bundle.
+   * @returns the same records `listBundles` returns for those names, in listing order.
+   */
+  private bundles(only?: ReadonlySet<string>): BundleInfo[] {
+    return this.readBundles(only).map((bundle) => {
+      const target = updateRefusal(bundle, bundle.name)
+      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
+    })
+  }
+
+  /** The bundle inventory before update eligibility; each name is read independently of the others. */
+  private readBundles(only?: ReadonlySet<string>): Omit<BundleInfo, 'update'>[] {
     const { manifest, exemptions, installation } = readProfileState(() => ({
       manifest: readProfileManifest('dsh', this.profile.dir),
       exemptions: readProfileVersionExemptions(this.profile.dir),
@@ -532,6 +541,7 @@ export class PluginManager extends TypertRemoteService {
     const dependencies = Object.keys(recorded)
     const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
     const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
+      .filter(name => only?.has(name) ?? true)
     const bundles: Omit<BundleInfo, 'update'>[] = []
     const runtimeVersion = getDshRuntimeVersion()
     for (const name of names) {

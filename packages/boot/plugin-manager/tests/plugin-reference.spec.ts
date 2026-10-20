@@ -58,7 +58,7 @@ function plugins(text: string): PluginReferenceInfo[] {
 }
 
 function render(names: readonly string[], source: PluginReferenceReader, cwd?: string): Promise<PluginReferenceInfo[]> {
-  return Promise.all([source.listBundles(), source.readInventory()]).then(([bundles, inventory]) =>
+  return Promise.all([source.listBundles(names), source.readInventory()]).then(([bundles, inventory]) =>
     plugins(renderPluginReferenceContext(names.map(packageName => ({ packageName })), bundles, inventory, source, cwd)))
 }
 
@@ -184,11 +184,16 @@ describe('plugin reference expansion', () => {
     expect(expanded[2]?.source).toMatchObject({ packages: [{ packageName: '@acme/plugin', label: '@acme/plugin' }] })
   })
 
-  it('ignores non-user messages and describes at most eight packages', async () => {
+  it('ignores non-user messages and reads and describes at most eight packages', async () => {
     const nonUser = createUserMessage({ source: { kind: 'system-prompt' }, content: [{ type: 'text', text: mention }] })
     const many = Array.from({ length: 10 }, (_, index) =>
       formatPluginMention({ packageName: `@acme/p${String(index)}`, label: `P${String(index)}` })).join(' ')
-    const expanded = await expandPluginReferenceMessages(undefined, [nonUser, message(many)], new AbortController().signal, source)
+    const listBundles = vi.fn(source.listBundles)
+    const expanded = await expandPluginReferenceMessages(
+      undefined, [nonUser, message(many)], new AbortController().signal, { ...source, listBundles },
+    )
+    // Only the eight described packages are read; the omitted ones and the non-user mention are not.
+    expect(listBundles).toHaveBeenCalledExactlyOnceWith(Array.from({ length: 8 }, (_, index) => `@acme/p${String(index)}`))
     expect(expanded).toHaveLength(3)
     expect(expanded[0]).toBe(nonUser)
     const context = expanded[2]
