@@ -5,6 +5,8 @@ import type { Message } from '@deepseek-ai/cordis'
 import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
+import { setFlagsFromString } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import open from 'open'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, inject, name } from '../src/index.ts'
@@ -154,7 +156,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     expect(messages.filter(message => message.type === 'error')).toEqual([])
   })
 
-  it('stops waiting when a bootstrap request is aborted before the Worker is ready', async () => {
+  it('stops waiting after garbage collection when a bootstrap request is aborted before the Worker is ready', async () => {
     const gate = gateStartup('start')
     const { fiber, bootstrap } = mount()
     await vi.waitFor(() => { expect(startInspector).toHaveBeenCalledOnce() })
@@ -162,6 +164,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     const abort = new AbortController()
     const abandoned = bootstrap(abort.signal)
     expect(await settledWithin(abandoned, 50)).toBe(false)
+    await collectGarbage()
     abort.abort()
     expect((await abandoned).status).toBe(503)
     expect((await bootstrap(AbortSignal.abort())).status).toBe(503)
@@ -171,6 +174,16 @@ describe('experimental Inspector Host bootstrap route', () => {
     expect((await bootstrap()).status).toBe(200)
   })
 })
+
+/** Collect unreachable Request controllers before the caller aborts. */
+async function collectGarbage(): Promise<void> {
+  setFlagsFromString('--expose-gc')
+  const gc = runInNewContext('gc') as () => void
+  for (let pass = 0; pass < 5; pass += 1) {
+    gc()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+  }
+}
 
 /** Report whether a promise settles before a real-time deadline. */
 async function settledWithin(promise: Promise<unknown>, ms: number): Promise<boolean> {

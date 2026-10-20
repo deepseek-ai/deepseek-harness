@@ -35,6 +35,9 @@ describe('Workspace path helpers', () => {
 
   it('resolves relative paths without changing absolute paths', () => {
     expect(resolveWorkspacePath('/w', 'src/a.ts')).toBe('/w/src/a.ts')
+    expect(resolveWorkspacePath('/w', '././src/a.ts')).toBe('/w/src/a.ts')
+    expect(resolveWorkspacePath('C:\\w', '.\\src\\a.ts')).toBe('C:\\w\\src\\a.ts')
+    expect(resolveWorkspacePath('/w', '../a.ts')).toBe('/w/../a.ts')
     expect(resolveWorkspacePath('/w/', '/abs/a.ts')).toBe('/abs/a.ts')
     expect(resolveWorkspacePath(undefined, 'src/a.ts')).toBe('src/a.ts')
     expect(resolveWorkspacePath('', 'src/a.ts')).toBe('src/a.ts')

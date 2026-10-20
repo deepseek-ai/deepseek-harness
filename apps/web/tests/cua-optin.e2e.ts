@@ -45,7 +45,12 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const before = await readFile(settingsPath, 'utf8')
     const selected = () => readProfileManifest('scaffold', join(scaffold.harnessHome, 'profiles/scaffold')).dsh?.profile?.bundles
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
+    const plugins = page.locator('[data-plugin-panel]')
+    await plugins.getByRole('button', { name: '更多', exact: true }).waitFor()
+    expect(await page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count()).toBe(0)
+    await plugins.getByRole('button', { name: '更多', exact: true }).click()
     const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
+    expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     const toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
     expect(await card.textContent()).toContain('请切换到 PTC 模式')

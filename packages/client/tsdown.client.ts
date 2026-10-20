@@ -6,18 +6,34 @@
  * lightningcss inside the bundle: `x.module.css` yields its hashed class map
  * and injects a tagged style at factory execution, while `x.css?inline`
  * exports compiled text for a plugin-owned lifecycle effect. The virtual
- * loaders register each real stylesheet as a watch dependency. SVG, PNG, and
- * WebP imports become watched base64 data URLs inside the bundle.
+ * loaders register each real stylesheet as a watch dependency. Images under
+ * `src/client/assets/`, imported from Client code or referenced by relative
+ * `url()` in the package's own stylesheets, are emitted under `lib/assets/`
+ * with their content revision in the file name and become document-relative
+ * URLs served by the
+ * client-modules asset route; such a package exports `./assets/*` as
+ * `./lib/assets/*`, and its Node Client face rejects asset imports.
  * Non-experimental client outputs reject experimental module and stylesheet
  * inputs, including origins recorded by chained source maps.
  */
-import { readFile, stat, utimes } from 'node:fs/promises'
-import { existsSync, readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { readFile, readdir, rm, rmdir, stat, utimes } from 'node:fs/promises'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire, isBuiltin } from 'node:module'
-import { basename, dirname, extname, isAbsolute, relative, resolve as resolvePath, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, posix, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Rolldown, type TsdownPlugin, type UserConfig } from 'tsdown'
-import { transform } from 'lightningcss'
+import { transform, type CustomAtRules, type Url, type Visitor } from 'lightningcss'
+import {
+  PACKAGE_ASSET_EXPORT,
+  PACKAGE_ASSET_EXPORT_TARGET,
+  PACKAGE_ASSET_FILES_ENTRY,
+  PACKAGE_ASSET_MEDIA_TYPES,
+  packageAssetMediaType,
+  packageAssetReference,
+  packageAssetRevision,
+  packageAssetRevisionedPath,
+} from './modules/src/assets.ts'
 import { optionalStringArray } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
@@ -35,10 +51,10 @@ const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 const INLINE_CSS_QUERY = '?inline'
 
-/** Image imports become base64 data URLs embedded in the plugin's own bundle. */
-const IMAGE_MEDIA_TYPES = new Map([['.svg', 'image/svg+xml'], ['.png', 'image/png'], ['.webp', 'image/webp']])
-
-/** Emit one plugin-owned style injector and an optional CSS Modules export. */
+/**
+ * Emit one plugin-owned style injector and an optional CSS Modules export.
+ * @param css - JavaScript expression yielding the stylesheet text; see {@link stylesheetSource}.
+ */
 function styleInjectionModule(
   id: string,
   fileId: string,
@@ -46,7 +62,7 @@ function styleInjectionModule(
   classMap?: Readonly<Record<string, string>>,
 ): string {
   const source = [
-    `const css = ${JSON.stringify(css)};`,
+    `const css = ${css};`,
     `const tagId = ${JSON.stringify(`${id}/${basename(fileId)}`)};`,
     'if (typeof document !== \'undefined\' && document.querySelector(\'style[data-plugin-css=\' + JSON.stringify(tagId) + \']\') === null) {',
     '  const tag = document.createElement(\'style\');',
@@ -106,7 +122,9 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * original source content, into the standalone plugin map.
  * @param packageDir - the package's own directory, normally the config's
  * `import.meta.dirname`. Its `package.json` name is the plugin id stamped into
- * the __ModuleLoader__.load handoff and onto the injected style tags.
+ * the __ModuleLoader__.load handoff and onto the injected style tags, and the
+ * owner segment of its asset URLs; its `src/client/assets/` holds the only
+ * images the browser bundle may reference.
  * @param libEntry - node-half entries.
  * @param options - phase placement, lib overrides, optional independently bundled Node Client, companion configs, and per-file Client banner.
  * @returns ENV-selected tsdown config for the current build face.
@@ -122,7 +140,7 @@ export function clientBundle(
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(manifest, clientEntry, options.clientBanner, options.dualClient === true)
+    const client = clientConfig(manifest, packageDir, clientEntry, options.clientBanner, options.dualClient === true)
     const node = [lib, ...(options.companions ?? [])]
     const clientFaces = options.dualClient === true
       ? [nodeClientConfig(manifest, clientEntry), client]
@@ -277,6 +295,11 @@ interface AssetEmitter {
   }): string
 }
 
+/** The slice of the rolldown plugin context that emits and watches one package asset. */
+interface AssetContext extends AssetEmitter {
+  addWatchFile(id: string): void
+}
+
 function staticLinkedConfig(id: string, entry: string, outputName = basename(entry, '.js')): UserConfig {
   const emitted = new Set<string>()
   const isolation = clientInputIsolation(id)
@@ -358,6 +381,8 @@ interface PackageManifest {
   readonly dependencies?: Record<string, string>
   readonly peerDependencies?: Record<string, string>
   readonly optionalDependencies?: Record<string, string>
+  /** Package exports; the browser face emits assets only while `./assets/*` publishes `lib/assets`. */
+  readonly exports?: Readonly<Record<string, unknown>>
   readonly dsh?: { readonly client?: { readonly external?: unknown } }
 }
 
@@ -478,6 +503,255 @@ function asyncChunkRequirePlugin(): TsdownPlugin {
   }
 }
 
+/** Emitted asset directory below the browser config's `lib` outDir, published as {@link PACKAGE_ASSET_FILES_ENTRY}. */
+const ASSET_OUTPUT_DIR = posix.relative('lib', PACKAGE_ASSET_FILES_ENTRY)
+
+/** Characters the asset route rejects in a decoded path segment, because Node resolves export subpaths as URL text. */
+const UNSERVABLE_ASSET_SEGMENT = /[%#?\\\0]/
+
+/** A `url()` value with a scheme, such as `data:` or `https:`, which names no package file. */
+const URL_SCHEME = /^[a-z][a-z\d+.-]*:/i
+
+/**
+ * Free identifier an asset reference compiles to before rendering; the CommonJS
+ * render turns each call into `require.asset(...)`, the module loader's
+ * synchronous asset resolver, which returns the reference unchanged unless its
+ * carrier maps it. The fixed hexadecimal suffix keeps plugin strings that happen
+ * to contain the shorter prefix out of that rewrite, and keeps the source maps
+ * that carry the loaded module text byte-stable across builds.
+ */
+const PACKAGE_ASSET_CALL = '__dshPackageAsset_5f8e2c1a9b7d'
+
+/** Compile one asset reference into the resolver call. */
+function packageAssetCall(reference: string): string {
+  return `${PACKAGE_ASSET_CALL}(${JSON.stringify(reference)})`
+}
+
+/**
+ * Compile stylesheet text into a JavaScript expression that passes each package-asset
+ * reference the `url()` rewrite inserted through the resolver call. The rewrite writes
+ * a placeholder of letters, digits, and underscores, which lightningcss never escapes,
+ * with a per-stylesheet random part that stylesheet text cannot contain by chance.
+ * A placeholder may appear several times or not at all, as when minification copies
+ * or drops a declaration.
+ * @param css - stylesheet text after the rewrite.
+ * @param references - reference of each placeholder the rewrite inserted into this stylesheet.
+ * @returns a string literal, or a concatenation of literals and resolver calls.
+ */
+function stylesheetSource(css: string, references: ReadonlyMap<string, string>): string {
+  if (references.size === 0) return JSON.stringify(css)
+  const parts: string[] = []
+  let last = 0
+  for (const match of css.matchAll(new RegExp([...references.keys()].join('|'), 'gu'))) {
+    parts.push(JSON.stringify(css.slice(last, match.index)), packageAssetCall(references.get(match[0]) as string))
+    last = match.index + match[0].length
+  }
+  parts.push(JSON.stringify(css.slice(last)))
+  return parts.join(' + ')
+}
+
+/** One stylesheet's `url()` rewrite: the lightningcss options and the references they insert while transforming. */
+interface StylesheetAssets {
+  /** lightningcss options; empty when the stylesheet lies outside the package's own `src`. */
+  readonly options: { readonly visitor?: Visitor<CustomAtRules> }
+  /** Reference of each placeholder inserted during the transform that uses {@link options}. */
+  readonly references: ReadonlyMap<string, string>
+}
+
+/** Browser-face package assets: the import plugin and the stylesheet `url()` rewrite share one per-build emission record. */
+interface PackageAssets {
+  /** `dsh-package-asset`: resolves asset imports, emits referenced files, and prunes stale `lib/assets` files after writing. */
+  readonly plugin: TsdownPlugin
+  /**
+   * Select the lightningcss options that rewrite one stylesheet's relative `url()` values.
+   * @param context - plugin context of the stylesheet loader, which emits each referenced asset.
+   * @param stylesheet - physical stylesheet path.
+   * @returns a `url()` visitor when the stylesheet lies inside the package's own `src`, otherwise no options,
+   *   and the references the visitor inserts.
+   * @throws {Error} from the visitor when a relative `url()` does not name a publishable package asset.
+   */
+  urlRewrite(context: AssetContext, stylesheet: string): StylesheetAssets
+}
+
+/**
+ * Build the package-asset rules of one dynamic browser bundle. A referenced
+ * file must lie under the package's own `src/client/assets/`, have a supported
+ * extension, and be published by the `./assets/*` export; it is emitted once
+ * per build under `lib/assets/` at its relative path with the content revision
+ * inserted before the extension, and the reference compiles to the module loader's
+ * synchronous resolver call on its document-relative URL.
+ * A one-shot build deletes files under `lib/assets/` that it did not emit; a
+ * watch build keeps them for pages still running an earlier generation.
+ * @param manifest - the package's own manifest, naming the URL owner and declaring the asset export.
+ * @param packageDir - the package's own directory.
+ * @returns the plugin and stylesheet visitor sharing the per-build emission record.
+ */
+function packageAssets(manifest: PackageManifest, packageDir: string): PackageAssets {
+  const name = manifest.name
+  const sourceDir = resolvePath(packageDir, 'src')
+  const assetsDir = resolvePath(sourceDir, 'client', 'assets')
+  /** Reference of every asset emitted in the current build, keyed by its real path. */
+  const references = new Map<string, string>()
+
+  const reference = (context: AssetContext, file: string): string => {
+    let realPath: string
+    try {
+      realPath = realpathSync(file)
+    } catch (error) {
+      throw new Error(`tsdown: ${name}: cannot resolve asset ${file}`, { cause: error })
+    }
+    const emitted = references.get(realPath)
+    if (emitted !== undefined) return emitted
+    const below = pathBelow(realDirectory(assetsDir), realPath)
+    if (below === undefined) throw new Error(`tsdown: ${name}: ${file} is outside src/client/assets; move the asset there`)
+    const assetPath = below.split(sep).join('/')
+    if (assetPath.split('/').some(segment => UNSERVABLE_ASSET_SEGMENT.test(segment) || segment.toLowerCase() === 'node_modules')) {
+      throw new Error(`tsdown: ${name}: ${file} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
+    }
+    const extension = posix.extname(assetPath)
+    if (extension !== extension.toLowerCase()) {
+      throw new Error(`tsdown: ${name}: ${file} has an uppercase extension; asset imports are typed by lowercase extensions, so rename it`)
+    }
+    if (manifest.exports?.[PACKAGE_ASSET_EXPORT] !== PACKAGE_ASSET_EXPORT_TARGET) {
+      throw new Error(
+        `tsdown: ${name}: ${file} needs package.json exports ${JSON.stringify({ [PACKAGE_ASSET_EXPORT]: PACKAGE_ASSET_EXPORT_TARGET })} `
+        + `and ${JSON.stringify(PACKAGE_ASSET_FILES_ENTRY)} in files`,
+      )
+    }
+    if (packageAssetMediaType(assetPath) === undefined) {
+      throw new Error(`tsdown: ${name}: ${file} is not a supported asset; supported extensions: ${[...PACKAGE_ASSET_MEDIA_TYPES.keys()].join(', ')}`)
+    }
+    const bytes = readFileSync(realPath)
+    const emittedPath = packageAssetRevisionedPath(assetPath, packageAssetRevision(bytes))
+    context.emitFile({ type: 'asset', fileName: `${ASSET_OUTPUT_DIR}/${emittedPath}`, source: bytes, originalFileName: realPath })
+    context.addWatchFile(realPath)
+    const url = packageAssetReference(name, emittedPath)
+    references.set(realPath, url)
+    return url
+  }
+
+  return {
+    plugin: {
+      name: 'dsh-package-asset',
+      buildStart() { references.clear() },
+      resolveId(source, importer) {
+        if (importer === undefined || packageAssetMediaType(source) === undefined) return null
+        return sourceAssetPath(source, importer)
+      },
+      load(id) {
+        if (!isAbsolute(id) || packageAssetMediaType(id) === undefined) return null
+        return `export default ${packageAssetCall(reference(this, id))};`
+      },
+      renderChunk(code, _chunk, outputOptions) {
+        if (outputOptions.format !== 'cjs' || !code.includes(PACKAGE_ASSET_CALL)) return null
+        const transformed = new Rolldown.RolldownMagicString(code)
+        for (const match of code.matchAll(new RegExp(`\\b${PACKAGE_ASSET_CALL}\\(`, 'gu'))) {
+          transformed.overwrite(match.index, match.index + match[0].length, 'require.asset(')
+        }
+        return transformed
+      },
+      async writeBundle(outputOptions, bundle) {
+        // A watch rebuild keeps earlier files: the Host still serves the previous
+        // bundle generation, and pages running it request those asset names.
+        if (this.meta.watchMode || outputOptions.dir === undefined) return
+        const outDir = outputOptions.dir
+        const assets = resolvePath(outDir, ASSET_OUTPUT_DIR)
+        if (!existsSync(assets)) return
+        await pruneDirectory(assets, file => relative(outDir, file).split(sep).join('/') in bundle)
+      },
+    },
+    urlRewrite(context, stylesheet) {
+      const inserted = new Map<string, string>()
+      const nonce = randomBytes(6).toString('hex')
+      if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
+      const base = dirname(stylesheet)
+      const rewrite = (url: Url): Url | undefined => {
+        // Empty values, fragments, root-relative paths, schemes such as `data:`, and placeholders name no package file.
+        if (url.url === '' || url.url.startsWith('#') || url.url.startsWith('/') || URL_SCHEME.test(url.url)) return undefined
+        if (inserted.has(url.url)) return undefined
+        if (/[#?]/u.test(url.url)) {
+          throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
+        }
+        const placeholder = `__dshPackageAsset_${nonce}_${String(inserted.size)}__`
+        inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
+        return { ...url, url: placeholder }
+      }
+      return {
+        options: {
+          visitor: {
+            Url: url => rewrite(url),
+            // lightningcss does not visit the urls inside image-set(), so its options are rewritten here.
+            Image(image) {
+              if (image.type !== 'image-set') return undefined
+              const options = image.value.options.map((option) => {
+                const url = option.image.type === 'url' ? rewrite(option.image.value) : undefined
+                return url === undefined ? option : { ...option, image: { type: 'url' as const, value: url } }
+              })
+              return { ...image, value: { ...image.value, options } }
+            },
+          },
+        },
+        references: inserted,
+      }
+    },
+  }
+}
+
+/** Real path of an existing directory, or undefined when it does not exist. */
+function realDirectory(directory: string): string | undefined {
+  return existsSync(directory) ? realpathSync(directory) : undefined
+}
+
+/**
+ * Locate a real path strictly inside a real directory.
+ * @param root - real directory path, or undefined when the directory does not exist.
+ * @param file - real file path.
+ * @returns the platform-separated path of `file` below `root`, or undefined when it is not inside.
+ */
+function pathBelow(root: string | undefined, file: string): string | undefined {
+  if (root === undefined) return undefined
+  const path = relative(root, file)
+  return path === '' || path === '..' || path.startsWith(`..${sep}`) || isAbsolute(path) ? undefined : path
+}
+
+/**
+ * Delete every file a predicate rejects below a directory, then every directory left empty.
+ * @param directory - directory to prune; removed itself when nothing remains.
+ * @param keep - whether a file path survives.
+ * @returns whether the directory was removed.
+ */
+async function pruneDirectory(directory: string, keep: (file: string) => boolean): Promise<boolean> {
+  let remaining = 0
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      if (!(await pruneDirectory(path, keep))) remaining++
+    } else if (keep(path)) {
+      remaining++
+    } else {
+      await rm(path)
+    }
+  }
+  if (remaining > 0) return false
+  await rmdir(directory)
+  return true
+}
+
+/**
+ * Reject asset imports in a Node Client face, which has no asset route.
+ * @param id - package name, used in diagnostics.
+ * @returns a plugin whose resolveId throws for every supported asset extension.
+ */
+function browserOnlyAssets(id: string): TsdownPlugin {
+  return {
+    name: 'dsh-package-asset-browser-only',
+    resolveId(source) {
+      if (packageAssetMediaType(source) === undefined) return null
+      throw new Error(`tsdown: ${id}: asset imports are browser-only (${source})`)
+    },
+  }
+}
+
 /** Bundle the Client entry for plain Node independently of the Host entry and browser factory. */
 function nodeClientConfig(manifest: PackageManifest, entry: string): UserConfig {
   const isolation = clientInputIsolation(manifest.name)
@@ -486,7 +760,7 @@ function nodeClientConfig(manifest: PackageManifest, entry: string): UserConfig 
     entry: { 'client.node': entry },
     sourcemap: true,
     inputOptions: { resolve: { conditionNames: ['node', 'import', 'module', 'default'] } },
-    plugins: [tscSourceMapPlugin(), isolation.plugin],
+    plugins: [browserOnlyAssets(manifest.name), tscSourceMapPlugin(), isolation.plugin],
     outputOptions: {
       entryFileNames: 'client.node.js',
       chunkFileNames: 'client.node.[name].js',
@@ -498,6 +772,7 @@ function nodeClientConfig(manifest: PackageManifest, entry: string): UserConfig 
 
 function clientConfig(
   manifest: PackageManifest,
+  packageDir: string,
   entry: string,
   clientBanner?: (fileName: string) => string | undefined,
   dualClient = false,
@@ -506,6 +781,7 @@ function clientConfig(
   let requested: ReadonlySet<string> | undefined
   const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
   const isolation = clientInputIsolation(id)
+  const assets = packageAssets(manifest, packageDir)
   return {
     name: `${id}/client`,
     entry: { client: entry },
@@ -589,17 +865,19 @@ function clientConfig(
         // The virtual id otherwise hides the physical stylesheet from Rolldown's watch graph.
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
         const { code, exports: cssExports } = transform({
           filename: fileId,
           code: source,
           cssModules: { pattern: '[hash]_[local]' },
           minify: true,
+          ...stylesheetAssets.options,
         })
         const classMap: Record<string, string> = {}
         const exportEntries = Object.entries(cssExports ?? {})
           .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         for (const [local, exp] of exportEntries) classMap[local] = exp.name
-        return styleInjectionModule(id, fileId, code.toString(), classMap)
+        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references), classMap)
       },
     }, {
       name: 'dsh-css-text-inline',
@@ -614,8 +892,9 @@ function clientConfig(
         const fileId = virtualId.slice(INLINE_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true })
-        return `export default ${JSON.stringify(code.toString())};`
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
+        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        return `export default ${stylesheetSource(code.toString(), stylesheetAssets.references)};`
       },
     }, {
       name: 'dsh-css-global-inline',
@@ -629,23 +908,11 @@ function clientConfig(
         const fileId = virtualId.slice(GLOBAL_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
         this.addWatchFile(fileId)
         const source = await readFile(fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true })
-        return styleInjectionModule(id, fileId, code.toString())
+        const stylesheetAssets = assets.urlRewrite(this, fileId)
+        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        return styleInjectionModule(id, fileId, stylesheetSource(code.toString(), stylesheetAssets.references))
       },
-    }, {
-      name: 'dsh-image-inline',
-      resolveId(source: string, importer: string | undefined) {
-        if (importer === undefined || !IMAGE_MEDIA_TYPES.has(extname(source))) return null
-        return sourceAssetPath(source, importer)
-      },
-      async load(fileId: string) {
-        const mediaType = IMAGE_MEDIA_TYPES.get(extname(fileId))
-        if (mediaType === undefined) return null
-        this.addWatchFile(fileId)
-        const data = await readFile(fileId)
-        return `export default ${JSON.stringify(`data:${mediaType};base64,${data.toString('base64')}`)};`
-      },
-    }],
+    }, assets.plugin],
     outputOptions: {
       entryFileNames: dualClient ? 'client.browser.js' : 'client.js',
       // The imported source basename becomes the published chunk name; package

@@ -65,6 +65,19 @@ const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 
 A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
+<a id="deprecated-plugin-compatibility"></a>
+### Deprecated plugin compatibility
+
+`register(definition)` keeps its public return type `Promise<ProjectionHandle<S>>`, but the runtime value is a callable thenable, not a native `Promise` (`typeof` is `"function"`; `instanceof Promise` is false). Awaiting it delivers the retained handle; calling it releases the registration through the original Cordis effect disposer. Calling the return value is deprecated; use `handle.dispose()` in new code. Use `Promise.resolve(registration)` when an API requires a native Promise or treats functions as callbacks, including Vitest Promise assertions. See the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-projection-handles/guide.md).
+
+Legacy synchronous `return register(...)`, `ctx.effect(() => register(...))`, and synchronous generator yields retain cleanup ownership. Returning the registration from an async function assimilates the thenable into a handle, which Cordis rejects as `Invalid effect`. Yielding it from an async generator also yields the handle: that effect fails with `Invalid effect` when disposed and never adopts the registration, while the plugin stays active and its fiber releases the registration on unload. Async plugins and effects await registration and return `void`; the owning fiber releases the registration automatically.
+
+Legacy `stateOf(session, key)` is deprecated and returns `unknown`. Reading a registered key materializes every registered unit at the Session cursor without producing unrelated wire views. An unregistered or fully released key returns `undefined`, while retained handles remain readable. Compatibility covers runtime calls; TypeScript consumers migrate their type declarations.
+
+The first legacy `stateOf(session, key)` read of each key logs one `ctx.logger.warn` deprecation warning per registry instance. Registration, calls to its result, handle methods, and owner cleanup do not warn.
+
+Definitions install synchronously, and handle delivery remains asynchronous. Registration errors reject the returned value. When no caller observes a rejection before the current macrotask and its microtasks finish, the registry logs it as an error instead of leaving an unhandled rejection, and the plugin stays active; after a key conflict, its keyed reads return the other registrant's state; a rejection whose owner is no longer loading or active is dropped. New plugins await registration before exposing readers. Synchronous `try/catch` cannot catch asynchronous registration errors.
+
 ### Persisted checkpoints
 
 Every unit's state is checkpointed — client-visible and host-only alike — through `checkpoint(session)`, and the sibling [session-projection-cache](../session-projection-cache/README.md) persists those checkpoints so cold reads skip full log loads. Checkpoint watermarks use `SessionSeqCursor` (`-1` for an empty log), while replay starts use `SessionLogOffset`; `restoreFloor` and `restore` implement the read recipe without conflating an existing event with a log gap.

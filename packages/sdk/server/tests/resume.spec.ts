@@ -49,6 +49,73 @@ async function initialized(root: string) {
 }
 
 describe('SDK persisted session resume', () => {
+  it('restores due reminders through the SDK owner after initialization and shares client resume', async () => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'original' }] })
+    await first.server.wait({ sessionId: 'saved' })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const { ctx, server, adapter } = await runtime(root)
+    const fallback = vi.fn(async () => { throw new Error('must not activate through the Web controller') })
+    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    expect(ctx.agents.list()).toHaveLength(0)
+    const actualOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<undefined>()
+    const open = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await actualOpen(...args)
+      opened.resolve(undefined)
+      await gate.promise
+      return handle
+    })
+    try {
+      await server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'reminder-model', maxTokens: 1234 })
+      await opened.promise
+      const resuming = server.resume({ sessionId: 'saved' })
+      const anotherReminder = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+      gate.resolve(undefined)
+      const [agent, sameAgent] = await Promise.all([restoring, anotherReminder, resuming])
+      expect(sameAgent).toBe(agent)
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(fallback).not.toHaveBeenCalled()
+      expect(agent.session.header.cwd).toBe(root)
+      await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'scheduled reminder' }] })
+      await server.wait({ sessionId: 'saved' })
+      expect(adapter.requests[0]).toMatchObject({ model: 'reminder-model', maxTokens: 1234 })
+      await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+      await server.shutdown()
+      expect(ctx.agents.list()).toHaveLength(0)
+    } finally {
+      gate.resolve(undefined)
+    }
+  })
+
+  it('reuses an SDK-owned Session for reminders and releases failed reminder restoration for retry', async () => {
+    const { ctx, server } = await initialized(await storageRoot())
+    const fallback = vi.fn(async () => { throw new Error('unexpected fallback') })
+    const restore = () => ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    await expect(restore()).rejects.toThrow()
+    await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'create after failed reminder' }] })
+    await server.wait({ sessionId: 'saved' })
+    const agent = ctx.agents.get(SessionId('saved'))
+    await expect(restore()).resolves.toBe(agent)
+    await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  it('releases a reminder waiting for initialization when the SDK shuts down', async () => {
+    const { ctx, server } = await runtime(await storageRoot())
+    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), async () => {
+      throw new Error('unexpected fallback')
+    })
+    const rejected = expect(restoring).rejects.toThrow('shutting down')
+    await server.shutdown()
+    await rejected
+    expect(ctx.agents.list()).toHaveLength(0)
+  })
+
   it('restores a non-main identity, preserves history and origin, and appends a new turn', async () => {
     const root = await storageRoot()
     const first = await initialized(root)

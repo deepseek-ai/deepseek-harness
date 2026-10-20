@@ -6,6 +6,13 @@
 - paragraph:
   - code: "@fixture/bundle"
 - paragraph: Registry description for the fixture bundle.
+- region "详细介绍":
+  - heading "Fixture bundle" [level=1]
+  - paragraph: English | 中文
+  - paragraph:
+    - text: Registry fixture for the Web plugin-manager tests. It declares no
+    - code: meta.detail
+    - text: ", so its page shows this README."
 - heading "包含的组件" [level=4]
 - text: 共 3 个 · 3 已停用
 - list:

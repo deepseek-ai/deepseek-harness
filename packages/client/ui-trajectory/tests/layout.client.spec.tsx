@@ -171,34 +171,40 @@ describe('deriveTrajectoryLayout', () => {
   })
 
   it('appends a streaming partial without rebuilding unaffected finalized turns', () => {
-    const nodes = [{
+    const nodes: ConversationNode[] = [{
       kind: 'assistant', seq: 2, time: 2_000, turn: 1, step: 1,
       blocks: [{ kind: 'text', text: 'finalized' }],
-    }] as unknown as LegacyConversationSlice['nodes']
+    }, {
+      kind: 'user', seq: 4, time: 3_100,
+      content: [{ type: 'text', text: 'Continue' }], source: null,
+    }]
     const partial = {
       turn: 2,
       step: 1,
       blocks: [{ kind: 'reasoning' as const, text: 'streaming' }],
       timing: { stepStartTime: 3_000, firstTokenTime: 3_200 },
     }
-    const request = {
+    const request: RequestView = {
       purpose: 'assistant', startSeq: 3, turn: 2, step: 1,
       startedAt: 3_000, completedAt: null, status: 'running',
-    } as unknown as RequestView
+    }
     const base = deriveTrajectoryLayout({
       nodes,
       partial: { ...partial, blocks: [] },
       requests: [request],
       runningCalls: [],
     })
-    expect(base).toHaveLength(1)
+    expect(base).toHaveLength(2)
+    expect(base[1]?.groups[0]?.cells).toMatchObject([{ kind: 'user', previewMarkdown: 'Continue' }])
 
-    const streamed = appendTrajectoryPartialLayout(base, partial, 1)
+    const streamed = appendTrajectoryPartialLayout(base, partial, 2)
 
     expect(streamed[0]).toBe(base[0])
     expect(streamed).toHaveLength(2)
     expect(streamed[1]?.groups[0]?.cells).toMatchObject([{
-      index: 2,
+      index: 2, kind: 'user', previewMarkdown: 'Continue',
+    }, {
+      index: 3,
       kind: 'message',
       text: '',
       previewMarkdown: 'streaming',
@@ -211,7 +217,7 @@ describe('deriveTrajectoryLayout', () => {
         completedTime: null,
       },
     }])
-    expect(streamed[1]?.groups[0]?.cells[0]?.requestOnly).toBeUndefined()
+    expect(streamed[1]?.groups[0]?.cells[1]?.requestOnly).toBeUndefined()
   })
 
   it('replaces a running-call placeholder with the matching streamed tool call', () => {
@@ -310,7 +316,7 @@ describe('deriveTrajectoryLayout', () => {
     ])
   })
 
-  it('places steering in its resolved step instead of the turn-opening Message group', () => {
+  it('places opening and steering inputs in their respective consuming steps', () => {
     const nodes = [
       { kind: 'user', seq: 1, time: 1_000, content: [{ type: 'text', text: 'start' }], source: null },
       {
@@ -345,9 +351,13 @@ describe('deriveTrajectoryLayout', () => {
 
     expect(turns).toHaveLength(1)
     expect(turns[0]?.groups.map(group => group.title)).toEqual([
-      'Message', 'Step 1', 'Step 2',
+      'Step 1', 'Step 2',
     ])
-    expect(turns[0]?.groups[2]?.cells).toMatchObject([
+    expect(turns[0]?.groups[0]?.cells).toMatchObject([
+      { kind: 'user', previewMarkdown: 'start' },
+      { kind: 'message', previewMarkdown: 'first step' },
+    ])
+    expect(turns[0]?.groups[1]?.cells).toMatchObject([
       { kind: 'user', previewMarkdown: 'change direction', sourceSeq: 3 },
       { kind: 'message', previewMarkdown: 'second step', sourceSeq: 4 },
     ])

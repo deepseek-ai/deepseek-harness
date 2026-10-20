@@ -927,6 +927,26 @@ describe('TrajectoryTable', () => {
     expect(screen.queryByText('Completed')).toBeNull()
   })
 
+  it.each([false, true])('places the request separator after input and prompt rows (waiting: %s)', (waiting) => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 2,
+      groups: [{
+        title: 'Step 1',
+        cells: [
+          { index: 1, kind: 'user', text: 'Continue', timeSeconds: 0 },
+          { index: 2, kind: 'context', text: 'Tool added: search', timeSeconds: 0 },
+          { index: 3, kind: 'system', text: 'Tools Updated', timeSeconds: 0 },
+          { index: 4, kind: 'message', text: waiting ? '' : 'Answer', requestOnly: waiting, timeSeconds: 0 },
+        ],
+      }],
+    }]
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    const rows = [...view.container.querySelectorAll('tr[data-kind]')]
+    const requestRow = screen.getByRole('button', { name: 'Request #1' }).closest('tr')
+    expect(rows.indexOf(requestRow!)).toBe(3)
+    expect(screen.getByRole('row', { name: 'SYSTEM, Tools Updated' }).contains(requestRow)).toBe(false)
+  })
+
   it('marks failed requests and lays coincident request markers left to right', () => {
     const turns: readonly TrajectoryTurnModel[] = [
       {

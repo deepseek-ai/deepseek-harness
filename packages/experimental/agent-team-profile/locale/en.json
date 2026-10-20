@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Agent Teams",
-    "description": "Enable team collaboration, team tools, the member roster, and the shared task board."
+    "description": "Enable team collaboration, team tools, the member roster, and the shared task board.",
+    "detail": "docs/DETAIL.md"
   }
 }

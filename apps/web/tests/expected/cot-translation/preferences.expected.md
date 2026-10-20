@@ -7,64 +7,55 @@
   - code: "@deepseek-ai/dsh-experimental-cot-translation-bundle"
 - paragraph: 机器翻译展开的思考内容；原文会发送给所选服务
 - region "详细介绍":
-  - heading "@deepseek-ai/dsh-experimental-cot-translation-bundle" [level=1]
-  - paragraph: English | 中文
-  - heading "Summary" [level=2]
-  - paragraph: Translate expanded reasoning into the interface language or another chosen language. Enable Reasoning translation on the Web or Desktop Plugins page; shipped profiles leave it disabled. Bing is the default provider, and Google is available in the bundle settings. Original reasoning remains available and stays unchanged in the Session and model input.
-  - heading "Table of Contents" [level=2]
+  - paragraph:
+    - img "展开的思考行从英文翻译成中文，并显示“查看原文”按钮"
+  - paragraph:
+    - text: 展开
+    - strong: 思考
+    - text: 行，即可用界面语言阅读其中的思考内容。智能体输出时会逐段翻译；最新的内容在能够翻译之前保持原文。
+  - heading "使用方法" [level=2]
   - list:
-    - listitem: Use this package
-    - listitem: Understand the implementation
-    - listitem: Further Exploration
-    - listitem: Model Experience
-    - listitem: Known Limitations and Deferred Work
-    - listitem: Dev Note
-  - separator
-  - paragraph
-  - heading "Use this package" [level=2]
-  - paragraph:
-    - text: Open Plugins and enable Reasoning translation in the Official group. Open its details to select a translation service and target language.
-    - code: auto
-    - text: follows the interface language; an explicit language code such as
-    - code: zh
-    - text: ","
-    - code: en
-    - text: ", or"
-    - code: ja
-    - text: overrides it. Save applies the preferences.
-  - paragraph: Expand a Think row to start translation. The row translates completed paragraphs and request-sized prefixes of long streaming paragraphs while retaining the unfinished tail. View original in the translation toolbar switches the expanded body to the source; View translation switches it back. A failed translation leaves the original visible and offers Retry. Disabling the bundle removes its controls and cancels pending calls. Successful translations remain saved in the Session and are reused when the same request is reopened, the page reloads, or the Host restarts.
-  - paragraph:
-    - text: The selected service receives the expanded reasoning, which can contain private code and conversation details. Google and Bing send source text in POST request bodies. Bing and Google require no additional login or API key, but neither anonymous endpoint guarantees availability or free quotas. Eligible native
-    - code: deepseek-flash
-    - text: routes appear as explicit paid choices using the configured DeepSeek Account or Official API credentials. Each uncached fragment issues one independent query with thinking disabled. Reopening reuses saved results; changing provider, language, source or recipe may require another billed query. The model ID is matched without a version number, and pi-ai routes are excluded. Provider failure never sends the text to another service automatically.
-  - separator
-  - paragraph
-  - heading "Understand the implementation" [level=2]
-  - paragraph:
-    - text: The bundle patch inserts
-    - code: translator
-    - text: and
-    - code: cot-translation
-    - text: ", selecting Bing and the interface language. The translator owns provider protocols, network limits, and shared persisted requests and results; the GUI consumer owns settings, paragraph scheduling, and a local cache for the current display. The GUI reuses saved results directly and joins normal Session activation when a new translation needs its existing writer. Its generated Remote contribution is mounted only while the bundle is enabled. The translation wrapper and Chat's default Body entry both call the official reasoning Content Factory."
-  - separator
-  - paragraph
-  - heading "Further Exploration" [level=2]
-  - paragraph: Text translation subsystem · Translator service · GUI consumer
-  - separator
-  - paragraph
-  - heading "Model Experience" [level=2]
-  - paragraph: Indirectly, through optional independent paid Flash requests and normal Session activation on cache misses; the translator owns translation prompts, and the Session's preset owns startup context.
-  - heading "KV Cache effect" [level=4]
-  - paragraph: Translation records leave original reasoning intact; normal Session activation and optional paid queries have the cache effects described by the GUI consumer.
-  - heading "Known Limitations and Deferred Work" [level=2]
-  - paragraph
+    - listitem:
+      - text: 展开
+      - strong: 思考
+      - text: 行。点击
+      - strong: 查看原文
+      - text: 显示原文，点击
+      - strong: 查看译文
+      - text: 切换回译文。
+    - listitem:
+      - text: 在此插件的页面中选择
+      - strong: 翻译服务
+      - text: 和
+      - strong: 目标语言
+      - text: ，然后点击
+      - strong: 保存
+      - text: 。
+      - code: auto
+      - text: 表示跟随界面语言；也可以填写
+      - code: zh
+      - text: 、
+      - code: en
+      - text: 、
+      - code: ja
+      - text: 等语言代码。
+    - listitem:
+      - text: 翻译失败时，原文保持显示，并提供
+      - strong: 重试
+      - text: 。
+  - heading "注意事项" [level=2]
   - list:
-    - listitem: Collapsed summaries remain in the original language. Translation starts when the reader expands the reasoning body; it may change Markdown or code formatting. Original always remains accessible.
-    - listitem: Anonymous Google and Bing browser endpoints may fail, rate-limit requests, or change their response formats. Mainland China connectivity depends on the deployment's network and proxy configuration. Successful translations remain in the Session after collapse, bundle removal, or restart. Experimental records have best-effort retention across future Session-format migrations.
-  - separator
-  - paragraph
-  - heading "Dev Note" [level=3]
-  - paragraph: None.
+    - listitem: 你展开的思考内容可能包含你的代码和对话细节。
+    - listitem: 默认使用 Bing，也可以选择 Google。两者都无需账号或 API key，但都不保证可用，也不保证免费额度。
+    - listitem:
+      - text: 如果已配置 DeepSeek 账号或官方 API，还会出现
+      - strong: DeepSeek Flash · 账号（付费）
+      - text: 和
+      - strong: DeepSeek Flash · 官方 API（付费）
+      - text: 。此时每段没有已保存译文的内容都是一次付费请求。
+    - listitem: 译文保存在会话中，重新打开时直接复用。原始思考内容和模型的输入都不会改变。
+    - listitem: 折叠时显示的摘要保持原文。翻译可能改变 Markdown 格式或代码。
+    - listitem: 关闭此插件会移除它的按钮并取消未完成的翻译；已保存的译文仍保留在会话中。
 - paragraph: 展开的思考内容会发送给所选翻译服务，可能包含私有代码或对话细节。
 - paragraph: Bing 和 Google 翻译无需额外登录或 API key，但匿名接口可能拒绝或限制请求
 - text: 翻译服务

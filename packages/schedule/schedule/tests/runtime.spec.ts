@@ -18,8 +18,8 @@ afterEach(async () => {
   await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
   vi.useRealTimers()
 })
-async function setup(tasks: ScheduleTask[]) {
-  const test = await harness(); tests.push(test)
+async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[0] = {}) {
+  const test = await harness(options); tests.push(test)
   const agent = agentFor(test.ctx)
   const followup = vi.fn<Agent['followup']>()
   agent.followup = followup
@@ -28,7 +28,7 @@ async function setup(tasks: ScheduleTask[]) {
     const index = tasks.findIndex(current => current.record.id === task.record.id)
     tasks[index] = task
   })
-  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, { days: 30, records: 200 })
+  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, { days: 30, records: 200 }, test.resolveAgent)
   runtimes.push(runtime)
   return { ...test, agent, followup, runtime, commit }
 }
@@ -59,6 +59,33 @@ it('seeds legacy history only from its actual receipt and appends through wall-c
 })
 
 describe('Host Schedule timer', () => {
+  it('keeps reminders unacknowledged when no Session activation provider is mounted', async () => {
+    const tasks = [task(createAfterScheduleRecord(ScheduleId('unavailable'), 'Remember', 2, Date.now(), 'Remember'))]
+    const test = await setup(tasks, { sessionController: false })
+    const warn = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+    try {
+      test.runtime.requestDrive()
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no Session activation provider'))
+      expect(test.followup).not.toHaveBeenCalled()
+      expect(test.commit).not.toHaveBeenCalled()
+      expect(tasks[0]?.status).toBe('active')
+    } finally { warn.mockRestore() }
+  })
+
+  it('uses the embedding activation handler instead of the Web controller', async () => {
+    const tasks = [task(createAfterScheduleRecord(ScheduleId('embedded'), 'Remember', 2, Date.now(), 'Remember'))]
+    const test = await setup(tasks)
+    const activate = vi.fn(async () => test.agent)
+    test.ctx.on('schedule/resolve-agent', activate)
+    test.runtime.requestDrive()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(activate).toHaveBeenCalledWith(SessionId('original'), expect.any(Function))
+    expect(test.resolve).not.toHaveBeenCalled()
+    expect(test.followup).toHaveBeenCalledOnce()
+    expect(tasks[0]?.status).toBe('inactive')
+  })
+
   it('restores the original Session and retains an ended one-shot with its flushed message receipt', async () => {
     const tasks = [task(createAfterScheduleRecord(ScheduleId('once'), 'Remember', 2, Date.now(), 'Remember'))]
     const test = await setup(tasks)
@@ -674,7 +701,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     const transaction = vi.fn<(work: () => Promise<void>) => Promise<void>>()
       .mockReturnValueOnce(failed.promise)
       .mockImplementation(work => work())
-    const runtime = new ScheduleRuntime(test.ctx, () => [], transaction, async () => {}, { days: 30, records: 200 })
+    const runtime = new ScheduleRuntime(test.ctx, () => [], transaction, async () => {}, { days: 30, records: 200 }, test.resolveAgent)
     runtimes.push(runtime)
     const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementationOnce(() => { runtime.requestDrive() })
     runtime.requestDrive()
@@ -695,7 +722,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
       entered.resolve(undefined)
       await released.promise
     })
-    const runtime = new ScheduleRuntime(test.ctx, () => records, transaction, async () => {}, { days: 30, records: 200 })
+    const runtime = new ScheduleRuntime(test.ctx, () => records, transaction, async () => {}, { days: 30, records: 200 }, test.resolveAgent)
     runtimes.push(runtime)
     test.ctx.effect(() => () => runtime.dispose())
     const stop = vi.spyOn(runtime, 'dispose')
@@ -739,7 +766,8 @@ describe('Schedule dispatch failures and concurrent changes', () => {
   it('drains a rejected serialization promise during disposal', async () => {
     const test = await setup([])
     const transaction = Promise.withResolvers<undefined>()
-    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {}, { days: 30, records: 200 })
+    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {},
+      { days: 30, records: 200 }, test.resolveAgent)
     runtimes.push(runtime)
     runtime.requestDrive()
     const stopped = runtime.dispose()

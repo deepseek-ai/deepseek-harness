@@ -442,6 +442,67 @@ describe('package payload constraints', () => {
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
   })
+
+  it.each([
+    { './assets/*': './lib/assets/*' },
+    { './assets/*': { default: './lib/assets/*' } },
+  ])('publishes built package assets after the browser Client entries: %j', (assets) => {
+    expect(expectedDshPackageFiles({
+      exports: {
+        './client': { types: './lib/types/client/index.d.ts', node: './lib/client.node.js', default: './lib/client.js' },
+        './loader': './lib/loader.js',
+        ...assets,
+      },
+    })).toEqual([
+      'lib/index.js', 'lib/client.js', 'lib/client.node.js', 'lib/assets', 'lib/loader.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it.each([
+    {},
+    { './assets/*': './assets/*' },
+    { './assets/*': { types: './lib/assets/*' } },
+    { './assets/extra': './lib/assets/*' },
+  ])('does not publish package assets without the exact asset export target: %j', (assets) => {
+    expect(expectedDshPackageFiles({ exports: { './client': './lib/client.js', ...assets } }))
+      .toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts'])
+  })
+
+  it('rejects a package-asset export whose payload omits the built assets', () => {
+    const dir = 'packages/client/probe'
+    const manifest = {
+      name: '@deepseek-ai/dsh-client-probe',
+      type: 'module',
+      main: 'lib/index.js',
+      types: 'lib/types/index.d.ts',
+      exports: {
+        '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+        './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+        './assets/*': './lib/assets/*',
+      },
+      files: ['lib/index.js', 'lib/client.js', 'lib/assets', 'lib/types/**/*.d.ts'],
+      peerDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+      devDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+    } satisfies WorkspaceManifest['manifest']
+    const payloadErrors = (candidate: WorkspaceManifest['manifest']): string[] =>
+      checkWorkspaceManifest({ dir, manifest: candidate }).filter(error => error.includes('package.json files must be'))
+    expect(payloadErrors(manifest)).toEqual([])
+    expect(payloadErrors({ ...manifest, files: manifest.files.filter(file => file !== 'lib/assets') })).toEqual([
+      expect.stringContaining('@deepseek-ai/dsh-client-probe: package.json files must be '
+        + '["lib/index.js","lib/client.js","lib/assets","lib/types/**/*.d.ts"]'),
+    ])
+  })
+
+  it.each(['ui-chat', 'ui-settings-account'])(
+    'accepts the published package assets for %s and rejects their omission', (name) => {
+      const dir = `packages/client/${name}`
+      const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+      expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== 'lib/assets'),
+      } })).toEqual([expect.stringContaining('package.json files must be')])
+    },
+  )
 })
 
 it('publishes CLI runtime declarations and rejects a payload that omits them', () => {
