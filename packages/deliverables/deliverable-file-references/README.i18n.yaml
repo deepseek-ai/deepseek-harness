@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/deliverables/deliverable-file-references/README.md
+/:
+  en: be4edd7a1427808e
+  zh: 11cd071f23d83084
+/deepseek-ai-dsh-deliverable-file-references:
+  en: 86c55674ad26ea6f
+  zh: 6c1e7fbd9808e727
+/deepseek-ai-dsh-deliverable-file-references/summary:
+  en: c1d53b592282a502
+  zh: c9fe1ed8de02ea68
+/deepseek-ai-dsh-deliverable-file-references/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-deliverable-file-references/use-this-package:
+  en: 582e00c45e6b82f2
+  zh: 516580c07a0d8abd
+/deepseek-ai-dsh-deliverable-file-references/understand-the-implementation:
+  en: 4fe7c3a943dbfee1
+  zh: c9df999dcf922e37
+/deepseek-ai-dsh-deliverable-file-references/further-exploration:
+  en: 87bee2f9ae099907
+  zh: c6906e52aae6e670
+/deepseek-ai-dsh-deliverable-file-references/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-deliverable-file-references/model-experience/file-reference-guidance:
+  en: def6db96da0ca05a
+  zh: a0956e37e0a362c9
+/deepseek-ai-dsh-deliverable-file-references/model-experience/file-reference-guidance/what-the-model-sees:
+  en: 1dfb9b2c748c87fe
+  zh: 9b4308986ae22e3a
+/deepseek-ai-dsh-deliverable-file-references/model-experience/file-reference-guidance/what-the-model-sees/shared-guidance:
+  en: f6f9454c369cd5a2
+  zh: 127b54d86cdf0cd5
+/deepseek-ai-dsh-deliverable-file-references/model-experience/file-reference-guidance/token-effect:
+  en: f3c44754e5881a8d
+  zh: cf72c0d320ee4881
+/deepseek-ai-dsh-deliverable-file-references/model-experience/file-reference-guidance/kv-cache-effect:
+  en: a1a94134f784ac31
+  zh: d763a15160ef4043
+/deepseek-ai-dsh-deliverable-file-references/known-limitations-and-deferred-work:
+  en: 8cf1186304d4f10b
+  zh: b38c0eb9558b3bdc
+/deepseek-ai-dsh-deliverable-file-references/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

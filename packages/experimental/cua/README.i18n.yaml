@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua/README.md
 /:
-  en: aa3d316ef17feae7
-  zh: 5a30d743ce257d5b
+  en: ed2539c6d12f814a
+  zh: 55a6c9d7f0d21fb7
 /deepseek-ai-dsh-cua:
   en: 0ef7ee882840cf1b
   zh: 01b9e768eff2d302
@@ -12,14 +12,17 @@
   en: f4d9cc48587d62a2
   zh: d1bac6c1fe7eb29e
 /deepseek-ai-dsh-cua/table-of-contents:
-  en: d152484eb41ac6b4
-  zh: 1db86285abf6c499
+  en: 4081cf444a77bf20
+  zh: def91d58969ec281
 /deepseek-ai-dsh-cua/use-this-package:
-  en: bdb95a169555b365
-  zh: f4bdfbba6809b566
+  en: ceb54d964dc355b6
+  zh: 0892066fbceef7b9
+/deepseek-ai-dsh-cua/use-this-package/permission-controls:
+  en: be53792edc381ea1
+  zh: 037407055d9f34a0
 /deepseek-ai-dsh-cua/understand-the-implementation:
-  en: effcee57d8854c32
-  zh: d02c6b76e7249051
+  en: 1fde7df44f040131
+  zh: 59a842fa402ccb35
 /deepseek-ai-dsh-cua/further-exploration:
   en: b8b0aece886fadaa
   zh: ecd8c88d601f2179
@@ -39,8 +42,8 @@
   en: 2d5df52dafa1d940
   zh: 06e815759b9150c3
 /deepseek-ai-dsh-cua/known-limitations-and-deferred-work:
-  en: da6aefcb279aea83
-  zh: b45b7bb300b9f792
+  en: ae98f1b2718b3b94
+  zh: e6bf4e96ae08e669
 /deepseek-ai-dsh-cua/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: 9f56528562c7c914

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Model-list editing, endpoint interrogation, and hand-declared provider creation. */
-import { within, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, within, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import { Context } from '@deepseek-ai/cordis'
@@ -623,7 +623,7 @@ describe('endpoint interrogation', () => {
     })
   })
 
-  it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
+  it('opens on the configured models and appends a newly checked one, keeping a row the user already tuned', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([
       { id: 'kept', contextWindow: 999, inputModalities: ['text', 'image'] },
       { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', inputModalities: ['text', 'image'] },
@@ -636,11 +636,10 @@ describe('endpoint interrogation', () => {
 
     fireEvent.click(screen.getByText(en.fetchModels))
     await screen.findByText(en.fetchTitle)
-    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'fresh' }).checked).toBe(true)
     expect(screen.queryByRole('checkbox', { name: 'Fresh' })).toBeNull()
-    // The already-configured row starts unchecked; the new one starts checked.
     const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([false, true])
+    expect(boxes.map(box => box.checked)).toEqual([true, false])
+    fireEvent.click(screen.getByRole<HTMLInputElement>('checkbox', { name: 'fresh' }))
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
@@ -656,6 +655,92 @@ describe('endpoint interrogation', () => {
       { id: 'kept', contextWindow: 111 },
       { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', input: ['text', 'image'] },
     ])
+  })
+
+  it('removes an unchecked configured model and keeps one the provider does not list', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'gone' }, { id: 'stays' }, { id: 'new' }])))
+    const { mutate } = await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [
+        { id: 'gone' }, { id: 'unlisted', maxTokens: 512 }, { id: 'stays', contextWindow: 111 },
+      ] } },
+    })
+    openEditor('openai')
+    expandModel(3)
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'gone' }))
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+
+    // The disclosure follows its row up the list.
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 2`).value).toBe('111')
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([
+      { id: 'unlisted', maxTokens: 512 }, { id: 'stays', contextWindow: 111 },
+    ])
+  })
+
+  it('checks a row drafted while the fetch is in flight', async () => {
+    const reply = Promise.withResolvers<ReturnType<typeof ok>>()
+    const discover = vi.fn(() => reply.promise)
+    const { mutate } = await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'a' }] } },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'b' } })
+    await act(async () => { reply.resolve(ok([{ id: 'a' }, { id: 'b' }, { id: 'c' }])) })
+    const boxes = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    expect(boxes.map(box => box.checked)).toEqual([true, true, false])
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b' }])
+  })
+
+  it('refuses to empty the list, since an empty list serves the whole catalog', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'a' }, { id: 'b' }, { id: 'c' }])))
+    await mountSection({
+      discover,
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'a' }, { id: 'b' }] } },
+    })
+    openEditor('openai')
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within_(dialog, en.fetchSelectAll))
+    fireEvent.click(within_(dialog, en.fetchDeselectAll))
+    const adopt = within_(dialog, en.fetchAdopt) as HTMLButtonElement
+    expect(adopt.disabled).toBe(true)
+    expect(adopt.title).toBe(en.fetchKeepOne)
+
+    // Removing several configured models at once still leaves one.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'c' }))
+    expect(adopt.disabled).toBe(false)
+    fireEvent.click(adopt)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('c')
+    expect(screen.queryByLabelText(`${en.modelId} 2`)).toBeNull()
+  })
+
+  it('lists a repeated candidate id once and starts it checked beside a blank row', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok([{ id: 'x' }, { id: 'x', maxTokens: 64 }])))
+    await mountSection({ discover, providers: { openai: { baseURL: 'https://proxy.example/v1' } } })
+    openEditor('openai')
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+    expect(screen.getAllByRole<HTMLInputElement>('checkbox', { name: 'x' }).map(box => box.checked)).toEqual([true])
+    fireEvent.click(screen.getByText(en.fetchAdopt))
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('x')
+    expect(screen.queryByLabelText(`${en.modelId} 3`)).toBeNull()
   })
 
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
@@ -767,7 +852,7 @@ describe('endpoint interrogation', () => {
     expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])
   })
 
-  it('filters by model id or name, selects visible candidates, and clears every selection', async () => {
+  it('filters by model id or name and selects or deselects only visible candidates', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([
       { id: 'alpha' }, { id: 'opaque-id', name: 'Beta Display' }, { id: 'gamma' },
     ])))
@@ -798,10 +883,14 @@ describe('endpoint interrogation', () => {
     expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
       .map(box => box.checked)).toEqual([false])
 
-    // Deselecting a filtered result must also clear hidden selections so they
-    // cannot be adopted accidentally.
+    // Hidden candidates keep their state, so a configured model is never
+    // removed unseen.
     fireEvent.change(search, { target: { value: '' } })
     const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    expect(boxes.map(box => box.checked)).toEqual([true, false, true])
+    fireEvent.click(within_(dialog, en.fetchSelectAll))
+    expect(boxes.map(box => box.checked)).toEqual([true, true, true])
+    fireEvent.click(within_(dialog, en.fetchDeselectAll))
     expect(boxes.map(box => box.checked)).toEqual([false, false, false])
 
     // Selecting while filtered adds only visible candidates.

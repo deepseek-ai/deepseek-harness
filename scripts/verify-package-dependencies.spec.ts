@@ -707,6 +707,36 @@ describe('face-aware source classification', () => {
     })).rejects.toThrow('Host export ./node cannot map ./other/node.js to a source entry')
   })
 
+  it.each(['./lib/assets/*', { default: './lib/assets/*.js' }])(
+    'does not classify the package-asset export %j as Host code', async (target) => {
+      const root = writeWorkspace({
+        'packages/client/ui-probe/package.json': {
+          name: '@deepseek-ai/dsh-client-ui-probe',
+          dsh: { client: { platform: 'web' } },
+          exports: {
+            '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+            './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+            './assets/*': target,
+          },
+          ...CORDIS_PEER,
+        },
+        'packages/client/ui-probe/src/index.ts': 'export function apply() {}\n',
+        'packages/client/ui-probe/src/client/index.ts': "import art from './assets/art.webp'\nexport const image = art\n",
+      })
+
+      const state = await readPackageDependencyState(root, policy())
+
+      expect(state.facts.map(fact => fact.manifestPath)).toEqual(['packages/client/ui-probe/package.json'])
+      expect(collectPackageDependencyViolations(state)).toEqual([])
+    },
+  )
+
+  it('scans other subpaths below ./assets as Host exports', async () => {
+    await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      exports: { './assets/index': './lib/assets/index.js' },
+    })).rejects.toThrow('Host export ./assets/index has no source entry')
+  })
+
   it('fails when a managed Host package has no Host entry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-missing-host-'))
     roots.push(root)

@@ -4,19 +4,21 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import type { PluginEntryId, PluginInstallRequestId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ChangeResult, PluginEntryId, PluginInstallRequestId, PluginUpdateResult, PluginVersion, RegistryAttempt } from '@deepseek-ai/dsh-api-remotes/client'
 import { allowAllAccess, bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigForm, ConfigFormSnapshot, SettingsMirrorSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StrictMode, type ReactNode } from 'react'
+import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
+import { bundleDetailKey, type BundleDetailsState } from '../src/client/detail-store.ts'
 import { createNavigationStore } from '../src/client/navigation-store.ts'
 import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast } from '../src/client/PluginRefreshToast.tsx'
 import type { PluginManagerPageProps } from '../src/client/index.ts'
 import type { PluginTab } from '../src/client/tab-ledger.ts'
 import type { ConfigLedger } from '../src/client/config-ledger.ts'
-import { rowKey, type InstallState, type PackageRow, type PackageView, type PluginManagerState } from '../src/client/manager-store.ts'
+import { rowKey, type InstallState, type PackageRow, type PackageView, type PluginManagerState, type UpdateState, type VersionCheck } from '../src/client/manager-store.ts'
 import { INSTALL_GIT_EXAMPLE, INSTALL_PATH_EXAMPLE, en, zh, type PluginManagerLocaleKey } from '../src/client/locales.ts'
 import type { PluginActivationOwnerProps, PluginAddActionsProps, PluginDetailProps, PluginTabProps, PluginsSubject } from '../src/client/slot-contract.ts'
 
@@ -40,6 +42,7 @@ function pkg(overrides: Partial<PackageView> = {}): PackageView {
     installed: true,
     optional: false,
     removable: true,
+    updatable: false,
     enabled: true,
     rows: [],
     ...overrides,
@@ -78,6 +81,8 @@ const READY: PluginManagerState = {
   busy: [],
   notice: null,
   install: IDLE_INSTALL,
+  versions: {},
+  update: null,
   confirm: null,
   highlight: null,
 }
@@ -108,6 +113,7 @@ function renderTab(
   const store = createSnapshotStore<PluginManagerState>({ ...READY, ...state })
   const ledger = createSnapshotStore<ConfigLedger>({ ...NO_CONFIG, ...config })
   const tabLedger = createSnapshotStore<readonly PluginTab[]>(tabs)
+  const bundleDetails = createSnapshotStore<BundleDetailsState>({})
   const actions = {
     ensure: vi.fn(),
     refresh: vi.fn(),
@@ -133,6 +139,16 @@ function renderTab(
     cancelConfirm: vi.fn(),
     setRowEnabled: vi.fn(),
     dismissNotice: vi.fn(),
+    checkVersions: vi.fn(),
+    ensureVersions: vi.fn(),
+    openUpdate: vi.fn(),
+    runUpdate: vi.fn(),
+    closeUpdate: vi.fn(),
+    toggleUpdateOutput: vi.fn(),
+    loadDetail: vi.fn(),
+    retryDetail: vi.fn(),
+    detailImage: vi.fn((name: string, document: string, destination: string, _fromNpm: boolean) =>
+      `https://dsh.example/api/plugin-manager/detail-file?bundle=${name}&document=${document}&path=${destination}`),
   }
   const unusedStandardHook = (): never => { throw new Error('Plugin manager fixture does not provide global state') }
   const standard = {
@@ -154,6 +170,8 @@ function renderTab(
     usePluginManager: bindSnapshotSelector(store),
     useConfigLedger: bindSnapshotSelector(ledger),
     usePluginTabs: bindSnapshotSelector(tabLedger),
+    useBundleDetails: bindSnapshotSelector(bundleDetails),
+    useLocale: bindSnapshotSelector(createSnapshotStore<LocaleSnapshot>({ active: 'en', locales: [], revision: 0 })),
     useConfigurations: bindSnapshotSelector(createSnapshotStore<SettingsMirrorSnapshot>({
       status: 'ready', error: null,
       view: { writable: true, hasDocument: true, namespaces: Object.keys(forms).map(ns => ({
@@ -197,6 +215,7 @@ function renderTab(
     store,
     actions,
     set: (next: Partial<PluginManagerState>) => { act(() => { store.set({ ...store.getSnapshot(), ...next }) }) },
+    setDetails: (next: BundleDetailsState) => { act(() => { bundleDetails.set(next) }) },
     setLanguage: (dict: typeof en) => {
       locale.setLocale(dict === zh ? 'zh' : 'en')
       currentT = translate(dict)
@@ -207,7 +226,7 @@ function renderTab(
 
 describe('PluginManagerPage', () => {
   it('shows no tabs without contributions, and switches between Installed and a contributed tab', () => {
-    const { actions, navigation, setTabs, set } = renderTab({ packages: [pkg()] }, {}, {
+    const { actions, navigation, setTabs } = renderTab({ packages: [pkg()] }, {}, {
       'plugins.tab:discover': (_view, owner) => {
         const tab = owner as PluginTabProps
         return (
@@ -230,24 +249,35 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
     expect(actions.installFrom).toHaveBeenCalledWith({ spec: 'dsh-a@1.0.0', registry: 'https://r.example/', title: 'Alpha', version: '1.0.0' })
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
-    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar' } })
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' } })
     expect(document.querySelector('[data-plugin-detail="dsh-better-sidebar"]')).not.toBeNull()
-    // A detail page hides the tabs; a contributed tab that leaves the ledger falls back to Installed.
+    // A detail page hides the tabs; its back button returns to the tab that opened it.
     expect(screen.queryByRole('tablist')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    expect(screen.getByRole('tab', { name: 'Discover' }).getAttribute('aria-selected')).toBe('true')
+    // A contributed tab that leaves the ledger falls back to Installed.
     act(() => { navigation.actions.setView({ kind: 'list' }); navigation.actions.setTab('discover') })
     setTabs([])
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     expect(navigation.getSnapshot().tab).toBe('installed')
-    // Enabling a bundle an install added highlights its card, so the page shows Installed.
+    // A contributed tab that returns can be selected again.
     setTabs([{ id: 'discover', label: 'Discover' }])
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
-    set({ highlight: 'dsh-better-sidebar' })
-    expect(navigation.getSnapshot().tab).toBe('installed')
-    expect(screen.getByRole('tabpanel', { name: en.installedTab })).toBeTruthy()
   })
 
-  it('keeps the Installed tab panel through loading and the More list out of the tabs', () => {
+  it('marks the bundle an install enabled without leaving a contributed tab', () => {
+    const { navigation, set } = renderTab({ packages: [pkg()] }, {}, {}, {}, [{ id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+    // Enable now publishes the new bundle's mark; the mark scrolls to a visible card and selects no page.
+    set({ highlight: 'dsh-better-sidebar' })
+    expect(navigation.getSnapshot().tab).toBe('discover')
+    expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+  })
+
+  it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
     const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
     const { navigation, set } = renderTab({ status: 'loading', packages: [] }, {}, {
       'plugins.tab:discover': (_view, owner) => (
@@ -266,8 +296,37 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
     expect(document.querySelector(`[data-plugin-detail="${worktree}"]`)).not.toBeNull()
+    // An official plugin of the More list opened from Discover returns to Discover, not to the More list.
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+    act(() => { navigation.actions.setView({ kind: 'more' }) })
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', worktree) }))
     fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+  })
+
+  it('keeps the opening tab through a row page opened from a bundle page', () => {
+    const { navigation, setTabs } = renderTab({ packages: [pkg({ rows: [row()] })] }, { rows: new Set(['dsh-better-sidebar#sidebar']) }, {
+      'plugins.tab:discover': (_view, owner) => (
+        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage('dsh-better-sidebar') }}>Discover open</button>
+      ),
+      'plugins.row.config:dsh-better-sidebar#sidebar': view => view === 'summary' ? 'Config summary' : <form aria-label="row settings" />,
+    }, {}, [{ id: 'discover', label: 'Discover' }])
+    fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
+    fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'dsh-better-sidebar') }))
+    expect(navigation.getSnapshot().view).toEqual({ kind: 'row', name: 'dsh-better-sidebar', rowId: 'sidebar', returnTab: 'discover' })
+    fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', 'dsh-better-sidebar') }))
+    expect(navigation.getSnapshot().view).toEqual({ kind: 'package', name: 'dsh-better-sidebar', returnTab: 'discover' })
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
+    // A calling tab that left the ledger while the page was open falls back to Installed.
+    fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
+    setTabs([])
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+    expect(navigation.getSnapshot().tab).toBe('installed')
+    expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
   })
 
   it('shows a confirmed version by name above its spec, as a check and a refusal with retry, without the spec form or another registry', () => {
@@ -418,12 +477,40 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).not.toBeNull()
   })
 
+  it('shows a bundle\'s detail document first among its sections, and its failures with a retry', () => {
+    const b = renderTab({ packages: [pkg()] })
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-better-sidebar' }) })
+    expect(b.actions.loadDetail).toHaveBeenCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
+    expect(screen.getByRole('status', { name: en.detailLoading })).toBeTruthy()
+    const key = bundleDetailKey('dsh-better-sidebar', '0.16.0', 'en')
+    b.setDetails({ [key]: { status: 'ready', detail: { status: 'found', origin: 'locale', path: 'guide/DETAIL.md', markdown: '# Sidebar\n\n![shot](img/a.png)' } } })
+    const sections = [...document.querySelectorAll('[data-plugin-detail="dsh-better-sidebar"] section')]
+    const order = sections.map(section => section.hasAttribute('data-detail-document') ? 'detail' : section.hasAttribute('data-plugin-source') ? 'source' : 'other')
+    expect(order[0]).toBe('detail')
+    expect(order).toContain('source')
+    expect(screen.getByRole('heading', { name: 'Sidebar' })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'shot' }).getAttribute('src'))
+      .toBe('https://dsh.example/api/plugin-manager/detail-file?bundle=dsh-better-sidebar&document=guide/DETAIL.md&path=img/a.png')
+    const failures = [['too-large', en.detailTooLarge], ['network', en.detailNetwork], ['denied', en.detailFailed], ['invalid', en.detailInvalid], ['other', en.detailFailed]] as const
+    for (const [failure, text] of failures) {
+      b.setDetails({ [key]: { status: 'error', failure } })
+      expect(screen.getByRole('alert').textContent).toBe(text)
+    }
+    fireEvent.click(screen.getByRole('button', { name: en.retry }))
+    expect(b.actions.retryDetail).toHaveBeenCalledWith('dsh-better-sidebar', '0.16.0', 'en', false)
+    b.setDetails({ [key]: { status: 'ready', detail: { status: 'none' } } })
+    expect(document.querySelector('[data-detail-document]')).toBeNull()
+    // A read the controller forgot, after a profile change, starts again.
+    b.setDetails({})
+    expect(b.actions.loadDetail).toHaveBeenCalledTimes(2)
+  })
+
   it('says where a bundle comes from: the spec that installs it, or built in, with its version', () => {
     const b = renderTab({ packages: [
       pkg({ source: 'github:someone/dsh-better-sidebar' }),
-      { name: 'dsh-official', installed: false, official: true, availability: 'installation', optional: true, removable: false, enabled: false, rows: [] },
-      { name: 'dsh-shadowed', installed: true, official: false, availability: 'profile', optional: false, removable: false, enabled: true, rows: [] },
-      { name: 'dsh-missing', installed: false, official: false, availability: 'missing', optional: false, removable: true, enabled: true, error: { code: 'unknown-plugin' }, rows: [] },
+      { name: 'dsh-official', installed: false, official: true, availability: 'installation', optional: true, removable: false, updatable: false, enabled: false, rows: [] },
+      { name: 'dsh-shadowed', installed: true, official: false, availability: 'profile', optional: false, removable: false, updatable: false, enabled: true, rows: [] },
+      { name: 'dsh-missing', installed: false, official: false, availability: 'missing', optional: false, removable: true, updatable: false, enabled: true, error: { code: 'unknown-plugin' }, rows: [] },
     ] })
     const facts = (): string[] => [...document.querySelectorAll('[data-plugin-source] dt, [data-plugin-source] dd')].map(node => node.textContent)
     act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-better-sidebar' }) })
@@ -436,6 +523,8 @@ describe('PluginManagerPage', () => {
     expect(facts()).toEqual([en.sourceSpec, en.sourceBuiltIn])
     act(() => { b.navigation.actions.setView({ kind: 'package', name: 'dsh-missing' }) })
     expect(facts()).toEqual([en.sourceSpec, en.sourceNotInstalled])
+    // A bundle whose files are not installed is read from the npm file CDNs.
+    expect(b.actions.loadDetail).toHaveBeenLastCalledWith('dsh-missing', undefined, 'en', true)
   })
 
   it('preserves the requested bundle through StrictMode effect replay and page remounts', () => {
@@ -708,11 +797,12 @@ describe('PluginManagerPage', () => {
   })
 
   it.each([
-    '@deepseek-ai/dsh-experimental-agent-team-profile',
-    '@deepseek-ai/dsh-experimental-auto-review',
-    '@deepseek-ai/dsh-experimental-fixture-input',
-    '@acme/dsh-local-tools',
-  ])('localizes Host metadata for %s across cards, details, switches, and uninstall confirmation', (name) => {
+    ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
+    ['@deepseek-ai/dsh-experimental-auto-review', true],
+    ['@deepseek-ai/dsh-experimental-fixture-input', false],
+    ['@deepseek-ai/dsh-cua-bundle', true],
+    ['@acme/dsh-local-tools', false],
+  ] as const)('localizes Host metadata for %s across cards, details, switches, and uninstall confirmation', (name, experimental) => {
     const meta = {
       title: { en: 'Installed tools', zh: '已安装工具' },
       description: { en: 'Tools on this host.', zh: '本机工具。' },
@@ -727,7 +817,7 @@ describe('PluginManagerPage', () => {
       expect(document.getElementById(card.getAttribute('aria-describedby')!)?.textContent).toBe(description(dict))
       expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', title(dict)) })).toBeTruthy()
       expect(screen.queryByText('Original metadata.')).toBeNull()
-      expect(screen.queryByText(dict.statusBeta) !== null).toBe(name.startsWith('@deepseek-ai/dsh-experimental-'))
+      expect(screen.queryByText(dict.statusBeta) !== null).toBe(experimental)
     }
     assertCard(en)
     setLanguage(zh)
@@ -740,6 +830,7 @@ describe('PluginManagerPage', () => {
       expect(screen.getByRole('heading', { level: 3 }).textContent).toBe(title(dict))
       expect(screen.getByText(description(dict))).toBeTruthy()
       expect(document.querySelector('[data-plugin-name]')?.textContent).toBe(name)
+      expect(screen.queryByText(dict.statusBeta) !== null).toBe(experimental)
       expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', title(dict)) })).toBeTruthy()
       expect(screen.getByRole('button', { name: dict.uninstallLabel.replace('{name}', title(dict)) })).toBeTruthy()
     }
@@ -782,47 +873,6 @@ describe('PluginManagerPage', () => {
     const detailImage = document.querySelector<HTMLImageElement>('[data-plugin-row-detail] img')!
     expect(detailImage.getAttribute('src')).toBe(icon)
     expect(detailImage.width).toBe(36)
-  })
-
-  it('shows a known bundle preview in its details before activation, follows the UI language, and survives decode failure', () => {
-    const name = '@deepseek-ai/dsh-experimental-badge-skill-bundle'
-    const { actions, setLanguage } = renderTab({ packages: [pkg({ name, enabled: false }), pkg()] })
-    expect(screen.queryByRole('img')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
-    const english = screen.getByRole('img', { name: en.previewAlt.replace('{name}', name) }).getAttribute('src')
-    expect(english).toMatch(/badge-skill-preview\.svg$/)
-    setLanguage(zh)
-    const chinese = screen.getByRole('img', { name: zh.previewAlt.replace('{name}', name) })
-    expect(chinese.getAttribute('src')).toMatch(/badge-skill-preview\.zh\.svg$/)
-    fireEvent.error(chinese)
-    expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.getByRole('status').textContent).toBe(zh.previewUnavailable)
-    fireEvent.click(screen.getByRole('switch', { name: zh.enableToggle.replace('{name}', name) }))
-    expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
-    setLanguage(en)
-    expect(screen.getByRole('img').getAttribute('src')).toBe(english)
-    expect(screen.queryByRole('status')).toBeNull()
-  })
-
-  it('shows no preview for bundles without one', () => {
-    renderTab({ packages: [pkg()] })
-    fireEvent.click(screen.getByRole('button', { name: 'View dsh-better-sidebar' }))
-    expect(screen.queryByRole('img')).toBeNull()
-  })
-
-  it('places the new voice illustration after its description and switches the single image with the UI language', () => {
-    const name = '@deepseek-ai/dsh-experimental-voice-input-bundle'
-    const description = 'Turn speech into local notes.'
-    const { setLanguage } = renderTab({ packages: [pkg({ name, enabled: false, meta: { description }, rows: [row()] })] })
-    fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
-    const image = screen.getByRole('img')
-    expect(image.getAttribute('src')).toMatch(/voice-input-preview\.svg$/u)
-    expect(screen.getByText(description).compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(image.compareDocumentPosition(screen.getByRole('heading', { name: en.partsLabel })) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy()
-    setLanguage(zh)
-    expect(screen.getAllByRole('img')).toHaveLength(1)
-    expect(screen.getByRole('img').getAttribute('src')).toMatch(/voice-input-preview\.zh\.svg$/u)
   })
 
   it('shows metadata diagnostics without blocking management or displaying legacy descriptions', () => {
@@ -1085,6 +1135,34 @@ describe('PluginManagerPage', () => {
       expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
     })
 
+    it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
+      const name = '@deepseek-ai/dsh-cua-bundle'
+      const entry = (enabled: boolean) => pkg({ name, official: true, enabled, meta: { title: 'Computer Use' } })
+      const b = renderTab({ packages: [entry(false)] })
+      b.setLanguage(dict)
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      const card = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+      expect(within(card).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(card).getByRole('button', { name: dict.openDetail.replace('{name}', 'Computer Use') }))
+      const detail = document.querySelector('[data-plugin-detail]') as HTMLElement
+      expect(within(detail).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(detail).getByRole('switch', { name: dict.enableToggle.replace('{name}', 'Computer Use') }))
+      expect(b.actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, true)
+      b.set({ packages: [entry(true)] })
+      fireEvent.click(screen.getByRole('button', { name: dict.backToPackage.replace('{name}', dict.moreTitle) }))
+      expect(screen.getByRole('heading', { name: dict.moreTitle, level: 1 })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: dict.backToList }))
+      const enabledCard = document.querySelector(`[data-plugin-package="${name}"]`) as HTMLElement
+      expect(within(enabledCard).getByText(dict.statusBeta)).toBeTruthy()
+      fireEvent.click(within(enabledCard).getByRole('switch', { name: dict.enableToggle.replace('{name}', 'Computer Use') }))
+      expect(b.actions.setEnabled).toHaveBeenLastCalledWith(name, false)
+      b.set({ packages: [entry(false)] })
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeTruthy()
+    })
+
     it('returns from package details to the secondary page and retains it across React remounts', () => {
       const name = '@deepseek-ai/dsh-experimental-terminal-bundle'
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
@@ -1250,7 +1328,7 @@ describe('PluginManagerPage', () => {
     })
 
     it('leaves the version out of a bundle the Host reports none for', () => {
-      const unversioned: PackageView = { name: 'dsh-better-sidebar', installed: true, official: false, availability: 'profile', optional: false, removable: true, enabled: true, rows: [] }
+      const unversioned: PackageView = { name: 'dsh-better-sidebar', installed: true, official: false, availability: 'profile', optional: false, removable: true, updatable: false, enabled: true, rows: [] }
       renderTab({ packages: [unversioned] }, {}, bodies)
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
       expect(subjects.at(-1)).toEqual({ kind: 'bundle', pkg: { name: 'dsh-better-sidebar', installed: true, official: false, availability: 'profile', enabled: true, rows: [] } })
@@ -2309,6 +2387,24 @@ it('dismisses activation guidance until the user enables the bundle again', () =
   expect(screen.getByText('Later')).toBeTruthy()
 })
 
+it('keeps activation guidance with the Installed list when a contributed tab enables the bundle', () => {
+  const name = 'dsh-better-sidebar'
+  const subject = { spec: `${name}@0.16.0`, status: 'accepted', kind: 'registry', name, bundle: true, registry: null } as const
+  const { set } = renderTab({
+    install: { ...IDLE_INSTALL, open: true, phase: 'done', subject, installed: name },
+  }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: () => <div>Enable guidance</div>,
+  }, {}, [{ id: 'discover', label: 'Discover' }])
+  fireEvent.click(screen.getByRole('button', { name: en.installEnableNow }))
+  set({ install: IDLE_INSTALL, packages: [pkg()] })
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
+  // A contributed tab shows its own content, not guidance for the Installed list.
+  fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
+  expect(screen.queryByText('Enable guidance')).toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
+  expect(screen.getByText('Enable guidance')).toBeTruthy()
+})
+
 it('supplies the accepted entry values and atomic mutation action to a custom plugin page', () => {
   const mutate = vi.fn(async () => true)
   const form: ConfigPageForm = {
@@ -2328,7 +2424,7 @@ describe('on-demand Official bundles', () => {
   const name = '@deepseek-ai/dsh-subagent-codex'
   const title = 'Codex subagent'
   const catalog = (): PackageView => ({ name, meta: { title }, official: true, availability: 'missing', installed: false,
-    optional: false, removable: false, enabled: false, rows: [],
+    optional: false, removable: false, updatable: false, enabled: false, rows: [],
     installTarget: { spec: `${name}@2.0.0`, version: '2.0.0' },
   })
 
@@ -2428,5 +2524,223 @@ describe('on-demand Official bundles', () => {
     expect(within(detail).queryByText(en.sourceBuiltIn)).toBeNull()
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
+  })
+})
+
+describe('registry versions and updates', () => {
+  const MIRROR = 'https://registry.npmmirror.com/'
+  const updatable = (): PackageView => pkg({ updatable: true, version: '0.16.0', source: 'dsh-better-sidebar@0.16.0' })
+  const runtime = '0.8.3'
+  const listed = (versions: PluginVersion[], attempts: RegistryAttempt[] = [{ registry: null }]): VersionCheck => ({
+    phase: 'done', checkedAt: 0,
+    list: { status: 'listed', installed: '0.16.0', registry: attempts.at(-1)?.registry ?? null, attempts, versions, omitted: 0 },
+  })
+  const v = (version: string, more: Partial<PluginVersion> = {}): PluginVersion => ({
+    version, tags: [], prerelease: false, bundle: true, ...more,
+  })
+  const incompatible = (version: string) => ({ name: 'dsh-better-sidebar', version, runtimeVersion: runtime, requirements: { '@deepseek-ai/dsh': '>=0.9.0' } })
+  const detail = (): HTMLElement => document.querySelector('[data-plugin-detail]') as HTMLElement
+  const section = (): HTMLElement => document.querySelector('[data-plugin-versions]') as HTMLElement
+  const open = (navigation: ReturnType<typeof renderTab>['navigation']) => {
+    act(() => { navigation.actions.setView({ kind: 'package', name: 'dsh-better-sidebar' }) })
+  }
+
+  it('checks once on opening, offers the newest installable version, and lists newer versions when unfolded', () => {
+    const versions = [
+      v('2.1.0-beta.1', { prerelease: true, tags: ['next'] }),
+      v('2.0.0', { tags: ['latest'], incompatible: incompatible('2.0.0'), publishedAt: '2026-10-10T00:00:00.000Z' }),
+      v('1.4.0', { publishedAt: '2026-09-28T08:00:00.000Z' }),
+      v('1.3.2', { deprecated: 'use 1.4.0' }),
+      v('1.3.1', { bundle: false }),
+    ]
+    const check = listed(versions, [{ registry: null, problem: 'network', reason: 'ETIMEDOUT' }, { registry: MIRROR }])
+    const { actions, navigation } = renderTab({ packages: [updatable()], versions: { 'dsh-better-sidebar': check } })
+    expect(screen.getByText(en.statusUpdateAvailable)).toBeTruthy()
+    open(navigation)
+    expect(actions.ensureVersions).toHaveBeenCalledWith('dsh-better-sidebar')
+    expect(actions.ensureVersions).toHaveBeenCalledOnce()
+    expect(within(section()).getByText('Update to 1.4.0 available')).toBeTruthy()
+    expect(within(section()).getByText('Published 2026-09-28')).toBeTruthy()
+    fireEvent.click(within(detail()).getAllByRole('button', { name: 'Update to 1.4.0' })[0]!)
+    expect(actions.openUpdate).toHaveBeenCalledWith('dsh-better-sidebar', '1.4.0')
+    const summary = within(section()).getByRole('button', { name: /Update to 1\.4\.0 available/ })
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(summary)
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    const rows = [...section().querySelectorAll('[data-plugin-version]')].map(row => row.getAttribute('data-plugin-version'))
+    expect(rows).toEqual(['2.0.0', '1.4.0', '1.3.2', '1.3.1', '0.16.0'])
+    const row = (version: string) => section().querySelector(`[data-plugin-version="${version}"]`) as HTMLElement
+    expect(within(row('2.0.0')).getByText('Needs @deepseek-ai/dsh >=0.9.0')).toBeTruthy()
+    expect(within(row('2.0.0')).queryByRole('button')).toBeNull()
+    expect(within(row('1.3.1')).getByText(en.versionsNotBundle)).toBeTruthy()
+    expect(within(row('1.3.2')).getByText('use 1.4.0')).toBeTruthy()
+    expect(within(row('0.16.0')).getByText(en.versionsInstalledTag)).toBeTruthy()
+    fireEvent.click(within(row('1.3.2')).getByRole('button', { name: 'Update to 1.3.2' }))
+    expect(actions.openUpdate).toHaveBeenLastCalledWith('dsh-better-sidebar', '1.3.2')
+    // The registry that answered, marked as a fallback after the first one failed.
+    expect(within(section()).getByText(en.registryNpmmirror)).toBeTruthy()
+    expect(within(section()).getByText(en.versionsFallbackTag)).toBeTruthy()
+    fireEvent.click(within(section()).getByRole('checkbox', { name: en.versionsShowPrerelease }))
+    expect(row('2.1.0-beta.1')).toBeTruthy()
+    fireEvent.click(within(section()).getByRole('button', { name: en.versionsRecheck }))
+    expect(actions.checkVersions).toHaveBeenCalledWith('dsh-better-sidebar')
+    fireEvent.click(summary)
+    expect(row('1.4.0')).toBeNull()
+  })
+
+  it.each([
+    ['checking', { phase: 'checking' }, en.versionsChecking],
+    ['up to date', listed([]), en.versionsLatest],
+    ['blocked', listed([v('2.0.0', { incompatible: incompatible('2.0.0') })]), en.versionsBlocked],
+    ['not installable', listed([v('1.0.0', { deprecated: 'old' })]), en.versionsNoneInstallable],
+  ] as const)('summarizes a %s check', (_name, check, title) => {
+    const { navigation } = renderTab({ packages: [updatable()], versions: { 'dsh-better-sidebar': check } })
+    open(navigation)
+    expect(within(section()).getByText(title)).toBeTruthy()
+    expect(within(detail()).queryByRole('button', { name: /^Update to / })).toBeNull()
+    if (title === en.versionsBlocked) expect(within(section()).getByText(`2.0.0 needs @deepseek-ai/dsh >=0.9.0; this DSH is ${runtime}`)).toBeTruthy()
+  })
+
+  it('reports a refused check with the registries asked and a retry', () => {
+    const attempts: RegistryAttempt[] = [
+      { registry: null, problem: 'network', reason: 'pnpm view timed out after 20000ms' },
+      { registry: MIRROR, problem: 'network', reason: 'getaddrinfo ENOTFOUND registry.npmmirror.com' },
+    ]
+    const { actions, navigation } = renderTab({ packages: [updatable()], versions: {
+      'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'network', reason: 'down', attempts } },
+    } })
+    open(navigation)
+    expect(within(section()).getByText(en.versionsFailedNetwork)).toBeTruthy()
+    expect(within(section()).getByText(`${en.registryNpmmirror} ${en.versionsProblemNetwork}`)).toBeTruthy()
+    expect(within(section()).queryByRole('button', { name: en.versionsRecheck })).toBeNull()
+    fireEvent.click(within(section()).getByRole('button', { name: en.versionsDetails }))
+    expect(within(section()).getByText('getaddrinfo ENOTFOUND registry.npmmirror.com')).toBeTruthy()
+    expect(within(section()).getByText(en.versionsPrimaryTag)).toBeTruthy()
+    fireEvent.click(within(section()).getByRole('button', { name: en.retry }))
+    expect(actions.checkVersions).toHaveBeenCalledWith('dsh-better-sidebar')
+  })
+
+  it('reports a check the transport lost by its words, and lists a single registry\'s answer without a fallback mark', () => {
+    const { navigation, set } = renderTab({ packages: [updatable()], versions: {
+      'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'unknown', reason: 'socket closed', attempts: [] } },
+    } })
+    open(navigation)
+    expect(within(section()).getByText(en.versionsFailedOther)).toBeTruthy()
+    expect(within(section()).getByText('socket closed')).toBeTruthy()
+    expect(within(section()).queryByRole('button', { name: en.versionsDetails })).toBeNull()
+    // A refused list can name a registry that answered before a later lookup failed.
+    set({ versions: { 'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'unknown', reason: 'boom', attempts: [{ registry: null }] } } } })
+    fireEvent.click(within(section()).getByRole('button', { name: en.versionsDetails }))
+    expect(within(section()).getByText(en.registryDefault)).toBeTruthy()
+    expect(within(section()).queryByText(en.versionsProblemUnknown)).toBeNull()
+    set({ versions: { 'dsh-better-sidebar': { ...listed([v('0.17.0')]), list: { ...(listed([v('0.17.0')]) as Extract<VersionCheck, { phase: 'done' }>).list, omitted: 3 } } as VersionCheck } })
+    expect(within(section()).queryByText(/^Published/)).toBeNull()
+    // The section stays unfolded across the new answer.
+    expect(within(section()).getByRole('button', { name: /Update to 0\.17\.0 available/ }).getAttribute('aria-expanded')).toBe('true')
+    expect(within(section()).getByText('3 more versions newer than the installed one are not listed')).toBeTruthy()
+    expect(within(section()).queryByText(en.versionsFallbackTag)).toBeNull()
+    expect(within(section()).queryByRole('checkbox')).toBeNull()
+  })
+
+  it('shows no Versions section for a package that is not updatable', () => {
+    const { actions, navigation } = renderTab({ packages: [pkg({ source: 'link:/dev/dsh-better-sidebar' })] })
+    open(navigation)
+    expect(section()).toBeNull()
+    expect(actions.ensureVersions).not.toHaveBeenCalled()
+  })
+
+  it('says in the toolbar what the version checks found', () => {
+    const { set } = renderTab({ packages: [updatable(), pkg({ name: 'dsh-linked' })] })
+    set({ versions: { 'dsh-better-sidebar': { phase: 'checking' } } })
+    expect(screen.queryByText(en.updatesNone)).toBeNull()
+    set({ versions: { 'dsh-better-sidebar': listed([v('1.0.0')]) } })
+    expect(screen.getByText('Updates available: 1')).toBeTruthy()
+    set({ versions: { 'dsh-better-sidebar': listed([]) } })
+    expect(screen.getByText(en.updatesNone)).toBeTruthy()
+    set({ versions: { 'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'unknown', reason: 'x', attempts: [] } } } })
+    expect(screen.getByText(en.updatesFailed)).toBeTruthy()
+  })
+
+  const base: UpdateState = { packageName: 'dsh-better-sidebar', from: '1.3.0', to: '1.4.0', registry: MIRROR, phase: 'confirm', steps: [], result: null, outputOpen: false }
+  const change = (application: ChangeResult['application'], more: Partial<ChangeResult> = {}): ChangeResult => ({
+    changed: true, application, stage: 'install', target: 'dsh-better-sidebar', ...more,
+  })
+  const dialog = (): HTMLElement => screen.getByRole('dialog')
+
+  it('confirms an update with its versions and registry, and runs it', () => {
+    const { actions } = renderTab({ packages: [updatable()], update: base })
+    expect(within(dialog()).getByText('1.3.0')).toBeTruthy()
+    expect(within(dialog()).getByText(en.registryNpmmirror)).toBeTruthy()
+    expect(within(dialog()).getByText(en.updateDescription.replaceAll('{from}', '1.3.0').replace('{to}', '1.4.0'))).toBeTruthy()
+    fireEvent.click(within(dialog()).getByRole('button', { name: en.update }))
+    expect(actions.runUpdate).toHaveBeenCalledOnce()
+    fireEvent.click(within(dialog()).getByRole('button', { name: en.cancel }))
+    expect(actions.closeUpdate).toHaveBeenCalledOnce()
+  })
+
+  it('names a package that left the list by its package name', () => {
+    renderTab({ packages: [], update: base })
+    expect(within(dialog()).getByText(en.updateTitle.replace('{name}', 'dsh-better-sidebar'))).toBeTruthy()
+  })
+
+  it('follows the running steps and keeps the dialog open', () => {
+    const { actions } = renderTab({ packages: [updatable()], update: { ...base, phase: 'running', steps: ['checking', 'removing'] } })
+    const steps = [...dialog().querySelectorAll('li')].map(item => [item.getAttribute('data-state'), item.textContent])
+    expect(steps).toEqual([['done', 'Check 1.4.0'], ['running', 'Stop and remove 1.3.0']])
+    expect(within(dialog()).getByRole<HTMLButtonElement>('button', { name: en.updateRunning }).disabled).toBe(true)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(actions.closeUpdate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['applied', { step: 'install', result: change('applied') }, 'Updated to 1.4.0', [['done', 'Check 1.4.0'], ['done', `Install 1.4.0 from ${en.registryNpmmirror}`]]],
+    ['restart', { step: 'install', result: change('restart-required', { restartReason: 'host-module' }) }, '1.4.0 installed; it takes effect after a restart', [['done', 'Check 1.4.0'], ['done', `Install 1.4.0 from ${en.registryNpmmirror}`]]],
+    ['refused', { step: 'check', result: change('failed', { error: { code: 'incompatible-version' } }) }, 'Cannot update to 1.4.0', [['failed', 'Check 1.4.0']]],
+    ['removal failure', { step: 'remove', result: change('failed', { stage: 'remove', error: { code: 'operation-error', diagnostic: 'EBUSY' } }) }, 'Could not remove 1.3.0', [['done', 'Check 1.4.0'], ['failed', 'Stop and remove 1.3.0']]],
+    ['restored', {
+      step: 'install', result: change('failed', { packageResult: { exitCode: 1, output: '\nERR_PNPM_FETCH_404 Not Found', truncated: false, logPath: '/l', kind: 'not-found' } }),
+      restore: change('applied'),
+    }, 'Update failed; restored 1.3.0', [['done', 'Check 1.4.0'], ['failed', `Install 1.4.0 from ${en.registryNpmmirror}`], ['done', 'Install 1.3.0 again']]],
+    ['kept', { step: 'install', result: change('failed', {
+      error: { code: 'operation-error', diagnostic: 'ETARGET' }, packageResult: { exitCode: 1, output: 'ETARGET', truncated: false, logPath: '/l' },
+    }) }, 'Could not update to 1.4.0', [['done', 'Check 1.4.0'], ['failed', `Install 1.4.0 from ${en.registryNpmmirror}`]]],
+    ['broken', { step: 'install', result: change('cancelled'), restore: change('failed', { packageResult: { exitCode: 1, output: 'gone', truncated: false, logPath: '/l' } }) },
+      en.updateBroken, [['done', 'Check 1.4.0'], ['failed', `Install 1.4.0 from ${en.registryNpmmirror}`], ['failed', 'Install 1.3.0 again']]],
+  ] as const)('reports a %s outcome with the steps its answer implies', (_name, answer, title, steps) => {
+    const result = { from: '1.3.0', to: '1.4.0', ...answer } as PluginUpdateResult
+    const { actions } = renderTab({ packages: [updatable()], update: { ...base, phase: 'done', result } })
+    expect(within(dialog()).getByText(title)).toBeTruthy()
+    expect([...dialog().querySelectorAll('li')].map(item => [item.getAttribute('data-state'), item.textContent])).toEqual(steps)
+    const output = within(dialog()).queryByRole('button', { name: en.updateOutput })
+    expect(output !== null).toBe(_name === 'restored' || _name === 'broken' || _name === 'kept')
+    if (_name === 'kept') expect(within(dialog()).getByText('1.3.0 was not removed and stays in use. ETARGET')).toBeTruthy()
+    if (output !== null) {
+      fireEvent.click(output)
+      expect(actions.toggleUpdateOutput).toHaveBeenCalledOnce()
+    }
+    fireEvent.click(within(dialog()).getByRole('button', { name: en.updateFinish }))
+    expect(actions.closeUpdate).toHaveBeenCalledOnce()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(actions.closeUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('lists the steps the answer implies beside the announced ones', () => {
+    renderTab({ packages: [updatable()], update: {
+      ...base, phase: 'done', steps: ['checking', 'removing'],
+      result: { from: '1.3.0', to: '1.4.0', step: 'install', result: change('failed'), restore: change('applied') },
+    } })
+    expect([...dialog().querySelectorAll('li')].map(item => item.getAttribute('data-state'))).toEqual(['done', 'done', 'failed', 'done'])
+  })
+
+  it('shows a failed run\'s output once unfolded and an unknown outcome after a lost answer', () => {
+    const failedRun = change('failed', { packageResult: { exitCode: 1, output: 'ERR_PNPM_FETCH_404', truncated: false, logPath: '/l' } })
+    const { set } = renderTab({ packages: [updatable()], update: {
+      ...base, phase: 'done', outputOpen: true, steps: ['checking', 'removing', 'installing', 'restoring'],
+      result: { from: '1.3.0', to: '1.4.0', step: 'install', result: failedRun, restore: change('restart-required') },
+    } })
+    expect(within(dialog()).getByText('ERR_PNPM_FETCH_404').tagName).toBe('PRE')
+    set({ update: { ...base, phase: 'done', steps: ['checking', 'removing'], lost: 'socket closed' } })
+    expect(within(dialog()).getByText(en.updateLost)).toBeTruthy()
+    expect([...dialog().querySelectorAll('li')].map(item => item.getAttribute('data-state'))).toEqual(['done', 'unknown'])
   })
 })

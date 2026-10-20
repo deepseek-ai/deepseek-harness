@@ -66,6 +66,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native',
       '@deepseek-ai/dsh-experimental-cot-translation-bundle',
+      '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-cua-macos',
       '@deepseek-ai/dsh-cua',
       '@deepseek-ai/dsh-hook-protocol',

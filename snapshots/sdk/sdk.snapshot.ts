@@ -127,6 +127,14 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'desktop-context': {
+    expectedFinalResponse: 'SDK snapshot OK',
+    runtimeContext: {
+      includes: ['Current working directory:'],
+      excludes: ['Current DeepSeek Harness implementation checkout:', 'Current DeepSeek Harness Web GUI URL:'],
+    },
+  },
+  'desktop-ptc-context': { expectedFinalResponse: 'SDK snapshot OK' },
   'minimal-image-compaction': {
     expectedFinalResponse: 'MINIMAL_IMAGE_OK',
     expectedTools: { bash: ['command'], read_image: ['file_path'], working_directory: [] },
@@ -548,6 +556,30 @@ async function waitForRootEvent(
   }
 }
 
+// These recorded compositions also pin pre-desktop SDK or headless headers.
+// New desktop-context cases exercise the shipped SDK defaults without this patch.
+const legacySdkCompositions = new Set([
+  'default',
+  'dynamic-tool-updates',
+  'image',
+  'ptc',
+  'sdk-account-provider-signout',
+  'sdk-default',
+  'sdk-dsh-sdk-diagnostic',
+  'sdk-dsh-sdk-dynamic-route',
+  'sdk-minimal',
+  'sdk-serial-created',
+  'sdk-upload',
+  'session-title',
+  'session-title-stability',
+  'subagent-activation-limit',
+  'subagent-continuable-inheritance',
+  'subagent-durability-failure',
+  'subagent-send-message',
+  'system-prompt-in-history',
+])
+const legacySdkContextPatch = fileURLToPath(new URL('./legacy-context.patch.yml', import.meta.url))
+
 function authoredPatches(scenario: CorpusScenario, replaying: boolean): string[] {
   const owner = compositionOwner(scenario)
   if (scenario.manifest.composition.startsWith('sdk-')) {
@@ -591,17 +623,22 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const patchRoot = join(cwd, '.snapshot-patches')
   await mkdir(patchRoot, { recursive: true })
   const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
-  const patches = [...authoredPatches(scenario, !recording), ...assertions.patches ?? []]
+  const patches = [
+    ...legacySdkCompositions.has(scenario.manifest.composition) ? [legacySdkContextPatch] : [],
+    ...authoredPatches(scenario, !recording),
+    ...assertions.patches ?? [],
+  ]
     .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
   let childEnvironment: Record<string, string> = {}
   if (assertions.dshSdkChild !== undefined) {
     const childHome = join(cwd, '.child-dsh')
-    const childPatch = materializeProfilePatch(assertions.dshSdkChild.config, cwd, 'sdk', patchRoot, patches.length)
+    const legacyChildPatch = materializeProfilePatch(legacySdkContextPatch, cwd, 'sdk', patchRoot, patches.length)
+    const childPatch = materializeProfilePatch(assertions.dshSdkChild.config, cwd, 'sdk', patchRoot, patches.length + 1)
     await mkdir(childHome, { recursive: true })
     childSessionsRoot = join(childHome, 'sessions')
     childEnvironment = {
-      DSH_TEST_CHILD_PATCHES: JSON.stringify([childPatch]),
+      DSH_TEST_CHILD_PATCHES: JSON.stringify([legacyChildPatch, childPatch]),
       DSH_TEST_CHILD_HOME: childHome,
     }
   }

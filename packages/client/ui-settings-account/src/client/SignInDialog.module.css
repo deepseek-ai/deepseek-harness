@@ -7,7 +7,7 @@
 .actions { box-sizing: border-box; display: flex; justify-content: flex-end; align-items: center; width: 100%; padding: 0 24px; gap: 8px; }
 .primaryButton, .secondaryButton { box-sizing: border-box; min-width: 72px; height: 36px; border-radius: var(--dsw-radius-md); font-size: 14px; line-height: 22px; }
 .primaryButton { padding: 0 16px; font-weight: 500; }
-.secondaryButton { padding: 0 14px; border: 0.5px solid var(--dsw-alias-border-l2); }
+.secondaryButton { padding: 0 14px; --dsh-button-outline-color: var(--dsw-alias-border-l2); }
 .description { margin: 0; padding: 0 24px; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
 .link { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .spinner { flex: none; animation: spin 1s linear infinite; }

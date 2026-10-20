@@ -584,8 +584,27 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
-    expect(await panel.getByText('实验性', { exact: true }).count())
-      .toBe(OPTIONAL_BUNDLES.filter(name => name.startsWith('@deepseek-ai/dsh-experimental-')).length)
+    const cards = await panel.locator('[data-plugin-group="more"] [data-plugin-package]').all()
+    expect(await Promise.all(cards.map(async card => [
+      await card.getAttribute('data-plugin-package'),
+      await card.getByText('实验性', { exact: true }).count(),
+    ]))).toEqual([
+      ['@deepseek-ai/dsh-experimental-agent-team-profile', 1],
+      ['@deepseek-ai/dsh-experimental-voice-input-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-auto-review', 1],
+      ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
+      ['@deepseek-ai/dsh-cua-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
+      ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-terminal-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-session-search', 1],
+      ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-ralph-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
+      ['@deepseek-ai/dsh-subagent-codex', 0],
+      ['@deepseek-ai/dsh-subagent-claude-code', 0],
+    ])
     expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
     await panel.getByRole('button', { name: '返回插件', exact: true }).click()
     expect(await panel.locator('[data-plugin-group="bundles"] [data-plugin-package]').count()).toBe(2)
@@ -690,13 +709,13 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('shows an optional feature preview before activation and leaves other plugin details unchanged', async () => {
+  it('shows a bundle detail document image before activation and leaves other plugin details unchanged', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-preview'))
     const panel = await openPluginsPanel()
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('button', { name: '查看 DSH 徽章技能', exact: true }).click()
     const detail = panel.locator('[data-plugin-detail]')
-    const preview = detail.getByRole('img', { name: 'DSH 徽章技能功能预览', exact: true })
+    const preview = detail.locator('[data-detail-document]').getByRole('img', { name: 'DSH 徽章技能功能预览', exact: true })
     await preview.waitFor()
     await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
     expect(await preview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
@@ -716,7 +735,8 @@ describe('web e2e: plugin manager', () => {
     const chineseSource = await preview.getAttribute('src')
     try {
       await setLanguage('en')
-      const englishPreview = detail.getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
+      const englishPreview = detail.locator('[data-detail-document]')
+        .getByRole('img', { name: 'DSH badge skill feature preview', exact: true })
       await englishPreview.waitFor()
       await englishPreview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
       expect(await englishPreview.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(640)
@@ -726,10 +746,12 @@ describe('web e2e: plugin manager', () => {
     }
     expect(await preview.getAttribute('src')).toBe(chineseSource)
     await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
-    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
-    // Detail icons have alt=""; only feature previews expose an image role.
+    await panel.getByRole('button', { name: '返回插件', exact: true }).click()
+    await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).click()
+    // A bundle without meta.detail still shows its README; this one has no images.
+    await panel.locator('[data-detail-document] h1').waitFor()
     expect(await panel.getByRole('img').count()).toBe(0)
-    await panel.getByRole('button', { name: '返回 实验性插件', exact: true }).click()
+    await panel.getByRole('button', { name: '返回插件', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -745,6 +767,9 @@ describe('web e2e: plugin manager', () => {
     expect(await search.getByText('搜索工作区中的文件。', { exact: true }).count()).toBe(1)
     expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(1)
     await panel.getByText('Registry description for the fixture bundle.', { exact: true }).first().waitFor()
+    // The README detail document loads asynchronously after the description.
+    const readmeHeading = panel.locator('[data-detail-document]').getByRole('heading', { name: 'Fixture bundle', exact: true })
+    await readmeHeading.waitFor()
     expect([...scaffold.ctx.loader.entries()].some(entry => entry.options.name.startsWith('@fixture/bundle'))).toBe(false)
     await compareOrRefreshGolden(EXPORTS_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
       replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
@@ -755,6 +780,7 @@ describe('web e2e: plugin manager', () => {
       expect(await review.getByText('@fixture/bundle/review', { exact: true }).count()).toBeGreaterThan(0)
       expect(await search.getByText('Search package introduction.', { exact: true }).count()).toBe(0)
       expect(await review.getByText('审查工作区中的改动。', { exact: true }).count()).toBe(0)
+      await readmeHeading.waitFor()
       await compareOrRefreshGolden(EXPORTS_EN_EXPECTED, await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
         replacements: [[FIXTURE_PLUGINS, '{{fixtures}}']],
       }), MODE)

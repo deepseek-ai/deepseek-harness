@@ -655,3 +655,73 @@ it('pins the tail only while sampled follow intent holds over overflowing conten
   viewport.detach()
   expect(pinned()).toBe(false)
 })
+
+it('leaves the tail unpinned while fold room takes growth, then pins once the room is used', () => {
+  let notifyResize = () => {}
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { notifyResize = () => { callback([], this) } }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  const scroller = document.createElement('div')
+  const column = document.createElement('div')
+  const spacer = document.createElement('div')
+  spacer.dataset.chatTurnSpacer = ''
+  scroller.append(column, spacer)
+  document.body.append(scroller)
+  let content = 900
+  let top = 0
+  const room = () => Number.parseFloat(spacer.style.height) || 0
+  const floor = () => Math.max(0, content + room() - 300)
+  Object.defineProperties(scroller, {
+    clientHeight: { configurable: true, get: () => 300 },
+    scrollHeight: { configurable: true, get: () => Math.max(300, content + room()) },
+    scrollTop: {
+      configurable: true,
+      get: () => Math.min(top, floor()),
+      set: (value: number) => { top = Math.max(0, Math.min(value, floor())) },
+    },
+  })
+  const viewport = new ChatViewport()
+  viewport.attach(scroller, column)
+  const follow = new ScrollFollow(true, 4)
+  const reading = new ChatReading(viewport, { read: () => null, save: vi.fn() }, {
+    initialized: true, followingTail: true, activeTurn: 1,
+  }, vi.fn(), follow)
+  const unbind = reading.bindFolds()
+  viewport.connect({
+    scroll: reading.onScroll, scrollEnd: reading.onScrollEnd, interact: () => {},
+    resize: () => { reading.onResize() },
+  })
+  onTestFinished(() => {
+    unbind()
+    reading.dispose()
+    viewport.detach()
+    scroller.remove()
+    vi.unstubAllGlobals()
+  })
+  const pinned = () => column.hasAttribute('data-chat-tail-pinned')
+
+  notifyResize()
+  expect(scroller.scrollTop).toBe(600)
+  expect(pinned()).toBe(true)
+  // A fold landing leaves room below the content and commits the tail landing.
+  spacer.style.height = '200px'
+  scroller.scrollTop = 800
+  reading.followTail()
+  expect(pinned()).toBe(false)
+  // Growth fills the room without scrolling, so the status moves on screen and keeps its slide.
+  content = 940
+  notifyResize()
+  expect(room()).toBe(160)
+  expect(scroller.scrollTop).toBe(800)
+  expect(pinned()).toBe(false)
+  // Once growth has used the room, following scrolls absorb it again.
+  content = 1_100
+  notifyResize()
+  expect(room()).toBe(0)
+  expect(scroller.scrollTop).toBe(800)
+  expect(pinned()).toBe(true)
+})

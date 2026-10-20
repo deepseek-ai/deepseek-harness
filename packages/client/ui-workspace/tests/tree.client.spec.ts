@@ -693,6 +693,17 @@ describe('deriveSearchResults', () => {
     })
   })
 
+  it('matches Session id substrings case-insensitively', () => {
+    const idHit = summary('3f9a2c71-session', 2)
+    idHit.title = idHit.displayTitle = 'Ordinary title'
+    const other = summary('b7e0d4aa-session', 1)
+    other.title = other.displayTitle = 'Another title'
+    const result = deriveSearchResults(
+      list(idHit, other), [], '9A2C71', noArchive, 'default', noAttention, { items: [], hasMore: false }, 10,
+    )
+    expect(result.items.map(item => [item.id, item.title])).toEqual([[idHit.id, 'Ordinary title']])
+  })
+
   it('excludes blank sessions from search regardless of query or content hits', () => {
     const currentBlank = { ...summary('opaque-current', 5), blank: true }
     const staleBlank = { ...summary('new session stale', 4), blank: true }

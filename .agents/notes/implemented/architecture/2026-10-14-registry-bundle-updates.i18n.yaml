@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-14-registry-bundle-updates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-14-registry-bundle-updates.md
+/agent-note-registry-bundle-updates:
+  en: 9b55699b0d5b3c7b
+  zh: 729a564af144048d
+/agent-note-registry-bundle-updates/problem:
+  en: 47524f94e08192b5
+  zh: 335104b6fda38f03
+/agent-note-registry-bundle-updates/decision:
+  en: 9201e6cc6cad6b8d
+  zh: be2332897037c43a
+/agent-note-registry-bundle-updates/alternatives-considered:
+  en: 299b8e211b9c21bf
+  zh: 72bd106e96b42605
+/agent-note-registry-bundle-updates/consequences:
+  en: 57c30a10a233c3e0
+  zh: 87cd51e2df8696bd
+/agent-note-registry-bundle-updates/verification:
+  en: ab3442415bff92a6
+  zh: 89d477c7d14f6098

@@ -7,7 +7,8 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-api-session-controller'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { isRecurringScheduleRecord, renderReminderFraming, renderRecurringReminderBatchFraming, resolveRecurringOccurrence } from './domain.ts'
 import type { DeliveryRetentionBounds, RecurringScheduleRecord } from './types.ts'
 import type { ScheduleTask } from './storage.ts'
@@ -28,6 +29,7 @@ export class ScheduleRuntime {
    * @param tasks - Current durable tasks.
    * @param transact - Serialize delivery against management writes.
    * @param commit - Persist task status, target, receipt, and history together after durable inbox delivery.
+   * @param resolveAgent - Host fallback after embedding activation handlers delegate.
    */
   constructor(
     private readonly ctx: Context,
@@ -35,6 +37,7 @@ export class ScheduleRuntime {
     private readonly transact: (work: () => Promise<void>) => Promise<void>,
     private readonly commit: (task: ScheduleTask) => Promise<void>,
     private readonly retention: DeliveryRetentionBounds,
+    private readonly resolveAgent: (sessionId: SessionId) => Promise<Agent>,
   ) {}
 
   /**
@@ -98,8 +101,8 @@ export class ScheduleRuntime {
       let admitted = group
       const committed = new Set<ScheduleTask['record']['id']>()
       try {
-        const resolved = await this.ctx.sessionController.resolveAgent(task.sessionId)
-        if ('error' in resolved) throw resolved.error
+        const agent = await this.ctx.waterfall('schedule/resolve-agent', task.sessionId,
+          () => this.resolveAgent(task.sessionId))
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- Disposal can run while Session restoration is awaited.
         if (this.stopping) return
         const now = Date.now()
@@ -120,8 +123,8 @@ export class ScheduleRuntime {
           content: [{ type: 'text', text }], source: { kind: 'schedule' },
         })
         // followup synchronously appends the inbox splice before flush observes the Session.
-        resolved.agent.followup(message)
-        const flushed = await this.ctx.sessions.flush(resolved.agent.session)
+        agent.followup(message)
+        const flushed = await this.ctx.sessions.flush(agent.session)
         if (!flushed) throw new Error('Session persistence did not acknowledge the reminder')
         const deliveredAt = new Date(Date.now()).toISOString()
         if (!isRecurringScheduleRecord(task.record)) {

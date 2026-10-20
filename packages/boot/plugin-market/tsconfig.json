@@ -19,6 +19,11 @@
     { "path": "../../util/values" },
     { "path": "../../settings/settings" },
     { "path": "../../typert/protocol" },
-    { "path": "../../core/tools" }
+    { "path": "../../core/tools" },
+    { "path": "../../util/brand" },
+    { "path": "../../subprocess/subprocess" },
+    { "path": "../../client/connection/tsconfig.host.json" },
+    { "path": "../../util/plugin-detail" },
+    { "path": "../../util/atomic-write" }
   ]
 }

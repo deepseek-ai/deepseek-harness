@@ -484,6 +484,7 @@ class WebSearchOutputSources(TypedDict):
     url: str
     title: NotRequired[str]
     snippet: NotRequired[str]
+    summary: NotRequired[str]
     publishedAt: NotRequired[str]
 
 class WebSearchOutput(TypedDict):

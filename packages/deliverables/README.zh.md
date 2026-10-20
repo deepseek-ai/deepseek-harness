@@ -24,6 +24,7 @@ deliverables 系列把一轮交给用户的内容记录为只有客户端读取�
 
 | 包 | 角色 | ctx key |
 |---|---|---|
+| [`deliverable-file-references`](deliverable-file-references/README.zh.md) | Web 与 SDK 宿主共用的文件链接与结果交付指导 | 注册到 `ctx.systemPrompt` |
 | [`tool-present`](tool-present/README.zh.md) | 通过 `present` 工具把已有文件声明为最终交付物 | 注册到 `ctx.tools` |
 | [`workspace-changes`](workspace-changes/README.zh.md) | 用 git 工作树快照和整文件捕获汇总每个顶层轮次改动的文件，并提供其对比 | 提供 `ctx.workspaceChanges`；监听 `session/event`，追加 `workspace/changes` |
 

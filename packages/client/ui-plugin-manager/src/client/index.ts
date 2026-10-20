@@ -84,12 +84,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     // A page never rendered holds no snapshot to refresh.
     const refresh = (): void => {
+      // A profile change can replace a bundle's files, and a restarted Host is read afresh.
+      controller.details.reset()
       if (controller.getSnapshot().status !== 'idle') void controller.load()
     }
     const disposers = [
       ctx.remote.$on('plugin-manager/changed', refresh),
       ctx.remote.$on('plugin-manager/install-log', (chunk) => { controller.appendLog(chunk) }),
       ctx.remote.$on('plugin-manager/install-state', (progress) => { controller.installProgress(progress) }),
+      ctx.remote.$on('plugin-manager/update-state', (progress) => { controller.updateProgress(progress) }),
       ctx.on('connection/reset', refresh),
     ]
     return () => { for (const dispose of disposers) dispose() }

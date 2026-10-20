@@ -4,6 +4,23 @@ import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { PluginInventoryEntry } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types'
+import type {} from '@deepseek-ai/dsh-typert-protocol'
+import type { DetailFailureReason } from '@deepseek-ai/dsh-plugin-detail/types'
+
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    /** The profile lists no such bundle, or its directory cannot be resolved. */
+    'plugin-manager/unknown-bundle': { readonly name: string }
+    /** The display language is not a BCP 47 language id. */
+    'plugin-manager/invalid-language': { readonly language: string }
+    /**
+     * A bundle's detail document or image exists but cannot be read: `too-large` beyond a size limit, `network` when the
+     * npm file CDNs cannot be reached, `invalid` for a malformed locale file or `meta.detail`, or a named file that does
+     * not exist. Bundle files come from local directories and public CDNs, which never answer `denied`.
+     */
+    'plugin-manager/detail-unavailable': { readonly reason: DetailFailureReason }
+  }
+}
 
 /** Reasons a profile control cannot modify its target. */
 export type ReadOnlyReason = 'management-required' | 'unaddressable'
@@ -81,6 +98,11 @@ export interface BundleInfo {
    */
   optional: boolean
   removable: boolean
+  /**
+   * Whether `listVersions` and `updateBundle` accept the bundle: a third-party profile dependency saved as a registry
+   * spec under its own name, whose installed manifest declares a semver version, and that carries no plugin management.
+   */
+  updatable: boolean
   readOnlyReason?: ReadOnlyReason
   error?: ManagementError
   /** The rows the bundle's patch inserts, in declaration order; empty when the patch cannot be read. */
@@ -222,6 +244,91 @@ export type PluginSpecInspection =
     readonly registries?: Registry[]
   }
 
+/** One registry a lookup asked, in order; the registry that answered carries no problem. */
+export interface RegistryAttempt {
+  readonly registry: Registry
+  /** Why this registry gave no usable answer; absent for the registry that answered. */
+  readonly problem?: 'not-found' | 'network' | 'unknown'
+  /** What pnpm or the registry said, verbatim. */
+  readonly reason?: string
+}
+
+/** One published version newer than the installed one. */
+export interface PluginVersion {
+  readonly version: string
+  /** The registry's publication time, as an ISO 8601 string. */
+  readonly publishedAt?: string
+  /** The dist-tags pointing at this version, such as `latest`. */
+  readonly tags: readonly string[]
+  /** Whether the version carries a semver prerelease suffix. */
+  readonly prerelease: boolean
+  /** The registry's deprecation message, when the version is deprecated. */
+  readonly deprecated?: string
+  /** Whether the version declares a `dsh.bundle`; a version that does not cannot replace a bundle. */
+  readonly bundle: boolean
+  /** Present when the version's `engines.dsh` or DSH peers reject the running DSH version without an exemption for the exact pair. */
+  readonly incompatible?: IncompatiblePlugin
+}
+
+/** The versions a registry offers for an installed registry package, read without changing the profile. */
+export type PluginVersionList =
+  | {
+    readonly status: 'listed'
+    /** The installed version the list is newer than. */
+    readonly installed: string
+    /** The registry that answered; an update installs from it. */
+    readonly registry: Registry
+    readonly attempts: readonly RegistryAttempt[]
+    /** Published versions newer than `installed`, newest first, at most `versionListLimit` of them. */
+    readonly versions: readonly PluginVersion[]
+    /** Newer versions beyond `versionListLimit` that the list leaves out. */
+    readonly omitted: number
+  }
+  | {
+    readonly status: 'refused'
+    /** `not-updatable`: the package is not an installed profile dependency resolved from a registry. */
+    readonly problem: 'not-updatable' | 'not-found' | 'network' | 'unknown'
+    readonly reason: string
+    /** The registries asked, in order; empty for `not-updatable`. */
+    readonly attempts: readonly RegistryAttempt[]
+  }
+
+/** Where a version listing asks. */
+export interface ListVersionsOptions {
+  /** The registry asked first; absent, the one this process last installed the package from, else the configured one. */
+  readonly registry?: Registry
+}
+
+/** Where an update asks for its target, and the request id its progress names. */
+export interface UpdateBundleOptions {
+  /** The registry asked first, normally the one that answered `listVersions`; absent, as for `listVersions`. */
+  readonly registry?: Registry
+  /** Names the update's progress and the target installation's logs; `cancelInstall` stops only that installation. */
+  readonly requestId?: PluginInstallRequestId
+}
+
+/** The step of an update its Host progress names. */
+export type PluginUpdateStep = 'checking' | 'removing' | 'installing' | 'restoring'
+
+/** Progress of one update request. */
+export interface PluginUpdateProgress {
+  readonly requestId: PluginInstallRequestId
+  readonly step: PluginUpdateStep
+}
+
+/**
+ * How an update ended. `result` belongs to the last step that ran: the target check, the removal of the installed
+ * version, or the target's installation. `restore` is present when the target's installation failed or was cancelled
+ * after the installed version was removed, and reports the reinstallation of that version.
+ */
+export interface PluginUpdateResult {
+  readonly from: string
+  readonly to: string
+  readonly step: 'check' | 'remove' | 'install'
+  readonly result: ChangeResult
+  readonly restore?: ChangeResult
+}
+
 /** The Host phase of one installation, before its install call settles; `installing` is announced once per registry asked. */
 export interface PluginInstallProgress {
   readonly requestId: PluginInstallRequestId
@@ -250,6 +357,22 @@ export interface PluginInstallLogChunk {
   /** Present on the run's last chunk: pnpm's exit code, null when it ended without one. */
   readonly exitCode?: number | null
 }
+
+/**
+ * A bundle's long description, or `none` when it has neither a `meta.detail` file nor a README. Images resolve beside
+ * `path` through `GET /api/plugin-manager/detail-file?bundle=<name>&document=<path>&path=<destination>`.
+ */
+export type BundleDetail =
+  | {
+    readonly status: 'found'
+    /** `locale` for the file locale `meta.detail` names, `readme` for the package's README. */
+    readonly origin: 'locale' | 'readme'
+    /** `/`-separated path of the document inside the package. */
+    readonly path: string
+    /** Markdown text without a byte order mark or a leading YAML front matter block. */
+    readonly markdown: string
+  }
+  | { readonly status: 'none' }
 
 /** What changed in the profile, for consumers that show it. */
 export interface PluginChange {
@@ -280,5 +403,12 @@ declare module '@deepseek-ai/cordis' {
      * @param progress - the installation's request id and phase, with the attempt while installing.
      */
     'plugin-manager/install-state'(progress: PluginInstallProgress): void
+    /**
+     * An update moved to its next step: checking the target, removing the installed version, installing the target,
+     * or reinstalling the removed version after the target failed. Announced once per step.
+     * @mode emit
+     * @param progress - the update's request id and step.
+     */
+    'plugin-manager/update-state'(progress: PluginUpdateProgress): void
   }
 }

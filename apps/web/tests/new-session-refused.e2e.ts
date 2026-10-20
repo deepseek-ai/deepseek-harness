@@ -38,7 +38,8 @@ describe.skipIf(MODE === 'record')('web e2e: refused New Session', () => {
         expect(scaffold.ctx.sessions.list()).toEqual([])
         expect(await page.getByRole('alert').count()).toBe(0)
 
-        await page.getByRole('button', { name: '新建会话', exact: true }).first().click()
+        // The capsule: on a local build the wordmark's fallback copies the version.
+        await page.getByRole('button', { name: '新建会话', exact: true }).last().click()
         const notice = page.getByRole('alert').filter({ hasText: '新建会话失败' })
         await notice.waitFor()
         await compareOrRefreshGolden(NOTICE_EXPECTED, await notice.ariaSnapshot(), MODE)

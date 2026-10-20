@@ -1,6 +1,7 @@
 /**
  * Discover, browser half: the Plugins page tab that browses the plugin market indexes the user configures through the
- * `pluginMarket` Remote and installs an entry through the page's install dialog.
+ * `pluginMarket` Remote and installs an entry through the page's install dialog; entry pages show each version's
+ * detail document.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -28,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'pluginMarket'
 
 /** Services the section reads. */
-export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket']
+export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket', 'remote.pluginRegistryProbe']
 
 /**
  * Contribute Discover to the Plugins page and keep it current on Host changes.
@@ -36,13 +37,16 @@ export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plugin-market: dictionaries')
-  const controller = new DiscoverController(ctx)
+  const controller = new DiscoverController(ctx, () => document.baseURI)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-market: controller')
   ctx.effect(() => {
     const disposers = [
       ctx.remote.$on('plugin-market/changed', () => { controller.sourcesChanged() }),
       ctx.remote.$on('plugin-manager/changed', () => { controller.bundlesChanged() }),
-      ctx.on('connection/reset', () => { controller.sourcesChanged() }),
+      ctx.on('connection/reset', () => {
+        controller.sourcesChanged()
+        controller.detailsReset()
+      }),
     ]
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-plugin-market: host invalidations')
