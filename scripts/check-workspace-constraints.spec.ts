@@ -344,7 +344,7 @@ describe('package payload constraints', () => {
     const detailFiles = detailDocumentFiles(dir)
     expect(detailFiles).toEqual(['docs'])
     expect(expectedDshPackageFiles({ exports: { './locale/*.json': './locale/*.json' } }, detailFiles)).toEqual([
-      'locale/*.json', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts',
+      'locale/*.json', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
     ])
   })
 
@@ -461,6 +461,7 @@ describe('package payload constraints', () => {
       },
     })).toEqual([
       'lib/index.js', 'lib/client.js', 'lib/client.node.js', 'lib/assets', 'lib/loader.js', 'lib/types/**/*.d.ts',
+      'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
     ])
   })
 
@@ -471,7 +472,7 @@ describe('package payload constraints', () => {
     { './assets/extra': './lib/assets/*' },
   ])('does not publish package assets without the exact asset export target: %j', (assets) => {
     expect(expectedDshPackageFiles({ exports: { './client': './lib/client.js', ...assets } }))
-      .toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts'])
+      .toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'])
   })
 
   it('rejects a package-asset export whose payload omits the built assets', () => {
@@ -486,7 +487,7 @@ describe('package payload constraints', () => {
         './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
         './assets/*': './lib/assets/*',
       },
-      files: ['lib/index.js', 'lib/client.js', 'lib/assets', 'lib/types/**/*.d.ts'],
+      files: ['lib/index.js', 'lib/client.js', 'lib/assets', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'],
       peerDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
       devDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
     } satisfies WorkspaceManifest['manifest']
@@ -495,7 +496,7 @@ describe('package payload constraints', () => {
     expect(payloadErrors(manifest)).toEqual([])
     expect(payloadErrors({ ...manifest, files: manifest.files.filter(file => file !== 'lib/assets') })).toEqual([
       expect.stringContaining('@deepseek-ai/dsh-client-probe: package.json files must be '
-        + '["lib/index.js","lib/client.js","lib/assets","lib/types/**/*.d.ts"]'),
+        + '["lib/index.js","lib/client.js","lib/assets","lib/types/**/*.d.ts","lib/types/**/*.d.ts.map","lib/**/*.js.map","src"]'),
     ])
   })
 
@@ -595,7 +596,7 @@ it('requires the OAR license while rejecting unrelated payload files', () => {
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   const files = [
     'icon.svg', 'locale/*.json', 'lib/index.js',
-    'LICENSE-OAR', 'lib/types/**/*.d.ts',
+    'LICENSE-OAR', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
   ]
   expect(expectedDshPackageFiles(manifest)).toEqual(files)
   expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
