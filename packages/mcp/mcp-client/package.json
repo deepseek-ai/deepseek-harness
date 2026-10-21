@@ -23,10 +23,17 @@
       "default": "./lib/types/types.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./oauth": {
+      "types": "./lib/types/oauth.d.ts",
+      "default": "./lib/oauth.js"
+    }
   },
   "files": [
     "lib/index.js",
+    "lib/oauth.js",
+    "lib/oauth-options-*.js",
+    "lib/oauth-credentials-*.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -41,12 +48,17 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/dsh-credentials": "workspace:*"
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-authorization": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
     "@modelcontextprotocol/client": "2.2.0",
-    "@deepseek-ai/dsh-util-values": "workspace:*"
+    "@deepseek-ai/dsh-util-values": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
+    "@modelcontextprotocol/core": "2.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-attachment": "workspace:*",
@@ -62,10 +74,12 @@
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@modelcontextprotocol/server": "2.2.0",
     "@modelcontextprotocol/node": "2.0.0",
-    "zod": "4.4.3",
     "@deepseek-ai/dsh-mcp-resources": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/dsh-credentials": "workspace:*"
+    "@deepseek-ai/dsh-credentials": "workspace:*",
+    "@deepseek-ai/dsh-authorization": "workspace:*",
+    "@deepseek-ai/dsh-host-webserver": "workspace:*",
+    "@deepseek-ai/dsh-credentials-local": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-mcp-resources": {
@@ -74,7 +88,10 @@
     "@deepseek-ai/dsh-system-prompt": {
       "optional": true
     },
-    "@deepseek-ai/dsh-credentials": {
+    "@deepseek-ai/dsh-authorization": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-host-webserver": {
       "optional": true
     }
   }

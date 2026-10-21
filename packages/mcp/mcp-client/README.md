@@ -104,6 +104,13 @@ Credential notifications rebuild the connection only when the resolved values ch
 
 With template expansion enabled, failure diagnostics, tool-call failures, and MCP `isError` tool-result text keep upstream messages but replace every value the instance resolved, including earlier rotations and URL-encoded forms, with `[redacted]`. Successful tool results retain their content.
 
+<a id="oauth"></a>
+### OAuth
+
+Set `oauth.credentialKey` to a stable `mcp-client/<id>` record address for a Streamable HTTP entry and load a credentials provider. Declare `inject: [credentials]` on the owning plugin entry so startup waits for that provider. OAuth cannot be combined with an `Authorization` header. Connections and probes only use committed grants and never open a browser or register a client. Missing credentials, rejected tokens, or an explicit insufficient-scope response put connections in `waiting-authorization`; probes return a failed result. Its reason is `missing` without a saved grant, `expired` when the access token expired and no refresh token remains, `binding` when the grant no longer matches the resolved `url` or OAuth options, `rejected` when a server rejects the token, and `scope` when the server requires more scope. A tool call in flight when authorization is lost fails with that reason, for example `MCP OAuth requires authorization: scope`. Probes may refresh and persist expired grants. Ordinary HTTP 403 errors do not change authorization state. Diagnostics, tool-call failures, and `isError` results replace every access token the connection sent with `[redacted]`.
+
+Explicit authorization uses the [manager](../mcp-manager/README.md#oauth-authorization) with Authorization and WebServer services. `oauth.clientId` selects a pre-registered public client; omission permits dynamic registration during explicit authorization. `oauth.scope` overrides the challenge scope; dynamic registration reuse requires the same configured scope. Changing the resolved `url`, `oauth.clientId`, or `oauth.scope` makes the saved grant unusable with reason `binding`, so the entry needs explicit authorization again. `oauth.requestTimeoutMs` defaults to 10,000 ms and `oauth.authorizationTimeoutMs` to 600,000 ms. Cancellation and retries wait up to `closeTimeoutMs` for unfinished authorization cleanup. Authorization-server requests and an OAuth entry's MCP requests require HTTPS, except for loopback HTTP, and reject redirects, so `url` must name the final endpoint. The browser callback answers with a static Chinese and English page that says whether DSH received the authorization or asks the user to retry in DSH; it never echoes callback parameters. Resource headers are excluded from authorization-server requests. A failed attempt's `lastError` is a fixed or local message, such as `MCP OAuth request failed`; when that message omits the upstream cause, the Host logs the cause as a warning with resolved template values, the authorization code, the PKCE verifier, client secrets, and issued tokens replaced by `[redacted]`. Refreshes serialize through the credential provider, preserve the grant identity, and retain the registered token endpoint authentication method; successful reauthorization replaces the identity and connection without entering `waiting-authorization`.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -136,9 +143,12 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | Status cell keyed by Fiber, retaining its final cleanup result |
 | [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
-| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup and probe budgets |
-| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics and secret-value redaction |
-| [`src/types.ts`](src/types.ts) | Client-safe connection status and probe outcome types (`./types`) |
+| [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup, probe, operation, and cleanup budgets |
+| [`src/diagnostic.ts`](src/diagnostic.ts) | Cause-chain diagnostics, OAuth failure classification, and secret-value redaction |
+| [`src/oauth-options.ts`](src/oauth-options.ts) | OAuth configuration schema |
+| [`src/oauth-credentials.ts`](src/oauth-credentials.ts) | Durable grant and client records, with refresh serialized by the credential provider |
+| [`src/oauth.ts`](src/oauth.ts) | Explicit browser authorization: callback, flow, and in-flight work under one owner |
+| [`src/types.ts`](src/types.ts) | Client-safe connection status, probe outcome, and OAuth attempt types (`./types`) |
 
 The exported `createMcpToolDefinition(ctx, options)` adapts an upstream tool schema and raw-result callback to the same canonical values, errors, and durable image projection. Each callback receives the exact `ToolExecution`, including its Agent and cancellation signal; SDK spec-type validation checks its result before projection. Callers own registration, cancellation deadlines, and provider teardown. The native Cua Driver provider uses this adapter without opening an MCP transport.
 
@@ -150,7 +160,7 @@ A manager composing instances (such as `dsh-mcp-manager`) observes one instance 
 
 The SDK receives tool-list changes through legacy notifications or a modern subscription. The supervisor queues each re-sync and republishes the connected tool count; a fetch failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation and closes the connection before applying the reconnect policy. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
 
-With `expandTemplates` enabled, failure diagnostics name the operation and keep the cause chain with every resolved value replaced by `[redacted]`. With expansion disabled, diagnostics retain the full error text.
+With `expandTemplates` or OAuth enabled, failure diagnostics name the operation and keep the cause chain with every resolved value and OAuth access token replaced by `[redacted]`. With both disabled, diagnostics retain the full error text.
 
 ### Tool execution internals
 
@@ -234,6 +244,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 - **Reconnect handles failed negotiation and transport close** — a failed initial connection or a crashed stdio child uses the configured reconnect budget. Ordinary HTTP request failures use the SDK transport's recovery; credential changes replace the connection.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Invalid protocol results or output schemas fail through the SDK** — the bridge does not accept legacy `toolResult` substitutes or bypass advertised schema validation.
+- **OAuth authorization needs a browser on the Host** — the callback is `http://127.0.0.1:<port>` on the Host's web server, so a remote Web deployment cannot finish authorization in another machine's browser. A dynamic client registration is keyed by that callback, so a changed or random port registers a new client at the next explicit authorization; sign-out keeps the previous registration record.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.
 
 <a id="dev-note"></a>

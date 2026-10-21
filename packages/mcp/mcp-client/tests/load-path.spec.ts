@@ -13,8 +13,14 @@
 import { describe, expect, it } from 'vitest'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import * as mcpClient from '@deepseek-ai/dsh-mcp-client'
+import { McpOAuthAuthorization } from '../src/oauth.ts'
 
 describe('dsh-mcp-client real-load-path guard', () => {
+  it('resolves the OAuth subpath to the same source module', async () => {
+    const entry = await import('@deepseek-ai/dsh-mcp-client/oauth')
+    expect(entry.McpOAuthAuthorization).toBe(McpOAuthAuthorization)
+  })
+
   it('has no default export and keeps name/inject/Config through unwrapExports', () => {
     expect('default' in mcpClient).toBe(false)
 

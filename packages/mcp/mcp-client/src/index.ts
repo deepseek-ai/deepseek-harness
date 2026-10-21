@@ -24,6 +24,8 @@ import type { ReconnectConfig } from './connection.ts'
 import { registerServerContext } from './server-context.ts'
 import { connectionStatusIn, registerStatusCell } from './status.ts'
 import type { McpConnectionStatusHandle } from './status.ts'
+import { OAuthSchema } from './oauth-options.ts'
+import type { McpOAuthConfig, McpOAuthConfigInput } from './oauth-options.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
@@ -34,6 +36,8 @@ export type { McpConnectionStatusHandle } from './status.ts'
 export type * from './types.ts'
 export { probeServer } from './probe.ts'
 export { assertTemplateSyntax } from './templates.ts'
+export { OAuthSchema } from './oauth-options.ts'
+export type { McpOAuthConfig, McpOAuthConfigInput } from './oauth-options.ts'
 export type { McpProbeOptions } from './probe.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -106,6 +110,8 @@ export interface StdioConfig {
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
 export interface StreamableHttpConfig {
+  /** Optional per-entry OAuth identity; passive connections never start browser authorization. */
+  oauth?: McpOAuthConfig
   /** Selects Streamable HTTP transport. */
   transport: 'streamable-http'
   /**
@@ -139,8 +145,9 @@ export type Config = StdioConfig | StreamableHttpConfig
 
 type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
   & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'oauth' | 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>
   & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError' | 'closeTimeoutMs' | 'expandTemplates'>>
+  & { oauth?: McpOAuthConfigInput }
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 /**
@@ -176,6 +183,7 @@ export const Config = z.union([
   }),
   z.object({
     transport: z.const('streamable-http'),
+    oauth: z.union([z.const(undefined), OAuthSchema]),
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
     url: z.string().required(),
     headers: z.dict(String).default({}),
@@ -201,6 +209,13 @@ export const Config = z.union([
  * @returns startup readiness after connection and initial tool discovery settle.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  if (config.transport === 'streamable-http' && config.oauth !== undefined
+    && Object.keys(config.headers).some(name => name.toLowerCase() === 'authorization')) {
+    throw new Error('MCP OAuth and an Authorization header cannot be configured together')
+  }
+  const oauth = config.transport === 'streamable-http' && config.oauth !== undefined
+    ? new (await import('./oauth-credentials.ts')).McpOAuthCredentials(ctx, config.oauth)
+    : undefined
   // Fail loud at load: reconnect misconfiguration (including programmatic
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
@@ -224,7 +239,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     names.add(config.serverName)
     status = registerStatusCell(ctx.fiber, (message, error) => {
       ctx.logger.warn(`mcp-client(${config.serverName}): ${message}`)
-      if (!config.expandTemplates) ctx.logger.warn(error)
+      if (!config.expandTemplates && !(config.transport === 'streamable-http' && config.oauth !== undefined)) ctx.logger.warn(error)
     })
     return () => {
       if (ctx.fiber.uid === null) status.detach()
@@ -238,7 +253,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!status.closure().closeConfirmed || status.closure().cleanupError !== undefined) {
     throw new Error(`mcp-client(${config.serverName}): previous connection cleanup is incomplete; restart the Host`)
   }
-  const connection = startConnection(ctx, config, reconnect, status)
+  const connection = startConnection(ctx, config, reconnect, status, oauth)
   let stopping: Promise<void> | undefined
   const dispose = (): Promise<void> => stopping ??= connection.dispose()
   // Cordis announces unload before awaiting an unfinished apply(). Closing

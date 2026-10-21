@@ -1,8 +1,20 @@
 /**
- * Client-safe MCP connection status and probe outcomes. Types only — no runtime code.
+ * Client-safe MCP connection status, probe outcomes, and OAuth attempt views. Types only — no runtime code.
  *
  * @module @deepseek-ai/dsh-mcp-client/types
  */
+
+import type { Branded } from '@deepseek-ai/dsh-brand'
+
+/**
+ * Actionable reasons a passive OAuth connection must await explicit authorization:
+ * `missing` — no grant is saved at the credential key; `expired` — the access token
+ * expired and the grant has no refresh token; `binding` — the saved grant or client
+ * registration no longer matches the endpoint URL, `clientId`, `scope`, or issuer,
+ * or a newer grant replaced it; `rejected` — the server or authorization server
+ * rejected the token or refresh; `scope` — the server requires a scope the grant lacks.
+ */
+export type McpAuthorizationReason = 'missing' | 'expired' | 'binding' | 'rejected' | 'scope'
 
 /** Transport closure and local cleanup are reported independently. */
 export interface McpCloseResult {
@@ -15,7 +27,20 @@ export interface McpCloseResult {
 /** Runtime state of one MCP instance and its current connection generation. */
 export type McpConnectionStatus =
   | { state: 'closed'; result: McpCloseResult }
-  | { state: 'waiting-credentials'; lastError: string }
+  | {
+    /** A credential template names a missing value; the connection retries when a credential record changes. */
+    state: 'waiting-credentials'
+    /** The resolution failure, as diagnostic text. */
+    lastError: string
+  }
+  | {
+    /** An OAuth connection has no usable grant and waits for explicit authorization. */
+    state: 'waiting-authorization'
+    /** Why the saved grant cannot be used. */
+    reason: McpAuthorizationReason
+    /** The authorization failure, as diagnostic text. */
+    lastError: string
+  }
   | {
     /** A connection attempt is in flight. */
     state: 'connecting'
@@ -85,3 +110,22 @@ export interface McpProbeFailure {
 
 /** Outcome of one MCP server probe. */
 export type McpProbeResult = (McpProbeSuccess | McpProbeFailure) & McpCloseResult
+
+/** Identity used to cancel only the selected authorization attempt. */
+export type McpOAuthAttemptId = Branded<'McpOAuthAttemptId'>
+
+/** Observable authorization state without tokens, client secrets, or the PKCE verifier. */
+export interface McpOAuthAttemptView {
+  /** Identity that cancels this attempt. */
+  id: McpOAuthAttemptId
+  /**
+   * `starting` discovers the authorization server and reuses or registers its client; `waiting-browser`
+   * waits for the browser callback; `exchanging` trades the code for tokens; `committing`
+   * saves the grant. `authorized`, `cancelled`, and `failed` are final.
+   */
+  phase: 'starting' | 'waiting-browser' | 'exchanging' | 'committing' | 'authorized' | 'cancelled' | 'failed'
+  /** The authorization page to open in a browser on the Host; present only while `waiting-browser`. */
+  authorizationUrl?: string
+  /** Redacted failure description; present only when `failed`. */
+  lastError?: string
+}

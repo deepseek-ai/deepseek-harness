@@ -3,8 +3,37 @@
  * secrets replace every known secret value before text leaves the instance.
  */
 
+import { InsufficientScopeError, OAuthError, OAuthErrorCode, SdkErrorCode, SdkHttpError, UnauthorizedError } from '@modelcontextprotocol/client'
+import type { McpAuthorizationReason } from './types.ts'
+
 /** Local failure whose message contains no expanded configuration or upstream text. */
 export class McpLocalError extends Error {}
+
+/** Safe authorization failure with no upstream messages or token values. */
+export class McpAuthorizationRequired extends McpLocalError {
+  constructor(readonly reason: McpAuthorizationReason) {
+    super('MCP OAuth requires authorization: ' + reason)
+  }
+}
+
+/**
+ * Classify SDK authentication failures without treating ordinary forbidden responses as missing authorization.
+ * @param error - local or SDK error from a connection, probe, or token request.
+ * @returns an authorization reason, or undefined for other errors.
+ */
+export function oauthFailure(error: unknown): McpAuthorizationRequired | undefined {
+  if (error instanceof McpAuthorizationRequired) return error
+  if (error instanceof InsufficientScopeError) return new McpAuthorizationRequired('scope')
+  if (error instanceof UnauthorizedError || error instanceof SdkHttpError && error.code === SdkErrorCode.ClientHttpAuthentication) {
+    return new McpAuthorizationRequired('rejected')
+  }
+  if (error instanceof OAuthError && reauthorizationCodes.has(error.code)) {
+    return new McpAuthorizationRequired('rejected')
+  }
+  return undefined
+}
+
+const reauthorizationCodes = new Set<string>([OAuthErrorCode.InvalidGrant, OAuthErrorCode.InvalidClient, OAuthErrorCode.UnauthorizedClient])
 
 /** Placeholder written in place of a known secret value. */
 const REDACTED = '[redacted]'
