@@ -1,6 +1,11 @@
 /** Adapt runner-local import decisions to Node's VM module callbacks. */
 import * as vm from 'node:vm'
+import { readFile } from 'node:fs/promises'
+import { dirname, extname } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { types } from 'node:util'
+import { resolve as resolveImport } from 'import-meta-resolve'
+import { getPackageType } from 'import-meta-resolve/lib/package-json-reader.js'
 import type { ImportAttributes } from 'node:module'
 import type { ProgramImportHandler } from '../evaluators/types.ts'
 
@@ -9,25 +14,43 @@ function assertNever(value: never): never {
   throw new Error(`Unsupported PTC import decision: ${String(value)}`)
 }
 
-type NativeImport = (specifier: string, attributes: ImportAttributes) => Promise<unknown>
-type ImportLoader = vm.DynamicModuleLoader<object> | typeof vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER
+// Node >=24.9 supplies explicit graph linking; the installed Node declarations omit these methods.
+interface SourceModule extends vm.SourceTextModule {
+  instantiate(): void
+  linkRequests(modules: vm.Module[]): void
+  readonly moduleRequests: readonly (vm.ModuleRequest & { phase: string })[]
+}
+const SourceModule = vm.SourceTextModule as new (code: string, options: vm.SourceTextModuleOptions) => SourceModule
+
+/** Node retains evaluation state; the loader owns asynchronous dependency resolution. */
+interface ModuleRecord {
+  module: vm.Module
+  dependencies?: Promise<ModuleRecord[]>
+}
+
+type ImportResult = ModuleRecord | { namespace: Record<string, unknown> }
 
 /** Modules belong to one evaluator; each compiled program retains its own resolution filename. */
 export class VmModuleImportLoader {
-  private modules = new WeakMap<Record<string, unknown>, Promise<vm.Module>>()
-  private readonly handler: ProgramImportHandler | undefined
+  private modules = new WeakMap<Record<string, unknown>, ModuleRecord>()
+  private files = new Map<string, Promise<ModuleRecord>>()
+  private readonly handler: ProgramImportHandler
   private readonly context: vm.Context
   private closed = false
+  // Keep resolved URLs on Node's loader even when this file's importer transforms import().
+  private readonly nativeImport = vm.compileFunction('return import(url, { with: attributes })', ['url', 'attributes'], {
+    importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
+  }) as (url: string, attributes: ImportAttributes) => Promise<unknown>
 
   /**
    * Own module instances for one evaluator's runner-local handler.
-   * @param handler - Import decisions, or undefined to retain Node's default loader.
+   * @param handler - Runner-local import decisions.
    * @param context - Script context receiving the imported modules.
    */
-  constructor(handler: ProgramImportHandler | undefined, context: vm.Context) {
+  constructor(handler: ProgramImportHandler, context: vm.Context) {
     this.handler = handler
     this.context = context
-    if (handler !== undefined && typeof vm.SyntheticModule !== 'function') {
+    if (typeof vm.SyntheticModule !== 'function') {
       throw new Error('PTC importHandler requires the runner to start with --experimental-vm-modules')
     }
   }
@@ -35,57 +58,129 @@ export class VmModuleImportLoader {
   /**
    * Bind import resolution to the filename used to compile a program.
    * @param filename - Absolute program filename, captured before its evaluation.
-   * @returns Native loading or a callback implementing the runner's import handler.
+   * @returns Callback implementing the runner's import handler.
    */
-  forFile(filename: string): ImportLoader {
-    const handler = this.handler
-    if (handler === undefined) return vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER
-    let nativeImport: NativeImport | undefined
-    const load = async (specifier: string, _referrer: object, attributes: ImportAttributes, phase = 'evaluation'): Promise<unknown> => {
-      if (this.closed) throw new Error('PTC evaluator is closed')
-      if (phase !== 'evaluation') throw new Error('PTC importHandler supports evaluation-phase imports only')
-      const result = await handler({ specifier, referrer: filename, attributes })
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cleanup can close the evaluator during the handler await.
-      if (this.closed) throw new Error('PTC evaluator closed before its import completed')
-      switch (result.type) {
-        case 'module': return this.module(result.exports)
-        case 'redirect': specifier = result.specifier; break
-        case 'default': break
-        /* v8 ignore next -- The runner supplies the closed ProgramImportResult union. */
-        default: return assertNever(result)
-      }
-      nativeImport ??= vm.compileFunction('return import(specifier, { with: attributes })', ['specifier', 'attributes'], {
-        filename, importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
-      }) as NativeImport
-      const value = await nativeImport(specifier, attributes)
-      if (types.isModuleNamespaceObject(value)) return value
-      // A native then export can settle to any value; the VM callback still requires a module.
-      return this.module({ then(resolve: (result: unknown) => void) { resolve(value) } })
-    }
-    // Node accepts namespace objects as well as vm.Module; the Node types declare only vm.Module.
-    return load as vm.DynamicModuleLoader<object>
+  forFile(filename: string): vm.DynamicModuleLoader<object> {
+    return this.callback(pathToFileURL(filename).href)
   }
 
   /** Reject further handler calls and release cached modules; imported values remain usable. */
   close(): void {
     this.closed = true
     this.modules = new WeakMap()
+    this.files.clear()
   }
 
-  private module(exports: Record<string, unknown>): Promise<vm.Module> {
+  private assertOpen(late = false): void {
+    if (this.closed) throw new Error(late ? 'PTC evaluator closed before its import completed' : 'PTC evaluator is closed')
+  }
+
+  private callback(referrer: string): vm.DynamicModuleLoader<object> {
+    const load = async (specifier: string, _referrer: object, attributes: ImportAttributes, phase = 'evaluation') => {
+      const record = await this.request(specifier, referrer, attributes, phase)
+      this.assertOpen(true)
+      if ('namespace' in record) return record.namespace
+      await this.link(record, new Set())
+      this.assertOpen(true)
+      if (record.module instanceof SourceModule && record.module.status === 'unlinked') record.module.instantiate()
+      await record.module.evaluate()
+      this.assertOpen(true)
+      return record.module
+    }
+    // Node accepts native namespaces; its callback declarations only describe vm.Module results.
+    return load as vm.DynamicModuleLoader<object>
+  }
+
+  private async request(specifier: string, referrer: string, attributes: ImportAttributes, phase: string): Promise<ImportResult> {
+    this.assertOpen()
+    if (phase !== 'evaluation') throw new Error('PTC importHandler supports evaluation-phase imports only')
+    const result = await this.handler({ specifier, referrer: fileURLToPath(referrer), attributes })
+    this.assertOpen(true)
+    switch (result.type) {
+      case 'module': return this.module(result.exports)
+      case 'redirect': specifier = result.specifier; break
+      case 'default': break
+      /* v8 ignore next -- The runner supplies the closed ProgramImportResult union. */
+      default: return assertNever(result)
+    }
+    const url = new URL(resolveImport(specifier, referrer))
+    if (isSourceModule(url)) {
+      if (Object.keys(attributes).length) throw new TypeError(`PTC ESM imports do not accept import attributes: ${url.href}`)
+      let record = this.files.get(url.href)
+      if (!record) {
+        record = this.sourceModule(url)
+        this.files.set(url.href, record)
+      }
+      return record
+    }
+    const value = await this.nativeImport(url.href, attributes)
+    this.assertOpen(true)
+    if (types.isModuleNamespaceObject(value)) return { namespace: value as Record<string, unknown> }
+    // A native then export can settle to any value; the VM callback still requires a module.
+    return this.module({ then(resolve: (result: unknown) => void) { resolve(value) } })
+  }
+
+  private async sourceModule(url: URL): Promise<ModuleRecord> {
+    const source = await readFile(url, 'utf8')
+    this.assertOpen(true)
+    const filename = fileURLToPath(url)
+    return { module: new SourceModule(source, {
+      context: this.context,
+      identifier: url.href,
+      initializeImportMeta(meta) {
+        meta.url = url.href
+        meta.filename = filename
+        meta.dirname = dirname(filename)
+        meta.main = false
+        meta.resolve = (specifier: string) => resolveImport(specifier, url.href)
+      },
+      importModuleDynamically: this.callback(url.href),
+    }) }
+  }
+
+  private async link(record: ModuleRecord, visited: Set<ModuleRecord>): Promise<void> {
+    if (visited.has(record)) return
+    visited.add(record)
+    record.dependencies ??= this.dependencies(record.module)
+    const dependencies = await record.dependencies
+    this.assertOpen(true)
+    await Promise.all(dependencies.map(dependency => this.link(dependency, visited)))
+  }
+
+  private async dependencies(module: vm.Module): Promise<ModuleRecord[]> {
+    if (module instanceof SourceModule) {
+      const dependencies = await Promise.all(module.moduleRequests.map(async (request) => {
+        const result = await this.request(request.specifier, module.identifier, request.attributes, request.phase)
+        return 'namespace' in result ? this.module(result.namespace) : result
+      }))
+      this.assertOpen(true)
+      // Cache direct dependencies before walking them: cycles must not await their own graph.
+      module.linkRequests(dependencies.map(record => record.module))
+      return dependencies
+    }
+    /* v8 ignore next -- SyntheticModule has no dependencies, so Node never calls its linker. */
+    await module.link(() => module)
+    return []
+  }
+
+  private module(exports: Record<string, unknown>): ModuleRecord {
+    this.assertOpen(true)
     const existing = this.modules.get(exports)
     if (existing) return existing
     const names = Object.keys(exports)
     const module = new vm.SyntheticModule(names, function () {
       for (const name of names) this.setExport(name, exports[name])
     }, { context: this.context })
-    const ready = (async () => {
-      /* v8 ignore next -- SyntheticModule has no dependencies, so Node never calls its linker. */
-      await module.link(() => module)
-      await module.evaluate()
-      return module
-    })()
-    this.modules.set(exports, ready)
-    return ready
+    const record = { module }
+    this.modules.set(exports, record)
+    return record
   }
+}
+
+/** Explicit file ESM stays in the evaluator; other formats retain Node's loader. */
+function isSourceModule(url: URL): boolean {
+  if (url.protocol !== 'file:') return false
+  const extension = extname(fileURLToPath(url))
+  if (extension === '.mjs') return true
+  return extension === '.js' && getPackageType(url) === 'module'
 }

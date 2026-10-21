@@ -12120,6 +12120,9 @@ importers:
       acorn-walk:
         specifier: ^8.3.5
         version: 8.3.5
+      import-meta-resolve:
+        specifier: ^4.2.0
+        version: 4.2.0
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

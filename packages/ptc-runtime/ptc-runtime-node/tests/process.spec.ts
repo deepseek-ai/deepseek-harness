@@ -18,7 +18,7 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
     await cp(new URL(`../src/${name}/`, import.meta.url), join(directory, name), { recursive: true })
   }
   await mkdir(join(directory, 'node_modules'))
-  for (const name of ['acorn', 'acorn-walk']) {
+  for (const name of ['acorn', 'acorn-walk', 'import-meta-resolve']) {
     await cp(dirname(fileURLToPath(import.meta.resolve(`${name}/package.json`))), join(directory, 'node_modules', name), { recursive: true })
   }
   const source = `import {Socket} from 'node:net';import {runNodeMain} from ${JSON.stringify(pathToFileURL(join(directory, 'process.ts')).href)};await runNodeMain(new Socket({fd:7,readable:true,writable:true}),100000,process);`

@@ -1,7 +1,7 @@
 /** VM Script evaluation with Node globals and retained Script-scope declarations. */
 import { resolve } from 'node:path'
 import { types } from 'node:util'
-import { createContext, Script, type Context, type ScriptOptions } from 'node:vm'
+import { constants, createContext, Script, type Context, type ScriptOptions } from 'node:vm'
 import { VmModuleImportLoader } from '../imports/vm-modules.ts'
 import { processTopLevelAwait } from './vm-script-await.ts'
 import type { ProgramEvaluator, ProgramEvaluatorOptions } from './types.ts'
@@ -13,7 +13,7 @@ import type { ProgramEvaluator, ProgramEvaluatorOptions } from './types.ts'
  */
 export function createVmScriptEvaluator(options: ProgramEvaluatorOptions): ProgramEvaluator {
   const context = createScriptContext()
-  const imports = new VmModuleImportLoader(options.importHandler, context)
+  const imports = options.importHandler === undefined ? undefined : new VmModuleImportLoader(options.importHandler, context)
   return {
     globals: context,
     evaluate(code, finish) {
@@ -22,7 +22,7 @@ export function createVmScriptEvaluator(options: ProgramEvaluatorOptions): Progr
         (error: unknown) => { finish({ ok: false, error }) },
       )
     },
-    close() { imports.close() },
+    close() { imports?.close() },
   }
 }
 
@@ -46,15 +46,15 @@ function createScriptContext(): Context {
  * Evaluate a script, lowering top-level await while retaining Script-scope declarations.
  * @param code - Type-stripped JavaScript; top-level return is not supported.
  * @param context - Program globals and declarations retained between evaluations.
- * @param imports - Runner-local module instances and import handling.
+ * @param imports - Runner-local import handling, or undefined for Node's default loader.
  * @returns The script completion value after Promise settlement.
  */
-async function evaluateScript(code: string, context: Context, imports: VmModuleImportLoader): Promise<unknown> {
+async function evaluateScript(code: string, context: Context, imports: VmModuleImportLoader | undefined): Promise<unknown> {
   try {
     const filename = resolve(process.cwd(), 'ptc-program.js')
     const options: ScriptOptions = {
       filename,
-      importModuleDynamically: imports.forFile(filename),
+      importModuleDynamically: imports === undefined ? constants.USE_MAIN_CONTEXT_DEFAULT_LOADER : imports.forFile(filename),
     }
     const compiled = compileScript(code, options)
     const value: unknown = await compiled.script.runInContext(context)

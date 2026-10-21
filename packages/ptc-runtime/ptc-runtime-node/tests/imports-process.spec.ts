@@ -12,7 +12,7 @@ it('reports a missing VM startup flag before accepting a Script handler', () => 
     .toThrow('PTC importHandler requires the runner to start with --experimental-vm-modules')
 })
 
-async function customBootstrap() {
+async function customBootstrap(asyncDecisions = false) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-ptc-import-runner-'))
   onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
   const bootstrapPath = join(directory, 'runner.mjs')
@@ -23,10 +23,29 @@ async function customBootstrap() {
     class Counter { #count = 0; next() { return ++this.#count } }
     const exports = { Counter, counter: new Counter(), pid: process.pid };
     await runNodeMain(openInheritedControlChannel(), Number(process.argv[2]), process, 'function-body',
-      ({ specifier }) => specifier === 'runner:counter' ? { type: 'module', exports } : { type: 'default' });
+      ${asyncDecisions ? 'async ' : ''}({ specifier }) => specifier === 'runner:counter' ? { type: 'module', exports } : { type: 'default' });
   `)
   return bootstrapPath
 }
+
+it('intercepts a child ESM dependency and its later imports through an asynchronous runner handler', async () => {
+  const bootstrapPath = await customBootstrap(true)
+  const modulePath = join(dirname(bootstrapPath), 'dependency.mjs')
+  await writeFile(modulePath, `
+    import { counter, Counter } from 'runner:counter';
+    export const first = () => [counter.next(), counter instanceof Counter];
+    export const later = async () => (await import('runner:counter')).counter.next();
+  `)
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'vm-script', scriptPersistence: true,
+    launch: { kind: 'node-script', executable: process.execPath, bootstrapPath } })
+  const stateOwner = {}
+  const first = await runtime.run(runtime.resolve({ program: `var dependency = await import(${JSON.stringify(pathToFileURL(modulePath).href)}); dependency.first()`, bindings: [], stateOwner }))
+  expect(first.error).toBeUndefined()
+  expect(first.value).toEqual([1, true])
+  const later = await runtime.run(runtime.resolve({ program: 'await dependency.later()', bindings: [], stateOwner }))
+  expect(later.error).toBeUndefined()
+  expect(later.value).toBe(2)
+})
 
 it.each([
   { executionMode: 'per-call', scriptPersistence: false },

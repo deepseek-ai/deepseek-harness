@@ -2,17 +2,17 @@
 /** Supported child evaluation syntax, independent of process lifetime. */
 export type ProgramFormat = 'function-body' | 'repl' | 'script'
 
-/** A dynamic import requested by a program in the runner process. */
+/** An import requested by a program or its VM-loaded ESM dependencies in the runner process. */
 export interface ProgramImportRequest {
   /** Specifier after JavaScript's import argument conversion. */
   specifier: string
-  /** Absolute filename of the program that contains this import, retained with its functions. */
+  /** Absolute filename containing this import, retained with the importing program or module. */
   referrer: string
   /** Import attributes supplied by the program, or an empty object. */
   attributes: Readonly<Record<string, string | undefined>>
 }
 
-/** Runner-owned handling of one dynamic import. */
+/** Runner-owned handling of one import. */
 export type ProgramImportResult =
   | { type: 'default' }
   | { type: 'redirect'; specifier: string }
@@ -28,12 +28,15 @@ export type ProgramImportResult =
 
 /**
  * Intercept program imports inside the runner, independently of evaluation syntax.
- * Default and redirected imports use Node's loader without reentering this handler.
+ * VM Script recursively loads .mjs files and .js files in type: module packages in its context.
+ * Their static and dynamic imports also consult the handler; each static request binds once.
+ * Default and redirect resolve relative to the importer; the replacement itself does not reenter the handler.
+ * Other formats, AsyncFunction and Node REPL use Node's loader without intercepting dependencies.
  * A thrown or rejected value rejects the program's import; there is no fallback after failure.
  * VM Script accepts async handlers and requires --experimental-vm-modules.
  * AsyncFunction and Node REPL require synchronous decisions and no VM startup flag.
- * @param request - Specifier, original program filename and import attributes.
- * @returns Native loading, one native redirect, or runner-local module exports.
+ * @param request - Specifier, importing filename and import attributes.
+ * @returns Default loading, one redirect, or runner-local module exports.
  */
 export type ProgramImportHandler = (request: ProgramImportRequest) => ProgramImportResult | Promise<ProgramImportResult>
 

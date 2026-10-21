@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Duplex, PassThrough } from 'node:stream'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
@@ -35,6 +36,222 @@ async function temporaryDirectory() {
   onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
   return realpath(directory)
 }
+
+async function moduleFixture(files: Record<string, string>) {
+  const directory = await temporaryDirectory()
+  await Promise.all(Object.entries(files).map(async ([name, source]) => {
+    const path = join(directory, name)
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, source)
+  }))
+  return { directory, url: (name: string) => pathToFileURL(join(directory, name)).href }
+}
+
+it('intercepts ESM package imports, re-exports, redirects and retained dynamic imports with their own filenames', async () => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'export * from "fixture-package"',
+    'node_modules/fixture-package/package.json': JSON.stringify({ type: 'module', exports: { import: './index.js', require: './missing.cjs' } }),
+    'node_modules/fixture-package/index.js': `
+      import { counter, Counter } from 'runner:static';
+      export { read } from 'runner:redirect';
+      export { counter, Counter };
+      export const next = () => counter.next();
+      export const later = async () => (await import('./lazy.mjs')).run();
+      export const metadata = [import.meta.url, import.meta.filename, import.meta.dirname, import.meta.main, import.meta.resolve('./lazy.mjs')];
+    `,
+    'node_modules/fixture-package/read.mjs': 'import { counter } from "runner:redirected"; export const read = () => counter.value',
+    'node_modules/fixture-package/lazy.mjs': `
+      import { counter } from 'runner:lazy-static';
+      export async function run() {
+        const { counter: again } = await import('runner:dynamic');
+        return [counter === again, again.next()];
+      }
+    `,
+  })
+  class Counter { value = 0; next() { return ++this.value } }
+  const counter = new Counter()
+  const exports = { counter, Counter }
+  const requests: ProgramImportRequest[] = []
+  const e = evaluator('script', async (request) => {
+    requests.push(request)
+    if (request.specifier === 'runner:redirect') return { type: 'redirect', specifier: './read.mjs' }
+    return request.specifier.startsWith('runner:') ? { type: 'module', exports } : { type: 'default' }
+  })
+  e.globals.expected = counter
+  await e.value(`var imported = await import(${JSON.stringify(fixture.url('entry.mjs'))})`)
+  expect(await e.expression('[imported.counter === expected, imported.counter instanceof imported.Counter, imported.next(), imported.read()]'))
+    .toEqual([true, true, 1, 1])
+  expect(await e.expression('imported.later()')).toEqual([true, 2])
+  const packagePath = join(fixture.directory, 'node_modules/fixture-package')
+  expect(await e.expression('imported.metadata')).toEqual([
+    fixture.url('node_modules/fixture-package/index.js'), join(packagePath, 'index.js'), packagePath, false,
+    fixture.url('node_modules/fixture-package/lazy.mjs'),
+  ])
+  for (const [specifier, file] of [
+    ['runner:static', 'index.js'], ['runner:redirect', 'index.js'], ['runner:redirected', 'read.mjs'],
+    ['runner:lazy-static', 'lazy.mjs'], ['runner:dynamic', 'lazy.mjs'],
+  ] as const) {
+    expect(requests).toContainEqual({ specifier, referrer: join(packagePath, file), attributes: {} })
+  }
+})
+
+it('shares an ESM evaluation while concurrent imports wait for its top-level await', async () => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'export { answer } from "./shared.mjs"',
+    'shared.mjs': 'globalThis.entered(); await globalThis.release; globalThis.executions++; export const answer = 42',
+  })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const release: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { release.resolve() })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  Object.assign(e.globals, { entered: entered.resolve, release: release.promise, executions: 0 })
+  const result = e.expression(`Promise.all([import(${JSON.stringify(fixture.url('entry.mjs'))}), import(${JSON.stringify(fixture.url('shared.mjs'))})]).then(values => values.map(m => m.answer))`)
+  await entered.promise
+  expect(e.globals.executions).toBe(0)
+  release.resolve()
+  expect(await result).toEqual([42, 42])
+  expect(e.globals.executions).toBe(1)
+})
+
+it('links ESM cycles and allows top-level await imports outside a waiting cycle', async () => {
+  const fixture = await moduleFixture({
+    'a.mjs': 'import { b } from "./b.mjs"; export const a = () => "a"; export const answer = b()',
+    'b.mjs': 'import { a } from "./a.mjs"; export const b = () => "b" + a()',
+    'await.mjs': 'import { answer } from "./a.mjs"; export const result = (await import("./a.mjs")).answer + answer',
+  })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('await.mjs'))})).result`)).toBe('baba')
+})
+
+it('isolates file ESM caches and globals between Script evaluators', async () => {
+  const fixture = await moduleFixture({ 'entry.mjs': 'import { value } from "runner:value"; globalThis.executions++; export { value }' })
+  const first = evaluator('script', ({ specifier }) => specifier === 'runner:value' ? { type: 'module', exports: { value: 1 } } : { type: 'default' })
+  const second = evaluator('script', ({ specifier }) => specifier === 'runner:value' ? { type: 'module', exports: { value: 2 } } : { type: 'default' })
+  first.globals.executions = 0
+  second.globals.executions = 0
+  const code = `import(${JSON.stringify(fixture.url('entry.mjs'))}).then(m => m.value)`
+  expect(await Promise.all([first.expression(code), first.expression(code), second.expression(code)])).toEqual([1, 1, 2])
+  expect(first.globals.executions).toBe(1)
+  expect(second.globals.executions).toBe(1)
+})
+
+it('retains failed ESM linking and evaluation without affecting unrelated imports', async () => {
+  const fixture = await moduleFixture({
+    'link.mjs': 'import "runner:denied"; globalThis.executions++',
+    'evaluate.mjs': 'globalThis.executions++; throw globalThis.failure',
+    'good.mjs': 'export const answer = 42',
+  })
+  const failure = new Error('denied ESM dependency')
+  const handler = vi.fn(({ specifier }: ProgramImportRequest): ProgramImportResult => {
+    if (specifier === 'runner:denied') throw failure
+    return { type: 'default' }
+  })
+  const e = evaluator('script', handler)
+  Object.assign(e.globals, { failure, executions: 0 })
+  for (let index = 0; index < 2; index++) {
+    for (const name of ['link.mjs', 'evaluate.mjs']) {
+      expect(await e.expression(`import(${JSON.stringify(fixture.url(name))}).catch(error => error === failure)`)).toBe(true)
+    }
+  }
+  expect(e.globals.executions).toBe(1)
+  expect(handler.mock.calls.filter(([request]) => request.specifier === 'runner:denied')).toHaveLength(1)
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('good.mjs'))})).answer`)).toBe(42)
+})
+
+it('rejects pending ESM dependencies after cleanup without evaluating their exports or parent', async () => {
+  const fixture = await moduleFixture({ 'entry.mjs': 'import { answer } from "runner:pending"; globalThis.executed = answer' })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const released = Promise.withResolvers<ProgramImportResult>()
+  const read = vi.fn(() => 42)
+  onTestFinished(() => { released.resolve({ type: 'module', exports: {} }) })
+  const e = evaluator('script', ({ specifier }) => {
+    if (specifier !== 'runner:pending') return { type: 'default' }
+    entered.resolve()
+    return released.promise
+  })
+  const result = e.expression(`import(${JSON.stringify(fixture.url('entry.mjs'))}).catch(error => error.message)`)
+  await entered.promise
+  e.close()
+  released.resolve({ type: 'module', exports: Object.defineProperty({}, 'answer', { enumerable: true, get: read }) })
+  expect(await result).toBe('PTC evaluator closed before its import completed')
+  expect(read).not.toHaveBeenCalled()
+  expect(e.globals.executed).toBeUndefined()
+})
+
+it('links native builtins, CommonJS and JSON into ESM while rejecting ESM import attributes', async () => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'import path from "node:path"; import cjs from "./native.cjs"; import implicit from "./native.js"; import explicit from "./common/index.js"; import json from "./answer.json" with { type: "json" }; export const answer = [path.basename("/a/b"), cjs.value, implicit.value, explicit.value, json.value]',
+    'native.cjs': 'module.exports = { value: 17 }',
+    'native.js': 'module.exports = { value: 18 }',
+    'common/package.json': '{"type":"commonjs"}',
+    'common/index.js': 'module.exports = { value: 19 }',
+    'answer.json': '{"value":42}',
+  })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`import(${JSON.stringify(fixture.url('entry.mjs'))}, { with: { type: 'json' } }).catch(error => error.message)`))
+    .toContain('PTC ESM imports do not accept import attributes')
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('entry.mjs'))})).answer`)).toEqual(['b', 17, 18, 19, 42])
+})
+
+it('uses one handler decision for repeated static requests for the same module', async () => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'import { first } from "runner:state"; import { second } from "runner:state"; export { third } from "runner:state"; export const values = [first, second]',
+  })
+  let decisions = 0
+  const e = evaluator('script', ({ specifier }) => {
+    if (specifier !== 'runner:state') return { type: 'default' }
+    const value = ++decisions
+    return { type: 'module', exports: { first: value, second: value, third: value } }
+  })
+  expect(await e.expression(`import(${JSON.stringify(fixture.url('entry.mjs'))}).then(m => [...m.values, m.third])`)).toEqual([1, 1, 1])
+  expect(decisions).toBe(1)
+})
+
+it.each(['import source module from "node:fs"', 'await import.source("node:fs")'])('rejects a dependency source phase before its handler: %s', async (source) => {
+  const fixture = await moduleFixture({ 'entry.mjs': source })
+  const handler = vi.fn((): ProgramImportResult => ({ type: 'default' }))
+  const e = evaluator('script', handler)
+  expect(await e.expression(`import(${JSON.stringify(fixture.url('entry.mjs'))}).catch(error => error.message)`))
+    .toBe('PTC importHandler supports evaluation-phase imports only')
+  expect(handler).toHaveBeenCalledTimes(1)
+})
+
+it('retains ESM read and parse failures until the evaluator is recreated', async () => {
+  const fixture = await moduleFixture({ 'invalid.mjs': 'export const =' })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  const missing = `import(${JSON.stringify(fixture.url('missing.mjs'))}).catch(error => error.code)`
+  const invalid = `import(${JSON.stringify(fixture.url('invalid.mjs'))}).catch(error => error.name)`
+  expect(await e.expression(missing)).toBe('ENOENT')
+  expect(await e.expression(invalid)).toBe('SyntaxError')
+  await writeFile(join(fixture.directory, 'missing.mjs'), 'export const answer = 42')
+  await writeFile(join(fixture.directory, 'invalid.mjs'), 'export const answer = 42')
+  expect(await e.expression(missing)).toBe('ENOENT')
+  expect(await e.expression(invalid)).toBe('SyntaxError')
+  const fresh = evaluator('script', () => ({ type: 'default' }))
+  expect(await fresh.expression(`(await import(${JSON.stringify(fixture.url('invalid.mjs'))})).answer`)).toBe(42)
+})
+
+it('keeps then exports callable from static ESM imports and assimilates them from dynamic imports', async () => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'import { then, answer } from "./then.mjs"; export const result = [typeof then, answer]',
+    'then.mjs': 'export const answer = 42; export function then(resolve) { resolve(17) }',
+  })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('entry.mjs'))})).result`)).toEqual(['function', 42])
+  expect(await e.expression(`import(${JSON.stringify(fixture.url('then.mjs'))})`)).toBe(17)
+})
+
+it('retains live dynamic native bindings while static imports capture their exports', async () => {
+  const source = 'data:text/javascript,export let value = 1; export function update() { value = 2 }'
+  const fixture = await moduleFixture({ 'entry.mjs': `export { value } from ${JSON.stringify(source)}` })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`(async () => {
+    const captured = await import(${JSON.stringify(fixture.url('entry.mjs'))});
+    const module = await import(${JSON.stringify(source)});
+    module.update();
+    return [captured.value, module.value];
+  })()`)).toEqual([1, 2])
+})
 
 it.each(formats)('preserves runner objects, closures, constructors and non-JSON values in %s', async (format) => {
   class Counter { #count = 0; next() { return ++this.#count } }
