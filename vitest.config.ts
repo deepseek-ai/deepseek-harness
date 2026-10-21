@@ -189,7 +189,7 @@ export default defineConfig({
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
-    // One coverage invocation aggregates both projects. Every suite forks for
+    // One coverage invocation aggregates all projects. Every suite forks for
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
