@@ -173,7 +173,8 @@ class StreamingRenderer {
  * text sizing, uniform bold headings, and tight block spacing; the default
  * `body` variant uses the full document typography. `omitHtml` renders raw
  * HTML as nothing instead of literal text, for documents written for HTML
- * renderers, such as package READMEs.
+ * renderers, such as package READMEs. `textInteractionSource` marks the
+ * existing root as a source for text selection interactions.
  * The provider's `openFile` enables local Markdown links in settled messages,
  * including `#L24` and `#L24-L30` destinations (ranges open at their first line).
  * @returns A GFM document with TeX math rendered through KaTeX; raw HTML never
@@ -181,7 +182,7 @@ class StreamingRenderer {
  * absolute HTTP(S) images render directly.
  */
 export const MarkdownText = memo(function MarkdownText({
-  text, streaming = false, labels, fileMentions, pathImages, variant = 'body', omitHtml = false,
+  text, streaming = false, labels, fileMentions, pathImages, variant = 'body', omitHtml = false, textInteractionSource = false,
 }: {
   text: string
   streaming?: boolean
@@ -190,6 +191,7 @@ export const MarkdownText = memo(function MarkdownText({
   pathImages?: MarkdownPathImages | undefined
   variant?: 'body' | 'compact'
   omitHtml?: boolean
+  textInteractionSource?: boolean
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
   const streamLabelsRef = useRef<MarkdownLabels>(labels)
@@ -205,5 +207,6 @@ export const MarkdownText = memo(function MarkdownText({
     return streamRef.current.render(text)
   }, [text, streaming, labels, fileMentions, pathImages, omitHtml])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
+    data-text-interaction-source={textInteractionSource ? '' : undefined}
     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
 })

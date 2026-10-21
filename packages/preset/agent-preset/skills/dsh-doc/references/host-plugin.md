@@ -30,7 +30,7 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
 
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. The bundle's page in Plugin Manager shows the detail document that `meta.detail` names, otherwise the package README. Complete this checklist before installation:
 
-- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin.
+- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin. Write English titles and other UI labels in sentence case: capitalize only the first word and proper nouns, as in `Git worktrees`.
 - Write a detail document for users in each locale's language, and name it with `meta.detail` in that locale file: a `/`-separated path relative to the package root, inside a subdirectory so images beside it are published, that ends in `.md`, such as `docs/DETAIL.md` for `en` and `docs/DETAIL.zh.md` for `zh`. Start with one paragraph on what the user gets, then `## How to use` (where to find or trigger the feature, with its exact UI labels) and `## Good to know` (added tokens or model requests, data read or sent elsewhere, risks, and what changes when the plugin is turned off); Chinese documents use `## 使用方法` and `## 注意事项`. State only behavior you implemented and verified. An optional feature image goes on the first line; see `references/artwork.md`. A malformed `meta.detail`, a missing named file, or a document above 1 MiB makes the page show an error, not the README.
 - Create an original icon or use artwork whose license permits redistribution, retaining any required attribution. Read `references/artwork.md` before drawing or revising an icon.
 - Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, the detail document's directory, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
@@ -39,7 +39,7 @@ Plugin Manager and Settings read `meta.title` and `meta.description` from export
 For example, the locale file contains:
 
 ```json
-{ "meta": { "title": "My Decoration", "description": "Draws a badge under the composer.", "detail": "docs/DETAIL.md" } }
+{ "meta": { "title": "My decoration", "description": "Draws a badge under the composer.", "detail": "docs/DETAIL.md" } }
 ```
 
 ```json

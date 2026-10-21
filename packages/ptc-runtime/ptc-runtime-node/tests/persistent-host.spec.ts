@@ -1,97 +1,23 @@
-import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
-import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
-import { JsonChannel } from '../src/channel.ts'
+import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
 const request: PtcRunRequest = { program: '1', bindings: [], stateOwner: {} }
-const NO_INITIAL_FRAME = Symbol('no initial frame')
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
   const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
-  const control = new Duplex({
-    read() {},
-    write(chunk: Buffer, _encoding, callback) {
-      if (childControl.destroyed) { callback(new Error('peer closed')); return }
-      childControl.push(chunk)
-      callback()
-    },
-  })
-  const childControl = new Duplex({
-    read() {},
-    write(chunk: Buffer, _encoding, callback) {
-      if (control.destroyed) { callback(new Error('peer closed')); return }
-      control.push(chunk)
-      callback()
-    },
-  })
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const direct = Promise.withResolvers<SubprocessOutcome>()
-  const messages: unknown[] = []
-  const terminate = vi.fn(() => {
-    stdout.end()
-    stderr.end()
-    direct.resolve({ exitCode: 0, signal: null })
-  })
-  const waitForExit = vi.fn(async () => true)
-  const handle: SubprocessHandle = {
-    stdin: undefined,
-    stdout,
-    stderr,
-    control,
-    collected: {},
-    done: direct.promise,
-    terminate,
-    waitForExit,
-  }
-  const writes = new Set<Promise<void>>()
-  let receive: (message: unknown) => void = () => {}
-  const peer = new JsonChannel(childControl, 1024 * 1024, (message) => {
-    messages.push(message)
-    receive(message)
-  }, () => {})
-  const emit = (message: unknown): void => {
-    const write = peer.send(message).catch(() => {}).finally(() => { writes.delete(write) })
-    writes.add(write)
-  }
-  const resolveExecutable = vi.spyOn(ctx.subprocess, 'resolveExecutable').mockResolvedValue(process.execPath)
-  const spawn = vi.spyOn(ctx.subprocess, 'spawn').mockReturnValue(handle)
-  onTestFinished(async () => {
-    peer.close()
-    control.destroy()
-    stdout.destroy()
-    stderr.destroy()
-    direct.resolve({ exitCode: 0, signal: null })
-    await Promise.all(writes)
-  })
-  const start = (input: PtcRunRequest = request, first: unknown = { type: 'ready' }) => {
-    const result = runtime.run(runtime.resolve(input))
-    if (first !== NO_INITIAL_FRAME) queueMicrotask(() => { emit(first) })
-    return result
-  }
-  const onBoot = (callback: () => void): void => {
-    receive = (message) => {
-      if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'run') callback()
-    }
-  }
-  return {
-    ctx, fiber, runtime, handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
-    spawn, resolveExecutable, emit, start, onBoot,
-    receive: (callback: typeof receive) => { receive = callback },
-  }
+  return { ctx, fiber, runtime, ...fakeChild(ctx, runtime, request) }
 }
 
-function frame(payload: unknown, id = 1) { return { id, payload } }
-function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return frame({ type: 'call', id, global: 'tools', name: 'test', args }) }
+function call(id = 1, args: unknown = encodePtcJsonWire(null)) { return { t: 'q', i: String(id), m: 'invoke', a: ['tools', 'test', args] } }
 const bound: PtcRunRequest = { ...request, bindings: [{ global: 'tools', functions: { test: async () => 42 } }] }
 
 it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when its Session policy changes before process launch', async (executionMode) => {
@@ -100,10 +26,9 @@ it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when i
   const policy = h.ctx.sandboxPolicy.resolve({ session })
   expect(policy.mode).toBe('danger-full-access')
   h.receive((message) => {
-    if (typeof message !== 'object' || message === null || !('type' in message)) return
-    const done = { type: 'done', value: encodePtcJsonWire(1) }
-    if (message.type === 'run') h.emit(frame(done))
-    else if (message.type === 'boot') h.emit(done)
+    if (typeof message !== 'object' || message === null || !('t' in message)) return
+    const done = { value: encodePtcJsonWire(1) }
+    if ('m' in message && message.m === 'run') h.complete(done)
   })
 
   const pending = h.start({
@@ -126,10 +51,9 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider 
   setSandboxMode(session, 'read-only')
   const standing = h.ctx.sandboxPolicy.resolve({ session })
   h.receive((message) => {
-    if (typeof message !== 'object' || message === null || !('type' in message)) return
-    const done = { type: 'done', value: encodePtcJsonWire(1) }
-    if (message.type === 'run') h.emit(frame(done))
-    else if (message.type === 'boot') h.emit(done)
+    if (typeof message !== 'object' || message === null || !('t' in message)) return
+    const done = { value: encodePtcJsonWire(1) }
+    if ('m' in message && message.m === 'run') h.complete(done)
   })
   const pending = h.start({
     program: executionMode === 'per-call' ? 'return 1' : '1',
@@ -149,8 +73,8 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
   const cleaning = Promise.withResolvers<undefined>()
   const cleanup = Promise.withResolvers<boolean>()
   h.receive((message) => {
-    if (typeof message === 'object' && message !== null && 'type' in message
-      && (message.type === 'run' || message.type === 'boot')) booted.resolve(undefined)
+    if (typeof message === 'object' && message !== null && 'm' in message
+      && message.m === 'run') booted.resolve(undefined)
   })
   h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleanup.promise })
   const first = h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
@@ -177,7 +101,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
 it('rejects a retained call when its provider unloads during earlier policy cleanup', async () => {
   const h = await setup()
   const session = h.ctx.sessions.create(SessionId('unloading-admission'))
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
   const cleaning = Promise.withResolvers<undefined>()
   const cleanup = Promise.withResolvers<boolean>()
@@ -208,12 +132,7 @@ it('rejects a retained call when its provider unloads during earlier policy clea
 describe('persistent PTC host protocol', () => {
   it.each([
     null,
-    { id: 99, payload: {} },
-    frame({ type: 'other' }),
-    frame({ type: 'log', text: 1 }),
-    frame({ type: 'done', error: { kind: 'other', message: '' } }),
-    frame({ type: 'done', error: { kind: 'exception', message: 1 } }),
-    call(2),
+    { t: 'q', m: 'log', a: [1] },
     call(1, 'not a wire value'),
   ])('rejects invalid process traffic %j', async (raw) => {
     const h = await setup()
@@ -223,9 +142,15 @@ describe('persistent PTC host protocol', () => {
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
   })
 
+  it.each([{ error: { kind: 'other', message: '' } }, { error: { kind: 'exception', message: 1 } }])('rejects malformed results %j', async (raw) => {
+    const h = await setup()
+    h.onBoot(() => { h.complete(raw) })
+    expect((await h.start()).error?.kind).toBe('protocol')
+  })
+
   it('requires the readiness handshake and all requested pipes', async () => {
     const h = await setup()
-    expect((await h.start(request, { type: 'other' })).error?.kind).toBe('protocol')
+    expect((await h.start(request, null)).error?.kind).toBe('protocol')
     const missing = await setup()
     missing.spawn.mockReturnValue({ ...missing.handle, control: undefined })
     expect((await missing.start(request, NO_INITIAL_FRAME)).error?.message).toContain('did not supply')
@@ -233,16 +158,16 @@ describe('persistent PTC host protocol', () => {
 
   it.each(['exception', 'invalid-output', 'output-limit'])('accepts a terminal %s failure', async (kind) => {
     const h = await setup()
-    h.onBoot(() => { h.emit(frame({ type: 'done', error: { kind, message: 'example' } })) })
+    h.onBoot(() => { h.complete({ error: { kind, message: 'example' } }) })
     expect((await h.start()).error?.kind).toBe(kind)
   })
 
   it('rejects lossy terminal values and bounds complete results', async () => {
     const h = await setup()
-    h.onBoot(() => { h.emit(frame({ type: 'done', value: 'bad' })) })
+    h.onBoot(() => { h.complete({ value: 'bad' }) })
     expect((await h.start()).error?.kind).toBe('invalid-output')
     const limited = await setup({ maxOutputBytes: 30 })
-    limited.onBoot(() => { limited.emit(frame({ type: 'log', text: 'x'.repeat(100) })) })
+    limited.onBoot(() => { limited.emit({ t: 'q', m: 'log', a: ['x'.repeat(100)] }) })
     expect((await limited.start()).error?.kind).toBe('output-limit')
   })
 
@@ -256,14 +181,14 @@ describe('persistent PTC host protocol', () => {
       const h = await setup()
       h.receive((raw) => {
         const message = raw as Record<string, unknown>
-        if (message.type === 'run') h.emit(call())
-        else if (message.type === 'reply') h.emit(frame({ type: 'done', value: encodePtcJsonWire(message.ok === true) }))
+        if (message.m === 'run') h.emit(call())
+        else if (message.t === 's') h.complete({ value: encodePtcJsonWire(message.e === undefined) })
       })
       const result = await h.start({ ...request, bindings: [{ global: 'tools', functions }] })
       expect(result.error).toBeUndefined()
-      const reply = h.messages.find(raw => (raw as { type: string }).type === 'reply') as { ok: boolean; message?: string }
-      expect(result.value).toBe(reply.ok)
-      if (!reply.ok) expect(reply.message).toMatch(/denied|unavailable/)
+      const reply = h.messages.find(raw => (raw as { t: string }).t === 's') as { e?: { message: string } }
+      expect(result.value).toBe(reply.e === undefined)
+      if (reply.e) expect(reply.e.message).toMatch(/denied|unavailable/)
     }
   })
 
@@ -275,7 +200,7 @@ describe('persistent PTC host protocol', () => {
       expect((await h.start({ ...request, bindings: [{ global: 'tools', functions: { test: () => pending.promise } }] })).error?.kind).toBe('protocol')
     } finally { pending.resolve(null) }
     await setImmediate()
-    expect(h.messages.some(raw => (raw as { type: string }).type === 'reply')).toBe(false)
+    expect(h.messages.some(raw => (raw as { t: string }).t === 's')).toBe(false)
   })
 
   it('cleans up after launch failure and cancellation during executable resolution', async () => {
@@ -298,19 +223,19 @@ describe('persistent PTC host protocol', () => {
     h.onBoot(() => {
       h.stdout.write('stdout')
       h.stderr.write('stderr')
-      h.emit(frame({ type: 'done' }))
+      h.complete({})
     })
     expect(await h.start()).toMatchObject({ logs: ['stdout', 'stderr'] })
     h.stdout.write('idle stdout')
     h.stderr.write('idle stderr')
-    h.onBoot(() => { h.emit(frame({ type: 'done' }, 2)) })
+    h.onBoot(() => { h.complete({}) })
     expect(await h.start(request, NO_INITIAL_FRAME)).toMatchObject({ logs: [] })
     expect(h.terminate).not.toHaveBeenCalled()
   })
 
   it('clears retained resources when final diagnostic accounting detects an overflow', async () => {
     const h = await setup({ maxOutputBytes: 100 })
-    h.onBoot(() => { h.emit(frame({ type: 'done', error: { kind: 'exception', message: 'x'.repeat(1000) } })) })
+    h.onBoot(() => { h.complete({ error: { kind: 'exception', message: 'x'.repeat(1000) } }) })
     const result = await h.start()
     expect(result.error?.kind).toBe('output-limit')
     expect(result.error?.message).toContain('retained variables were cleared')
@@ -320,7 +245,7 @@ describe('persistent PTC host protocol', () => {
   it('keeps the first outcome when raw output overflows beside a terminal frame', async () => {
     const h = await setup({ maxOutputBytes: 100 })
     h.onBoot(() => {
-      h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+      h.complete({ value: encodePtcJsonWire(42) })
       queueMicrotask(() => { h.stdout.write('x'.repeat(1000)) })
     })
     expect((await h.start()).error?.kind).toBe('output-limit')
@@ -342,6 +267,31 @@ describe('persistent PTC host protocol', () => {
     expect(result.error?.message).toContain('fatal output')
   })
 
+  it('does not send a late binding result into the next evaluation', async () => {
+    const h = await setup({ maxMessageBytes: 1024 })
+    const release = Promise.withResolvers<string>()
+    onTestFinished(() => { release.resolve('') })
+    const slow = { ...request, bindings: [{ global: 'tools', functions: { test: () => release.promise } }] }
+    h.onBoot(() => { h.emit(call()); h.complete({}) })
+    expect((await h.start(slow)).error).toBeUndefined()
+    const booted = Promise.withResolvers<undefined>()
+    h.onBoot(() => { booted.resolve(undefined) })
+    const next = h.start(slow, NO_INITIAL_FRAME)
+    await booted.promise
+    release.resolve('x'.repeat(2000))
+    await setImmediate()
+    h.complete({ value: encodePtcJsonWire(2) })
+    expect(await next).toMatchObject({ value: 2 })
+    expect(h.messages).toContainEqual({ t: 's', i: '1', e: { message: 'PTC evaluation ended before the binding completed' } })
+  })
+
+  it('terminates the process when the control pipe fails during an evaluation', async () => {
+    const h = await setup()
+    h.onBoot(() => { h.control.emit('error', new Error('control transport failed')) })
+    expect((await h.start()).error?.kind).toBe('worker-exit')
+    expect(h.terminate).toHaveBeenCalled()
+  })
+
   it('terminates when a binding result exceeds the control write budget', async () => {
     const h = await setup({ maxMessageBytes: 1024 })
     h.onBoot(() => { h.emit(call()) })
@@ -353,7 +303,7 @@ describe('persistent PTC host protocol', () => {
 
   it.each(['exit', 'abort', 'cleanup'] as const)('does not dispatch to an exited idle process during %s handling', async (outcome) => {
     const h = await setup()
-    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    h.onBoot(() => { h.complete({}) })
     await h.start()
     h.onBoot(() => { h.stdout.end(); h.stderr.end() })
     h.direct.resolve({ exitCode: 9, signal: null })
@@ -364,7 +314,8 @@ describe('persistent PTC host protocol', () => {
     const result = await h.runtime.run(h.runtime.resolve({ ...request, program: '2', signal: controller.signal }))
     expect(result.error?.kind).toBe(outcome === 'abort' ? 'abort' : 'worker-exit')
     expect(result.error?.message).toContain(outcome === 'abort' ? 'execution canceled' : outcome === 'cleanup' ? 'exit cleanup failed' : 'exited (9, signal null)')
-    expect(h.messages).toEqual([expect.objectContaining({ type: 'run', id: 1 })])
+    expect(h.messages).toHaveLength(1)
+    expect(h.messages[0]).toMatchObject({ t: 'q', m: 'run' })
     expect(h.spawn).toHaveBeenCalledTimes(1)
     expect(h.terminate).toHaveBeenCalledTimes(1)
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
@@ -387,7 +338,7 @@ describe('persistent PTC host protocol', () => {
   it('reports failed managed cleanup and waits for both exit and pipe drain', async () => {
     const h = await setup()
     h.waitForExit.mockRejectedValue(new Error('cleanup failed'))
-    h.onBoot(() => { h.emit(frame({ type: 'output-limit' })) })
+    h.onBoot(() => { h.emit({ t: 'q', m: 'outputLimit', a: [] }) })
     expect((await h.start()).error?.message).toContain('cleanup failed')
   })
 
@@ -396,7 +347,7 @@ describe('persistent PTC host protocol', () => {
     { maxOutputBytes: 4, kind: 'output-limit' },
   ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
     const h = await setup({ maxOutputBytes })
-    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    h.onBoot(() => { h.complete({}) })
     expect(await h.start()).toMatchObject({ logs: [] })
     h.waitForExit.mockRejectedValue(new Error('x'))
     const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
@@ -415,7 +366,7 @@ describe('persistent PTC host protocol', () => {
     await expect(h.runtime.run({ ...request, cwd: '.', timeoutMs: null })).rejects.toThrow('resolved inputs')
     await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: Infinity })).rejects.toThrow('resolved inputs')
     for (const config of [
-      { timeoutMs: 0 }, { maxMessageBytes: 0x1_0000_0000 }, { maxOutputBytes: 3 }, { graceMs: 2_147_483_648 },
+      { timeoutMs: 0 }, { maxMessageBytes: 1.5 }, { maxOutputBytes: 3 }, { graceMs: 2_147_483_648 },
       { launch: { kind: 'node-script', executable: '' } },
       { launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: 'relative' } },
     ] satisfies Config[]) {
@@ -425,7 +376,7 @@ describe('persistent PTC host protocol', () => {
 
   it('waits for another environment to stop before reporting a failed cleanup', async () => {
     const h = await setup()
-    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    h.onBoot(() => { h.complete({}) })
     await h.start()
     const entered: PromiseWithResolvers<void> = Promise.withResolvers()
     const release: PromiseWithResolvers<string> = Promise.withResolvers()
@@ -457,15 +408,19 @@ describe('persistent PTC host protocol', () => {
 
 it('rejects corrupt framed traffic before it reaches the evaluator', async () => {
   const h = await setup()
-  h.onBoot(() => { h.control.emit('data', Buffer.from([0, 0, 0, 1, 255])) })
+  h.onBoot(() => { h.control.emit('data', Buffer.from([255, 10])) })
   expect((await h.start()).error?.kind).toBe('protocol')
 })
 
-it('discards unsolicited idle traffic and awaits the retained process exit', async () => {
+it.each([
+  { t: 'q', m: 'log', a: ['late'] },
+  { t: 'q', m: 'outputLimit', a: [] },
+  call(),
+])('discards unsolicited idle traffic %j and awaits the retained process exit', async (raw) => {
   const h = await setup()
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   expect((await h.start()).error).toBeUndefined()
-  h.emit(frame({ type: 'log', text: 'late' }))
+  h.emit(raw)
   await h.direct.promise
   expect(h.terminate).toHaveBeenCalledTimes(1)
 })
@@ -475,7 +430,7 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
   const cleanup = Promise.withResolvers<true>()
   const stopped = Promise.withResolvers<boolean>()
   h.waitForExit.mockImplementation(async () => { cleanup.resolve(true); return stopped.promise })
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   let closing: Promise<void> | undefined
   try {
     await h.start()
@@ -496,11 +451,41 @@ it.each(['owner release', 'provider unload'])('keeps idle-crash cleanup tracked 
   } finally { stopped.resolve(true); await closing }
 })
 
+it('logs unexpected idle readiness and its failed cleanup', async () => {
+  const h = await setup()
+  const reported = vi.spyOn(h.fiber.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    h.onBoot(() => { h.complete({}) })
+    await h.start()
+    h.waitForExit.mockRejectedValueOnce(new Error('idle cleanup failed'))
+    h.emit({ t: 'q', m: 'ready', a: [] })
+    await vi.waitFor(() => { expect(reported).toHaveBeenCalledTimes(2) })
+    expect(reported.mock.calls).toEqual([['unexpected persistent PTC readiness'], ['idle cleanup failed']])
+  } finally { reported.mockRestore() }
+})
+
+it('does not log a launch failure after cancellation closed the environment', async () => {
+  const h = await setup()
+  const entered = Promise.withResolvers<undefined>()
+  const lookup = Promise.withResolvers<string>()
+  h.resolveExecutable.mockImplementation(() => { entered.resolve(undefined); return lookup.promise })
+  const reported = vi.spyOn(h.fiber.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    const controller = new AbortController()
+    const result = h.start({ ...request, signal: controller.signal }, NO_INITIAL_FRAME)
+    await entered.promise
+    controller.abort()
+    lookup.reject(new Error('lookup aborted'))
+    expect((await result).error?.kind).toBe('abort')
+    expect(reported).not.toHaveBeenCalled()
+  } finally { reported.mockRestore() }
+})
+
 it('logs an idle process failure with its bounded stderr tail', async () => {
   const h = await setup({ maxOutputBytes: 100 })
   const reported = vi.spyOn(h.fiber.ctx.logger, 'warn').mockImplementation(() => {})
   try {
-    h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+    h.onBoot(() => { h.complete({}) })
     await h.start()
     h.stdout.end()
     h.stderr.end('x'.repeat(200) + 'idle fatal diagnostic')
@@ -513,7 +498,7 @@ it('logs an idle process failure with its bounded stderr tail', async () => {
 
 it('retries process observation before releasing an owner after cleanup fails', async () => {
   const h = await setup()
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   await h.start()
   const failure = new Error('release cleanup failed')
   h.waitForExit.mockRejectedValue(failure)
@@ -533,7 +518,7 @@ it('reserves the owner while parse-output overflow releases its environment', as
   const h = await setup({ maxOutputBytes: 32 })
   const cleanup = Promise.withResolvers<true>()
   const stopped = Promise.withResolvers<boolean>()
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   await h.start()
   h.waitForExit.mockImplementation(async () => { cleanup.resolve(true); return stopped.promise })
   const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
@@ -582,7 +567,7 @@ it('reports a sandbox runner refusal before the REPL is ready', async () => {
 
 it('releases a confirmed exited process even when its output pipe did not drain', async () => {
   const h = await setup()
-  h.onBoot(() => { h.emit(frame({ type: 'done' })) })
+  h.onBoot(() => { h.complete({}) })
   await h.start()
   h.stdout.destroy()
   const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
@@ -596,8 +581,8 @@ it('releases a confirmed exited process even when its output pipe did not drain'
 it('preserves logs in a result-level failure when temporary process pipes do not drain', async () => {
   const h = await setup()
   h.onBoot(() => {
-    h.emit(frame({ type: 'log', text: 'captured before cleanup' }))
-    h.emit(frame({ type: 'done', value: encodePtcJsonWire(42) }))
+    h.emit({ t: 'q', m: 'log', a: ['captured before cleanup'] })
+    h.complete({ value: encodePtcJsonWire(42) })
     h.stdout.destroy()
   })
   const result = await h.start({ program: '1', bindings: [] })

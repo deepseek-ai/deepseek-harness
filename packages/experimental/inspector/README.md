@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 Inspect one running dsh Host and its browser Clients in Chrome DevTools: Host and Client Console contexts, Host Sources and debugging, captured Host fetches, and a shared Cordis tree, with all CDP state in a Worker.
 
-The optional [Developer Tools bundle](../inspector-profile/README.md) enables both NodeJS Inspector and Session Log, including Host fetch capture. Web startup does not require or accept `--inspect`.
+The optional [Developer tools bundle](../inspector-profile/README.md) enables both NodeJS inspector and Session log, including Host fetch capture. Web startup does not require or accept `--inspect`.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ For trusted local development, `pnpm run demo:inspector` explicitly mounts the s
 
 The bundle sets `experimental-inspector` to `disabled: false` with `captureFetch: true`. The Host's optional `--inspect` argument hook only opens an external Chrome window; it does not control whether the Inspector runs.
 
-When this component is enabled, **Ctrl/Cmd+Shift+.** toggles **NodeJS Inspector** in the full-width bottom panel without requiring a selected Session. Drag its top edge to resize it, taking space from the content above; the selected height is retained across collapse and navigation. The focused divider also accepts Up/Down, Home and End. Its iframe loads on the first open and remains mounted while collapsed and across Session or main-panel navigation; unloading the component resets it. The X button and shortcut restore the opening control's focus when that control remains connected. The iframe automatically connects to this Host and opens Console; the manual Connection panel is omitted. Each embedded frontend shows Host and only its embedding page's Client in Console, Sources and the Cordis tree. The printed `devtools://` URL shows all Clients.
+When this component is enabled, **Ctrl/Cmd+Shift+.** toggles **NodeJS inspector** in the full-width bottom panel without requiring a selected Session. Drag its top edge to resize it, taking space from the content above; the selected height is retained across collapse and navigation. The focused divider also accepts Up/Down, Home and End. Its iframe loads on the first open and remains mounted while collapsed and across Session or main-panel navigation; unloading the component resets it. The X button and shortcut restore the opening control's focus when that control remains connected. The iframe automatically connects to this Host and opens Console; the manual Connection panel is omitted. Each embedded frontend shows Host and only its embedding page's Client in Console, Sources and the Cordis tree. The printed `devtools://` URL shows all Clients.
 
 The Host serves the mirrored DevTools frontend at the application-relative `inspector/devtools/devtools_app.html` path, using the existing Web login. The `inspector/devtools` prefix redirects to that entry; GET and HEAD serve files, missing resources return 404, and other methods return 405. Its `cdp` WebSocket route authenticates the same browser session and forwards only to this Inspector's Worker page target. The bottom panel supplies its claimed `clientSourceId` to the entry and automatic WebSocket endpoint; the selection follows that logical Client across reconnects. An absent selector includes all Clients, an unavailable selected Client leaves Host visible, and empty or repeated selectors reject the upgrade with 400. Explicit `ws` or `wss` query parameters override the automatic endpoint, including its selection.
 

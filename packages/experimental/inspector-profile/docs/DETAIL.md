@@ -1,13 +1,13 @@
-![Session Log table in the sidebar and the NodeJS Inspector console](preview.svg)
+![Session log table in the sidebar and the NodeJS inspector console](preview.svg)
 
 Use it when troubleshooting: check exactly what DSH recorded for a session, or debug DSH itself in Chrome DevTools. It does not change how the agent works.
 
 ## How to use
 
-- In the right sidebar, click **+** (**New tab**), then choose **Session Log** on the **Start** page that opens.
-- **Raw Log** lists the session's events grouped by turn and step; click a row to see its full data. Switch the selector to **Chat Group** to see the chat messages and their groups instead.
+- In the right sidebar, click **+** (**New tab**), then choose **Session log** on the **Start** page that opens.
+- **Raw log** lists the session's events grouped by turn and step; click a row to see its full data. Switch the selector to **Chat group** to see the chat messages and their groups instead.
 - Click the crosshair button next to the selector, then click a message in the chat to find its record. Press Esc to cancel.
-- Press **Ctrl+Shift+.** (**Cmd+Shift+.** on macOS) to open or collapse **NodeJS Inspector** at the bottom of the window: Chrome DevTools, in English, connected to the DSH backend.
+- Press **Ctrl+Shift+.** (**Cmd+Shift+.** on macOS) to open or collapse **NodeJS inspector** at the bottom of the window: Chrome DevTools, in English, connected to the DSH backend.
 
 ## Good to know
 

@@ -1,8 +1,9 @@
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
   FileAttachmentRef, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
@@ -15,7 +16,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import FileUploads from '@deepseek-ai/dsh-client-file-upload'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { ApiSessionAgentController } from '../src/agent.ts'
+import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
 import type { SessionRequestId } from '../src/types.ts'
 
@@ -44,17 +45,25 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   })
   const inbox = createInboxStub()
   const followup = vi.fn()
+  const options = { provider: 'fixture', model: 'fixture-model' }
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
   const agent = {
     id: session.id,
+    options,
+    whenIdle: vi.fn(() => Promise.resolve()),
+    runMaintenance: async () => { throw new Error('unexpected maintenance') },
+    send: vi.fn(),
+    inject: vi.fn(),
     session,
+    model: new AgentModel(() => projection.stateOf(session), session, options),
     inbox,
     status: 'idle',
-    ctx: undefined,
+    ctx,
     steer: vi.fn(),
     followup,
     cancel: vi.fn(),
-  } as unknown as Agent
-  ;(agent as { ctx: Context }).ctx = createScope(ctx, agent).ctx
+  } satisfies Agent
+  agent.ctx = createScope(ctx, agent).ctx
   const disposeAgent = await ctx.agents.register(agent)
   const saveFile = vi.fn((input: SaveFileAttachment): Promise<FileAttachmentRef> => Promise.resolve({
     attachmentId: AttachmentId(`sha256:${'cd'.repeat(32)}`),
@@ -90,15 +99,8 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
     resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
   } as never)
-  const selection: ModelSelectionRef = {
-    current: { provider: 'fixture', model: 'fixture-model' },
-    assembled: undefined,
-  }
-  const agents = {
-    resolveAgent: () => Promise.resolve({ agent }),
-    selectionFor: () => selection,
-    serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
-  } as unknown as ApiSessionAgentController
+  const agents = new ApiSessionAgentController(ctx)
+  vi.spyOn(agents, 'resolveAgent').mockResolvedValue({ agent })
   const uploads = new FileUploads(ctx)
   if (uploadRoute === undefined) throw new Error('file upload route was not registered')
   return {
@@ -225,6 +227,28 @@ describe('Session file uploads', () => {
     ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } })
     expect(followup).not.toHaveBeenCalled()
     expect(saveImages).not.toHaveBeenCalled()
+  })
+
+  it('admits an image before the Agent has a model selection', async () => {
+    const { ctx, controller, agent, followup, saveImages } = await uploadHarness()
+    delete agent.options.provider
+    delete agent.options.model
+    expect(agent.model.current()).toBeUndefined()
+    const resolveModel = vi.spyOn(ctx.llm, 'resolveModelInfo')
+    const image: ImageAttachmentRef = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      mediaType: 'image/png', bytes: 3, width: 1, height: 1,
+    }
+    saveImages.mockResolvedValueOnce([image])
+
+    await expect(controller.prompt(promptRequest([
+      { type: 'image', mediaType: 'image/png', data: 'AAAA' },
+    ]), USER_SOURCE)).resolves.toEqual({ accepted: true })
+
+    expect(resolveModel).not.toHaveBeenCalled()
+    expect(followup).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      content: [{ type: 'image', attachment: image }],
+    }))
   })
 
   it('publishes no receipt when its exact Agent is disposed during storage', async () => {

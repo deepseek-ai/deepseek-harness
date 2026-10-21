@@ -101,6 +101,7 @@ function props(
     useChat: unused,
     useTrajectory: unused,
     inputActions: {
+      insertQuote: () => false,
       captureInsertion: unused,
       insertText: unused,
       setDraft: unused,

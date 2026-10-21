@@ -1,5 +1,5 @@
 /**
- * Shared service mounting, real AgentLoop drivers, and structural Inbox stubs
+ * Shared service mounting, real AgentLoop drivers, and structural Agent stubs
  * for agent-loop tests. Callers retain ownership of their contexts, adapters,
  * optional plugins, agents, and teardown.
  * @module @deepseek-ai/dsh-agent-loop-testkit
@@ -21,6 +21,7 @@ import FsLocal from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 
 export { createInboxStub, unsupportedInbox } from './inbox.ts'
+export { unsupportedModel } from './model.ts'
 export { provideWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
 interface DriverInbox extends Inbox {

@@ -923,14 +923,14 @@ describe('web e2e: plugin manager', () => {
     expect(await child.getByText('为智能体提供成员协调、消息通信和共享任务管理工具。', { exact: true }).count()).toBe(1)
     try {
       await setLanguage('en')
-      await panel.getByRole('heading', { name: 'Agent Teams', exact: true }).waitFor()
+      await panel.getByRole('heading', { name: 'Agent teams', exact: true }).waitFor()
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
       expect(await panel.getByText('Enable team collaboration, team tools, the member roster, and the shared task board.').count()).toBe(1)
-      await child.getByText('Team Tools', { exact: true }).waitFor()
+      await child.getByText('Team tools', { exact: true }).waitFor()
       expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
-      await panel.getByRole('button', { name: 'View Agent Teams', exact: true }).waitFor()
-      expect(await panel.getByRole('switch', { name: 'Enable Agent Teams', exact: true }).count()).toBe(1)
+      await panel.getByRole('button', { name: 'View Agent teams', exact: true }).waitFor()
+      expect(await panel.getByRole('switch', { name: 'Enable Agent teams', exact: true }).count()).toBe(1)
       // Schedule ships in the delivered composition, so no bundle card carries it in either language.
       expect(await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).count()).toBe(0)
       // The official configuration pages follow the language too, from their own dictionary.

@@ -1,6 +1,7 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
-import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 
+import type {} from '@deepseek-ai/dsh-agent/types'
+import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 import type {
   AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
@@ -23,18 +24,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
      * it, so a list row would repeat one host-wide fact.
      */
     imageLimits: SessionProjectionSummaryExcluded<ImageAttachmentLimits>
-    /** Durable model selection already used and selected for the next request. */
-    modelSelection: ModelSelectionProjection
-  }
-}
-
-declare module '@deepseek-ai/dsh-session/types' {
-  interface SessionEventMap {
-    /**
-     * Complete validated model selection requested for subsequent prompt
-     * assembly. Log-only: it never enters derived model history.
-     */
-    'model/selection': ModelSelection
   }
 }
 
@@ -99,22 +88,6 @@ export interface ModelSelection {
   readonly provider: string
   readonly model: string
   readonly reasoningEffort?: string
-}
-
-/** Host fold state for durable model selection. */
-export interface ModelSelectionProjectionState {
-  /** Selection consumed by the latest recorded model request. */
-  readonly lastUsed: ModelSelection | null
-  /** Later user selection not yet consumed by a matching model request. */
-  readonly pending: ModelSelection | null
-}
-
-/** Client view of the durable model-selection fold. */
-export interface ModelSelectionProjection {
-  /** Selection consumed by the latest recorded model request. */
-  readonly lastUsed: ModelSelection | null
-  /** Selection the next request should use, falling back to {@link lastUsed}. */
-  readonly next: ModelSelection | null
 }
 
 /** One adapter-owned reasoning effort for an exact model route. */

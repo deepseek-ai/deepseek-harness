@@ -30,7 +30,6 @@ import * as SessionTurnOutlinePlugin from '@deepseek-ai/dsh-session-turn-outline
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 // These Host-only adapters have no public Node export and are compiled into the benchmark worker.
 import { SessionHistoryController } from '../../packages/api/session-controller/src/history.ts'
-import { modelSelectionProjection } from '../../packages/api/session-controller/src/model-selection-projection.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 import { SYNTHETIC_SESSION_ID } from './session-open.constants.ts'
 
@@ -131,7 +130,6 @@ function memoryDelta(
 async function installProjectionSet(ctx: Context): Promise<void> {
   // Mirrors projection owners mounted by the base and web-app bundles without timing profile boot.
   await ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  await ctx.sessionProjections.register(modelSelectionProjection)
   await ctx.plugin(SessionTitleService, {
     fallbackMaxWords: 5,
     fallbackMaxBytes: 40,

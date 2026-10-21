@@ -51,7 +51,7 @@ kind: "package-reference"
 | `maxTimeoutMs` | `600,000` | 解析器应用的经过时间截止上限 |
 | `maxOutputBytes` | `67,108,864` | 序列化日志与完成值或诊断的合计预算 |
 | `maxOldGenerationSizeMb` | `512` | V8 老生代堆上限，单位 MiB |
-| `maxMessageBytes` | `134,217,728` | 控制帧、未完成参数字节和排队控制写入的上限 |
+| `maxMessageBytes` | `134,217,728` | 控制消息、未完成绑定参数字节和排队控制写入的上限 |
 | `maxPendingCalls` | `128` | 同时进行的 Host 绑定调用数量上限 |
 | `graceMs` | `3,000` | 受管终止与输出排空宽限时间 |
 | `launch` | 本地载体 | 子进程环境中显式的 `{ kind: "node-script", executable, bootstrapPath? }` 或 `{ kind: "embedded", executable }` |
@@ -93,7 +93,7 @@ PTC 消费方按 [dsh-tools](../../core/tools/README.zh.md#ptc-mode) 的说明�
 
 ### 失败
 
-程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；畸形或超量控制通信为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出或受管清理失败为 `worker-exit`。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
+程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出或受管清理失败为 `worker-exit`。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
 -----
 
@@ -109,11 +109,13 @@ Host 负责策略、截止时间、绑定查找和进程清理。子进程负责
 
 Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与 bootstrap，通过 `ctx.sandbox` 等待 argv 限制准备完成，再通过 `ctx.subprocess` 启动。限制准备完成后会再次检查取消状态，因此提供方在取消后返回也无法启动程序。接管继承的控制通道后，子进程在 OS 环境中只保留可执行文件搜索路径、Windows 系统路径和临时路径，并将程序可见的 `process.env` 替换为空字典。Windows ACL 初始化接收父进程各自的 `TEMP` 和 `TMP` 值以使用共享授权锁，然后在启动程序前将二者替换为私有目录。这些原生路径使嵌套进程创建和原生临时文件 API 仍可正常工作。Host 仅在子进程启动时保留 `ELECTRON_RUN_AS_NODE`，使桌面端可执行文件运行 Node bootstrap；bootstrap 在求值模型代码前删除该选择变量。堆上限通过 Node argv 或为打包可执行文件由提供方构造的 `NODE_OPTIONS` 值传递；环境中的加载器和调试器标志会被丢弃。
 
-带长度分帧的 JSON 与 stdout/stderr 分开传输。Host 限制帧与排队写入，在分派前验证调用身份和已声明的绑定名，并拒绝无效通信。子进程刷新终态帧后仍保持控制通道打开，直到 Host 关闭通道。提交终态帧后，子进程忽略后续绑定回复，不再发送程序控制消息。输出捕获计量序列化日志加完成值或诊断；固定结果信封字段与沙箱元数据不计入该账本。
+Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host 的 `invoke()` 方法，捕获的输出通过通知传递。birpc 负责请求关联、远程结果和异常传递。逐行 JSON 通过继承的控制管道传输，与 stdout/stderr 分离。RPC 适配层限制每行消息和原生写入队列的大小，并在管道关闭时拒绝待完成调用；对端点自身没有的方法，birpc 以错误回复，管道关闭后不再执行任何方法。Host 在分派前校验绑定名与无损 JSON；同一管道保证每次求值的消息先于其结果到达，因此消息不携带求值身份。执行截止时间仍由 Host 管理，包含等待审批的调用。
+
+单次执行完成后，尚未完成的绑定等待保持挂起，并停止绑定调用和捕获输出的通知。子进程保持控制管道打开，直到 Host 收到结果并关闭管道。输出捕获计量序列化日志加完成值或诊断；固定结果信封字段与沙箱元数据不计入该账本。
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出。构建后脚本通过 `process.js` 运行逐次程序，通过 `persistent-process.js` 运行保留状态的 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载可擦除的 TypeScript 及已安装的 birpc 依赖，不依赖同级包的构建后导出。构建后的进程脚本将 birpc 打包在内，因此预安装的 bootstrap 无需在旁边安装依赖。构建后脚本通过 `process.js` 运行逐次程序，通过 `persistent-process.js` 运行保留状态的 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
 ### 源码索引
 
@@ -127,7 +129,8 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 | [`src/launch.ts`](src/launch.ts) | 可执行文件／bootstrap 参数与执行世界资源映射 |
 | [`src/process.ts`](src/process.ts) | 子进程握手、环境清空与程序生命周期 |
 | [`src/bootstrap.ts`](src/bootstrap.ts) | 程序求值、绑定代理与输出捕获 |
-| [`src/channel.ts`](src/channel.ts) | 分帧、有界写入与协议失败 |
+| [`src/rpc.ts`](src/rpc.ts) | 类型化 birpc 传输、消息限制与连接生命周期 |
+| [`src/protocol.ts`](src/protocol.ts) | Host 与程序方法，以及不可信程序结果的校验 |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host 外层结果计量 |
 
 </details>
@@ -168,6 +171,7 @@ Host 擦除可擦除类型，在配置的执行世界中解析可执行文件与
 - **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
+- **控制协议没有版本握手**——预装的 `launch.bootstrapPath` 或 SSH helper 必须来自与客户端相同的版本；其他版本的 bootstrap 会在第一条控制消息时失败。
 - **console shim 有五个方法**——`log`、`info`、`warn`、`error` 与 `debug`。
 
 <a id="dev-note"></a>

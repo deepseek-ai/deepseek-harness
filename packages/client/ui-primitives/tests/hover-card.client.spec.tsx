@@ -129,7 +129,7 @@ describe('HoverCard', () => {
     expect(screen.queryByText('card body')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     const card = screen.getByText('card body').parentElement as HTMLElement
-    expect(card.parentElement).toBe(document.body)
+    expect(card.parentElement?.parentElement).toBe(document.body)
     expect(card.style.left).toBe('208px')
     expect(card.style.top).toBe('40px')
   })

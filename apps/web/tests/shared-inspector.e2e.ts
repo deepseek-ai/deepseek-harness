@@ -42,7 +42,7 @@ it('toggles bottom DevTools from the page and iframe without a selected Session'
       const close = panel.getByRole('button', { name: 'Collapse', exact: true })
       expect(await close.textContent()).toBe('')
       expect(await close.locator('svg').count()).toBe(1)
-      const divider = panel.getByRole('separator', { name: 'Resize NodeJS Inspector panel' })
+      const divider = panel.getByRole('separator', { name: 'Resize NodeJS inspector panel' })
       const drag = async (deltaY: number): Promise<void> => {
         const box = (await divider.boundingBox())!
         const x = box.x + box.width / 2
@@ -93,10 +93,10 @@ it.each([
     openSidebar: '打开右侧边栏', sidebarDescription: '在侧边栏分析当前会话原始日志和聊天分组数据',
   },
   {
-    locale: 'en-US', file: 'en', plugins: 'Plugins', open: 'View Developer Tools', bundle: 'Developer Tools',
+    locale: 'en-US', file: 'en', plugins: 'Plugins', open: 'View Developer tools', bundle: 'Developer tools',
     description: 'Inspect and debug raw session data, grouped chat messages, and the NodeJS backend.',
-    inspector: 'NodeJS Inspector', inspectorDescription: 'Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.',
-    session: 'Session Log', sessionDescription: "Enable analysis of the current session's raw data and grouped chat messages in the session sidebar.",
+    inspector: 'NodeJS inspector', inspectorDescription: 'Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.',
+    session: 'Session log', sessionDescription: "Enable analysis of the current session's raw data and grouped chat messages in the session sidebar.",
     openSidebar: 'Open right sidebar', sidebarDescription: 'Analyze raw logs and grouped chat messages for the current session in the sidebar.',
   },
 ])('shows the Inspector bundle and component copy in $locale', async (copy) => {
@@ -150,7 +150,7 @@ it.each([
     `  description: ${await sessionGuide.getByText(copy.sidebarDescription, { exact: true }).innerText()}`,
     `- NodeJS bottom: ${await bottomTitle.innerText()}`)
   await sessionGuide.click()
-  await page.getByRole('table', { name: copy.locale === 'zh-CN' ? '原始数据' : 'Raw Log', exact: true }).waitFor()
+  await page.getByRole('table', { name: copy.locale === 'zh-CN' ? '原始数据' : 'Raw log', exact: true }).waitFor()
   await compareOrRefreshGolden(fileURLToPath(new URL(`./expected/shared-inspector/metadata-${copy.file}.expected.md`, import.meta.url)),
     snapshot.join('\n'), webSnapshotMode())
 })

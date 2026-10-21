@@ -35,7 +35,7 @@ it('opens bottom DevTools after the Developer Tools bundle is enabled on an alre
 
   await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
   const plugins = page.locator('[data-plugin-panel]')
-  const toggle = plugins.getByRole('switch', { name: 'Enable Developer Tools', exact: true })
+  const toggle = plugins.getByRole('switch', { name: 'Enable Developer tools', exact: true })
   await toggle.waitFor()
   expect(await toggle.getAttribute('aria-checked')).toBe('false')
   const panel = page.locator('[data-inspector-panel]')

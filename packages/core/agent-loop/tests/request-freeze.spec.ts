@@ -1,3 +1,4 @@
+import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 /** Request immutability through the real loop, including adopted restore graphs. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -75,8 +76,9 @@ describe('loop-owned request freezing', () => {
     expect(Object.isFrozen(assistantEvent.data.message)).toBe(false)
     ctx.effect(() => ctx.sessions.enter(session))
     const inbox = await loopCtx.sessionProjections.register(inboxProjectionDefinition)
+    const model = await loopCtx.sessionProjections.register(modelSelectionProjectionDefinition)
     const agent = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
-      () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
+      () => model.stateOf(session), () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
     cleanups.push(async () => {
       agent.cancel({ kind: 'disposed' })
       await agent.whenIdle()
@@ -126,7 +128,7 @@ describe('loop-owned request freezing', () => {
     expect(freeze.mock.calls.filter(([value]) => value === userEvent.data)).toHaveLength(1)
     expect(freeze.mock.calls.filter(([value]) => value === replacement.data)).toHaveLength(1)
     const resumed = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
-      () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
+      () => model.stateOf(session), () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
     cleanups.push(async () => {
       resumed.cancel({ kind: 'disposed' })
       await resumed.whenIdle()

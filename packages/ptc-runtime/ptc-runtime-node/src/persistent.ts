@@ -8,19 +8,19 @@ import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
+import type { BirpcReturn } from 'birpc'
 import type { PolicyProcesses } from './policy-processes.ts'
 import type { ResolvedConfig } from './config.ts'
-import { replyToBinding, validateBindings } from './bindings.ts'
-import { JsonChannel } from './channel.ts'
+import { invokeBinding, validateBindings } from './bindings.ts'
+import { createProcessRpc } from './rpc.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
-import type { ProgramBootData } from './protocol.ts'
+import { readProgramResult, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
-const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 function persistentOutput(maxBytes: number): OutputLedger {
   return new OutputLedger(maxBytes, `retained variables were cleared; outer output exceeded ${maxBytes} bytes`)
@@ -40,11 +40,10 @@ function sameAdditionalRoots(left: readonly string[] | undefined, right: readonl
 }
 
 interface Evaluation {
-  id: number
   data: ProgramBootData
   spec: PtcRunSpec
   bindings: Map<string, PtcBindingNamespace>
-  reply: typeof replyToBinding
+  invoke: typeof invokeBinding
   pending: number
   pendingBytes: number
   admit(text: string): void
@@ -56,14 +55,12 @@ class Kernel {
   private readonly unregister: (() => void) | undefined
   private confined: ConfinedArgv | undefined
   private handle?: SubprocessHandle
-  private channel?: JsonChannel
+  private channel?: BirpcReturn<ProgramMethods, HostMethods>
   private active: Evaluation | undefined
   /** Admission remains reserved until the result includes completed process cleanup. */
   private running = false
   private cleanupPending = false
   private ready = false
-  private sequence = 0
-  private nextCall = 1
   private stderr = ''
   private stopped: Promise<boolean> | undefined
   private starting?: Promise<void>
@@ -117,11 +114,10 @@ class Kernel {
     }, spec.timeoutMs)
     const onAbort = (): void => { evaluation.finish({ kind: 'abort', message: 'execution canceled; retained variables were cleared' }, undefined, true) }
     const evaluation: Evaluation = {
-      id: ++this.sequence,
       data: { code, maxOutputBytes: this.config.maxOutputBytes, namespaces: [...bindings.values()].map(binding => ({
         global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
       })) },
-      spec, bindings, reply: AsyncLocalStorage.bind(replyToBinding), pending: 0, pendingBytes: 0,
+      spec, bindings, invoke: AsyncLocalStorage.bind(invokeBinding), pending: 0, pendingBytes: 0,
       admit: (text) => {
         if (!output.admit(text, logs)) {
           logs.push(text)
@@ -164,7 +160,7 @@ class Kernel {
     this.closed = true
     this.cleanupPending = true
     this.controller.abort()
-    this.channel?.close()
+    this.channel?.$close()
     this.stopped = (async () => {
       await this.starting?.catch(() => {})
       const handle = this.handle
@@ -187,8 +183,11 @@ class Kernel {
   }
 
   private dispatch(evaluation: Evaluation): void {
-    void this.channel?.send({ type: 'run', id: evaluation.id, cwd: evaluation.spec.cwd, data: evaluation.data })
-      .catch((error: unknown) => { this.fail('protocol', messageOf(error)) })
+    void this.channel?.run(evaluation.spec.cwd, evaluation.data).then((raw) => {
+      const { error, value } = readProgramResult(raw)
+      // Raw stdio can be queued beside the RPC result on separate pipes.
+      setImmediate(() => { evaluation.finish(error, value) })
+    }).catch((error: unknown) => { if (this.active === evaluation && !this.channel?.$closed) this.fail('protocol', messageOf(error)) })
   }
 
   private exitMessage(outcome: SubprocessOutcome): string {
@@ -217,78 +216,58 @@ class Kernel {
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
-    this.channel = new JsonChannel(handle.control, this.config.maxMessageBytes,
-      (raw, bytes) => { this.receive(raw, bytes) }, (error, kind) => {
-        if (kind === 'protocol') this.fail('protocol', error.message)
-        else setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
-      })
+    // Report a protocol failure and abandon the handler; the closed endpoint sends no response.
+    const refuse = (message: string): never => { this.fail('protocol', message); throw new Error(message) }
+    this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
+      ready: () => {
+        if (this.ready || !this.active) { this.fail('protocol', 'unexpected persistent PTC readiness'); return }
+        this.ready = true
+        this.dispatch(this.active)
+      },
+      log: (text: unknown) => {
+        if (this.active === undefined || typeof text !== 'string') this.fail('protocol', 'invalid persistent PTC log')
+        else this.active.admit(text)
+      },
+      outputLimit: () => {
+        if (this.active === undefined) this.fail('protocol', 'idle persistent PTC output limit')
+        else this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+      },
+      invoke: async (global, name, wire) => {
+        const evaluation = this.active
+        if (evaluation === undefined) return refuse('idle persistent PTC binding call')
+        const args = decodePtcJsonWire(wire)
+        if (args === undefined) return refuse('binding arguments must be lossless JSON')
+        const bytes = Buffer.byteLength(JSON.stringify(wire))
+        if (evaluation.pending >= this.config.maxPendingCalls || evaluation.pendingBytes + bytes > this.config.maxMessageBytes) {
+          return refuse('pending binding calls exceed configured limits')
+        }
+        // A retained function can name a binding this evaluation no longer declares; invokeBinding rejects it.
+        const functions = evaluation.bindings.get(global)?.functions
+        const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
+        evaluation.pending += 1
+        evaluation.pendingBytes += bytes
+        try {
+          const value = await evaluation.invoke(fn, args)
+          // The child already rejected this wait; a late result must not fill the pipe shared with the next evaluation.
+          if (this.active !== evaluation) throw new Error('PTC evaluation ended before the binding completed')
+          return value
+        } finally {
+          evaluation.pending -= 1
+          evaluation.pendingBytes -= bytes
+        }
+      },
+    }, [], (error, kind) => {
+      if (kind === 'protocol') this.fail('protocol', error.message)
+      else setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
+    })
     void handle.done.then(async (outcome) => {
       this.exitOutcome = outcome
       await Promise.all([drainOutput(handle.stdout, this.config.graceMs), drainOutput(handle.stderr, this.config.graceMs)])
-      // The terminal control frame can already be queued when process exit arrives.
+      // The run result can already be queued when process exit arrives.
       setImmediate(() => {
         if (!this.closed) this.fail(this.confined !== undefined && classifyRunnerFailure(outcome.exitCode, this.stderr, this.confined.runnerFailureRules) !== undefined ? 'sandbox-unavailable' : 'worker-exit', this.exitMessage(outcome))
       })
     }, (error: unknown) => { this.fail('worker-exit', messageOf(error)) })
-  }
-
-  private receive(raw: unknown, bytes: number): void {
-    if (!record(raw)) { this.fail('protocol', 'invalid persistent PTC frame'); return }
-    const evaluation = this.active
-    if (!evaluation) { this.fail('protocol', 'frame arrived without an active PTC evaluation'); return }
-    if (!this.ready) {
-      if (raw.type !== 'ready') { this.fail('protocol', 'expected persistent PTC readiness'); return }
-      this.ready = true
-      this.dispatch(evaluation)
-      return
-    }
-    if (raw.id !== evaluation.id || !record(raw.payload)) { this.fail('protocol', 'frame does not belong to the active PTC evaluation'); return }
-    const payload = raw.payload
-    switch (payload.type) {
-      case 'log':
-        if (typeof payload.text === 'string') evaluation.admit(payload.text)
-        else this.fail('protocol', 'invalid persistent PTC log')
-        return
-      case 'output-limit': evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true); return
-      case 'done': {
-        if (payload.error !== undefined) {
-          const error = payload.error
-          if (!record(error) || typeof error.message !== 'string' || (error.kind !== 'exception' && error.kind !== 'invalid-output' && error.kind !== 'output-limit')) {
-            this.fail('protocol', 'invalid persistent PTC failure'); return
-          }
-          const failure = { kind: error.kind, message: error.message } as PtcRunFailure
-          setImmediate(() => { evaluation.finish(failure, undefined, failure.kind === 'output-limit') })
-        } else {
-          const value = payload.value === undefined ? undefined : decodePtcJsonWire(payload.value)
-          const failure: PtcRunFailure | undefined = payload.value !== undefined && value === undefined
-            ? { kind: 'invalid-output', message: 'program completion must be lossless JSON' } : undefined
-          // Raw stdio may be queued beside the terminal control frame on separate pipes.
-          setImmediate(() => { evaluation.finish(failure, value) })
-        }
-        return
-      }
-      case 'call': {
-        if (payload.id !== this.nextCall || typeof payload.global !== 'string' || typeof payload.name !== 'string') { this.fail('protocol', 'invalid persistent PTC binding identity'); return }
-        this.nextCall += 1
-        const args = decodePtcJsonWire(payload.args)
-        if (args === undefined) { this.fail('protocol', 'binding arguments must be lossless JSON'); return }
-        if (++evaluation.pending > this.config.maxPendingCalls || (evaluation.pendingBytes += bytes) > this.config.maxMessageBytes) {
-          this.fail('protocol', 'pending binding calls exceed configured limits'); return
-        }
-        const functions = evaluation.bindings.get(payload.global)?.functions
-        const fn = functions && Object.hasOwn(functions, payload.name) ? functions[payload.name] : undefined
-        const id = payload.id
-        void (async () => {
-          const reply = await evaluation.reply(id, fn, args).finally(() => {
-            evaluation.pending -= 1
-            evaluation.pendingBytes -= bytes
-          })
-          if (this.active === evaluation) await this.channel?.send(reply)
-        })().catch((error: unknown) => { this.fail('protocol', messageOf(error)) })
-        return
-      }
-      default: this.fail('protocol', 'unknown persistent PTC message')
-    }
   }
 }
 

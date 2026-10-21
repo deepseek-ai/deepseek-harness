@@ -17,6 +17,7 @@
     { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
     { "path": "../../client/ui-workspace" },
+    { "path": "../../core/agent" },
     { "path": "../../core/session" }
   ]
 }

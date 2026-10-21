@@ -136,7 +136,7 @@ Merge these entries into `package.json`, retaining existing runtime exports and 
 }
 ```
 
-Keep language files together in `locale/`, with `en.json` as the discovery entry. Fields are optional; present values must be non-empty strings. Missing files or fields permit fallback, while malformed JSON or invalid fields produce a per-plugin diagnostic.
+Keep language files together in `locale/`, with `en.json` as the discovery entry. Fields are optional; present values must be non-empty strings. English `meta.title` and `meta.description` use sentence case: capitalize only the first word, proper nouns, and product names, as in `Git worktrees` ([rule](../../.agents/skills/dsh-prose-standard/SKILL.md#required-coverage-by-prose-location)). Missing files or fields permit fallback, while malformed JSON or invalid fields produce a per-plugin diagnostic.
 
 Fields fall back independently before view-specific name formatting, using the existing locale language chain first:
 

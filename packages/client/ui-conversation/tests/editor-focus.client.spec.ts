@@ -37,6 +37,7 @@ function fixture(start = 1, end = 4) {
   const onUpdate = vi.fn()
   const runtime: DraftEditorRuntime = new DraftEditorRuntime({
     onUpdate: () => { runtime.refreshProjection(); onUpdate() },
+    quoteLabels: () => ({ remove: 'Remove quote' }),
     openReference: () => false,
     lexicon: () => new Map(), resolveLexicon: () => undefined,
   })
