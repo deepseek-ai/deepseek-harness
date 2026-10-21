@@ -75,13 +75,13 @@ it.each([
   const question = request.questions[0]!
   expect(question).toMatchObject({
     id: 'cua-app-access',
-    question: 'Allow Computer Use to launch if needed, read, capture, and control Test application?',
-    detail: 'Session access lasts until DSH restarts or Computer Use is disabled.',
+    question: 'Allow computer use to launch if needed, read, capture, and control Test application?',
+    detail: 'Session access lasts until DSH restarts or computer use is disabled.',
     intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
       subject: { name: 'Test application' }, display: {
-        question: { en: 'Allow Computer Use to launch, read, capture and control this application?',
+        question: { en: 'Allow computer use to launch, read, capture and control this application?',
           zh: '允许 Computer Use 启动、读取、截图和控制此应用吗？' },
-        detail: { en: 'Session access lasts until DSH restarts or Computer Use is disabled.',
+        detail: { en: 'Session access lasts until DSH restarts or computer use is disabled.',
           zh: '会话授权在 DSH 重启或关闭 Computer Use 后失效。' },
         approve: { en: 'Allow for this session', zh: '本会话允许' },
       },

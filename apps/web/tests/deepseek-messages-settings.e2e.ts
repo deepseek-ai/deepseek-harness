@@ -95,6 +95,8 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     onTestFailed(() => saveFailureShot(page, 'web-e2e-deepseek-messages-default'))
     await page.keyboard.press('Escape')
     await scaffold.ctx.agentDefaultModel.saveSelection({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+    const patchPath = join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
+    expect(await readFile(patchPath, 'utf8')).toContain('model: deepseek-v4-flash')
     await page.reload({ waitUntil: 'load' })
     const input = page.locator('[data-composer-input]').first()
     const trigger = page.getByRole('button', { name: '请选择模型', exact: true })
@@ -109,8 +111,8 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     await expect.poll(() => scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({
       provider: 'deepseek-official', model: 'deepseek-flash',
     })
-    const settings = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
-    expect(settings).toContain('provider: deepseek-official')
+    const settings = await readFile(patchPath, 'utf8')
+    expect(settings).not.toContain('id: agent-default-model')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 })

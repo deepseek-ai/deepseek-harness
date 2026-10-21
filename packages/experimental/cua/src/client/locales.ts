@@ -2,13 +2,13 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
-  title: 'Authorize Computer Use',
-  applicationsTitle: 'Manage applications Computer Use can access',
-  setupTitle: 'Set up Computer Use before use',
-  setupBody: 'Computer Use is enabled. Before using it, switch to PTC mode and grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.',
-  setupQueryFailed: 'Computer Use is enabled, but system permissions could not be checked. Open the plugin details to see the error and retry.',
+  title: 'Authorize computer use',
+  applicationsTitle: 'Manage applications computer use can access',
+  setupTitle: 'Set up computer use before use',
+  setupBody: 'Computer use is enabled. Before using it, switch to PTC mode and grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.',
+  setupQueryFailed: 'Computer use is enabled, but system permissions could not be checked. Open the plugin details to see the error and retry.',
   defaultTitle: 'Default mode for new sessions',
-  defaultBody: 'Computer Use is available only in PTC mode.',
+  defaultBody: 'Computer use is available only in PTC mode.',
   defaultConfirm: 'Set to PTC', defaultSet: 'PTC is the default',
   defaultUnavailable: 'Could not read the default mode. Check it in Settings.',
   defaultReadOnly: 'Default-mode settings are read-only.',

@@ -74,6 +74,8 @@ agent 会完成该任务，把提供方的每个非空推理（reasoning）增�
 
 每次调用默认使用全新的 `session-<uuid>` 标识，`--json` 会在开头的 `session` 事件里报告它。传入 `--session-id <id>` 延续这段对话：runner 沿用该 id 对应的持久化 Session，而该 id 没有持久化 Session 时会在任务运行前失败，而不是悄悄开出一段空历史。沿用要求已组合 `sessionPersistence` 与 `sessionQuery` 服务，因此缺少任一服务的 profile 会显式失败，而不会返回一个历史随进程消失的 id。本进程中已存在持有该 id 的存活 Agent 时会被拒绝：它的原 owner 可能仍在驱动它，runner 无法取得独占的运行区间。标识是不透明的，因此会原样使用调用方给出的字符串，包括空白字符。工作目录通过已挂载的文件系统提供方解析（`fs.resolve('.')` 与 `fs.processPath()`）；未挂载文件系统服务时使用进程 cwd，新 Session 会记录该目录。沿用会将已记录 cwd 与同一提供方解析出的目录比较，并拒绝子 agent 或 fork 会话、未记录工作目录的会话、运行在本 profile 不组合的 agent preset 下的会话，以及 preset 记录畸形的会话——该检查读取 Session 日志当前记录的 preset，因此在空白期切换过 preset 的会话同样会被拒绝。因此监督进程无法在另一套组合下悄悄驱动他人的会话；任一不匹配都会在任务运行前失败。
 
+接管会话时，运行器会在提交任务前记录当前部署路由。未声明推理强度时，仅在路由相同的情况下保留已保存的显式强度。本进程中已准备的步骤保留捕获的路由，后续步骤读取共享的 Session 选择。
+
 ### 监督实现任务
 
 每个实现任务使用一个已准备好的 Git worktree。将该 worktree 设为进程工作目录，通过 stdin 提供范围明确的任务，并将 stdout 保存为 NDJSON；诊断仍写入 stderr。

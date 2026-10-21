@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
@@ -22,13 +23,13 @@ async function storageRoot(): Promise<string> {
   return root
 }
 
-async function runtime(root: string, persistence = true) {
+async function runtime(root: string, persistence = true, reasoning?: LlmModelReasoningInfo) {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
   if (persistence) await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
-  const adapter = new MockAdapter([textResponse('remembered')])
+  const adapter = new MockAdapter([textResponse('remembered')], reasoning)
   ctx.llm.registerAdapter(['mock'], adapter)
   const events: SessionEventNotification[] = []
   const transport: JsonRpcTransportPeer = {
@@ -49,6 +50,35 @@ async function initialized(root: string) {
 }
 
 describe('SDK persisted session resume', () => {
+  it.each([
+    { model: 'mock', effort: undefined, expected: 'high' },
+    { model: 'other', effort: undefined, expected: undefined },
+    { model: 'mock', effort: 'low', expected: 'low' },
+  ])('applies the initialized route and effort on resume: $model / $effort', async ({ model, effort, expected }) => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved-effort', contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId: 'saved-effort' })
+    first.ctx.agents.get(SessionId('saved-effort'))!.model.select({
+      provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high'),
+    })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await runtime(root, true, {
+      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }, { id: ReasoningEffortId('low'), name: 'Low' }],
+    })
+    await second.server.initialize({
+      cwd: root, provider: 'mock', model,
+      ...effort === undefined ? {} : { reasoningEffort: ReasoningEffortId(effort) },
+    })
+    await second.server.resume({ sessionId: 'saved-effort' })
+    expect(second.ctx.agents.get(SessionId('saved-effort'))!.model.current()).toEqual({
+      provider: 'mock', model,
+      ...expected === undefined ? {} : { reasoningEffort: expected },
+    })
+  })
+
   it('restores due reminders through the SDK owner after initialization and shares client resume', async () => {
     const root = await storageRoot()
     const first = await initialized(root)
@@ -132,7 +162,10 @@ describe('SDK persisted session resume', () => {
     const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
-    expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: 'session/end-seed' })
+    expect(restored.snapshotEvents().slice(original.length)).toMatchObject([
+      { type: 'session/end-seed' },
+      { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
+    ])
     expect(second.adapter.requests).toHaveLength(0)
     expect(second.events).toEqual([])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })

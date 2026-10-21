@@ -14,7 +14,7 @@ import GoalService, {
   foldGoal,
 } from '@deepseek-ai/dsh-goal'
 import type { GoalChangeMeta, GoalRef, GoalSnapshotChangeMeta } from '@deepseek-ai/dsh-goal'
-import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -59,6 +59,7 @@ function stubAgentForSession(session: Session, suppliedCtx?: Context): StubAgent
     id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox,
     ctx: agentCtx,
     status: 'idle',

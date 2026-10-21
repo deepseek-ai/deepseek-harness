@@ -450,17 +450,15 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
       : undefined).toContain('has no provider/model')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
       ? turnEnd.data.reason.error.message
-      : undefined).toContain('agent/request')
+      : undefined).toContain('record a model selection')
   })
 
-  it('the agent/request waterfall can supply the model for a model-less agent', async () => {
+  it('a recorded selection supplies the route before a model-less Agent starts a step', async () => {
     const adapter = new MockAdapter([textResponse('routed')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), {}) // no model — router plugin decides
+    const agent = await ctx.agentLoop.create(SessionId('a1'), {})
 
-    ctx.on('agent/request', async (_payload, next) => {
-      return { ...await next(), provider: 'mock', model: 'mock' }
-    })
+    agent.model.select({ provider: 'mock', model: 'mock' })
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)

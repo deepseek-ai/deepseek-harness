@@ -1,5 +1,5 @@
 ---
-description: "Give Agents tools to search and read earlier sessions from the current workspace."
+description: "Give agents tools to search and read earlier sessions from the current workspace."
 kind: "package-bundle"
 ---
 

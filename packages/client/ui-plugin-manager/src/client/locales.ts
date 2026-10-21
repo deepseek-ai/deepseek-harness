@@ -380,7 +380,7 @@ export const en = {
   installGuideFill: 'Use example',
   installGuideFillAria: 'Use the example {example}',
   installGuideSafety: 'Install only plugins you trust: they run with your permissions and can damage DeepSeek Harness or leak your data.',
-  installUpgradeNotice: 'On-demand Official plugins offer Update when their version differs from DSH. To update other plugins, uninstall and reinstall them.',
+  installUpgradeNotice: 'On-demand official plugins offer Update when their version differs from DSH. To update other plugins, uninstall and reinstall them.',
   registryToggle: 'Registry',
   registryLegend: 'The npm registry the plugin is downloaded from',
   registryDefault: 'Default registry',

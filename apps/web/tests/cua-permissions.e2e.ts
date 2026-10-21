@@ -80,15 +80,15 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await card.getByRole('button', { name: /Accessibility permission|Screen Recording permission/ }).count()).toBe(0)
   await page.setViewportSize({ width: 1680, height: 600 })
   const plugins = page.locator('[data-plugin-panel]')
-  const openDetails = page.getByRole('button', { name: 'View Computer Use', exact: true })
+  const openDetails = page.getByRole('button', { name: 'View Computer use', exact: true })
   await openDetails.scrollIntoViewIfNeeded()
   expect(await plugins.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   await openDetails.click()
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await panel.getByRole('region', { name: 'Authorize Computer Use', exact: true }).getByRole('group').count()).toBe(4)
-  expect(await panel.getByRole('region', { name: 'Manage applications Computer Use can access', exact: true }).count()).toBe(1)
+  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(4)
+  expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
   expect(await accessibility.getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
@@ -186,7 +186,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     return { errors, layouts, documents, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
   })
   try {
-    const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
+    const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer use', exact: true })
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       if (width === 390) await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'attached' })

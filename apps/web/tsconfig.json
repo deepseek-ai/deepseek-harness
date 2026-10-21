@@ -23,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/rich-text-quotes.e2e.ts",
     "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
     "tests/notice-wake-tail.e2e.ts",
@@ -89,6 +90,7 @@
     "tests/cua-optin.e2e.ts",
     "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
+    "tests/schedule-phone.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",

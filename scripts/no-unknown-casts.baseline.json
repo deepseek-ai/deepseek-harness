@@ -205,9 +205,6 @@
   "packages/api/session-controller/src/list.ts": {
     "a288679a4dcd49ed1fea620d9f3442c1f518406ad8d2d49dba1fafe8a45fbcbd": 1
   },
-  "packages/api/session-controller/src/model-selection-projection.ts": {
-    "921e80b20107c8b88b0fc3cb1ebc1fe52d465175fe782cf9e7a0b72e505ff427": 1
-  },
   "packages/api/session-controller/tests/agent.host.spec.ts": {
     "40b9b8efe71e65b5bddad33acf9b7595d58a7427f077e3aa9ccc488ebb23f4d0": 1,
     "4ddb5771e76b6c641d7049711207ce32902b1599afc4736514bab35c6e1fdf07": 1,
@@ -218,21 +215,15 @@
     "e929814f19128d947cc0188ecfe39833ffd5cf3f2c7155ddfef94ba9740d2bfd": 1
   },
   "packages/api/session-controller/tests/commands-queue-attachment.host.spec.ts": {
-    "246d9f25f7a12a2a3946993bc28f1c5a47d7dee57a4dab75bd44a10d39c5d6e4": 1,
     "8204ecbe96e5e470dde7a6dad4f8a0e6809c30bd8095af16a3a5d378e6c6c0c7": 4,
-    "e9721557773cba96e50cea1b0c6737991a9fb2490bcd83e934311e46310d8b68": 1,
-    "e9ce9370ab27e1dbff54a0ae9a250b10f0314069d41fef58c1822652747be8ff": 1
-  },
-  "packages/api/session-controller/tests/commands-upload-file.host.spec.ts": {
-    "ecd545e1cc141b29fc9da1988bc3ceab4135f376c0c4d12aaa1a1ab67e2d4b05": 1,
-    "ff123c922407e6cb6d42b06534e1e7fb2da129cb09dc6a82d801b8d536540341": 1
+    "e9721557773cba96e50cea1b0c6737991a9fb2490bcd83e934311e46310d8b68": 1
   },
   "packages/api/session-controller/tests/control-queue.host.spec.ts": {
     "9b2258e1e99500b30d66b0b93e0f0bc5077278877903fc8cc6712167411f6109": 1,
     "f2fe8bd862649a2492b7f99f0c35e78ba051a248f339d248d0dcfab163c69752": 1
   },
   "packages/api/session-controller/tests/controller.host.spec.ts": {
-    "40725eab4d86929b16d87c88d5cf83168035def78b4d901613dd0369876f0731": 4,
+    "40725eab4d86929b16d87c88d5cf83168035def78b4d901613dd0369876f0731": 3,
     "6667f55d27d315e8906a2ffdd1b7ab83c3785036fce5575f865b1dab9f3710b3": 2
   },
   "packages/api/session-controller/tests/event-script.client.ts": {
@@ -254,20 +245,14 @@
   },
   "packages/api/session-controller/tests/session-cold.host.spec.ts": {
     "23129d43b519124d7c915c0f1dfd075c1d84579c176678fa8905d0ba02403406": 1,
-    "36809c8a43a7b9240089e359618107af0a42e948791f0502d6366df65d43208f": 2,
     "4e05d4d65c076fff556c0dd813f53e90b8c98390825e7293033d8450a8f94ff0": 1,
-    "526a22860f8bc330caf4a3f28a28948de5c04b4e17125f04b3738808cfbd4e3e": 1,
-    "9d54088afe33da8176bd4898a775c5a5181111a52a8f682ca300ade28684feac": 1,
-    "a6a04773270367c3ea0f54b577d3f766ff738afb6702e09caac1b3fa66a7397d": 1
+    "526a22860f8bc330caf4a3f28a28948de5c04b4e17125f04b3738808cfbd4e3e": 1
   },
   "packages/api/session-controller/tests/session-fork.host.spec.ts": {
     "dbbb38fac6189a3be6f7c29f8df6ef34679f5956c168d08d4f058b5d66b24089": 1
   },
   "packages/api/session-controller/tests/session-history-journal.host.spec.ts": {
     "4e6289bbcd36e12927fd2ac87dc09b4de8ac884f2a0041af58383a0144b8b9b1": 1
-  },
-  "packages/api/session-controller/tests/session-models.host.spec.ts": {
-    "7f2d35b6be247c2410599d4b91260905bc2ada88f62507af622fe067a9295f5b": 1
   },
   "packages/api/session-controller/tests/session-pending-submissions.client.spec.ts": {
     "f35467810e1f7bd9ea7659c947c274c48d310411d0eabcf528366708ea3b7ca1": 1
@@ -1441,10 +1426,6 @@
     "c7aec9d6ea8a843f0793e1f9786747912092bc091a54a124583c4975d4e0fd42": 1,
     "d2c3345795169400442563b4923671c090a724eacaaae7f0c190297b967c1c4d": 1,
     "dfa30a521aae411e70eee81fc4c0511178589d0656dea01c1c97131bfe097793": 1
-  },
-  "packages/ptc-runtime/ptc-runtime-node/tests/host-failures.spec.ts": {
-    "aa5de2d4958ec64219565d53ec5a9d7f40f1f60037a2d52d1a9c3c65db034d73": 1,
-    "be027af1ef5cb3bfe41eeb19b54dbb176ec7c23ae367d709059839f9851833d5": 1
   },
   "packages/ptc-runtime/ptc-runtime-node/tests/output-json.spec.ts": {
     "8c4c486bbc27559714f4e0aaf376c72c49ac9157539b03c6c12853b8d3fc6e74": 1

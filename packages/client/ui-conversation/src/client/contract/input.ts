@@ -182,6 +182,9 @@ export interface InputTarget {
 
 /** Per-session input facade owned by the conversation wiring layer. */
 export interface SessionInput extends InputTarget {
+  /** Insert selected transcript text as an atomic quote. @param text - nonblank selection. @returns whether editing accepted it. */
+  insertQuote(text: string): boolean
+
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
@@ -248,11 +251,13 @@ export type DraftInitializationResult = 'applied' | 'preserved' | 'blocked'
 
 /**
  * The public input action face provided to every session-scope slot
- * component: stable-identity void callbacks, mirroring the
+ * component: stable-identity callbacks, mirroring the
  * useStore+actions convention. Command-style handles (arbitrate/space/
  * paste/…) stay InputBar-private and never ride this face.
  */
 export interface InputActions {
+  /** Insert one nonblank transcript quote. @param text - selected text. @returns whether editing accepted it. */
+  insertQuote(text: string): boolean
   /** @returns a revision-guarded copy of the current editor selection. */
   captureInsertion(): TokenSpan
   /**

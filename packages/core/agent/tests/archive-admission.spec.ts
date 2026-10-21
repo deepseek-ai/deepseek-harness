@@ -1,8 +1,9 @@
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent, AgentCancelCause, AgentStatus, CancelOptions } from '@deepseek-ai/dsh-agent'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 
@@ -19,6 +20,7 @@ async function liveAgent(ctx: Context, rawId: string, initial: AgentStatus): Pro
     id,
     options: {},
     session: Session.create(id),
+    model: unsupportedModel(),
     inbox: { nextTurn: [], nextStep: [] } as never,
     get status() { return status },
     ctx,

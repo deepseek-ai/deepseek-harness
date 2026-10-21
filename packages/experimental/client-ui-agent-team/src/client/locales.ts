@@ -37,10 +37,10 @@ export type TeamKey = keyof typeof zh
 
 /** English dictionary checked against the Chinese key set. */
 export const en = {
-  trigger: 'Agent Team',
-  loading: 'Loading Team…',
+  trigger: 'Agent team',
+  loading: 'Loading team…',
   unavailable: 'Team is unavailable',
-  failure: 'Invalid persisted Team record: {message}',
+  failure: 'Invalid persisted team record: {message}',
   empty: 'No shared tasks yet. Create them through the conversation.',
   roster: 'Members',
   tasks: 'Shared tasks',

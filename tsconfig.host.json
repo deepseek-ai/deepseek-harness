@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/rich-text-quotes.e2e.ts",
     "apps/web/tests/hover-input.e2e.ts",
     "apps/web/tests/collapse-timing.e2e.ts",
     "apps/web/tests/notice-wake-tail.e2e.ts",
@@ -80,6 +81,7 @@
     "apps/web/tests/cua-optin.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
+    "apps/web/tests/schedule-phone.e2e.ts",
     "apps/web/tests/worktree-opt-in.e2e.ts",
     "apps/web/tests/session-inspector.e2e.ts",
     "apps/web/tests/shared-inspector.e2e.ts",
@@ -243,6 +245,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
     { "path": "./packages/experimental/cot-translation-bundle" },
     { "path": "./packages/experimental/session-search" },

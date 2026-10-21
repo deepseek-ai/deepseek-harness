@@ -11,8 +11,9 @@ import type { ConfinedArgv, SandboxExecutionPolicy, SandboxMode } from '@deepsee
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-fs'
-import { replyToBinding, validateBindings } from './bindings.ts'
-import { JsonChannel } from './channel.ts'
+import type { BirpcReturn } from 'birpc'
+import { invokeBinding, validateBindings } from './bindings.ts'
+import { createProcessRpc } from './rpc.ts'
 import { bootstrapArgs, resolveLaunch } from './launch.ts'
 import { NodeConfig, validateConfig } from './config.ts'
 import { PolicyProcesses } from './policy-processes.ts'
@@ -24,14 +25,13 @@ import { OutputLedger } from './output-ledger.ts'
 import { terminateProcess } from './output-stream.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
-import type { ProgramBootData } from './protocol.ts'
+import { readProgramResult, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 interface LiveRun { controller: AbortController; finished: Promise<void> }
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
 
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : String(error) }
-function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 
 /** Node execution under file policy, with optional owner-scoped retained memory. */
 export class NodePtcRuntime extends PtcRuntime {
@@ -135,14 +135,14 @@ export class NodePtcRuntime extends PtcRuntime {
     bindings: Map<string, PtcBindingNamespace>,
     controller: AbortController,
   ): Promise<PtcRunResult> {
-    const replyBinding = AsyncLocalStorage.bind(replyToBinding)
+    const callBinding = AsyncLocalStorage.bind(invokeBinding)
     const output = new OutputLedger(this.config.maxOutputBytes)
     const logs: string[] = []
     const sandbox: PtcRunSandbox = { mode: policy.mode, denied: false }
     const result = Promise.withResolvers<PtcRunResult>()
     const signal = spec.signal === undefined ? controller.signal : AbortSignal.any([spec.signal, controller.signal])
     let handle: SubprocessHandle | undefined
-    let channel: JsonChannel | undefined
+    let channel: BirpcReturn<ProgramMethods, HostMethods> | undefined
     let confined: ConfinedArgv | undefined
     let settled = false
     let timedOut = false
@@ -167,7 +167,7 @@ export class NodePtcRuntime extends PtcRuntime {
       settled = true
       clearTimeout(wallTimer)
       signal.removeEventListener('abort', onAbort)
-      channel?.close()
+      channel?.$close()
       void (async () => {
         try {
           const drained = await stop()
@@ -263,7 +263,6 @@ export class NodePtcRuntime extends PtcRuntime {
       })
       handle.stderr?.on('error', (error: Error) => { finish({ kind: 'worker-exit', message: messageOf(error) }) })
       let ready = false
-      let nextId = 1
       let pending = 0
       let pendingBytes = 0
       const protocolFailure = (message: string): void => { finish({ kind: 'protocol', message }) }
@@ -273,66 +272,55 @@ export class NodePtcRuntime extends PtcRuntime {
           ? { kind: 'sandbox-unavailable', message: stderr }
           : { kind: 'worker-exit', message: `Node process exited before completing (${String(outcome.exitCode)})${stderr ? `: ${stderr}` : ''}` })
       }
-      const transport: JsonChannel = new JsonChannel(launched.control, this.config.maxMessageBytes, (raw, bytes) => {
-        if (!record(raw)) { protocolFailure('invalid control frame'); return }
-        if (!ready) {
-          if (raw.type !== 'ready') { protocolFailure('program frame arrived before bootstrap readiness'); return }
+      // Report a protocol failure and abandon the handler; the closed endpoint sends no response.
+      const refuse = (message: string): never => { protocolFailure(message); throw new Error(message) }
+      const transport = createProcessRpc<ProgramMethods, HostMethods>(launched.control, this.config.maxMessageBytes, {
+        ready: () => {
+          if (ready) { protocolFailure('duplicate program readiness'); return }
           ready = true
-          void transport.send({ type: 'boot', data }).catch((error: unknown) => { protocolFailure(messageOf(error)) })
-          return
-        }
-        switch (raw.type) {
-          case 'log':
-            if (typeof raw.text !== 'string') { protocolFailure('invalid log frame'); return }
-            admit(raw.text)
-            return
-          case 'output-limit': outputOverflow = true; finish(); return
-          case 'done': {
-            if (raw.error !== undefined) {
-              if (!record(raw.error) || typeof raw.error.message !== 'string' || (raw.error.kind !== 'exception' && raw.error.kind !== 'invalid-output' && raw.error.kind !== 'output-limit')) { protocolFailure('invalid terminal error'); return }
-              const failure = { kind: raw.error.kind, message: raw.error.message } as PtcRunFailure
-              if (confined !== undefined) {
-                sandbox.denied = confined.denialSignatures.some(signature =>
-                  failure.message.toLowerCase().includes(signature.toLowerCase()))
-              }
-              if (failure.kind === 'output-limit') outputOverflow = true
-              finish(failure)
-              return
+          void transport.run(spec.cwd, data).then((raw) => {
+            // A message delivered beside the result can select another outcome first.
+            if (settled) return
+            const { error, value } = readProgramResult(raw)
+            if (error !== undefined) {
+              if (confined !== undefined) sandbox.denied = confined.denialSignatures.some(signature =>
+                error.message.toLowerCase().includes(signature.toLowerCase()))
+              if (error.kind === 'output-limit') outputOverflow = true
             }
-            const value = raw.value === undefined ? undefined : decodePtcJsonWire(raw.value)
-            if (raw.value !== undefined && value === undefined) finish({ kind: 'invalid-output', message: 'program completion must be lossless JSON' })
-            else finish(undefined, value)
-            return
+            finish(error, value)
+          }).catch((error: unknown) => { protocolFailure(messageOf(error)) })
+        },
+        log: (text: unknown) => {
+          if (typeof text === 'string') admit(text)
+          else protocolFailure('invalid program log')
+        },
+        outputLimit: () => {
+          outputOverflow = true
+          finish()
+        },
+        invoke: async (global, name, wire) => {
+          // Wire identities that are not strings fail these lookups.
+          const functions = bindings.get(global)?.functions
+          const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
+          if (typeof fn !== 'function') return refuse('program requested an undeclared binding')
+          const args = decodePtcJsonWire(wire)
+          if (args === undefined) return refuse('binding arguments must be lossless JSON')
+          const bytes = Buffer.byteLength(JSON.stringify(wire))
+          if (pending >= this.config.maxPendingCalls || pendingBytes + bytes > this.config.maxMessageBytes) {
+            return refuse('pending binding calls exceed configured limits')
           }
-          case 'call': {
-            if (!Number.isSafeInteger(raw.id) || raw.id !== nextId || typeof raw.global !== 'string' || typeof raw.name !== 'string') { protocolFailure('invalid binding call identity'); return }
-            nextId += 1
-            const functions = bindings.get(raw.global)?.functions
-            const fn = functions !== undefined && Object.hasOwn(functions, raw.name) ? functions[raw.name] : undefined
-            if (typeof fn !== 'function') { protocolFailure('program requested an undeclared binding'); return }
-            const args = decodePtcJsonWire(raw.args)
-            if (args === undefined) { protocolFailure('binding arguments must be lossless JSON'); return }
-            if (++pending > this.config.maxPendingCalls || (pendingBytes += bytes) > this.config.maxMessageBytes) { protocolFailure('pending binding calls exceed configured limits'); return }
-            const id = raw.id
-            void (async () => {
-              const reply = await replyBinding(id, fn, args).finally(() => {
-                pending -= 1
-                pendingBytes -= bytes
-              })
-              if (!settled) await transport.send(reply)
-            })().catch((error: unknown) => { protocolFailure(messageOf(error)) })
-            return
-          }
-          default: protocolFailure('unknown control message')
-        }
-      }, (error, kind) => {
+          pending += 1
+          pendingBytes += bytes
+          try { return await callBinding(fn, args) } finally { pending -= 1; pendingBytes -= bytes }
+        },
+      }, [], (error, kind) => {
         if (kind === 'protocol') protocolFailure(messageOf(error))
         else if (ready) finish({ kind: 'worker-exit', message: messageOf(error) })
         else void launched.done.then(processFinished, (failure: unknown) => { finish({ kind: 'worker-exit', message: messageOf(failure) }) })
       })
       channel = transport
       void launched.done.then((outcome) => {
-        // Allow queued control-frame callbacks to run before classifying a command exit.
+        // Allow queued control messages to run before classifying a command exit.
         setImmediate(() => { processFinished(outcome) })
       }, (error: unknown) => { finish({ kind: confined !== undefined && isRunnerSpawnFailure(error, confined.argv[0], spec.cwd) ? 'sandbox-unavailable' : 'worker-exit', message: messageOf(error) }) })
     } catch (error: unknown) {
