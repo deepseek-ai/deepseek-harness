@@ -176,11 +176,17 @@ describe('the shipped dsh-doc skill', () => {
     writeFileSync(join(pkg, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
     const command = /```powershell\n([\s\S]+?)\n```/u.exec(readFileSync(join(skill, 'references', 'locate-docs.md'), 'utf8'))?.[1]
     expect(command).toBeDefined()
-    const output = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', command ?? ''], {
+    const run = (script: string) => spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
       encoding: 'utf8', env: { ...process.env, DSH_INSTALL_DIR: install, DSH_NODE_EXECUTABLE: process.execPath },
     })
-    const lines = output.split(/\r?\n/u).filter(line => line !== '')
-    expect(lines).toEqual([pkg, 'exit 0'])
+    const found = run(command ?? '')
+    expect(found.status, found.stderr).toBe(0)
+    expect(found.stdout.trim()).toBe(pkg)
+    // A failing script keeps its exit code and writes its error to stderr only.
+    const missing = run((command ?? '').replace("'@deepseek-ai/dsh-tool-bash'", "'@deepseek-ai/dsh-missing'"))
+    expect(missing.status).not.toBe(0)
+    expect(missing.stdout).toBe('')
+    expect(missing.stderr).toContain('@deepseek-ai/dsh-missing')
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {

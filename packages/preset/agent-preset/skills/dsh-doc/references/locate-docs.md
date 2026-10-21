@@ -29,6 +29,7 @@ $script = @'
 console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))
 '@
 $arguments = @('@deepseek-ai/dsh-tool-bash')
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $start = [System.Diagnostics.ProcessStartInfo]::new($env:DSH_NODE_EXECUTABLE)
 foreach ($argument in @('-e', $script, '--') + $arguments) { $start.ArgumentList.Add($argument) }
 $start.Environment['ELECTRON_RUN_AS_NODE'] = '1'
@@ -41,7 +42,9 @@ $process = [System.Diagnostics.Process]::Start($start)
 $stderr = $process.StandardError.ReadToEndAsync()
 $stdout = $process.StandardOutput.ReadToEnd()
 $process.WaitForExit()
-$stdout; $stderr.Result; "exit $($process.ExitCode)"
+[Console]::Out.Write($stdout)
+[Console]::Error.Write($stderr.Result)
+exit $process.ExitCode
 ```
 
 When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable whose packages are not on disk; do not substitute a `node` from `PATH`, and report package behavior as unverified. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
