@@ -1,6 +1,7 @@
 /**
- * The shipped dsh-doc skill: it is the package's only skill, renders below the pruner threshold, lists
- * every file it ships, its templates parse and show their detail documents, and it never bans reading DSH sources.
+ * The shipped dsh-doc skill: it is the package's only skill, renders below the pruner threshold, and
+ * names exactly the files it ships; its templates parse and show their detail documents, and it never
+ * bans reading DSH sources. The Web preset e2e measures whole-reference reads.
  */
 import { execFileSync } from 'node:child_process'
 import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -78,17 +79,6 @@ describe('the shipped dsh-doc skill', () => {
     expect([...referenced].sort()).toEqual(shipped.sort())
   })
 
-  it('keeps every whole-file reference below the pruner threshold with read line numbers', () => {
-    const references = join(skill, 'references')
-    // The generated package list is read in parts with offset and limit, as SKILL.md and locate-docs.md direct.
-    for (const file of readdirSync(references).filter(entry => entry !== 'packages.md')) {
-      const lines = readFileSync(join(references, file), 'utf8').split('\n')
-      // The read tool renders each line as `${number}: ${text}`.
-      const numbered = lines.map((text, index) => `${String(index + 1)}: ${text}`).join('\n')
-      expect(codePointLength(numbered), file).toBeLessThan(PRUNER_THRESHOLD_CHARS)
-    }
-  })
-
   it('ship templates whose manifest, patch, and JavaScript parse', () => {
     for (const name of readdirSync(templates)) {
       const dir = join(templates, name)
@@ -144,6 +134,16 @@ describe('the shipped dsh-doc skill', () => {
     const locale = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: { detail: string } }
     expect(document).toMatchObject({ origin: 'locale', path: locale.meta.detail })
     expect(document?.markdown).toMatch(/\n## How to use\n[\s\S]*\n## Good to know\n/u)
+  })
+
+  it('names only shipped files and no retired skill in any of its documents', () => {
+    for (const file of markdownFiles(skill)) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/`((?:references|templates)\/[^`]+)`/g)) {
+        expect(() => statSync(join(skill, match[1] ?? '')), `${file}: ${match[1] ?? ''}`).not.toThrow()
+      }
+      expect(text, file).not.toMatch(/cordis-plugin-development|editing-cordis-compositions|cordis-composition-reference|agent-experience/u)
+    }
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {

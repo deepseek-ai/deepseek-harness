@@ -44,7 +44,7 @@ Write a bundle directory in the workspace with exactly two files, then install i
             name: '@deepseek-ai/dsh-tool-bash'
 ```
 
-Install with `plugin_manager`, `action: install_bundle`, `target` set to the absolute bundle directory. It runs package installation and bundle selection itself; do not reproduce those steps with shell commands.
+Install with `plugin_manager`, `action: install_bundle`, `target` set to the absolute bundle directory. It runs package installation and bundle selection itself; do not reproduce those steps with shell commands. Without `plugin_manager`, follow the fallback in `references/plugin-development.md`.
 
 ## Change a shipped preset
 
@@ -66,7 +66,7 @@ Before declaration rows, a user preset was a directory `$DSH_HOME/.agent-presets
 
 ## Verify
 
-`plugin_manager` `list_bundles` lists the installed bundle; `list_plugins` shows the `preset-<id>` row with its activation state. A declaration whose activation fails stays on the roster with its diagnostic and cannot compose a session until the bundle is fixed and reinstalled. Existing sessions and their children keep the plugin revision they started with; validate changed behavior in a new session. Installing a bundle executes plugin code in the Host process, so it requires Full access or approval.
+`plugin_manager` `list_bundles` lists the installed bundle and `list_plugins` the `preset-<id>` row with its activation state; without `plugin_manager`, **Plugins** shows both. A declaration whose activation fails stays on the roster with its diagnostic and cannot compose a session until the bundle is fixed and reinstalled. Existing sessions and their children keep the plugin revision they started with; validate changed behavior in a new session. Installing a bundle executes plugin code in the Host process, so it requires Full access or approval.
 
 ## Choose plugin placement
 

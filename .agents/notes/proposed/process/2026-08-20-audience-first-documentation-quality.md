@@ -85,7 +85,7 @@ The first prototype should use one large catalog and one mixed subsystem page. I
 
 ### Enforcement slices
 
-1. Create and validate `dsh-doc`, then rewrite one package README pair as a line-aligned, metadata-bearing prototype without changing runtime claims.
+1. Create and validate `dsh-doc-writing`, then rewrite one package README pair as a line-aligned, metadata-bearing prototype without changing runtime claims.
 2. Review the rendered prototype with newcomer, user, developer, and agent tasks; revise the skill before enforcing the format elsewhere.
 3. Add narrow metadata, Summary-length, section-order, line-alignment, link-resolution, and pairing fixtures. Migrate every existing package Summary that violates the accepted entry limit, and keep sidecars until every merge and recovery consumer has replacement support.
 4. Extract accepted standing rules into one canonical quality reference, condense `docs/AGENTS.md` below its target, and organize one coherent `docs/` topic at a time with atomic link/navigation repair.
@@ -93,7 +93,7 @@ The first prototype should use one large catalog and one mixed subsystem page. I
 
 This sequence keeps each change independently reviewable. The first three slices improve criteria and package entry points without changing the broader information architecture; the generated-doc prototype supplies evidence before a broader structural change.
 
-Slices 1–3 have shipped in this form: `dsh-doc` is the consolidated standard (`dsh-doc-standards` and `dsh-doc-site-sync` are folded into it, and the site workflow carries the corrected sidebar values), the `session-persistence-jsonl` README pair is the reference example, and `pnpm run test:docs` enforces the metadata, pairing, and quick documentation checks. Slices 4–5 remain open.
+Slices 1–3 have shipped in this form: `dsh-doc-writing` is the consolidated standard (`dsh-doc-standards` and `dsh-doc-site-sync` are folded into it, and the site workflow carries the corrected sidebar values), the `session-persistence-jsonl` README pair is the reference example, and `pnpm run test:docs` enforces the metadata, pairing, and quick documentation checks. Slices 4–5 remain open.
 
 ### Non-goals
 
@@ -114,9 +114,9 @@ This proposal does not shorten exhaustive facts, merge audience tiers, publish i
 ## Acceptance criteria
 
 - One canonical quality reference defines brief, intuitive, friendly, accurate, and agent-readable documentation by document job.
-- `.agents/skills/dsh-doc` validates and directly links its metadata, structure/hierarchy, and review/prototype references without duplicating their detailed rules in `SKILL.md`.
+- `.agents/skills/dsh-doc-writing` validates and directly links its metadata, structure/hierarchy, and review/prototype references without duplicating their detailed rules in `SKILL.md`.
 - The `session-persistence-jsonl` README pair demonstrates searchable YAML, Summary, Table of Contents, user-to-developer progression, Further Exploration, final Dev Note, structural parity, and exact line-count equality while preserving verified package contracts.
-- Every English package README Summary stays within 100 `wc -w`-style words; the focused gate reports the measured count and directs failures to `dsh-doc` and the selected kind template.
+- Every English package README Summary stays within 100 `wc -w`-style words; the focused gate reports the measured count and directs failures to `dsh-doc-writing` and the selected kind template.
 - `docs/AGENTS.md` links that reference, remains sufficient as standing instruction, and is below its target with at least 5% headroom.
 - The root user path, Web quick start, first-plugin tutorial, contributor setup, and architecture overview each name an observable outcome and a verification owner without duplicating implementation detail.
 - The budget manifest records both target and temporary ceiling, and its check reports or rejects a violated headroom/ratchet state.

@@ -9,7 +9,7 @@
         order: 4
         plugins:
           # Same persona as `standard`: tool descriptions and the skill catalog carry
-          # the operating detail, and the skills own the preset-authoring rules.
+          # the operating detail, and the dsh-doc skill owns the preset-authoring rules.
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:

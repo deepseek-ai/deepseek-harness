@@ -47,7 +47,7 @@ kind: "package-reference"
 
 声明行的 `id` 是 Loader 编辑地址；`config.id` 是会话保存的 preset 标识符。子插件可省略行 ID，由 Loader 分配。
 
-本包还随包出货创造模式通过 `skill-filesystem` 挂载的 `skills/` 目录。该目录只包含一个 skill，即 `dsh-doc`：一份简短的 `SKILL.md`，规定查找 DSH 事实的顺序（运行时检查工具可用时先做运行时检查，再查阅已安装的文档与包源码），并说明加载该 skill 不授权任何文件或 profile 修改；另有按需读取的 `references/` 与可复制的 `templates/` 组合包。参考文件涵盖定位文档、插件开发、组合包展示元数据与详情文档、Web UI 插件、MCP 组合包、扩展实践、用户操作、验证与用户体验评审、图标与功能配图绘制、Agent preset、Loader 补丁方言、工具设计，以及 `references/packages.md`；后者由 `scripts/gen-plugin-packages.ts` 生成，并在 `doc-sync` 中做新鲜度门禁。渲染后的 `SKILL.md` 与除 `packages.md` 外的每个参考文件在带行号读取时都保持在 8192 字符阈值之下；标准 preset 的工具结果修剪器会裁剪超过该阈值的结果。
+本包还随包出货创造模式通过 `skill-filesystem` 挂载的 `skills/` 目录。该目录只包含一个 skill，即 `dsh-doc`：一份简短的 `SKILL.md`，规定查找 DSH 事实的顺序（运行时检查工具可用时先做运行时检查，再查阅已安装的文档与包源码），并说明加载该 skill 不授权任何文件或 profile 修改；另有按需读取的 `references/` 与可复制的 `templates/` 组合包。参考文件涵盖定位文档、插件开发、组合包展示元数据与详情文档、Web UI 插件、MCP 组合包、扩展实践、用户操作、验证与用户体验评审、图标与功能配图绘制、Agent preset、Loader 补丁方言、工具设计、跨 DSH 版本升级，以及 `references/packages.md`；后者由 `scripts/gen-plugin-packages.ts` 生成，并在 `doc-sync` 中做新鲜度门禁。渲染后的 `SKILL.md` 与除 `packages.md` 外的每个参考文件在带行号读取时都保持在 8192 字符阈值之下；标准 preset 的工具结果修剪器会裁剪超过该阈值的结果。
 
 工具设计规则在 [skills/dsh-doc/references/tool-design.md](skills/dsh-doc/references/tool-design.md) 中编辑。仓库 skill `.agents/skills/agent-experience/SKILL.md` 只包含指向该文件的链接。
 

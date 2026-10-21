@@ -1,6 +1,6 @@
 ---
 name: dsh-doc
-description: Use when a task needs facts about DeepSeek Harness (DSH) itself, such as how a feature, setting, plugin, agent preset, tool, or Cordis API of the running installation works, and when the user asks to design, review, build, install, enable, or debug a DSH plugin, bundle, MCP connection, agent preset, plugin icon or detail page, or a DSH tool definition or skill. Loading it grants no permission to change files or the profile.
+description: Use when a task needs facts about DeepSeek Harness (DSH) itself, such as how a feature, setting, plugin, agent preset, tool, or Cordis API of the running installation works; when the user asks to design, review, build, install, enable, or debug a DSH plugin, bundle, MCP connection, agent preset, plugin icon or detail page, or a DSH tool definition or skill; and when upgrading a plugin or profile to a newer DSH release. Loading it grants no permission to change files or the profile.
 ---
 
 # DeepSeek Harness documentation
@@ -31,6 +31,7 @@ The files below live in this skill's base directory, which the `skill` tool repo
 | Verify a page or panel, review its user experience, or work without browser control | `references/verification.md` |
 | Draw icons and feature images | `references/artwork.md` |
 | Create, change, or migrate an agent preset; choose Host or preset placement | `references/compositions.md` |
+| Upgrade a plugin or profile to a newer DSH release | `references/upgrading.md` |
 | Loader patch dialect | `references/composition-reference.md` |
 | Installable plugin packages, one table per package group | `references/packages.md` |
 | Write a DSH tool definition, skill, or multi-step workflow | `references/tool-design.md` |
