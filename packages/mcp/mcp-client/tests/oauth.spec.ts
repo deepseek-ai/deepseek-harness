@@ -61,6 +61,22 @@ describe('MCP OAuth', () => {
     expect(grant).not.toHaveProperty('expiresAt')
   })
 
+  it('receives the callback at the Web server origin when it listens on IPv6 loopback', async () => {
+    const world = await oauthWorld(true, '::1')
+    const owner = world.owner()
+    await owner.start()
+    const waiting = await phase(() => owner.current(), 'waiting-browser')
+    const authorization = new URL(waiting.authorizationUrl!)
+    const url = new URL(authorization.searchParams.get('redirect_uri')!)
+    expect(url.origin).toBe(world.ctx.webServer.getOrigin())
+    expect(url.hostname).toBe('[::1]')
+    url.searchParams.set('state', authorization.searchParams.get('state')!)
+    url.searchParams.set('iss', authorization.origin)
+    url.searchParams.set('code', 'fixture-code')
+    expect((await fetch(url)).status).toBe(200)
+    await phase(() => owner.current(), 'authorized')
+  })
+
   it('fails before publishing a plaintext authorization page outside loopback', async () => {
     const world = await oauthWorld()
     world.behavior.authorizationEndpoint = 'http://auth.example.invalid/authorize'

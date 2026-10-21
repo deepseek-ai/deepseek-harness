@@ -93,7 +93,7 @@ None; registering or removing an account changes no model-visible text.
 <a id="known-limitations-and-deferred-work"></a>
 
 - The section exists only while the connector plugin is on. To sign out after turning the plugin off, turn it on again or delete the grant record.
-- The authorization callback is `http://127.0.0.1:<port>` on the Host, so the browser that completes authorization must run on the Host machine.
+- The authorization callback is the Host web server's own origin, so the browser that completes authorization must reach that server directly, not through a proxy or the Web app's `publicUrl`.
 - Each account opens its own manager stream.
 - One grant serves each server on the Host; there is no account picker.
 

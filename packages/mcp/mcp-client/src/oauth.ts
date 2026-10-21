@@ -187,8 +187,8 @@ export class McpOAuthAuthorization {
     let consumed = false
     const state = randomBytes(32).toString('base64url')
     const path = '/mcp/oauth/callback/' + createHash('sha256').update(this.credentials.key).digest('hex')
-    const redirectUri = 'http://127.0.0.1:' + String(webServer.port) + path
     try {
+      const redirectUri = webServer.getOrigin() + path
       attempt.removeCallback = this.ctx.effect(() => {
         const remove = webServer.register({
           kind: 'exact', path,

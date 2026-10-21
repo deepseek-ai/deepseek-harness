@@ -27,7 +27,7 @@ export interface OAuthRequest {
 }
 
 /** Mount isolated services and a protocol server, with all teardown owned by this test. */
-export async function oauthWorld(interactive = true) {
+export async function oauthWorld(interactive = true, webHost = '127.0.0.1') {
   const ctx = new Context()
   const releases: Array<() => void> = []
   const owners: McpOAuthAuthorization[] = []
@@ -112,7 +112,7 @@ export async function oauthWorld(interactive = true) {
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, 'credentials.yaml'), watch: false })
   if (interactive) {
     await ctx.plugin(Authorization)
-    await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+    await ctx.plugin(WebServer, { host: webHost, port: 0 })
   }
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
