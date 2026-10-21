@@ -2248,7 +2248,7 @@ export interface LspLocalServerConfig {
 ## `@deepseek-ai/dsh-mcp-client`
 
 - `inject`: `tools`
-- `source`: [`packages/mcp/mcp-client/src/index.ts:144`](../packages/mcp/mcp-client/src/index.ts)
+- `source`: [`packages/mcp/mcp-client/src/index.ts:146`](../packages/mcp/mcp-client/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -2355,7 +2355,7 @@ export interface McpOAuthConfig {
 
 - `inject`: `tools`
 - `refs`: [`McpOAuthConfig`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:76`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:75`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */

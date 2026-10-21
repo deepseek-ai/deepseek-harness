@@ -22,12 +22,11 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Fiber, Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import { OAuthSchema, ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer, resolveReconnectPolicy } from '@deepseek-ai/dsh-mcp-client'
+import { McpOAuthAuthorization, OAuthSchema, ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer, resolveReconnectPolicy } from '@deepseek-ai/dsh-mcp-client'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import type { McpCloseResult, McpProbeOptions, McpProbeResult, ReconnectConfig } from '@deepseek-ai/dsh-mcp-client'
 import type { McpOAuthAttemptId, McpOAuthAttemptView, McpOAuthConfig, McpOAuthConfigInput } from '@deepseek-ai/dsh-mcp-client'
-import type { McpOAuthAuthorization } from '@deepseek-ai/dsh-mcp-client/oauth'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { assertTemplateSyntax } from '@deepseek-ai/dsh-mcp-client'
 import type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
@@ -427,7 +426,7 @@ export default class McpServerManager extends TypertRemoteService {
    */
   @Remote
   async startAuthorization(name: string): Promise<McpOAuthAttemptView> {
-    return (await this.authorizationFor(name)).start()
+    return this.authorizationFor(name).start()
   }
 
   /**
@@ -475,12 +474,10 @@ export default class McpServerManager extends TypertRemoteService {
     }).finally(() => { record.signingOut = false })
   }
 
-  private async authorizationFor(name: string): Promise<McpOAuthAuthorization> {
+  private authorizationFor(name: string): McpOAuthAuthorization {
     const record = this.recordFor(name)
     const config = this.toClientConfig(name, record.entrySnapshot)
     if (config.transport !== 'streamable-http' || config.oauth === undefined) throw new Error('mcp-manager: OAuth is not configured for this server')
-    const { McpOAuthAuthorization } = await import('@deepseek-ai/dsh-mcp-client/oauth')
-    if (record.retired || this.stopped) throw new Error(`mcp-manager: configuration for "${name}" is changing`)
     return record.oauth ??= new McpOAuthAuthorization(this.ownerContext, { ...config, oauth: config.oauth }, () => {
       this.notifyStatus(name, this.currentStatus(name))
     })

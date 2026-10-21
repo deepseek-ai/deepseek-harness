@@ -188,7 +188,6 @@
       "@deepseek-ai/dsh-jobs/view": ["./packages/jobs/jobs/src/view.ts"],
       "@deepseek-ai/dsh-credentials/types": ["./packages/credentials/credentials/src/types.ts"],
       "@deepseek-ai/dsh-authorization/types": ["./packages/credentials/authorization/src/types.ts"],
-      "@deepseek-ai/dsh-mcp-client/oauth": ["./packages/mcp/mcp-client/src/oauth.ts"],
       "@deepseek-ai/dsh-settings/types": ["./packages/settings/settings/src/types.ts"],
       "@deepseek-ai/dsh-api-remotes/types": ["./packages/api/remotes/src/types.ts"],
       "@deepseek-ai/dsh-compaction/checkpoint": ["./packages/compaction/compaction/src/checkpoint.ts"],

@@ -23,17 +23,10 @@
       "default": "./lib/types/types.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json",
-    "./oauth": {
-      "types": "./lib/types/oauth.d.ts",
-      "default": "./lib/oauth.js"
-    }
+    "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/oauth.js",
-    "lib/oauth-options-*.js",
-    "lib/oauth-credentials-*.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],

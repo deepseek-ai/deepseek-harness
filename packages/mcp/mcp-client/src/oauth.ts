@@ -16,8 +16,6 @@ import type { StreamableHttpConfig } from './index.ts'
 import type { McpOAuthConfig } from './oauth-options.ts'
 import type { McpCloseResult, McpOAuthAttemptId, McpOAuthAttemptView } from './types.ts'
 
-export type { McpOAuthConfig } from './oauth-options.ts'
-
 const CLEANUP_FAILED = 'MCP OAuth cleanup failed'
 const CLEANUP_UNSETTLED = 'MCP OAuth cleanup did not settle'
 

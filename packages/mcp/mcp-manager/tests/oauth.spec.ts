@@ -48,7 +48,7 @@ it.each(['signOut', 'restart'] as const)('notifies authorization removal from a 
 
 it('cancels only the selected attempt and retires authorization when a disabled entry changes', async () => {
   const world = await oauthWorld()
-  const { entry } = await managerProfile(world.ctx, { base: { servers: { oauth: { ...world.config, enabled: false } } } })
+  await managerProfile(world.ctx, { base: { servers: { oauth: { ...world.config, enabled: false } } } })
   const manager = world.ctx.mcpServers
   const view = () => manager.list()[0]!.authorization
   const first = await manager.startAuthorization('oauth')
@@ -61,10 +61,6 @@ it('cancels only the selected attempt and retires authorization when a disabled 
   await world.ctx.settings.update('mcp', { servers: { oauth: { url: world.origin + '/changed' } } })
   await vi.waitFor(() => { expect(view()).toBeUndefined() })
   expect(await callback(waiting)).toBe(404)
-  const pending = manager.startAuthorization('oauth')
-  const rejected = expect(pending).rejects.toThrow('mcp-manager: configuration for "oauth" is changing')
-  await entry.fiber!.dispose()
-  await rejected
 })
 
 it.each([false, true])('preserves the grant when authorization cleanup exceeds its deadline (queued restart: %s)', async (restart) => {

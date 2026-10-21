@@ -24,6 +24,7 @@ import type { ReconnectConfig } from './connection.ts'
 import { registerServerContext } from './server-context.ts'
 import { connectionStatusIn, registerStatusCell } from './status.ts'
 import type { McpConnectionStatusHandle } from './status.ts'
+import { McpOAuthCredentials } from './oauth-credentials.ts'
 import { OAuthSchema } from './oauth-options.ts'
 import type { McpOAuthConfig, McpOAuthConfigInput } from './oauth-options.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
@@ -36,6 +37,7 @@ export type { McpConnectionStatusHandle } from './status.ts'
 export type * from './types.ts'
 export { probeServer } from './probe.ts'
 export { assertTemplateSyntax } from './templates.ts'
+export { McpOAuthAuthorization } from './oauth.ts'
 export { OAuthSchema } from './oauth-options.ts'
 export type { McpOAuthConfig, McpOAuthConfigInput } from './oauth-options.ts'
 export type { McpProbeOptions } from './probe.ts'
@@ -214,7 +216,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     throw new Error('MCP OAuth and an Authorization header cannot be configured together')
   }
   const oauth = config.transport === 'streamable-http' && config.oauth !== undefined
-    ? new (await import('./oauth-credentials.ts')).McpOAuthCredentials(ctx, config.oauth)
+    ? new McpOAuthCredentials(ctx, config.oauth)
     : undefined
   // Fail loud at load: reconnect misconfiguration (including programmatic
   // construction that bypassed Schemastery) rejects THIS instance before any

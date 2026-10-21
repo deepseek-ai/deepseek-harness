@@ -16,6 +16,7 @@ import { McpTemplateBinding } from './credentials.ts'
 import { McpGeneration } from './generation.ts'
 import { oauthFailure } from './diagnostic.ts'
 import type { McpAuthorizationRequired } from './diagnostic.ts'
+import { McpOAuthCredentials } from './oauth-credentials.ts'
 import type { Config } from './index.ts'
 
 /** Options for one {@link probeServer} call. */
@@ -82,7 +83,7 @@ export async function probeServer(ctx: Context, config: Config, options: McpProb
     const oauthConfig = resolved.transport === 'streamable-http' ? resolved.oauth : undefined
     const oauth = resolved.transport === 'streamable-http' && oauthConfig !== undefined
       ? await generation.run(async (signal) => {
-        const credentials = new (await import('./oauth-credentials.ts')).McpOAuthCredentials(ctx, oauthConfig)
+        const credentials = new McpOAuthCredentials(ctx, oauthConfig)
         const grant = await credentials.read(new URL(resolved.url).href, signal)
         binding.remember(grant.tokens.access_token)
         return credentials.transport(grant, signal, (url, init) => generation.run(() => globalThis.fetch(url, init)))
