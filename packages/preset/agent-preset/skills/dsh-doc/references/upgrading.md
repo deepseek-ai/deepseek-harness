@@ -7,7 +7,7 @@ When the user asks what an upgrade affects, report the applicable guides and the
 ## Choose the guides
 
 1. Target version: the running installation's version from `references/locate-docs.md`, unless the user names another target.
-2. Starting version: an exact version from the user, the old installation, a lockfile, or the plugin's history. A manifest range such as `engines.dsh` or a `@deepseek-ai/dsh-*` dependency range only bounds the candidates. Without an exact starting version, ask.
+2. Starting version: an exact version from the user, the old installation, a lockfile, or the plugin's history. A manifest range such as `engines.dsh` or a `@deepseek-ai/dsh-*` dependency range only bounds the candidates; never report it as the starting version. Without an exact version, continue with the candidate directories and check each guide against the plugin's code and the target's APIs. Ask only when the migration order or data safety depends on the exact starting version.
 3. Affected surfaces: the packages the plugin imports or names in its patch, and the configuration fields, services, events, slots, commands, and stored data it uses.
 4. Version directories: `upgrade-guide/v<T>/` describes the upgrade from release vT to the release after it; vT is the release being left, not the target. From vA to a released vB, work through the directories from vA up to, but not including, vB, one adjacent step at a time in release order.
 5. Source checkout or prerelease target: when the target is a checkout or build whose root `package.json` version is vB, `upgrade-guide/vB/` holds breaks made after vB that the target may already contain. Check each such guide against the target's code before applying it.

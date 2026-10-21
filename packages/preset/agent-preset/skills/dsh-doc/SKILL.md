@@ -17,7 +17,7 @@ Loading this skill does not authorize changes. Write bundle files, run mutating 
 
 ## Read next
 
-The files below live in this skill's base directory, which the `skill` tool reported, and the table is the complete list: do not enumerate that directory. Read them with the file-read tool, write copies into the workspace with the file-write tool, and verify a copy by reading it back. In Desktop the directory sits inside `app.asar`, which only the Host process's own file reads can open; shell commands (`ls`, `cat`, `cp`, `cmp`), the glob and search tools, `node`, and pnpm fail on it. Never install or syntax-check a template in place; copy its contents into the workspace first.
+The files below live in this skill's base directory, which the `skill` tool reported, and the table is the complete list: do not enumerate that directory. Read them with the file-read tool, write copies into the workspace with the file-write tool, and verify a copy by reading it back. In Desktop the directory sits inside `app.asar`, which the file-read tool and the runtime that `references/locate-docs.md` describes can open; native utilities such as `ls`, `cat`, `cp`, and `cmp`, the glob and search tools, a `node` from `PATH`, and pnpm fail on it. Never install or syntax-check a template in place; copy its contents into the workspace first.
 
 | Task | File |
 |---|---|

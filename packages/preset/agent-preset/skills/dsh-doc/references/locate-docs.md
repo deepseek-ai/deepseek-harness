@@ -22,7 +22,7 @@ With inspection tools, `cordis_inspect_query` `Config.listConfigs` filtered by `
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" -e "console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))" @deepseek-ai/dsh-tool-bash
 ```
 
-In PowerShell, set `$env:ELECTRON_RUN_AS_NODE = '1'` and run `& $env:DSH_NODE_EXECUTABLE` with the same arguments. When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable; do not substitute a `node` from `PATH`, which cannot open `app.asar`. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
+In PowerShell, set `$env:ELECTRON_RUN_AS_NODE = '1'` and run `& $env:DSH_NODE_EXECUTABLE` with the same arguments. On Windows, Desktop's Electron executable is a GUI program, so PowerShell may neither wait for it nor capture its output, and no Windows invocation has been verified; there, use the file-read tool and report a package location you could not resolve as unverified. When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable; do not substitute a `node` from `PATH`, which cannot open `app.asar`. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
 
 A package directory holds `README.md`, `src/`, and built `lib/`. Read the README first, then the `src/` file that owns the behavior.
 

@@ -4,7 +4,7 @@ Agent presets are ordinary `@deepseek-ai/dsh-agent-preset` declarations carried 
 
 ## Where declarations live
 
-The shipped Web presets are `presets/<id>.patch.yml` files of the `@deepseek-ai/dsh-web-app` bundle, ids `standard`, `ptc`, `minimal` and `cordis`. Installed, the bundle resolves from the dsh installation, not the profile; `references/locate-docs.md` finds its package directory, which is `packages/bundle/web-app/` in a source checkout. Read one file with the file-read tool when you need a template; `minimal.patch.yml` is the shortest. In Desktop the bundle sits inside `app.asar`, which shell commands cannot open. Read `references/composition-reference.md` for the patch dialect and `references/packages.md` for the plugin packages a preset can mount.
+The shipped Web presets are `presets/<id>.patch.yml` files of the `@deepseek-ai/dsh-web-app` bundle, ids `standard`, `ptc`, `minimal` and `cordis`. Installed, the bundle resolves from the dsh installation, not the profile; `references/locate-docs.md` finds its package directory, which is `packages/bundle/web-app/` in a source checkout. Read one file with the file-read tool when you need a template; `minimal.patch.yml` is the shortest. In Desktop the bundle sits inside `app.asar`; read it with the file-read tool. Read `references/composition-reference.md` for the patch dialect and `references/packages.md` for the plugin packages a preset can mount.
 
 A declaration row has these `config` fields: `id` (required, lowercase letters, digits and hyphens), `plugins` (required Cordis entry list), and optional `name`, `description` and `order` (roster position). The Loader row `id` is `preset-<id>` by convention.
 
