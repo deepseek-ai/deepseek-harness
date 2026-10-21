@@ -1,5 +1,6 @@
 /** Adapt runner-local import decisions to Node's VM module callbacks. */
 import * as vm from 'node:vm'
+import { types } from 'node:util'
 import type { ImportAttributes } from 'node:module'
 import type { ProgramImportHandler } from '../evaluators/types.ts'
 
@@ -56,7 +57,10 @@ export class VmModuleImportLoader {
       nativeImport ??= vm.compileFunction('return import(specifier, { with: attributes })', ['specifier', 'attributes'], {
         filename, importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
       }) as NativeImport
-      return nativeImport(specifier, attributes)
+      const value = await nativeImport(specifier, attributes)
+      if (types.isModuleNamespaceObject(value)) return value
+      // A native then export can settle to any value; the VM callback still requires a module.
+      return this.module({ then(resolve: (result: unknown) => void) { resolve(value) } })
     }
     // Node accepts namespace objects as well as vm.Module; the Node types declare only vm.Module.
     return load as vm.DynamicModuleLoader<object>

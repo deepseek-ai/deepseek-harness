@@ -125,6 +125,14 @@ it.each(formats)('preserves JavaScript then-export assimilation in %s', async (f
   else expect(await e.expression('import("runner:then")')).toBe(42)
 })
 
+it.each(['default', 'redirect'] as const)('preserves native then-export results through Script %s loading', async (decision) => {
+  const specifier = 'data:text/javascript,export function then(resolve) { resolve({ answer() { return 42 } }) }'
+  const handler = vi.fn((): ProgramImportResult => decision === 'default' ? { type: 'default' } : { type: 'redirect', specifier })
+  const e = evaluator('script', handler)
+  expect(await e.expression(`(await import(${JSON.stringify(decision === 'default' ? specifier : 'runner:then')})).answer()`)).toBe(42)
+  expect(handler).toHaveBeenCalledTimes(1)
+})
+
 it('keeps async-function grammar and parameter semantics when imports are intercepted', async () => {
   const e = evaluator('function-body', () => ({ type: 'default' }))
   e.globals.answer = 42
