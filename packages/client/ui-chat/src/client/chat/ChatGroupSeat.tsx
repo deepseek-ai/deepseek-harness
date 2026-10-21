@@ -148,7 +148,7 @@ export const ChatGroupSeat = memo(function ChatGroupSeat({ groupKey, useChatGrou
     || (policy.stepGrouping === 'history' && turnLocation?.status !== 'open' && !deferCollapse))
   const reason = turnLocation?.end?.data.reason.kind
   const alwaysOpen = presentation?.turnClosed === false || presentation?.hasInterleavedInput === true
-    || reason === 'aborted' || reason === 'error'
+    || reason === 'aborted' || reason === 'interrupted' || reason === 'error'
   const spec = presentation?.spec
   const selectOpen = useCallback((state: Readonly<ChatStoreState>) => spec !== undefined
     && turnProcessOpen(state, spec, deferCollapse), [spec, deferCollapse])
@@ -176,10 +176,14 @@ export const ChatGroupSeat = memo(function ChatGroupSeat({ groupKey, useChatGrou
     if (!open) initialize(closed === false ? 'bottom' : 'top')
     setOpen(!open)
   }, [closed, initialize, open, setOpen])
+  // With next-input timing the height cap applies only to a group the reader opened. A closing body keeps
+  // the cap it was last shown with, so the transition starts from what is on screen: a reader-opened group
+  // closes from its cap, and a flat latest Turn becoming historical closes from its flat height.
+  const shownCap = !grouped ? false : open ? true : undefined
+  const [closingCap, setClosingCap] = useState(shownCap ?? true)
+  if (shownCap !== undefined && shownCap !== closingCap) setClosingCap(shownCap)
   if (members === undefined) return null
-  // The height cap applies only to a group the reader opened; a body that is closing keeps its flat
-  // height so the transition starts from what is on screen instead of snapping to the cap first.
-  const capped = grouped && (!deferCompletedTurns || open)
+  const capped = grouped && (!deferCompletedTurns || (shownCap ?? closingCap))
   const classes = [css.body, !capped ? css.expandedBody : '',
     capped && edges.canScrollUp ? css.fadeTop : '', capped && edges.canScrollDown ? css.fadeBottom : '']
   return (

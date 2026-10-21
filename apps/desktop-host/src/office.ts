@@ -21,7 +21,7 @@ export interface Config {
 }
 
 /**
- * Enable offline Office authoring and structural checks in the Desktop profile.
+ * Enable offline Office authoring and LibreOffice Kit operations in the Desktop profile.
  * @param ctx - Profile scope; child plugins declare their own service requirements.
  * @param config - Bundled payload source and Harness-home installation root.
  */

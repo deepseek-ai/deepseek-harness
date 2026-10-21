@@ -431,7 +431,7 @@ type ScheduleDeliveryHistoryResult =
 
 ## 宿主投递
 
-宿主启动时读取持久任务，并将定时器设为最早的活动目标。未运行任务仍可查询，但不会再次安排投递。投递时通过 Session controller 获取原 Session，包括尚未加载的 Session。恢复后重新采样实际时间，并排除时钟回拨后尚未到期的成员；这些任务仍保留定时义务。投递不涉及 Goal 或独立的 Run 完成记录。
+宿主启动时读取持久任务，并将定时器设为最早的活动目标。未运行任务仍可查询，但不会再次安排投递。投递通过 `schedule/resolve-agent` 解析原 Session，包括尚未激活的会话。嵌入方拥有激活过程：SDK 处理方等待初始化，并保留其 Session handle 和模型选项；没有处理方时由 Web Session controller 恢复会话。组合等待其激活提供方就绪后再启动 Schedule。恢复后重新采样实际时间，并排除时钟回拨后尚未到期的成员；这些任务仍保留定时义务。投递不涉及 Goal 或独立的 Run 完成记录。
 
 插件来源的 `followup()` 同步将消息追加到 Session 收件箱。Session flush 成功后，一次任务记录 put 追加带有指令快照的发送记录，并同时存储最新的 `ScheduleDeliveryReceipt`，以及一次性任务的 `inactive` 状态或重复任务的下一目标和状态。同一批次的重复任务共享回执的 `messageId`；每条回执保留该任务已投递的发生时点。投递不会中途引导或取消当前轮次，也不等待模型完成。
 
@@ -547,4 +547,24 @@ Durable task set changed; clients refetch global task and Session-active catalog
 ```
 
 Source: [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts)
+
+<a id="scheduleresolve-agent--waterfall"></a>
+
+#### `schedule/resolve-agent` — waterfall
+
+Restore a reminder's Session through its embedding's owning controller. Call next() to use the Web Session controller.
+
+```ts cordis-catalog
+/**
+ * Restore a reminder's Session through its embedding's owning controller.
+ * Call next() to use the Web Session controller.
+ * @param sessionId - Original Session receiving the reminder.
+ * @mode waterfall
+ */
+'schedule/resolve-agent'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>
+```
+
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
+
+Source: [`packages/schedule/schedule/src/index.ts`](../../packages/schedule/schedule/src/index.ts)
 <!-- END GENERATED cordis-surface -->

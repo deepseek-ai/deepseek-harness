@@ -7,17 +7,34 @@
   padding: 0 8px;
   padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   color: var(--dsw-alias-label-primary);
 }
 
-.projectRow:hover,
-.sessionRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .projectRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .sessionRow.selected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dragPreview {
+  position: fixed;
+  top: 0;
+  /* WebKit fills transparent snapshot pixels white, including rounded corners. */
+  background: var(--dsw-specific-sidebar-fill);
+  pointer-events: none;
+}
+
+.dragPreview > :first-child {
+  box-sizing: border-box;
+  margin: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .searchResultRow {
@@ -36,8 +53,10 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.searchResultRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .searchResultRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchResultRow.selected {
@@ -142,8 +161,11 @@
 
 /* Project leading slot: folder by default, expand arrow on row hover. */
 .projectRow .chevron { display: none; }
-.projectRow:hover .chevron { display: inline-flex; }
-.projectRow:hover .folder { display: none; }
+@media (hover: hover) {
+  .projectRow:hover .chevron { display: inline-flex; }
+
+  .projectRow:hover .folder { display: none; }
+}
 
 /* Expand arrow (filled triangle): points right closed, rotates to point down open. */
 .arrow {
@@ -260,12 +282,19 @@
   gap: 15px;
 }
 
-.projectRow:hover .rowActions,
-.sessionRow:hover .rowActions,
-.searchResultRow:hover .rowActions,
-.projectRow.menuOpen .rowActions,
-.sessionRow.menuOpen .rowActions {
+@media (hover: hover) {
+  .projectRow:hover .rowActions,
+  .searchResultRow:hover .rowActions {
+    display: inline-flex;
+  }
+}
+
+.projectRow.menuOpen .rowActions {
   display: inline-flex;
+}
+
+.rowQuickActions {
+  display: contents;
 }
 
 /* The search heading has no trailing time cell, so the unarchive action
@@ -274,16 +303,16 @@
   margin-left: auto;
 }
 
-.sessionRow:hover .time,
-.sessionRow.menuOpen .time {
-  display: none;
+.rowResting {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-/* Hover swaps the trailing cell to the action buttons, which already carry
-   the pin/archive glyphs — hide the static markers so they do not double. */
-.sessionRow:hover .pinIndicator,
-.sessionRow.menuOpen .pinIndicator {
-  display: none;
+.rowResting .pinIndicator {
+  margin-left: 0;
 }
 
 /* The unclipped hover state drops the ellipsis, which would otherwise cover
@@ -291,9 +320,37 @@
    latches `:hover` on the row after the title has already returned: an
    unguarded rule would strand that row without its ellipsis. */
 @media (hover: hover) {
+  .sessionRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .sessionRow:hover .rowActions,
+  .sessionRow.menuOpen .rowActions,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow:hover .rowResting,
+  .sessionRow.menuOpen .rowResting,
+  :global(html[data-input-modality='keyboard']) .sessionRow:focus-within .rowResting {
+    display: none;
+  }
+
   .sessionRow:hover .title,
   .sessionRow.menuOpen .title {
     text-overflow: clip;
+  }
+}
+
+@media (hover: none) {
+  .projectRow .rowActions,
+  .searchResultRow .rowActions,
+  .sessionRow .rowActions {
+    display: inline-flex;
+  }
+
+  .sessionRow .rowQuickActions {
+    display: none;
   }
 }
 
@@ -403,8 +460,10 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.iconButton:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Chevrons ride the caption grey (#ADB2B8); the folder glyph stays one step

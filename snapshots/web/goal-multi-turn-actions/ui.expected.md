@@ -6,6 +6,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
@@ -40,6 +41,26 @@
   - time: {{clock}}
 - status: Completed
 - button "Completed in {{duration}}"
+- paragraph:
+  - strong: Turn 2 / 2
+  - text: — 随机选中的包：
+  - code: packages/llm/token-meter
+  - text: 📦
+- text: Code block
+- button "Wrap lines" [pressed]
+- button "Copy"
+- code: token-meter ├── README.md ├── package.json ├── src │ └── index.ts └── tests └── token-meter.spec.ts
+- text: Code block
+- button "Wrap lines" [pressed]
+- button "Copy"
+- code: "token-meter/ ├── README.md # 包说明文档 ├── package.json # 包元数据与依赖声明 ├── src/ │ └── index.ts # 入口，导出公共 API（token 计量逻辑） └── tests/ └── token-meter.spec.ts # 单元测试"
+- paragraph:
+  - text: 两个 turn 都完成了（turn 1：
+  - code: session-reference
+  - text: ，turn 2：
+  - code: token-meter
+  - text: ）。这一轮到此结束。
+- paragraph: 两个 turn 均已完成，目标达成，标记 goal 为完成。
 - paragraph: 两个 turn 都完成了 ✅
 - paragraph:
   - strong: 总结：

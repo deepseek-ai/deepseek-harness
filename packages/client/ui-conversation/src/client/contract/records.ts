@@ -124,8 +124,9 @@ export type ModelRetryNode = LlmRetryEventData & {
 }
 
 /**
- * Durable terminal failure for a turn that ended with an error reason; the
- * turn's settled retry chain renders separately and never replaces this node.
+ * Durable terminal notice for a turn that ended with an error, a sign-out
+ * cancellation, or an interruption by a DSH stop; the turn's settled retry
+ * chain renders separately and never replaces this node.
  */
 export interface TurnErrorNode {
   kind: 'turn-error'
@@ -137,7 +138,11 @@ export interface TurnErrorNode {
   step: number
   /** Sanitized provider message; empty when a known code owns localized copy. */
   message: string
-  /** Stable provider failure code, when recorded. */
+  /**
+   * Stable provider failure code when recorded, or a Client display code:
+   * `ACCOUNT_SIGNED_OUT` for a sign-out cancellation, `INTERRUPTED` for a
+   * turn closed after DSH stopped.
+   */
   code?: string
 }
 

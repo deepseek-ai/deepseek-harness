@@ -54,5 +54,5 @@ export function turnProcessAlwaysOpen(node: ChatNode | undefined): boolean {
   const location = node?.location
   if (location?.kind !== 'turn' && location?.kind !== 'step') return false
   const reason = location.turn.end?.data.reason.kind
-  return location.turn.status === 'open' || reason === 'aborted' || reason === 'error'
+  return location.turn.status === 'open' || reason === 'aborted' || reason === 'interrupted' || reason === 'error'
 }

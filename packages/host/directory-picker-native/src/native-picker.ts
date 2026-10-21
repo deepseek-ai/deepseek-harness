@@ -27,7 +27,8 @@ const DIALOG_TITLE = 'Select Workspace Directory'
  * Tags) un-pastable. Menu items stay untargeted, so AppKit enables them
  * against the responder chain that owns the panel's field editor. The prompt
  * arrives as argv, never as executable source, and a cancel prints an empty
- * line instead of failing.
+ * line instead of failing. A cancelled panel still reports its highlighted or
+ * current directory in `URLs`, so only an OK response reads the selection.
  */
 const MAC_PANEL = `
 ObjC.import('AppKit');
@@ -54,7 +55,7 @@ function run(argv) {
   panel.canCreateDirectories = true;
   panel.allowsMultipleSelection = false;
   panel.message = argv[0];
-  panel.runModal;
+  if (panel.runModal !== $.NSModalResponseOK) return '';
   var urls = panel.URLs;
   if (urls.count < 1) return '';
   return ObjC.unwrap(urls.objectAtIndex(0).path);

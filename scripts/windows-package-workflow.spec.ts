@@ -59,13 +59,14 @@ it.skipIf(process.platform !== 'win32')('resets only the allocated checkout with
 
 it('routes manual packaging to the dedicated runner with explicit preset and signing selection', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+  expect(workflow.jobs.package).not.toHaveProperty('name')
   expect(job['runs-on']).toBe('dsh-win-package-trial')
   expect(workflow.concurrency).toEqual({ group: 'windows-desktop-package', 'cancel-in-progress': false })
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(Object.keys(workflow.on.workflow_dispatch!.inputs).sort()).toEqual([
-    'build_version', 'preset', 'publish', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
+    'build_version', 'preset', 'signing', 'source_ref', 'test_release_id', 'update_channel', 'version_mode',
   ])
-  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('unsigned')
+  expect(workflow.on.workflow_dispatch!.inputs.signing!.default).toBe('signed')
   expect(workflow.on.workflow_dispatch!.inputs.build_version!.required).toBe(false)
   expect(workflow.on.workflow_dispatch!.inputs.version_mode!.default).toBe('default')
   expect(workflow.on.workflow_dispatch!.inputs.source_ref!.default).toBe('master')
@@ -98,7 +99,7 @@ it('validates before building and passes the same mode and version to checks and
 
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(4)
+  expect(uploads).toHaveLength(3)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({ path: 'apps/desktop/.desktop-build/packaging-runs/', 'include-hidden-files': true })
   for (const mode of ['unsigned', 'signed']) {

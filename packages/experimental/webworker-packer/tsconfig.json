@@ -15,10 +15,10 @@
       "path": "../../../vendor/include"
     },
     {
-      "path": "../webworker-runtime"
+      "path": "../../boot/app-boot"
     },
     {
-      "path": "../../util/home-paths"
+      "path": "../webworker-runtime"
     },
     {
       "path": "../../session/session-format"

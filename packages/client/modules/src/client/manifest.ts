@@ -82,10 +82,20 @@ export interface WebBootBatch {
   entries: string[]
 }
 
+/** Host release identity; two releases are the same when both fields are equal. */
+export interface WebBootRelease {
+  /** Release version label. */
+  version: string
+  /** Source commit fixed in when the Host was built; absent when the build recorded none. */
+  commit?: string
+}
+
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 export interface WebBootGraph {
   /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
+  /** Host release identity; absent from a Host that publishes none. */
+  release?: WebBootRelease
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
    * rows whose `external` requests that package. Cordis activation order is
@@ -126,6 +136,8 @@ export interface BootPluginRow {
 export interface BootManifest {
   /** Consistency anchor over the whole graph. */
   rev: string
+  /** Host release identity carried by the graph; absent when the Host publishes none. */
+  release?: WebBootRelease
   /** Rows as the module table consumes them. */
   modules: BootModuleRow[]
   /** Rows as entry composition consumes them. */
@@ -222,6 +234,10 @@ export function parseBootManifest(wire: unknown): BootManifest {
   if (typeof graph.rev !== 'string') {
     throw new Error('client-modules: boot manifest rev must be a string')
   }
+  const release = decodeRelease(graph.release)
+  if (release === null) {
+    throw new Error('client-modules: boot manifest release must carry a string version and an optional string commit')
+  }
   if (!Array.isArray(graph.entries)) {
     throw new Error('client-modules: boot manifest entries must be an array')
   }
@@ -302,7 +318,31 @@ export function parseBootManifest(wire: unknown): BootManifest {
     }
     return { ...row, initialUrl }
   })
-  return { rev: graph.rev, modules, plugins }
+  return { rev: graph.rev, ...(release === undefined ? {} : { release }), modules, plugins }
+}
+
+/**
+ * Decode a wire release identity, dropping members outside {@link WebBootRelease}.
+ * @param value - the graph's `release` member.
+ * @returns the release, undefined when absent, or null when present but malformed.
+ */
+function decodeRelease(value: unknown): WebBootRelease | undefined | null {
+  if (value === undefined) return undefined
+  const release = typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+  const commit = release?.commit
+  if (release === undefined || typeof release.version !== 'string' || (commit !== undefined && typeof commit !== 'string')) return null
+  return { version: release.version, ...(commit === undefined ? {} : { commit }) }
+}
+
+/**
+ * Read a Host graph's release without validating the rest of the graph, so releases stay comparable
+ * when another release changes the graph format.
+ * @param wire - JSON-decoded graph received from the Host.
+ * @returns the release, or undefined when the graph carries none or it cannot be read.
+ */
+export function readRelease(wire: unknown): WebBootRelease | undefined {
+  if (typeof wire !== 'object' || wire === null) return undefined
+  return decodeRelease((wire as Record<string, unknown>).release) ?? undefined
 }
 
 /** Module resolver passed into a registered Client bundle factory. */
@@ -311,6 +351,12 @@ export interface ClientBundleRequire {
   (specifier: string): unknown
   /** Load and resolve a package-local dynamic chunk asynchronously. */
   async(specifier: string): Promise<unknown>
+  /**
+   * Resolve a package-asset reference (`plugins/<package>/assets/<path>`) the
+   * build compiled from an asset import or stylesheet `url()` to the URL the
+   * page loads; the reference itself unless the carrier maps it.
+   */
+  asset(reference: string): string
 }
 
 /** One client bundle's factory registration submitted through `window.__ModuleLoader__.load`. */
@@ -335,6 +381,8 @@ export interface ClientModuleCreateOptions {
   staticModules: Record<string, unknown>
   /** Bundle-load hook. Defaults to a same-origin classic `<script src>` element. */
   loadBundle?: (url: string) => Promise<void>
+  /** Package-asset reference hook behind {@link ClientBundleRequire.asset}. Defaults to returning the reference. */
+  resolveAsset?: (reference: string) => string
 }
 
 /** The modules bundle after its factory has been materialized by the HTML bootstrap facade. */
@@ -445,4 +493,6 @@ export interface ClientModuleSystemOptions {
   bootstrapModule: ClientBootstrapModule
   /** Bundle-load hook. Defaults to a same-origin classic `<script src>` element. */
   loadBundle?: (url: string) => Promise<void>
+  /** Package-asset reference hook behind {@link ClientBundleRequire.asset}. Defaults to returning the reference. */
+  resolveAsset?: (reference: string) => string
 }

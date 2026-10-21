@@ -120,6 +120,15 @@ export type PeerAdmission =
   | { readonly peer: PeerScope }
   | { readonly rejection: 401 | 403 }
 
+/** Socket admission claims API ownership until its carrier calls release, including failed upgrades. */
+export type ConnectionAdmission =
+  | {
+    readonly peer: PeerScope
+    /** Remove and dispose an API Peer; browser releases leave the shared browser Peer intact. */
+    readonly release: () => Promise<void>
+  }
+  | { readonly rejection: 401 | 403 | 409 }
+
 /**
  * Handler invoked after Connection has decoded the transport envelope.
  * `peer` is the Peer the carrier admitted or the in-process caller supplied.
@@ -199,10 +208,7 @@ export interface HostConnectionHandle {
   readonly rpc: HostConnectionRpc
   /** Exact Fetch routes for streaming or browser-native responses. */
   readonly fetch: HostConnectionFetch
-  /**
-   * The Peer every authenticated browser connection shares; its principal is
-   * the owner and its scope lives as long as Connection.
-   */
+  /** The owner Peer every authenticated browser connection shares. */
   readonly browserPeer: PeerScope
 
   /**
@@ -227,22 +233,27 @@ export interface HostConnectionHandle {
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection
 
   /**
-   * Admit one network request: it passes {@link requestRejection} and speaks
-   * for {@link browserPeer}, or it is refused with that status.
+   * Admit an HTTP request against its signed browser or API credential and live Peer.
    * @param request - request headers from the HTTP or upgrade request.
-   * @returns the admitted Peer, or the rejection status.
+   * @returns the credential's Peer, or the rejection status.
    */
   admit(request: ConnectionTrustRequest): PeerAdmission
 
   /**
-   * Create an independent Peer. In-process only: no route, header, query, or
-   * cookie reaches it. Disposed with the Context that read `ctx.connection`,
-   * or earlier by its own `dispose()`.
-   * @param options - caller identity the Peer speaks for.
-   * @param options.principal - principal fixed for the Peer's lifetime.
+   * Create an independent in-process Peer, disposed with the Context that read `ctx.connection`.
+   * @param options - fixed principal and optional interaction participation (default `answer`).
    * @returns a new Peer distinct from every other Peer.
    */
-  createPeer(options: { readonly principal: Principal }): PeerScope
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
+
+  /**
+   * Claim a physical socket for an API Peer; browser sockets share their owner Peer.
+   * @param request - authenticated upgrade request headers.
+   * @returns the Peer and idempotent release, or 409 for duplicate API ownership.
+   * The carrier releases on socket termination or failed upgrade; release removes
+   * API admission synchronously without cancelling independent HTTP calls.
+   */
+  admitConnection(request: ConnectionTrustRequest): ConnectionAdmission
 
   /**
    * Authenticate one frontend index request, owning a token redirect or 401.

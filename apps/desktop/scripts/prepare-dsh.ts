@@ -134,7 +134,7 @@ async function main(): Promise<void> {
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:install', () => runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile']))
     const packageSet = readDesktopCorePackageSet(BUILD_ROOT, release.version)
     const targetName = resolveDesktopBuildTarget()
-    const target = { platform: process.platform, arch: desktopTargetPlatform(targetName).arch }
+    const target = desktopTargetPlatform(targetName)
     const modules = join(BUILD_ROOT, 'node_modules')
     const officeManifest = JSON.parse(readFileSync(join(modules, '@deepseek-ai/libreoffice-kit/package.json'), 'utf8'))
     const officeEngine = selectOfficeEngine(officeManifest, target)

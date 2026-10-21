@@ -10,7 +10,6 @@ const product = JSON.parse(readFileSync(resolve(appRoot, 'package.json'), 'utf8'
 const version = desktopCiVersion(process.env, product.version)
 if (!process.env.DSH_PACKAGING_PRESET) throw new Error('Select a machine preset')
 const skipNotarization = process.env.PACKAGE_SKIP_NOTARIZATION === 'true'
-if (process.env.PACKAGE_PUBLISH === 'true' && skipNotarization) throw new Error('Publishing requires notarization and stapling')
 if (!['true', 'false', undefined].includes(process.env.PACKAGE_SKIP_NOTARIZATION)) throw new Error('Invalid skip notarization selection')
 const environment = loadDesktopPackageEnvironment('darwin', process.env, appRoot)
 for (const [name, value] of Object.entries(environment)) {

@@ -184,6 +184,11 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
       await backend!.account.cancel(waiting.attempt!.id)
       expect((await fetch(late, { redirect: 'manual' })).status).not.toBe(302)
       expect(await status()).toMatchObject({ loggedIn: false })
+      // A handle left open after acknowledged teardown must not fail the update handoff.
+      vi.stubEnv('NODE_OPTIONS', `--import=data:text/javascript,${encodeURIComponent(
+        "process.on('message', message => { if (message?.type === 'shutdown') setInterval(() => {}, 1000) })")}`)
+      await restart()
+      await host!.stop(true)
     } finally {
       await host?.stop()
       await platform.close()

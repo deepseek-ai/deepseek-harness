@@ -254,6 +254,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ConversationHeaderCornerOwnerProps
     }
+    /** Rows of the View tab row's More menu; the header shows More only while this list has registrations. */
+    'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
     'conversation.view': { kind: 'list'; scope: 'session'; owner: ConvViewOwnerProps }
     /** Selector-routed replacements for the current Session's resident composer. */
@@ -264,6 +266,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.brand.mark': { kind: 'single'; scope: 'root'; owner: HeroBrandMarkOwnerProps }
     /** Agent-preset control staged for a New Session. */
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
+    /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
+    'conversation.hero.options': { kind: 'list'; scope: 'session' }
     /** Full-width entries above the composer card. */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
     /** Floating entries rendered inside the resident composer card. */
@@ -309,6 +313,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
         'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
         'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
+        'conversation.hero.options': { kind: 'list'; scope: 'session' }
       }
       inject: ConversationInjected
       locale: 'conversation'
@@ -419,10 +424,51 @@ export interface ConversationSessionInjected {
   openView: (view: string, focus: string) => void
 }
 
+/** One customizable View tab listed in the More menu. */
+export interface ConversationViewActionEntry {
+  /** View id. */
+  readonly id: string
+  /** Resolved View label. */
+  readonly label: string
+  /** False while the tab is unpinned from the header. */
+  readonly pinned: boolean
+}
+
+/** Owner share of the View tab row's More menu rows. */
+export interface ConversationViewActionsOwnerProps {
+  /** Available Views in registration order; Chat is never listed. */
+  readonly entries: readonly ConversationViewActionEntry[]
+  /**
+   * Select a View in this Session without changing its pin state.
+   * @param id - Listed View id.
+   */
+  readonly onOpen: (id: string) => void
+  /**
+   * Show (true) or unpin (false) a View tab in every Session.
+   * @param id - Listed View id.
+   * @param pinned - Whether the tab shows in the header.
+   */
+  readonly onPinnedChange: (id: string, pinned: boolean) => void
+  /** Close the More menu. */
+  readonly onDismiss: () => void
+}
+
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
   /** Package-owned View roster source bound only for the Conversation header. */
-  readonly hooks: { readonly conversationViews: ObservableSnapshot<readonly ViewTab[]> }
+  readonly hooks: {
+    readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
+    /** Ids of unpinned View tabs, persisted across reloads and shared by every Session. */
+    readonly entryPins: ObservableSnapshot<readonly string[]>
+    /** Whether `conversation.session.header.views.actions` has registrations. */
+    readonly entryActions: ObservableSnapshot<boolean>
+  }
+  /**
+   * Show or unpin one View tab in every Session; Chat is ignored.
+   * @param id - View id.
+   * @param pinned - Whether the tab shows in the header.
+   */
+  setPinned: (id: string, pinned: boolean) => void
   /** Select a Session through the Session Controller. */
   open: (sessionId: SessionId) => void
   /** Select and activate one registered Conversation View. */
@@ -576,6 +622,7 @@ export type ConversationSessionHeaderSlotProps =
     | 'conversation.session.header.actions'
     | 'conversation.session.header.utilities'
     | 'conversation.session.header.corner'
+    | 'conversation.session.header.views.actions'
   >
   & PropsStore<ConversationStore>
   & InjectFace<ConversationSessionHeaderInjected>

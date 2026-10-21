@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
@@ -203,6 +204,7 @@ describe('DeepSeekSearchProvider request mapping', () => {
       max_tokens: 4096,
       messages: [{ role: 'user', content: [{ type: 'text', text: 'Perform a web search for the query: hello' }] }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      thinking: { type: 'disabled' },
     }
     expect(JSON.parse(init.body as string)).toEqual(body)
     expect(recordRequest).toHaveBeenCalledOnce()
@@ -470,12 +472,11 @@ describe('DeepSeekSearchProvider error handling', () => {
       .rejects.toThrow(expect.objectContaining({
         code: 'WEB_PROVIDER_ERROR',
         message: 'DeepSeek API error (HTTP 429): rate limited\n\n'
-          + 'The web search request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
+          + 'The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
           + 'Search endpoint configuration is separate from chat. If that endpoint is not intended, '
-          + 'guide the user to Settings > Plugins > Plugin configuration > Web search, where they can '
-          + 'change and save Endpoint. If that settings page is unavailable, the user can set '
-          + 'DEEPSEEK_SEARCH_BASE_URL or configure web-search-deepseek.baseURL to a trusted '
-          + 'Anthropic-compatible Messages API base. Only the user should choose or change the endpoint.',
+          + 'guide the user to Plugins > Built-in plugin settings > Web search, where they can '
+          + 'change and save Messages API base URL. If that settings page is unavailable, the user can set '
+          + 'web-search-deepseek.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
       }))
   })
 
@@ -544,7 +545,7 @@ describe('DeepSeekSearchProvider error handling', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('connection refused'))))
     const error = await rejectedWebError(searchProvider(options).search({ query: 'q' }))
     expect(error.code).toBe('WEB_PROVIDER_ERROR')
-    expect(error.message).toContain('The web search request used endpoint "https://api.deepseek.test/anthropic/v1/messages".')
+    expect(error.message).toContain('The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages".')
   })
 
   it('strict mode flows through search(): a prose-only response throws WEB_PROVIDER_ERROR', async () => {
@@ -704,6 +705,7 @@ describe('web-search-deepseek account route selection', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       ctx.provide('deepseekAccount', {

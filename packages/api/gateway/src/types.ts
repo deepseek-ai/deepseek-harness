@@ -130,6 +130,7 @@ export type TypertGatewayErrorCode =
   | 'gateway/context-unavailable'
   | 'gateway/definition-unavailable'
   | 'gateway/input-invalid'
+  | 'gateway/interactions-forbidden'
   | 'gateway/invocation-unavailable'
   | 'gateway/lookup-failed'
   | 'gateway/lookup-not-found'

@@ -121,7 +121,7 @@ const visibleFoldCases = [
   { name: 'small viewport', earlier: 200, steps: 900, body: 100, viewport: 300, top: 900, input: 30, target: 200, room: 170 },
 ] as const
 
-function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolean) {
+function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolean, finalSiblingGrowth = 0) {
   let inputHeight = 0
   let submission = 0
   let top: number = test.top
@@ -146,7 +146,7 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
   const rowHeight = () => row.hidden ? 0 : (row.style.transition !== '' && row.style.transition !== 'none') || row.style.height === ''
     ? test.steps : Number.parseFloat(row.style.height)
   const room = () => Number.parseFloat(spacer.style.height) || 0
-  const contentHeight = () => test.earlier + rowHeight() + test.body + inputHeight
+  const contentHeight = () => test.earlier + rowHeight() + test.body + inputHeight + (row.hidden ? finalSiblingGrowth : 0)
   const floor = () => Math.max(0, contentHeight() + room() - test.viewport)
   const scrollTo = vi.fn((options: ScrollToOptions) => {
     scroller.scrollTop = options.top ?? scroller.scrollTop
@@ -215,6 +215,22 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
 }
 
 describe.each([false, true])('visible input-fold matrix (reduced=%s)', (reduced) => {
+  it.each(['larger input', 'T/B'])('lands on final sibling spacing in the closing frame (%s)', async (name) => {
+    const test = visibleFoldCases.find(test => test.name === name)!
+    const h = mountVisibleFold(test, reduced, 4)
+    h.submit()
+    await act(async () => { await Promise.resolve() })
+    for (let frame = 0; frame < 24 && !h.row.hidden; frame++) {
+      act(() => { vi.advanceTimersByTime(16) })
+    }
+    expect(h.row.hidden).toBe(true)
+    const target = test.target + (test.room === 0 ? 4 : 0)
+    expect(h.scroller.scrollTop).toBe(target)
+    expect(h.room()).toBe(Math.max(0, test.room - 4))
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(h.scroller.scrollTop).toBe(target)
+  })
+
   it.each(visibleFoldCases)('$name lands with only the required visible room', async (test) => {
     const h = mountVisibleFold(test, reduced)
     const positions = [h.bodyTop()]

@@ -27,8 +27,8 @@
   en: cd6e05c61a7cc495
   zh: 480d2d85d78d2d7f
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/5-the-typert-workspace-root-also-requires-packages:
-  en: 8b89436df201141c
-  zh: 2fab82419c8ba704
+  en: b2bea05b59abe4b3
+  zh: 1e3304dec8a77146
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/6-typert-generates-in-a-worker-thread:
   en: 0362483a79c07881
   zh: d84a2390b49c4012
@@ -39,8 +39,8 @@
   en: 80c2ddc5fdff0b5f
   zh: f5ce309a2e88ff4f
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/alternatives-considered:
-  en: 4372c82ef0c944dd
-  zh: 5fb70d499baadea7
+  en: 8def70ac09c5250c
+  zh: 5385aa58fc4b0b3b
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/consequences:
   en: 93a96d3ed398f348
   zh: 93b7c7405be981a6

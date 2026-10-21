@@ -25,6 +25,8 @@ Use `present` to declare final files accessible through the Session filesystem, 
 <a id="use-this-package"></a>
 ## Use this package
 
+Shared output and file-link guidance comes from [`dsh-deliverable-file-references`](../deliverable-file-references/README.md), mounted separately by Web and SDK bundles.
+
 `present` validates paths against the Session's current working directory and records absolute paths, so later directory changes do not redirect delivered files.
 
 The `standard`, `ptc`, and `cordis` agent presets mount this plugin. Call `present` with `files: [{ path, description? }]` after creating the files. Files must be regular files accessible through the Session filesystem. Relative paths resolve against the Session working directory; absolute paths may name files outside it, including `/tmp` or Downloads. Missing files, directories, final symbolic links, and provider-denied paths fail the call. Files in a shell sandbox’s private `/tmp` must first be written somewhere the Session filesystem can access.

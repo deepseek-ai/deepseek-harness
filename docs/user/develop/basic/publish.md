@@ -63,6 +63,8 @@ Create `hello-plugin/cordis.patch.yml`. The patch is a YAML array like the `--pa
 
 `patch` also accepts an ordered list of files, for example `["./base.patch.yml", "./web.patch.yml"]`; the launcher applies them in that order as one layer, and each file's relative plugin paths resolve beside that file. A package without the `dsh.bundle` declaration still installs, but only as a plain dependency: `dsh plugin` prints a warning and activates no layer. Use that package format for a library that plugin packages import rather than a plugin users enable.
 
+Declare the DSH releases the bundle supports with an `engines.dsh` SemVer range, for example `"engines": { "dsh": ">=0.2.0 <0.3.0" }`. Installation and profile startup refuse a bundle whose range the running DSH does not satisfy; without `engines.dsh`, they check its `@deepseek-ai/dsh*` peer dependency ranges instead ([rule](../../../../packages/boot/app-boot/README.md#profiles)).
+
 ### The profile manifest
 
 A profile directory holds two files:
@@ -70,7 +72,7 @@ A profile directory holds two files:
 - `package.json` — the profile's out-of-tree plugin dependencies (managed by pnpm) plus the `dsh.profile` manifest with its ordered `bundles` list.
 - `cordis.patch.yml` — the user's own patch layer, applied after every bundle layer.
 
-You never write a profile manifest by hand: `dsh --profile <name> --from-default-profile <template>` can create one from a shipped application template, while `dsh plugin` creates a base-backed profile and maintains its installed bundle list. The [CLI behavior reference](../../../../apps/cli/reference/README.md#profile-boot) owns the creation rules; the next section shows the plugin path.
+You never write a profile manifest by hand: `dsh --profile <name> --from-default-profile <template>` can create or reset one from a shipped application template, while `dsh plugin` creates a base-backed profile and maintains its installed bundle list. The [CLI behavior reference](../../../../apps/cli/reference/README.md#profile-boot) owns the creation rules; the next section shows the plugin path.
 
 ## Install into a profile
 

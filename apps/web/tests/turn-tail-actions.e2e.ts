@@ -12,14 +12,15 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
-import { chromium } from 'playwright'
-import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { chromium, devices, webkit } from 'playwright'
+import { afterEach, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
+import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import { openSettings, connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/turn-tail-actions', import.meta.url))
@@ -249,9 +250,10 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     expect(await process.evaluate(element => getComputedStyle(element).borderBottomWidth)).toBe('1px')
     const processBottom = await process.evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="turn-process"]')?.getBoundingClientRect().bottom)
-    const answerTop = await page.getByText('DONE', { exact: true }).evaluate(element =>
+    // The hidden reasoning row separates the folded control from the intermediate reply, so it keeps the 12px reply gap.
+    const leadTop = await page.getByText('Reading the workspace now.', { exact: true }).evaluate(element =>
       element.closest<HTMLElement>('[data-chat-flow-kind="assistant-step"]')?.getBoundingClientRect().top)
-    expect(answerTop).toBe((processBottom ?? 0) + 16)
+    expect(leadTop).toBe((processBottom ?? 0) + 12)
     await process.focus()
     const completed = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(COMPLETED_EXPECTED, completed, MODE)
@@ -345,4 +347,50 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
       ],
     )
   })
+})
+
+it('keeps copy tooltips hidden during a WebKit touch copy', async () => {
+  const scaffold = await launchWebScaffold({})
+  const browserPromise = webkit.launch()
+  onTestFinished(async () => {
+    try { await (await browserPromise).close() }
+    finally { await scaffold.close() }
+  })
+  const browser = await browserPromise
+  const context = await browser.newContext({
+    ...devices['iPhone 13'], locale: 'en-US', viewport: { width: 1280, height: 900 },
+  })
+  const page = await context.newPage()
+  // LAN HTTP pages use the clipboard fallback on iOS.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+  })
+  const fixture = createChatScrollFixture({ markerPrefix: 'TOOLTIP_TOUCH', title: 'Touch tooltips', turns: 1 })
+  await seedSession(scaffold, fixture.log, 'tooltip-touch-web-e2e')
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await connectFreshWorkspace(page, scaffold.workspaceCwd, 'tooltip-touch')
+  await page.getByRole('button', { name: 'Search sessions' }).click()
+  await page.getByRole('textbox', { name: 'Search session names', exact: true }).fill(fixture.markers.user(1))
+  const result = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
+  await expect.poll(() => result.count(), { timeout: 60_000 }).toBe(1)
+  await result.click()
+  await page.getByText(fixture.markers.assistant(1), { exact: false }).last().waitFor()
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => matchMedia('(any-hover: hover)').matches)).toBe(false)
+  const copy = page.getByRole('button', { name: 'Copy', exact: true }).last()
+  await copy.tap()
+  await expect.poll(() => page.getByRole('button', { name: 'Copied', exact: true }).count()).toBe(1)
+  const duringCopy = await page.getByRole('tooltip').count()
+  expect(duringCopy).toBe(0)
+  await expect.poll(() => page.getByRole('button', { name: 'Copied', exact: true }).count(), { timeout: 10_000 }).toBe(0)
+  // iOS may synthesize mouse entry when the checkmark is replaced by the copy icon.
+  await copy.dispatchEvent('pointerover', { pointerType: 'mouse', bubbles: true })
+  const afterCopy = await page.getByRole('tooltip').count()
+  expect(afterCopy).toBe(0)
+  await compareOrRefreshGolden(
+    fileURLToPath(new URL('./expected/tooltip-touch/copy.expected.md', import.meta.url)),
+    ['# Touch copy feedback', '', 'Copy succeeds and the button returns from Copied to Copy.',
+      `Tooltips during copy feedback: ${duringCopy}`, `Tooltips after emulated mouse entry: ${afterCopy}`].join('\n'),
+    webSnapshotMode(),
+  )
 })

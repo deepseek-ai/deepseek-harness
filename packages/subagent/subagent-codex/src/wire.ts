@@ -205,6 +205,7 @@ export class CodexAppServerWire {
     readonly order: number
   }> = []
   private lastFinalAnswer: string | undefined
+  private lastPartialAnswer: string | undefined
   private lastUnphasedAnswer: string | undefined
   private diagnostic: string | undefined
   private failure: CodexWireFailureFacts | undefined
@@ -368,7 +369,7 @@ export class CodexAppServerWire {
     const output = this.collectOutput()
     if (output.length === 0) {
       this.recordFailure({ stage: 'turn', category: 'invalid-result' })
-      throw new Error('subagent-codex: Codex completed without a final answer')
+      throw new Error('subagent-codex: Codex completed without an answer')
     }
     return { output, stopReason: 'completed' }
   }
@@ -386,11 +387,13 @@ export class CodexAppServerWire {
   }
 
   /**
-   * The best non-commentary answer observed so far, preserving exact bytes.
-   * @returns the selected final or nullable-phase text block, if any.
+   * The best non-commentary answer observed so far, preserving exact bytes:
+   * the latest `final_answer`, else the latest `partial_answer`, else the
+   * latest nullable-phase message.
+   * @returns the selected text block, if any.
    */
   collectOutput(): ContentBlock[] {
-    const selected = this.lastFinalAnswer ?? this.lastUnphasedAnswer
+    const selected = this.lastFinalAnswer ?? this.lastPartialAnswer ?? this.lastUnphasedAnswer
     return selected !== undefined && selected.trim().length > 0
       ? [{ type: 'text', text: selected }]
       : []
@@ -667,6 +670,11 @@ export class CodexAppServerWire {
         : (() => { throw new Error('subagent-codex: app-server returned an invalid agent message') })()
       if (item.phase === 'final_answer') {
         this.lastFinalAnswer = text
+      } else if (item.phase === 'partial_answer') {
+        // `MessagePhase::PartialAnswer` (openai/codex codex-rs/protocol/src/models.rs,
+        // app-server 0.162+): stable answer text that later assistant output
+        // or tool calls may follow; it outranks only unphased text.
+        this.lastPartialAnswer = text
       } else if (item.phase === null) {
         this.lastUnphasedAnswer = text
       } else if (item.phase !== 'commentary') {

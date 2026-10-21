@@ -365,10 +365,11 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
       )}
       <div className={css.stripFill} data-dockkit-strip-fill />
       {!(callbacks.hideSplitWhenBlocked && block !== undefined) && (
-        <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500}>
+        <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500} openOnClick={block !== undefined}>
           <span
             tabIndex={block === undefined ? undefined : 0}
             aria-label={block === undefined ? undefined : splitBlockedTitle(callbacks.labels, block)}
+            onClick={(event) => { if (block !== undefined) event.stopPropagation() }}
           >
             <button
               type="button"

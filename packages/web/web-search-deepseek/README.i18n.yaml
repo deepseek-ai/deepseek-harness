@@ -9,8 +9,8 @@
   en: d2c50aae9d869902
   zh: ee9f3f0ff575cbf9
 /deepseek-ai-dsh-web-search-deepseek/summary:
-  en: 1810224f58c8d39b
-  zh: 2e253cb447ee49c4
+  en: 264b231bc3342f9c
+  zh: 218eb246c9948743
 /deepseek-ai-dsh-web-search-deepseek/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -33,8 +33,8 @@
   en: 467b8238cf7e140c
   zh: 85a519c8811557aa
 /deepseek-ai-dsh-web-search-deepseek/use-this-package/failures-and-recovery:
-  en: 8b9211a88d2927dd
-  zh: a2b6bbaa8c4e1996
+  en: e8b3d05fa39ccf47
+  zh: 2faa8b06ce0c4ad4
 /deepseek-ai-dsh-web-search-deepseek/understand-the-implementation:
   en: 9842c69ad3636bb3
   zh: 3cdc3f816cbdd0cb
@@ -48,8 +48,8 @@
   en: d6469ab9ac915762
   zh: 07ddf7b12c748eaf
 /deepseek-ai-dsh-web-search-deepseek/further-exploration:
-  en: 59a97f197c044508
-  zh: de191dd060c31801
+  en: 19219558735b84a1
+  zh: 0e7f935aaf50c391
 /deepseek-ai-dsh-web-search-deepseek/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -57,11 +57,11 @@
   en: 722e4bf02953e236
   zh: b3432958beb7b60f
 /deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/what-the-model-sees:
-  en: cac44ad2353afadd
-  zh: 23b27f833e47bf7e
+  en: 6b2b2909347efee8
+  zh: 664c3e210ec75cfd
 /deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/token-effect:
-  en: f244b4dd6c9e6ad4
-  zh: 50f2434d5119296b
+  en: 9b079b978c305dd8
+  zh: af2c3f39976b34de
 /deepseek-ai-dsh-web-search-deepseek/model-experience/auxiliary-deepseek-search-request/kv-cache-effect:
   en: 2bac9662f1792a79
   zh: 556d9baabd79f9cb
@@ -78,11 +78,11 @@
   en: f5d5f97a153f7c70
   zh: f681f89596f500f5
 /deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work:
-  en: c9fa522bcfa7bfef
-  zh: f95aeb879603bb62
+  en: c26e32bcb03c3cc1
+  zh: 49b2d0bfc01771a9
 /deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note:
   en: 7f775cc79dbce94b
   zh: 12b8f68f9e7c48ca
-/deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note/future-dedicated-retrieval-endpoint:
-  en: 5cfe3e3773c0abe7
-  zh: a97e11f22b7a0434
+/deepseek-ai-dsh-web-search-deepseek/known-limitations-and-deferred-work/dev-note/dedicated-retrieval-endpoint:
+  en: 2a0437bd17a5a8a4
+  zh: 4032f3feb2388f6e

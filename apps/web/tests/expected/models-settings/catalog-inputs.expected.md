@@ -22,7 +22,8 @@
       - text: openai API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 留空时保留现有认证（OPENAI_API_KEY）
+        - /placeholder: 留空使用环境认证（OPENAI_API_KEY）
+      - paragraph: 已检测到环境变量（OPENAI_API_KEY）
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":
@@ -41,11 +42,11 @@
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
-            - /placeholder: 256K
+            - /placeholder: 1M
             - text: 272K
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
-            - /placeholder: 32K
+            - /placeholder: 128K
             - text: 128K
           - group "输入类型 1":
             - text: 输入类型

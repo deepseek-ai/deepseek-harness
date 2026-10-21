@@ -43,7 +43,9 @@ const manifest: DshPackageManifest = {
 }
 ```
 
-`DshPackageManifest` describes the package.json fields used by DSH, with required `name` and `version`; it is not an exhaustive npm schema. Local profile readers use `Partial<DshPackageManifest>` because profiles need no published version. `DshManifest` describes only public author fields under `dsh`. `DshBundleManifest.patch` is one patch file path or an ordered list of them, each relative to the package root; the launcher applies a list in order as one bundle layer. TypeScript checks the example and erases `import type`; these interfaces do not parse JSON or write a file.
+`DshPackageManifest` describes the package.json fields used by DSH, with required `name` and `version`; it includes dependency, peer, and optional dependency declarations but is not an exhaustive npm schema. Local profile readers use `Partial<DshPackageManifest>` because profiles need no published version. `DshManifest` describes only public author fields under `dsh`. `DshBundleManifest.patch` is one patch file path or an ordered list of them, each relative to the package root; the launcher applies a list in order as one bundle layer. TypeScript checks the example and erases `import type`; these interfaces do not parse JSON or write a file.
+
+`DshBundleManifest.listedByDefault` is an optional boolean, defaulting to true. False hides an installation-carried bundle from the default GUI lists until the profile enables or installs it; the management inventory remains complete. [Plugin Manager](../../client/ui-plugin-manager/README.md#use-this-package) owns the display and explicit activation paths.
 
 The following metadata fields are optional. Omitting them leaves the format version or compatible host versions undeclared; readers do not infer defaults.
 

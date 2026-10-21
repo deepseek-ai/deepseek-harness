@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
   "description": "dsh CLI: profile launch, plugin management, and configuration inspection",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -112,7 +112,9 @@
     "@deepseek-ai/dsh-experimental-session-titles-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-terminal-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-session-search": "workspace:*",
-    "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*"
+    "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
+    "@deepseek-ai/dsh-cua-bundle": "workspace:*",
+    "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-skill-badge": "workspace:*",
@@ -176,5 +178,8 @@
     },
     "./lib/*": "./lib/*",
     "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24.9.0"
   }
 }

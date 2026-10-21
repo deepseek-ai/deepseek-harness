@@ -146,9 +146,11 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:disabled {
@@ -198,9 +200,14 @@
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.option:hover:not(:disabled),
 .optionSelected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .option:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .optionSelected {
@@ -315,7 +322,9 @@
 }
 
 /* Custom answer row (figma 973:36427): an option-shaped row whose copy is an
-   inline text input; focus or a typed draft lifts it to the selected look. */
+   inline text input; focus or a typed draft gives it the selected look.
+   While a single-select option is chosen, focus alone does not apply that
+   look, so the radio group shows one selection; typing clears the option. */
 .customRow {
   display: flex;
   /* Same first-line alignment as .option — the indicator seat carries the
@@ -333,13 +342,18 @@
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.customRow:hover,
-.customRow:focus-within,
+.customRow:focus-within:not(.customRowYielded),
 .customRowActive {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.customRow:focus-within,
+@media (hover: hover) {
+  .customRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.customRow:focus-within:not(.customRowYielded),
 .customRowActive {
   border-color: var(--dsw-alias-border-l2);
 }

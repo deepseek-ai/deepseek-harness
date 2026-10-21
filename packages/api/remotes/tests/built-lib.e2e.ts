@@ -86,10 +86,10 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       })
       await host.plugin({ inject: connectionHost.inject, apply: connectionHost.apply })
       await host.plugin(TypertRegistry)
+      await host.plugin(SessionProjectionRegistry)
       await host.plugin(AgentRegistry)
       await host.plugin(RemoteAccessService)
       await host.plugin(TypertRemoteService)
-      await host.plugin(SessionProjectionRegistry)
       await host.plugin(GoalService)
       host.typert.register(TYPERT)
 
@@ -117,9 +117,11 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       host.agents.register(rootAgent)
       host.agents.register(scopedAgent)
 
-      if (routes.length !== 1 || routes[0].path !== '/api') {
+      const apiRoutes = routes.filter(route => route.path === '/api')
+      if (apiRoutes.length !== 1) {
         throw new Error('Connection did not register exactly one /api route')
       }
+      const apiRoute = apiRoutes[0]
       const server = createServer((request, response) => {
         if ((request.url ?? '/').startsWith('/?')) {
           if (host.connection.authorizeIndex(request, response)) {
@@ -128,7 +130,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           }
           return
         }
-        void routes[0].handler(request, response)
+        void apiRoute.handler(request, response)
       })
       await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen))
       const address = server.address()

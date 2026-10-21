@@ -67,6 +67,8 @@ production 发布使用产品版本本身，不传 `--build-version`。其上传
 
 ## 配置与本地构建
 
+macOS 和 Windows 未签名安装包使用与本地 Web 构建相同的本地化 **DSH 本地构建** 标签及版本/commit 徽标。签名安装包保留官方品牌，包括 test 部署和跳过公证的 macOS 构建。原生应用及安装器名称不变。
+
 本地 Windows 命令通过 `DSH_PACKAGING_CONFIG_DIR` 指定机器配置绝对目录，通过 `DSH_PACKAGING_PRESET` 选择 `test` 或 `production`。加载器读取 `presets/<preset>.env`；签名命令另读 `secrets/windows-signing.env`。相对证书和 SignTool 路径以声明它们的文件所在目录为基准。公开 preset 拒绝凭据，签名文件不能覆盖公开配置。配置缺失立即失败，不回退到 `.env.windows`；不选择 preset 的命令保留原 dotenv 行为。未签名和仅准备 preset 不读取签名文件。缓存维护也只读取公开 preset 配置。签名测试包还需现有下载 origin 和 release ID，但无需上传凭据。本地 preset 命令使用 `--build-version auto` 时仅按本地产物编号；Actions 使用运行编号和重试次数。
 
 两个手动打包工作流都接受 `test_release_id`。留空沿用机器 preset；非空值必须是 32 位小写十六进制字符串，且仅允许 test preset。加载器通过 `PACKAGE_TEST_RELEASE_ID` 应用覆盖值，不修改 preset 文件。同一平台连续升级测试需使用相同值。轮换默认值只影响后续构建：已安装客户端保留原更新地址，旧对象仍可访问，除非另行删除。随机前缀降低地址的可发现性，但不提供下载身份认证。
@@ -103,7 +105,9 @@ macOS 正式发布和本地未签名 DMG 都通过 [electron-builder 配置](../
 
 ## Windows Actions 打包
 
-`Package Desktop · Windows` [手动工作流](../../../.github/workflows/windows-package.yml) 选择专用 Windows x64 runner 标签 `dsh-win-package-trial`，并使用机器 preset `test` 或 `production`。选择 `unsigned`（默认）或 `signed`；签名模式复用现有 EV token 预检、签名缓存与失败 interlock，不发布或上传 release。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中的 CI 标识；显式值可以是源码产品版本，或扩展构建版本，例如产品 `0.2.1-alpha.1` 对应 `0.2.1-alpha.1.20261009.1`。版本前缀必须匹配所选源码；校验错误显示其当前示例。manifest 保持不变。
+runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-signing/README.zh.md#machine-setup)。
+
+`Package Desktop · Windows` [手动工作流](../../../.github/workflows/windows-package.yml) 选择专用 Windows x64 runner 标签 `dsh-win-package-trial`，并使用机器 preset `test` 或 `production`。选择 `signed`（默认）或 `unsigned`；签名模式复用现有 EV token 预检、签名缓存与失败 interlock，不发布或上传 release。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中的 CI 标识；显式值可以是源码产品版本，或扩展构建版本，例如产品 `0.2.1-alpha.1` 对应 `0.2.1-alpha.1.20261009.1`。版本前缀必须匹配所选源码；校验错误显示其当前示例。manifest 保持不变。
 
 在 Actions 选择工作流、源码分支、preset、签名模式和版本，再点击 Run workflow。输入变更合并前，用 `gh workflow run windows-package.yml --ref <branch> -f preset=test -f signing=unsigned -f build_version=auto` 测试已推送分支；合并后验证网页表单。它不监听 push 或 PR。日志和成功生成的 EXE 保留 14 天。依赖打包流程前检查日志和安装包；安装是独立操作。检出前，Node 删除 runner 专用源码目录，不跟随依赖 junction；工作流校验目标位置并拒绝链接祖先目录。不得指向日常开发目录。运行共享一个并发组，不取消正在进行的构建；最多保留一个待运行任务，新触发会替换它。仅在成功完成干净检出后上传诊断。机器配置位于 checkout 之外，不作为产物上传。
 
@@ -183,7 +187,7 @@ Mac 打包从 `.env.macos` 读取三个调优字段：
 | `DSH_DESKTOP_MACOS_DOWNLOAD_PROXY` | 空 | Electron、运行时资源、pnpm 安装及 builder 下载使用的 HTTP/HTTPS 代理 origin。 |
 | `DSH_DESKTOP_MACOS_NOTARIZATION_PROXY` | 空 | 通过临时系统代理设置供 Apple 工具使用的 HTTP 代理 origin。 |
 
-两个代理字段互相独立，拒绝 URL 中的凭证、路径、查询参数和片段。空值沿用继承的网络设置。显式下载代理会替换子进程的代理变量，仅绕过本地主机；它不修改系统设置。Windows 与独立 `release:pack` 保持现有并发默认值。公司代理地址仅写入 Git 忽略的本地文件；具体地址参见内部文档。
+两个代理字段互相独立，拒绝 URL 中的凭证、路径、查询参数和片段。空值沿用继承的网络设置。显式下载代理会替换子进程的代理变量，仅绕过本地主机；它不修改系统设置。公司代理地址仅写入 Git 忽略的本地文件；具体地址参见内部文档。
 
 Apple 工具使用 macOS 当前活动网络服务的 HTTP/HTTPS 代理。配置公证代理后，打包会检查代理可达性、保存该服务的设置，在两条产物任务期间启用代理，并在两条任务均结束后恢复原设置。对于原本关闭、服务器为空且端口为零的代理，恢复时仅关闭代理；临时服务器和端口可能保留，但不生效。仅生成目录的打包会在签名目录构建完成后的 App 公证期间启用代理。这会临时影响其他应用，并要求修改系统代理的权限；必须先禁用 PAC、自动发现、SOCKS 及需要认证的代理配置。打包和恢复在读取恢复记录或修改代理前获取同一个用户级 POSIX 文件锁；进程退出会释放锁的持有权，锁文件保留。该锁在首次使用时才加载 `@deepseek-ai/node-addon-system/flock`，而不是在脚本启动时加载，因此 `check:package` 和打包入口在未构建 `native/system` 的 checkout 上也能加载；加锁时若宿主 addon 二进制或入口的 JavaScript 缺失，加载器会先运行 `pnpm run build:native-system` 和 `pnpm --dir native/system run build:ts` 再加锁，因此恢复命令在这样的 checkout 上同样可用。这会阻止不同 checkout 的代理事务重叠；其他用户及网络设置工具不得同时修改这些设置。SIGINT/SIGTERM 会等待活动任务结束后恢复。强制终止或恢复失败后，先停止残留公证进程，再运行 `pnpm --dir apps/desktop run restore:mac-proxy`；保存的记录会保留到恢复成功。配置检查仅验证 URL 语法，不修改系统设置或连接代理。
 
@@ -204,7 +208,7 @@ pnpm run package:desktop:mac:arm64:dir
 pnpm run prepare:desktop
 ```
 
-这条诊断命令是另一种停止位置，并非两条命令构建流程的前半段。之后执行 `package:desktop*` 时仍会重新完成正式构建与准备，避免使用陈旧的 dsh 包、运行时文件或 dsh 内容。
+这条诊断命令是另一种停止位置，并非两条命令构建流程的前半段。之后执行 `package:desktop*` 时仍会重新完成按签名模式选择的构建与全部准备，避免使用陈旧的 dsh 包、运行时文件或 dsh 内容。
 
 <a id="local-official-bundles-from-a-loopback-registry"></a>
 
@@ -244,6 +248,8 @@ pwsh -NoProfile -File apps/desktop/scripts/smoke-windows.ps1 -Makensis $Makensis
 
 Windows 安装器在启动时和选定目标目录后检查应用是否正在运行，通过检查后才将新版本解压到安装目录旁边。通过同卷目录改名替换前，安装器会再次检查。运行中的应用会阻止安装；更新启动允许等待应用退出，最长十秒。同路径升级在替换成功前保留旧目录；解压失败时旧版不变，替换失败时尝试恢复旧目录。安装器在启动前清理旧版备份。强制结束安装器或断电可能留下 `.new-*` 或 `.old-*` 目录；不同安装位置或安装范围迁移仍使用 electron-builder 的旧卸载器流程。
 
+目录改名、空目标目录删除和旧版恢复遇到 Windows 错误 5、32 或 33 时最多尝试十次，每次等待递增 250 毫秒（每个操作合计等待 11.25 秒）。其他错误立即停止。替换失败时，安装器将 Windows 错误、相关路径和恢复结果写入解压报告旁的 `directory-failure-<时间戳>.log`。如果恢复失败，安装器会清理未被占用的暂存文件并保留备份。上报此失败后，退出清理不再重试恢复。请保留报告所列的备份目录，并在重新安装前联系支持人员。静默安装保存相同的诊断，不显示弹窗。
+
 解压失败时，安装器会把 7-Zip 的结果和完整错误输出写入更新缓存目录 `%LOCALAPPDATA%\<按包名派生>-updater\installer-logs\extract-failure-<时间戳>.log`（当前为 `@deepseek-aidsh-desktop-updater`），并在弹窗中显示首条错误行和 **复制错误信息** 按钮；静默安装只写入报告。未签名的 Windows 构建（`DSH_DESKTOP_UNSIGNED=1`）会将安装包命名为 `deepseek-harness-<版本>-win-x64-unsigned.exe`，以免被误当作发布产物。
 
 Windows 打包将 7-Zip 过滤器固定为 `BCJ`，以兼容内置的 NSIS 解码器。这样可以保留 x64 安装包中由依赖携带的 ARM64 二进制文件；自动 ARM64 过滤会生成该解码器无法解压的条目。
@@ -267,6 +273,8 @@ macOS 签名打包在组装 App 时、代码签名前写入 `Contents/Resources/
 <a id="verification"></a>
 
 ## 安装与发布验收
+
+Windows 以不带版本后缀的产品名称显示已安装应用，版本保留在单独的版本字段中。Desktop 的 `package.json` 中的 `author.name` 提供安装包发布者和可执行文件公司名称，与签名证书相互独立。Windows 和 macOS 的版权文本仍使用产品名称。重新构建的安装包在安装或升级时写入新元数据；既有安装在此之前保留原值。
 
 一起保留生成的安装包、版本和打包记录。安装前检查签名与运行时验证结果，再按[已安装更新验收流程](../tests/installed-update/README.zh.md)记录安装后启动及升级证据。[Desktop 测试记录](../tests/README.zh.md)维护验证限制；工作流成功本身不代表 production preset、新工作站或已安装升级验收通过。
 

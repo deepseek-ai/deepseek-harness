@@ -10,9 +10,11 @@ import { registerPlainText } from '@lexical/plain-text'
 import { createEmptyHistoryState, registerHistory } from '@lexical/history'
 import { mergeRegister } from '@lexical/utils'
 import type { DraftReference, ReferenceInsert } from '../../contract/draft-editor.ts'
+import type { CommandClaim } from '../../contract/input.ts'
 import { registerReferenceActivation } from './reference-activation.ts'
 import { ReferenceChipNode, $createReferenceChipNode } from './chip-node.tsx'
-import { refreshClaimDecoration, registerClaimDecoration } from './claim-decor.ts'
+import { CommandChipNode, $createCommandChipNode, registerCommandChipSeat } from './command-chip-node.tsx'
+import { registerCommandChipSelection } from './command-chip-selection.ts'
 import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './text-ref.ts'
 import type { EditorProjection } from './projection.ts'
 import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from './projection.ts'
@@ -25,7 +27,6 @@ type Lexicon = ReadonlyMap<'/' | '@', readonly string[]>
 interface DraftEditorRuntimeDeps {
   readonly onUpdate: () => void
   readonly openReference: (source: string | undefined, reference: Pick<ReferenceInsert, 'ref' | 'appearance'>) => boolean
-  readonly activeClaimToken: () => string | null
   readonly lexicon: () => Lexicon
   readonly resolveLexicon: () => ObservableSnapshot<Lexicon> | undefined
 }
@@ -38,6 +39,21 @@ interface DraftEditorRuntimeDeps {
  */
 const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
 
+/**
+ * Append one paragraph per line of `text` to the editor root and move the caret
+ * to the end. Must run inside an editor update.
+ * @param text - sanitized plain text.
+ */
+function $appendParagraphs(text: string): void {
+  const root = $getRoot()
+  for (const line of text.split('\n')) {
+    const paragraph = $createParagraphNode()
+    if (line !== '') paragraph.append($createTextNode(line))
+    root.append(paragraph)
+  }
+  root.selectEnd()
+}
+
 /** Undo merge window for contiguous typing, in ms (the old machine's mergeWindowMs). */
 const HISTORY_MERGE_DELAY_MS = 1000
 
@@ -45,7 +61,9 @@ const HISTORY_MERGE_DELAY_MS = 1000
 export class DraftEditorRuntime {
   /** The editor bound by the Composer's contenteditable host. */
   readonly editor: LexicalEditor
-  private projected: EditorProjection = { detectText: '', clipboardText: '', occurrences: [], selection: null, caret: null }
+  private projected: EditorProjection = {
+    detectText: '', clipboardText: '', occurrences: [], selection: null, caret: null, command: undefined,
+  }
   /** Stable occurrence ids per chip NodeKey (undo restores keys, so ids survive it too). */
   private readonly occurrenceIds = new Map<NodeKey, number>()
   private occurrenceSeq = 0
@@ -57,7 +75,7 @@ export class DraftEditorRuntime {
   constructor(private readonly deps: DraftEditorRuntimeDeps) {
     this.editor = createEditor({
       namespace: 'dsh-composer',
-      nodes: [ReferenceChipNode, TextRefNode],
+      nodes: [ReferenceChipNode, CommandChipNode, TextRefNode],
       onError: (error) => { throw error },
     })
   }
@@ -88,8 +106,9 @@ export class DraftEditorRuntime {
         this.deps.openReference(source, reference)),
       registerHistory(this.editor, createEmptyHistoryState(), HISTORY_MERGE_DELAY_MS),
       this.editor.registerUpdateListener(() => { this.deps.onUpdate() }),
-      registerClaimDecoration(this.editor, () => this.deps.activeClaimToken()),
-      registerTextRefDecoration(this.editor, () => this.deps.lexicon(), () => this.deps.activeClaimToken()),
+      registerCommandChipSeat(this.editor),
+      registerCommandChipSelection(this.editor),
+      registerTextRefDecoration(this.editor, () => this.deps.lexicon()),
       () => {
         this.lexiconOff?.()
         this.lexiconOff = undefined
@@ -169,15 +188,26 @@ export class DraftEditorRuntime {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0) return
     this.editor.update(() => {
-      const root = $getRoot()
-      root.clear()
-      for (const line of clean.split('\n')) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        root.append(paragraph)
-      }
-      root.selectEnd()
+      $getRoot().clear()
+      $appendParagraphs(clean)
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
+  }
+
+  /**
+   * Add plain text after the current draft as new paragraphs, keeping its text
+   * and references; an empty draft takes the text as its whole content.
+   * Placeholder-sanitized; the caret lands at the end; merged into history
+   * like {@link setDraft}.
+   * @param text - plain text to add.
+   */
+  appendDraft(text: string): void {
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    if (clean === '') return
+    if (this.projection.clipboardText === '' && this.projection.occurrences.length === 0) {
+      this.setDraft(clean)
+      return
+    }
+    this.editor.update(() => { $appendParagraphs(clean) }, { discrete: true, tag: HISTORY_MERGE_TAG })
   }
 
   /**
@@ -262,6 +292,28 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Replace a span with a command chip followed by the claim token's
+   * argument separator, unless the separator already follows.
+   * @param span - detect-coordinate range.
+   * @param claim - the command claim the chip anchors.
+   * @param tail - the character following the range before editing.
+   * @param mergeHistory - merge into the previous history entry (a restored
+   * draft's chip is part of its seed, not an undoable step).
+   * @returns whether the range mapped and the edit applied.
+   */
+  insertCommand(span: DetectSpan, claim: CommandClaim, tail: string, mergeHistory = false): boolean {
+    const separator = claim.token.slice(claim.token.trimEnd().length)
+    let applied = false
+    this.applyEdit(() => {
+      const nodes = separator === '' || tail === separator.charAt(0)
+        ? [$createCommandChipNode(claim)]
+        : [$createCommandChipNode(claim), $createTextNode(separator)]
+      applied = $replaceDetectSpanWithNodes(span, nodes)
+    }, mergeHistory ? HISTORY_MERGE_TAG : undefined)
+    return applied
+  }
+
+  /**
    * Insert an ordered file-reference batch after the live selection without deleting it.
    * @param references - validated references in source order.
    * @returns whether the live insertion position accepted the batch.
@@ -278,11 +330,6 @@ export class DraftEditorRuntime {
       applied = $replaceDetectSpanWithNodes({ start: at, end: at }, nodes)
     }, PASTE_TAG)
     return applied
-  }
-
-  /** Refresh claim-token decoration after the model's claim changes. */
-  refreshClaimDecoration(): void {
-    refreshClaimDecoration(this.editor)
   }
 
   /**

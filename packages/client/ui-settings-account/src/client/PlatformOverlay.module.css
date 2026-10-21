@@ -92,7 +92,7 @@
   height: 32px;
   min-width: 58px;
   padding: 0 12px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
+  --dsh-button-outline-color: var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
   font-size: 13px;
   line-height: 20px;

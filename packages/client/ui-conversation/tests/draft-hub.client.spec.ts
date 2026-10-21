@@ -96,6 +96,7 @@ function controller(lexicon: () => InputTriggerController['lexicon']): InputTrig
     onSpace: () => false,
     serializeReference: (_source, ref) => Promise.resolve(ref),
     adjudicate: () => Promise.resolve(undefined),
+    resolveClaim: () => Promise.resolve(undefined),
     openReference: () => false,
     toggleSource: () => {},
   }

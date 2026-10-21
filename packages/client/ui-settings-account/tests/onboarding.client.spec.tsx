@@ -17,7 +17,7 @@ const theme: ThemeSnapshot = {
 }
 
 it('claims onboarding while loading, offers API key fallback, and completes after login', () => {
-  let account: AccountSnapshot = { view: undefined, details: undefined, failed: false }
+  let account: AccountSnapshot = { view: undefined, details: undefined, avatar: undefined, failed: false }
   const unused = (): never => { throw new Error('AccountOnboarding does not consume global hooks') }
   const globals: GlobalStandardProps = {
     usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
@@ -33,6 +33,7 @@ it('claims onboarding while loading, offers API key fallback, and completes afte
     start: vi.fn(async () => {}), cancel: vi.fn(async () => {}), signOut: vi.fn(async () => {}),
     contactUs: vi.fn(), t: makeTranslate(en),
     refreshAccount: vi.fn(async () => {}), bonusNoticeShown: vi.fn(), bonusNoticeDismissed: vi.fn(),
+    avatarFailed: vi.fn(),
   }
   const view = render(<AccountOnboarding {...props} />)
   expect(props.setOnboarding).toHaveBeenCalledExactlyOnceWith(true)

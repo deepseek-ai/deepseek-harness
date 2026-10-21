@@ -72,7 +72,7 @@ import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
-import { nativeAuthOf } from './native-auth.ts'
+import { providerDefaultsOf } from './provider-data.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -141,8 +141,7 @@ function directoryEntries(
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
       declared: installed === undefined,
-      ...installed?.baseUrl === undefined ? {} : { defaultBaseURL: installed.baseUrl },
-      ...installed === undefined ? {} : { nativeAuth: nativeAuthOf(installed) },
+      ...installed === undefined ? {} : providerDefaultsOf(installed),
       ...error === undefined ? {} : { error },
     })
   }

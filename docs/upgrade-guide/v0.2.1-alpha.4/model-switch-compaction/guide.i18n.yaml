@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-alpha.4/model-switch-compaction/guide.md
+/:
+  en: 830f003296555f6f
+  zh: a83508af05b217ff
+/model-switches-check-destination-context-pressure:
+  en: 7d11a333984b08b7
+  zh: 93f0d5f2c309253d
+/model-switches-check-destination-context-pressure/change:
+  en: 613c81a294809de3
+  zh: 6a8747f2f326c390
+/model-switches-check-destination-context-pressure/migration:
+  en: c17dc3c452145b02
+  zh: 9a905067e047e275

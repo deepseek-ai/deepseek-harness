@@ -39,8 +39,8 @@ export abstract class DeepSeekAccount extends Service {
   abstract getState(): Promise<AccountView>
   /**
    * Query Platform profile independently of wallet balances.
-   * A ready result whose stable profile ID first becomes available or changes notifies watch
-   * consumers, so identity consumers re-read getPlatformSession; repeated IDs stay silent.
+   * A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch
+   * consumers, so they re-read getPlatformSession; repeated IDs stay silent.
    * @param client - identity of the requesting UI for this call.
    * @returns profile outcome, or null if signed out or the grant changed during the query.
    */
@@ -88,9 +88,10 @@ export abstract class DeepSeekAccount extends Service {
   /**
    * Subscribe to snapshots including a complete initial state.
    * @param signal - subscription lifetime; ending it never cancels login.
+   * @param includeIdentityChanges - also notify when cached Platform identity changes; defaults to false.
    * @returns complete snapshots as account state changes.
    */
-  abstract watch(signal: AbortSignal): AsyncIterable<AccountView>
+  abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>
   /**
    * Resolve a credential only for the inference origin allowed by the provider.
    * @param url - actual request destination or API base URL.

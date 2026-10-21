@@ -1,10 +1,10 @@
 /**
- * Lifecycle of bonus notices: one displayed notice at a time, one read result in
+ * Lifecycle of bonus notices: one foreground card in a stack, one read result in
  * force at a time, and one acknowledgement per displayed card. Reads happen when
  * the account becomes active and when the user asks for a refresh, never on a
  * timer; the server owns which bonus is unnotified and what its copy says.
  *
- * An order is acknowledged once its card reports a presented frame: the card has
+ * An order is acknowledged once its foreground card reports a presented frame: the card has
  * a position, the document is visible, and it painted one frame. The card measures
  * no cover, so a card painted under the open Settings overlay reports like any
  * other, and closing the card counts as a display too.
@@ -18,16 +18,18 @@
  * @module @deepseek-ai/dsh-client-ui-settings-account/src/client/bonus-notices
  */
 import type {
-  AccountBonusBatch, AccountBonusNotification, AccountBonusOrderId, AccountUserId,
+  AccountBonusBatch, AccountBonusOrderId, AccountUserId,
 } from '@deepseek-ai/dsh-deepseek-account/types'
 
 /** Notice eligible for display; the message is server-authored for the active locale. */
 export interface BonusNotice {
+  /** Server-localized plain-text title; absent responses use the localized bonus title. */
+  readonly title?: string
   /** Server order identity. */
   readonly orderId: AccountBonusOrderId
   /** Server-localized plain text, including any award amount or expiration. */
   readonly message: string
-  /** Server expiration, re-checked at display time so a notice cannot appear after its award expired. */
+  /** Server expiration, re-checked at display time; an empty string means no expiration. */
   readonly expiresAt: string
 }
 
@@ -50,8 +52,8 @@ export interface BonusNoticeControllerOptions extends BonusNoticeTiming {
    * @returns false when the account changed or signed out; a protocol failure rejects.
    */
   acknowledge: (accountId: AccountUserId, orderId: AccountBonusOrderId) => Promise<boolean>
-  /** @param notice - notice to display, or null when none is shown. */
-  publish: (notice: BonusNotice | null) => void
+  /** @param notices - notices in front-to-back order; empty when none are shown. */
+  publish: (notices: readonly BonusNotice[]) => void
 }
 
 /** Commands the account plugin issues to the bonus notice lifecycle. */
@@ -88,6 +90,7 @@ interface NoticeScope {
  * @returns whether the bonus can no longer be shown.
  */
 function expired(expiresAt: string, at: number): boolean {
+  if (expiresAt === '') return false
   const expires = Date.parse(expiresAt)
   // An unparsable timestamp is not evidence of expiry, so the notice still shows.
   return !Number.isNaN(expires) && expires <= at
@@ -101,7 +104,7 @@ function expired(expiresAt: string, at: number): boolean {
 export function createBonusNoticeController(options: BonusNoticeControllerOptions): BonusNoticeController {
   let scope: NoticeScope | undefined
   /** Notice currently published to the sidebar, including the expiration checked at display time. */
-  let current: BonusNotice | undefined
+  let current: readonly BonusNotice[] = []
   /** Newest read; an older read still in flight has its result dropped once a newer one starts. */
   let readGeneration = 0
   let ackTimer: ReturnType<typeof setTimeout> | undefined
@@ -110,14 +113,16 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
   /** Orders the card on screen already reported, so one mount cannot acknowledge twice. */
   const reported = new Set<AccountBonusOrderId>()
   const clearAckTimer = (): void => { if (ackTimer !== undefined) { clearTimeout(ackTimer); ackTimer = undefined } }
-  const setCurrent = (notice: BonusNotice | undefined): void => {
-    if (notice === undefined && current === undefined) return
-    if (notice?.orderId === current?.orderId && notice?.message === current?.message
-      && notice?.expiresAt === current?.expiresAt) return
-    // A different order means a different card, so its report is a fresh one.
-    if (notice?.orderId !== current?.orderId) reported.clear()
-    current = notice
-    options.publish(notice ?? null)
+  const setCurrent = (notices: readonly BonusNotice[]): void => {
+    if (notices.length === current.length && notices.every((notice, index) => {
+      const previous = current[index]
+      return notice.orderId === previous?.orderId && notice.message === previous.message
+        && notice.title === previous.title && notice.expiresAt === previous.expiresAt
+    })) return
+    const retained = new Set(notices.map(notice => notice.orderId))
+    for (const orderId of reported) if (!retained.has(orderId)) reported.delete(orderId)
+    current = notices
+    options.publish(notices)
   }
   const scheduleAck = (delay: number): void => {
     clearAckTimer()
@@ -132,9 +137,8 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
   const startAcks = (): void => { if (scope !== undefined && scope.pending.length > 0) scheduleAck(0) }
 
   /**
-   * Apply one read result. A newly offered order replaces the on-screen card;
-   * an offer equal to the on-screen card refreshes its copy in place, and an
-   * empty batch leaves a card the user has already seen alone.
+   * Apply the server-ordered stack, excluding expired notices. An empty batch
+   * retains only the foreground card if the user has already seen it.
    */
   const apply = (scopeAtRead: NoticeScope, batch: AccountBonusBatch): void => {
     if (scopeAtRead.accountId !== batch.accountId) {
@@ -143,22 +147,16 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
       scopeAtRead.accountId = batch.accountId
       scopeAtRead.pending.length = 0
       resetAcks()
-      setCurrent(undefined)
+      setCurrent([])
     }
-    const candidate: AccountBonusNotification | undefined = batch.bonuses[0]
-    if (candidate === undefined) {
-      // No candidate: a card the user has already seen stays until it is closed,
-      // while a candidate that never reached a presented frame is withdrawn.
-      if (current !== undefined && !reported.has(current.orderId)) setCurrent(undefined)
+    const candidates = batch.bonuses.filter(notice => !expired(notice.expiresAt, Date.now()))
+    if (candidates.length === 0) {
+      // Keep an already presented foreground card until dismissal; unseen cards are withdrawn.
+      const foreground = current[0]
+      setCurrent(foreground !== undefined && reported.has(foreground.orderId) ? [foreground] : [])
       return
     }
-    if (candidate.orderId === current?.orderId) {
-      // Same order still on screen: refresh its copy, and validate expiration at display time.
-      setCurrent({ orderId: candidate.orderId, message: candidate.message, expiresAt: candidate.expiresAt })
-      return
-    }
-    if (expired(candidate.expiresAt, Date.now())) return
-    setCurrent({ orderId: candidate.orderId, message: candidate.message, expiresAt: candidate.expiresAt })
+    setCurrent(candidates)
   }
 
   /**
@@ -225,7 +223,7 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
   /** Queue a presented order, so an acknowledgement interrupted by a failure retries within this sign-in. */
   const report = (orderId: AccountBonusOrderId): void => {
     const scopeAtReport = scope
-    if (scopeAtReport === undefined || current?.orderId !== orderId || reported.has(orderId)) return
+    if (scopeAtReport === undefined || current[0]?.orderId !== orderId || reported.has(orderId)) return
     reported.add(orderId)
     if (!scopeAtReport.pending.includes(orderId)) scopeAtReport.pending.push(orderId)
     ackDelay = options.ackRetryDelayMs
@@ -238,7 +236,7 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
     resetAcks()
     scope = undefined
     reported.clear()
-    setCurrent(undefined)
+    setCurrent([])
   }
 
   return {
@@ -256,15 +254,16 @@ export function createBonusNoticeController(options: BonusNoticeControllerOption
       return runRead(scope)
     },
     shown(orderId) {
-      if (current?.orderId !== orderId) return
-      if (expired(current.expiresAt, Date.now())) return
+      setCurrent(current.filter(notice => !expired(notice.expiresAt, Date.now())))
+      if (current[0]?.orderId !== orderId) return
       report(orderId)
     },
     dismiss(orderId) {
-      if (current?.orderId !== orderId) return
+      setCurrent(current.filter(notice => !expired(notice.expiresAt, Date.now())))
+      if (current[0]?.orderId !== orderId) return
       // Closing the card is the user seeing it, so queue its acknowledgement before withdrawing.
       report(orderId)
-      setCurrent(undefined)
+      setCurrent(current.slice(1).filter(notice => !expired(notice.expiresAt, Date.now())))
     },
   }
 }

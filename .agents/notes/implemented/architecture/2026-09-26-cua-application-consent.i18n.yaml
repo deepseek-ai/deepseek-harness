@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-26-cua-application-consent.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-26-cua-application-consent.md
+/agent-note-application-consent-for-native-computer-use:
+  en: d570ebf4790311f9
+  zh: a6ec87cb3ae3d0f1
+/agent-note-application-consent-for-native-computer-use/problem:
+  en: b32a7ce6483b9b48
+  zh: ec0938ad032b99d8
+/agent-note-application-consent-for-native-computer-use/decision:
+  en: 36c560c24c376f12
+  zh: 5e4ff72f66574e38
+/agent-note-application-consent-for-native-computer-use/alternatives-considered:
+  en: 80cd5fd93a42d937
+  zh: 2a0e241b1b8c2e1d
+/agent-note-application-consent-for-native-computer-use/consequences:
+  en: 4bda3366af65250a
+  zh: 7c83561b4db07284

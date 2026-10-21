@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-10-18-websocket-permessage-deflate.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-18-websocket-permessage-deflate.md
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate:
+  en: 0bc2e23413bf72c1
+  zh: 5bb252767d0a9fac
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/problem:
+  en: 4b2b62b888cf4735
+  zh: 9d5c1ffce7c253b5
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/decision:
+  en: f0d660d42cd9cfbf
+  zh: a1fff91323e6b213
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/decision/negotiation-and-degradation:
+  en: efd339349731b4eb
+  zh: d4fafd884b3cfc75
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/decision/failure-and-capacity:
+  en: 5f666978c80f0098
+  zh: 69afb0f62622c5cb
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/alternatives-considered:
+  en: 1df91aee779c7c51
+  zh: b8db98186b21143d
+/agent-note-compress-the-remote-stream-websocket-with-permessage-deflate/consequences:
+  en: b6e6e5fb4dc0f38d
+  zh: fbaa18b8c4b53940

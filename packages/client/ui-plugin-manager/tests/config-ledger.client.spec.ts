@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { configLedgerSource, rowConfigKey } from '../src/client/config-ledger.ts'
+import { tabLedgerSource } from '../src/client/tab-ledger.ts'
 
 interface Registration {
   options: { id?: string; key?: string; label?: string | (() => string) }
@@ -9,8 +10,8 @@ interface Registration {
 
 /** A slot registry and locale stand-in: ledgers by slot, versions that move on registration, and a locale revision. */
 function bench() {
-  const entries: Record<string, Registration[]> = { 'plugins.item': [], 'plugins.bundle.config': [], 'plugins.row.config': [] }
-  const versions: Record<string, number> = { 'plugins.item': 0, 'plugins.bundle.config': 0, 'plugins.row.config': 0 }
+  const entries: Record<string, Registration[]> = { 'plugins.item': [], 'plugins.bundle.config': [], 'plugins.row.config': [], 'plugins.tab': [] }
+  const versions: Record<string, number> = { 'plugins.item': 0, 'plugins.bundle.config': 0, 'plugins.row.config': 0, 'plugins.tab': 0 }
   const listeners = new Map<string, Set<() => void>>()
   const localeListeners = new Set<() => void>()
   let revision = 0
@@ -99,5 +100,27 @@ describe('configLedgerSource', () => {
     expect(b.listenerCount()).toBe(0)
     b.register('plugins.item', { id: 'loop', label: 'Loop' })
     expect(listener).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('tabLedgerSource', () => {
+  it('projects contributed tabs with locale-following labels, keeps its snapshot between changes, and unsubscribes', () => {
+    const b = bench()
+    const source = tabLedgerSource(b.ctx)
+    expect(source.getSnapshot()).toEqual([])
+    let label = 'Discover'
+    const listener = vi.fn()
+    const off = source.subscribe(listener)
+    b.register('plugins.tab', { id: 'discover', label: () => label })
+    b.register('plugins.tab', { id: 'unlabelled' })
+    expect(listener).toHaveBeenCalledTimes(2)
+    const first = source.getSnapshot()
+    expect(first).toEqual([{ id: 'discover', label: 'Discover' }, { id: 'unlabelled', label: '' }])
+    expect(source.getSnapshot()).toBe(first)
+    label = '发现'
+    b.setLocale()
+    expect(source.getSnapshot()[0]).toEqual({ id: 'discover', label: '发现' })
+    off()
+    expect(b.listenerCount()).toBe(0)
   })
 })

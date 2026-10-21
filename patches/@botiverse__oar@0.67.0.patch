@@ -1,0 +1,163 @@
+diff --git a/dist/runtimes/claude/launch-args.js b/dist/runtimes/claude/launch-args.js
+index 7dfd067d13561e14d00fbc685141d2ef872ec8fb..b7875b83018287729dd0cf9e0b04a8342e953179 100644
+--- a/dist/runtimes/claude/launch-args.js
++++ b/dist/runtimes/claude/launch-args.js
+@@ -14,7 +14,6 @@ const MANAGED = new Map([
+     ["-r", "use SessionOptions.resume"],
+     ["--session-id", "OAR assigns the session id"],
+     ["--fork-session", "a fork runs under a new native id that Session.id would not report"],
+-    ["--permission-mode", "OAR runs claude with --dangerously-skip-permissions, which overrides it"],
+     ["--print", "OAR drives claude in print mode over stream-json already"],
+     ["-p", "OAR drives claude in print mode over stream-json already"],
+     ["--input-format", "OAR drives claude over stream-json"],
+diff --git a/dist/runtimes/claude/launch.js b/dist/runtimes/claude/launch.js
+index 9a1f58421f04922614867e38b8206204fa8f38c9..6a0a94fdd73fa23feaca6ad52fe0549c57a33f1e 100644
+--- a/dist/runtimes/claude/launch.js
++++ b/dist/runtimes/claude/launch.js
+@@ -17,7 +17,8 @@ function spawnClaude(command, sessionId, options, mcpConfig, tierArgs) {
+         // YOLO by default (repo policy, 2026-08-24): in embedded/SDK use there is
+         // no human at an approval prompt: a permission gate is a hang, not
+         // safety. Isolation is the sandbox's job, not the approval flow's.
+-        "--dangerously-skip-permissions",
++        ...((options.launchArgs ?? []).some(arg => arg === "--permission-mode" || arg.startsWith("--permission-mode="))
++            ? [] : ["--dangerously-skip-permissions"]),
+         ...(options.resume === undefined ? ["--session-id", sessionId] : ["--resume", sessionId]),
+         // SessionOptions.name (#368) names a new session only: `--name` on a
+         // resume replaces the name the session has, which may be the user's
+diff --git a/dist/runtimes/codex/session.js b/dist/runtimes/codex/session.js
+--- a/dist/runtimes/codex/session.js
++++ b/dist/runtimes/codex/session.js
+@@ -29,10 +29,17 @@
+     // Every error the client reports goes through the redactor first: the
+     // open's config carries the session's MCP credentials to codex.
+     const client = startAppServerClient(installation.command, options.env, configOverrides, undefined, { redact, ...(options.launchArgs === undefined ? {} : { launchArgs: options.launchArgs }) });
+-    await client.request("initialize", {
+-        clientInfo: { name: "oar", version: "0.0.0" },
+-        capabilities: { experimentalApi: true },
+-    });
++    try {
++        await client.request("initialize", {
++            clientInfo: { name: "oar", version: "0.0.0" },
++            capabilities: { experimentalApi: true },
++        });
++    }
++    catch (error) {
++        client.kill();
++        await client.exited;
++        throw error;
++    }
+     client.notify("initialized", {});
+     const filteredOpenParams = await prepareCodexToolDenials(client, options, openParams);
+     // The open event is marked at the reply's wire position AS the reply line
+@@ -53,6 +60,7 @@
+     const threadId = asRecord(started.thread)?.id;
+     if (typeof threadId !== "string") {
+         client.kill();
++        await client.exited;
+         throw new TypeError("codex thread start/resume returned no thread id");
+     }
+     // The reply is codex's word on the model and effort the thread runs (the
+diff --git a/dist/runtimes/codex/rpc-control.js b/dist/runtimes/codex/rpc-control.js
+--- a/dist/runtimes/codex/rpc-control.js
++++ b/dist/runtimes/codex/rpc-control.js
+@@ -99,6 +99,7 @@
+     }
+     catch (error) {
+         client.kill();
++        await client.exited;
+         const message = error instanceof Error ? error.message : String(error);
+         const typed = resumeError(method, resumeId, asRecord(error instanceof Error ? error.cause : undefined), message);
+         if (typed !== null) {
+diff --git a/dist/contracts/installation.d.ts b/dist/contracts/installation.d.ts
+index 3afb839..455fd2f 100644
+--- a/dist/contracts/installation.d.ts
++++ b/dist/contracts/installation.d.ts
+@@ -35,6 +35,6 @@ export type InstallationSnapshot = AvailableInstallation | {
+     readonly kind: "unsupported";
+     readonly reason: string;
+ };
+-/** A local-only installation observation. Implementations must not perform account or usage I/O. */
+-export type InstallationProbe = () => Promise<InstallationSnapshot>;
++/** A local-only installation observation. Optional env overlays apply to native readiness and version subprocesses. Implementations must not perform account or usage I/O. */
++export type InstallationProbe = (options?: { readonly env?: Readonly<Record<string, string | null>> }) => Promise<InstallationSnapshot>;
+ //# sourceMappingURL=installation.d.ts.map
+\ No newline at end of file
+diff --git a/dist/shared/executable/version.d.ts b/dist/shared/executable/version.d.ts
+index 1bf0801..9f2f670 100644
+--- a/dist/shared/executable/version.d.ts
++++ b/dist/shared/executable/version.d.ts
+@@ -5,5 +5,5 @@ export type VersionReader = (stdout: string) => string | undefined;
+  * Returns undefined when the executable rejects the flag; execution failures
+  * and timeouts throw with the native reason and bounded stderr tail.
+  */
+-export declare function readExecutableVersion(executable: string, timeoutMs?: number, read?: VersionReader): Promise<string | undefined>;
++export declare function readExecutableVersion(executable: string, timeoutMs?: number, read?: VersionReader, env?: NodeJS.ProcessEnv): Promise<string | undefined>;
+ //# sourceMappingURL=version.d.ts.map
+\ No newline at end of file
+diff --git a/dist/shared/executable/version.js b/dist/shared/executable/version.js
+index c65769e..216ee5d 100644
+--- a/dist/shared/executable/version.js
++++ b/dist/shared/executable/version.js
+@@ -8,8 +8,8 @@ function firstLine(stdout) {
+  * Returns undefined when the executable rejects the flag; execution failures
+  * and timeouts throw with the native reason and bounded stderr tail.
+  */
+-export async function readExecutableVersion(executable, timeoutMs, read = firstLine) {
+-    const result = await runExecutable(executable, ["--version"], timeoutMs === undefined ? {} : { timeoutMs });
++export async function readExecutableVersion(executable, timeoutMs, read = firstLine, env) {
++    const result = await runExecutable(executable, ["--version"], { env, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+     assertRan(result, `Failed to run ${executable} --version`);
+     if (!result.ok) {
+         return undefined;
+diff --git a/dist/shared/installation.js b/dist/shared/installation.js
+index 950c138..792f057 100644
+--- a/dist/shared/installation.js
++++ b/dist/shared/installation.js
+@@ -2,6 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
+ import path from "node:path";
+ import { readExecutableVersion, resolveExecutable, resolveExecutableAll, runExecutable, } from "./executable/index.js";
+ import { assertRan } from "./executable/diagnostics.js";
++import { sessionEnvironment } from "./environment.js";
+ function isPinnedPath(entry) {
+     return entry.includes("/") || entry.includes("\\");
+ }
+@@ -66,8 +67,8 @@ function locateCandidate(entry) {
+     }
+     return locateOnPath(entry);
+ }
+-async function versionSnapshot({ command, shadowed }, options) {
+-    const version = await readExecutableVersion(command, options.versionTimeoutMs, options.readVersion);
++async function versionSnapshot({ command, shadowed }, options, env) {
++    const version = await readExecutableVersion(command, options.versionTimeoutMs, options.readVersion, env);
+     const snapshot = {
+         kind: "available",
+         via: "executable",
+@@ -85,7 +86,8 @@ async function versionSnapshot({ command, shadowed }, options) {
+  * a winner found on PATH shadows are reported, never for a pinned env var.
+  */
+ export function executableInstallation(envVar, command, fallbacks = [], readiness, options = {}) {
+-    return async () => {
++    return async (probeOptions = {}) => {
++        const env = sessionEnvironment(probeOptions.env);
+         const pinned = process.env[envVar];
+         const found = [];
+         if (pinned !== undefined && pinned !== "") {
+@@ -107,15 +109,13 @@ export function executableInstallation(envVar, command, fallbacks = [], readines
+             return { kind: "not_found" };
+         }
+         if (readiness === undefined) {
+-            return versionSnapshot(first, options);
++            return versionSnapshot(first, options, env);
+         }
+         for (const candidate of found) {
+-            const result = await runExecutable(candidate.command, readiness, options.readinessTimeoutMs === undefined ? {} : {
+-                timeoutMs: options.readinessTimeoutMs,
+-            });
++            const result = await runExecutable(candidate.command, readiness, { env, ...(options.readinessTimeoutMs === undefined ? {} : { timeoutMs: options.readinessTimeoutMs }) });
+             assertRan(result, `Failed to run ${candidate.command} ${readiness.join(" ")}`);
+             if (result.ok) {
+-                return versionSnapshot(candidate, options);
++                return versionSnapshot(candidate, options, env);
+             }
+         }
+         return { kind: "unsupported", reason: `${readiness.join(" ")} failed` };

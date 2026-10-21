@@ -1,0 +1,26 @@
+[
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "loading"
+  },
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "failed"
+  },
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "loading"
+  },
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "failed"
+  },
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "loading"
+  },
+  {
+    "url": "https://example.test/avatar.png",
+    "status": "ready"
+  }
+]

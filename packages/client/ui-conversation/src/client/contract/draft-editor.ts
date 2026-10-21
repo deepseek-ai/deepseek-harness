@@ -23,12 +23,24 @@ export interface ReferenceInsert {
 export type DraftReference = Omit<Occurrence, 'occurrenceId'>
 
 /**
+ * Persisted command chip opening a draft. The claim itself (its submit
+ * closure) is not persisted; the input rebuilds it from the token through the
+ * trigger pipeline when the draft is restored.
+ */
+export interface DraftCommand {
+  /** Claim token with its argument separator, e.g. `/goal `; the draft text starts with the token without the separator. */
+  readonly token: string
+}
+
+/**
  * Editor-independent content. Reference spans are ordered, non-overlapping UTF-16
- * ranges whose text equals clipboardText; runtime node identities are excluded.
+ * ranges whose text equals clipboardText and that follow a leading command
+ * token; runtime node identities are excluded.
  */
 export interface DraftSnapshot {
   readonly text: string
   readonly references: readonly DraftReference[]
+  readonly command?: DraftCommand
 }
 
 /** Plain initial text or an existing document with explicit reference identities. */

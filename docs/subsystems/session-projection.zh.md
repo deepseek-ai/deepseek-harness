@@ -2,13 +2,35 @@
 
 [English](session-projection.md) | 中文
 
-会话投影 seam 是一项[能力 seam](../capability-seams.zh.md)：领域 host 插件经由它向客户端载体供给按会话的日志派生状态的当前全量值；三方分别是 Service Definition 与注册表（[dsh-session-projection](../../packages/session/session-projection)，`ctx.sessionProjections`）、领域贡献方（每个领域注册一个纯单元）与载体（[dsh-session-controller](../../packages/api/session-controller) 的历史尾页与 `session/projection` 推送帧）。它是一项可选能力，不属于 agent loop（智能体循环）主干。框架负责驱动，领域负责计算：注册表只订阅一次 `session/event`，并把每个已提交事件折叠进每个单元；领域不持有任何订阅，客户端也从不折叠领域事件——它们收到的是成品值。设计权威：[session-projection RFC](../../.agents/notes/proposed/architecture/2026-07-27-session-projection-and-command-log.zh.md)；驱动、缓存与变更流约定：[包 README](../../packages/session/session-projection/README.zh.md)。
+会话投影 seam 是一项[能力 seam](../capability-seams.zh.md)：领域 host 插件经由它向客户端载体供给按会话的日志派生状态的当前全量值；三方分别是 Service Definition 与注册表（[dsh-session-projection](../../packages/session/session-projection)，`ctx.sessionProjections`）、领域贡献方（每个领域注册一个纯单元）与载体（[dsh-session-controller](../../packages/api/session-controller) 的历史尾页与 `session/projection` 推送帧）。Host 状态读取方在激活期间要求注册表存在。框架负责驱动，领域负责计算：注册表只订阅一次 `session/event`，并把每个已提交事件折叠进每个单元；领域不持有任何订阅，客户端也从不折叠领域事件——它们收到的是成品值。设计权威：[session-projection RFC](../../.agents/notes/proposed/architecture/2026-07-27-session-projection-and-command-log.zh.md)；驱动、缓存与变更流约定：[包 README](../../packages/session/session-projection/README.zh.md)。
 
 源码：[`packages/session/session-projection/src/index.ts`](../../packages/session/session-projection/src/index.ts)
 
+`ProjectionHandle` 在注销后仍保留同步 reader。`stateOf(session)` 用原有单元折叠新提交的事件，不会重新加入全局快照、检查点或通知。必须等待注册完成才能使用 handle。参见[注册生命周期](../../packages/session/session-projection/README.zh.md)。
+
+```ts type-equiv
+/** An effect-owned registration with a reader retained independently of registration. */
+interface ProjectionHandle<S> {
+  /**
+   * Read the current state, including after unregistering, by folding new
+   * Session events with this handle's original unit. Do not mutate the live value.
+   * @param session - Session whose committed events are folded.
+   * @returns the projection state at the Session's current cursor.
+   */
+  stateOf(session: Session): S
+  /**
+   * Unregister from global drives and snapshots without invalidating this reader.
+   * @returns a promise that resolves when this registration is released.
+   */
+  dispose(): Promise<void>
+}
+```
+
+[兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取及其每个键一次的弃用警告。
+
 ## 投影单元
 
-`SessionProjectionStateMap` 是 host 侧折叠状态的 merge-extensible 类型表，`SessionProjectionMap` 则继续表示客户端可见的全量值。领域为每个状态 key 贡献一个 `ProjectionDefinition`；`wire` 块使该 key 对客户端可见，渲染归 slot 体系管，永远不归本层：
+`ProjectionDefinition<K, S>` 在各单元内部携带宿主状态类型；注册从 `stateSchema` 推导 `S`，并返回 `ProjectionHandle<S>`。只有客户端可见的 key 合并到 `SessionProjectionMap`，由它约束对应的全量值。`wire` 块使单元对客户端可见，渲染归 slot 体系管，永远不归本层：
 
 ```ts type-equiv
 /**
@@ -19,11 +41,8 @@
  * synchronous (an async unit would tear the carriers' consistency cut), and
  * `state` MUST be plain JSON (the persisted-cache precondition).
  */
-interface ProjectionDefinition<
-  K extends keyof SessionProjectionStateMap,
-  S extends SessionProjectionStateMap[K] = SessionProjectionStateMap[K],
-> {
-  /** The projection key this unit owns (its `SessionProjectionStateMap` entry). */
+interface ProjectionDefinition<K extends string, S> {
+  /** The projection key this unit owns. */
   key: K
   /** Validates persisted state before it seeds a fold. */
   stateSchema: ZodType<S>
@@ -46,7 +65,7 @@ interface ProjectionDefinition<
   /** Client view. Omit for host-only units. */
   wire?: K extends keyof SessionProjectionMap ? {
     /** Validates the wire payload before it leaves the host. */
-    viewSchema: ZodType<SessionProjectionMap[K]>
+    viewSchema: ZodType<SessionProjectionViewValue<SessionProjectionMap[K]>>
     /**
      * State → wire payload (the read-side projection). The live drive keeps
      * the two latest raw results and compares them with `Object.is`; an
@@ -55,7 +74,15 @@ interface ProjectionDefinition<
      * @param state - the current state.
      * @returns the whole current value for this unit's key.
      */
-    view(state: NoInfer<S>): SessionProjectionMap[K]
+    view(state: NoInfer<S>): SessionProjectionViewValue<SessionProjectionMap[K]>
+    /**
+     * Whether a Session summary carries this unit; omitted means `true`.
+     * Declare `false` on a key whose map entry carries the
+     * `SessionProjectionSummaryExcluded` mark: the runtime key set follows this
+     * field, while the client view type follows the mark.
+     * @default true
+     */
+    summary?: boolean
   } : never
   /**
    * Persisted-cache invalidation version: bump whenever the serialized state fields or the
@@ -99,11 +126,87 @@ type ProjectionChangeListener = (
 ) => void
 ```
 
-`snapshot(session)` 完全同步：载体在切出页面切片的同一 tick 内读取它，因此 `asOfSeq` 使两次读取使用同一个序号。它只返回客户端视图，并在返回前通过各单元的 `viewSchema` 校验。`stateOf(session, key)` 可在不计算无关视图的情况下读取一份实时 host 状态；调用方不得修改这一借用引用。state 引用变化时，注册表计算并缓存一次原始 view；只有该结果通过 `Object.is` 判定为变化时才触发变更流，对象 view 若要在仅内部 state 变化时抑制发布就必须保留引用。
+`snapshot(session)` 完全同步：载体在切出页面切片的同一 tick 内读取它，因此 `asOfSeq` 使两次读取使用同一个序号。它只返回客户端视图，并在返回前通过各单元的 `viewSchema` 校验。`handle.stateOf(session)` 可在不计算无关视图的情况下读取一份实时 host 状态；调用方不得修改这一借用引用。state 引用变化时，注册表计算并缓存一次原始 view；只有该结果通过 `Object.is` 判定为变化时才触发变更流，对象 view 若要在仅内部 state 变化时抑制发布就必须保留引用。
+
+## 摘要读取
+
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目带 `SessionProjectionSummaryExcluded<T>` 标记的 key。标记没有运行时表示：它决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段是普通布尔值，类型层不做强制。
+
+`summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例。摘要消费方把它传给既有的带 key 读取面 —— 缓存 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者保持各自的水位规则且直接使用 Set、不做复制 —— 因此不存在摘要专用读取面，集合也只有一处定义。
+
+列表行携带的是这个摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。`snapshot`、`cachedSnapshot` 与 `viewCheckpoint` 在不传 key 子集时仍是完整的，打开的 Session、其 follow 基线与控制基线因此保留每个投影值；`@` 引用只通过同一组带 key 的读取面读取其标签 key。
+
+### 摘要词汇
+
+以下声明构成摘要规则。标记、其剥离、被排除键的判定与摘要值类型声明在纯类型出口；两个读取面共同接受的 key 选择声明在服务模块。
+
+```ts type-equiv
+/**
+ * One `SessionProjectionMap` entry excluded from Session summary payloads
+ * (the Session list row and any other summary read). The mark is type-only;
+ * `T` keeps its exact runtime value and wire representation. Wrap only the
+ * excluded contributor's own map entry, and place a nullable entry's `null`
+ * outside the wrapper (`SessionProjectionSummaryExcluded<Item[]> | null`) so
+ * the required symbol cannot absorb that member.
+ */
+type SessionProjectionSummaryExcluded<T> = T & {
+  readonly [sessionProjectionSummaryExcluded]: true
+}
+```
+
+```ts type-equiv
+/**
+ * One map entry's client view value: the summary mark stripped. The
+ * conditional distributes over a nullable entry's union, so a `| null` member
+ * written outside the wrapper survives unchanged.
+ */
+type SessionProjectionViewValue<T> =
+  T extends SessionProjectionSummaryExcluded<infer Value> ? Value : T
+```
+
+```ts type-equiv
+/** Every client view value, keyed by projection key, with no summary mark. */
+type SessionProjectionViewValues = {
+  [K in keyof SessionProjectionMap]: SessionProjectionViewValue<SessionProjectionMap[K]>
+}
+```
+
+```ts type-equiv
+/**
+ * Keys a Session summary omits: map entries whose non-nullish value carries
+ * the summary mark. Nullish members are ignored, so a nullable entry is still
+ * recognized when its `null` lives outside the wrapper.
+ */
+type SessionProjectionSummaryExcludedKey = {
+  [K in keyof SessionProjectionMap]:
+  NonNullable<SessionProjectionMap[K]> extends SessionProjectionSummaryExcluded<unknown> ? K : never
+}[keyof SessionProjectionMap]
+```
+
+```ts type-equiv
+/**
+ * The client values a Session summary carries: every client view value except
+ * {@link SessionProjectionSummaryExcludedKey}. A summary read returns these
+ * keys only; an opened Session's full snapshot keeps every view value.
+ */
+type SessionProjectionSummaryValues =
+  Omit<SessionProjectionViewValues, SessionProjectionSummaryExcludedKey>
+```
+
+```ts type-equiv
+/**
+ * One read's client-visible key selection: an explicit key list, or a derived
+ * set such as {@link SessionProjectionRegistry.summaryKeys}. A set is used as
+ * given; only a list is copied into one.
+ */
+type ProjectionKeySelection =
+  | readonly Extract<keyof SessionProjectionMap, string>[]
+  | ReadonlySet<Extract<keyof SessionProjectionMap, string>>
+```
 
 ## 注册表：`ctx.sessionProjections`
 
-`SessionProjectionRegistry`（[签名](#ctxsessionprojections--sessionprojectionregistry)）拥有驱动权：一份 `session/event` 订阅、对每个已注册单元即时调用 `apply`，以及每会话每单元的水位线（watermark）cell。cell 惰性构建：在事件流过之后才注册的单元，或比注册表更早的会话，都在首次触达（事件或读取）时从 `init` 出发在内存日志上折叠。注册是一个 effect，其 disposer 随调用方 fiber 走：领域插件卸载后，其 key（连同缓存的 cell）从后续驱动与快照中消失，客户端将其读作能力缺失；key 以不同 `stateVersion` 重复时直接 throw，同版本注册方则共享一个单元并被计数。领域插件在 `ctx.inject(['sessionProjections'], …)` 下注册，因此不带注册表的 headless 组装完全不受影响。
+`SessionProjectionRegistry`（[签名](#ctxsessionprojections--sessionprojectionregistry)）拥有驱动逻辑：一个 `session/event` 订阅、对所有已注册单元立即执行的 `apply`，以及按会话、按单元保存的水位线缓存。缓存单元惰性构建：若单元在事件产生后才注册，或会话早于注册表存在，第一次访问（事件或读取）会从 `init` 开始折叠内存日志。领域在激活期间等待 `register(definition)`，并保留返回的 handle（句柄）。注册归调用 fiber 所有：最后一次释放会从全局驱动和快照中移除该 key，已有句柄仍可读取。同 key、同版本的注册者共享一个单元；版本不兼容时注册失败。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -139,7 +242,7 @@ The persisted projection cache service. Opens the `session_projcache` domain at 
  * @returns the viewed block, or `undefined` when no usable row exists for
  *   this lifecycle at the current Session format.
  */
-cachedSnapshot( meta: SessionHeader, keys?: readonly Extract<keyof SessionProjectionMap, string>[], ): ProjectionSnapshot | undefined
+cachedSnapshot( meta: SessionHeader, keys?: ProjectionKeySelection, ): ProjectionSnapshot | undefined
 
 /**
  * Read only a predecessor checkpoint's title as a zero-I/O listing hint.
@@ -204,26 +307,27 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
 
 ### `ctx.sessionProjections` — `SessionProjectionRegistry`
 
-`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect (disposer rides the calling fiber): an unloaded domain plugin's key disappears from snapshots and clients read it as capability absence. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject(['sessionProjections'], ...)`. Registrants sharing a key share one unit and are counted: the same tool package mounted in N agent presets registers N times, and the key survives until the last one unloads.
+`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Consumers declare `sessionProjections` as a required injection, await registration during activation, and retain its ready handle. Registrants sharing a key share one unit and are counted. The last release removes the unit from live drives, checkpoints, and client snapshots; retained handles still fold new events on demand using the original unit.
 
 ```ts cordis-catalog
 /**
- * Register one domain's unit. The registration is an effect on the calling
- * context's fiber: disposing the fiber (or calling the returned disposer)
- * removes the key — and the unit's cached cells — from subsequent drives
- * and snapshots.
+ * Register one domain's unit on the calling context's fiber. Fiber or handle
+ * disposal releases one reference; the final release removes live participation.
+ * Retained handles remain readable after release.
+ * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns the exact disposer that unregisters this unit.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
-register< K extends keyof SessionProjectionMap, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): () => void
+register<K extends keyof SessionProjectionMap, S>( definition: Omit<ProjectionDefinition<K, S>, 'wire'> & { wire: NonNullable<ProjectionDefinition<K, S>['wire']> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Register one host-only unit. Its state is omitted from client snapshots
  * and always checkpointed like every other unit.
+ * Callers must await registration before publishing consumers; registration may perform asynchronous work.
  * @param definition - key, state schema, pure unit functions, and stateVersion.
- * @returns the exact disposer that unregisters this unit.
+ * @returns an awaitable yielding a ready handle; the callable runtime value is deprecated.
  */
-register< K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjectionMap>, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, 'wire'>, ): () => void
+register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: Exclude<K, keyof SessionProjectionMap> }, ): Promise<ProjectionHandle<S>>
 
 /**
  * Subscribe to the change feed. The registration is an effect on the
@@ -234,16 +338,6 @@ register< K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjec
 onChanged(listener: ProjectionChangeListener): () => void
 
 /**
- * Read one unit's current host state after materializing every registered
- * unit at the Session cursor. Unrelated wire views are not produced.
- * The returned value is live; callers must not mutate it.
- * @param session - the session whose state is read.
- * @param key - the registered unit key.
- * @returns current state, or `undefined` when the key is not registered.
- */
-stateOf<K extends keyof SessionProjectionStateMap>( session: Session, key: K, ): SessionProjectionStateMap[K] | undefined
-
-/**
  * One consistent cut over every registered client-visible unit for one session, read from
  * the watermark cache (missing cells fold lazily over the in-memory log).
  * Fully synchronous — every value and `asOfSeq` reflect the same log
@@ -252,7 +346,7 @@ stateOf<K extends keyof SessionProjectionStateMap>( session: Session, key: K, ):
  * @param keys - optional client-visible outputs; state materialization remains complete.
  * @returns the snapshot; `values` is empty when no selected client-visible unit is registered.
  */
-snapshot( session: Session, keys?: readonly Extract<keyof SessionProjectionMap, string>[], ): ProjectionSnapshot
+snapshot( session: Session, keys?: ProjectionKeySelection, ): ProjectionSnapshot
 
 /**
  * Read only already-materialized client-visible cells without folding history.
@@ -262,7 +356,18 @@ snapshot( session: Session, keys?: readonly Extract<keyof SessionProjectionMap, 
  * @param keys - optional wire keys to view.
  * @returns the lowest common cached cut, or `undefined` when no wire cell exists.
  */
-cachedSnapshot( session: Session, keys?: readonly Extract<keyof SessionProjectionMap, string>[], ): ProjectionSnapshot | undefined
+cachedSnapshot( session: Session, keys?: ProjectionKeySelection, ): ProjectionSnapshot | undefined
+
+/**
+ * The keys a Session summary carries: every registered client-visible key
+ * whose unit does not declare `summary: false`. The returned set is stable —
+ * the same instance on every call — until a registration or its disposal
+ * changes the key table, so a consumer may hold it across rows. Callers pass
+ * it to a key-taking read face such as `cachedSnapshot(session, summaryKeys())`
+ * or `viewCheckpoint(rows, summaryKeys())`; those faces use the set as-is.
+ * @returns the current summary key set; do not mutate it.
+ */
+summaryKeys(): ReadonlySet<Extract<keyof SessionProjectionMap, string>>
 
 /**
  * State-level checkpoint of every persisted unit for one session, read
@@ -309,7 +414,7 @@ restoreFloor(checkpoint: ProjectionCheckpoint): SessionLogOffset | undefined
  * @param keys - optional wire keys to view.
  * @returns whole values per key with a usable row; empty when none.
  */
-viewCheckpoint( checkpoint: ProjectionCheckpoint, keys?: readonly Extract<keyof SessionProjectionMap, string>[], ): Partial<SessionProjectionMap>
+viewCheckpoint( checkpoint: ProjectionCheckpoint, keys?: ProjectionKeySelection, ): Partial<SessionProjectionMap>
 
 /**
  * Cold read: fold every persisted unit over a stored log suffix, seeding

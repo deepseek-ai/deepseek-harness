@@ -25,25 +25,31 @@
   - listitem:
     - button "查看 智能体团队": 智能体团队
     - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。
+    - status
     - switch "启用 智能体团队"
   - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - status
     - switch "启用 语音输入"
   - listitem:
     - button "查看 自动授权审查": 自动授权审查
     - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
+    - status
     - switch "启用 自动授权审查"
   - listitem:
     - button "查看 开发者工具": 开发者工具
     - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
+    - status
     - switch "启用 开发者工具"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:
     - button "查看 @fixture/bundle": "@fixture/bundle"
     - text: Registry description for the fixture bundle.
+    - status
     - switch "启用 @fixture/bundle" [checked]
   - listitem:
     - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
+    - status
     - switch "启用 dsh-web-scaffold-defaults" [checked]

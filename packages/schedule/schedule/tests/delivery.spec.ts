@@ -19,7 +19,7 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
     const releaseMaintenance = Promise.withResolvers<undefined>()
     const maintenance = agent.runMaintenance(() => releaseMaintenance.promise)
     try {
-      const resolve = vi.fn(async () => ({ agent }))
+      const resolve = vi.fn(async (_sessionId: SessionId) => ({ agent }))
       ctx.provide('sessionController', { resolveAgent: resolve } as never)
       const record = createAfterScheduleRecord(ScheduleId('receipt'), 'Inbox only', 1, Date.now() - 2000, 'Inbox only')
       const tasks: ScheduleTask[] = [{ sessionId: agent.session.id, record, status: 'active' }]
@@ -32,7 +32,8 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
         return releaseFlush.promise
       })
       const commit = vi.fn(async (task: ScheduleTask) => { tasks[0] = task })
-      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, { days: 30, records: 200 })
+      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, { days: 30, records: 200 },
+        async sessionId => (await resolve(sessionId)).agent)
       try {
         runtime.requestDrive()
         await flushStarted.promise

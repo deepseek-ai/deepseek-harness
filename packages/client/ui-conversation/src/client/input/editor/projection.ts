@@ -12,7 +12,9 @@ import {
   $getRoot, $getSelection, $isElementNode, $isLineBreakNode, $isRangeSelection, $isTextNode,
 } from 'lexical'
 import type { Occurrence } from '../../contract/draft-editor.ts'
+import type { CommandClaim } from '../../contract/input.ts'
 import { $isReferenceChipNode } from './chip-node.tsx'
+import { $isCommandChipNode } from './command-chip-node.tsx'
 
 /** The detect-projection stand-in for one chip (object replacement character). */
 export const ATOMIC_CHAR = '￼'
@@ -79,7 +81,7 @@ export function $composerLayout(): ComposerLayout {
     const kids = element.getChildren()
     children.set(element.getKey(), kids.map(kid => kid.getKey()))
     for (const kid of kids) {
-      if ($isReferenceChipNode(kid)) {
+      if ($isReferenceChipNode(kid) || $isCommandChipNode(kid)) {
         pushLeaf('chip', kid, ATOMIC_CHAR, kid.getTextContent())
       } else if ($isTextNode(kid)) {
         const text = kid.getTextContent()
@@ -162,6 +164,8 @@ export interface EditorProjection {
   readonly selection: { readonly start: number; readonly end: number } | null
   /** Collapsed caret in detect coordinates; null while the selection is absent or ranged. */
   readonly caret: number | null
+  /** Claim of the command chip opening the document; undefined without one. */
+  readonly command: CommandClaim | undefined
 }
 
 /**
@@ -211,6 +215,7 @@ export function $projectComposer(idOf: (key: NodeKey) => number): EditorProjecti
       ...(chip.isInvalid() ? { invalid: true } : {}),
     })
   }
+  const lead = layout.segments[0]?.node
   const selection = $getSelection()
   let range: { start: number; end: number } | null = null
   if ($isRangeSelection(selection)) {
@@ -226,5 +231,6 @@ export function $projectComposer(idOf: (key: NodeKey) => number): EditorProjecti
     occurrences,
     selection: range,
     caret: range !== null && range.start === range.end ? range.start : null,
+    command: $isCommandChipNode(lead) ? lead.getClaim() : undefined,
   }
 }

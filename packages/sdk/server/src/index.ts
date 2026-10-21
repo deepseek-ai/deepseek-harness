@@ -59,6 +59,9 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
   const server = new HarnessSdkJsonRpcServer(ctx, transport, {
     maxTokensAsSuccess: resolvedConfig.maxTokensAsSuccess,
   })
+  // Compositions can order Schedule after its activation handler is installed.
+  // Like the app startup marker, this carries readiness, not another control API.
+  ctx.provide('sdkSessionActivation', { ready: true })
 
   // Share one exit task so racing shutdown requests cannot dispose the root or
   // exit the process more than once.

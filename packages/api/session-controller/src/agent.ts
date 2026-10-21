@@ -16,7 +16,9 @@ import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import type { ModelSelection } from './types.ts'
+import type { ModelSelection, ModelSelectionProjectionState } from './types.ts'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { modelSelectionProjection } from './model-selection-projection.ts'
 
 /** Cold Session identity absent from persistence. */
 export class ApiSessionNotFound extends Error {}
@@ -168,13 +170,22 @@ export async function inspectApiSession(
 
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 export class ApiSessionAgentController {
+  private modelSelectionProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
   private readonly resumes = new Map<SessionId, Promise<Agent>>()
   private readonly claims = new Map<SessionId, Promise<void>>()
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
   /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
-  constructor(private readonly ctx: Context) {
+  constructor(private readonly ctx: Context) {}
+
+  /**
+   * Acquire projection readers before exposing dependent operations.
+   * @returns when all required registrations are ready.
+   */
+  async initialize(): Promise<void> {
+    const ctx = this.ctx
+    this.modelSelectionProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjection)
     ctx.typert.lookups.configure('agent', async (sessionId: SessionId) => {
       const found = await this.resolveAgent(sessionId)
       if ('error' in found) throw found.error
@@ -289,10 +300,7 @@ export class ApiSessionAgentController {
   selectionFor(agent: Agent): InstalledSelection {
     const installed = this.selections.get(agent)
     if (installed !== undefined) return installed
-    const projectionState = this.ctx.sessionProjections.stateOf(agent.session, 'modelSelection')
-    if (projectionState === undefined) {
-      throw new Error('api-session: required modelSelection projection is not registered')
-    }
+    const projectionState = this.modelSelectionProjectionHandle.stateOf(agent.session)
     let picked = projectionState.pending === null
       ? undefined
       : agentModelSelection(projectionState.pending)
@@ -361,10 +369,10 @@ export class ApiSessionAgentController {
   /**
    * Read the current Agent preset from the Session projection.
    * @param session - live Session whose projection state is available.
-   * @returns the current preset, or undefined when the capability is absent.
+   * @returns the current preset, or undefined without a preset service or recorded selection.
    */
   presetForSession(session: Session): string | undefined {
-    return this.ctx.sessionProjections.stateOf(session, 'agentPreset') ?? undefined
+    return this.ctx.get('agentPresets')?.presetForSession(session) ?? undefined
   }
 
   /**
@@ -542,8 +550,8 @@ export class ApiSessionAgentController {
 
   /** Whether no turn has started, by the predicate the preset registry's `select` enforces. */
   private isBlank(session: Session): boolean {
-    const boundary = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    return boundary === undefined || (boundary.openTurnStartSeq === null && boundary.lastTurn === 0)
+    const boundary = this.ctx.agents.turnBoundaryOf(session)
+    return boundary.openTurnStartSeq === null && boundary.lastTurn === 0
   }
 
   /** Without a roster, reuse cannot apply a named preset. */

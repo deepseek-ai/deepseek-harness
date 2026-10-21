@@ -26,9 +26,9 @@ async function harness(): Promise<Context> {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRegistry)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(WorkingDirectory)
   return ctx
 }
@@ -64,6 +64,7 @@ describe('LocalFileReferenceService', () => {
   it('defers guidance until optional prompt and tool services become available', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     ctx.provide('workingDirectory', { ensure: vi.fn<WorkingDirectory['ensure']>() })
     await ctx.plugin(LocalFileReferenceService)

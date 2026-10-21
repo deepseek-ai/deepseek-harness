@@ -1,9 +1,9 @@
 /**
  * SubmitMachine behavior: enter routing, adjudication outcomes, the claimed
- * lifecycle and its integrity watch, settlement (commit-draft and claim
- * re-entry decisions), anti-backwash, and per-session isolation. Text-edit
- * semantics live in the editor (lexical-editor-core spec) — the machine only
- * observes drafts through event payloads.
+ * lifecycle that follows the leading command chip, settlement (commit-draft
+ * and claim re-entry decisions), anti-backwash, and per-session isolation.
+ * Text-edit semantics live in the editor (lexical-editor-core spec) — the
+ * machine only observes the document through event payloads.
  */
 import { describe, expect, it } from 'vitest'
 import type { CommandClaim } from '../src/client/contract/input.ts'
@@ -192,41 +192,45 @@ describe('submit-machine: claimed lifecycle', () => {
     expect(m.state.phase).toBe('submitting')
   })
 
-  it('editing the command name releases back to plain', () => {
+  it('holds the claim while the leading command chip stays and releases it when the chip goes', () => {
     const m = new SubmitMachine()
-    m.dispatch({ type: 'claim', claim: claimOf('goal') })
-    m.dispatch({ type: 'draft-changed', draft: '/goal args fine' })
+    const claim = claimOf('goal')
+    m.dispatch({ type: 'claim', claim })
+    m.dispatch({ type: 'draft-changed', command: claim })
     expect(m.state.phase).toBe('claimed')
-    m.dispatch({ type: 'draft-changed', draft: '/goa' })
+    m.dispatch({ type: 'draft-changed', command: undefined })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
+  })
+
+  it('re-enters claimed when a history restore brings the command chip back', () => {
+    const m = new SubmitMachine()
+    const claim = { ...claimOf('goal'), token: '/目标 ' }
+    m.dispatch({ type: 'draft-changed', command: claim })
+    expect(m.state.phase).toBe('claimed')
+    expect(m.state.claim?.token).toBe('/目标 ')
   })
 
   it.each([
     ['goal', '/goal '], ['goal', '/目标 '], ['plan', '/plan '], ['plan', '/计划 '],
     ['feedback', '/feedback '], ['feedback', '/反馈 '],
-  ])('retains %s as %s without its separator and submits an empty argument', (name, token) => {
+  ])('submits %s claimed as %s without its separator with an empty argument', (name, token) => {
     const m = new SubmitMachine()
-    m.dispatch({ type: 'claim', claim: { ...claimOf(name), token } })
-    for (const draft of [token + '这是目标', token, token.trimEnd(), token, token.trimEnd()]) {
-      m.dispatch({ type: 'draft-changed', draft })
-      expect(m.state.phase).toBe('claimed')
-      expect(m.state.claim?.name).toBe(name)
-    }
+    const claim = { ...claimOf(name), token }
+    m.dispatch({ type: 'claim', claim })
     const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: token.trimEnd() })
     const begin = effectAt(fx, 0, 'begin-submit')
     expect(begin.args).toBe('')
-    m.dispatch({ type: 'submit-settled', attempt: begin.attempt, ok: false, draft: token.trimEnd() })
+    m.dispatch({ type: 'submit-settled', attempt: begin.attempt, ok: false, command: claim })
     expect(m.state.phase).toBe('claimed')
     expect(m.state.claim?.name).toBe(name)
   })
 
-  it.each(['/目', '/目标x', '/目标/文件', '', '看看 /目标'])('releases a goal claim for %j', (draft) => {
+  it('reads arguments typed directly against the chip without a separator', () => {
     const m = new SubmitMachine()
     m.dispatch({ type: 'claim', claim: { ...claimOf('goal'), token: '/目标 ' } })
-    m.dispatch({ type: 'draft-changed', draft })
-    expect(m.state.phase).toBe('plain')
-    expect(m.state.claim).toBeUndefined()
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/目标发布' })
+    expect(effectAt(fx, 0, 'begin-submit').args).toBe('发布')
   })
 
   it('explicit release returns to plain when nothing is in flight', () => {
@@ -250,7 +254,7 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     enterSubmitting(m, 'goal', 'x')
     expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x' })).toEqual([])
-    m.dispatch({ type: 'draft-changed', draft: 'typed during flight' })
+    m.dispatch({ type: 'draft-changed', command: undefined })
     expect(m.state.phase).toBe('submitting')
   })
 
@@ -258,7 +262,7 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: true, draft: '/goal x',
+      type: 'submit-settled', attempt, ok: true, command: undefined,
       outcome: { kind: 'success', text: 'goal saved' },
     })
     expect(effectAt(fx, 0, 'commit-draft').retainSuffixOf).toBe('/goal x')
@@ -271,49 +275,49 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: false, draft: 'deviated',
+      type: 'submit-settled', attempt, ok: false, command: undefined,
       outcome: { kind: 'error', text: 'rejected' },
     })
     expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'rejected' })
     expect(m.state.phase).toBe('plain')
   })
 
-  it('rollback with an undeviated draft keeps the claim and re-enters claimed', () => {
+  it('a failed settlement re-enters claimed while the command chip still leads', () => {
     const m = new SubmitMachine()
-    const { attempt } = enterSubmitting(m, 'goal', 'x')
-    m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: '/goal x', message: 'transport' })
+    const { attempt, claim } = enterSubmitting(m, 'goal', 'x')
+    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, command: claim, message: 'transport' })
+    expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'transport' })
     expect(m.state.phase).toBe('claimed')
     expect(m.state.claim?.token).toBe('/goal ')
   })
 
-  it('rollback with a deviated draft only notices — the newer input wins', () => {
+  it('a failed settlement without the command chip only notices and returns to plain', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
-    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: 'rewritten', message: 'transport' })
+    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, command: undefined, message: 'transport' })
     expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'transport' })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
   })
 
-  it('enter-path rollback cannot re-enter claimed when the snapshot never carried the bare token prefix', () => {
+  it('enter-path rollback returns to plain because an adjudicated claim has no command chip', () => {
     const m = new SubmitMachine()
-    const attempt = enterAdjudicating(m, '  /goal x')
+    const attempt = enterAdjudicating(m, '/goal x')
     m.dispatch({ type: 'adjudicated', attempt, outcome: { claim: claimOf('goal') } })
-    m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: '  /goal x', message: 'nope' })
-    // The snapshot carries leading whitespace the token never had: plain, claim cleared.
+    m.dispatch({ type: 'submit-settled', attempt, ok: false, command: undefined, message: 'nope' })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
   })
 
   it('a stale settle after rollback + resubmit is dropped (anti-backwash)', () => {
     const m = new SubmitMachine()
-    const { attempt: first } = enterSubmitting(m, 'goal', 'x')
-    m.dispatch({ type: 'submit-settled', attempt: first, ok: false, draft: '/goal x', message: 'try again' })
+    const { attempt: first, claim } = enterSubmitting(m, 'goal', 'x')
+    m.dispatch({ type: 'submit-settled', attempt: first, ok: false, command: claim, message: 'try again' })
     const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x' })
     const second = effectAt(fx, 0, 'begin-submit').attempt
-    expect(m.dispatch({ type: 'submit-settled', attempt: first, ok: true, draft: '/goal x' })).toEqual([])
+    expect(m.dispatch({ type: 'submit-settled', attempt: first, ok: true, command: claim })).toEqual([])
     expect(m.state.phase).toBe('submitting')
-    m.dispatch({ type: 'submit-settled', attempt: second, ok: true, draft: '/goal x' })
+    m.dispatch({ type: 'submit-settled', attempt: second, ok: true, command: claim })
     expect(m.state.phase).toBe('plain')
   })
 
@@ -322,7 +326,7 @@ describe('submit-machine: submitting transaction', () => {
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     m.dispatch({ type: 'release' })
     expect(attempt.signal.aborted).toBe(true)
-    expect(m.dispatch({ type: 'submit-settled', attempt, ok: true, draft: '' })).toEqual([])
+    expect(m.dispatch({ type: 'submit-settled', attempt, ok: true, command: undefined })).toEqual([])
     expect(m.state.phase).toBe('plain')
   })
 
@@ -343,7 +347,7 @@ describe('submit-machine: per-session isolation', () => {
     const { attempt } = enterSubmitting(a, 'goal', 'x')
     const fx = b.dispatch({ type: 'enter', mode: 'queue', draft: 'hello' })
     expect(effectAt(fx, 0, 'default-sink').draft).toBe('hello')
-    a.dispatch({ type: 'submit-settled', attempt, ok: true, draft: '/goal x' })
+    a.dispatch({ type: 'submit-settled', attempt, ok: true, command: undefined })
     expect(a.state.phase).toBe('plain')
     expect(b.state.phase).toBe('plain')
   })

@@ -87,6 +87,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       hookContext: UseSidebarRightTabInfo
       inject: { hooks: { tabInfo: SlotHookFactory<'sidebar.right.tab.guide', UseSidebarRightTabInfo> } }
     }
+    /** Rows of the guide's More menu; the guide shows More only while this list has registrations. */
+    'sidebar.right.tab.guide.actions': { kind: 'list'; scope: 'root'; owner: SidebarRightGuideActionsOwnerProps }
     /** One provider's guide card, with the standard card as the owner's fallback. */
     'sidebar.right.tab.guide.entry': {
       kind: 'keyed'
@@ -214,4 +216,33 @@ export interface SidebarRightGuideEntryOwnerProps {
   readonly kind: string
   readonly title: string
   readonly description?: string
+}
+
+/** One customizable guide card listed in the More menu. */
+export interface SidebarRightGuideActionEntry {
+  /** Card id, `kind:entry id`. */
+  readonly id: string
+  /** Resolved card title. */
+  readonly label: string
+  /** False while the card is unpinned from the guide. */
+  readonly pinned: boolean
+}
+
+/** Owner share of the guide's More menu rows. */
+export interface SidebarRightGuideActionsOwnerProps {
+  /** Guide cards in registry order; cards of kind `files` are never listed. */
+  readonly entries: readonly SidebarRightGuideActionEntry[]
+  /**
+   * Open a card's tab type in the guide's place without changing its pin state.
+   * @param id - Listed card id.
+   */
+  readonly onOpen: (id: string) => void
+  /**
+   * Show (true) or unpin (false) a guide card.
+   * @param id - Listed card id.
+   * @param pinned - Whether the card shows on the guide.
+   */
+  readonly onPinnedChange: (id: string, pinned: boolean) => void
+  /** Close the More menu. */
+  readonly onDismiss: () => void
 }

@@ -1445,24 +1445,30 @@ it('publishes a snapshot while the profile read is still pending', async () => {
   expect(await f.account.getPlatformSession()).toMatchObject({ userId: 'test-user' })
 })
 
-it('notifies account watchers when a profile read first exposes the stable ID', async () => {
+it.each([false, true])('notifies only identity-enabled watchers on profile identity changes (enabled: %s)', async (includeIdentityChanges) => {
   const f = await fixture()
   f.failProfile(true)
   await storeAccount(f)
   expect(await f.account.getProfile(clientMetadata())).toEqual({ status: 'failed' })
   const lifetime = new AbortController()
   const states: Awaited<ReturnType<PlatformAccount['getState']>>[] = []
-  const watching = (async () => { for await (const state of f.account.watch(lifetime.signal)) states.push(state) })()
+  const watching = (async () => {
+    for await (const state of f.account.watch(lifetime.signal, includeIdentityChanges)) states.push(state)
+  })()
   try {
     await expect.poll(() => states.length).toBe(1)
     f.failProfile(false)
     await expect(f.account.getProfile(clientMetadata())).resolves.toMatchObject({ status: 'ready', value: { id: 'test-user' } })
-    await expect.poll(() => states.length).toBe(2)
+    if (includeIdentityChanges) await expect.poll(() => states.length).toBe(2)
     expect(await f.account.getPlatformSession()).toMatchObject({ userId: 'test-user' })
     // A later refresh with the same stable ID must not wake publishers again.
     await f.account.getProfile(clientMetadata())
     await new Promise<void>((resolve) => { setTimeout(resolve, 0) })
-    expect(states).toHaveLength(2)
+    expect(states).toHaveLength(includeIdentityChanges ? 2 : 1)
+    await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+      kind: 'grant', payload: { version: 1, issuer: f.origin, token: 'replacement-token' },
+    }))
+    await expect.poll(() => states.length).toBe(includeIdentityChanges ? 3 : 2)
   } finally {
     lifetime.abort()
     await watching

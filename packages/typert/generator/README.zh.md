@@ -60,19 +60,21 @@ factory 返回类实例，并保留 spec，直到 `descriptors` 或 `methods` ge
 
 ### 静态分析工作区
 
-静态消费方直接针对工作区的 `tsconfig.host.json` 与 `tsconfig.client.json` 聚合配置调用 `WorkspaceAnalyzer`，选择 face 与包子集，并在不生成或加载运行时产物的前提下读取生成的 `FaceModel` 与类型图。`analyzeInBatches()` 通过有界的编译器程序处理大批量包选择，模型形态保持一致；`discoverPackages()` 无需构建类型检查程序即可找出参与贡献的包，其可选的 `package.json` 谓词会在读取某个包的源码或项目配置之前就跳过该包。Typert 只解析它所分析的包的 tsconfig；校验每个被引用的 tsconfig 由之前运行的 `tsc -b` 负责。
+静态消费方直接针对工作区的 `tsconfig.host.json` 与 `tsconfig.client.json` 聚合配置调用 `WorkspaceAnalyzer`，选择 face 与包子集，并在不生成或加载运行时产物的前提下读取生成的 `FaceModel` 与类型图。`analyzeInBatches()` 通过有界的编译器程序处理大批量包选择，模型形态保持一致；`discoverPackages()` 无需构建类型检查程序即可找出参与贡献的包，其可选的 `package.json` 谓词会在读取某个包的源码或项目配置之前就跳过该包。Typert 只解析它所分析的包的 tsconfig；校验每个被引用的 tsconfig 由包编译中的 `tsc -b` 负责。
 
 JSON、YAML、SVG、PNG、JPEG 和 WebP 资源导出不提供 TypeScript 声明，因此不进入 API 模型。JavaScript 或 TypeScript 导出源文件缺失时仍报错。
 
 ### 在 tsdown 构建中运行生成
 
-包的 `./tsdown` 子路径为根 tsdown 配置提供 `typertPlugin()`：它在打包前转换 TypeScript 依赖中的标准装饰器，并在包输出根目录生成模型驱动的 face 产物。其 `transform` 钩子带有模块 id 过滤器，非 TypeScript 模块不会进入 JavaScript。工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录，因此包自身的 face 叶子配置永远不会被当作根目录。`package` 模式在当前包的 `writeBundle` 中同步生成，并只生成该包。
+`./tsdown` 子路径导出 `decoratorPlugin()` 与 `typertPlugin()`。`./tsdown` 子路径导出 `decoratorPlugin()` 与 `typertPlugin()`。`decoratorPlugin()` 转换标准 TypeScript 装饰器，不读取或写入元数据。仓库构建在仅源码生成完成后使用它；需要在打包时生成元数据的消费方使用 `typertPlugin()`。
+
+`typertPlugin()` 用于需要在打包时生成元数据的构建：它在打包前转换 TypeScript 依赖中的标准装饰器，并在包输出根目录生成模型驱动的 face 产物。其 `transform` 钩子带有模块 id 过滤器，非 TypeScript 模块不会进入 JavaScript。工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录，因此包自身的 face 叶子配置永远不会被当作根目录。`package` 模式在当前包的 `writeBundle` 中同步生成，并只生成该包。
 
 `workspace` 模式对每个显式贡献方各生成一次，且不阻塞打包：第一个包构建的 `buildStart` 在 Worker Thread 中启动生成，第一个 `writeBundle` 等待结果并写入全部产物，之后的打包立即返回。分析错误、worker 崩溃或提前退出、worker 响应格式错误，都会以指明工作区与原因的 `TypertWorkerError` 使该打包失败，从而使整个 tsdown 阶段失败；报告失败之前 worker 已被终止。
 
 ### 不经打包器生成
 
-`writeWorkspaceArtifacts()` 与 `writePackageArtifacts()` 是插件的写盘函数：每个产物写成 `lib/typert.<face>.{js,d.ts}`，带 Remote 方法时另写 `lib/typert.remote-client.{js,d.ts,d.ts.map}`，没有 Remote 方法的 Host 产物会删除残留的 Remote client 文件。把 `WorkspaceTypertGenerator.generateContributors()` 的结果交给它们写盘，得到的字节与 `workspace` 模式插件相同；`findWorkspaceRoot()` 采用插件的工作区根目录规则。仓库中不打包的生成 [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts) 就以这种方式为不需要 bundle 的类型检查生成 Host face。
+`writeWorkspaceArtifacts()` 与 `writePackageArtifacts()` 是插件的写盘函数：每个产物写成 `lib/typert.<face>.{js,d.ts}`，带 Remote 方法时另写 `lib/typert.remote-client.{js,d.ts,d.ts.map}`，没有 Remote 方法的 Host 产物会删除残留的 Remote client 文件。把 `WorkspaceTypertGenerator.generateContributors()` 的结果交给它们写盘，得到的字节与 `workspace` 模式插件相同；`findWorkspaceRoot()` 采用插件的工作区根目录规则。仓库中不打包的生成 [`scripts/generate-typert.ts`](../../../scripts/generate-typert.ts) 就以这种方式为产物构建与仅生成声明的构建在包编译之前生成 Host face。
 
 设置 `rejectBuildOutputs: true` 后，若 face program 载入了工作区包 `lib/` 目录下的文件，或无法解析对工作区包的 import（例如包尚未编译的工作区），分析会以 `TypertAnalysisError` 失败。错误信息列出每个这样的 import 说明符，以及应由 `paths` 别名映射到的源文件；因此通过的生成只依赖工作区源码，可以在包编译之前或与之并行运行。若某个 face 的源码 import 生成产物（例如 Client face import `/remote`），则不要开启它。
 

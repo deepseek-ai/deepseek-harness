@@ -137,7 +137,9 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
  *   in-band terminal error an aborted finish.
  * @param requestedModel - request model identity recorded for durable replay.
  * @returns the harness chunks, ending with `usage` then `finish`; throws
- *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event.
+ *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event, or
+ *   `MALFORMED_RESPONSE` when completed tool arguments are invalid. Length-limited
+ *   output retains its terminal reason so the assembler can discard incomplete calls.
  */
 export async function* toStreamChunks(
   events: AsyncIterable<AssistantMessageEvent>,
@@ -148,6 +150,7 @@ export async function* toStreamChunks(
   // pi-ai contentIndex ↔ our block index map 1:1 (both count blocks from 0
   // in stream order), but we track ids per index for tool calls.
   const toolIds = new Map<number, { id: string; name: string }>()
+  let argumentsError: string | undefined
 
   for await (const event of events) {
     switch (event.type) {
@@ -192,6 +195,10 @@ export async function* toStreamChunks(
         break
       }
       case 'toolcall_end':
+        if (event.toolCall.argumentsError !== undefined) {
+          argumentsError ??= `Tool call "${event.toolCall.name}": ${event.toolCall.argumentsError}`
+          break
+        }
         yield {
           type: 'block-end',
           index: event.contentIndex,
@@ -207,6 +214,9 @@ export async function* toStreamChunks(
         break
       case 'done':
         yield { type: 'usage', usage: mapUsage(event.message.usage) }
+        if (argumentsError !== undefined && event.message.stopReason !== 'length') {
+          throw new LlmError(argumentsError, 'MALFORMED_RESPONSE')
+        }
         yield {
           type: 'finish',
           reason: mapStopReason(event.message, contextWindow),

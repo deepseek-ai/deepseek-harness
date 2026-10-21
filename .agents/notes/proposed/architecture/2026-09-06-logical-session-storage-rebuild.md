@@ -141,6 +141,7 @@ The proposal preserves the shipped [handle-based persistence decision](../../imp
 
 ## References
 
+- [Cleanup dependency lifetimes](2026-10-09-cordis-cleanup-dependency-lifetimes.md) adds the graceful-teardown requirement for the stage 4 enqueue ownership change: retain writers and required listeners until producers finish publishing final events.
 - [Sessions subsystem](../../../../docs/subsystems/session.md) defines the shipped session API and event semantics.
 - [Session persistence subsystem](../../../../docs/subsystems/persistence.md) defines the shipped durable format and lifecycle.
 - [`@deepseek-ai/dsh-session`](../../../../packages/core/session/README.md) owns the session package contract.

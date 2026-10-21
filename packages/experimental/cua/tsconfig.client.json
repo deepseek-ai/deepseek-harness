@@ -1,0 +1,65 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "include": [
+    "src/client",
+    "src/css-modules.d.ts",
+    "src/access-types.ts",
+    "src/application-types.ts",
+    "src/remote-types.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../client/locale/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/store"
+    },
+    {
+      "path": "../../client/ui-primitives"
+    },
+    {
+      "path": "../../client/ui-renderer"
+    },
+    {
+      "path": "../../client/ui-slots"
+    },
+    {
+      "path": "../../client/ui-plugin-manager/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-settings/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-layout"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../client/ui-user-questions/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-approval/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-conversation/tsconfig.client.json"
+    }
+  ]
+}

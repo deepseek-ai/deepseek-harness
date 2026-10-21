@@ -1248,6 +1248,72 @@ describe('adjudicate', () => {
   })
 })
 
+describe('resolveClaim', () => {
+  const claimSource = (
+    trigger: TriggerChar, name: string,
+    matchClaim?: InputTriggerSource['matchClaim'],
+  ): InputTriggerSource => ({
+    trigger,
+    name,
+    candidates: () => Promise.resolve([]),
+    onPick: () => undefined,
+    ...(matchClaim !== undefined ? { matchClaim } : {}),
+  })
+
+  it('polls matchClaim in registration order with the projection and token; the first claim wins', async () => {
+    const calls: string[] = []
+    const claim = claimOf('/goal ')
+    const signal = new AbortController().signal
+    const atHook = vi.fn(() => Promise.resolve(claimOf('@goal ')))
+    const { controller } = controllerBench([
+      claimSource('@', 'subagent', atHook),
+      claimSource('/', 'silent'),
+      claimSource('/', 'first', (session, token, received) => {
+        expect(session).toEqual({ sessionId: sid('a') })
+        expect(received).toBe(signal)
+        calls.push(`first:${token}`)
+        return Promise.resolve(undefined)
+      }),
+      claimSource('/', 'second', (_session, token) => {
+        calls.push(`second:${token}`)
+        return Promise.resolve(claim)
+      }),
+      claimSource('/', 'third', () => {
+        calls.push('third')
+        return Promise.resolve(claimOf('/plan '))
+      }),
+    ])
+    await expect(controller.resolveClaim('/goal', signal)).resolves.toBe(claim)
+    expect(calls).toEqual(['first:/goal', 'second:/goal'])
+    expect(atHook).not.toHaveBeenCalled()
+  })
+
+  it('answers undefined when no source claims the token', async () => {
+    const { controller } = controllerBench([claimSource('/', 'command', () => Promise.resolve(undefined))])
+    await expect(controller.resolveClaim('/xyz', new AbortController().signal)).resolves.toBeUndefined()
+  })
+
+  it('a rejecting source rejects the whole resolution', async () => {
+    const { controller } = controllerBench([
+      claimSource('/', 'command', () => Promise.reject(new Error('warmup failed'))),
+      claimSource('/', 'late', () => Promise.resolve(claimOf('/goal '))),
+    ])
+    await expect(controller.resolveClaim('/goal', new AbortController().signal)).rejects.toThrow('warmup failed')
+  })
+
+  it.each([
+    { name: 'its own reason', reason: new Error('restore superseded'), message: 'restore superseded' },
+    { name: 'a fallback error for a non-error reason', reason: 'superseded', message: 'command restore aborted' },
+  ])('an aborted restore stops the poll with $name', async ({ reason, message }) => {
+    const hook = vi.fn(() => Promise.resolve(claimOf('/goal ')))
+    const { controller } = controllerBench([claimSource('/', 'command', hook)])
+    const abort = new AbortController()
+    abort.abort(reason)
+    await expect(controller.resolveClaim('/goal', abort.signal)).rejects.toThrow(message)
+    expect(hook).not.toHaveBeenCalled()
+  })
+})
+
 describe('reference activation', () => {
   it('routes chips by owner and text by the live lexicon without picking or serializing', () => {
     const openReference = vi.fn(() => true)

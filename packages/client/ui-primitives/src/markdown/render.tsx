@@ -77,12 +77,17 @@ function remoteImageUrl(url: string): string | undefined {
   }
 }
 
-/** Rewritten images may use Web media protocols or the Desktop application's file route. */
+/** Authenticated Host media routes as the Desktop application addresses them. */
+const DESKTOP_MEDIA_ROUTES = [
+  'dsh-app://app/api/file?', 'dsh-app://app/api/plugin-market/detail-file?', 'dsh-app://app/api/plugin-manager/detail-file?',
+]
+
+/** Rewritten images may use Web media protocols or the Desktop application's media routes. */
 function vocabularyImageUrl(url: string): string | undefined {
   try {
     const protocol = new URL(url).protocol
     return protocol === 'http:' || protocol === 'https:' || protocol === 'blob:' || protocol === 'data:'
-      || url.startsWith('dsh-app://app/api/file?')
+      || DESKTOP_MEDIA_ROUTES.some(route => url.startsWith(route))
       ? url
       : undefined
   } catch {
@@ -193,6 +198,8 @@ export interface MarkdownRenderContext {
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
   readonly pathImages: MarkdownPathImages | undefined
+  /** Raw HTML renders nothing instead of literal text. */
+  readonly omitHtml: boolean
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -331,8 +338,8 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
       return <code key={key}>{value}</code>
     }
     case 'html':
-      // No HTML parser enters the pipeline: raw HTML stays literal text.
-      return node.value
+      // No HTML parser enters the pipeline: raw HTML is literal text, or nothing where the owner omits it.
+      return context.omitHtml ? null : node.value
     case 'code':
       return renderCode(node, key, context)
     case 'math':
@@ -483,8 +490,8 @@ function renderTable(node: Md.Table, key: Key, context: MarkdownRenderContext): 
   // column and wrap instead (deepsuite chat TableWrapper parity).
   const wide = columns >= 4 && context.inBlockquote !== true
   return (
-    // Wide tables rest with overflow-x hidden (the hover-revealed bar in
-    // MarkdownText.module.css), which drops Chromium's implicit scroller
+    // On hover-capable inputs, wide tables rest with overflow-x hidden (the
+    // hover-revealed bar in MarkdownText.module.css), dropping Chromium's implicit scroller
     // focusability — the explicit tabindex keeps them keyboard-reachable,
     // and :focus-visible restores scrolling.
     <div

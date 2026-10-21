@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-macos/native/README.md
+/:
+  en: 43b5e4e8cad52456
+  zh: 657b0fc9d4391135
+/dsh-cua-native-helper:
+  en: dd53c24d4b95e89e
+  zh: 361d6704c41a155f
+/dsh-cua-native-helper/summary:
+  en: 9aeb574bf09a3de2
+  zh: 7df2def6acb71ac3
+/dsh-cua-native-helper/table-of-contents:
+  en: e8cbc43d38786c40
+  zh: 52b3ba85d98011b9
+/dsh-cua-native-helper/build-and-service:
+  en: 02b25ac1126b6094
+  zh: 3995a1f46354531b
+/dsh-cua-native-helper/request-protocol:
+  en: c8ad13843989b314
+  zh: 2a42acb2faee8803
+/dsh-cua-native-helper/observation-and-input:
+  en: c527eedc3a0ee968
+  zh: ce8cc12d5a62e8ae
+/dsh-cua-native-helper/verification:
+  en: a2ac6f2d581a1e8b
+  zh: f82c7d0c13539421
+/dsh-cua-native-helper/further-exploration:
+  en: 265e1927952ce6d7
+  zh: 7c35d9fd98b6e6c8
+/dsh-cua-native-helper/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -11,6 +11,7 @@ import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, rm, stat } 
 import type { BigIntStats, Dirent, Stats } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { TextDecoder, promisify } from 'node:util'
+import { homedir } from 'node:os'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import { copyFileDaclWin32, replaceFileWin32 } from './win32.ts'
 
@@ -134,6 +135,19 @@ export interface LocalDirEntry {
   target: LocalTarget
   version?: FsVersion
   size?: number
+}
+
+/**
+ * Replace a leading `~` with the host user's home directory in a caller-supplied path.
+ * `~/` is recognized on every platform and `~\` only on Windows; `~user` and later `~`
+ * segments stay literal. The rest of the spelling is kept so parent traversal still resolves physically.
+ * @param path - requested path from a model, plugin, or other caller; never a directory entry name.
+ * @returns the path with its home prefix replaced, or `path` unchanged.
+ */
+export function expandHomePrefix(path: string): string {
+  /* v8 ignore next -- Native Windows tests cover the `~\` prefix; POSIX keeps it literal. */
+  if (path === '~' || path.startsWith('~/') || (process.platform === 'win32' && path.startsWith('~\\'))) return `${homedir()}${path.slice(1)}`
+  return path
 }
 
 /**

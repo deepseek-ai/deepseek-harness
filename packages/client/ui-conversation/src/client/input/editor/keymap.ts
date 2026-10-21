@@ -115,7 +115,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     ),
     editor.registerCommand(KEY_ESCAPE_COMMAND, (event) => {
       // Escape layering: an open overlay closes; claimed without an overlay
-      // does NOT release (backspacing the token is the only exit gesture).
+      // does NOT release (deleting the command chip is the only exit gesture).
       handlers.dismissPopup()
       if (handlers.arbitrate('escape', isComposingEvent(event, recentlyComposing)) === 'consumed') {
         event.preventDefault()
@@ -127,7 +127,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       if (isComposingEvent(event, recentlyComposing)) return false
       const consumed = handlers.space()
       if (consumed) {
-        event.preventDefault() // claim token already carries the trailing separator
+        event.preventDefault() // the command chip insertion already carries its separator
         return true
       }
       return false

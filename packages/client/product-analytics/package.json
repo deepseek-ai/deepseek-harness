@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-product-analytics",
   "description": "Desktop product event collection and authenticated Host reporting",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -64,7 +64,9 @@
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
-    "@deepseek-ai/dsh-otel": "workspace:*"
+    "@deepseek-ai/dsh-otel": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-loader-smoke": "workspace:*"
   },
   "files": [
     "locale/*.json",

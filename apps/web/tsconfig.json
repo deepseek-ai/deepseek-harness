@@ -15,6 +15,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "tests"
   ],
   // The web e2e lane (scaffold + replay specs) boots the host spine and reads
@@ -22,9 +23,11 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
     "tests/notice-wake-tail.e2e.ts",
     "tests/fold-blank-matrix.e2e.ts",
+    "tests/chat-fold-opened-group.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
@@ -38,6 +41,7 @@
     "tests/code-card-layout.e2e.ts",
     "tests/code-language.snapshot.ts",
     "tests/scaffold.ts",
+    "tests/clock.e2e.ts",
     "tests/connection-recovery.e2e.ts",
     "tests/server-restart.e2e.ts",
     "tests/voice-input.e2e.ts",
@@ -81,10 +85,14 @@
     "tests/plugin-config.e2e.ts",
     "tests/input-plugin-extensions.e2e.ts",
     "tests/plugin-manager.e2e.ts",
+    "tests/entry-customization.e2e.ts",
+    "tests/cua-optin.e2e.ts",
+    "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",
+    "tests/inspector-late-enable.e2e.ts",
     "tests/devtools-frontend.e2e.ts",
     "tests/inspector-panels.e2e.ts",
     "tests/inspector-source-build.e2e.ts",
@@ -106,6 +114,7 @@
     "tests/developer-tools-settings.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/deepseek-messages-settings.e2e.ts",
+    "tests/deepseek-model-label-1017.e2e.ts",
     "tests/deepseek-messages-chat.e2e.ts",
     "tests/models-settings-recovery.e2e.ts",
     "tests/default-model.e2e.ts",
@@ -170,6 +179,7 @@
     "tests/queue-image.e2e.ts",
     "tests/skill-invocation-policy.e2e.ts",
     "tests/skill-user-invoke.e2e.ts",
+    "tests/skill-menu-plugin-change.e2e.ts",
     "tests/permission-policy-context.e2e.ts",
     "tests/access-confirmation.e2e.ts",
     "tests/agent-preset-selection.e2e.ts",
@@ -195,6 +205,7 @@
     "tests/auto-review-approval.e2e.ts",
     "tests/auto-review-denial.e2e.ts",
     "tests/bash-abort-row.e2e.ts",
+    "tests/interrupted-turn.e2e.ts",
     "tests/skill-tool-row.e2e.ts",
     "tests/tool-details.e2e.ts",
     "tests/turn-tail-actions.e2e.ts",

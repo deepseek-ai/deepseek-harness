@@ -43,7 +43,9 @@ const manifest: DshPackageManifest = {
 }
 ```
 
-`DshPackageManifest` 描述 DSH 使用的 package.json 字段，其中 `name` 和 `version` 必填；它不是完整的 npm schema（模式）。本地 profile 读取方使用 `Partial<DshPackageManifest>`，因为 profile 无需发布版本。`DshManifest` 仅描述 `dsh` 下的公共作者字段。`DshBundleManifest.patch` 是一个 patch 文件路径，或一个有序的路径列表，均相对于包根目录；launcher 按列表顺序把它们作为同一个组合包层应用。TypeScript 检查示例并删除 `import type`；这些接口不解析 JSON，也不写入文件。
+`DshPackageManifest` 描述 DSH 使用的 package.json 字段，其中 `name` 和 `version` 必填；它包含普通依赖、peer 依赖及可选依赖声明，未覆盖 npm 的所有字段。本地 profile 读取方使用 `Partial<DshPackageManifest>`，因为 profile 无需发布版本。`DshManifest` 仅描述 `dsh` 下的公共作者字段。`DshBundleManifest.patch` 是一个 patch 文件路径，或一个有序的路径列表，均相对于包根目录；launcher 按列表顺序把它们作为同一个组合包层应用。TypeScript 检查示例并删除 `import type`；这些接口不解析 JSON，也不写入文件。
+
+`DshBundleManifest.listedByDefault` 为可选布尔值，默认为 true。false 使随安装提供的组合包在 profile 启用或安装它之前不出现在默认 GUI 列表中；管理清单仍保持完整。[插件管理页](../../client/ui-plugin-manager/README.zh.md#use-this-package)管理展示与显式启用入口。
 
 以下元数据字段均可选。省略时，格式版本或兼容的宿主版本保持未声明状态；读取方不推断默认值。
 

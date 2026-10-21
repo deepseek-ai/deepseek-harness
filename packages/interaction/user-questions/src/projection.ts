@@ -329,9 +329,3 @@ export const userQuestionProjectionDefinition = {
   wire: { viewSchema: projectionViewSchema, view: state => state.questions },
   stateVersion: 2,
 } satisfies ProjectionDefinition<'userQuestions', UserQuestionProjectionState>
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    userQuestions: UserQuestionProjectionState
-  }
-}

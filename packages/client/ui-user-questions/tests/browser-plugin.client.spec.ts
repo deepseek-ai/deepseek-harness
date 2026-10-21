@@ -378,6 +378,9 @@ describe('apply', () => {
     ) => PendingQuestion | null
     expect(select({ pendingInteraction: undefined })).toBeNull()
     expect(select({ pendingInteraction: pending })).toBe(pending)
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, PLAN_QUESTIONS) })?.kind).toBe('plan-review')
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, [{ id: 'cua-app-access', question: 'Allow?',
+      intent: { kind: 'approval', approve: 'Allow', reject: 'Deny' } }]) })?.questions[0]?.intent?.kind).toBe('approval')
     expect(pending).toMatchObject({ kind: 'question', sessionId: SESSION_ID, questions: QUESTIONS, callId: undefined })
     expect(pending.snapshot()).toEqual({
       state: 'open', waitState: 'counting', countdown: undefined,

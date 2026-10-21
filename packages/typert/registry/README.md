@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration.
+Mount the registry in any Host or Client composition that stores or consumes generated Typert artifacts; it provides `ctx.typert`. There is no configuration. Node resolves `/client` to the standalone ESM `lib/client.node.js` bundle for programmatic Cordis composition; browsers use the `lib/client.browser.js` loader factory through the logical `/plugins/.../client.js` URL. Both bundles use the same registry implementation, separate from the Host package root.
 
 ### Minimal setup
 
@@ -44,6 +44,8 @@ Invocation information is available through existing `ctx.typert.local.get/list`
 ### Registering a contribution
 
 Generated artifacts register through the [loader](../loader/README.md) in Loader compositions; any other owner calls `ctx.typert.register(contribution)` directly and receives the exact disposer that withdraws it. Duplicate package-face identities, schema keys, invocation ids, or endpoints reject the whole batch before anything is committed.
+
+Harness offline integrations register an ordinary `TYPERT_REMOTE` contribution with `ctx.typert.remotes.register(contribution)` in their profile Context. `$mount(contribution)` already performs that registration, so registering and mounting the same contribution in the same registry duplicates it and fails. Keep offline metadata ownership separate from the live connection-and-mount Context. Independent offline consumers may instead read `TYPERT_REMOTE.methods` without any Registry. Registry state belongs to its Context and process, is not shared across processes, and neither registration nor querying opens a connection.
 
 ### Lookup and Context providers
 

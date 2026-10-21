@@ -73,6 +73,8 @@ The plugin prepends an `agent/pre-step` listener that runs only on the first ste
 
 ### Main flow
 
+The pre-step listener is installed before awaiting projection registration. Steps arriving during activation wait for the reader; registration failure or owner disposal stops the request, and cancellation while waiting performs no shell query or context injection.
+
 At the first step of a turn, the listener checks whether an injection is due, queries the location through `ctx.shell`, and compares the rendered state with the latest durable injection of this source. Change suppression and interval scheduling scan the raw durable session events, so the schedule survives compaction and resumed processes without process-local cache state; sessions schedule independently. A downstream pre-step listener that rejects or fails prevents the reading from being recorded.
 
 </details>

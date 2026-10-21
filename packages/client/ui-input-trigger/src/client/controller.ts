@@ -10,7 +10,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
-  ArbitrateKey, ArbitrateOutcome, PickOutcome, ReferenceInsert,
+  ArbitrateKey, ArbitrateOutcome, CommandClaim, PickOutcome, ReferenceInsert,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { detectTrigger } from '../core/detect.ts'
@@ -392,6 +392,28 @@ export class InputTriggerController {
       if (src.matchEnter === undefined || !line.startsWith(src.trigger)) continue
       const outcome = await src.matchEnter(projection, line, signal, envelope)
       if (outcome !== undefined) return outcome
+    }
+    return undefined
+  }
+
+  /**
+   * Resolve the claim a persisted command chip names, polling sources'
+   * matchClaim in registration order; the first claim wins. Never acts on the
+   * token (see {@link InputTriggerSource.matchClaim}).
+   * @param token - command spelling without its argument separator, e.g. '/goal'.
+   * @param signal - abort for the caller's restore attempt.
+   * @returns the claim, or undefined when no source claims the token. Rejects
+   * when a polled source's warmup fails or `signal` aborts.
+   */
+  async resolveClaim(token: string, signal: AbortSignal): Promise<CommandClaim | undefined> {
+    const projection = this.project()
+    for (const src of this.deps.roster.all()) {
+      if (signal.aborted) {
+        throw signal.reason instanceof Error ? signal.reason : new Error('command restore aborted')
+      }
+      if (src.matchClaim === undefined || !token.startsWith(src.trigger)) continue
+      const claim = await src.matchClaim(projection, token, signal)
+      if (claim !== undefined) return claim
     }
     return undefined
   }

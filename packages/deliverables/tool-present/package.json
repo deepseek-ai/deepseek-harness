@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-present",
   "description": "Explicit workspace file delivery declarations for the DeepSeek Harness",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -45,7 +45,6 @@
     "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
@@ -60,7 +59,6 @@
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
-    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*"
   }

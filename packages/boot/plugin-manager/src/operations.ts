@@ -155,7 +155,7 @@ function namedSpecs(args: readonly string[]): string[] {
 
 /** The manifest a named spec would install, read without installing it.
  * A path spec is read from disk. A registry spec asks pnpm's own configuration for the version the
- * range selects and its peer requirements. A git or tarball spec needs the fetch itself, so the
+ * range selects and its dsh requirements (`engines` and peerDependencies). A git or tarball spec needs the fetch itself, so the
  * check after installation is what judges it.
  * @param dir Profile directory the lookup runs in.
  * @param spec Anchored install spec.
@@ -175,7 +175,7 @@ async function namedSpecManifest(
   }
   if (parsed.kind !== 'registry') return undefined
   const viewed = await execa(options.command ?? 'pnpm', [
-    ...options.args ?? [], 'view', parsed.spec, 'name', 'version', 'peerDependencies', '--json',
+    ...options.args ?? [], 'view', parsed.spec, 'name', 'version', 'engines', 'peerDependencies', '--json',
     ...flags, '--config.fetch-retries=0',
   ], {
     cwd: dir, env: environment, extendEnv: false, reject: false, stdin: 'ignore',
@@ -498,7 +498,7 @@ export async function runProfilePnpm(
         }
       }
       if (warnings.length > 0) {
-        // A bundle component's peers need installed contents, so this rejection lands after pnpm
+        // A bundle component's requirements need installed contents, so this rejection lands after pnpm
         // replaced the tree: restore the files, then reinstall the restored lockfile so the version
         // that worked before this run keeps loading. A profile that had no lockfile is reinstalled
         // from its restored manifest without creating one, which removes what this run added.
@@ -583,6 +583,8 @@ export interface PackageViewOptions {
   timeoutMs: number
   /** The registry asked; null asks the one pnpm's own configuration names. */
   registry?: Registry
+  /** The manifest fields printed, as `pnpm view` names them; registry-only fields such as `versions`, `time`, and `dist-tags` included. */
+  fields: readonly string[]
 }
 
 /**
@@ -620,12 +622,12 @@ export function registryArguments(registry: Registry): string[] {
  * configured after it are the retry.
  * @param dir Profile directory.
  * @param spec One registry spec: a package name with an optional range.
- * @param options The registry, cancellation, and the time bound.
+ * @param options The fields printed, the registry, cancellation, and the time bound.
  * @returns pnpm's exit, output, and how the lookup ended.
  */
 export async function viewProfilePackage(dir: string, spec: string, options: PackageViewOptions): Promise<PackageViewResult> {
   const result = await execa(options.command ?? 'pnpm', [
-    ...options.args ?? [], 'view', spec, 'name', 'version', 'description', 'dsh', '--json',
+    ...options.args ?? [], 'view', spec, ...options.fields, '--json',
     ...registryArguments(options.registry ?? null), '--config.fetch-retries=0',
   ], {
     cwd: dir, env: { ...scrubbedParentEnv(), ...options.env }, extendEnv: false, reject: false, stdin: 'ignore',

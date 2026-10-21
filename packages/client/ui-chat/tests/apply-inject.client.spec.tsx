@@ -61,6 +61,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
     get: (id: string) => id === CHAT_SETTINGS_NAMESPACE ? chatSettings.scope : stubConfigForm().scope,
   } as never)
   const layout = { closeRightbar: vi.fn(), openRightbar: vi.fn() }
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
     openResource: vi.fn<(address: string) => void>(),
@@ -155,6 +156,11 @@ describe('Chat inject API', () => {
       setCollapseTiming('completion')
       expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion' })
       expect(b.chatSettings.set).toHaveBeenLastCalledWith('collapseTiming', 'completion')
+      const setFoldedReplies = preference.setFoldedReplies as TranscriptViewRowInjected['setFoldedReplies']
+      expect(presentation.getSnapshot()).toMatchObject({ foldedReplies: 'all' })
+      setFoldedReplies('final')
+      expect(presentation.getSnapshot()).toMatchObject({ mode: 'standard', collapseTiming: 'completion', foldedReplies: 'final' })
+      expect(b.chatSettings.set).toHaveBeenLastCalledWith('foldedReplies', 'final')
       expect(b.session.prompt).not.toHaveBeenCalled()
       expect(b.session.cancel).not.toHaveBeenCalled()
     } finally {
@@ -257,6 +263,25 @@ describe('Chat inject API', () => {
     // A line travels as the `file` type's navigation parameter, not in the address.
     await injected.openFile('src/a.ts', { line: 7 })
     expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
+    await b.runtime.dispose()
+  })
+
+  it('resolves relative file paths against the Session\'s current working directory', async () => {
+    const b = await bench()
+    const { injected } = b.chatViewApi(b.rootReference)
+    await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/proj/.agents/worktrees/w')
+    await injected.openFile('src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
+    // A leading `./` names the same file, so the Sidebar reuses its tab.
+    await injected.openFile('./src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/.agents/worktrees/w/src/a.ts')
+    await injected.openFile('/proj/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+
+    // Outside the workspace, the address carries the absolute path after the Session id.
+    await b.runtime.sessions.setProjection(ROOT, 'workingDirectory', '/elsewhere')
+    await injected.openFile('src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1//elsewhere/src/a.ts')
     await b.runtime.dispose()
   })
 
@@ -442,6 +467,8 @@ describe('Chat inject API', () => {
     expect(flow.injected.keyedHooks.chatNode('missing')).toBe(injected.keyedHooks.chatNode('missing'))
     expect(flow.injected.keyedHooks.chatNodeProcess('missing')).toBe(injected.keyedHooks.chatNodeProcess('missing'))
     expect(flow.injected.keyedHooks.chatNodeBottom('missing')).toBe(injected.keyedHooks.chatNodeBottom('missing'))
+    expect(flow.injected.hooks.connectionState).toBe(b.runtime.ctx.get('connection')!.state)
+    expect(flow.injected.hooks.presentation).toBe(injected.hooks.presentation)
 
     expect(injected.fileMentions(owner)).toBeUndefined()
     const mentions = { resolve: vi.fn() } as never

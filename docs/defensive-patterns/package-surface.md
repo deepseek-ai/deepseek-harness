@@ -222,3 +222,10 @@ const previous = hooks.resolve
 hooks.resolve = (specifier, context, next) =>
   pinned.has(specifier) ? pinned.get(specifier) : previous(specifier, context, next)
 ```
+
+## Package modules do not await at module scope
+
+A package source module starts its asynchronous work inside a function it calls, such as an explicit `main()` that handles its own rejection, and never uses `await`, `for await`, or `await using` at module scope: a module-scope wait makes every importer's evaluation wait, turns a rejection into a module-evaluation failure, and cannot be lowered to the synchronous CommonJS wrapper of the browser-worker image.
+
+- Judged by [verify-no-top-level-await.ts](../../scripts/verify-no-top-level-await.ts), run as `pnpm run verify-no-top-level-await` and by `scripts/run-gates.ts` as the `no-top-level-await` gate; it parses every `packages/*/*/src/**/*.{ts,tsx}` file and excludes executables by declaration only: a source that starts with `#!`, or the source of a `lib/` output that the package's `bin` field names.
+- Exception: none.

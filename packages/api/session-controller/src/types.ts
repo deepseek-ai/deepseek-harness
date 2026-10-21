@@ -8,25 +8,21 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
-import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
+import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Host state persisted for cold Session list summaries. */
-    sessionListMetadata: SessionListMetadata
-    /** Host state for the boot-constant image-limit view. */
-    imageLimits: null
-    /** Durable model selection already used by a request and still pending for a later request. */
-    modelSelection: ModelSelectionProjectionState
-  }
   interface SessionProjectionMap {
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
-    /** Image-intake limits enforced by the Session prompt endpoint. */
-    imageLimits: ImageAttachmentLimits
+    /**
+     * Image-intake limits enforced by the Session prompt endpoint. Boot
+     * constant, excluded from Session summary payloads: every Session shares
+     * it, so a list row would repeat one host-wide fact.
+     */
+    imageLimits: SessionProjectionSummaryExcluded<ImageAttachmentLimits>
     /** Durable model selection already used and selected for the next request. */
     modelSelection: ModelSelectionProjection
   }
@@ -51,10 +47,11 @@ export interface SessionListMetadata {
 }
 
 /**
- * Every available wire value a Session-list row carries as partial, possibly
- * stale hints. `kind` and `asOfSeq` are independent facts: `kind` says which
- * sequence space `asOfSeq` belongs to, and therefore how a client may merge
- * the block; `asOfSeq` is the producer's watermark in that space.
+ * Every available summary wire value a Session-list row carries as partial,
+ * possibly stale hints. The block omits the keys whose unit declares
+ * `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
+ * which sequence space `asOfSeq` belongs to, and therefore how a client may
+ * merge the block; `asOfSeq` is the producer's watermark in that space.
  */
 export interface SessionProjectionHints {
   /**
@@ -67,8 +64,8 @@ export interface SessionProjectionHints {
   readonly kind: 'cached' | 'sequenced'
   /** Watermark of the block in the sequence space named by `kind`. */
   readonly asOfSeq: number
-  /** Provider-validated values present in the block; omitted keys remain unknown. */
-  readonly values: SessionProjectionValues
+  /** Provider-validated summary values present in the block; omitted keys remain unknown. */
+  readonly values: Partial<SessionProjectionSummaryValues>
 }
 
 /** Complete projection values at an exact Session event cursor. */

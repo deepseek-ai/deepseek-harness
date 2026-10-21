@@ -56,7 +56,7 @@ interface CredentialInfo {
 
 ## 内嵌 Platform 凭证
 
-PlatformSession 是 getPlatformSession 返回的仅限 Host 快照：origin 指定所配置的 Platform 签发来源，token 包含其已存账号凭证。userId 复制最近一次成功 getProfile 得到的稳定账号 ID；尚无一次成功读取或资料不含 ID 时为 null。快照复用该 ID，不自行发起资料请求，因此 ID 未知时只会让 userId 为 null，而不会延迟调用方；资料读取首次取得稳定 ID 或该 ID 变化时会通知 watch 订阅者，供标识使用方重新读取快照。使用方以 origin 和 userId 作为持久化浏览器存储的键，为 null 时退回临时存储。账号已退登或读取凭证期间凭证变化时不返回快照；签发来源不匹配时失败。原生使用方负责在凭证变化时使文档失效。账号控制器 RPC、AccountView 和 AccountDetails 均不包含此快照。
+PlatformSession 是 getPlatformSession 返回的仅限 Host 快照：origin 指定所配置的 Platform 签发来源，token 包含其已存账号凭证。userId 复制最近一次成功 getProfile 得到的稳定账号 ID；尚无一次成功读取或资料不含 ID 时为 null。快照复用该 ID，不自行发起资料请求，因此 ID 未知时只会让 userId 为 null，而不会延迟调用方；资料读取首次取得稳定 ID 或该 ID 变化时仅通知使用 `watch(signal, true)` 的 Host 订阅者，供标识使用方重新读取快照。使用方以 origin 和 userId 作为持久化浏览器存储的键，为 null 时退回临时存储。账号已退登或读取凭证期间凭证变化时不返回快照；签发来源不匹配时失败。原生使用方负责在凭证变化时使文档失效。账号控制器 RPC、AccountView 和 AccountDetails 均不包含此快照。
 
 AccountDetails.balance 将充值钱包投影为 value、赠送钱包投影为 bonusWallets，分别保留币种和十进制余额字符串。查询失败不包含钱包数组。
 
@@ -276,8 +276,8 @@ abstract getState(): Promise<AccountView>
 
 /**
  * Query Platform profile independently of wallet balances.
- * A ready result whose stable profile ID first becomes available or changes notifies watch
- * consumers, so identity consumers re-read getPlatformSession; repeated IDs stay silent.
+ * A ready result whose stable profile ID first becomes available or changes notifies identity-enabled watch
+ * consumers, so they re-read getPlatformSession; repeated IDs stay silent.
  * @param client - identity of the requesting UI for this call.
  * @returns profile outcome, or null if signed out or the grant changed during the query.
  */
@@ -332,9 +332,10 @@ abstract signOut(client: AccountClientMetadata): Promise<AccountView>
 /**
  * Subscribe to snapshots including a complete initial state.
  * @param signal - subscription lifetime; ending it never cancels login.
+ * @param includeIdentityChanges - also notify when cached Platform identity changes; defaults to false.
  * @returns complete snapshots as account state changes.
  */
-abstract watch(signal: AbortSignal): AsyncIterable<AccountView>
+abstract watch(signal: AbortSignal, includeIdentityChanges?: boolean): AsyncIterable<AccountView>
 
 /**
  * Resolve a credential only for the inference origin allowed by the provider.

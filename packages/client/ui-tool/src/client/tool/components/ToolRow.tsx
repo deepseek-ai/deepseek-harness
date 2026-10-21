@@ -13,7 +13,7 @@ import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-mod
 import type { ImageCardModel } from '../models/image-card-model.ts'
 import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
 import {
-  localizeTerminalCardModel, terminalBlockLabels, type TerminalCardModel,
+  localizeTerminalCardModel, terminalBlockLabels, terminalExitLabel, type TerminalCardModel,
 } from '../models/terminal-card-model.ts'
 import {
   codeToolbarLabels, diffBlockLabels, readBlockLabels, searchBlockLabels, webBlockLabels,
@@ -25,6 +25,7 @@ import {
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
 import { ToolDetails, type ToolDetailsModel } from './ToolDetails.tsx'
+import { ExitCodeBadge } from './ExitCodeBadge.tsx'
 import css from './ToolRow.module.css'
 
 export interface ToolRowProps {
@@ -50,7 +51,10 @@ export interface ToolRowProps {
   output?: string | null | undefined
   /** Ask-user transcript card; card fields are mutually exclusive and replace text sections. */
   askQuestion?: AskQuestionCardModel | null | undefined
-  /** Error first line shown as the collapsed summary on an error row; null/absent = keep `summary`. */
+  /**
+   * First error line for rows without an exit status capsule; null/absent keeps
+   * the ordinary summary. Rows with an exit capsule retain the command description.
+   */
   errorSummary?: string | null | undefined
   /** Terminal card; card fields are mutually exclusive and replace text sections. */
   terminal?: TerminalCardModel | null | undefined
@@ -176,10 +180,9 @@ export const ToolRow = memo(function ToolRow({
   const status = stateStatus(state, t)
   const running = state === 'running' || state === 'preparing'
   const normalSummary = terminalBody?.description ?? (open ? detailsBody?.expandedSummary ?? summary : summary)
-  // A failure keeps its first result line when available and otherwise turns
-  // the ordinary summary red. An interruption turns the tool-owned summary
-  // amber while retaining the business icon and hidden state announcement.
-  const failureLine = state === 'error' ? errorSummary ?? normalSummary : null
+  const exitLabel = terminalExitLabel(terminal, t)
+  // Generic failures retain their first result line; command exits keep their description.
+  const failureLine = state === 'error' && exitLabel === null ? errorSummary ?? normalSummary : null
   const summaryText = failureLine ?? normalSummary
   // Diff totals remain visible after the optional summary suffix.
   const diffStat = useMemo(() => diffBody === null ? null : diffTotals(diffBody.card.diffs), [diffBody])
@@ -210,7 +213,7 @@ export const ToolRow = memo(function ToolRow({
        its title shows no trailing dot). */
     <>
       <span className={css.sep} data-shimmer-decoration aria-hidden />
-      {openFile !== undefined ? (
+      {exitLabel === null && openFile !== undefined ? (
         <button
           type="button"
           className={css.fileLink}
@@ -219,7 +222,7 @@ export const ToolRow = memo(function ToolRow({
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </button>
-      ) : linkHref !== undefined ? (
+      ) : exitLabel === null && linkHref !== undefined ? (
         <a
           className={css.fileLink}
           href={linkHref}
@@ -234,13 +237,14 @@ export const ToolRow = memo(function ToolRow({
         <span
           className={clsx(
             css.summary,
-            state === 'error' && css.errorSummary,
-            state === 'stopped' && css.stoppedSummary,
+            exitLabel === null && state === 'error' && css.errorSummary,
+            exitLabel === null && state === 'stopped' && css.stoppedSummary,
           )}
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </span>
       )}
+      {exitLabel !== null && <ExitCodeBadge label={exitLabel} />}
       {suffix !== null && (
         <TextShimmer className={css.summarySuffix}>{suffix}</TextShimmer>
       )}
@@ -250,7 +254,7 @@ export const ToolRow = memo(function ToolRow({
         </TextShimmer>
       )}
     </>
-  ), [summaryLinkKeyDown, linkHref, openFile, state, suffix, totals, summaryText])
+  ), [summaryLinkKeyDown, linkHref, openFile, state, suffix, totals, summaryText, exitLabel])
   const expandedContent = useMemo(() => open ? (
     <div className={clsx(css.bodyWrap, detailsBody !== null && css.detailsBodyWrap)}>
       {askQuestionBody !== null

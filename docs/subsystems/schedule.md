@@ -431,7 +431,7 @@ New tasks initialize an empty history. Older task rows without history expose on
 
 ## Host delivery
 
-The Host reads persisted tasks at startup and sets its timer to the earliest active target. Inactive tasks remain queryable but never schedule another delivery. At delivery it resolves the original Session through the Session controller, including cold Sessions. After restoration it samples the wall clock again and excludes members that are no longer due after a rollback; those tasks retain their timer obligation. Neither a Goal nor a separate Run completion record participates in dispatch.
+The Host reads persisted tasks at startup and sets its timer to the earliest active target. Inactive tasks remain queryable but never schedule another delivery. At delivery it resolves the original Session, including cold Sessions, through `schedule/resolve-agent`. The embedding owns activation: the SDK handler waits for initialization and retains its Session handle and model options; without a handler, the Web Session controller restores the Session. The composition waits for its activation provider before starting Schedule. After restoration it samples the wall clock again and excludes members that are no longer due after a rollback; those tasks retain their timer obligation. Neither a Goal nor a separate Run completion record participates in dispatch.
 
 Plugin-sourced `followup()` synchronously appends the message to the Session inbox. After a successful Session flush, one task-record put appends a saved delivery with its instruction snapshot and stores the latest `ScheduleDeliveryReceipt` together with the one-shot's `inactive` status or the recurring task's next target and status. Recurring tasks in the same batch share the receipt's `messageId`; each receipt retains that task's delivered occurrence time. Delivery never steers or cancels the current turn and does not wait for model completion.
 
@@ -547,4 +547,24 @@ Durable task set changed; clients refetch global task and Session-active catalog
 ```
 
 Source: [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts)
+
+<a id="scheduleresolve-agent--waterfall"></a>
+
+#### `schedule/resolve-agent` — waterfall
+
+Restore a reminder's Session through its embedding's owning controller. Call next() to use the Web Session controller.
+
+```ts cordis-catalog
+/**
+ * Restore a reminder's Session through its embedding's owning controller.
+ * Call next() to use the Web Session controller.
+ * @param sessionId - Original Session receiving the reminder.
+ * @mode waterfall
+ */
+'schedule/resolve-agent'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>
+```
+
+Types: [Agent](core.md) · [SessionId](core.md)
+
+Source: [`packages/schedule/schedule/src/index.ts`](../../packages/schedule/schedule/src/index.ts)
 <!-- END GENERATED cordis-surface -->

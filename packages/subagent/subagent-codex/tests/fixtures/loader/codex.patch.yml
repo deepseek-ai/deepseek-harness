@@ -45,3 +45,9 @@
         provider: codex-secondary
         toolName: subagent_codex_secondary
         maxDepth: 'provider-managed'
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

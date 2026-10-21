@@ -24,6 +24,10 @@ pre-commit:
     - name: whitespace (staged)
       run: git diff --cached --check
 
+    - name: pi-ai provider metadata
+      glob: '{pnpm-lock.yaml,packages/llm/llm-pi-ai/package.json,packages/llm/llm-pi-ai/scripts/gen-provider-data.ts,packages/llm/llm-pi-ai/src/provider-data.generated.ts}'
+      run: node_modules/.bin/tsx packages/llm/llm-pi-ai/scripts/gen-provider-data.ts --check --cached
+
     - name: vendor manifest guard
       run: scripts/check-vendor-manifest.sh
 

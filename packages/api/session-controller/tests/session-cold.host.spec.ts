@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -81,6 +82,7 @@ describe('sessions.list cold merge', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       const historical = header('format-historical', 100)
       const current = header('format-current', 200)
@@ -97,7 +99,7 @@ describe('sessions.list cold merge', () => {
       const stat = vi.fn()
       const open = vi.fn()
       ctx.provide('sessionPersistence', { list, stat, open } as never)
-      const remote = createSessionTestRemote(ctx, {
+      const remote = await createSessionTestRemote(ctx, {
         defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
         cwd: '/tmp',
       })
@@ -147,7 +149,7 @@ describe('sessions.list cold merge', () => {
         ? { asOfSeq: 2, values: { title: 'Cached predecessor title' } }
         : undefined,
     } as never)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -209,7 +211,7 @@ describe('sessions.list cold merge', () => {
       },
       cachedPredecessorTitle: () => undefined,
     } as never)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const response = await remote.list(request({}))
     expect(response.ok).toBe(true)
@@ -246,8 +248,9 @@ describe('attached updatedAt tracks human prompts', () => {
   it('ignores pickup and non-prompt work after the latest human message', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await new Promise(resolve => setTimeout(resolve, 0))
 
     // Old work, resumed just now: the log tail would report the pickup.
@@ -306,7 +309,7 @@ describe('cold history recovery view', () => {
       list: () => Promise.resolve([structuredClone(meta)]),
       inspect: () => Promise.resolve({ meta: structuredClone(meta), events: structuredClone(events) }),
     })
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const history = await remote.page({
       address: { kind: 'session', sessionId },
@@ -365,7 +368,7 @@ describe('Remote Agent and Session lookup policy', () => {
       }),
     })
     const resume = vi.spyOn(ctx.agents, 'resume')
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -390,8 +393,9 @@ describe('Remote Agent and Session lookup policy', () => {
   it('keeps queue-item-not-found for a cold session when no persistence backend is composed', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -410,6 +414,7 @@ describe('Remote Agent and Session lookup policy', () => {
     const ctx = new Context()
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-remote-cold')
     const meta = header(sessionId, 1000)
@@ -427,7 +432,7 @@ describe('Remote Agent and Session lookup policy', () => {
     })
     const defaultAgentLookup = ctx.typert.lookups.get('agent')
     const defaultSessionLookup = ctx.typert.lookups.get('session')
-    createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await vi.waitFor(() => {
       expect(ctx.typert.lookups.get('agent')).not.toBe(defaultAgentLookup)
       expect(ctx.typert.lookups.get('session')).not.toBe(defaultSessionLookup)
@@ -450,6 +455,7 @@ describe('Remote Agent and Session lookup policy', () => {
     const ctx = new Context()
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const coldId = sid('session-remote-cold-child')
     const coldMeta = header(coldId, 1000, {
@@ -469,7 +475,7 @@ describe('Remote Agent and Session lookup policy', () => {
     const resume = vi.spyOn(ctx.agents, 'resume')
     const defaultAgentLookup = ctx.typert.lookups.get('agent')
     const defaultSessionLookup = ctx.typert.lookups.get('session')
-    createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await vi.waitFor(() => {
       expect(ctx.typert.lookups.get('agent')).not.toBe(defaultAgentLookup)
       expect(ctx.typert.lookups.get('session')).not.toBe(defaultSessionLookup)
@@ -494,6 +500,7 @@ describe('Remote Agent and Session lookup policy', () => {
     const ctx = new Context()
     await ctx.plugin(TypertRegistry)
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-remote-resumed-child')
     const meta = header(sessionId, 1000)
@@ -511,7 +518,7 @@ describe('Remote Agent and Session lookup policy', () => {
       return { agent: published, dispose: () => Promise.resolve() }
     })
     const defaultLookup = ctx.typert.lookups.get('agent')
-    createSessionTestRemote(ctx, {
+    await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -529,6 +536,7 @@ describe('subagent ownership fence', () => {
   it('reads a cold child without an Agent and rejects generic resume or adoption', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-child')
     const meta = header('session-child', 1000, {
@@ -562,8 +570,8 @@ describe('subagent ownership fence', () => {
       inspect,
     })
     const resume = vi.spyOn(ctx.agents, 'resume')
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
-    ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
 
     const history = await new SessionHistoryController(
       ctx,
@@ -607,6 +615,7 @@ describe('subagent ownership fence', () => {
   it('no longer treats a descriptor-only cold child without origin as subagent-owned', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('session-legacy-child')
     const meta = header('session-legacy-child', 1000, {
@@ -629,7 +638,7 @@ describe('subagent ownership fence', () => {
     // answering `agent-busy`.
     const resume = vi.spyOn(ctx.agents, 'resume')
       .mockRejectedValue(new Error('registry unavailable in this bench'))
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const prompt = await remote.prompt(promptRequest({
       sessionId,
@@ -644,6 +653,7 @@ describe('subagent ownership fence', () => {
   it('rejects origin-marked and runtime-owned live children from generic controls', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const parentSession = ctx.sessions.create(sid('session-parent'), { meta: { cwd: '/proj' } })
     const parent = { id: parentSession.id, session: parentSession, status: 'idle', ctx } as Agent
@@ -669,7 +679,7 @@ describe('subagent ownership fence', () => {
     })
     const startingChild = { id: startingSession.id, session: startingSession, status: 'idle', ctx } as Agent
     ctx.agents.enter(startingChild, parent)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const stopped = await remote.cancel(request({ sessionId: originChild.id }))
     expect(stopped.ok).toBe(false)
@@ -703,6 +713,7 @@ describe('subagent ownership fence', () => {
   it('does not classify an ordinary fork from an inherited ancestor descriptor', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-ordinary-fork'), {
       seed: [{
@@ -719,7 +730,7 @@ describe('subagent ownership fence', () => {
       id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
     await ctx.agents.register(agent)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const response = await remote.prompt(promptRequest({
       sessionId: agent.id,
@@ -733,6 +744,7 @@ describe('subagent ownership fence', () => {
   it('canonicalizes a supplied browser zone on the exact prompt and rejects invalid names', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-browser-zone'), { meta: { cwd: '/proj' } })
     const followup = vi.fn()
@@ -740,7 +752,7 @@ describe('subagent ownership fence', () => {
       id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
     await ctx.agents.register(agent)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -804,8 +816,9 @@ describe('degenerate composition (no persistence, no factory)', () => {
   it('lists no cold rows and reports an absent point source as not found', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const listed = await remote.list(request({}))
     expect(listed.ok).toBe(true)
@@ -825,6 +838,7 @@ describe('degenerate composition (no persistence, no factory)', () => {
   it('maps a missing direct persistence read to session-not-found', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const inspect = vi.fn()
     const stat = vi.fn(() => Promise.resolve(undefined))
@@ -833,7 +847,7 @@ describe('degenerate composition (no persistence, no factory)', () => {
       stat,
       inspect,
     })
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const response = await remote.page({
       address: { kind: 'session', sessionId: sid('session-missing') },
@@ -851,6 +865,7 @@ describe('sessions.prompt synchronous rejection', () => {
   it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-empty-prompt'))
     const followup = vi.fn()
@@ -883,7 +898,7 @@ describe('sessions.prompt synchronous rejection', () => {
         provider: 'p', id: 'm', name: 'Model', inputModalities: ['text', 'image'],
       }),
     } as never)
-    const remote = createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
     })
@@ -947,6 +962,7 @@ describe('sessions.prompt synchronous rejection', () => {
   it('maps a synchronous send throw (disposed/invalid input) to agent-busy with the reason attached', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-throwing'))
     // A live structural stub whose delivery verbs throw synchronously, the
@@ -960,7 +976,7 @@ describe('sessions.prompt synchronous rejection', () => {
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
       steer: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
     } as unknown as Agent)
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     for (const mode of ['queue', 'steer'] as const) {
       const response = await remote.prompt(promptRequest({
@@ -980,6 +996,7 @@ describe('sessions.prompt synchronous rejection', () => {
   it('classifies a raced cold-resume ID collision as agent-busy', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const sessionId = sid('race-resume')
     const meta: SessionHeader = header('race-resume', 1000)
@@ -1001,7 +1018,7 @@ describe('sessions.prompt synchronous rejection', () => {
       await ctx.agents.register(child)
       throw new Error('session id already published')
     })
-    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const selection = await remote.selectModel(request({ sessionId, provider: 'p', model: 'm' }))
     expect(selection.ok).toBe(false)

@@ -33,6 +33,11 @@ kind: "package-reference"
 
 浏览器插件包在其 `package.json` 中以 `platform: 'web'` 声明 `dsh.client`，导出 `./client` bundle，并在 `dsh.client.external` 下列出任何基座之外的模块请求。宿主半侧把每份声明变成 `/plugins` 下提供的 bundle，并让动态提供方先于其消费方加载。
 
+<a id="package-assets"></a>
+### 包资源
+
+同一个 `/plugins` 路由也提供客户端包通过其 `"./assets/*": "./lib/assets/*"` 导出发布的图片。构建会产出每个被引用的资源，在扩展名之前插入其内容 revision（资源字节 SHA-1 摘要的前 12 位十六进制数字），并把 import 或样式表 `url()` 编译成对 bundle 模块加载器的同步调用 `require.asset("plugins/<package>/assets/<emitted path>")`，因此一个 URL 始终对应一份内容。每个路径段先用 `encodeURIComponent` 编码，再编码 `!`、`'`、`(`、`)` 和 `*`，因此引用本身也是合法的无引号 CSS `url()`；仓库外构建的包必须输出同样的形式。除非页面的载体提供了 `resolveAsset`，这个调用都返回文档相对引用；WebWorker 预览的页面无法请求该引用，它把引用映射为 Worker 镜像中对应字节的 Blob URL。任何 `/plugins/<package>/assets/` 路径都只由资源路由响应：对于活动的客户端 row，Host 对路径做一次百分号解码，并从该包自身的 manifest（元数据清单）出发，用 Node 的 `require.resolve` 解析 `<package>/assets/<path>`，因此由包的导出决定哪些文件存在。无法解析的路径、扩展名不是 `.svg`、`.png`、`.webp`、`.jpg` 或 `.jpeg` 的已解析文件、格式错误的转义以及未激活的包都返回 404；查询串不参与选择。提供的资源每次请求都从磁盘流式读取且不缓存，并携带其媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、`etag: "<requested path>"` 和 `x-content-type-options: nosniff`；SVG 还额外携带 `content-security-policy: script-src 'none'`，因此直接打开的 SVG 不会运行脚本。`If-None-Match` 等于该 etag 时返回 304 且不打开文件，`HEAD` 的响应不带 body。`fetchBundle()` 返回相同的响应，其流式 body 在取消时关闭文件。
+
 ### 浏览器加载什么
 
 application combo 脚本只携带每个插件的 `client.js` 入口，并在启动时仅注册一次这些 factory；模块主体仍保持惰性，只在首次 import 或物化时运行。经 tsdown 拆分的源码 `import()` 会编译为 `require.async("./client.<name>.js")`；只有执行该表达式时，对应的带版本同级脚本才会到达。共享 combo URL 的 row 共用一个进行中的脚本任务。`<script>` 加载失败的 combo 会再请求一次；加载成功但没有注册某条 row 的 combo 绝不会重新执行，因为批量脚本按顺序注册各个包，重放会在第一个重复注册处停止。两种情况下，每条仍缺失的 row 随后加载自己的单资源 combo URL，因此一个失败的 batch 对每条缺失 row 最多花费三次请求，且不影响它已经注册的 row。模块系统按 row 记录最后一次 import 失败（传输、注册、依赖级联或 factory 执行）；Web 启动审计按条目报告该文本。HMR（热模块替换）会让一条发生变化的 row 改用带 revision 的单资源 combo URL。`<id>/client` 与裸 id 解析到同一组导出，因为插件 bundle 就是其包的客户端半侧。
@@ -40,6 +45,11 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 ### 插件动态组合
 
 已打开的 Web 页面通过 HMR 传输跟随 Host 的完整模块图。启用普通插件会添加其 Loader 条目；停用会移除条目，并在其异步 effect 完成清理后回收未使用的模块与样式。再次启用会加载一个带样式的实例。其他 Loader 贡献方的条目及活动条目仍需使用的共享模块会保留。「设置 → 插件 → 插件列表」显示当前页面的同步失败，并提供不改变 Host 启用状态的重试。
+
+<a id="host-release-changes"></a>
+### Host release 变化
+
+每个图都以 `release` 携带 Host 的 release 身份：本包的 `version`（各包发布时与 CLI 共用同一版本号），以及 client 构建固化进 Host 构建产物的源码 `commit`。两个字段都相等才算同一个 release。只有当前连接的 Host 提供的是页面启动时的 release，页面才应用图和 rebuilt 帧，因此页面运行的每个模块都属于这个 release；Host 回到该 release 时，照常按 revision 对比，只替换变化了的模块。Host 提供另一个 release 期间，页面不应用它的任何内容，当前插件继续运行，并通过 `ctx.modules.entries.releaseChange` 发布页面启动时的 release、Host 之前的 release 和当前的 release；只有刷新页面才会加载另一个 release。`dismissRelease()` 撤回提示，并在出现其他 release 之前不再为该 Host release 提示；它只在页面内存里记住最近一次撤回的 release。在插件页重试失败的插件也不会加载另一个 release：重试请求的是启动 release 的产物，而提供另一个 release 的 Host 已经没有这些产物，所以会以下载失败结束。
 
 ### 共享模块
 
@@ -69,9 +79,9 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 增量组合
 
-Node 半侧逐包增量扫描——没有全量重扫路径。每次发出 `internal/plugin` 事件时，系统都会把该 fiber 的 entry 名标脏；微任务 flush 会把每个脏名与当前 loader 条目对账，激活 pass 会初始化同一个脏集合并同步 flush，因此首次扫描与稳态共用同一实现。包元数据按 Loader specifier 与所属 tree base URL 缓存至重启，解析出的 manifest（元数据清单）包名作为浏览器模块身份。若不同的 active Loader source 解析到同一包名，组合会失败；移除冲突来源后，剩余来源无需重启 fiber 即可接替。bundle 内容变更只能通过 `rebuilt()`（HMR 钩子）进入图。
+Node 半侧逐包增量扫描——没有全量重扫路径。每次发出 `internal/plugin` 事件时，系统都会把该 fiber 的 entry 名标脏；微任务 flush 会把每个脏名与当前 loader 条目对账，激活 pass 会初始化同一个脏集合并同步 flush，因此首次扫描与稳态共用同一实现。每次对账都会重新读取包 manifest 与 bundle 元数据，因此包在重新安装、升级或移动之后重启的条目会发布其当前的 `dsh.client` 声明与客户端导出；读到相同 manifest 与 bundle 元数据的对账不发布任何内容，也不读取 bundle 字节；未变化的 bundle 保留其 revision，因此浏览器会保留已加载的插件。解析出的 manifest 包名作为浏览器模块身份。若不同的 active Loader source 解析到同一包名，组合会失败；移除冲突来源后，剩余来源无需重启 fiber 即可接替。没有伴随条目重启的 bundle 重建经 `rebuilt()`（HMR 钩子）进入图。
 
-Node 半侧会在发布前快照每个 `client.js` 入口，并在不构建响应 body 的情况下创建 combo descriptor。它把资源分组为 combo 路由键（`/plugins/??...&rev=...`）：modules row 使用一个 bootstrap combo，其余 row 使用一个或多个 application combo；每个阶段都会在 URL 超过 3 KiB 之前分区。启动图与批次描述符携带同一路由键的应用目录相对形式（`plugins/??...&rev=...`），浏览器文档会按其自身挂载解析它，而响应表仍以绝对路由为键；source-map trailer 则相对该 combo 脚本自身目录解析。脚本 body 在首次 `GET` 时只组合一次，并以对应的 map 引用结尾；map 文件则在首次 map `GET` 时单独读取、校验并组合，`HEAD` 不会物化任一 body。Host 不扫描也不预加载同级 chunk：精确的 `/plugins/<package>/client.<name>.js?rev=<rev>` 请求会读取并缓存该脚本，其 map 仍会等到 map URL 被请求后才计算。浏览器从所属 row 派生出该 chunk 引用，因此它同样是文档相对形式（`plugins/<package>/client.<name>.js?rev=<rev>`）；chunk 脚本携带的 map trailer 则是裸文件名 `client.<name>.js.map?rev=<rev>`，由该脚本自身目录解析。每个 combo 或 chunk map 都是 Indexed Source Map v3，并在可用时使用作者提供的 section，否则为已打包 bundle 生成 identity section。首次发布与 HMR 都从入口的 `mtimeMs`、`ctimeMs` 和大小派生逐插件 revision，不对产物内容求哈希。状态变更时间用于区分保留 mtime 和大小的重写。未变化的产物因此会跨 Host 重启保持 revision，SSE 重连不会替换其浏览器插件。共享预设会在该包所有输出写完后标记 `client.js`，因此仅 chunk 发生重建也会更换 owner revision，无需 Host 扫描 chunk。combo revision 从有序 row revision 派生。已公告的 combo 响应与已请求的 chunk 响应会跨无关图重组保持不可变；未知资源或 revision 返回 404。
+Node 半侧会在发布前快照每个 `client.js` 入口，并在不构建响应 body 的情况下创建 combo descriptor。它把资源分组为 combo 路由键（`/plugins/??...&rev=...`）：modules row 使用一个 bootstrap combo，其余 row 使用一个或多个 application combo；每个阶段都会在 URL 超过 3 KiB 之前分区。启动图与批次描述符携带同一路由键的应用目录相对形式（`plugins/??...&rev=...`），浏览器文档会按其自身挂载解析它，而响应表仍以绝对路由为键；source-map trailer 则相对该 combo 脚本自身目录解析。脚本 body 在首次 `GET` 时只组合一次，并以对应的 map 引用结尾；map 文件则在首次 map `GET` 时单独读取、校验并组合，`HEAD` 不会物化任一 body。Host 不扫描也不预加载同级 chunk：精确的 `/plugins/<package>/client.<name>.js?rev=<rev>` 请求会通过异步文件 API 读取该脚本并缓存，因此首次异步读取时才物化文件的文件系统也能提供它；其 map 仍会等到 map URL 被请求后才计算。浏览器从所属 row 派生出该 chunk 引用，因此它同样是文档相对形式（`plugins/<package>/client.<name>.js?rev=<rev>`）；chunk 脚本携带的 map trailer 则是裸文件名 `client.<name>.js.map?rev=<rev>`，由该脚本自身目录解析。每个 combo 或 chunk map 都是 Indexed Source Map v3，并在可用时使用作者提供的 section，否则为已打包 bundle 生成 identity section。首次发布与 HMR 都从入口的 `mtimeMs`、`ctimeMs` 和大小派生逐插件 revision，不对产物内容求哈希。状态变更时间用于区分保留 mtime 和大小的重写。未变化的产物因此会跨 Host 重启保持 revision，SSE 重连不会替换其浏览器插件。共享预设会在该包所有输出写完后标记 `client.js`，因此仅 chunk 发生重建也会更换 owner revision，无需 Host 扫描 chunk。combo revision 从有序 row revision 派生。已公告的 combo 响应与已请求的 chunk 响应会跨无关图重组保持不可变；未知资源或 revision 返回 404。
 
 ### 启动 manifest 注入
 
@@ -81,13 +91,14 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 
 ### 条目所有权
 
-`ClientEntries` 记录启动时创建的条目，并在同一个 Loader 上串行执行完整图更新、重试和代码重载。本地代际阻止旧下载在目标条目或代码变化后挂载；目标相同的快照共用进行中的加载。新增模块使用单资源 URL，不会重新执行可能重复注册现有 factory 的启动 batch。Factory 在条目创建前就保留产物 revision；图更新会在导入消费者前丢弃未归属条目的陈旧 factory、其样式和失败的到达目标。清理会保留每个剩余 Loader 条目的已声明及已观察到的传递模块依赖。其可观察状态不导入运行时库，因为 modules bootstrap 在平台种子可用之前物化。
+`ClientEntries` 记录启动时创建的条目，并在同一个 Loader 上串行执行完整图更新、重试和代码重载。本地代际阻止旧下载在目标条目或代码变化后挂载；目标相同的快照共用进行中的加载。来自启动 release 以外 release 的图不进入队列：重试继续调和上次应用的图，Host 提供该 release 期间忽略 rebuilt 帧。新增模块使用单资源 URL，不会重新执行可能重复注册现有 factory 的启动 batch。Factory 在条目创建前就保留产物 revision；图更新会在导入消费者前丢弃未归属条目的陈旧 factory、其样式和失败的到达目标。清理会保留每个剩余 Loader 条目的已声明及已观察到的传递模块依赖。其可观察状态不导入运行时库，因为 modules bootstrap 在平台种子可用之前物化。
 
 ### 源码索引
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node 半侧：`ClientModuleRegistry`、扫描、产物快照、可选 combo 路由、结构化 index 行 |
+| [`src/assets.ts`](src/assets.ts) | 包资源的媒体类型、导出、内容 revision、带 revision 的文件名与浏览器引用，由构建预设、资源路由和门禁共用 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：bootstrap 导出、`ctx.modules` 登记 |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`：加载／物化／失效机制 |
 | [`src/client/entries.ts`](src/client/entries.ts) | 页面条目对账、重试与代码替换 |
@@ -129,9 +140,13 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 
 - **基于元数据的 revision**——revision 标识文件系统代际，而非内容相等性。仅元数据变化也可能重载插件；mtime、ctime 和大小都无法反映的变化无法区分。
 - **有意采用扁平模块图**——每个 bundle 是一个模块节点，其边只指向表中的叶节点；接口（`loadCache`/`edges`/`invalidate`）已经支持通用模块图，因此可以改变 externalization 粒度而不更改接口。
+- **Host release 检测依赖图事件流**——页面只能从图帧得知 Host 换了 release。重启中的 Host 若在注册路由之前对 `/plugins/events` 返回非 200 状态，浏览器会永久关闭该事件流，页面在刷新前既不更新插件，也检测不到 release 变化。
+- **源码启动时 Host 半侧没有构建步骤**——从 TypeScript 源码启动的 Host 读取 `pnpm run dev:web` 放入其环境的 commit；没有该值的源码启动只发布版本号。
 - **Bootstrap 与代码替换限制**——页面保留 modules bootstrap 和静态平台模块的身份。移除或替换 bootstrap 需要刷新页面；动态替换请求会报告页面本地错误，并保留其 fiber 与导出；替换包代码及其所有现有消费者不属于普通启停同步。
 - **惰性提供会保留已请求的 body**——Host 在内存中保留每个 bundle 与惰性响应计划；脚本或 map body 在首次 `GET` 后保留缓存，HMR 还会保留上一代启动响应。内存仅随客户端实际请求的响应 body 增长，同时保留一代竞态容忍。
 - **从未请求的上一代 map 会读取当前 map 文件**——combo revision 跟踪可执行 bundle，而不跟踪调试产物。若 HMR 在保留的旧 URL 首次收到 map `GET` 前重建 map，该响应会把当前 authored map 与旧 bundle offset 组合；在重建前请求 map 会固定该 URL 的响应。
+- **仅编辑 manifest 不会被察觉**——Host 在包的 Loader 条目启动或重启时读取包 manifest；只编辑 `package.json` 要到下一次条目重启或 Host 重启时才生效。资源路由经 Node 的包配置缓存解析，因此原地修改的 `./assets/*` 导出要等 boot HMR 让该包的缓存失效、或 Host 重启后才生效。
+- **Desktop 每次显示都重新读取包资源**——Desktop 转发器把每个 `/plugins/` 缓存头改写为 `no-store`，因此不可变的资源响应头到达不了其浏览器缓存。
 
 <a id="dev-note"></a>
 ### 开发备注

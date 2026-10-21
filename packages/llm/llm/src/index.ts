@@ -39,7 +39,7 @@ import { normalizeApiKey } from './api-key.ts'
 import {
   contentHasFile, contentHasImage, fileHandleText, projectFilesToText, projectImagesForTextModel, projectToolUpdates,
 } from './content.ts'
-import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 
 export * from './attribution.ts'
 export * from './brand.ts'
@@ -235,6 +235,18 @@ export abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined {
     return undefined
+  }
+
+  /**
+   * Resolve the image dimensions and byte target this adapter sends to the model.
+   * The default preserves normalized images; adapters that resize must override it.
+   * @param _provider - registered provider route.
+   * @param _model - exact model id.
+   * @param image - normalized image whose request projection is being resolved.
+   * @returns the same target used by request serialization, before provider-internal processing.
+   */
+  imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget {
+    return { width: image.width, height: image.height, maxBytes: image.bytes }
   }
 
   /**
@@ -668,6 +680,17 @@ export class LlmRuntime extends TypertRemoteService {
    */
   imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined {
     return this.adapters.get(provider)?.adapter.imageRequestPricing(provider, model)
+  }
+
+  /**
+   * Resolve the image projection for an exact registered model route.
+   * @param provider - registered provider route.
+   * @param model - exact model id.
+   * @param image - normalized image reference.
+   * @returns dimensions and byte target used by the adapter's request serializer.
+   */
+  imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget {
+    return this.registration(provider).adapter.imageRequestTarget(provider, model, image)
   }
 
   /**
@@ -1174,6 +1197,7 @@ function detachDirectoryEntry(entry: LlmConfigurableProvider): LlmConfigurablePr
   return {
     ...entry,
     settingsPath: [...entry.settingsPath],
+    ...entry.baseURLEnv === undefined ? {} : { baseURLEnv: [...entry.baseURLEnv] },
     ...(nativeAuth === undefined ? {} : { nativeAuth: { ...nativeAuth, env: [...nativeAuth.env] } }),
   }
 }

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-13-cua-hover-routes-and-coordinates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-13-cua-hover-routes-and-coordinates.md
+/agent-note-background-hover-and-screenshot-coordinates:
+  en: 2abcb6476c2995eb
+  zh: 007a05272fc7f366
+/agent-note-background-hover-and-screenshot-coordinates/problem:
+  en: f96bf1ebc0719fb0
+  zh: e9a1144f0e76572d
+/agent-note-background-hover-and-screenshot-coordinates/decision:
+  en: 0cdd295d5f1872ed
+  zh: fe03ec9f7df94a4a
+/agent-note-background-hover-and-screenshot-coordinates/alternatives-considered:
+  en: 5fc4beaf79761c50
+  zh: 4948333b0020be28
+/agent-note-background-hover-and-screenshot-coordinates/consequences:
+  en: 07a67707e1df59f8
+  zh: 459c4f2629cd3190

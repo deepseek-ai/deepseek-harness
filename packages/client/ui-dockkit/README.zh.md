@@ -52,7 +52,7 @@ kind: "package-reference"
 | `TabRenderer` | 一个 tab 的正文（`renderTab`），贴着格的边缘和（不带边线的）tab 条底边绘制、自己决定留白，以及可选的 chip 或浮窗头部显示的标题（`renderTabTitle`，回退到记录的 `title`）；嵌入方按 `tab.kind` 分发 |
 | `DockIntents` | 每次手势落定的结果 |
 
-`DockController` 原样满足 `DockIntents`，因此嵌入方可将它交给 `DockLayout` 来保活 Sidebar 布局，或交给 `DockSurface` 来渲染递归分割树。经由自己 store 路由的嵌入方则实现同名方法。有三个 props 承载的是控制策略而非手势：`canSplit`（整面有效，即格预算；用 `splitPaneDisabled` 禁用分栏控件）、`canAddTab(paneId)`（按格，省略添加控件；不传则每格都画）与 `canCloseTab(tabId)`（按 tab，把 chip 的关闭控件和菜单的关闭项一并收起；不传则每个 tab 都可关闭）。隐藏添加控件不会移动 tab 条里的其它任何东西，收起关闭也不会移动 chip 里的任何东西——关闭控件压在标题末端之上而非并排。某格仅剩的一个 chip 在关闭被收起时画成安静样式——没有胶囊底色，没有悬停填充——因为既没有别的 tab 可供选择，也没有任何可对它做的事。套件自己再加一条策略，即下文的空间规则，它用 `splitPaneNarrow` 禁用某格的分栏控件；`onRoom(fits)` 上报其读数，让以编程方式分栏的嵌入方能遵守同一规则。
+`DockController` 原样满足 `DockIntents`，因此嵌入方可将它交给 `DockLayout` 来保活 Sidebar 布局，或交给 `DockSurface` 来渲染递归分割树。经由自己 store 路由的嵌入方则实现同名方法。有三个 props 承载的是控制策略而非手势：`canSplit`（整面有效，即格预算；用 `splitPaneDisabled` 禁用分栏控件）、`canAddTab(paneId)`（按格，省略添加控件；不传则每格都画）与 `canCloseTab(tabId)`（按 tab，把 chip 的关闭控件和菜单的关闭项一并收起；不传则每个 tab 都可关闭）。隐藏添加控件不会移动 tab 条里的其它任何东西，收起关闭也不会移动 chip 里的任何东西——关闭控件压在标题末端之上而非并排。某格仅剩的一个 chip 在关闭被收起时画成安静样式——没有胶囊底色，没有悬停填充——因为既没有别的 tab 可供选择，也没有任何可对它做的事。套件自己再加一条策略，即下文的空间规则，它用 `splitPaneNarrow` 禁用某格的分栏控件；`onRoom(fits)` 上报其读数，让以编程方式分栏的嵌入方能遵守同一规则。可见的禁用分栏控件支持鼠标或触摸点击查看原因，不会分栏或聚焦窗格。
 
 `dropZones="horizontal"` 提供左右两个半区提示；预算或宽度不允许再拆时，正文整格接收移动。提示是一张内缩 8px 的虚线卡片，显示该落区的图形和 `labels.dropZone[zone]`；预览层覆盖全部 tab 正文，指针所在的卡片取强调色，另一张保持安静的轮廓。`minPaneFraction` 控制预览的最小比例，`planResizeSplit` 接受相同最小值以约束提交；Sidebar使用0.2并在自己的store限制两格。通用引擎仍保留原有树与其它分割方向。 `hideSplitWhenBlocked` 在分栏被阻止时（窗格预算已满或格太窄）直接隐藏分栏控件而不是渲染禁用态，默认值为 false。
 

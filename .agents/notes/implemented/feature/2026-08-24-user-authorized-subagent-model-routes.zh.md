@@ -12,11 +12,11 @@ Status: implemented
 
 Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 开关与 `allowedModels`，后者是由精确 `{ provider, model }` 路由组成的数组。启用时必须至少有一条路由；关闭时可以保留已选路由，供以后重新启用。Plugins 设置卡通过 `session/modelCatalog` 读取实时适配器目录，让用户暂存开关与路由，再在一次带 revision 限制的设置 mutation 中保存两个字段。它不保存适配器自有的显示名称、描述或推理强度元数据。当前目录中缺失的已存或暂存路由仍显示为不可用并允许移除；某个提供方的目录失败不会阻塞其他提供方，也不会清除已存授权或未保存选择。连接重置会丢弃草稿，因为 namespace revision 只能在同一个 Host 进程内比较。
 
-设置启用时，新组合的顶层 Session 会在模型可选定义进入请求之前，把路由列表快照记录为 `subagent/model-selection-policy`。事件存在就表示模型选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一份精确列表，恢复的 Session 使用已记录事件而不是当前设置。因此，设置修改只影响之后组合的顶层 Session，而没有该事件的旧 Session 仍保持禁用，包括显式为空的恢复 Session。
+设置启用时，Host 设置服务为每个新顶层 Session 在首个模型请求前将路由列表记录为 `subagent/model-selection-policy`。事件存在表示选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一精确列表，恢复的 Session 使用已记录事件而非当前设置。因此设置变更只影响之后创建的顶层 Session。没有该事件时，包括显式为空的恢复 Session，显式选择仍仅限当前父级路由。
 
-固定的 `list_subagent_models` schema 不会枚举该策略。调用时，提供方和模型列表是 Session 路由列表与适配器实时公布目录的交集。精确 provider/model 查询先要求授权，再解析适配器自有的模型元数据和全部已公布推理强度。委派执行器还会独立拒绝任何生效 provider/model 路由不在 Session 列表内的显式提供方、模型或强度选择，然后才由 `resolveCallConfig()` 校验适配器可用性与强度支持。完全没有选择字段的调用保留配置或继承路由，因为模型没有作出路由选择。
+固定的 `list_subagent_models` schema 不枚举策略。调用时，它列出已授权且已注册的提供方，并取其公布模型目录与已记录路由列表的交集。精确查询先要求授权，再解析模型元数据及全部支持的推理强度，也允许目录未列出的 ID。没有已记录策略时，发现只解析父 Agent 当前生效的路由，即使目录未列出它。委派执行器会在适配器预检前独立校验显式提供方、模型或强度选择是否符合相同授权。没有选择字段的调用保留配置或继承的路由。
 
-模型选择不再有无限制的静态模式。默认关闭的 Host 设置是唯一授权来源，启用的 Session 始终携带精确允许列表。主 spawn 工具读取该设置；随附 fork 工具仍不公开路由选择，使继承的对话前缀继续符合提供方侧 KV Cache 复用条件。
+模型选择没有无限制的静态模式。默认关闭的 Host 设置授权其他子级路由；没有该授权时，仍可选择父级路由及其支持的强度。各委派工具的 `modelSelection` 选项只控制自身路由字段。每个作用域的一个委派实例启用 `modelDiscovery` 并负责发现；设置、发现和委派读取包内同一个授权投影。Web 与 Desktop preset 默认挂载发现工具，启用 spawn 路由字段，并为 fork 保持关闭，以保留对继承前缀的复用；自定义 fork 组合可以在相同 Session 授权下启用这些字段。工具安装不采样或扩大授权。
 
 ## Alternatives considered
 
@@ -33,11 +33,11 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 ## Consequences
 
 - 新适配器注册和新公布模型不会扩大用户授权。
-- 适配器移除或目录失败可以减少发现当前列出的内容，但不会删除已存路由决定；即使建议性目录省略某条精确已授权路由，只要适配器接受它，该路由仍然可用。
-- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。
+- 适配器移除或目录查询失败可能使提供方发现不可用，但不会删除已存路由决定；只要适配器接受某个获准模型，即使建议性目录省略它，该模型仍可使用。
+- 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。`modelSelection` 选项增加三个路由字段；`modelDiscovery` 增加固定发现 schema。两个选项都默认关闭；随附 headless 与 SDK profile 两者都不携带。
 - 策略事件仅存在于日志，并在 Agent 组合期间、两套 SDK 开始订阅运行前追加。随附 SDK profile 不启用这项 Web 自有偏好，因此该事件不会改变任一 SDK 的预期通知或持久 Session 输出；其持久投影由包级恢复测试负责，不会为了发出该事件而虚构 SDK 组合。
-- 单元覆盖固定设置校验、异常持久值、Session 取样与继承、发现交集、执行器拒绝、UI 实时目录失效、暂存路由保留、连接换代失效、暂存后的整数组写入、陈旧 revision 拒绝，以及作用域安装失败后的重试。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
+- 单元覆盖固定设置校验、异常持久值、Session 取样与继承、共享定义、父级路由默认值、发现限制、执行器拒绝，以及设置 UI 的暂存写入与 revision 检查。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
 
 ## Related decisions
 
-路由参数、适配器预检、发现工具与 fork 缓存限制仍由[模型选择的 subagent 路由](../../../../packages/subagent/tool-subagent/README.zh.md)负责。
+路由参数、适配器预检、发现工具与 fork 限制仍由[模型选择的 subagent 路由](../../../../packages/subagent/tool-subagent/README.zh.md)负责。

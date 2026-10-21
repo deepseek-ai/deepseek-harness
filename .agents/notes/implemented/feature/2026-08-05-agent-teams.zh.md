@@ -16,7 +16,7 @@ Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的�
 
 每个普通运行时 Root 都是一个隐式 Team 的 Lead，Team id 等于该 Root 的 `SessionId`。Team 没有 creation event：Lead pseudo-row 由身份直接存在，持久状态从第一条 member、message 或 task event 开始。roster 是扁平结构，最多包含配置数量、不可变且采用小写 kebab-case 的名字。每个 teammate 都是使用预留 Session id 的 continuable 直接 child；只有 Lead 可以创建或 interrupt teammate。roster 外由 provider 管理的普通 subagent 不是 Team member；普通 fork 是新的 Root，继承的 Team 记录会因 ancestor `TeamId` 被排除。
 
-实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件，并可禁用具有相同模型可见名称的旧 continuable control。显式 delegation 策略只允许在用户要求 Agent Teams 或 teammate 时创建 Team。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
+实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件，并可禁用具有相同模型可见名称的旧 continuable control。共享策略声明 Team 可用，并说明协调责任。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
 
 Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍是最终生命周期 owner，并会 drain continuation Activation；Team task owner 是持久状态，不会因 idle、interrupt 或进程退出自动释放。
 

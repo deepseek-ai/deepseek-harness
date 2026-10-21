@@ -51,6 +51,8 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
  * prominent heading in the pull request description.
  */
 const SAFE_HOST_DEPENDENCY_EXPORTS = {
+  '@deepseek-ai/dsh-atomic-write': ['withFileLock'],
+  '@deepseek-ai/dsh-computer-use/brand': ['ComputerUseProviderName'],
   '@deepseek-ai/dsh-credentials': ['credentialKey'],
   '@deepseek-ai/dsh-deque': ['Deque'],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
@@ -61,6 +63,11 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 
 /** Runtime exports that require every consumer to resolve the provider's shared peer instance. */
 const PEER_REQUIRED_HOST_EXPORTS = {
+  // CUA checks UserQuestionError and preserves AttachmentError from image admission.
+  '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
+  '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
+  // `instanceof` checks need the translator's own class instance.
+  '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget'],
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
@@ -100,18 +107,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Whether a package manifest declares a dynamically loaded Client entry. */
 export function hasClientDeclaration(dshField: unknown): boolean {
   return isRecord(dshField) && Object.hasOwn(dshField, 'client')
-}
-
-/** Whether the repository policy flattens one package's non-Cordis peers. */
-export function usesFlattenedPackageDependencies(
-  manifestPath: string,
-  packageName: string,
-  dshField: unknown,
-  policy: PackageDependencyPolicy = PACKAGE_DEPENDENCY_POLICY,
-): boolean {
-  if (!manifestPath.startsWith('packages/') || manifestPath.startsWith('packages/experimental/')) return false
-  if (policy.hostPackages.includes(packageName)) return true
-  if (manifestPath.startsWith('packages/client/')) return true
-  const included = hasClientDeclaration(dshField) || policy.clientFaceInclude.includes(packageName)
-  return included && !policy.clientFaceExclude.includes(packageName)
 }

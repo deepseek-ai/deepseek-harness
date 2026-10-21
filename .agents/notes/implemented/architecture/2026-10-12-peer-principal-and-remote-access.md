@@ -57,12 +57,14 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
   readonly signal: AbortSignal
+  /** Forwarded human-interaction participation; independent of authorization. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 
 // @deepseek-ai/dsh-client-connection
 export class Peer implements PeerScope {
-  constructor(owner: Context, options: { readonly principal: Principal })
+  constructor(owner: Context, options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' })
 }
 
 interface HostConnectionHandle {
@@ -71,7 +73,7 @@ interface HostConnectionHandle {
   /** Network admission: the admitted Peer or the refusal status. */
   admit(request: ConnectionTrustRequest): PeerAdmission
   /** In-process only; disposed with the Context that read `ctx.connection`, or earlier by dispose(). */
-  createPeer(options: { readonly principal: Principal }): PeerScope
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
 }
 
 interface ConnectionFetchHandler {
@@ -90,6 +92,7 @@ wireStream.open(endpoint, payload, uplink, peer: PeerScope, signal)          // 
 | Browser connections share `browserPeer` | Every browser connection shares one Peer, and every use site names `connection.browserPeer` explicitly; there is no fallback variable. The in-page Host (webworker-runtime) also passes `browserPeer` explicitly |
 | In-process Host automation | Code that calls Remote methods creates its own Peer with `createPeer({ principal })`. No production caller exists yet, so no fixed Host Peer is pre-provisioned |
 | Multiple Peers | Each `createPeer()` returns an independent Peer; liveshare is to create one per viewer connection (wired on the #3854 side) |
+| Interaction participation | `Peer(owner, { principal, interactions? })` and `createPeer()` default omitted `interactions` to `answer`. `none` refuses `$events` and `$events/result` for every principal, even owner; this is independent of method-level RBAC. Answering owner Peers receive waterfalls, and non-owner Peers receive only RBAC-authorized broadcasts and cannot answer |
 | Exact Fetch routes | Exact routes such as file-upload, present-open, media-references, session-log-export, and inspector bypass the Gateway; the shared Fetch handler answers 403 to every non-owner Peer |
 
 ### Identity types
@@ -547,9 +550,9 @@ The review rule's home is the "`@Remote` marks capability methods" section of [R
 
 ### Out of scope and future work
 
-- The `/connect` handshake, API cookies, one Peer per API connection, and WebSocket lifetimes belong to pr-5945.
+- The API-only `/connect` handshake, API cookies, one Peer per API connection, and WebSocket lifetimes are described in [Peer-scoped connect handshake](2026-10-09-operator-scoped-connect-handshake.md).
 - Multiple browser Peers (such as one per tab): every browser connection shares `browserPeer`.
-- Interaction participation (interactions) and approval isolation by principal come with later work; non-owners currently receive only authorized `$events` broadcast frames.
+- Interaction participation is attached to each Peer. A non-owner with `interactions: 'answer'` still receives only RBAC-authorized broadcast frames and cannot answer owner waterfalls; per-principal approval handling remains outside this mechanism.
 - `agent-preset/selected` and the other forwarded events declare no resources and are decided on `global`; when its viewers need a Session event, #3854 declares that event's resources and lists `event:<name>` in a role.
 - Liveshare integration (declaring `share-viewer`, one Peer per viewer connection, defining roles and registering a policy, removing `origin` / `prompt/origin` / `READ_ENDPOINTS`) happens on the #3854 side.
 - `session/cancel` ownership checks, the fork `childSessionId`, and `ToolExecutionInput.turn` do not change.

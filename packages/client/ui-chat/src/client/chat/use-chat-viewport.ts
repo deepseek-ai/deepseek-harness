@@ -65,6 +65,10 @@ export class ChatViewport {
   private observation: { top: number; landing: ViewportLanding | null } = { top: 0, landing: null }
   private paging: PagingPosition | null = null
   private reader: FoldReader | null = null
+  /** Content overflow at the latest scroll or resize measurement; follow-intent commits reuse it. */
+  private overflowing = false
+  /** Whether the column carries `data-chat-tail-pinned`. */
+  private tailPinned = false
   /** The pending or running fold batch lands at the tail. */
   private tailRequested = false
   /** Switches the running batch to a tail landing; null while no batch runs. */
@@ -96,9 +100,12 @@ export class ChatViewport {
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(() => {
         if (this.elements !== elements) return
+        // Read while layout is still clean, before this callback writes room or scroll positions.
+        const overflowing = this.contentOverflows(scrollMetrics(elements.scroller))
         this.reclaimBelow()
         this.invalidate()
         this.events?.resize()
+        this.refreshTailPin(overflowing)
       })
       this.observer.observe(column)
       this.observer.observe(scroller)
@@ -110,7 +117,12 @@ export class ChatViewport {
   detach(): void {
     this.stopPreserving()
     this.motion.clear()
-    if (this.elements !== null) this.elements.scroller.style.overflowAnchor = ''
+    if (this.elements !== null) {
+      this.elements.scroller.style.overflowAnchor = ''
+      delete this.elements.column.dataset.chatTailPinned
+    }
+    this.overflowing = false
+    this.tailPinned = false
     this.elements?.scroller.removeEventListener('scroll', this.onScroll)
     this.elements?.scroller.removeEventListener('scrollend', this.onScrollEnd, true)
     for (const type of READING_INTENTS) this.elements?.scroller.removeEventListener(type, this.onIntent, true)
@@ -174,7 +186,12 @@ export class ChatViewport {
    */
   bindReader(reader: FoldReader): () => void {
     this.reader = reader
-    return () => { if (this.reader === reader) this.reader = null }
+    this.refreshTailPin()
+    return () => {
+      if (this.reader !== reader) return
+      this.reader = null
+      this.refreshTailPin()
+    }
   }
 
   /**
@@ -754,16 +771,47 @@ export class ChatViewport {
     this.invalidate()
     if (this.paging !== null) {
       this.events?.resize()
+      this.refreshTailPin()
       return
     }
     const scroll = this.readScroll()
     if (scroll !== null) this.events?.scroll(scroll)
+    this.refreshTailPin(scroll === null ? undefined : this.contentOverflows(scroll.metrics))
+  }
+
+  /**
+   * Mark the column while the tail is pinned: the reader follows the floor with no unsampled reader
+   * movement, the test fold batches use for a tail landing, and the content overflows with no fold room
+   * below it, so following scrolls absorb output growth and the status keeps its on-screen position. Fold
+   * room, like the empty space below content that fits, takes growth before any scroll, so the status moves
+   * there. The first-output slide runs at zero duration while pinned. A resize calls this after its own
+   * follow scroll, before paint, so a slide that starts in that frame finishes before it is drawn; scroll and
+   * scrollend call it after delivering the sample, and follow-intent commits call it with the latest
+   * measurement. The attribute changes only with the pin.
+   * @param overflowing - a fresh overflow measurement; omitted, the latest one is reused.
+   */
+  refreshTailPin(overflowing = this.overflowing): void {
+    this.overflowing = overflowing
+    const elements = this.elements
+    if (elements === null) return
+    const reader = this.reader
+    const pinned = overflowing && this.spacerHeight() === 0 && reader !== null && reader.follow.active && !reader.pending()
+    if (pinned === this.tailPinned) return
+    this.tailPinned = pinned
+    if (pinned) elements.column.dataset.chatTailPinned = ''
+    else delete elements.column.dataset.chatTailPinned
+  }
+
+  /** Room below closing rows is not content: only rows taller than the scrollport scroll on growth. */
+  private contentOverflows(metrics: ViewportMetrics): boolean {
+    return metrics.floor - this.spacerHeight() > 0
   }
 
   private readonly onScrollEnd = (event: Event): void => {
     if (event.target === this.elements?.scroller) {
       this.events?.scrollEnd(true)
       this.reclaimBelow()
+      this.refreshTailPin()
     } else if (event.target instanceof HTMLElement && event.target.hasAttribute('data-step-process-body')) this.events?.scrollEnd(false)
   }
 

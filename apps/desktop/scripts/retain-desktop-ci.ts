@@ -1,4 +1,4 @@
-/** Retain completed CI packages and a credential-free request for the publishing workflow. */
+/** Retain completed CI packages for later manual publication. */
 import { appendFile, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
@@ -6,6 +6,7 @@ import { desktopBuildRecordFilename, desktopUpdateMetadataFilename, resolveDeskt
 import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs'
 import { retainDesktopRelease, type DesktopRetainedSource } from './desktop-release-store.ts'
 import { validateDesktopBuildVersion } from './desktop-build-version.mjs'
+import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]
@@ -29,7 +30,7 @@ export function desktopReleasesRoot(env: NodeJS.ProcessEnv): string {
  * Save the complete installer inventory for a successful package job, without reading signing secrets.
  * @param env Actions identity, resolved package version and machine preset selection.
  * @param appRoot Desktop checkout directory; defaults to this script's owning app.
- * @returns Retained directory. Publish requests for debugging packages reject before copying.
+ * @returns Retained directory, including explicitly qualified debugging packages.
  */
 export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(import.meta.dirname, '..')): Promise<string> {
   const target = resolveDesktopBuildTarget(env)
@@ -38,15 +39,10 @@ export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(
   const settings = loadDesktopPackageEnvironment(platform, env, appRoot, { unsigned: true })
   const preset = settings.DSH_PACKAGING_PRESET
   if (preset !== 'test' && preset !== 'production') throw new Error('desktop retention: a machine preset is required')
-  const publish = env.PACKAGE_PUBLISH === 'true'
-  if (!['true', 'false', undefined].includes(env.PACKAGE_PUBLISH)) throw new Error('desktop retention: invalid publish selection')
   if (windows && !['signed', 'unsigned'].includes(env.PACKAGE_SIGNING ?? '')) throw new Error('desktop retention: invalid signing selection')
   if (!windows && !['true', 'false'].includes(env.PACKAGE_SKIP_NOTARIZATION ?? '')) throw new Error('desktop retention: invalid notarization selection')
   const qualification = windows ? (env.PACKAGE_SIGNING === 'signed' ? 'signed' : 'unsigned')
     : (env.PACKAGE_SKIP_NOTARIZATION === 'true' ? 'unnotarized' : 'notarized')
-  if (publish && (qualification === 'unsigned' || qualification === 'unnotarized')) {
-    throw new Error('desktop retention: publishing requires signed Windows or notarized macOS packages')
-  }
   const product: { version: string } = JSON.parse(await readFile(join(appRoot, 'package.json'), 'utf8'))
   const version = validateDesktopBuildVersion(required(env, 'PACKAGE_VERSION'), product.version)
   const source: DesktopRetainedSource = {
@@ -56,7 +52,7 @@ export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(
     channel: resolveDesktopUpdateChannel(settings),
     runnerName: required(env, 'RUNNER_NAME'), target, preset, productVersion: product.version, version,
     testReleaseId: preset === 'test' ? (settings.DOWNLOAD_TEST_RELEASE_ID || null) : null,
-    publishRequested: publish, qualification,
+    qualification,
   }
   const paths = desktopTargetBuildPaths(target)
   // The CLI's checkout owns these paths; alternate app roots are used by fixtures.
@@ -71,8 +67,10 @@ export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(
   }
   const retained = await retainDesktopRelease(desktopReleasesRoot(env), source, names.map(name => join(artifacts, name)))
   if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `directory=${retained}\n`)
+  const nextStep = desktopPublishQualificationError(qualification)
+    ?? `Publish separately with package_run_id=${env.GITHUB_RUN_ID} and package_run_attempt=${env.GITHUB_RUN_ATTEMPT}`
   if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-    `\nRetained package: ${env.GITHUB_RUN_ID}/${env.GITHUB_RUN_ATTEMPT}\n\nPublish requested: ${publish}\n`)
+    `\nRetained package: ${env.GITHUB_RUN_ID}/${env.GITHUB_RUN_ATTEMPT}\n\n${nextStep}\n`)
   return retained
 }
 

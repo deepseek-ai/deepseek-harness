@@ -106,6 +106,8 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       // win32.spec's injected bindings and exercised natively by every
       // Windows suite through the real backend.
       'packages/session/session-persistence-jsonl/src/lease.ts',
+      // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
+      'packages/experimental/cua-macos/src/shared-native.ts',
     ]
   : []
 
@@ -304,7 +306,6 @@ export default defineConfig({
         // Keep already-complete Inspector modules under the per-file gate and
         // enumerate the remaining direct-test debt instead of exempting src/**.
         // TODO(inspector): close these branch gaps and remove the entries.
-        'packages/experimental/inspector/src/host/plugin.ts',
         'packages/experimental/inspector/src/shared/bridge/{control-codec,rpc}.ts',
         'packages/experimental/inspector/src/shared/bridge/messages/observation.ts',
         'packages/experimental/inspector/src/shared/bridge/messages/query/codec.ts',
@@ -330,6 +331,9 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
+        // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
+        // its built entry, while source tests exercise mountCuaPermissions and its UI.
+        'packages/experimental/cua/src/client/index.ts',
         // The mods band entry imports the bridge's generated Remote contribution, which exists only in lib;
         // the Web snapshot exercises the built entry, while source tests cover mountModsBand.
         'packages/experimental/client-ui-claude-code-mods/src/client/index.ts',

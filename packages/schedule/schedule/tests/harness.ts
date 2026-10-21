@@ -1,6 +1,7 @@
 /** Host Schedule tests use real domain storage and an explicit Session resolver. */
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -67,11 +68,13 @@ export async function harness(options: {
   pool?: MemoryMediaPool
   backend?: StorageBackend
   direct?: true
+  sessionController?: false
   config?: Config
 } = {}) {
   const ctx = new Context()
   options.onContext?.(ctx)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
@@ -87,7 +90,7 @@ export async function harness(options: {
     return async () => { await facility.closeAll(); unmount() }
   })
   const resolve = vi.fn<Context['sessionController']['resolveAgent']>(async () => { throw new Error('missing Session') })
-  ctx.provide('sessionController', { resolveAgent: resolve } as never)
+  if (options.sessionController !== false) ctx.provide('sessionController', { resolveAgent: resolve } as never)
   const flush = vi.fn(async () => {})
   ctx.on('session/flush', flush)
   // This fixture supplies flush behavior above; Schedule does not invoke persistence methods directly.
@@ -101,7 +104,14 @@ export async function harness(options: {
   } else {
     fiber = await ctx.plugin(ScheduleService, options.config)
   }
-  return { ctx, service: ctx.schedule, pool, resolve, flush, fiber }
+  const resolveAgent = async (sessionId: SessionId): Promise<Agent> => {
+    const controller = ctx.get('sessionController')
+    if (controller === undefined) throw new Error('schedule: no Session activation provider')
+    const result = await controller.resolveAgent(sessionId)
+    if ('error' in result) throw result.error
+    return result.agent
+  }
+  return { ctx, service: ctx.schedule, pool, resolve, resolveAgent, flush, fiber }
 }
 
 /**

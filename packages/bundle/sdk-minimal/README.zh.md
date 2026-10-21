@@ -38,6 +38,8 @@ dsh --profile sdk-minimal
 
 该 profile 只挂载一套持久 shell：Linux 和 macOS 使用 Bash，Windows 使用 PowerShell。两套配置都使用 300 秒超时与一个 agent 自有终端；另一平台的配置项保持禁用。
 
+[Session 检查点](../../session/session-checkpoint-policy/README.zh.md)会在每次模型请求、顶层工具执行和 agent step 之前刷盘。调度会等待刷盘完成，持久化失败时停止，因此第一次模型请求也会等待原生文件锁初始化。最后一段回复仍依赖后台写入或成功关闭来保存；检查点不能保证强制终止时尚未刷盘的事件不丢失。
+
 与其他随附 profile 一样，它统一挂载 [MCP 资源](../../mcp/mcp-resources/README.zh.md)一次。只需配置 [MCP 客户端条目](../../mcp/mcp-client/README.zh.md)即可添加服务器。其他提供方挂载的客户端也属于已配置状态。调用方作用域中未配置服务器时，MCP 不贡献提示词文本或工具，默认仍为 shell、`read_image` 与 `working_directory` 三个工具。
 
 -----

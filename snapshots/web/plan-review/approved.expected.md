@@ -5,10 +5,15 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: "plan Plan mode on. Use /plan off to leave. Plan a small change: add a --greeting flag to a CLI. Do not read or write any files. Call exit_plan_mode with a short plan of at most five bullet points. Once the plan is approved, reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"
+- paragraph:
+  - text: Since the user has explicitly asked me not to read or write any files and to go straight to planning, I'll proceed with
+  - code: exit_plan_mode
+  - text: .
 - paragraph: DONE
 - 'button "Open plan: Add `--greeting` flag to CLI"': "Add `--greeting` flag to CLI Plan · Markdown Open"
 - button "Copy"

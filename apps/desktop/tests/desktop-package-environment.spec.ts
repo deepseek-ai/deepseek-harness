@@ -52,6 +52,25 @@ describe('Desktop local packaging configuration', () => {
     })
   })
 
+  it('takes pack concurrency from the Windows file without inheriting ambient tuning', async () => {
+    await withDirectory(async (directory) => {
+      const parent = { DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: '8' }
+      await writeFile(join(directory, '.env.windows'), '')
+      expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', parent, directory)).packConcurrency).toBe(4)
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY=2\n')
+      expect(resolveWindowsPackageSettings(loadDesktopPackageEnvironment('win32', parent, directory)).packConcurrency).toBe(2)
+    })
+  })
+
+  it.each(['', '0', '-1', '1.5', 'Infinity', '01', '9007199254740992'])('rejects invalid pack concurrency %s', (value) => {
+    expect(() => resolveWindowsPackageSettings({ DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value })).toThrow('PACK_CONCURRENCY')
+    for (const options of [{ unsigned: true }, { prepareOnly: true }]) {
+      expect(() => {
+        validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_WINDOWS_PACK_CONCURRENCY: value }, WINDOWS, options)
+      }).toThrow('PACK_CONCURRENCY')
+    }
+  })
+
   it.each(['1', '2', '4', '8'])('accepts cache concurrency %s', (value) => {
     const settings = resolveWindowsPackageSettings({ DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_CONCURRENCY: value })
     expect(settings.signatureCacheConcurrency).toBe(Number(value))

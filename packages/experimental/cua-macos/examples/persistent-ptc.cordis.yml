@@ -1,0 +1,6 @@
+- id: ptc-runtime
+  config:
+    executionMode: persistent-in-memory
+- id: tools
+  config:
+    mode: ptc

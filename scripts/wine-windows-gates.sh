@@ -243,11 +243,17 @@ grep -q '^smoke: win32 x64' "$scratch/logs/smoke.log" || { echo 'wine-windows-ga
 
 # ---- the two blocking surfaces, concurrently ------------------------------
 # The build mirrors the root build:lib:host and build:lib:client scripts:
-# compile and bundle the Host face, bundle apps/desktop from the Host lib/
-# outputs, then compile and bundle the Client face.
+# generate metadata, compile the Host package projects, type-check the Host
+# aggregate program, bundle the Host face, bundle apps/desktop from the Host
+# lib/ outputs, then compile and bundle the Client face. The Host compile is two
+# invocations because that is how the supported build splits it; a single
+# `tsc -b` holds the reference graph and the aggregate program in one process
+# and exceeds the heap the Host face is budgeted.
 # Both statuses are captured so one failure cannot hide the other's result.
 build_gate() {
-  wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false || return $?
+  wine_node "$scratch/logs/host-typert.log" --import tsx/esm scripts/generate-typert.ts || return $?
+  wine_node "$scratch/logs/host-references.log" --import tsx/esm scripts/compile-referenced-projects.ts host || return $?
+  wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -p tsconfig.host.json --pretty false || return $?
   wine_node "$scratch/logs/host-tsdown.log" "$tsdown_js" --env.DSH_BUILD_FACE host || return $?
   (cd apps/desktop && wine_node "$scratch/logs/desktop-tsdown.log" "../../$tsdown_js") || return $?
   wine_node "$scratch/logs/client-tsc.log" "$tsc_js" -b tsconfig.client.json --pretty false || return $?
@@ -277,7 +283,8 @@ report() {
     for log in "$@"; do tail -n 200 "$log" >&2 || true; done
   fi
 }
-report 'build (Host tsc/tsdown, desktop tsdown, Client tsc/tsdown)' "$build_status" \
+report 'build (Typert, Host tsc/tsdown, desktop tsdown, Client tsc/tsdown)' "$build_status" \
+  "$scratch/logs/host-typert.log" \
   "$scratch/logs/host-tsc.log" \
   "$scratch/logs/host-tsdown.log" \
   "$scratch/logs/desktop-tsdown.log" \

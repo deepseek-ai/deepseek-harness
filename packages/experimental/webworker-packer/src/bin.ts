@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Pack a Preview deployment from this repository: compose and lower the base
- * image, then write each named fixture overlay and their manifest.
+ * Pack a Preview deployment from this repository: materialize and lower the
+ * base image for one shipped profile, write its lazy chunk archives beside it,
+ * then write each named fixture overlay and their manifest.
  *
  * Usage: dsh-pack-vfs-image --out <file> [--profile web] [--root /dsh]
  *        node --import tsx/esm src/bin.ts --out ../../apps/web/dist/preview/vfs-image.tar.gz
@@ -14,9 +15,8 @@ import {
   PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
   type PreviewFixtureManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
-import { packVfsImage } from './pack.ts'
 import {
-  composeProfile, configTrees, describePack, indexWorkspacePackages, packPreviewFixture, previewFixtures,
+  describePack, packPreviewFixture, packRepositoryImage, previewFixtures,
 } from './repository.ts'
 
 /**
@@ -45,14 +45,7 @@ const profile = flag('profile', 'web')
 const out = flag('out')
 const outputFile = isAbsolute(out) ? out : resolve(process.cwd(), out)
 
-const result = packVfsImage({
-  config: composeProfile(repoRoot, profile),
-  profile,
-  root: flag('root', '/dsh'),
-  workspaces: indexWorkspacePackages(repoRoot),
-  resolveFrom: repoRoot,
-  configTrees: configTrees(repoRoot),
-})
+const result = packRepositoryImage(repoRoot, profile, flag('root', '/dsh'))
 
 if (result.missing.length > 0) {
   throw new Error(`vfs image: ${String(result.missing.length)} dependencies did not resolve; the image would be incomplete`)
@@ -60,6 +53,12 @@ if (result.missing.length > 0) {
 
 mkdirSync(dirname(outputFile), { recursive: true })
 writeFileSync(outputFile, result.image)
+// Lazy archive names are relative to the base image, which the Worker resolves them against.
+for (const archive of result.lazyArchives) {
+  const path = join(dirname(outputFile), archive.name)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, archive.image)
+}
 
 const fixtureDefinitions = previewFixtures(repoRoot)
 const fixtureDirectory = join(dirname(outputFile), 'fixtures')

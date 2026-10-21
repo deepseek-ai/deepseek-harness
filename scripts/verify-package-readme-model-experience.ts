@@ -45,6 +45,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/client/ui-entry-customization': { kind: 'none', reason: 'Controls browser launchers and prepares a reviewable Creator draft without submitting model input.' },
   'packages/experimental/client-ui-cot-translation': { kind: 'indirect', reason: 'The translator owns optional paid queries; normal Session activation delegates startup context to the preset.' },
   'packages/experimental/cot-translation-bundle': { kind: 'indirect', reason: 'The GUI consumer delegates paid query prompts to the translator and normal activation context to the Session preset.' },
   'packages/client/product-analytics': { kind: 'none', reason: 'Desktop analytics observes selected interactions without contributing model context or Session events.' },
@@ -52,6 +53,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/api-speech-to-text': { kind: 'none', reason: 'Transports audio and preparation state; ordinary user submission owns model-visible text.' },
   'packages/experimental/speech-to-text-sensevoice': { kind: 'none', reason: 'Local recognition returns transient text without modifying model context.' },
   'packages/experimental/client-ui-voice-input': { kind: 'none', reason: 'Inserts reviewable text into the unsent draft without submitting to the Agent.' },
+  'packages/experimental/plugin-market-bundle': { kind: 'indirect', reason: 'Mounts the pluginMarket service, which lets the Creator preset register the plugin_market tool documented in packages/boot/plugin-market.' },
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },
@@ -91,6 +93,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/util/chunked-list': { kind: 'none', reason: 'Immutable collection primitive; registers nothing model-facing.' },
   'packages/util/package-manifest': { kind: 'none', reason: 'Type declarations only; registers nothing model-facing.' },
   'packages/util/lazy-require': { kind: 'none', reason: 'Host module-loading primitive; registers nothing model-facing.' },
+  'packages/util/plugin-detail': { kind: 'none', reason: 'Pure document selection for plugin detail pages; registers nothing model-facing.' },
+  'packages/util/plugin-market-index': { kind: 'indirect', reason: 'Pure index validation; the plugin_market tool owns the entries it returns to the model.' },
   'packages/util/time': { kind: 'indirect', reason: 'Pure zone validation; the consumer that records a canonical zone owns the model-visible line derived from it.' },
   'packages/core/agent-default-model': { kind: 'indirect', reason: 'The service supplies a ModelSelection; request assembly and adapters own the model-visible request.' },
   'packages/llm/deepseek-llm-api-extensions': { kind: 'indirect', reason: 'The registry contributes model-hidden provider fields; dsh-llm-deepseek owns their wire placement.' },
@@ -136,6 +140,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-reference': { kind: 'indirect', reason: 'Browser-side reference selection delegates file guidance and session snapshot preparation to Host-owned providers.' },
   'packages/client/ui-commands': { kind: 'indirect', reason: 'The dispatch paths trigger the host command.execute RPC; each command handler\'s host package owns any model-visible effect.' },
   'packages/client/ui-model-selection': { kind: 'indirect', reason: 'Selection routes session.selectModel; the Host snapshots the selection at the next prompt-assembly boundary and owns the model-visible effect.' },
+  'packages/client/ui-deepseek-model-label-1017': { kind: 'none', reason: 'Temporary browser release badge; leaves model catalogs and requests unchanged.' },
   'packages/client/ui-goal': { kind: 'indirect', reason: 'The strip verbs route goal.* mutations; the host GoalService owns the model-visible goal/change context message.' },
   'packages/extensions/ui-cordis': { kind: 'indirect', reason: 'The definition card drives the host dynamic run/stop verbs that the model\'s cordis_run/cordis_stop tools also reach; the runner owns any model-visible effect.' },
   'packages/client/ui-permission-presets': { kind: 'indirect', reason: 'The picker submits the host /permission command; the knob events it appends own the model-visible effect through the sandbox/approval consumers.' },
@@ -159,6 +164,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-settings': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-settings-general': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-settings-models': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
+  'packages/client/ui-plugin-market': { kind: 'none', reason: 'Browser-side Discover tab; registers nothing model-facing.' },
   'packages/client/ui-plugin-manager': { kind: 'none', reason: 'Browser-side management surface; registers nothing model-facing.' },
   'packages/client/ui-settings-plugin-inventory': { kind: 'none', reason: 'Browser-side inventory projection; registers nothing model-facing.' },
   'packages/client/locale': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },

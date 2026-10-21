@@ -38,7 +38,7 @@ getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导�
 
 getProfile / getBalance 将保存的授权 token 通过 x-dsh-auth-token 请求头，向 platformOrigin 上的 GET /auth-api/v0/users/current 和 GET /api/v0/users/get_user_summary 发起请求。授权签发来源必须与该来源一致。Host 只投影账号 UID、资料名称、头像 URL、由 Platform 脱敏的手机号或邮箱（原样保留），以及 normal_wallets / bonus_wallets 的币种和余额字符串，丢弃响应 token 与其他字段。余额和赠金金额字符串只要符合 Platform Web 客户端交给 big.js 的数字文法即可通过，该文法和 big.js 一致，允许省略整数或小数部分以及十进制指数，因此 0E-16、5.0000000000000000 这类值仍然有效；原始字符串会保留，NaN、Infinity 和非法文本仍被拒绝。赠送钱包不计入充值余额。凭证变化和销毁会使进行中的查询失效。
 
-getUnnotifiedBonuses 读取同一来源上的 GET /api/v0/users/get_unnotified_bonuses，ackBonusNotified 向 POST /api/v0/users/ack_bonus_notified 发送仅含订单号的 JSON 正文，两者都按调用方元数据组装这五个客户端请求头。二者都先为捕获到的授权解析账号身份，因此退登或切号时返回 null 或 false，而不会确认另一个账号的赠金；一次读取只有在同一凭证生命周期内全部结算后才发布。Host 按 Platform 返回顺序转发赠金列表，把每条的 msg 映射为 message，其余字段不额外丢弃；格式错误、其他 HTTP 失败和其他业务失败都会抛出，而凭据被拒绝（HTTP 401 或响应码 `40003`）会使当前授权失效并返回 null 或 false。
+getUnnotifiedBonuses 读取同一来源上的 GET /api/v0/users/get_unnotified_bonuses，ackBonusNotified 向 POST /api/v0/users/ack_bonus_notified 发送仅含订单号的 JSON 正文，两者都按调用方元数据组装这五个客户端请求头。二者都先为捕获到的授权解析账号身份，因此退登或切号时返回 null 或 false，而不会确认另一个账号的赠金；一次读取只有在同一凭证生命周期内全部结算后才发布。Host 按 Platform 返回顺序转发赠金列表，保留字符串字段 order_id、expires_at 和 msg，并映射为 orderId、expiresAt 和 message。可选的字符串 title 原样转发；null 或缺省表示使用客户端默认标题。expires_at 为空字符串、null 或缺省时，统一转为空字符串 expiresAt，表示通知永不过期。订单号不要求 UUID 格式；campaign、amount、currency 和 granted_at 均为可选元数据，不做校验，分别原样转发为 campaign、amount、currency 和 grantedAt；格式错误、其他 HTTP 失败和其他业务失败都会抛出，而凭据被拒绝（HTTP 401 或响应码 `40003`）会使当前授权失效并返回 null 或 false。
 
 余额请求使用 balanceTimeoutMs（默认 30,000ms）；超时返回失败结果，不清除账号，也不制造零余额。在插件行配置 platformOrigin、allowLoopbackHttp、requestTimeoutMs、balanceTimeoutMs 和 attemptTimeoutMs。HTTP 仅用于显式启用的本机开发。提供者先在现有 Host webServer 注册 /oauth/callback，再调用 auth_init；校验 state、使用 S256 PKCE 授权码兑换一次，并在跳转 auth_exchange.biz_data.authorized_url 前提交授权记录。浏览器地址默认要求匹配配置的平台来源，并始终要求固定的 /dsh/authorize 或 /dsh/authorized 路径。完成页地址将 `login_source` 设为发起登录的客户端类型（`web` 或 `desktop`），并保留平台返回的其他查询参数。设备标识是独立的随机 UUID 记录，由使用同一凭证存储的进程共享；device_model 报告操作系统和架构。
 
@@ -59,7 +59,7 @@ getUnnotifiedBonuses 读取同一来源上的 GET /api/v0/users/get_unnotified_b
 
 已鉴权客户端提供浏览器可访问的回调来源（含 SSH 本地转发端口）和 UI 类型。提供者固定回调路径，并在初始化与兑换时使用同一个 redirect_uri。回调请求使用 state 和 PKCE 校验，不要求 RPC 鉴权。完成、取消和卸载仅移除本次尝试的路由。兑换失败发布 failed 状态，不自动重试：Web 关闭授权标签页，原标签页显示失败弹窗；回调页尝试自行关闭，并提供手动关闭提示。Desktop 收到 HTTP 204，并通过账号状态流聚焦现有登录界面。
 
-Host 诊断通过标准输出及 Host 调试器 Console 输出，前缀为 `[deepseek-account]`。日志包含接口路径、HTTP 状态、数值响应码、失败阶段、校验失败的字段路径、实际类型和校验码，以及浏览器 URL 拒绝规则，不包含请求头、请求和响应正文、授权 URL 或原始异常。
+Host 诊断仅在请求、响应校验或登录失败时，通过 `console.error` 写入标准错误及 Host 调试器 Console，前缀为 `[deepseek-account]`。成功请求、调用方主动取消和正常账号状态变化不输出日志；请求超时仍记录为失败。失败诊断包含接口路径、HTTP 状态、数值响应码、失败阶段、校验失败的字段路径、实际类型和校验码，以及浏览器 URL 拒绝规则，不包含请求头、请求和响应正文、授权 URL 或原始异常。
 
 `rewriteBrowserOrigin` 默认为 `false`，要求浏览器地址同源。私有开发 patch 可设为 `true`，将授权页和完成页地址映射到 `platformOrigin`，保留固定路径和查询字符串。原地址必须使用 HTTPS 或已匹配配置来源；仍拒绝用户名密码、片段和非预期路径。发布的 profile 保持严格同源校验。
 
@@ -99,7 +99,7 @@ attemptTimeoutMs 包含初始化、等待浏览器和兑换的耗时。初始化
 
 [桌面登录决策](../../../.agents/notes/implemented/architecture/2026-09-14-deepseek-account-login.zh.md)记录取消和存储的职责。
 
-登录后首次读取资料使用 auth_exchange 返回并经筛选的 user。user 为 null 或格式无效时回退到 current；后续刷新及 Host 重启也查询 current。current 请求失败时保留 Host 内存中同一凭证最近一次成功的资料；凭证变更或提供者销毁时清空。current 成功返回的稳定账号 ID 首次可用或变化时会通知 watch 订阅者，供标识使用方重新读取 getPlatformSession；重复相同 ID 的刷新不通知。exchange 负责登记提交的设备信息。
+登录后首次读取资料使用 auth_exchange 返回并经筛选的 user。user 为 null 或格式无效时回退到 current；后续刷新及 Host 重启也查询 current。current 请求失败时保留 Host 内存中同一凭证最近一次成功的资料；凭证变更或提供者销毁时清空。current 成功返回的稳定账号 ID 首次可用或变化时仅通知使用 `watch(signal, true)` 的 Host 订阅者，供标识使用方重新读取 getPlatformSession；重复相同 ID 的刷新不通知。exchange 负责登记提交的设备信息。
 
 accountRequestHeaders 覆盖 requestHeaders，供 current、余额以及内嵌 Platform 页面/API 请求使用。Cookie 按名称合并，路由覆盖保留其他部署 Cookie。授权初始化、兑换、取消和退登保持使用 requestHeaders。两组请求头仅供 Host 和 Electron 主进程使用；快照的 userId 同样仅限 Host，渲染层 bootstrap 仅接收 origin 和 token。
 

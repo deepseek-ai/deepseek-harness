@@ -38,8 +38,8 @@ Arguments:
 Options:
   -V, --version                  output the version number
   --profile <name>               the profile under $DSH_HOME/profiles to boot
-  --from-default-profile <name>  initialize a new custom profile from a shipped
-                                 profile template
+  --from-default-profile <name>  replace a custom profile with a fresh copy of a
+                                 shipped profile template
   --patch <path>                 extra patch-list overlay applied after the
                                  profile layer (repeatable)
   --dump-config                  print the composed profile tree and exit
@@ -51,7 +51,7 @@ Options:
 Examples:
   dsh web                                   boot the web profile (same as: dsh --profile web)
   dsh rescue --from-default-profile web
-                                            create rescue from the shipped web template, then boot it
+                                            recreate rescue from the shipped web template, then boot it
   dsh headless "run the tests"              answer one task, print the result, and exit
   dsh tui --patch ./extra.yml               boot a custom profile with one extra overlay
   dsh tui --resume <session>                arguments after the launcher flags reach the app
@@ -110,21 +110,29 @@ Usage: dsh --profile headless [options] [task...]
 Answer one task and exit; the answer goes to stdout and diagnostics to stderr.
 
 Arguments:
-  task               the task text; multiple words are joined by spaces, and `-`
-                     reads stdin
+  task                        the task text; multiple words are joined by
+                              spaces, and `-` reads stdin
 
 Options:
-  --json             write newline-delimited run events to stdout instead of the
-                     final message
-  --session-id <id>  adopt the persisted Session with this id; an unknown id is
-                     an error
-  -h, --help         show this help
+  --json                      write newline-delimited run events to stdout
+                              instead of the final message
+  --session-id <id>           adopt the persisted Session with this id; an
+                              unknown id is an error
+  --permission-mode <preset>  select a configured permission preset for this
+                              task, including on resume
+  --approval-policy <policy>  set approval behavior after selecting the
+                              permission preset (choices: "ask", "never")
+  --add-dir <path>            allow an additional physical absolute directory
+                              under workspace-write (repeatable)
+  -h, --help                  show this help
 
 Examples:
   dsh --profile headless "run the tests"          answer one task and exit
   echo "run the tests" | dsh --profile headless   read the task from stdin
   dsh --profile headless --json "run the tests"   emit machine-readable run events
   dsh --profile headless --session-id session-… "continue"   resume an existing Session
+  dsh --profile headless --permission-mode workspace-write --add-dir /repo/.git "commit the fix"
+                                                        grant shared Git metadata for this task
 
 ```
 

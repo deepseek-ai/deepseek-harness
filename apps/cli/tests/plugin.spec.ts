@@ -87,7 +87,7 @@ it('names the exact grant command for each package a compatibility check refused
   const { stderr } = fixture()
   vi.mocked(runPluginCommand).mockResolvedValue({
     exitCode: 1, output: '', truncated: false, logPath: '/profile/log',
-    incompatible: [{ name: '@example/plugin', version: '1.2.3', runtimeVersion: '0.1.0', peers: { '@deepseek-ai/dsh': '^9.0.0' } }],
+    incompatible: [{ name: '@example/plugin', version: '1.2.3', runtimeVersion: '0.1.0', requirements: { '@deepseek-ai/dsh': '^9.0.0' } }],
   })
   expect(await runPlugin('test', ['add', '@example/plugin'])).toBe(1)
   expect(stderr.mock.calls.map(call => call[0])).toEqual([

@@ -109,7 +109,7 @@ const handle = await ctx.agents.create({
 
 创建是同一个受回滚保护的事务：构造私有会话、具象 agent 与带作用域上下文；等待可选 setup；进入两个注册表；宣告 `session/created`；等待串行 `agent/created` 监听器；随后释放已排队输入。创建运行时子 Agent 的调用方设置 `options.parentAgent`；调用方 Context 则单独拥有事务和存活句柄。Setup、commit、监听器失败或所有者 dispose 都会回滚已准备的资源。已送达的宣告仍可被观察，并有配对的销毁通知。Teardown 停止并排空驱动器、撤销作用域、关闭会话写路径、detach agent，再 detach 会话。每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
 
-工厂卸载时在整个作用域清理期间保留 inbox 投影与轮次边界投影，包括作用域内 abort 监听器发起取消的时刻，直到所有 Agent teardown 和启动任务结束。清理失败不会使这些投影提前释放。调用方卸载、工厂卸载和句柄释放等待同一次 teardown。
+loop 在发布工厂前等待 inbox 与轮次边界注册完成，并将句柄传入 Agent 的同步构造过程。工厂卸载时，全局注册可以先于 teardown 完成而消失；保留句柄在整个作用域清理期间仍可读取，包括作用域内 abort 监听器发起取消的时刻。调用方卸载、工厂卸载和句柄释放等待同一次 teardown。
 
 ### 持久化集成
 

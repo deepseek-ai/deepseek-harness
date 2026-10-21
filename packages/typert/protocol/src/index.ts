@@ -238,7 +238,7 @@ export function bindTypertRemote<Service extends object>(
   const namespace = options.namespace ?? serviceKey
   validateName('namespace', namespace)
   const ctx: unknown = Reflect.get(service, 'ctx')
-  if (ctx instanceof Context) provideInvocationAccessor(ctx)
+  if (Context.is(ctx)) provideInvocationAccessor(ctx)
   return Object.freeze({ service, serviceKey, namespace })
 }
 

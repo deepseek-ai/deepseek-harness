@@ -102,20 +102,19 @@ const subjectBuilt = [
 
 let memo: ReturnType<typeof packVfsImage> | undefined
 const packed = (): ReturnType<typeof packVfsImage> => memo ??= packVfsImage({
-  // The composition's own shape: one entry per plugin, `name:` on its own line.
-  config: `- id: subject\n  name: '${SUBJECT}'\n`,
   profile: 'image-loadable-check',
+  roster: [SUBJECT],
   workspaces,
   resolveFrom: repoRoot,
-  // Synthetic composition: nothing boots the worker assembly, so its default
+  // Synthetic roster: nothing boots the worker assembly, so its default
   // image entries must not be demanded of this one-package closure.
   entries: [],
 })
 
 let landlockMemo: ReturnType<typeof packVfsImage> | undefined
 const packedLandlock = (): ReturnType<typeof packVfsImage> => landlockMemo ??= packVfsImage({
-  config: `- id: subject\n  name: '${LANDLOCK}'\n`,
   profile: 'landlock-package-check',
+  roster: [LANDLOCK],
   workspaces,
   resolveFrom: repoRoot,
   entries: [],
@@ -123,8 +122,8 @@ const packedLandlock = (): ReturnType<typeof packVfsImage> => landlockMemo ??= p
 
 let pluginInventoryMemo: ReturnType<typeof packVfsImage> | undefined
 const packedPluginInventory = (): ReturnType<typeof packVfsImage> => pluginInventoryMemo ??= packVfsImage({
-  config: `- id: subject\n  name: '${PLUGIN_INVENTORY}'\n`,
   profile: 'plugin-inventory-check',
+  roster: [PLUGIN_INVENTORY],
   workspaces,
   resolveFrom: repoRoot,
   entries: [],
@@ -132,8 +131,8 @@ const packedPluginInventory = (): ReturnType<typeof packVfsImage> => pluginInven
 
 let webServerMemo: ReturnType<typeof packVfsImage> | undefined
 const packedWebServer = (): ReturnType<typeof packVfsImage> => webServerMemo ??= packVfsImage({
-  config: `- id: subject\n  name: '${WEB_SERVER}'\n`,
   profile: 'webserver-dependency-check',
+  roster: [WEB_SERVER],
   workspaces,
   resolveFrom: repoRoot,
   entries: [],
@@ -196,8 +195,8 @@ const archive = async (): Promise<Uint8Array> =>
     // so anything the compressor takes from its environment would read as a
     // changed tree.
     const again = packVfsImage({
-      config: `- id: subject\n  name: '${SUBJECT}'\n`,
       profile: 'image-loadable-check',
+      roster: [SUBJECT],
       workspaces,
       resolveFrom: repoRoot,
       entries: [],

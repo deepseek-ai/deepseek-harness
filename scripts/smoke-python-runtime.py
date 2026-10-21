@@ -75,21 +75,26 @@ SPAWN_NODE_COMMAND = (
 )
 LEGACY_CUSTOM_DISABLED_ROWS = (
     "agent-instructions",
+    "deliverable-file-references",
+    "file-reference-local",
     "goal",
     "goal-round-driver",
     "command-goal",
     "plan-mode",
+    "present",
     "skill",
     "skill-filesystem",
     "skill-office",
     "workspace-dependencies",
+    "time-context",
+    "tool-ask-user",
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
+    "tool-schedule",
     "tool-skill",
     "tool-str-replace-editor",
     "tool-subagent-control",
-    "tool-subagent-list-agents",
     "tool-subagent-fork",
     "tool-todo",
     "tool-web",
@@ -916,7 +921,16 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                 skill.parent.mkdir(parents=True)
                 skill.write_text("---\nname: office-docx\ndescription: CUSTOM_OFFICE_DOCX\n---\nUse the bundled Python for custom document work.\n")
             patch = root / "skills.patch.yml"
-            patch.write_text(json.dumps([{"id": "skill-office", "disabled": True}] if mode == "disabled" else []))
+            # Fix the model-visible clock in this child only; native timers stay live.
+            patch_rows = [
+                {"insert": [{"id": "authoring-clock", "name": (
+                    Path(__file__).resolve().parent / "fixtures/python-sdk-authoring-clock.mjs"
+                ).as_uri()}]},
+                {"id": "time-context", "config": {"timeZone": "UTC"}},
+            ]
+            if mode == "disabled":
+                patch_rows.append({"id": "skill-office", "disabled": True})
+            patch.write_text(json.dumps(patch_rows))
             first = len(MockModelHandler.requests)
             with DeepSeekHarness(
                 provider="deepseek-official", model="smoke-model", cwd=str(root),

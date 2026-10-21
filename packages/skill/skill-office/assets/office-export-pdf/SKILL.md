@@ -13,6 +13,6 @@ Convert the final saved Office file to a new PDF in the task workspace. Preserve
 "<node>" "<cli>" convert --input <final-office-file> --output <new-file.pdf>
 ```
 
-Check the command result, nonempty output, and `%PDF-` file signature. If a PDF reader library is already available, compare page count and extractable text with the requested content. If it is unavailable, report the extent of validation; do not generate images or install extra tools to validate a conversion. Spreadsheet PDF pages follow workbook print settings; change those settings only when requested. Conversion may differ from the native application's pagination or fonts.
+Check the command result, nonempty output, and `%PDF-` file signature, then report that extent of validation. Unless the user requests deeper checks, do not search for PDF readers, generate images, or install tools to validate a conversion. Spreadsheet PDF pages follow workbook print settings; change those settings only when requested. Conversion may differ from the native application's pagination or fonts.
 
 If export fails, preserve the usable source and report the export limitation. Do not repeatedly convert an unchanged source or use conversion to investigate a failed preview. For PDF export alone, stop after these checks. Only a request for images or visual inspection calls for `office-render`; load it before that separate operation. Deliver the requested PDF through `present` when available, keeping the file in place.

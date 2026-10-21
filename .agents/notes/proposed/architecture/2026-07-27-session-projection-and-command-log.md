@@ -24,15 +24,14 @@ A state-carrying log event MUST carry the complete post-change state, never a ba
 
 ### Host projection registry (`dsh-session-projection`, new package)
 
-A light Service Definition package: merge-extensible host-state and client-view type maps, the registry service, and zod validation for persisted state and client values. Capability-seam roles: domain host plugins provide projection units, carriers consume them, and neither knows the other.
+A light Service Definition package: local host-state definitions, a merge-extensible client-view type map, the registry service, and zod validation for persisted state and client values. Capability-seam roles: domain host plugins provide projection units, carriers consume them, and neither knows the other.
 
 What a domain registers is a **state-driven computation unit** — a pure fold plus declarations and an optional client view — never an opaque getter. The framework owns driving it (subscription, watermark, caching, and later checkpointing); the domain owns only the computation. Projections serve every business domain (session title, plan, goal, permission, todos); commands are merely one trigger path and hold no special position in this contract.
 
 ```ts ignore-check
-export interface SessionProjectionStateMap {} // host fold states
-export interface SessionProjectionMap {}      // client-visible whole values
+export interface SessionProjectionMap {} // client-visible whole values
 
-export interface ProjectionDefinition<K extends keyof SessionProjectionStateMap, S> {
+export interface ProjectionDefinition<K extends string, S> {
   key: K
   stateSchema: ZodType<S>
   persist?: boolean // host-only units opt in; client-visible units always persist
@@ -54,7 +53,7 @@ declare module 'cordis' {
 }
 ```
 
-- `SessionProjectionStateMap` types host fold states; `SessionProjectionMap` remains the one client DTO table shared by the wire block and React hook via `import type`. A unit may remain host-only by omitting `wire`. How a client value is *rendered* is the slot system's business, never the projection layer's. The state/view split is specified by the [implemented state and client-view note](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md).
+- `ProjectionDefinition<K, S>` carries each unit's host state type; `SessionProjectionMap` remains the one client DTO table shared by the wire block and React hook via `import type`. A unit may remain host-only by omitting `wire`. How a client value is *rendered* is the slot system's business, never the projection layer's. The state/view split is specified by the [implemented state and client-view note](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md).
 - **The host is the only place a projection is computed.** The framework drives every registered unit forward eagerly: each committed session event passes through `apply`; a unit uninterested in an event returns the same state reference, and an unchanged reference (`Object.is`) produces no downstream work. Clients never fold domain events — they receive finished values (baseline block + push frame below). This removes the double-implementation trap (plan's two-event fold written once, on the host) and any client-side domain code.
 - **State is always computed, never logged.** The log holds events only; the unit's state lives in the framework's per-session watermark cache (`{state, observedSeq}` per unit) and, in a later phase, in a **persisted projection cache** on the domain-KV storage seam: rows of `(sessionId, key, ver, seq, val)` (`ver` = the unit's `stateVersion`, `seq` = the watermark, `val` = the state JSON). A row is never wrong, only possibly stale — its `seq` says exactly how stale. The one read recipe, cold and live alike: take the cached state (or `init()`), forward-apply only the events past its watermark, `view` the result. Cold listings (every session's title across all workspaces) become an index read plus, at worst, a short tail replay; the session-persistence seam grows a read-from-seq primitive for that tail in the same later phase. Write policy: throttled (count/interval, configurable) plus two mandatory points — `turn/end` and detach (the live-to-cold moment). A crash between writes costs a longer tail replay, never a wrong value.
 - A domain's input event set is its own choice: todos folds `todo/write` alone; plan folds `plan/mode` plus its own `/plan` `command/run` records (see the plan section); goal folds `goal/change` metadata; session title folds its title events (retiring the bespoke `session/title` frame and the client's title-snapshot map — the fourth hand-rolled projection this seam absorbs).
@@ -161,7 +160,7 @@ Infrastructure first; the three in-flight PRs are left untouched and re-target a
 
 **Hanging the registry off `ctx.apiProxy`** — rejected: session projections are not web-specific (TUI, ACP, headless are future consumers), and domain packages must not depend on the apiproxy package. The independent seam also deletes #587's type-only import edge from api-proxy into the plan package.
 
-**A second client DTO table** — rejected: `SessionProjectionMap` remains the single client vocabulary shared by wire and UI. `SessionProjectionStateMap` is not another client view table; it types host fold state so internal state may differ from the value sent to clients.
+**A second client DTO table** — rejected: `SessionProjectionMap` remains the single client vocabulary shared by wire and UI. Each unit types its host fold state locally, independently of the value sent to clients.
 
 **Event-broadcast collection instead of a registry walk** — rejected: async listeners cannot yield the single synchronous cut that makes `asOfSeq` one consistent snapshot across all keys; registries are this repo's shape for contributions (`ctx.tools`, prompt sections, slots).
 

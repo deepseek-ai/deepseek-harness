@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包让模型创建具名 teammate、向它们发送消息、查看可用状态、等待进展、中断卡住的工作，并通过共享任务板协调。每个团队成员都会获得相同的九个工具，以及在共享工作区协调的指引。当模型只应在你明确要求后运行团队时，选择本包。它会取代同名的旧版 subagent 控件，因此同时需要两者的组合必须禁用旧定义。本包以实验性名称公开发布，但不提供稳定性保证。
+本包让模型创建具名 teammate、向它们发送消息、查看可用状态、等待进展、中断卡住的工作，并通过共享任务板协调。每个团队成员都会获得相同的九个工具，以及在共享工作区协调的指引。它会取代同名的旧版 subagent 控件，因此同时需要两者的组合必须禁用旧定义。本包以实验性名称公开发布，但不提供稳定性保证。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当模型应该自行创建与协调 teammate、而不是由人来操作 subagent 控件时，选择它。当同名的旧全局 subagent 工具必须继续可用时，请不要选择：团队工具会为团队成员取代它们，因此想同时使用两者的组合必须禁用旧定义。固定策略只在明确要求团队或 teammate 时创建成员，因此普通任务永远不会自行触发委派。
+当模型应该自行创建与协调 teammate、而不是由人来操作 subagent 控件时，选择它。当同名的旧全局 subagent 工具必须继续可用时，请不要选择：团队工具会为团队成员取代它们，因此想同时使用两者的组合必须禁用旧定义。
 
 ### 最小工作示例
 
@@ -124,7 +124,7 @@ member scope 上的一个 `team:policy` 段落说明共享的协作规则；固�
 
 #### 模型看到什么
 
-共享系统 policy 覆盖显式委派、共享 cwd 安全、任务协调、Steer 投递、inbox 接收和 Lead 等待责任。Lead 与 teammate 使用相同的九个 schema；执行时落实 Lead-only 操作。必需的 runtime context 声明 `You are the Team Lead named "lead".`，或 `You are teammate "<name>".` 与 `Your Team Lead is named "lead".`，并提供 roster 和消息操作说明。身份来自当前 Team membership，关闭可选 context 时仍保留，压缩移除快照后会恢复。从 teammate 创建的普通 fork 会收到当前 Lead 身份。
+共享系统 policy 覆盖 Team 可用性、共享 cwd 安全、任务协调、Steer 投递、inbox 接收和 Lead 等待责任。Lead 与 teammate 使用相同的九个 schema；执行时落实 Lead-only 操作。必需的 runtime context 声明 `You are the Team Lead named "lead".`，或 `You are teammate "<name>".` 与 `Your Team Lead is named "lead".`，并提供 roster 和消息操作说明。身份来自当前 Team membership，关闭可选 context 时仍保留，压缩移除快照后会恢复。从 teammate 创建的普通 fork 会收到当前 Lead 身份。
 
 #### Token 影响
 
@@ -141,7 +141,6 @@ provider／model、共享 system 策略和工具 schema 相同时，fork 保留�
 这些限制说明策略与工具无法为一支团队保证什么。它们是当前包约束，不是与其他协作方式的对比。
 
 - **提示词策略只负责协调，不负责 confinement**——它无法阻止 Bash 或外部进程写入重叠文件。
-- **不会自主创建 Team**——除非用户明确要求，普通任务不会触发 delegation。
 - **没有 Web 控制功能**——浏览器 roster 与任务板呈现不属于该运行时包。
 - **实验原型，无稳定性承诺**——本包公开发布，但孵化期间 schema 仍可自由变更。
 

@@ -15,8 +15,9 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
 
 it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
-  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { publish: { type: 'boolean', default: false },
-    test_release_id: { type: 'string', default: '', required: false } } })
+  expect(workflow.jobs.package).not.toHaveProperty('name')
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { test_release_id: { type: 'string', default: '', required: false } } })
+  expect(workflow.on.workflow_dispatch).not.toHaveProperty('inputs.publish')
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(workflow.concurrency).toEqual({ group: 'macos-desktop-package', 'cancel-in-progress': false })
   expect(workflow.jobs.package!['runs-on']).toEqual(['self-hosted', 'macOS', 'ARM64', 'dsh-mac-package-trial'])
@@ -24,7 +25,7 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
   expect(steps.find(step => step.id === 'checkout')?.with).toMatchObject({ 'persist-credentials': false, clean: true })
   for (const step of steps) expect(step.run ?? '').not.toContain('${{ inputs.')
   const uploads = steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(3)
+  expect(uploads).toHaveLength(2)
   expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[1]?.if).toBe('success()')
   expect(uploads[1]?.with?.path).toBe('${{ steps.retained.outputs.directory }}/*')
@@ -33,7 +34,7 @@ it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silic
 it('defaults to notarization and labels the explicit debugging option', () => {
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { skip_notarization: {
     type: 'boolean', default: false,
-    description: 'Skip notarization/stapling: internal debugging only, not for distribution or updates',
+    description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选',
   } } })
   const steps = workflow.jobs.package!.steps
   expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)

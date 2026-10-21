@@ -13,18 +13,25 @@ const referenceSchema = z.object({
   invalid: z.boolean().optional(),
 })
 
+const commandSchema = z.object({
+  token: z.string(),
+})
+
 const snapshotSchema = z.object({
   text: z.string(),
   references: z.array(referenceSchema),
+  command: commandSchema.optional(),
 }).refine((draft) => {
-  let end = 0
+  const spelling = draft.command?.token.trimEnd()
+  if (spelling !== undefined && (!/^\/\S/u.test(spelling) || !draft.text.startsWith(spelling))) return false
+  let end = spelling?.length ?? 0
   for (const reference of draft.references) {
     if (reference.offset < end || reference.length !== reference.clipboardText.length) return false
     end = reference.offset + reference.length
     if (end > draft.text.length || draft.text.slice(reference.offset, end) !== reference.clipboardText) return false
   }
   return true
-}, 'Draft references must identify ordered, non-overlapping text spans')
+}, 'Draft references must identify ordered, non-overlapping text spans after the leading command token')
 
 /**
  * Copy input into the semantic draft representation without editor runtime identities.
@@ -33,7 +40,11 @@ const snapshotSchema = z.object({
  */
 export function resolveDraftInput(input: DraftInput): DraftSnapshot {
   if (typeof input === 'string') return { text: input, references: [] }
-  return { text: input.text, references: input.references.map(copyReference) }
+  return {
+    text: input.text,
+    references: input.references.map(copyReference),
+    ...(input.command === undefined ? {} : { command: { token: input.command.token } }),
+  }
 }
 
 /**
@@ -52,6 +63,7 @@ export function parseStoredDraft(value: unknown): DraftSnapshot | undefined {
       ...(appearance === undefined ? {} : { appearance }),
       ...(invalid === undefined ? {} : { invalid }),
     })),
+    ...(parsed.data.command === undefined ? {} : { command: { token: parsed.data.command.token } }),
   }
 }
 
@@ -59,12 +71,14 @@ export function parseStoredDraft(value: unknown): DraftSnapshot | undefined {
  * Export reference identities without their editor-local occurrence ids.
  * @param text - current clipboard projection.
  * @param occurrences - matching reference projections from the same document revision.
+ * @param commandToken - claim token of the command chip opening the document, if any.
  * @returns an editor-independent snapshot.
  */
-export function snapshotDraft(text: string, occurrences: readonly Occurrence[]): DraftSnapshot {
+export function snapshotDraft(text: string, occurrences: readonly Occurrence[], commandToken?: string): DraftSnapshot {
   return {
     text,
     references: occurrences.map(copyReference),
+    ...(commandToken === undefined ? {} : { command: { token: commandToken } }),
   }
 }
 

@@ -105,20 +105,24 @@
 /* Pinned, the toggle needs an opaque hover fill: the default translucent hover
    token below would let the scrolling prose show through the moment the pointer
    lands on the toggle to collapse it. */
-.compactionRow:has(.compactionBody) .compactionButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+@media (hover: hover) {
+  .compactionRow:has(.compactionBody) .compactionButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .compactionButton:not(:disabled) {
   cursor: pointer;
 }
 
-.compactionButton:hover {
-  color: var(--dsw-alias-label-secondary);
-}
+@media (hover: hover) {
+  .compactionButton:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 
-.compactionButton:not(:disabled):hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+  .compactionButton:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .compactionLeading {
@@ -150,14 +154,24 @@
   opacity: 0;
 }
 
-.compactionButton:not(:disabled):hover .compactionContextIcon,
 .compactionButton:not(:disabled):focus-visible .compactionContextIcon {
   opacity: 0;
 }
 
-.compactionButton:not(:disabled):hover .compactionDisclosureIcon,
+@media (hover: hover) {
+  .compactionButton:not(:disabled):hover .compactionContextIcon {
+    opacity: 0;
+  }
+}
+
 .compactionButton:not(:disabled):focus-visible .compactionDisclosureIcon {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .compactionButton:not(:disabled):hover .compactionDisclosureIcon {
+    opacity: 1;
+  }
 }
 
 .compactionTitle {
@@ -231,8 +245,10 @@
   transition: transform 120ms ease;
 }
 
-.retrySummary:hover {
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .retrySummary:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -16,6 +16,7 @@ import { withWindowsSigningStage } from './windows-signing-stage.mjs'
 import { prepareWindowsSignatureCacheDirectory, resolveWindowsSignatureCacheDirectory } from './windows-signature-cache-directory.mjs'
 import { withMacOSSigningKeychain } from './macos-signing-keychain.mjs'
 import { macOSDownloadEnvironment, resolveMacOSPackageSettings } from './macos-package-settings.mjs'
+import { resolveWindowsPackageSettings } from './windows-package-settings.mjs'
 import { packagingErrorDetails, packagingStep } from './packaging-step.mjs'
 import { notarizeMacOS } from './notarize-macos.mjs'
 import { resolveMacOSNotarizationEnvironment } from './desktop-release-environment.mjs'
@@ -423,7 +424,8 @@ export async function packageTarget(
   const journal = target.platform === 'darwin' ? process.env.DSH_DESKTOP_PACKAGING_RUN_DIR : undefined
   const proxyEvent = (status: string) => { if (journal) recordPackagingEvent(journal, { type: 'notarization-proxy', status }) }
   const mac = target.platform === 'darwin' ? resolveMacOSPackageSettings(environment) : undefined
-  const packArguments = mac === undefined ? [] : ['--concurrency', String(mac.packConcurrency)]
+  const packConcurrency = mac?.packConcurrency ?? resolveWindowsPackageSettings(environment).packConcurrency
+  const packArguments = ['--concurrency', String(packConcurrency)]
   const buildPaths = desktopTargetBuildPaths(target.name)
   const releaseRecordPath = join(buildPaths.artifacts, desktopBuildRecordFilename(target.name))
   if (!invocation.prepareOnly && !invocation.unsigned && !invocation.skipNotarization) {
@@ -473,8 +475,13 @@ export async function packageTarget(
         { cwd: APP_ROOT, env: electronBuilderEnv, timeoutMs: 60_000 })
     })
   }
-  await execute(['run', 'build:official'], buildEnv, REPOSITORY_ROOT)
-  await execute(['run', 'release:pack', '--family', 'dsh', '--out', buildPaths.packedDsh, ...packArguments], buildEnv, REPOSITORY_ROOT)
+  await execute(invocation.unsigned ? ['run', 'build', '--profile', 'local'] : ['run', 'build:official'], buildEnv, REPOSITORY_ROOT)
+  await execute([
+    ...(invocation.unsigned
+      ? ['exec', 'tsx', 'apps/desktop/scripts/pack-local-packages.ts']
+      : ['run', 'release:pack', '--family', 'dsh']),
+    '--out', buildPaths.packedDsh, ...packArguments,
+  ], buildEnv, REPOSITORY_ROOT)
   await execute([
     '--dir',
     'apps/desktop-host',

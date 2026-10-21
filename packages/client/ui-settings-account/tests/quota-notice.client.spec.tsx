@@ -26,7 +26,7 @@ const noticeMessage = 'Request quota exhausted.'
 
 function snapshot(status?: 'signed-out' | 'credential-stored'): AccountSnapshot {
   const view: AccountView = { status: status ?? 'signed-out', attempt: null, links: { usageUrl: '', topUpUrl: '' } }
-  return { view: status === undefined ? undefined : view, details: undefined, failed: false }
+  return { view: status === undefined ? undefined : view, details: undefined, avatar: undefined, failed: false }
 }
 
 /** The live page request channel with its acquisition order retained for ordering assertions. */

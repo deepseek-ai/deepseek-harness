@@ -662,6 +662,31 @@ function eventSource(ctx: Context): (dispatch: TypertRemoteEventDispatch) => voi
 }
 
 describe('Gateway forwarded events for non-owner Peers', () => {
+  it('denies event streams and results for passive owner and guest Peers', async () => {
+    const { ctx } = await setup({ connection: true })
+    const passive = [
+      ctx.connection.createPeer({ principal: OWNER, interactions: 'none' }),
+      ctx.connection.createPeer({ principal: GUEST, interactions: 'none' }),
+    ]
+    const push = eventSource(ctx)
+    for (const peer of passive) {
+      await expect(ctx.typertGateway.wireStream.open(
+        '$events', { args: {} }, (async function* () {})(), peer, new AbortController().signal,
+      )).rejects.toMatchObject({ code: 'gateway/interactions-forbidden' })
+      const result = await ctx.connection.createSharedFetchHandler('/api').fetch(new Request('http://host/api/$events/result', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request', rpcId: 'rpc-passive', method: '$events/result',
+          payload: { args: { clientId: 'absent', eventId: 'absent', outcome: { kind: 'next' } } },
+        }),
+      }), peer)
+      expect(await result.json()).toMatchObject({ result: { ok: false, error: { code: 'gateway/interactions-forbidden' } } })
+    }
+    push({ event: 'fixture/notice', args: ['ignored'] })
+    expect(ctx.typertGateway.hasLiveClient()).toBe(false)
+  })
+
   it('delivers only allowed broadcasts and no answerable waterfall to a non-owner, and refuses its results', async () => {
     const { ctx, hold } = await setup({ connection: true })
     hold(shelf('s1'))

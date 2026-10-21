@@ -36,7 +36,7 @@ Connection 可用时，Host 入口会在 Connection 共享的 `/api` FetchHandle
 
 支持取消的 Remote 方法会把 `signal: AbortSignal` 声明为最后一个 Host 参数。signal 是 descriptor 元数据，而不是 wire 参数：Connection 将它提供给 Gateway，Gateway 则在已解码的业务参数之后注入它。SRC 识别这个保留的末位参数名，严格生成还要求它具有全局 `AbortSignal` 类型。
 
-流式 Remote 使用 `@Remote({ mode: 'stream' })` 并返回 `Iterable` 或 `AsyncIterable`。`ctx.typertGateway.stream()` 执行与一元调用相同的 endpoint、参数、lookup 和取消校验，再返回可取消的业务项 iterable。Client 插件激活时打开 Gateway 自有的 `/api/remote.mux` WebSocket，并让它在空闲时保持连接。Connection 拥有重试调度；每次 retry 前，它要求 mux 取消候选或活动 socket，并且只做一次全新的物理连接尝试。Host 按配置的 `websocketHeartbeatIntervalMs` 间隔（默认 2 秒）发送 Ping 控制帧，浏览器在 WebSocket 协议层自动回复 Pong，使空闲网络中间层持续看到流量，而不新增 Remote 流帧。Pong、收到的任意帧，或曾在已满的本机发送缓冲区中等待后完成的下行写入，都视为对端活动；连续两个 Ping 间隔没有活动的 socket 会被终止，因此 Pong 被数据阻塞在拥塞链路上时连接仍会保持。可独立取消的逻辑流共享这条连接；进程内 Connection 载体直接提供等价的流，不打开该 WebSocket。
+流式 Remote 使用 `@Remote({ mode: 'stream' })` 并返回 `Iterable` 或 `AsyncIterable`。`ctx.typertGateway.stream()` 执行与一元调用相同的 endpoint、参数、lookup 和取消校验，再返回可取消的业务项 iterable。Client 插件激活时打开 Gateway 自有的 `/api/remote.mux` WebSocket，并让它在空闲时保持连接。Connection 拥有重试调度；每次 retry 前，它要求 mux 取消候选或活动 socket，并且只做一次全新的物理连接尝试。Host 按配置的 `websocketHeartbeatIntervalMs` 间隔（默认 2 秒）发送 Ping 控制帧，浏览器在 WebSocket 协议层自动回复 Pong，使空闲网络中间层持续看到流量，而不新增 Remote 流帧。Pong、收到的任意帧，或未一次性完成的下行写入，都视为对端活动；默认 `'deflate'` 下，JSON 文本达到压缩阈值的帧异步 deflate，因此其完成总是计入。连续两个 Ping 间隔没有活动的 socket 会被终止，因此 Pong 被数据阻塞在拥塞链路上时连接仍会保持。`websocketCompression` 保持默认的 `'deflate'` 时，携带 `permessage-deflate` 的升级会协商该扩展，Host 压缩自己发出的、JSON 文本达到 1024 个字符 的帧；更短的帧不压缩，上行帧是否压缩由对端决定，设为 `'none'` 时接受同样的升级但不带该扩展。可独立取消的逻辑流共享这条连接；进程内 Connection 载体直接提供等价的流，不打开该 WebSocket。
 
 启动器提供 `ctx.appReady` 时，Gateway 仅在应用成功启动后注册 WebSocket 升级路由。此前的连接尝试仍属于载体故障，由 Connection 的重试策略处理，因此重启中的 Host 不会在控制器仍在初始化时接受流。卸载会取消尚未触发的就绪订阅，并关闭已注册的载体。不提供 `appReady` 的嵌入式 Host 会立即注册，并自行负责启动顺序；进程内调用不变。
 
@@ -46,12 +46,12 @@ Host 下行、Host 上行和 Client 上行泵的取消与停止状态归属单�
 
 Host 组合可通过 `registerRemoteEvents()` 注册唯一的应用事件 source。Gateway 为它保留内部 `$events` logical endpoint，只接受空 `args`，并在 source 撤回时中止该注册打开的流。事件名单、参数校验、每个 Client 的队列及 opening `{ type: 'ready', clientId, host: { home } }` frame 中的 Host home 由 API Remotes 拥有。source factory 在返回 iterable 前同步挂好增量 listener，因此 Client 只在增量投递就绪后发布 generation 并开始 baseline 读取。Peer 的 principal 不是 owner 的 `$events` 流从不收到它可以作答的 scoped waterfall（瀑布式事件）；只有当 `ctx.remoteAccess.decide({ principal, action: 'event:<name>', resources })` 在该帧读取函数指明的资源上（帧没有读取函数时为 `global`）允许时，才整条、不裁剪地收到广播 emit 帧；每帧只解析一次资源，资源非法的帧不经判定即不送达任何非 owner 流，被拒的帧只对该流丢弃。这类 Peer 的 `$events/result` 回复以 `gateway/invocation-unavailable` 失败。
 
-`hasLiveClient()` 检查已有 `$events` 记录中是否有 Peer principal 为 owner 的未取消流，只有这类流能回答转发的 waterfall。已取消的流即使尚未完成 iterator 清理也不计入，单独的 WebSocket 也不计入。这一同步观察不保证后续投递成功或 Client Provider 已就绪。
+已释放的 Peer 在事件流参与检查之前被拒绝。无论 principal 是否为 owner，`$events` 与 `$events/result` 都要求 `peer.interactions === 'answer'`；否则返回 `gateway/interactions-forbidden`。只有 owner Peer 接收并回答转发的 waterfall，回复必须来自持有该事件流的同一 Peer。`hasLiveClient()` 只计算未取消的 owner 回答流；非 owner 广播流、单独的 WebSocket 与已取消但尚未完成 iterator 清理的流均不计入。这一同步观察不保证后续投递成功或 Client Provider 已就绪。
 
 <a id="client-service-clientremote-ctx-key-remote"></a>
 ## Client 服务：`ClientRemote`（ctx key：`remote`）
 
-浏览器载体接受 [Connection](../../client/connection/README.zh.md#use-this-package) 定义的 shell 所拥有的流 origin；逻辑流帧与生命周期保持一致。
+同一个 `./client` 导入在 Node 中选择独立的 ESM `lib/client.node.js`，在浏览器中选择 loader factory `lib/client.browser.js`；Host 包根入口保持独立。浏览器载体接受 [Connection](../../client/connection/README.zh.md#use-this-package) 定义的 shell 所拥有的流 origin；逻辑流帧与生命周期保持一致。
 
 `ctx.remote.$mount()` 会校验并注册生成的 Host-for-Client 贡献项，然后为发起调用的 Cordis fiber 安装具体的直接方法和作用域方法。每个 namespace 都是可追踪的 `remote.<namespace>` 子 Service，并在最后一个方法撤回后卸载。重复端点、命名空间冲突，以及缺少生成的严格 codec 的 Client 供值字段，都会在方法可调用前报错。
 
@@ -61,9 +61,9 @@ Host 组合可通过 `registerRemoteEvents()` 注册唯一的应用事件 source
 
 `ctx.remote.$host` 以普通值读取固定的 Host 事实：`home`（首个 ready 帧之前为 undefined）与 `isLoopback`。它不是存储——没有订阅、没有代次计数——所以需要响应重连的消费方去监听 `connection/reset`，而不是轮询它。
 
-`ctx.remote.$stream()` 返回跨越多个物理载体代次的单消费方 `RemoteStream`。Host 仍在线时，它允许一次立即重试；Host 离线时，它等待下一代连接，并为每个流项标注物理代次。领域消费方校验并接受各代次的 opening value；业务与协议错误仍然终止流。一切终态失败离开本面时都是 `RemoteError`，包括重试耗尽和在 opening value 之前就结束的代次，因此流消费方与一元调用方用同一种方式判别。`RemoteStreamCarrierError` 命名的是可重试的物理丢失，它只作为 `carrierFailed` 回调参数到达领域，绝不作为终态结果。`RemoteSnapshotStream` 在此之上规定每代由一个初始快照和后续 delta 组成。`RemoteJournalStream` 基于领域提供的 entry 闭区间提供 follow-before-page、分页、重连追赶与缺口修复；它丢弃完整重复项，并拒绝缺口、倒置区间和部分重叠。领域还可以携带无 cursor 的通知：通知绝不推进或修复持久 cursor，在缺口修复期间收到的通知只会在 replacement page 提交后发布。若更新代次取代该修复，旧代次 held notification 会与其 page 一同丢弃。对任一种流执行 dispose（资源释放）时，系统会取消该流的请求，并在活动 iterator 完全停止后完成资源释放。
+`ctx.remote.$stream()` 返回跨越多个物理载体代次的单消费方 `RemoteStream`。对于回答型 Client，载体仍可用时的独立流故障允许一次立即重试；物理 WebSocket 丢失后等待 Connection 重开载体。如果 Host generation 已不可用，则等待下一代连接。每个流项都带有其物理代次。被动 Client 不使用 `$stream()`，而是调用生成的原始流方法，并自行处理终态载体故障。领域消费方校验并接受各代次的 opening value；业务与协议错误仍然终止流。一切终态失败离开本面时都是 `RemoteError`，包括重试耗尽和在 opening value 之前就结束的代次，因此流消费方与一元调用方用同一种方式判别。`RemoteStreamCarrierError` 命名的是可重试的物理丢失，它只作为 `carrierFailed` 回调参数到达领域，绝不作为终态结果。`RemoteSnapshotStream` 在此之上规定每代由一个初始快照和后续 delta 组成。`RemoteJournalStream` 基于领域提供的 entry 闭区间提供 follow-before-page、分页、重连追赶与缺口修复；它丢弃完整重复项，并拒绝缺口、倒置区间和部分重叠。领域还可以携带无 cursor 的通知：通知绝不推进或修复持久 cursor，在缺口修复期间收到的通知只会在 replacement page 提交后发布。若更新代次取代该修复，旧代次 held notification 会与其 page 一同丢弃。对任一种流执行 dispose（资源释放）时，系统会取消该流的请求，并在活动 iterator 完全停止后完成资源释放。
 
-`ctx.remote.$on()` 订阅一条被转发的 Host 事件。它的合法键恰好等于 Host 装配声明的转发选择，listener 类型就是事件所属包自己的 Cordis `Events` 声明，因此不存在会与之漂移的第二份签名。每个订阅归属调用方 fiber，并随该 fiber 一起消失。Client Remote 服务激活时就把 `$events` pump 注册为 Connection generation source，无论当前是否存在 `$on` listener。浏览器使用 Remote mux，进程内组合使用 `connection.rpc.open`；opening `ready` 项建立 Connection generation 并提供 Host 信息。物理 carrier 失败、Remote 流故障、意外正常结束、非 ready 首项或畸形事件项都会终止该 generation，由 Connection 按持续且间隔封顶的带抖动指数退避重开。普通通知按注册顺序运行并隔离 listener 失败；Agent-scoped waterfall 允许 listener 返回结果、调用 `next()` 或拒绝，Gateway 再通过现有 HTTP 一元载体回送该结果。
+`ctx.remote.$on()` 订阅一条被转发的 Host 事件。它的合法键恰好等于 Host 装配声明的转发选择，listener 类型就是事件所属包自己的 Cordis `Events` 声明，因此不存在会与之漂移的第二份签名。每个订阅归属调用方 fiber，并随该 fiber 一起消失。Client Remote 服务仅在 `connection.interactions` 为 `answer` 时把 `$events` pump 注册为 Connection generation source，无论当前是否存在 `$on` listener。选择 `none` 时，`$on()` 不可用，Client 只打开物理生命周期连接；unary 调用不等待 socket 就绪。浏览器使用 Remote mux，进程内组合使用 `connection.rpc.open`；opening `ready` 项建立 Connection generation 并提供 Host 信息。物理 carrier 失败、Remote 流故障、意外正常结束、非 ready 首项或畸形事件项都会终止该 generation，由 Connection 按持续且间隔封顶的带抖动指数退避重开。普通通知按注册顺序运行并隔离 listener 失败；Agent-scoped waterfall（瀑布式事件）允许 listener 返回结果、调用 `next()` 或拒绝，Gateway 再通过现有 HTTP 一元载体回送该结果。
 
 Client waterfall 的 Context 解析保持同步。解析器可以返回借用的 Context 或 `TypertOwnedValue<Context>`；Gateway 仅在处理器使用和回复结算均结束后释放 owned value。Context 解析失败保留既有的记录错误并委托语义，处理器失败产生拒绝回复。取消会抑制迟到回复，但不会释放处理器仍在使用的 Context。每个 handler 都必须响应 `request.signal` 并在取消后结束；插件销毁与 Connection generation 替换会等待未结束的 handler 结算。Session Context 的获取本身不执行历史 I/O。
 
@@ -91,7 +91,8 @@ Client waterfall 的 Context 解析保持同步。解析器可以返回借用的
 - lookup 解析器按 key 配置；当前无法让单个 Remote 参数或 endpoint 在同一 `agent`/`session` key 下选择 live-only 策略。
 - 被转发的事件到达 `$on` 时不做业务载荷投影或脱敏。普通通知在重连后不重放；Agent-scoped waterfall 只投影选择 Client Context 所需的顶层 Agent 身份，并自行携带 pending 生命周期。
 - `websocketHeartbeatIntervalMs` 同时是 Ping 周期和活动截止时间。对端连续两个周期没有活动时，Host 会终止连接；如果部署的事件循环或网络可能停顿超过该间隔，必须调大此配置。
-- 排队写入完成只说明 TCP 对端确认了数据。经过带缓冲的反向代理时，该对端是代理，因此持续下行期间 Client 消失，要等代理不再接收数据后才会被检测到。
+- `websocketCompression` 默认 `'deflate'`，会协商 `permessage-deflate`；Host 压缩自己发出的、JSON 文本达到 1024 个字符 的帧，更短的帧不压缩，因为 `ws` 在默认上下文接管下会忽略自己的 `threshold` 选项。压缩后的下行写入完成会计入心跳规则中的缓冲活动，而阈值以下的写入只有在本机发送缓冲区已满时才计入；换不到带宽的 loopback 部署可设为 `'none'`。
+- 未压缩的排队写入完成说明 TCP 对端确认了数据；压缩写入则在 `ws` 完成 deflate 并写出后即完成，只证明本地流水线已排空。经过带缓冲的反向代理时，该对端是代理，因此持续下行期间 Client 消失，要等代理不再接收数据后才会被检测到。
 - Gateway 通过 `invocation.uplinkWindow` 提供每条 WebSocket 流的 inbox 容量与 JSON 封装开销；没有编码帧 inbox 限额的载体省略该字段。领域协议可以公布该窗口并通过确认约束在途字节数。Gateway 本身不发放额度：Client 发送快于方法读取，或发给从未取用 uplink 的方法时，其流以 `gateway/uplink-overflow` 失败；上行项不会跨载体代际重放，需要恢复上行的领域在重开的请求里自带确认游标。
 
 

@@ -27,11 +27,6 @@ function argsAfter(draft: string, token: string): string {
   return ''
 }
 
-/** A claimed name may stand alone; arguments require the token's separator. */
-function retainsClaim(draft: string, token: string): boolean {
-  return draft.startsWith(token) || draft === token.trimEnd()
-}
-
 /** The submit-plane slice of the published InputState. */
 export interface SubmitSnapshot {
   readonly phase: InputState['phase']
@@ -75,8 +70,8 @@ export class SubmitMachine {
    */
   dispatch(ev: InputEvent): readonly InputEffect[] {
     switch (ev.type) {
-      case 'draft-changed': return this.onDraftChanged(ev.draft)
-      case 'claim': return this.onClaim(ev.claim)
+      case 'draft-changed': return this.followCommand(ev.command)
+      case 'claim': return this.followCommand(ev.claim)
       case 'enter': return this.onEnter(ev.mode, ev.draft, ev.submission)
       case 'adjudicated': return this.onAdjudicated(ev.attempt, ev.outcome)
       case 'adjudication-failed': return this.onAdjudicationFailed(ev.attempt, ev.message)
@@ -88,20 +83,17 @@ export class SubmitMachine {
     }
   }
 
-  /** The complete command name retains its claim with or without the argument separator. */
-  private onDraftChanged(draft: string): readonly InputEffect[] {
-    if (this.phase === 'claimed' && this.claim !== undefined && !retainsClaim(draft, this.claim.token)) {
-      this.phase = 'plain'
-      this.claim = undefined
-    }
-    return []
-  }
-
-  /** The editor applied a claim-token replacement; busy phases refuse another claim. */
-  private onClaim(claim: CommandClaim): readonly InputEffect[] {
+  /**
+   * Outside a transaction the claim follows the document's leading command
+   * chip: deleting or displacing the chip releases it, and a history restore
+   * of the chip re-enters claimed. The claim event applies the same rule to a
+   * chip the editor just inserted, before its update commits; busy phases
+   * refuse both.
+   */
+  private followCommand(command: CommandClaim | undefined): readonly InputEffect[] {
     if (this.phase !== 'plain' && this.phase !== 'claimed') return []
-    this.claim = claim
-    this.phase = 'claimed'
+    this.claim = command
+    this.phase = command === undefined ? 'plain' : 'claimed'
     return []
   }
 
@@ -189,7 +181,7 @@ export class SubmitMachine {
     return [{ type: 'notice', level: 'error', text: message }]
   }
 
-  /** Claimed command settlement retains the frozen transaction semantics. */
+  /** Claimed command settlement; after a failure the claim follows the leading command chip again. */
   private onSubmitSettled(ev: Extract<InputEvent, { type: 'submit-settled' }>): readonly InputEffect[] {
     const flight = this.inflight
     if (this.phase !== 'submitting' || flight === undefined || flight.attempt.seq !== ev.attempt.seq) return []
@@ -204,13 +196,8 @@ export class SubmitMachine {
       return effects
     }
     const text = ev.message ?? ev.outcome?.text
-    if (ev.draft === flight.attempt.draftSnapshot
-      && this.claim !== undefined && retainsClaim(ev.draft, this.claim.token)) {
-      this.phase = 'claimed'
-      return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
-    }
-    this.phase = 'plain'
-    this.claim = undefined
+    this.claim = ev.command
+    this.phase = ev.command === undefined ? 'plain' : 'claimed'
     return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
   }
 

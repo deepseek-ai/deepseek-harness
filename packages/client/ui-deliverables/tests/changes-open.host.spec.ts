@@ -12,7 +12,7 @@ import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 import type { SessionEventReadRequest } from '@deepseek-ai/dsh-session-query'
 import type { WorkspaceChangedFile, WorkspaceChangesSummary, WorkspaceFileDiff } from '@deepseek-ai/dsh-workspace-changes/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { registerPresentOpen } from '../src/present-open.ts'
+import * as deliverables from '../src/index.ts'
 import {
   changedFileUrl, changesDiffUrl, changesSummaryUrl, CHANGES_DIFF_PATH, CHANGES_OPEN_PATH, CHANGED_FILES_PATH, isChangedFile, isChangesDiff,
   isChangesEvent, isChangesSummary,
@@ -64,10 +64,7 @@ async function fixture() {
   const applications = vi.fn(async () => [{ id: 'player', name: 'Player', default: true, icon: null }])
   ctx.provide('sessionController', { workspacePathApplications: applications, openWorkspacePath: opener, workspaceDesktop: () => ({ name: 'desktop', available: true, fileManager: 'finder' }) } as never)
   const connection = new HostConnectionService(ctx, [], {} as BrowserAuth)
-  await ctx.plugin({
-    inject: ['connection', 'sessionQuery', 'sessionController', 'workspaceFiles', 'fs', 'sandboxPolicy', 'workspaceChanges'],
-    apply: registerPresentOpen,
-  })
+  await ctx.plugin(deliverables)
   const handler = connection.createSharedFetchHandler('/api')
   const open = (query = '?sessionId=owner&seq=9&index=0') => handler.fetch(new Request(`http://localhost${CHANGES_OPEN_PATH}${query}`, { method: 'POST' }), connection.browserPeer)
   const read = (query = '?sessionId=owner&seq=9') => handler.fetch(new Request(`http://localhost${CHANGED_FILES_PATH}${query}`), connection.browserPeer)

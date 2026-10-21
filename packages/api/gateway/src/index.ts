@@ -121,6 +121,7 @@ interface RegisteredRemoteEventSource {
 }
 
 interface RemoteEventClient {
+  readonly peer: PeerScope
   readonly id: RemoteEventClientId
   readonly queue: RemoteEventQueue
   readonly signal: AbortSignal
@@ -157,11 +158,14 @@ export interface Config {
   readonly websocketHeartbeatIntervalMs?: number
   /** Buffered uplink frame bytes one logical stream may hold before it fails with `gateway/uplink-overflow`. @default 262144 */
   readonly streamInboxBytes?: number
+  /** Per-message compression for the Remote stream WebSocket; `'none'` disables the extension. @default 'deflate' */
+  readonly websocketCompression?: 'none' | 'deflate'
 }
 
 interface ResolvedConfig extends Config {
   readonly websocketHeartbeatIntervalMs: number
   readonly streamInboxBytes: number
+  readonly websocketCompression: 'none' | 'deflate'
 }
 
 /**
@@ -211,6 +215,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     websocketHeartbeatIntervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS)
       .default(DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS),
     streamInboxBytes: z.number().step(1).min(1).default(DEFAULT_STREAM_INBOX_BYTES),
+    websocketCompression: z.union([z.const('none'), z.const('deflate')]).default('deflate'),
   })
 
   /** Carrier adapter shared by the WebSocket mux and local Host transports. */
@@ -251,20 +256,52 @@ export class TypertGatewayService extends Service implements TypertGateway {
           (endpoint, payload, uplink, peer, control, window) =>
             this.openWireStream(endpoint, payload, uplink, peer, control.signal, control, window),
           this.wireStream.failure,
-          resolved.websocketHeartbeatIntervalMs,
-          resolved.streamInboxBytes,
+          {
+            heartbeatIntervalMs: resolved.websocketHeartbeatIntervalMs,
+            streamInboxBytes: resolved.streamInboxBytes,
+            compression: resolved.websocketCompression === 'deflate',
+          },
         )
+        const releases = new Set<Promise<void>>()
         webCtx.effect(function* () {
-          yield () => mux.close()
+          yield async () => {
+            await mux.close()
+            await Promise.all(releases)
+          }
           const route: WebUpgradeRoute = {
             path: REMOTE_STREAM_MUX_PATH,
             handler: (req, socket, head) => {
-              const admission = webCtx.connection.admit(req)
+              const admission = webCtx.connection.admitConnection(req)
               if ('rejection' in admission) {
                 rejectRemoteStreamUpgrade(socket, admission.rejection)
                 return
               }
-              mux.handleUpgrade(req, socket, head, admission.peer)
+              const release = (): void => {
+                // release removes the API Peer synchronously, before awaiting
+                // scope cleanup or any logical-stream iterator's return.
+                const done = admission.release().catch((error: unknown) => {
+                  console.error('[api-gateway] Peer release failed:', error)
+                })
+                releases.add(done)
+                void done.then(() => { releases.delete(done) })
+              }
+              const closed = (): void => {
+                socket.removeListener('error', release)
+                release()
+              }
+              socket.on('error', release)
+              socket.once('close', closed)
+              if (socket.destroyed) {
+                closed()
+                return
+              }
+              try {
+                mux.handleUpgrade(req, socket, head, admission.peer)
+              } catch (error) {
+                release()
+                socket.destroy()
+                console.error('[api-gateway] Remote stream upgrade failed:', error)
+              }
             },
           }
           yield webCtx.webServer.registerUpgrade(route)
@@ -450,6 +487,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
       try {
         assertPeerLive(peer, endpoint)
+        requireInteractions(peer, endpoint)
         // oxlint-disable-next-line typescript/no-unnecessary-condition -- other packages merge non-owner kinds into PrincipalMap.
         if (peer.principal.kind !== 'owner') {
           throw new TypertGatewayError('gateway/invocation-unavailable', endpoint, 'only owner Peers answer forwarded Remote events')
@@ -458,6 +496,12 @@ export class TypertGatewayService extends Service implements TypertGateway {
         const client = this.remoteEventClients.get(result.clientId)
         if (client === undefined) {
           throw new Error('typert gateway: Remote event result identifies no active event stream')
+        }
+        if (client.peer !== peer) {
+          throw new TypertGatewayError(
+            'gateway/interactions-forbidden', endpoint,
+            'Remote event result belongs to another Peer',
+          )
         }
         this.receiveRemoteEventResult(client, result)
         return { ok: true, value: undefined }
@@ -481,6 +525,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
       // A Gateway-owned stream reads no uplink: releasing it now keeps its items out of the bounded inbox.
       releaseUplink(uplink)
       assertPeerLive(peer, endpoint)
+      requireInteractions(peer, endpoint)
       return this.openRemoteEvents(payload, signal, peer)
     }
     return this.openStream({ ...remoteRequest(endpoint, payload, signal, peer), uplink, uplinkWindow }, control)
@@ -519,6 +564,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     let clientId = randomUUID() as RemoteEventClientId
     while (this.remoteEventClients.has(clientId)) clientId = randomUUID() as RemoteEventClientId
     const client: RemoteEventClient = {
+      peer,
       id: clientId,
       queue: new RemoteEventQueue(),
       signal: lifetime,
@@ -1180,6 +1226,15 @@ function assertRemoteEventFrame(frame: TypertRemoteEventFrame): void {
 function assertRemoteEventName(frame: { readonly event: unknown }): void {
   if (typeof frame.event !== 'string' || frame.event.length === 0) {
     throw new TypeError('typert gateway: Remote event name must be a nonempty string')
+  }
+}
+
+function requireInteractions(peer: PeerScope, endpoint: string): void {
+  if (peer.interactions !== 'answer') {
+    throw new TypertGatewayError(
+      'gateway/interactions-forbidden', endpoint,
+      'forwarded Remote events require interactions=answer',
+    )
   }
 }
 

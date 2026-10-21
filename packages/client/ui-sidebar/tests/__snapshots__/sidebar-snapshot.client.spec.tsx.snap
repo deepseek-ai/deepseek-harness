@@ -120,14 +120,19 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
               data-slot="sidebar.brand.mark"
               style="display: contents;"
             >
-              <svg
-                aria-hidden="true"
-                data-content="965fe321"
-                fill="none"
-                height="17.6580310880829"
-                viewBox="0 0 23.16 17.04"
-                width="24"
-              />
+              <span
+                class="copyVersion"
+                data-copy-version="true"
+              >
+                <svg
+                  aria-hidden="true"
+                  data-content="965fe321"
+                  fill="none"
+                  height="17.6580310880829"
+                  viewBox="0 0 23.16 17.04"
+                  width="24"
+                />
+              </span>
             </div>
           </span>
           <span
@@ -138,7 +143,8 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
               style="display: contents;"
             >
               <span
-                class="localBuildBrand"
+                class="localBuildBrand copyVersion"
+                data-copy-version="true"
               >
                 <span
                   class="localBuildTitle"
@@ -372,14 +378,19 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
               data-slot="sidebar.brand.mark"
               style="display: contents;"
             >
-              <svg
-                aria-hidden="true"
-                data-content="965fe321"
-                fill="none"
-                height="17.6580310880829"
-                viewBox="0 0 23.16 17.04"
-                width="24"
-              />
+              <span
+                class="copyVersion"
+                data-copy-version="true"
+              >
+                <svg
+                  aria-hidden="true"
+                  data-content="965fe321"
+                  fill="none"
+                  height="17.6580310880829"
+                  viewBox="0 0 23.16 17.04"
+                  width="24"
+                />
+              </span>
             </div>
           </span>
           <span
@@ -390,7 +401,8 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
               style="display: contents;"
             >
               <span
-                class="localBuildBrand"
+                class="localBuildBrand copyVersion"
+                data-copy-version="true"
               >
                 <span
                   class="localBuildTitle"
@@ -515,14 +527,19 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
               data-slot="sidebar.brand.mark"
               style="display: contents;"
             >
-              <svg
-                aria-hidden="true"
-                data-content="965fe321"
-                fill="none"
-                height="17.6580310880829"
-                viewBox="0 0 23.16 17.04"
-                width="24"
-              />
+              <span
+                class="copyVersion"
+                data-copy-version="true"
+              >
+                <svg
+                  aria-hidden="true"
+                  data-content="965fe321"
+                  fill="none"
+                  height="17.6580310880829"
+                  viewBox="0 0 23.16 17.04"
+                  width="24"
+                />
+              </span>
             </div>
           </span>
           <span
@@ -533,7 +550,8 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
               style="display: contents;"
             >
               <span
-                class="localBuildBrand"
+                class="localBuildBrand copyVersion"
+                data-copy-version="true"
               >
                 <span
                   class="localBuildTitle"

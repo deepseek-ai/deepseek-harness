@@ -57,12 +57,14 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed; Remote streams that speak for the Peer end with it. */
   readonly signal: AbortSignal
+  /** Forwarded human-interaction participation; independent of authorization. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 
 // @deepseek-ai/dsh-client-connection
 export class Peer implements PeerScope {
-  constructor(owner: Context, options: { readonly principal: Principal })
+  constructor(owner: Context, options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' })
 }
 
 interface HostConnectionHandle {
@@ -71,7 +73,7 @@ interface HostConnectionHandle {
   /** Network admission: the admitted Peer or the refusal status. */
   admit(request: ConnectionTrustRequest): PeerAdmission
   /** In-process only; disposed with the Context that read `ctx.connection`, or earlier by dispose(). */
-  createPeer(options: { readonly principal: Principal }): PeerScope
+  createPeer(options: { readonly principal: Principal; readonly interactions?: 'answer' | 'none' }): PeerScope
 }
 
 interface ConnectionFetchHandler {
@@ -90,6 +92,7 @@ wireStream.open(endpoint, payload, uplink, peer: PeerScope, signal)          // 
 | 浏览器连接共享 `browserPeer` | 所有浏览器连接共享一个 Peer，每个使用处都显式引用 `connection.browserPeer`，不存在兜底变量；页内 Host（webworker-runtime）同样显式传 `browserPeer` |
 | Host 进程内自动化 | 需要调用 Remote 方法时用 `createPeer({ principal })` 创建自己的 Peer。目前没有这类生产调用方，因此不预置固定的 Host Peer |
 | 多 Peer | `createPeer()` 每次返回独立 Peer；liveshare 将用它为读者的每条连接建一个 Peer（在 #3854 侧接入） |
+| 交互参与 | `Peer(owner, { principal, interactions? })` 与 `createPeer()` 省略 interactions 时默认 `answer`。`none` 对所有 principal 拒绝 `$events` 与 `$events/result`；交互模式不赋予方法权限。回答型 owner 能接收并回答 waterfall，非 owner 只能接收 RBAC 授权的广播，不能回答 |
 | exact Fetch route | file-upload、present-open、media-references、session-log-export、inspector 等 exact route 不经 Gateway；共享 Fetch handler 对非 owner Peer 一律返回 403 |
 
 ### 身份类型
@@ -547,9 +550,9 @@ GlobalStandardProps.useWorkspaceAccess: (workspaceId: WorkspaceId, action: Remot
 
 ### 不在范围与 Future work
 
-- `/connect` 握手、API Cookie、每条 API 连接一个 Peer、WebSocket 生命周期：归 pr-5945。
+- 仅供 API 的 `/connect` 握手、API Cookie、每条 API 连接一个 Peer 与 WebSocket 生命周期见 [Peer 作用域建连握手](2026-10-09-operator-scoped-connect-handshake.zh.md)。
 - 浏览器多 Peer（如每标签页一个）：所有浏览器连接共享 `browserPeer`。
-- 交互参与（interactions）与按 principal 隔离审批由后续工作引入；目前非 owner 只收被授权的 `$events` 广播帧。
+- 交互参与属于 Peer；`interactions: 'answer'` 的非 owner 依然只能收到 RBAC 授权的广播，不能回答 owner 的 waterfall；按 principal 处理审批不在本机制内。
 - `agent-preset/selected` 等其余转发事件未声明资源，按 `global` 判定；读者需要某个会话事件时，#3854 为其声明资源并在 role 中列出 `event:<name>`。
 - liveshare 接入（声明 `share-viewer`、每条读者连接一个 Peer、定义 role 并注册 policy、删除 `origin` / `prompt/origin` / `READ_ENDPOINTS`）：#3854 侧。
 - `session/cancel` 归属检查、fork 的 `childSessionId`、`ToolExecutionInput.turn`：不改。

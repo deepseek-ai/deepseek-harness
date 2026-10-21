@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-实验性能力可按需安装和组合，但不提供产品支持承诺。包命名和发布遵循[实验包策略](../../scripts/experimental-package-policy.ts)。[可选组合规则](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)决定哪些能力以默认关闭状态随安装提供，并在 GUI 插件管理器的官方分组显式启用。
+实验性能力可按需安装和组合，但不提供产品支持承诺。包命名和发布遵循[实验包策略](../../scripts/experimental-package-policy.ts)。[可选组合规则](../../.agents/notes/implemented/architecture/2026-09-21-experimental-capabilities-as-optional-bundles.zh.md)决定哪些能力以默认关闭状态随安装提供，以便显式选入。[插件管理页](../client/ui-plugin-manager/README.zh.md#use-this-package)管理哪些组合包默认展示，以及如何启用隐藏项。
 
 ## 目录
 
@@ -58,14 +58,20 @@ kind: "package-group"
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.zh.md) | 托管本地 SenseVoice 推理 | — |
 | [`api-speech-to-text`](api-speech-to-text/README.zh.md) | 带认证的临时转写 Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.zh.md) | 麦克风录音与版本检查后的草稿插入 | — |
+| [`plugin-market-bundle`](plugin-market-bundle/README.zh.md) | 默认禁用的可选自定义插件市场：市场服务和「发现」标签页 | — |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 协作、工具与 Web UI 组合包 | — |
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间直接消息与持久共享任务板 | `ctx.agentTeams` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
+| [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |
+| [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |
 | [`claude-code-mods`](claude-code-mods/README.zh.md) | 把 Claude Code 模组作为插件运行：钩子链落在 harness 扩展点上，并在提示框上方绘制横幅 | `ctx.claudeCodeMods` |
 | [`client-ui-claude-code-mods`](client-ui-claude-code-mods/README.zh.md) | 在提示框上方绘制模组树并把按钮点击发回的 Web 横幅 | — |
 | [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
+| [CUA](cua/README.zh.md) | 应用与窗口对象、授权执行和权限控件。 | `ctx.cuaAccess` |
+| [macOS CUA](cua-macos/README.zh.md) | Swift 原生执行与平台组件准备。 | `ctx.computerUse` |
+| [`cua-bundle`](cua-bundle/README.zh.md) | 面向 PTC 会话、默认关闭的 Computer Use 开关 | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.zh.md) | 嵌入 Cua Driver 原生 npm 运行时 | `ctx.computerUse` |
 | [`browser-use-playwright-mcp`](browser-use-playwright-mcp/README.zh.md) | 通过 MCP 提供 Playwright 浏览器工具 | `ctx.browserUse` |

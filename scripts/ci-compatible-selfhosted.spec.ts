@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { runInNewContext } from 'node:vm'
 import * as yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
+import { BUILD_BACKED_NODE_COMPAT_VERSION } from './run-gates.ts'
 
 interface Step {
   name?: string
@@ -54,6 +55,14 @@ function route(options: { mode?: string; author?: string; repository?: string; f
 }
 
 describe('Node compatibility self-hosted routing', () => {
+  it('runs the build-backed compatibility minor and declares it for installed CLI users', () => {
+    expect(job.strategy.matrix.include.filter(entry => String(entry.node) === BUILD_BACKED_NODE_COMPAT_VERSION)).toHaveLength(1)
+    for (const manifest of ['package.json', 'apps/cli/package.json']) {
+      const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', manifest), 'utf8')) as { engines: { node: string } }
+      expect(pkg.engines.node).toBe(`>=${BUILD_BACKED_NODE_COMPAT_VERSION}.0`)
+    }
+  })
+
   it('uses the Linux pool only for opted-in repository-owned PRs', () => {
     expect(route()).toEqual(labels)
     for (const mode of ['', 'hosted', 'unexpected']) expect(route({ mode })).toBe('ubuntu-latest')
@@ -67,11 +76,10 @@ describe('Node compatibility self-hosted routing', () => {
     expect(route({ repository: '' })).toBe('ubuntu-latest')
   })
 
-  it('preserves all three required version jobs and their concurrency', () => {
+  it('preserves the supported version jobs and their concurrency', () => {
     expect(job.if).toBe("github.event_name == 'pull_request'")
     expect(job.strategy['fail-fast']).toBe(false)
     expect(job.strategy.matrix.include).toEqual([
-      { node: '22.19', name: 'node 22.19', runner: 'ubuntu-latest', gate_concurrency: '1' },
       { node: '24.9', name: 'node 24.9', runner: 'ubuntu-latest', gate_concurrency: '1' },
       { node: 26, name: 'node 26', runner: 'ubuntu-latest', gate_concurrency: '1' },
     ])

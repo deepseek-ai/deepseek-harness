@@ -7,7 +7,8 @@ const root = resolve(import.meta.dirname, '..')
 
 const artifactGraph = {
   'native': [],
-  'host-src': ['native'],
+  'host-typert': [],
+  'host-src': ['native', 'host-typert'],
   'host-bundle': ['host-src'],
   'desktop-bundle': ['host-bundle'],
   'client-src': ['desktop-bundle'],
@@ -80,12 +81,12 @@ describe('repository build steps', () => {
     })
   })
 
-  it('type-checks every program with the source-only Typert pass beside Host compilation', () => {
+  it('type-checks every program after source-only Typert generation', () => {
     const gates = buildGates(root, 'typecheck')
     expect(graph(gates)).toEqual({
-      'host-src': [],
       'host-typert': [],
-      'client-src': ['host-src', 'host-typert'],
+      'host-src': ['host-typert'],
+      'client-src': ['host-src'],
       'host-check': ['host-src'],
       'client-check': ['client-src'],
     })

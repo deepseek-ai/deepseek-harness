@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。
+在存储或消费生成 Typert 产物的任何 Host 或 Client 组合中挂载本注册表；它提供 `ctx.typert`。没有配置。Node 将 `/client` 解析为供程序化 Cordis 组合使用的独立 ESM bundle `lib/client.node.js`；浏览器通过逻辑 URL `/plugins/.../client.js` 使用 `lib/client.browser.js` loader factory。两个 bundle 使用相同的注册表实现，且与 Host 包根入口分离。
 
 ### 最小设置
 
@@ -44,6 +44,8 @@ kind: "package-reference"
 ### 注册贡献
 
 生成产物在 Loader 组合中通过 [loader](../loader/README.zh.md) 注册；其他所有者直接调用 `ctx.typert.register(contribution)`，并获得撤销它的同一资源释放函数。重复的包与 face 组合键、schema 键、调用 id 或端点会在提交任何内容之前拒绝整个批次。
+
+Harness 离线集成在各自的 profile Context 中通过 `ctx.typert.remotes.register(contribution)` 注册普通 `TYPERT_REMOTE` 贡献。`$mount(contribution)` 已执行该注册，因此在同一个注册表中先注册再挂载同一贡献会因重复而失败。离线元数据所有权应与建立实际连接及挂载的 Context 分离。独立离线消费方也可以直接读取 `TYPERT_REMOTE.methods`，无需任何 Registry。注册表状态归所属 Context 与进程所有，不跨进程共享；注册和查询都不会打开连接。
 
 ### Lookup 与 Context 提供方
 

@@ -108,6 +108,14 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'headlessStartup',
+    pkg: 'headless',
+    title: 'Headless invocation options',
+    mode: 'core',
+    consumers: ['headless'],
+    note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
+  },
+  {
     key: 'cotTranslation',
     pkg: 'experimental-client-ui-cot-translation',
     title: 'Reasoning translation Remote',
@@ -145,6 +153,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['plugin-manager', 'ui-settings-plugin-inventory'],
     note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
+  },
+  {
+    key: 'pluginMarket',
+    pkg: 'plugin-market',
+    title: 'Plugin market index reader',
+    mode: 'core',
+    consumers: ['client-ui-plugin-market', 'plugin-market'],
+    note: 'Fetches and validates the index sources the user configures; installation goes through the plugin manager.',
   },
   {
     key: 'profileContext',
@@ -206,6 +222,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['experimental-computer-use-cua-driver-mcp', 'experimental-computer-use-cua-driver-native'],
     consumers: ['experimental-computer-use-cua-driver-mcp', 'experimental-computer-use-cua-driver-native'],
     note: 'One provider-owned name per service instance. Each provider also owns its model tools; the service has no common action API, runtime selection, or Session workflow lock.',
+  },
+  {
+    key: 'cuaAccess', pkg: 'cua', title: 'Computer Use permission controls',
+    mode: 'core', consumers: ['cua'],
+    note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
     key: 'officeToPdf', pkg: 'office-to-pdf', title: 'Office to PDF conversion',
@@ -810,7 +831,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'web',
     title: 'Web access provider registry',
     mode: 'seam',
-    implementations: ['web-search-exa', 'web-search-perplexity', 'web-search-deepseek', 'web-fetch-http'],
+    implementations: ['web-search-exa', 'web-search-perplexity', 'web-search-deepseek', 'web-deepseek-api', 'web-fetch-http'],
     consumers: ['tool-web'],
     note: 'Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names.',
   },

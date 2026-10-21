@@ -30,6 +30,7 @@ import { DesktopOnboardingController } from './onboarding-state.ts'
 import { DesktopOnboardingEntry, type DesktopOnboardingInjected } from './DesktopOnboardingEntry.tsx'
 import { readOnboardingApiKeyPresence } from './onboarding-credentials.ts'
 import { refreshAfterReturn } from './account-refresh.ts'
+import { AccountAvatarLoader } from './account-avatar.ts'
 export type { AccountSectionInjected, AccountSectionProps } from './AccountSection.tsx'
 export type { AccountMenuProps } from './AccountMenu.tsx'
 export type { AccountSnapshot } from './AccountSection.tsx'
@@ -48,12 +49,16 @@ export function apply(ctx: Context): void {
   const t = ctx.locale.bind('settings.account')
   const page = globalThis as Partial<Record<typeof CONTACT_CONFIG_GLOBAL, unknown>>
   const config = ContactConfig(page[CONTACT_CONFIG_GLOBAL] ?? {})
-  let snapshot: AccountSnapshot = { view: undefined, details: undefined, failed: false, loginVisible: false }
+  let snapshot: AccountSnapshot = {
+    view: undefined, details: undefined, avatar: undefined, failed: false, loginVisible: false, desktopOnboardingVisible: desktop,
+  }
   // Desktop main opens the authorization page natively; a plain browser opens it in a tab it owns.
   const browser = new BrowserLogin(url => authorizeUrlWithTheme(url, ctx.theme.getTheme().active.colorScheme))
   ctx.effect(() => () => { browser.dispose() }, 'account: pending browser window')
   const listeners = new Set<() => void>()
   const publish = (value: AccountSnapshot) => { snapshot = value; for (const listener of listeners) listener() }
+  const avatar = new AccountAvatarLoader((value) => { publish({ ...snapshot, avatar: value }) })
+  ctx.effect(() => () => { avatar.dispose() }, 'account: profile picture lifetime')
   /** @returns the client identity for one account call, read at call time so it carries the language and zone in effect then. */
   const client = () => accountClientMetadata(ctx.locale.getSnapshot().active, process.env.DSH_CLIENT_VERSION)
   // The browser half of the notice lifecycle: reads when the account becomes
@@ -73,10 +78,9 @@ export function apply(ctx: Context): void {
       if (!result.ok) throw new Error('account bonus acknowledgement failed')
       return result.value
     },
-    publish: (notice) => {
-      const { notice: _replaced, ...withoutNotice } = snapshot
-      // exactOptionalPropertyTypes distinguishes an absent notice from an undefined one.
-      publish(notice === null ? withoutNotice : { ...withoutNotice, notice })
+    publish: (notices) => {
+      const { notices: _replaced, ...withoutNotices } = snapshot
+      publish(notices.length === 0 ? withoutNotices : { ...withoutNotices, notices })
     },
   })
   ctx.effect(() => () => { notices.end() }, 'account: bonus notice lifetime')
@@ -91,12 +95,14 @@ export function apply(ctx: Context): void {
       let value: AccountDetails[K] | null
       try { value = await query() }
       catch { value = { status: 'failed' } }
+      if (value?.status === 'failed') console.error('[deepseek-account] account read failed', { field })
       if (generation === revision && value !== null) publish({ ...snapshot, details: { ...snapshot.details, [field]: value } })
     }
     const request = Promise.all([
       read('profile', async () => {
         const result = await ctx.remote.account.getProfile(client())
         if (!result.ok) throw new Error('account profile failed')
+        if (generation === revision && result.value?.status === 'ready') avatar.setUrl(result.value.value.avatarUrl)
         return result.value
       }),
       read('balance', async () => {
@@ -119,11 +125,12 @@ export function apply(ctx: Context): void {
     for await (const frame of stream) {
       revision++
       refreshing = undefined
+      avatar.reset()
       const initialize = frame.value.status === 'credential-stored' && frame.value.attempt?.phase === 'succeeded'
         && snapshot.view?.attempt?.phase !== 'succeeded'
-      const { notice, ...previous } = snapshot
-      publish({ ...previous, view: frame.value, details: undefined, failed: false,
-        ...(frame.value.status === 'credential-stored' && notice ? { notice } : {}) })
+      const { notices: previousNotices, ...previous } = snapshot
+      publish({ ...previous, view: frame.value, details: undefined, avatar: undefined, failed: false,
+        ...(frame.value.status === 'credential-stored' && previousNotices ? { notices: previousNotices } : {}) })
       browser.update(frame.value)
       frame.accept()
       if (frame.value.status === 'credential-stored') notices.begin()
@@ -131,9 +138,9 @@ export function apply(ctx: Context): void {
       if (initialize) void (async () => {
         try {
           const initialized = await ctx.remote.session.initializeDefaultModel()
-          if (!initialized.ok) console.info('[deepseek-account] default model initialization failed', { reason: 'refused' })
+          if (!initialized.ok) console.error('[deepseek-account] default model initialization failed', { reason: 'refused' })
         } catch (_error) {
-          console.info('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
+          console.error('[deepseek-account] default model initialization failed', { reason: 'disconnected' })
         }
       })()
       void refresh()
@@ -148,7 +155,10 @@ export function apply(ctx: Context): void {
   // One account refresh: the recharge/bonus wallet and the unnotified-bonus read,
   // whichever surface asks — a Settings entry, or returning from top-up. Both
   // reads are independent, and a concurrent refresh shares the in-flight request.
-  const refreshAccount = async (): Promise<void> => { await Promise.all([refresh(), notices.refresh()]) }
+  const refreshAccount = async (): Promise<void> => {
+    avatar.retry()
+    await Promise.all([refresh(), notices.refresh()])
+  }
   /**
    * Narrow the shared channel to one surface's post-return read: only a viewer
    * returning from top-up re-reads, so a superseded page or a plugin teardown
@@ -162,6 +172,7 @@ export function apply(ctx: Context): void {
       if (reason === 'returned' && page === 'top-up') void refreshAfterReturn(refreshing, reRead)
     })
   const operations: AccountSectionInjected = {
+    avatarFailed: (value) => { avatar.failed(value) },
     subscribeSessionExpired: listener => ctx.remote.$on('deepseek-account/session-expired', listener),
     subscribeModelSignInRequired: listener => ctx.remote.$on('deepseek-account/model-sign-in-required', listener),
     ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refreshAccount) },
@@ -264,6 +275,9 @@ export function apply(ctx: Context): void {
       name: 'shell.overlay', id: 'desktop-onboarding', locale: 'settings.account',
       inject: (): DesktopOnboardingInjected => ({
         hooks: { account: operations.hooks.account, onboarding: controller.state },
+        setVisible: (visible: boolean) => {
+          if (snapshot.desktopOnboardingVisible !== visible) publish({ ...snapshot, desktopOnboardingVisible: visible })
+        },
         // Onboarding's recharge return re-reads profile and balance only.
         ...nativePlatform === undefined ? {} : { openPlatformPage: platformPageOpener(refresh) },
         update: (change: OnboardingChange) => controller.update(change),

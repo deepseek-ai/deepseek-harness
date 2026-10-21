@@ -86,7 +86,7 @@ it('exposes an absent Official bundle installation target without display metada
   const { manager, call } = await fixture()
   const offered: BundleInfo = {
     name: '@deepseek-ai/dsh-subagent-codex', official: true, availability: 'missing',
-    installed: false, enabled: false, optional: false, removable: false, rows: [], overrides: [],
+    installed: false, enabled: false, optional: false, removable: false, updatable: false, rows: [], overrides: [],
     installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@1.2.3', version: '1.2.3' },
     meta: { title: 'Codex subagent' },
   }
@@ -223,7 +223,7 @@ it('paginates inventories with an explicit continuation and total', async () => 
   expect(resultText(await call({ action: 'list_bundles' }))).toContain('"name":"bundle"')
 })
 
-it('keeps UI translation metadata out of model-facing plugin and bundle lists', async () => {
+it('keeps UI translation and listing metadata out of model-facing plugin and bundle lists', async () => {
   const { call, manager } = await fixture()
   const meta = { title: { en: 'Plugin', zh: '插件' }, error: 'UI-only diagnostic' }
   manager.listPlugins.mockImplementationOnce(async () => [{ entryId: 'include:plugin', enabled: true, meta }])
@@ -231,7 +231,7 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
     entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
   })
   manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, listedByDefault: false, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
   }])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
     entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,

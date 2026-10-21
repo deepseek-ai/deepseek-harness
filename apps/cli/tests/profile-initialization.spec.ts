@@ -1,8 +1,8 @@
-/** One-time custom-profile initialization from shipped templates. */
+/** Custom-profile replacement from shipped templates. */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   initProfile,
@@ -12,9 +12,31 @@ import {
   resolveProfileDir,
   writeProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { execa } from 'execa'
 import { initializeProfileFromDefault } from '../src/profile-boot.ts'
+
+/** Replaces one `renameSync` call when it returns true; the real rename runs otherwise. */
+const renameHook = vi.hoisted(() => ({ current: undefined as ((from: string, to: string) => boolean) | undefined }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...fs,
+    renameSync(from: string, to: string): void {
+      if (renameHook.current?.(from, to) !== true) fs.renameSync(from, to)
+    },
+  }
+})
+
+afterEach(() => {
+  renameHook.current = undefined
+})
+
+/** A rename failure whose code does not identify a concurrent target. */
+function renameFailure(): NodeJS.ErrnoException {
+  return Object.assign(new Error('rename failed'), { code: 'EIO' })
+}
 
 const childEntry = fileURLToPath(new URL('./fixtures/initialize-profile-from-default.ts', import.meta.url))
 const tsxLoader = import.meta.resolve('tsx/esm')
@@ -80,36 +102,116 @@ describe('initializeProfileFromDefault', () => {
     })
   })
 
-  it('rejects an existing target without changing its files', () => {
+  it('replaces an existing target with a fresh template copy', () => {
     withHome((home) => {
       const dir = resolveProfileDir('rescue', home)
       initProfile(dir, ['existing-bundle'])
+      const manifest = readProfileManifest('test', dir)
+      manifest.dependencies = { 'existing-bundle': '1.0.0' }
+      writeProfileManifest(dir, manifest)
       writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: existing\n  disabled: true\n')
-      const paths = ['package.json', PROFILE_PATCH_FILENAME, 'pnpm-workspace.yaml'].map(file => join(dir, file))
-      const before = paths.map(path => readFileSync(path))
+      mkdirSync(join(dir, 'node_modules', 'existing-bundle'), { recursive: true })
 
-      expect(() => {
-        initializeProfileFromDefault('rescue', 'web', home)
+      initializeProfileFromDefault('rescue', 'web', home)
+
+      expect(readProfileManifest('test', dir)).toEqual({
+        name: 'dsh-profile-rescue',
+        private: true,
+        dependencies: {},
+        dsh: { profile: { bundles: [...PROFILE_TEMPLATES.web!.bundles] } },
       })
-        .toThrow('profile "rescue" already exists')
-      expect(paths.map(path => readFileSync(path))).toEqual(before)
+      expect(readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')).not.toContain('existing')
+      expect(existsSync(join(dir, 'node_modules'))).toBe(false)
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
     })
   })
 
-  it('rejects a residual target directory without changing its contents', () => {
+  it('replaces a residual target directory', () => {
     withHome((home) => {
       const dir = resolveProfileDir('rescue', home)
       mkdirSync(dir, { recursive: true })
-      const residual = join(dir, PROFILE_PATCH_FILENAME)
-      writeFileSync(residual, '- id: residual\n  disabled: true\n')
-      const before = readFileSync(residual)
+      writeFileSync(join(dir, 'residual'), '')
+
+      initializeProfileFromDefault('rescue', 'web', home)
+
+      expect(existsSync(join(dir, 'residual'))).toBe(false)
+      expect(readProfileManifest('test', dir).dsh?.profile).toEqual(PROFILE_TEMPLATES.web)
+    })
+  })
+
+  it('restores the previous target when the fresh copy cannot be moved into place', () => {
+    withHome((home) => {
+      const dir = resolveProfileDir('rescue', home)
+      initProfile(dir, ['existing-bundle'])
+      const before = readFileSync(join(dir, 'package.json'))
+      renameHook.current = (from, to) => {
+        if (to === dir && from.endsWith(join('new', 'rescue'))) throw renameFailure()
+        return false
+      }
 
       expect(() => {
         initializeProfileFromDefault('rescue', 'web', home)
-      })
-        .toThrow('profile directory')
-      expect(readFileSync(residual)).toEqual(before)
-      expect(existsSync(join(dir, 'package.json'))).toBe(false)
+      }).toThrow('rename failed')
+      expect(readFileSync(join(dir, 'package.json'))).toEqual(before)
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
+    })
+  })
+
+  it('keeps the previous target in staging when restoring it also fails', () => {
+    withHome((home) => {
+      const dir = resolveProfileDir('rescue', home)
+      initProfile(dir, ['existing-bundle'])
+      const before = readFileSync(join(dir, 'package.json'))
+      renameHook.current = (_from, to) => {
+        if (to === dir) throw renameFailure()
+        return false
+      }
+
+      let failure: unknown
+      try {
+        initializeProfileFromDefault('rescue', 'web', home)
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toBeInstanceOf(AggregateError)
+      const [staging] = readdirSync(dirname(dir))
+      expect(staging).toMatch(/^\.rescue\.staging-/)
+      const previous = join(dirname(dir), staging!, 'previous')
+      expect((failure as AggregateError).message).toContain(previous)
+      expect(readFileSync(join(previous, 'package.json'))).toEqual(before)
+    })
+  })
+
+  it('reports a target recreated between the two renames and keeps that copy', () => {
+    withHome((home) => {
+      const dir = resolveProfileDir('rescue', home)
+      initProfile(dir, ['existing-bundle'])
+      renameHook.current = (_from, to) => {
+        if (to !== dir) return false
+        renameHook.current = undefined
+        initProfile(dir, ['concurrent-bundle'])
+        // The real rename now fails with the platform's code for an occupied target.
+        return false
+      }
+
+      expect(() => {
+        initializeProfileFromDefault('rescue', 'web', home)
+      }).toThrow('profile "rescue" was recreated concurrently')
+      expect(readProfileManifest('test', dir).dsh?.profile).toEqual({ bundles: ['concurrent-bundle'] })
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
+    })
+  })
+
+  it('rejects a case variant of a shipped profile without changing it', () => {
+    withHome((home) => {
+      const dir = resolveProfileDir('web', home)
+      initProfile(dir, ['existing-bundle'])
+      const before = readFileSync(join(dir, 'package.json'))
+
+      expect(() => {
+        initializeProfileFromDefault('Web', 'headless', home)
+      }).toThrow('profile "Web" names shipped profile "web"')
+      expect(readFileSync(join(dir, 'package.json'))).toEqual(before)
     })
   })
 
@@ -118,7 +220,7 @@ describe('initializeProfileFromDefault', () => {
       expect(() => {
         initializeProfileFromDefault(name, 'web', home)
       })
-        .toThrow(`profile ${JSON.stringify(name)} is shipped`)
+        .toThrow(`names shipped profile ${JSON.stringify(name)}`)
       expect(existsSync(resolveProfileDir(name, home))).toBe(false)
     })
   })
@@ -133,7 +235,7 @@ describe('initializeProfileFromDefault', () => {
     })
   })
 
-  it('allows only one of two synchronized processes to create the target', async () => {
+  it('leaves one complete template copy after two synchronized processes replace the target', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-profile-from-default-race-'))
     const gate = join(home, 'start')
     const ready = [join(home, 'ready-1'), join(home, 'ready-2')]
@@ -146,9 +248,13 @@ describe('initializeProfileFromDefault', () => {
       await Promise.all(ready.map(waitForFile))
       writeFileSync(gate, '')
       const results = await Promise.all(children)
-      expect(results.map(result => result.exitCode).sort()).toEqual([0, 1])
-      expect(readProfileManifest('test', resolveProfileDir('rescue', home)).dsh?.profile)
-        .toEqual(PROFILE_TEMPLATES.web)
+      expect(results.map(result => result.exitCode)).toContain(0)
+      for (const result of results.filter(result => result.exitCode !== 0)) {
+        expect(result.stderr).toContain('was recreated concurrently')
+      }
+      const dir = resolveProfileDir('rescue', home)
+      expect(readProfileManifest('test', dir).dsh?.profile).toEqual(PROFILE_TEMPLATES.web)
+      expect(readdirSync(dirname(dir))).toEqual(['rescue'])
     } finally {
       for (const child of children) child.kill('SIGKILL')
       rmSync(home, { recursive: true, force: true })

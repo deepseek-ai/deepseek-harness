@@ -130,16 +130,8 @@ inline std::wstring Compose(int code, const std::wstring& archive, const std::ws
     return report;
 }
 
-// The expanded panel adds 7-Zip's own lines beneath the result; long lines are cut and a trailing note counts what the
-// saved report still holds. Header fields already appear in the report file and clipboard.
-inline std::wstring Excerpt(const std::wstring& report, size_t maxLines = kExcerptLines, size_t maxChars = kExcerptChars) {
-    std::vector<std::wstring> lines;
-    bool inOutput = false;
-    for (const std::wstring& line : Lines(Trim(report))) {
-        if (inOutput) lines.push_back(line);
-        else if (line.rfind(L"Result: ", 0) == 0) lines.push_back(line);
-        else if (line == kOutputMarker) inOutput = true;
-    }
+// Expanded native dialogs bound both line count and line length; files and clipboard keep the complete report.
+inline std::wstring BoundedExcerpt(const std::vector<std::wstring>& lines, size_t maxLines = kExcerptLines, size_t maxChars = kExcerptChars) {
     std::wstring excerpt;
     size_t shown = 0;
     for (const std::wstring& line : lines) {
@@ -152,6 +144,18 @@ inline std::wstring Excerpt(const std::wstring& report, size_t maxLines = kExcer
         excerpt += L"\r\n" + std::wstring(1, kEllipsis) + L" (" + std::to_wstring(lines.size() - shown) + L" more lines in the saved report)";
     }
     return excerpt;
+}
+
+// The extraction panel selects 7-Zip's own lines beneath the result; metadata remains in the saved report.
+inline std::wstring Excerpt(const std::wstring& report, size_t maxLines = kExcerptLines, size_t maxChars = kExcerptChars) {
+    std::vector<std::wstring> lines;
+    bool inOutput = false;
+    for (const std::wstring& line : Lines(Trim(report))) {
+        if (inOutput) lines.push_back(line);
+        else if (line.rfind(L"Result: ", 0) == 0) lines.push_back(line);
+        else if (line == kOutputMarker) inOutput = true;
+    }
+    return BoundedExcerpt(lines, maxLines, maxChars);
 }
 
 // A cut inside a multi-byte sequence would make the whole UTF-8 attempt fail; drop the incomplete tail first.

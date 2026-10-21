@@ -12,6 +12,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: the root `main` keyed slot the page registers into, declared by
 // ui-layout with the panel id brand, and the `sidebar.panellist` list the
 // entry registers into, declared by ui-sidebar.
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -24,6 +25,7 @@ import { PluginManagerPage } from './PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from './PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from './PluginsPanelIcon.tsx'
 import { configLedgerSource } from './config-ledger.ts'
+import { tabLedgerSource } from './tab-ledger.ts'
 import { PluginManagerController } from './manager-store.ts'
 import { en, zh, type PluginManagerLocaleKey } from './locales.ts'
 import { createNavigationStore } from './navigation-store.ts'
@@ -31,6 +33,16 @@ import type {} from './slot-contract.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
+    /** Read-only management activity, independent of the visible Plugins page. */
+    pluginChanges: {
+      /**
+       * Observe whether a bundle or one of its rows is being changed.
+       * @param packageName Bundle package name.
+       * @returns A snapshot source whose subscriptions belong to the caller.
+       */
+      bundle(packageName: string): HostObservable<boolean>
+    }
+
     /** Cross-plugin navigation to the Plugins panel. */
     pluginNavigation: {
       /**
@@ -39,6 +51,8 @@ declare module '@deepseek-ai/cordis' {
        * @param packageName - npm package name of the bundle.
        */
       openBundle(packageName: string): void
+      /** Open the Plugins main list without opening a dialog or changing the current Session. */
+      openList(): void
     }
   }
 }
@@ -48,7 +62,7 @@ export type { ConfigLedger, OfficialItem } from './config-ledger.ts'
 export type { PluginManagerFace } from './manager-store.ts'
 export type { PluginManagerLocaleKey } from './locales.ts'
 export type {
-  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps,
+  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps, PluginTabInstall, PluginTabProps,
   PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
 } from './slot-contract.ts'
 
@@ -78,17 +92,21 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const controller = new PluginManagerController(ctx)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-manager: controller')
+  ctx.provide('pluginChanges', { bundle: packageName => controller.observeChanges(packageName) })
   // The Host says when what is installed, enabled, or composed changed — from
   // this page, the CLI, or another browser — and streams install output.
   ctx.effect(() => {
     // A page never rendered holds no snapshot to refresh.
     const refresh = (): void => {
+      // A profile change can replace a bundle's files, and a restarted Host is read afresh.
+      controller.details.reset()
       if (controller.getSnapshot().status !== 'idle') void controller.load()
     }
     const disposers = [
       ctx.remote.$on('plugin-manager/changed', refresh),
       ctx.remote.$on('plugin-manager/install-log', (chunk) => { controller.appendLog(chunk) }),
       ctx.remote.$on('plugin-manager/install-state', (progress) => { controller.installProgress(progress) }),
+      ctx.remote.$on('plugin-manager/update-state', (progress) => { controller.updateProgress(progress) }),
       ctx.on('connection/reset', refresh),
     ]
     return () => { for (const dispose of disposers) dispose() }
@@ -99,7 +117,7 @@ export function apply(ctx: ClientContext): void {
   // the page's own; a plugin's configuration arrives through the slots the
   // page declares here, so the page never names a configurable plugin.
   const configLedger = configLedgerSource(ctx)
-  const face = controller.inject(configLedger, text => ctx.locale.resolveText(text))
+  const face = controller.inject(configLedger, tabLedgerSource(ctx), text => ctx.locale.resolveText(text))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'plugin-manager.refresh-toast', locale: NS,
     inject: (): PluginRefreshToastFace => ({
@@ -118,6 +136,7 @@ export function apply(ctx: ClientContext): void {
       inject: () => face,
       children: {
         'plugins.add.actions': { kind: 'list', scope: 'root' },
+        'plugins.tab': { kind: 'list', scope: 'root' },
         'plugins.item': { kind: 'list', scope: 'root' },
         'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
         'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
@@ -131,8 +150,14 @@ export function apply(ctx: ClientContext): void {
       if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
     })
     const disposeNavigation = ctx.reflect.provide('pluginNavigation', {
+      openList: () => {
+        ctx.layout.selectPanel(PANEL_ID)
+        instance.actions.setTab('installed')
+        instance.actions.setView({ kind: 'list' })
+      },
       openBundle: (packageName: string) => {
         ctx.layout.selectPanel(PANEL_ID)
+        instance.actions.setTab('installed')
         instance.actions.setView({ kind: 'package', name: packageName })
       },
     })

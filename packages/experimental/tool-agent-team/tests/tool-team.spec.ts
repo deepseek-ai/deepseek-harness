@@ -249,7 +249,7 @@ describe('dsh-tool-team', () => {
     expect(leadAssembly.tools.map(schema => schema.name).filter(name => TOOL_NAMES.includes(name)).sort())
       .toEqual(TOOL_NAMES)
     const leadPrompt = renderPrompt(leadAssembly)
-    expect(leadPrompt).toContain('create teammates only when the user explicitly asks')
+    expect(leadPrompt).toContain('Agent Teams is available in this session\n\n')
     expect(leadPrompt).toContain('FS_STALE_VERSION')
     expect(leadPrompt).toContain('Bash, formatters, code generators, and scripts are not fully protected')
     expect(leadPrompt).toContain('Task readiness never starts an owner')

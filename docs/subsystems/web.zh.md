@@ -2,7 +2,7 @@
 
 [English](web.md) | 中文
 
-Web 访问 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)，在同一个 `ctx.web` 服务上横跨**两项操作**（search 与 fetch），并拆分到多个包：Service Definition（[dsh-web](../../packages/web/web)，`ctx.web` + 提供方注册表）、Service Provider（[dsh-web-search-exa](../../packages/web/web-search-exa)、[dsh-web-search-perplexity](../../packages/web/web-search-perplexity)、[dsh-web-search-deepseek](../../packages/web/web-search-deepseek)、[dsh-web-fetch-http](../../packages/web/web-fetch-http)）与 Consumer（[dsh-tool-web](../../packages/web/tool-web)，即 `web_search`/`web_fetch` 工具 schema）。Web 是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.zh.md) 中。更换 search 提供方不会改变模型提交查询的方式，更换 fetch 提供方也不会改变模型请求 URL 的方式。
+Web 访问 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md)，在同一个 `ctx.web` 服务上横跨**两项操作**（search 与 fetch），并拆分到多个包：Service Definition（[dsh-web](../../packages/web/web)，`ctx.web` + 提供方注册表）、Service Provider（[dsh-web-search-exa](../../packages/web/web-search-exa)、[dsh-web-search-perplexity](../../packages/web/web-search-perplexity)、[dsh-web-search-deepseek](../../packages/web/web-search-deepseek)、[dsh-web-deepseek-api](../../packages/web/web-deepseek-api)、[dsh-web-fetch-http](../../packages/web/web-fetch-http)）与 Consumer（[dsh-tool-web](../../packages/web/tool-web)，即 `web_search`/`web_fetch` 工具 schema）。Web 是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.zh.md) 中。更换 search 提供方不会改变模型提交查询的方式，更换 fetch 提供方也不会改变模型请求 URL 的方式。
 
 源码：[`packages/web/web/src/types.ts`](../../packages/web/web/src/types.ts)
 
@@ -54,15 +54,18 @@ interface WebSearchResult {
 
 ```ts type-equiv
 /**
- * One citeable source. A source always has a URL; `title`, `snippet`, and
- * `publishedAt` are optional because not every provider returns them — forcing
+ * One citeable source. A source always has a URL; `title`, `snippet`, `summary`,
+ * and `publishedAt` are optional because not every provider returns them — forcing
  * adapters to invent them would make the seam lie (Perplexity citations may be
  * URL-only). `dsh-tool-web` renders `title ?? hostname(url)` for display.
  */
 interface WebSearchSource {
   readonly url: string
   readonly title?: string
+  /** Short excerpt suited to display. */
   readonly snippet?: string
+  /** Longer excerpt suited to model reading; consumers bound its length. */
+  readonly summary?: string
   /** Publication/crawl timestamp as a provider-supplied ISO-8601 string. */
   readonly publishedAt?: string
 }
@@ -122,13 +125,13 @@ type WebFetchBody =
 
 提供方的 `available(): boolean` 是一个廉价的本地检查（凭证是否存在、配置是否可解析），**禁止发起网络调用**。它是执行时选择提供方的输入，而不是健康检查系统：`search()`／`fetch()` 会读取它来选择可用的提供方。选择失败时，调用方会收到可据以分支处理的结构化 `WebError`；其错误代码和消息会说明缺失的 id 或存在歧义的候选集。
 
-选择从不依赖注册顺序、配置顺序或 HMR（热模块替换）顺序：一项能力要么有显式的提供方 id（配置 `searchProvider`／`fetchProvider`，或填充同一字段的对应环境变量），要么在恰好只有一个可用提供方注册时自动选择；如果存在多个可用提供方却未配置 id，则抛出 `WEB_PROVIDER_AMBIGUOUS`，而不会选用最先注册的提供方。
+选择从不依赖注册顺序、配置顺序或 HMR（热模块替换）顺序：一项能力要么有显式的提供方 id（配置 `searchProvider`／`fetchProvider`，或填充同一字段的对应环境变量），要么在恰好只有一个可用提供方注册时自动选择；如果存在多个可用提供方却未配置 id，则抛出 `WEB_PROVIDER_AMBIGUOUS`，而不会选用最先注册的提供方。每次操作在执行时读取配置的 id，因此保存的设置变更无需重新挂载 `ctx.web` 即对下一次搜索或抓取生效。
 
 ## 抓取网络策略
 
 已交付的 Cordis、Code 与 Standard preset 会在所有 sandbox 和审批模式下暴露 `web_fetch`，无需逐次确认。文件 sandbox preset 不管辖 Web 网络访问。需要确认步骤的部署必须添加 `tools/pre-execute` 策略或禁用抓取。
 
-HTTP 提供方会解析每个实际请求，拒绝包括通过当前 DNS64 前缀抵达私有 IPv4 在内的非公开结果，固定已验证的地址集合，并在每次同源重定向时重复强制执行。跨源重定向需要新的工具调用和新的公开地址校验。这些检查会阻止通过 SSRF 访问非公开目的地址，但不会阻止模型把数据发送到公开 URL。
+HTTP 提供方不限制目的地址：`web_fetch` 会像访问其他主机一样访问 loopback、内网与云元数据主机，模型也可以把数据发送到它能访问的任何 URL。跨源重定向需要新的工具调用。需要阻止模型访问私有目的地址的部署必须使用网络隔离、`tools/pre-execute` 策略，或不挂载抓取工具。
 
 ## 错误
 
@@ -136,7 +139,7 @@ HTTP 提供方会解析每个实际请求，拒绝包括通过当前 DNS64 前�
 
 ## 服务
 
-`WebRuntime` 注册搜索与抓取提供方，以 `WEB_DUPLICATE_PROVIDER` 拒绝重复 id，并在执行时以结构化的选择错误解析提供方。本地抓取后端仅接受 HTTP(S)、拒绝凭证、对每个 hostname 只解析一次、拒绝包含任一非公开 IPv4／IPv6 目的地址或经当前前缀转换到非公开 IPv4 的 NAT64 地址的解析结果、把请求连接固定到已验证地址、对每一次同源重定向跳转重复这些校验、限制重定向次数、字节数、字符数和时间，并解码正文；展示由工具负责。
+`WebRuntime` 注册搜索与抓取提供方，以 `WEB_DUPLICATE_PROVIDER` 拒绝重复 id，并在执行时以结构化的选择错误解析提供方。本地抓取后端仅接受 HTTP(S)、拒绝凭证、经已安装的代理策略发送每个请求、对每一次同源重定向跳转重复 URL 校验、限制重定向次数、字节数、字符数和时间，并解码正文；展示由工具负责。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

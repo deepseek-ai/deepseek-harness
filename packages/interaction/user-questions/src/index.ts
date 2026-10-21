@@ -7,16 +7,16 @@
  * @module @deepseek-ai/dsh-user-questions
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage, HarnessError, type MessageId, type ToolCallId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import z from '@deepseek-ai/schemastery'
-import { userQuestionProjectionDefinition } from './projection.ts'
+import { userQuestionProjectionDefinition, type UserQuestionProjectionState } from './projection.ts'
 import { TimedQuestionWait } from './timed-wait.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -78,14 +78,12 @@ type QueuedReply = { messageId: MessageId; claimedTurn?: number }
 /** `ctx.userQuestions`: validation plus the scoped answerer waterfall. */
 export class UserQuestionService extends TypertRemoteService {
   static Config = z.object({})
+  private userQuestionProjectionHandle: ProjectionHandle<UserQuestionProjectionState> | undefined
   private readonly waits = new Map<Agent, Map<ToolCallId, TimedQuestionWait>>()
   private readonly queuedReplies = new WeakMap<Session, Map<ToolCallId, QueuedReply>>()
 
   constructor(ctx: Context) {
     super(ctx, 'userQuestions')
-    ctx.inject(['sessionProjections'], (projectionCtx) => {
-      projectionCtx.sessionProjections.register(userQuestionProjectionDefinition)
-    })
     ctx.effect(() => () => {
       for (const calls of this.waits.values()) {
         for (const wait of calls.values()) wait.close(abortedQuestion())
@@ -128,6 +126,14 @@ export class UserQuestionService extends TypertRemoteService {
     calls.delete(callId)
   }
 
+  protected async [Service.init](): Promise<void> {
+    const binding = this.ctx.inject(['sessionProjections'], async (ctx) => {
+      this.userQuestionProjectionHandle = await ctx.sessionProjections.register(userQuestionProjectionDefinition)
+      return () => { this.userQuestionProjectionHandle = undefined }
+    })
+    if (this.ctx.get('sessionProjections') !== undefined) await binding
+  }
+
   private assertLiveRoot(agent: Agent): void {
     const agents = this.ctx.get('agents')
     if (agents === undefined || agents.get(agent.id) !== agent) {
@@ -144,8 +150,7 @@ export class UserQuestionService extends TypertRemoteService {
   }
 
   private continued(agent: Agent): readonly PendingUserQuestion[] {
-    const state = this.ctx.get('sessionProjections')?.stateOf(agent.session, 'userQuestions')
-    return (state?.questions.active ?? []).filter(question => question.state === 'continued')
+    return this.userQuestionProjectionHandle?.stateOf(agent.session).questions.active.filter(question => question.state === 'continued') ?? []
   }
 
   /**
@@ -293,26 +298,44 @@ export class UserQuestionService extends TypertRemoteService {
     }
     const agent = request.agent
     if (agent !== undefined) this.assertLiveRoot(agent)
-    // A presentation intent asserts two things the types cannot: that the
-    // named approve label is one of this question's own options, and that a
-    // plan-review carries the plan it is a review of. A UI honouring the
-    // intent answers with that label, and shows that detail as the plan, so
-    // either gap would put a choice the asker never offered — or an approval of
-    // something invisible — in front of the user. Caught at the asker, where
-    // the mistake is, rather than in each UI.
     for (const question of request.questions) {
       const intent = question.intent
       if (intent === undefined) continue
-      if (!(question.options ?? []).some(option => option.label === intent.approve)) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} whose approve label `
-          + `${JSON.stringify(intent.approve)} names none of its options`,
-          'BAD_INTENT')
+      const labels = intent.kind === 'approval'
+        ? [intent.approve, intent.reject, ...intent.always === undefined ? [] : [intent.always]]
+        : [intent.approve]
+      const options = question.options ?? []
+      const unoffered = labels.find(label => !options.some(option => option.label === label))
+      if (unoffered !== undefined) {
+        if (intent.kind === 'plan-review') {
+          throw new UserQuestionError(
+            `question ${question.id} declares intent ${intent.kind} whose approve label `
+            + `${JSON.stringify(intent.approve)} names none of its options`,
+            'BAD_INTENT')
+        }
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} whose action label `
+          + `${JSON.stringify(unoffered)} names none of its options`, 'BAD_INTENT')
       }
       if (question.detail === undefined) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} without the detail it reviews`,
-          'BAD_INTENT')
+        const detail = intent.kind === 'approval' ? 'scope detail it requires' : 'detail it reviews'
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} without the ${detail}`, 'BAD_INTENT')
+      }
+      if (intent.kind === 'approval') {
+        if (request.questions.length !== 1) {
+          throw new UserQuestionError(`approval presentation requires one question; received ${request.questions.length}`, 'BAD_INTENT')
+        }
+        if (question.multiSelect === true) {
+          throw new UserQuestionError(`approval question ${question.id} does not support multiSelect`, 'BAD_INTENT')
+        }
+        if (request.wait !== undefined) {
+          throw new UserQuestionError(`approval question ${question.id} requires a blocking request without wait`, 'BAD_INTENT')
+        }
+        if (new Set(labels).size !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires distinct action labels; received ${JSON.stringify(labels)}`, 'BAD_INTENT')
+        }
+        if (options.length !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires ${labels.length} options matching its actions; received ${options.length}`, 'BAD_INTENT')
+        }
       }
     }
     const noAnswerer = () => Promise.reject(new UserQuestionError(

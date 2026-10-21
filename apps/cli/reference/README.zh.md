@@ -16,9 +16,9 @@
 
 `web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 首次使用时会从随附模板自动初始化（`web`：base + web-app，实时应用 patch；`headless`：base + headless，只在启动时应用 patch；`sdk`：base + sdk-app，只在启动时应用 patch；`sdk-minimal`：独立组合包，只在启动时应用 patch；`acp`：base + acp-app，只在启动时应用 patch）。其他缺失的 profile 会显式报错，并提示运行 `dsh plugin --profile <name> add <package>`。
 
-`dsh --profile <name> --from-default-profile <template>` 会在启动前，从上述五个随附模板之一初始化新的自定义目标。目标名称不能是随附 profile 名称，并且完整的目标 profile 目录必须不存在。launcher 会以独占方式领取该目录，因此残留文件和另一个并发创建者都会在不作修改的情况下被拒绝。它把模板当前的组合包列表复制进一份依赖为空、用户 patch 为空的新 manifest。它不会读取 `<template>` 指定的本地同名 profile，不会复制其依赖或 patch，也不会持久化继承字段；模板列表之后的变化不会改写新 profile。复制列表中指名的内置组合包仍从当前 dsh 安装目录解析。初始化成功不会增加 launcher 输出。
+`dsh --profile <name> --from-default-profile <template>` 会在启动前，用上述五个随附模板之一的全新副本替换自定义目标。目标名称不能是任何大小写形式的随附 profile 名称。launcher 先在目标旁边的暂存目录中组装新 profile 并移动到目标位置，再删除原有的目标目录，包括其中已安装的依赖和用户 patch。移动失败时会恢复原有目录。如果恢复也失败，或进程在两次重命名之间停止，原有目录会保留在 `$DSH_HOME/profiles/.<name>.staging-*/previous`，供手动恢复。多个进程并发替换同一目标时，至少有一个会成功，且目标中只保留一份完整副本。该副本把模板当前的组合包列表写进一份依赖为空、用户 patch 为空的新 manifest。它不会读取 `<template>` 指定的本地同名 profile，不会复制其依赖或 patch，也不会持久化继承字段；模板列表之后的变化不会改写新 profile。复制列表中指名的内置组合包仍从当前 dsh 安装目录解析。替换成功不会增加 launcher 输出。
 
-profile 已经存在时，`--from-default-profile` 会被拒绝，且不会修改或启动它；去掉该选项即可使用它。残留的目标目录同样会被原样保留，此时必须改用另一个 profile 名称。未知模板或随附目标名称会在创建目标之前失败；未知模板的诊断会列出有效模板。初始化在组合包解析和应用启动之前提交，因此后续失败仍会把新 profile 留在磁盘上，重试时需要去掉创建选项。三种配置 dump 模式都接受该选项，并在不启动应用的情况下初始化目标。
+去掉该选项即可在不重置的情况下启动该 profile。未知模板或随附目标名称会在目标被改动之前失败；未知模板的诊断会列出有效模板。替换在组合包解析和应用启动之前提交，因此后续失败仍会把新 profile 留在磁盘上。三种配置 dump 模式都接受该选项，并在不启动应用的情况下替换目标。
 
 ```sh
 dsh rescue --from-default-profile web
@@ -27,7 +27,7 @@ dsh rescue
 
 ### 应用参数
 
-启动器自身的 flag 必须写在最前面，并在遇到第一个无法识别的 token 时结束；从该 token 开始的所有内容都会通过 `ctx.cmdlineArgs` 原样交给已启动的 profile，注入该 profile 的任意应用插件都可以解析这些内容（[`dsh-cmdline`](../../../packages/boot/cmdline/README.zh.md)）。因此，`dsh rescue --from-default-profile web --no-open` 会先初始化，再把 `--no-open` 交给 Web；`dsh --profile web --port 8080` 会将 `--port` 交给 web 应用；`dsh --profile web --help` 只打印该应用的帮助信息，不启动应用；`dsh --help` 没有可供交付参数的 profile，因此会打印启动器自身的帮助信息。`-V`/`--version` 位于应用参数边界之前时，会打印启动器的版本。
+启动器自身的 flag 必须写在最前面，并在遇到第一个无法识别的 token 时结束；从该 token 开始的所有内容都会通过 `ctx.cmdlineArgs` 原样交给已启动的 profile，注入该 profile 的任意应用插件都可以解析这些内容（[`dsh-cmdline`](../../../packages/boot/cmdline/README.zh.md)）。因此，`dsh rescue --from-default-profile web --no-open` 会先重置 rescue，再把 `--no-open` 交给 Web；`dsh --profile web --port 8080` 会将 `--port` 交给 web 应用；`dsh --profile web --help` 只打印该应用的帮助信息，不启动应用；`dsh --help` 没有可供交付参数的 profile，因此会打印启动器自身的帮助信息。`-V`/`--version` 位于应用参数边界之前时，会打印启动器的版本。
 
 每套组合只会挂载一次。普通插件注入 `cmdlineArgs`，解析所属应用的参数，并将解析结果作为服务提供。每个从 flag 取值的配置行都会注入该服务；Loader 会等到服务激活后，再对该行的配置求值（`port: !!js ctx.webStartup.port ?? 3080`），因此 flag 的优先级高于配置行中写明的值。要维持这一优先级，配置行必须保留该表达式；如果用户 patch 用字面量替换整个 `config`，也会随之移除运行时读取。帮助参数和被拒绝的参数都会请求退出：参数被拒绝时以非零状态退出，显示帮助时以 0 退出；依赖该提供方服务的配置行不会激活。启用 HMR 时，编辑 patch 文件会根据仍在运行的服务重新计算表达式，因此不会重置当前正在使用的端口。
 
@@ -128,7 +128,7 @@ dsh web --help
 
 进程关闭时，插件树最多有 5 秒完成 dispose。首次收到 `SIGINT` 或 `SIGTERM` 时会开始优雅排空：`SIGTERM` 是监督进程发出的常规停止请求，在所有运行模式下都以 0 退出；`SIGINT` 则报告 130。第二次收到信号时会立即强制退出。如果一次性运行在正常结束时已经卡在 dispose 阶段，第一次按下 `Ctrl+C` 就会直接升级为强制退出，而不会被忽略。
 
-基于 base 的模式都将运行命令时所在的目录作为默认 workspace 根目录，以 65,536 字节渲染预算加载适用的 `AGENTS.md` 或 `CLAUDE.md` 指令，并使用内存 SQLite 会话内容索引。独立的 `sdk-minimal` profile 把运行命令时所在的目录作为沙箱策略根目录并包含 `read_image`，但省略文本文件系统工具、指令发现与 SQLite。启用的 HMR 插件会监视 profile 与 home 两个 `cordis.patch.yml` 配置层的有效变更，并以事务方式重新应用；未启用 HMR 时只应用一次。一次性运行模式通过有界关闭流程退出，该流程会 dispose 所有实时监视器。
+基于 base 的模式都将运行命令时所在的目录作为默认 workspace 根目录，以每条指令链 65,536 字节的渲染预算加载适用的 `AGENTS.md` 或 `CLAUDE.md` 指令，并使用内存 SQLite 会话内容索引。独立的 `sdk-minimal` profile 把运行命令时所在的目录作为沙箱策略根目录并包含 `read_image`，但省略文本文件系统工具、指令发现与 SQLite。启用的 HMR 插件会监视 profile 与 home 两个 `cordis.patch.yml` 配置层的有效变更，并以事务方式重新应用；未启用 HMR 时只应用一次。一次性运行模式通过有界关闭流程退出，该流程会 dispose 所有实时监视器。
 
 基于 base 的 profile 中，新会话默认使用 `workspace-write` 权限预设。Bash 和文件系统修改仅限于会话 workspace 与平台临时根目录；读取和网络访问不受限制，进程可见性则取决于所选沙箱后端——bwrap 在私有 PID 命名空间中运行命令并隐藏宿主进程，Landlock 与 Seatbelt 保持宿主进程可见性不变。`DSH_PERMISSION_MODE` 更改进程后备值。General settings 中存储的权限影响后续 Web 会话，不改变已打开的会话。独立的 `sdk-minimal` 配置树则固定为 `danger-full-access`，且不挂载 approval 或权限 settings 服务。
 
@@ -136,7 +136,7 @@ dsh web --help
 
 ## 共享部署行为
 
-基础组合包挂载原生 DeepSeek 适配器、settings 与凭据提供方、稳定的 `web_search` 和 `web_fetch`、仅限公网的 HTTP fetch 提供方，默认开启的 DeepSeek 会话日志上传，以及面向所有用户的反馈门控 OTel 上传。提供方凭据依次从继承环境、`$DSH_HOME/.credentials.yaml`、调用目录的 `.env` 和 `$DSH_HOME/.env` 解析；受管文档从不物化进 `process.env`，而两个 `.env` 文件都是普通启动环境层。搜索使用 `DEEPSEEK_API_KEY` 并接受 `DEEPSEEK_SEARCH_BASE_URL`。已启用的抓取调用会在所有 sandbox 与审批模式下执行，无需逐次确认；提供方会在连接前拒绝非公开目的地址。Web app 会禁用 base 工具配置项，再通过 `cordis`、`ptc` 与 `standard` agent preset 暴露相同工具。
+基础组合包挂载原生 DeepSeek 适配器、settings 与凭据提供方、稳定的 `web_search` 和 `web_fetch`、HTTP fetch 提供方，默认开启的 DeepSeek 会话日志上传，以及面向所有用户的反馈门控 OTel 上传。提供方凭据依次从继承环境、`$DSH_HOME/.credentials.yaml`、调用目录的 `.env` 和 `$DSH_HOME/.env` 解析；受管文档从不物化进 `process.env`，而两个 `.env` 文件都是普通启动环境层。搜索使用 `DEEPSEEK_API_KEY` 并接受 `DEEPSEEK_SEARCH_BASE_URL`。已启用的抓取调用会在所有 sandbox 与审批模式下执行，无需逐次确认，并且可以访问 loopback 与内网主机。Web app 会禁用 base 工具配置项，再通过 `cordis`、`ptc` 与 `standard` agent preset 暴露相同工具。
 
 反馈记录在会话日志中，不会启动模型工作。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随后续 DeepSeek 请求发送尚未确认接收的完整日志后缀，包括经已配置网关发送的请求；可在 Web 的**设置 → 通用 → 在使用官方模型 API 时上传 Session Log**中关闭上传，或将其 `enabled` 配置设为 `false`。[OTel 会话上传](../../../packages/session/session-telemetry-otel/README.zh.md)适用于所有用户和提供方，包括 `deepseek-official`，无需请求头。基础配置默认使用 `FEEDBACK_ONLY`：新的自身文本反馈、消息评分、编辑与撤回会释放截至该事件的完整规范日志前缀，包含存储的上下文；后续记录等待下一次显式反馈。继承的父级反馈不构成 fork 的授权。请求、恢复、挂载和 HMR 不触发捕获。SDK 批处理可完成已授权上传，无需进一步交互或模型工作。`DSH_TELEMETRY_MODE=DISABLED` 禁止 OTel 投递；`FULL` 被拒绝，任何非空的 `DSH_TELEMETRY_DISABLED` 都会禁用其配置行。`DSH_TELEMETRY_OTLP_URL` 选择采集端。交接尽力而为，不代表采集端接受；不提供持久化 outbox 或重试保证。这些 OTel 设置不会开启或关闭 DeepSeek 贡献。两条路径都不改变模型输入，但导出可能包含消息文本、工具参数和结果，以及工作区路径。
 

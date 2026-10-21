@@ -162,7 +162,7 @@ describe.skipIf(MODE === 'record')('web e2e: archiving a running Session stops i
     // A foreground Bash command is a registered job from its start, so the
     // Host reports it beside the turn; stopping the turn kills it.
     await expect.poll(() => dialog.getByRole('list', { name: 'Work that will be stopped' }).locator('li').allTextContents())
-      .toEqual(['The turn in progress', `1 background job: ${WAIT_COMMAND}`])
+      .toEqual([`1 background job: ${WAIT_COMMAND}`, 'The turn in progress'])
     // Asking is not archiving: the Host set is untouched, the turn and its
     // Bash child keep running, and the row stays in the sidebar.
     expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([])

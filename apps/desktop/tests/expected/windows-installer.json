@@ -8,6 +8,7 @@
     "welcome-ready-before-first-show",
     "welcome-presented-on-first-show",
     "successful-install-paints-100-before-finish",
+    "locked-directory-shows-error-and-copy-control-and-preserves-installation",
     "registered-directory-with-trailing-separators",
     "registered-directory-and-checked-launch",
     "launch-failure-retry-and-prompt-dismissal",

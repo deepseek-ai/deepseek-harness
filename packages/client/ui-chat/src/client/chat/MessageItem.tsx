@@ -54,6 +54,7 @@ function failureMessage(
   t: ChatViewSlotProps['t'],
 ): string {
   if (code === 'ACCOUNT_SIGNED_OUT') return t('message.failure.accountSignedOut')
+  if (code === 'INTERRUPTED') return t('message.failure.interrupted')
   if (code === 'ACCOUNT_SIGN_IN_REQUIRED') return t('message.failure.accountSignInRequired')
   if (code === 'QUOTA' || code === 'ACCOUNT_QUOTA') return t('message.failure.quota')
   return code === 'AUTH' ? t('message.failure.auth') : message
@@ -136,10 +137,10 @@ function TurnErrorItem({ node, t }: {
     <div className={css.turnErrorRow} role="status">
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
-        <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' ? t('message.accountStopped') : t('message.turnError')}</span>
+        <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' || node.code === 'INTERRUPTED' ? t('message.taskStopped') : t('message.turnError')}</span>
         <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
       </div>
-      {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}
+      {node.code !== undefined && node.code !== 'INTERRUPTED' && <code className={css.turnErrorCode}>{node.code}</code>}
     </div>
   )
 }
@@ -161,8 +162,8 @@ function TurnMaxTokensItem({ t }: {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, referenceLabels, skillNames,
-  previewAttachments, facts: inputFacts = EMPTY_TEXT_FACTS, interactive = false,
+  content, loadImage, renderFactorySlot, actions, pending = false, echo = false, batchStart = false,
+  referenceLabels, skillNames, previewAttachments, facts: inputFacts = EMPTY_TEXT_FACTS, interactive = false,
 }: {
   content: readonly unknown[]
   renderFactorySlot: PropsRenderFactories['renderFactorySlot']
@@ -172,6 +173,8 @@ function UserStyleBubble({
   pending?: boolean
   /** Whether this is a local submission echo (invisible marker; the echo renders exactly like its durable replacement). */
   echo?: boolean
+  /** Whether this admitted steering row starts its claim's batch and keeps the Turn tail slot above it. */
+  batchStart?: boolean
   /** Exact session mention labels associated by the adjacent recall node. */
   referenceLabels?: readonly string[]
   /** Skill names the step's `skill-invocation` injections loaded for this message. */
@@ -198,6 +201,7 @@ function UserStyleBubble({
       className={css.userRow}
       data-pending-steering={pending || undefined}
       data-submission-echo={echo || undefined}
+      data-chat-steering-batch={batchStart ? 'start' : undefined}
     >
       {renderFactorySlot('conversation.chat.user.content', {
         content: prepared,
@@ -304,6 +308,7 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
       interactive
       renderFactorySlot={renderFactorySlot}
       loadImage={loadImage}
+      batchStart={node.kind === 'steering' && node.data.batchStart === true}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
       {...data.skillNames === undefined ? {} : { skillNames: data.skillNames }}
       actions={text => (

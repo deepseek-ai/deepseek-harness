@@ -12,7 +12,8 @@
     "src/client/retention.ts",
     "src/client/shell-preference.ts",
     "src/types.ts",
-    "src/client/close-requests.ts"
+    "src/client/close-requests.ts",
+    "src/client/inventory.ts"
   ],
   "references": [
     {
@@ -38,6 +39,9 @@
     },
     {
       "path": "../../util/deque"
+    },
+    {
+      "path": "../../client/connection/tsconfig.client.json"
     }
   ]
 }

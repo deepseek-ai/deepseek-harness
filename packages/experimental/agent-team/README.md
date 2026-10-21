@@ -149,7 +149,7 @@ Mailbox projection and checkpoint admission preserve every decoded JSON field of
 
 ### Disposal
 
-The runtime lifecycle tracks sends and complete creation transactions in one operation set. Disposal closes admission, aborts and awaits those operations, then releases the roster’s live children and descendants. Non-Team children remain untouched. Admitted operations share one `disposalTimeoutMs` settlement deadline; each subsequent Team child drain has its own deadline. This value is not a whole-service shutdown bound. Cleanup failures are reported.
+The runtime lifecycle tracks sends and complete creation transactions in one operation set. Disposal closes admission, aborts and awaits those operations, then releases the roster’s live children and descendants. Non-Team children remain untouched. Admitted operations share one `disposalTimeoutMs` settlement deadline; each subsequent Team child drain has its own deadline. This value is not a whole-service shutdown bound. Cleanup failures are reported. Team shutdown is independent of projection unregistration; its retained reader follows Session events while admitted work settles.
 
 </details>
 
@@ -171,7 +171,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 ### Browser projection
 
-The `agentTeam` Session projection publishes the Lead Session's durable roster identities and phases, member errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` Session projection publishes the Lead Session's durable roster identities and phases, member errors, non-deleted task views, and any `failure` beside the last valid state. Its `apply` replaces only the touched collection; mailbox-only changes retain the client view reference and produce no frame. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types. A failed projection rejects subsequent Team reads and mutations without appending further Team events.
 
 The [Web UI](../client-ui-agent-team/README.md) reads the shared Session projections and overlays activity from Session status. Task creation and updates belong to Team agents through the service and model tools. The `./client` export supplies browser-safe roster, task, and projection types.
 

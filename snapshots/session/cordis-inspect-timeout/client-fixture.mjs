@@ -23,6 +23,7 @@ export function registerSilentClientTransport(ctx) {
     id: 'snapshot-client-peer',
     ctx,
     principal: { kind: 'owner' },
+    interactions: 'answer',
     signal: new AbortController().signal,
     dispose: async () => {},
   }

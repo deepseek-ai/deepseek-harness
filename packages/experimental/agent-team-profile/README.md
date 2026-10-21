@@ -58,7 +58,7 @@ In Web and Desktop conversations, the [Team UI](../client-ui-agent-team/README.m
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after `dsh-base`, the patch disables `tool-subagent-control`, `tool-subagent-list-agents`, `tool-subagent`, and `tool-subagent-fork`, and inserts the Team service, tools, and UI with explicit providers and limits. The UI plugin has an inert Host entry; only the Web Client loader mounts its browser entry, so headless needs no Web server.
+The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after `dsh-base`, the patch disables `tool-subagent-control`, `tool-subagent`, and `tool-subagent-fork`, and inserts the Team service, tools, and UI with explicit providers and limits. The UI plugin has an inert Host entry; only the Web Client loader mounts its browser entry, so headless needs no Web server.
 
 | File | Role |
 |---|---|

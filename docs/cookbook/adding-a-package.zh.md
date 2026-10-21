@@ -14,7 +14,7 @@ packages/<group>/<pkg>/
                    # ../../../vendor/cordis (+ ../../../vendor/schemastery if
                    # you use Config, + ../../<group>/<dep> for each dsh dep)
   src/index.ts     # service default export or plugin (name/inject/apply/Config)
-  locale/en.json   # optional display metadata: meta.title and meta.description
+  locale/en.json   # optional display metadata: meta.title, meta.description, and meta.detail
   locale/zh.json   # translations using the same fields
   README.md        # service API, events, extension points, design notes,
                    # + gated Model Experience context blocks or short form
@@ -146,6 +146,8 @@ Append-only, prefix-stable, replacing, or independent behavior, including the ex
 导出 `<包名>/locale/en.json` 供 locale 查询；需要包字段回退或声明图标时，开放 `<包名>/package.json`。`<包名>/search` 这样的子路径插件不是包，从不读取 `package.json`，即使导出了 `./search/package.json`；它用 `./search/locale/*.json` 提供文本，用 `./search/icon` 提供图片。
 
 要在组合包卡片、详情和组件行显示图片，包根插件在导出清单顶层设置 `"icon": "./icon.svg"`，或在省略该字段时导出 `./icon`。子路径插件导出自己的图标，例如 `"./search/icon": "./search.svg"`。将每张图片加入 `files`。清单 `icon` 相对于清单所在目录；绝对路径、URL、目录外路径，以及解析到目录外的符号链接均被拒绝。导出的图标像 locale 资源一样经 Node exports 解析，且必须位于所属包内。支持不超过 256 KiB 的 SVG、PNG、JPEG（`.jpg`/`.jpeg`）和 WebP 文件。图片必须自包含；SVG 作为图片渲染，不作为内联 HTML。Host 返回 data URL，不激活插件。声明无效或文件不可读时，显示元信息诊断并保留有效文本，不再尝试导出的图标；图片缺失或无法解码时使用面板的默认插画。
+
+组合包还可以把 `meta.detail` 设为相对于包根目录的 Markdown 文件路径，例如在 `locale/en.json` 中设为 `"docs/DETAIL.md"`，在 `locale/zh.json` 中设为 `"docs/DETAIL.zh.md"`；读取时使用包根目录下的这些文件。路径使用 `/`，必须位于包内，以 `.md` 或 `.markdown` 结尾，且没有包字段回退；图片放在该文件旁边，并按 `check-workspace-constraints` 的要求，在 `files` 中紧接语言资源之后列出该文件的顶层目录，例如 `docs`。该文件必须位于包的子目录中且已存在；包根目录下的文档会被拒绝，因为其旁边的图片不会被发布。组合包在**插件**中的页面，以及启用[自定义插件市场组合包](../../packages/experimental/plugin-market-bundle/README.zh.md)时其市场条目页面，把当前界面语言对应的该文件作为插件的详细介绍文档显示。没有 `meta.detail` 时，它们显示包 README；市场条目页面在此之后还会回退到所声明仓库的 README；规则由[文档顺序](../../packages/util/plugin-detail/README.zh.md#document-order)定义。该文档面向用户编写，图片使用相对于该文件的路径引用。
 
 已安装 bundle 的卡片和详情、组件列表与配置详情、设置中的插件清单都展示这些元信息，包括禁用插件和预设内插件。读取时不激活插件。
 

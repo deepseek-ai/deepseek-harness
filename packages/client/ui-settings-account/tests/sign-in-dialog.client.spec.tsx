@@ -14,7 +14,7 @@ function dialogProps(attempt: AccountView['attempt'], copy: typeof en | typeof z
   const close = vi.fn()
   const useApiKey = vi.fn()
   return { start, cancel, close, useApiKey, colorScheme, t: (key: keyof typeof en) => copy[key],
-    account: { view: { status: 'signed-out' as const, attempt, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }, details: undefined, failed: false } }
+    account: { view: { status: 'signed-out' as const, attempt, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }, details: undefined, avatar: undefined, failed: false } }
 }
 function mount(attempt: AccountView['attempt'], copy: typeof en | typeof zh = en, colorScheme: 'light' | 'dark' = 'dark') {
   const props = dialogProps(attempt, copy, colorScheme)

@@ -10,13 +10,15 @@ Web 插件页只提供两个可选 bundle：Agent Teams 与语音输入。Auto r
 
 ## 决策
 
-`OPTIONAL_BUNDLES` 管理安装随附且默认关闭的选项，包括维护中的可选能力与实验性能力。每个 bundle 声明 `icon`，并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`；官方分组显示这些元数据。Bundle 的展示方式不决定其[实验性状态](../../../../packages/experimental/README.zh.md#status)。隔离检查校验准入，并继续拒绝非实验 bundle 的实验性依赖。
+`OPTIONAL_BUNDLES` 管理安装随附且默认关闭的选项，包括维护中的可选能力与实验性能力。每个 bundle 声明 `icon`，并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`；[插件管理页](../../../../packages/client/ui-plugin-manager/README.zh.md#use-this-package)为符合展示条件的组合包显示这些元数据，并保留默认隐藏项的显式启用入口。Bundle 的展示方式不决定其[实验性状态](../../../../packages/experimental/README.zh.md#status)。隔离检查校验准入，并继续拒绝非实验 bundle 的实验性依赖。
 
-可选 bundle 的依赖随每次 `dsh` 安装下载。[思考过程翻译](2026-10-05-anonymous-reasoning-translation.zh.md)使用三个实验包，不增加第三方运行时依赖。因此准入需要考虑安装成本，以及开关能否在不增加配置表单的情况下提供可用组合。浏览器与电脑提供方仍使用显式组合，因为它们会增加较大的运行时或要求外部可执行文件。Stagehand 需要模型凭据；Python PTC 替换核心提供方，并与 TypeScript workflow 消费方冲突。演示性钩子、webhook 与模组不进入名单。[Session Inspector](../feature/2026-09-24-session-inspector.zh.md) 管理 Inspector 特有的激活行为。
+可选 bundle 的依赖随每次 `dsh` 安装下载。[思考过程翻译](2026-10-05-anonymous-reasoning-translation.zh.md)使用三个实验包，不增加第三方运行时依赖。因此准入需要考虑安装成本，以及开关能否在不增加配置表单的情况下提供可用组合。外部浏览器与 Cua Driver 提供方仍使用显式组合，因为它们会增加较大的运行时或要求外部可执行文件。Stagehand 需要模型凭据；Python PTC 替换核心提供方，并与 TypeScript workflow 消费方冲突。演示性钩子、webhook 与模组不进入名单。[Session Inspector](../feature/2026-09-24-session-inspector.zh.md) 管理 Inspector 特有的激活行为。
 
 Bundle 插入普通 Host 行；可选模型工具注册到全局工具层，因此包括 minimal 在内的所有预设都会获得它们。插件管理、profile 组合与重载无需针对 bundle 的特殊行为。搜索、Ralph 与终端在 Host 组内提供自己的隔离服务。搜索按需打开一个内存索引；Host 搜索策略保持不变。徽章技能与标题提供方作用于 Host。切换 bundle 会为运行中的 Agent 注册或移除其工具，后续用户 patch 层继续优先。前一个标题提供方开始清理后，替代提供方即可注册；前一个提供方的迟到结果不会提交。
 
 Claude Code 与 Codex 通过独立的 `ON_DEMAND_BUNDLES` 目录按需安装，其成本、版本与离线发现取舍由[按需原生 bundle 决策](2026-10-05-official-on-demand-bundles.zh.md)管理。
+
+Computer Use 是 experimental 包组内随安装提供的可选组合包。组合包与 `@deepseek-ai/dsh-cua` 一起采用显式命名例外 `@deepseek-ai/dsh-cua-bundle`，在能力移动分组时保留配置引用。依赖隔离和晋升仍由实验性分类约束。提供方加载时准备仓库自有的本机组件，无需外部 Cua Driver 运行时。
 
 ## 考虑过的替代方案
 
@@ -31,3 +33,5 @@ Claude Code 与 Codex 通过独立的 `ON_DEMAND_BUNDLES` 目录按需安装，�
 ## 后果
 
 官方发现不表示实验性状态，也不引入不同的插件生命周期。关闭 bundle 保留已安装文件；激活失败保留现有的已保存选择行为。Bundle 行是普通 Host 行，使用常规开关。独立与组合测试覆盖 Host 行及每个预设的工具目录；实时切换与已记录 Session 覆盖激活和模型可见行为。
+
+Computer Use 将权限服务和原生提供方保留在 Host，在已绑定 `ptc` preset 的 Agent 作用域中注册工具。现有 Agent 事件和 `createScope()` 维护当前、新建和恢复的 Agent，preset 声明保持不变。只有详情页的显式操作通过现有设置表单修改新会话默认模式，启用开关不配置 PTC 执行方式。

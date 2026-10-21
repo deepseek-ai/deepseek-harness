@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subagent",
   "description": "Abstract subagent seam (ctx.subagents): named-provider registry for delegating to child agents",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -96,9 +96,6 @@
       "optional": true
     },
     "@deepseek-ai/dsh-session-persistence": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-session-projection": {
       "optional": true
     },
     "@deepseek-ai/dsh-session-query": {

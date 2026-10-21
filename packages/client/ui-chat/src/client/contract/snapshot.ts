@@ -92,9 +92,10 @@ export interface ChatTurnProcessPresentation {
   readonly turnStarted: boolean
   readonly turnClosed: boolean
   readonly hasExternalProcess: boolean
+  /** Like `hasExternalProcess`, but a reply from another Step counts only through its reasoning. */
+  readonly hasNonReplyProcess: boolean
   /** A visible input after process output prevents one disclosure from hiding its surrounding groups. */
   readonly hasInterleavedInput: boolean
-  readonly compactAnswer: boolean
 }
 
 /** Compatibility projection backing the composer stats pills (StatsPills.tsx) and the legacy top-level snapshot fields. */

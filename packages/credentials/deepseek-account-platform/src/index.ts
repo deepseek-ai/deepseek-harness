@@ -98,7 +98,7 @@ export class PlatformAccount extends DeepSeekAccount {
   private readonly logoutLifetime = new AbortController()
   private readonly revocations = new Set<Promise<void>>()
   private attempt: Attempt | undefined
-  private readonly listeners = new Set<() => void>()
+  private readonly listeners = new Set<(identityOnly: boolean) => void>()
   /**
    * Latest ready profile read and the grant token it was read with. Binding the token keeps a
    * cached identity from answering for a credential that has since changed.
@@ -172,7 +172,6 @@ export class PlatformAccount extends DeepSeekAccount {
     if (!parsed.success) throw new PlatformAuthError('storage')
     if (parsed.data.issuer === this.origin) return
     await this.ctx.credentials.deleteRecord(KEY)
-    console.info('[deepseek-account] stored grant discarded', { reason: 'issuer-mismatch' })
   }
 
   override async getState(): Promise<AccountView> {
@@ -270,7 +269,7 @@ export class PlatformAccount extends DeepSeekAccount {
 
   /**
    * Cache one ready profile against the grant token it was read with, so identity reuse cannot cross
-   * a credential change. A stable ID that first appears or changes notifies watch consumers, so
+   * a credential change. A stable ID that first appears or changes notifies identity-enabled watch consumers, so
    * identity consumers re-read getPlatformSession; repeated IDs stay silent.
    * @param token - grant the profile was read with.
    * @param profile - profile outcome to record when it carries account data.
@@ -280,7 +279,7 @@ export class PlatformAccount extends DeepSeekAccount {
     // Identity publishers re-read the session snapshot; wake them only when the stable ID changes.
     const previous = this.lastProfile?.profile.value.id || null
     this.lastProfile = { token, profile }
-    if (previous !== (profile.value.id || null)) this.changed()
+    if (previous !== (profile.value.id || null)) this.changed(true)
   }
 
   /**
@@ -433,7 +432,7 @@ export class PlatformAccount extends DeepSeekAccount {
       } else attempt.callback?.writeHead(204, { 'cache-control': 'no-store' }).end()
     }).catch((error: unknown) => {
       const code = error instanceof PlatformAuthError ? error.code : 'protocol'
-      console.info('[deepseek-account] sign-in failed', { errorCode: code })
+      console.error('[deepseek-account] sign-in failed', { errorCode: code })
       this.update(attempt, { phase: code === 'expired' ? 'expired' : 'failed', errorCode: code })
       this.finishFailedCallback(attempt)
     }).then(async () => {
@@ -481,12 +480,13 @@ export class PlatformAccount extends DeepSeekAccount {
     return this.removing
   }
 
-  override async *watch(signal: AbortSignal): AsyncIterable<AccountView> {
+  override async *watch(signal: AbortSignal, includeIdentityChanges = false): AsyncIterable<AccountView> {
     let dirty = true
     let wake: (() => void) | undefined
-    const changed = (): void => { dirty = true; wake?.() }
+    const wakeUp = (): void => { dirty = true; wake?.() }
+    const changed = (identityOnly: boolean): void => { if (!identityOnly || includeIdentityChanges) wakeUp() }
     this.listeners.add(changed)
-    signal.addEventListener('abort', changed, { once: true })
+    signal.addEventListener('abort', wakeUp, { once: true })
     try {
       while (!this.closed && !signal.aborted) {
         if (dirty) { dirty = false; yield await this.getState(); continue }
@@ -494,7 +494,7 @@ export class PlatformAccount extends DeepSeekAccount {
       }
     } finally {
       this.listeners.delete(changed)
-      signal.removeEventListener('abort', changed)
+      signal.removeEventListener('abort', wakeUp)
     }
   }
 
@@ -511,7 +511,7 @@ export class PlatformAccount extends DeepSeekAccount {
     this.detailsLifetime = new AbortController()
   }
 
-  private changed(): void { for (const listener of this.listeners) listener() }
+  private changed(identityOnly = false): void { for (const listener of this.listeners) listener(identityOnly) }
 
   private update(attempt: Attempt, value: Partial<SignInAttemptView>): void {
     const { authorizeUrl: _url, ...rest } = attempt.view
@@ -612,7 +612,7 @@ export class PlatformAccount extends DeepSeekAccount {
   }
 
   private rejectPayload(stage: string, error: z.ZodError): never {
-    console.info('[deepseek-account] payload rejected', {
+    console.error('[deepseek-account] payload rejected', {
       stage, issues: error.issues.map(issue => ({
         path: issue.path, code: issue.code,
         receivedType: issue.input === null ? 'null' : Array.isArray(issue.input) ? 'array' : typeof issue.input,

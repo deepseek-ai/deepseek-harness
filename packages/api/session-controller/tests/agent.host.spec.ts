@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
@@ -17,7 +18,6 @@ import {
   ApiSessionNotFound,
   inspectApiSession,
 } from '../src/agent.ts'
-import { installModelSelectionProjection } from '../src/model-selection-projection.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
 const roots: Context[] = []
@@ -35,15 +35,17 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
   roots.push(ctx)
   await ctx.plugin(TypertRegistry)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   installSessionReadTestServices(ctx)
-  ctx.sessionProjections.register(agentPresetProjectionDefinition)
-  installModelSelectionProjection(ctx)
+  await ctx.sessionProjections.register(agentPresetProjectionDefinition)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  return { ctx, agents: new ApiSessionAgentController(ctx) }
+  const agents = new ApiSessionAgentController(ctx)
+  await agents.initialize()
+  return { ctx, agents }
 }
 
 function header(id: string, cwd: string | null = '/workspace'): SessionHeader {
@@ -287,14 +289,6 @@ describe('ApiSession Agent lookup and recovery', () => {
 })
 
 describe('ApiSession model selection', () => {
-  it('requires the model-selection projection', async () => {
-    const { ctx, agents } = await harness()
-    const live = agent(ctx, header('missing-model-projection'))
-    vi.spyOn(ctx.sessionProjections, 'stateOf').mockReturnValue(undefined)
-
-    expect(() => agents.selectionFor(live)).toThrow('required modelSelection projection')
-  })
-
   it('reads a reasoning-free request and consumes only the exact pending selection', async () => {
     const { ctx, agents } = await harness()
     const logged = agent(ctx, header('logged-model'))

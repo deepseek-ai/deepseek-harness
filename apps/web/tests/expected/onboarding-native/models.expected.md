@@ -14,7 +14,8 @@
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 留空时保留现有认证（DEEPSEEK_API_KEY）
+        - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
+      - paragraph: 未检测到环境变量。请填写 API 密钥，或设置环境变量 DEEPSEEK_API_KEY。
       - group: 自定义设置
       - button "取消"
       - button "保存"

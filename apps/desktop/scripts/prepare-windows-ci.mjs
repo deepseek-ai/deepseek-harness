@@ -11,7 +11,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
   const product = JSON.parse(readFileSync(resolve(appRoot, 'package.json'), 'utf8'))
   const version = windowsCiVersion(process.env, product.version)
   const mode = process.env.PACKAGE_SIGNING
-  if (process.env.PACKAGE_PUBLISH === 'true' && mode !== 'signed') throw new Error('Publishing requires signed Windows packages')
   if (mode !== 'unsigned' && mode !== 'signed') throw new Error('Select unsigned or signed packaging')
   if (!process.env.DSH_PACKAGING_PRESET) throw new Error('Select a machine preset')
   const environment = loadDesktopPackageEnvironment('win32', process.env, appRoot, { unsigned: mode === 'unsigned' })

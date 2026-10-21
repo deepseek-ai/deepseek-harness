@@ -1,0 +1,10 @@
+# Custom plugin markets: the Host service that reads the index sources the
+# user configures and the Web Discover tab of the Plugins page. The
+# `plugin_market` tool row in the Creator preset registers its tool only
+# while this service is mounted.
+- insert:
+    - id: plugin-market
+      name: '@deepseek-ai/dsh-plugin-market'
+      disabled: !!js "!ctx.get('profileContext')"
+    - id: ui-plugin-market
+      name: '@deepseek-ai/dsh-client-ui-plugin-market'

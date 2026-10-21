@@ -46,8 +46,6 @@
 
 - id: tool-subagent-control
   disabled: true
-- id: tool-subagent-list-agents
-  disabled: true
 - id: tool-subagent-report
   disabled: true
 - id: tool-subagent

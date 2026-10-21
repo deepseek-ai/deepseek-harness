@@ -30,7 +30,7 @@ describe('CI workflow', () => {
     expect(compatibilityLimit).toBeGreaterThan(0)
     expect(compatibility.strategy).toMatchObject({
       'fail-fast': false,
-      matrix: { include: [{ node: '22.19' }, { node: '24.9' }, { node: 26 }] },
+      matrix: { include: [{ node: '24.9' }, { node: 26 }] },
     })
     expect(workflowJob(ci, 'all-checks-passed').needs).toContain('node-compat')
     const ordinaryJobs = Object.entries(ci.jobs)
@@ -86,7 +86,10 @@ describe('CI workflow', () => {
         .toContainEqual(expect.objectContaining({ name: 'Build', run: command }))
     }
     const scripts = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
-    expect(scripts.scripts['build:lib:host']).toContain('tsc -b tsconfig.host.json')
+    const hostSteps = scripts.scripts['build:lib:host']!.split(' && ')
+    expect(hostSteps[0]).toBe('tsx scripts/compile-referenced-projects.ts host-libraries')
+    expect(hostSteps).toContain('node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.host.json')
+    expect(hostSteps.at(-1)).toBe('pnpm --filter @deepseek-ai/dsh-desktop run bundle')
     expect(scripts.scripts['build:lib:client']).toContain('tsc -b tsconfig.client.json')
     expect(scripts.scripts.typecheck).toBe('tsx scripts/build.ts --scope typecheck')
   })
@@ -668,12 +671,20 @@ describe('CI workflow', () => {
     expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
   })
 
-  it('gives the Wine Host TypeScript compile the repository heap budget', () => {
+  it('splits the Wine Host TypeScript compile and retains its heap budget', () => {
     const wineGates = readFileSync(resolve(root, 'scripts/wine-windows-gates.sh'), 'utf8')
 
-    expect(wineGates).toContain(
-      'wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -b tsconfig.host.json --pretty false',
+    const references = wineGates.indexOf(
+      'wine_node "$scratch/logs/host-references.log" --import tsx/esm scripts/compile-referenced-projects.ts host',
     )
+    const aggregate = wineGates.indexOf(
+      'wine_node "$scratch/logs/host-tsc.log" --max-old-space-size=4096 "$tsc_js" -p tsconfig.host.json --pretty false',
+    )
+    const metadata = wineGates.indexOf('wine_node "$scratch/logs/host-typert.log" --import tsx/esm scripts/generate-typert.ts')
+    expect(metadata).toBeGreaterThan(-1)
+    expect(references).toBeGreaterThan(metadata)
+    expect(aggregate).toBeGreaterThan(references)
+    expect(wineGates).not.toContain('-b tsconfig.host.json')
   })
 
   it('cancels superseded master runs without changing the post-merge job inventory', () => {
@@ -1261,6 +1272,7 @@ describe('Weighted approval workflow', () => {
     expect(review.types).toEqual(['submitted', 'edited', 'dismissed'])
     expect(reviewEvent.permissions).toEqual({})
     expect(publisher.permissions).toEqual({
+      checks: 'write',
       contents: 'read',
       'pull-requests': 'write',
       statuses: 'write',

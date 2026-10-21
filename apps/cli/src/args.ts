@@ -21,7 +21,7 @@ import { Command, CommanderError, InvalidArgumentError } from 'commander'
 interface ProfileInvocation {
   mode: 'profile'
   profile: string
-  /** Shipped template used once to initialize a missing profile. */
+  /** Shipped template that replaces the named profile. */
   fromDefaultProfile?: string | undefined
   /** Extra patch-list overlays applied after the profile's own layer, in argv order. */
   patches: string[]
@@ -33,7 +33,7 @@ interface ProfileInvocation {
 interface DumpConfigInvocation {
   mode: 'dump-config'
   profile: string
-  /** Shipped template used once to initialize a missing profile. */
+  /** Shipped template that replaces the named profile. */
   fromDefaultProfile?: string | undefined
   /** Omit the profile's user layer and --patch overlays; print bundle layers only. */
   defaultOnly: boolean
@@ -44,7 +44,7 @@ interface DumpConfigInvocation {
 interface DumpConfigSchemaInvocation {
   mode: 'dump-config-schema'
   profile: string
-  /** Shipped template used once to initialize a missing profile. */
+  /** Shipped template that replaces the named profile. */
   fromDefaultProfile?: string | undefined
   patches: string[]
 }
@@ -91,7 +91,7 @@ const HELP_EXAMPLES = `
 Examples:
   dsh web                                   boot the web profile (same as: dsh --profile web)
   dsh rescue --from-default-profile web
-                                            create rescue from the shipped web template, then boot it
+                                            recreate rescue from the shipped web template, then boot it
   dsh headless "run the tests"              answer one task, print the result, and exit
   dsh tui --patch ./extra.yml               boot a custom profile with one extra overlay
   dsh tui --resume <session>                arguments after the launcher flags reach the app
@@ -166,7 +166,7 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
     .enablePositionalOptions()
     .argument('[args...]', 'arguments for the booted profile\'s app (see: dsh --profile <name> --help)')
     .option('--profile <name>', 'the profile under $DSH_HOME/profiles to boot', selectProfile)
-    .option('--from-default-profile <name>', 'initialize a new custom profile from a shipped profile template')
+    .option('--from-default-profile <name>', 'replace a custom profile with a fresh copy of a shipped profile template')
     .option('--patch <path>', 'extra patch-list overlay applied after the profile layer (repeatable)', collect)
     .option('--dump-config', 'print the composed profile tree and exit')
     .option('--dump-config-schema', 'print JSON Schema for profile entries and patches without mounting')

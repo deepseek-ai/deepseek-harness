@@ -18,14 +18,20 @@
   en: 25f536f156ec0bcc
   zh: a522355b3e0edeae
 /deepseek-ai-dsh-client-modules/use-this-package/declaring-a-client-plugin:
-  en: d4a7f865f4593724
-  zh: 4313eb8fe9cd5c98
+  en: cc0eb2c35a7a0998
+  zh: 0e1df23869410c7a
+/deepseek-ai-dsh-client-modules/use-this-package/package-assets:
+  en: 529af1eb8bf1acf2
+  zh: 7d891a5dfa90c625
 /deepseek-ai-dsh-client-modules/use-this-package/what-the-browser-loads:
   en: 1383d68472b3c057
   zh: 94dd7d9abbdbccf3
 /deepseek-ai-dsh-client-modules/use-this-package/live-plugin-composition:
   en: 45740a56e931d094
-  zh: b3362af77c804459
+  zh: fa44cf77c86019af
+/deepseek-ai-dsh-client-modules/use-this-package/host-release-changes:
+  en: 5c0aa6f1d8df8e1c
+  zh: 34005131c9bdce3b
 /deepseek-ai-dsh-client-modules/use-this-package/sharing-modules:
   en: 1778b5a63ecde5e8
   zh: 537b4f8c755af8ad
@@ -42,17 +48,17 @@
   en: 6d16b74acb333e3b
   zh: fcb3a20cc8c39e4a
 /deepseek-ai-dsh-client-modules/understand-the-implementation/incremental-composition:
-  en: 1b54c654b3f7344d
-  zh: c20d3499b51f0b4d
+  en: d2c42ee89ca84f7b
+  zh: 70ee9dd5e6aa5327
 /deepseek-ai-dsh-client-modules/understand-the-implementation/boot-manifest-injection:
   en: 253d9f265cd83ed0
   zh: 9d0f8df84d9d3ac9
 /deepseek-ai-dsh-client-modules/understand-the-implementation/entry-ownership:
-  en: ae59769034d692fa
-  zh: f71914d6f39b033a
+  en: df2994f9ff8872c9
+  zh: cd776526ed2b51e6
 /deepseek-ai-dsh-client-modules/understand-the-implementation/source-map:
-  en: fabe9db8c44e2d90
-  zh: 89ca94a8161f57ed
+  en: d8b5407a0279a3f9
+  zh: 27af3437fad78672
 /deepseek-ai-dsh-client-modules/further-exploration:
   en: 7e5b283efe4f1d16
   zh: 79472b64a0d759fe
@@ -63,8 +69,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work:
-  en: d0908712f037c479
-  zh: 14034e5df3c34e7f
+  en: 97127ddc35daf6d4
+  zh: 1417b06046b01067
 /deepseek-ai-dsh-client-modules/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

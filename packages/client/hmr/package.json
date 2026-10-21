@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-hmr",
   "description": "Web client graph synchronization and rebuilt-bundle reload transport",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -46,7 +46,8 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-client-modules": "workspace:*",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
-    "@deepseek-ai/cordis": "workspace:~"
+    "@deepseek-ai/cordis": "workspace:~",
+    "eventsource-parser": "^3.1.0"
   },
   "files": [
     "locale/*.json",

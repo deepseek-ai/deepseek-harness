@@ -2,9 +2,11 @@
 .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 28px; margin-bottom: 4px; }
 /* Offset the sm Button's 10px inline padding to align its label with the body. */
 .toolbar > .viewToggle { margin-inline-start: -10px; color: var(--dsw-alias-label-tertiary); }
-.toolbar > .viewToggle:hover:not(:disabled),
 .toolbar > .viewToggle:active:not(:disabled),
 .toolbar > .viewToggle:focus-visible:not(:disabled) { color: var(--dsw-alias-label-secondary); }
+@media (hover: hover) {
+  .toolbar > .viewToggle:hover:not(:disabled) { color: var(--dsw-alias-label-secondary); }
+}
 .failure { color: var(--dsw-alias-label-primary); font-size: var(--dsh-content-font-size-secondary, 13px); }
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field label { font-size: 13px; color: var(--dsw-alias-label-primary); }
@@ -13,4 +15,6 @@
 
 .spinner { animation: cot-translation-spin 1s linear infinite; }
 @keyframes cot-translation-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}

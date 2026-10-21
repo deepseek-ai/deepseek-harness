@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-terminal-controller",
   "description": "Session-owned interactive terminals with shell discovery, screen recovery and typed Remote control",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -73,6 +73,7 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",

@@ -20,17 +20,23 @@ pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps 
 
 [空闲提交交接](idle-submission-handoff.e2e.ts)对 Host 帧和浏览器中的消息归位的等待使用 scaffold 的 30 秒 Turn 完成预算。Vitest 负责 scaffold 清理，使 replay 消耗检查错误不会覆盖场景中失败的断言。
 
-插件管理器的开关为 Host 的 profile 写入与 store 随后的 inventory 读取预留 `PLUGIN_TOGGLE_SETTLE_MS`（10 秒），这两步完成后才会重新发布 `aria-checked`；链路的实测值记录在该常量的 JSDoc 中。
+插件管理器和 HMR 生命周期场景中的开关为 Host 的 profile 写入与 store 随后的 inventory 读取预留 `PLUGIN_TOGGLE_SETTLE_MS`（10 秒），这两步完成后才会重新发布 `aria-checked`；链路的实测值记录在该常量的 JSDoc 中。
 
 显式滚动使用 `support.ts` 的 `scrollIntoView`：旧元素脱离 DOM 时重新解析 locator，并在同一个浏览器任务中检查连接状态、执行原生滚动。各场景保留滚动后的可见性与几何断言。
+
+[侧栏窗格关闭后的快照](shortcuts-panels.e2e.ts)在捕获前将指针移出控件，并等待悬停提示关闭。键盘焦点保持在窗格上。
+
+[同源窗口终端用例](sidebar-terminal.e2e.ts)等待 UI 触发的 Host 关闭操作完成后，再检查进程终止。它还检查第一个窗口的进程、保存的绑定以及重载后的布局。
 
 ## 这些是 Host 面的测试
 
 它们在根 `tsconfig.host.json` 中做类型检查，而不在 Client aggregate 中，因为它们直接读取 Host 服务：`ctx.connection`、Host 侧 `SessionStore` 与 `ctx.sessionProjectionCache`。运行时驱动浏览器并不使一个文件成为 Client 程序的一部分——两个 face 在相同的键上以不同服务合并 Cordis `Context`，因此单个程序无法同时看见两者。把这些文件挪进 Client aggregate 会让每一处 Host 服务访问都无法编译。
 
+新增场景要在同一次改动里登记到两份工程清单：根 `tsconfig.host.json` 的 include，以及 Client aggregate `apps/web/tsconfig.json` 的 exclude。该工程包含整个 `tests` 目录，漏登记 exclude 的文件会按 Client 代码编译，`pnpm run typecheck` 的 Client compiler 关卡会一直以 Host 服务错误失败，直到它被列入。
+
 ## 不要在此 import `@deepseek-ai/dsh-client-*`
 
-import 一个 Client 包——无论值还是类型——都会把它整个 TypeScript 工程、以及它引用的每个工程拉进 **Host 构建图**。这已经坑过本 lane 一次：四个 Client 消费方包引用了 `api/remotes` 的 Client face，而该 face 必须等 Host tsdown 生成 `@deepseek-ai/dsh-goal/remote` 之后才能编译，于是 Host 构建阶段变成在等一个由它自己产出的产物。
+import 一个 Client 包——无论值还是类型——都会把它的 TypeScript 工程及其引用的工程拉进 Host 构建图。生成的 Remote 声明在包编译之前就绪，但这并不使 Host 与 Client 的 Cordis `Context` 声明兼容。保留这些测试的 Host face 归属，只使用下文明确的 built-client harness 例外。
 
 当某个场景需要 Client 持有的常量或纯函数时，改为在此处镜像一份，并紧挨着一条注释掉的 import 点明源模块。这样漂移会表现为选择器未命中或镜像值陈旧——是响亮的失败，绝不会是静默通过。`scaffold.ts` 按此规则镜像 welcome-notice 的 namespace、确认字段、版本和被断言的中文文案。
 

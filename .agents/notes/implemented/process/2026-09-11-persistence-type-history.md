@@ -16,6 +16,8 @@ One normalized type model supplies the readable persistence catalog, the complet
 
 The dedicated [persistence-change records](../../../../docs/persistence-changes/README.md) bind acknowledgement to the after digest of each affected root. A generated companion stores complete after schemas. The initial record covers all roots; later records name each root's predecessor. A predecessor's after schema supplies the next before schema. Verification rejects ambiguous history and requires current source to match the terminal recorded state without consulting Git history or remote services.
 
+Every schema file stores one node table keyed by a 16-hexadecimal-digit prefix of each node's canonical subgraph digest; roots and types locate their graphs through their own digests. A type change therefore rewrites only the changed nodes, their ancestors, and the affected digests. Parsers accept only the exact generated text, and all committed files share this layout.
+
 Automatic classification permits optional body additions, required-to-optional body changes, and ordinary event additions within one version. The scoped [source-attribution policy](2026-09-17-persistence-schema-review.md) also permits qualified new producer kinds when both saved schemas opt in. The [event-payload version rule](../../../../docs/persistence-changes/README.md#compatibility-rules) admits higher numeric payload versions when every old alternative remains readable and records the older-reader limitation. Other structural changes require an explicit same-version choice in the recording CLI or an increasing header version. Every structural difference needs an acknowledgement; its Compatibility and Verification sections explain both reader directions and executed checks. CI validates saved decisions without inferring how they were authored. The [format-version procedure](../../../../docs/cookbook/adding-a-session-format-version.md) owns adjacent migration work when a bump is required.
 
 The persistence-change document kind preserves compatibility reasoning and evidence for a historical type transition. Agent Notes retain mechanism-level decisions; they do not become a growing inventory of individual acknowledgements. Machine declarations remain identical across the bilingual pair and are parsed once.
@@ -43,6 +45,8 @@ Finalization records acceptance independently of publication. The [status record
 **Treat every changed digest as a version bump.** Optional body additions, required-to-optional changes, and ordinary event additions do not always require a new persistence version. Conservative classification distinguishes these cases and leaves the compatibility explanation to review.
 
 **Infer behavior from types or require proof of human review.** A type graph cannot establish replay semantics, and a recorded choice cannot establish how it was authored. The checker validates declared transitions and header-version constraints. Reviewers inspect actual reader behavior and the acknowledgement’s explanation independently.
+
+**Keep positional node indices or also read the previous layout.** Positional indices renumber every later node when a union gains a variant, and per-root graphs repeat shared types, so a one-variant change rewrote thousands of lines. Digest-keyed nodes keep diffs proportional to the change. Reading two layouts would leave two parsers to maintain and two accepted texts per inventory; migrating every committed file once keeps a single format.
 
 ## Consequences
 

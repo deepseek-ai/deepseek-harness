@@ -1,0 +1,12 @@
+version: 1
+scenario: cua-ptc
+profile: headless
+composition: cua-ptc
+recording: authored
+header:
+  class: cua-ptc
+  pin: true
+replay:
+  override: true
+platform: posix
+permission: danger-full-access

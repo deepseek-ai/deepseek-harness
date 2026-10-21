@@ -10,7 +10,7 @@ Full access 让有用的项目工作无需反复审批即可继续，但也允�
 
 ## 决策
 
-[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.zh.md)是显式安装的实验性 Web 层，按[实验包发布策略](../../../../packages/experimental/README.zh.md)参与发布。默认 Web 保持 Read Only、Workspace Write 与 Full access。此层贡献仅限当前会话的 `auto`，唯一持久身份为 `permission/preset:auto`；它使用 Full access 的 `danger-full-access` 沙箱与工具定义，审批策略由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)决定。Headless、通用设置与新会话默认值都排除此 integration。
+[`dsh-experimental-auto-review`](../../../../packages/experimental/auto-review/README.zh.md)是显式安装的实验性 profile 层，按[实验包发布策略](../../../../packages/experimental/README.zh.md)参与发布。默认 Web 保持 Read Only、Workspace Write 与 Full access。此层贡献仅限当前会话的 `auto`，唯一持久身份为 `permission/preset:auto`；它使用 Full access 的 `danger-full-access` 沙箱与工具定义，审批策略由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)决定。默认 Headless、通用设置与新会话默认值都排除此 integration。[Headless 调用者入口](2026-10-18-headless-auto-review.zh.md)定义显式 headless 启用方式与不依赖传输的 user-source 权威。
 
 每个原生调用与已开始的 PTC `tools.*` inner call 都在 body 前接受一次审查。外层 `run_code` transport 与 PTC 程序内直接 Node 效果不在保证范围内。不提供按工具名豁免、缓存 grant、重试、可配置策略或第二授权检查；拒绝之后的行为由[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)负责。重复调用也重新审查。
 
@@ -21,28 +21,29 @@ Full access 让有用的项目工作无需反复审批即可继续，但也允�
 | 风险 | 示例 | 决定 |
 | --- | --- | --- |
 | `low` | 普通项目内读写、分析、format／lint／test／build、非破坏性 Git，以及保留调用能证明在本 Session 创建的对象的精确清理 | 允许 |
-| `medium` | 不可逆删除既有状态、force push／历史改写、生产读写／部署、非敏感外部写入／发送，以及权限／安全／系统变更 | 只有当前 human 或直接父级明确授权动作、准确目标与必要范围时才允许 |
+| `medium` | 不可逆删除既有状态、force push／历史改写、生产读写／部署、非敏感外部写入／发送，以及权限／安全／系统变更 | 只有当前用户或直接父级明确授权动作、准确目标与必要范围时才允许 |
 | `high` | 敏感数据跨越当前信任边界外泄及等价 hard-deny 效果 | 拒绝，包括显式请求的动作 |
 
-实际效果不明确或超出已确立范围时按拒绝处理。后续指令只有明确撤销或替换旧指令才能消除冲突；直接父级指令不能覆盖 human 限制。历史可以证明对象由本会话创建，但不能授权 medium 操作或解除 high 禁令。
+实际效果不明确或超出已确立范围时按拒绝处理。后续指令只有明确撤销或替换旧指令才能消除冲突；直接父级指令不能覆盖用户限制。历史可以证明对象由本会话创建，但不能授权 medium 操作或解除 high 禁令。
 
-Reviewer 从既有 Session 事实派生权威。Shipped Web human 指令具有 `source.kind === 'user'` 和浏览器 prompt admission 写入的 `rpcId`。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。Human 文本定义或替换任务与限制。直接父级文本在这些限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的 human 权威。
+Reviewer 从既有 Session 事实派生权威。`source.kind === 'user'` 的文本定义或替换任务与限制，不区分输入传输。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。继承的 child 创建 prompt 与无法验证的 child 创建 prompt 仍是事实。[User-source 接纳](2026-10-18-headless-auto-review.zh.md)定义调用者与恢复历史的语义。直接父级文本在用户限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的指令权威。
 
 ### 一次完整 reviewer 请求
 
-Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求固定包含五个分区：
+Integration 只使用最新 `request/header.config` 的 provider／model 与 shipped adapter 默认 reasoning。它既不比较冗余 route metadata，也不复制主 agent 请求。请求由固定 system prompt 和其后的 user 消息组成：
 
-| 分区 | 保留输入 |
+| 部分 | 保留输入 |
 | --- | --- |
-| `REVIEW_POLICY` | 固定分类、来源权威与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
-| `ENVIRONMENT` | 仅既有 Session header `cwd` |
-| `PROJECT_INSTRUCTIONS` | 可见项目指令，保留原始来源并赋予约束角色 |
-| `FILTERED_HISTORY` | 当前 compaction surface 中带来源的 human／直接父级消息、checkpoint、图片／附件事实，以及历史调用名称与日志参数 |
-| `PENDING_ACTION` | 工具名称、描述、参数 schema 与解析后的 arguments |
+| System prompt `REVIEW_POLICY` | 固定分类、来源权威、消息布局与严格结果规则；allow 后立即以 Full access 执行，没有后续确认 |
+| 第一条 user 消息 `ENVIRONMENT` | 仅既有 Session header `cwd` |
+| 每个保留条目一条 user 消息 | 当前 compaction surface 中带来源的用户／直接父级消息、带约束角色的项目指令、checkpoint、图片／附件事实、历史调用名称与日志参数，以及在首次使用某个已审 schema 的调用之前出现的 `tool-schema` 条目，按 surface 顺序排列 |
+| 最后一条 user 消息 | 待审调用及其日志参数；其之前同 mode 与名称的最新 `tool-schema` 条目给出工具描述与参数 schema |
 
-reviewer 从 Session 的完整动作历史构建这两个动作分节：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。
+每个条目各占一条消息，并在后续评审中保持相同文本：待审调用会变成历史调用，integration 为每个存活 Session 记住每次已审调用展示的 schema，使其在同一位置再次出现。因此一次评审的消息以上一次评审的全部消息开头。只在消息结尾缓存的 provider（如 GPT-5.6 及以后的 OpenAI 隐式断点），或在末尾标记处向前回溯的 provider（如 Anthropic `cache_control`），都能复用上一次评审；单条不断增长的 user 消息只能让它们复用策略。Schema 记忆只在进程内，因此重启后的第一次评审会缺少先前的 schema，并有一次缓存未命中。
 
-主 agent 的 V3 `system/message` 节点、assistant 正文／reasoning 与 tool results 全部排除。当前调用必须属于 `step/start` 记录的开放 step；缺少 step 归属时拒绝执行。该调用只在 `PENDING_ACTION` 出现；尚未开始的 sibling 没有历史调用事实。原生 schema 来自最新 request header。PTC 在 binding 构造时捕获冻结 schema，经由调度器传入 `ToolExecution`；描述与参数 schema 不进入开始／结算事件或 Session／SDK wire。动作事实缺失、不一致或有歧义时拒绝调用，不查询 live registry。超窗请求直接拒绝，不做摘要、截断、额外 compaction 或设置小型输出 token 预算。
+reviewer 从 Session 的完整动作历史构建历史与待审调用：授权是符合 `REVIEW_POLICY` 来源规则的那个更早调用，而重复或冲突的身份必须在整份日志的任何位置都可见，而不是只在近期窗口内可见，因此 Session 投影与有界读取都无法支撑该判定。这次读取使用已废弃的同步 `snapshotEvents()`，并带有行级 `typescript/no-deprecated` 豁免。
+
+主 agent 的 V3 `system/message` 节点、assistant 正文／reasoning 与 tool results 全部排除。当前调用必须属于 `step/start` 记录的开放 step；缺少 step 归属时拒绝执行。该调用只作为最后一条消息出现；尚未开始的 sibling 没有历史调用事实。原生 schema 来自最新 request header。PTC 在 binding 构造时捕获冻结 schema，经由调度器传入 `ToolExecution`；描述与参数 schema 不进入开始／结算事件或 Session／SDK wire。动作事实缺失、不一致或有歧义时拒绝调用，不查询 live registry。超窗请求直接拒绝，不做摘要、截断、额外 compaction 或设置小型输出 token 预算。
 
 ### 结果与取消
 
@@ -50,7 +51,7 @@ Reviewer 可以输出 reasoning blocks，随后恰好一个 JSON text block 和�
 
 最终拒绝（[用户审批兜底决策](2026-09-24-auto-review-user-approval-fallback.zh.md)将其限定在 `never` 审批策略下）让原生结果与 PTC 结算事件携带同形结构化 `AutoReviewDeniedError`／`AUTO_REVIEW_DENIED` 及可选原始理由。对最终拒绝，主 agent 通过普通失败渲染只收到 `Auto review rejected tool "<name>"; its body was not executed`。PTC 保留既有程序异常／catch 行为；捕获拒绝不会将其提升为外层失败。通用 Web 工具卡片为折叠行提供拒绝身份，为展开行提供一行未执行输出，不提供输入正文。只有该显示过程会 trim、折叠行分隔符，或提供本地化空理由 fallback；持久化与两套 SDK 保留完整原始理由，不增加长度或脱敏规则。
 
-准入与在途 review 登记在首次 await 前同步完成。Integration 拥有一个生命周期 controller 和一个在途操作集合。卸载先关闭新选择／review admission，经由既有 preset writer 把存活 Auto Session 切为 Full access，该 writer 写入 `never` 审批策略，不改变沙箱值、不关闭终端，然后中止并等待 review 结清，最后移除 listener 与 contribution。Provider 结算后，lifecycle abort 始终形成规范的 dispatch 前取消，包括晚到 allow、deny 或 failure。Caller 取消保留 ToolRuntime 优先级：晚到 allow 在 dispatch 前取消；晚到 failure 或最终拒绝保留原结果，`ask` 下晚到的拒绝产生已取消的审批与规范的 dispatch 前取消。被取消的 review 不启动工具 body。
+准入与在途 review 登记在首次 await 前同步完成。Integration 拥有一个生命周期 controller 和一个在途操作集合。卸载先关闭新选择／review admission，然后中止并等待 review 结清，最后移除 listener 与 contribution。只有在根 context 仍活跃时卸载插件，才经由既有 preset writer 把存活 Auto Session 切为 Full access；该 writer 写入 `never` 审批策略，不改变沙箱值、不关闭终端。根关闭保留选择：停止应用不等于撤销已安装的 integration，且子级 disposer 可能与 Session 持久化清理并发。根 fiber 在子级清理开始前进入 `UNLOADING`，因此可用该生命周期状态区分关闭，无需新建关闭服务或依赖时序推测。Provider 结算后，lifecycle abort 始终形成规范的 dispatch 前取消，包括晚到 allow、deny 或 failure。Caller 取消保留 ToolRuntime 优先级：晚到 allow 在 dispatch 前取消；晚到 failure 或最终拒绝保留原结果，`ask` 下晚到的拒绝产生已取消的审批与规范的 dispatch 前取消。被取消的 review 不启动工具 body。
 
 完整 integration 缺失或失败时，持久 Auto Session 不能发布。日志不改写，也不后台重试。重装后用户可以重新打开它；已经迁移为 Full access 的存活 Session 保持原状，直到显式切换。
 
@@ -64,7 +65,7 @@ Auto 在选择器选项中带 `EXP` 标记；选中后的 composer 控件不显�
 
 ## 考虑过的替代方案
 
-**默认或正式发布 integration** 会把实验模型审批策略带入每个部署。私有源码 Web patch 在复用既有插件安装器的同时保持显式 opt-in。
+**默认或正式发布 integration** 会把实验模型审批策略带入每个部署。显式 profile patch 在复用既有插件安装器的同时保持显式 opt-in。
 
 **新增 sandbox 或 approval-policy 值**会把 review 与执行耦合，产生没有当前消费者的组合。显式 preset 身份保留 Full access 未改变的执行行为。
 

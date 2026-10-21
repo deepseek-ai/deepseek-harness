@@ -28,7 +28,7 @@ describe('RunningWhaleTail', () => {
   })
 
   it('ships a 28px alpha APNG with sixty 50ms frames and infinite playback', () => {
-    const png = readFileSync(resolve(import.meta.dirname, '../src/client/chat/running-whale@2x.png'))
+    const png = readFileSync(resolve(import.meta.dirname, '../src/client/assets/running-whale@2x.png'))
     expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
     const chunks: { type: string; data: Buffer }[] = []
     for (let offset = 8; offset < png.length;) {

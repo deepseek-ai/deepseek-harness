@@ -42,7 +42,9 @@ const STEER_STEPS = 3
 const BLANK_LIMIT = 120
 /**
  * Frames whose layout gap may exceed {@link BLANK_LIMIT}. The gap counts rows by their boxes, so a
- * closing row that has faded but not finished shrinking still covers its space.
+ * closing row that has faded but not finished shrinking still covers its space. A band whose rows on
+ * both sides have faded to full transparency shows the same background as those rows and does not
+ * count; a band beside a visible row always counts.
  */
 const TRANSIENT_FRAMES = 1
 const EVIDENCE = fileURLToPath(new URL('../../../.artifacts/screenshots/fold-blank-matrix/', import.meta.url))
@@ -155,23 +157,37 @@ function installMeasure(): void {
     if (composer === null) throw new Error(`composer is absent: ${root}`)
     const composerTop = composer.getBoundingClientRect().top
     const spacer = host.querySelector<HTMLElement>('[data-chat-turn-spacer]')?.getBoundingClientRect().height ?? 0
+    // Fold motion writes row opacity, so a row is transparent when it or a moving ancestor has opacity 0.
+    const visible = (element: HTMLElement): boolean => {
+      for (let box = element.closest<HTMLElement>('[data-chat-motion]'); box !== null && host.contains(box);
+        box = box.parentElement?.closest<HTMLElement>('[data-chat-motion]') ?? null) {
+        if (Number.parseFloat(getComputedStyle(box).opacity) === 0) return false
+      }
+      return true
+    }
     const intervals = [...host.querySelectorAll<HTMLElement>('[data-chat-flow-key], [data-submission-echo], [data-pending-steering], [data-streaming], [data-chat-running]')]
       .filter(element => element.closest('[hidden]') === null)
       .map((element) => {
         const rect = element.getBoundingClientRect()
-        return [Math.max(rect.top, viewport.top), Math.min(rect.bottom, composerTop)] as const
+        return [Math.max(rect.top, viewport.top), Math.min(rect.bottom, composerTop), visible(element)] as const
       })
       .filter(([top, bottom]) => bottom - top > 0.5)
       .sort((left, right) => left[0] - right[0])
     let cursor = viewport.top
+    let cursorVisible = true
     let maxGap = 0
     let gapAt = 0
-    for (const [top, bottom] of intervals) {
-      if (top - cursor > maxGap) {
+    for (const [top, bottom, rowVisible] of intervals) {
+      if (top - cursor > maxGap && (cursorVisible || rowVisible)) {
         maxGap = top - cursor
         gapAt = cursor - viewport.top
       }
-      cursor = Math.max(cursor, bottom)
+      if (bottom > cursor) {
+        cursor = bottom
+        cursorVisible = rowVisible
+      } else if (bottom === cursor && rowVisible) {
+        cursorVisible = true
+      }
     }
     if (composerTop - cursor > maxGap) {
       maxGap = composerTop - cursor
@@ -873,3 +889,27 @@ describe.skipIf(MODE === 'record')('web e2e: blank area after next-message foldi
 })
 
 export {}
+
+describe('web e2e: fold blank measurement', () => {
+  it('skips a band between fully transparent rows and counts a band beside a visible row', async () => {
+    const browser = await chromium.launch()
+    try {
+      const page = await browser.newPage()
+      await page.setContent(`<body style="margin:0"><div data-measure-root style="height:800px">
+        <div data-chat-flow-key="a" style="height:100px"></div>
+        <div data-chat-motion="collapse" data-chat-flow-key="b" style="height:50px;opacity:0;margin-bottom:300px"></div>
+        <div data-chat-motion="collapse" data-chat-flow-key="c" style="height:50px;opacity:0"></div>
+        <div data-chat-flow-key="d" style="height:50px;margin-top:150px"></div>
+        <div data-composer-seat style="height:50px"></div>
+      </div></body>`)
+      await page.evaluate(installMeasure)
+      const transparent = await page.evaluate(() => window.foldMeasure!('[data-measure-root]'))
+      expect([transparent.maxGap, transparent.gapAt]).toEqual([150, 500])
+      await page.locator('[data-chat-flow-key="c"]').evaluate((element) => { element.style.opacity = '1' })
+      const visible = await page.evaluate(() => window.foldMeasure!('[data-measure-root]'))
+      expect([visible.maxGap, visible.gapAt]).toEqual([300, 150])
+    } finally {
+      await browser.close()
+    }
+  })
+})

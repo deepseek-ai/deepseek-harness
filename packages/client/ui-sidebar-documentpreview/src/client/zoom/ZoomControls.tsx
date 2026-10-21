@@ -45,7 +45,8 @@ export const ZoomControls = forwardRef<ZoomControlsHandle, {
     : ZOOM_OPTIONS.includes(displayZoom as typeof ZOOM_OPTIONS[number]) ? String(displayZoom) : undefined
   return <div className={`${css.panel} ${visible ? css.visible : ''}`} role="toolbar" aria-label={labels.controls}
     data-document-zoom-controls data-document-zoom-visible={visible || undefined}
-    onPointerEnter={() => { setHovered(true) }} onPointerLeave={() => { setHovered(false) }}
+    onPointerEnter={(event) => { if (event.pointerType !== 'touch') setHovered(true) }}
+    onPointerLeave={() => { setHovered(false) }}
     onFocusCapture={() => { setFocused(true) }} onBlurCapture={() => { setFocused(false) }}>
     <Tooltip label={labels.out} side="top">
       <span className={css.controlAnchor}><Button size="sm" className={css.zoomButton} aria-label={labels.out}

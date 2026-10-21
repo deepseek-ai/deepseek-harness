@@ -12,7 +12,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, openSettings, saveFailureShot, writeComposerDraft } from './support.ts'
+import { newEnglishPage, openSettings, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/collapse-timing', import.meta.url))
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
@@ -38,8 +38,12 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
   let fixture: string
   let prompt: string
   let replayDir: string
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
+    // Seeded and live prompt timestamps share the renderer's fixture day, so a run
+    // that spans Asia/Shanghai midnight renders no date prefix in the aria.
+    if (MODE !== 'record') hostClock = pinHostClock()
     fixture = await readFile(SEED, 'utf8')
     const prompts = fixtureUserPrompts(fixture)
     expect(prompts).toHaveLength(1)
@@ -56,9 +60,10 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
       // This rendering borrows a completed turn and replays only its final response as a continuation.
       compareReplaySession: false,
     })
-    await seedSession(scaffold, fixture, SEED_ID)
+    await seedSession(scaffold, fixture, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch({ headless: true })
     page = await newEnglishPage(browser)
+    if (MODE !== 'record') await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.getByRole('button', { name: 'Account menu', exact: true }).waitFor()
@@ -66,8 +71,12 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
 
   afterAll(async () => {
     const failures: unknown[] = []
-    await browser?.close().catch((error: unknown) => failures.push(error))
-    await scaffold?.close().catch((error: unknown) => failures.push(error))
+    try {
+      await browser?.close().catch((error: unknown) => failures.push(error))
+      await scaffold?.close().catch((error: unknown) => failures.push(error))
+    } finally {
+      hostClock?.mockRestore()
+    }
     if (replayDir !== undefined) {
       await rm(replayDir, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
     }

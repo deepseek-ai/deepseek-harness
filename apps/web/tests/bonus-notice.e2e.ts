@@ -22,12 +22,13 @@ const MODE = webSnapshotMode()
 
 const TOKEN = 'dsh_bonus_notice_test'
 const ACCOUNT_ID = 'bonus-user'
-const ORDER_FIRST = '22222222-2222-4222-8222-222222222222'
+const ORDER_FIRST = 'bonus-notice-first'
 const ORDER_LATER = '33333333-3333-4333-8333-333333333333'
 const ORDER_EN = '44444444-4444-4444-8444-444444444444'
 const ORDER_RETRY = '55555555-5555-4555-8555-555555555555'
 const ORDER_REPEAT = '66666666-6666-4666-8666-666666666666'
 const ORDER_TOPUP = '77777777-7777-4777-8777-777777777777'
+const ORDER_WEB = '99999999-9999-4999-8999-999999999999'
 
 const CLAIM_DAYS = 30
 
@@ -79,17 +80,17 @@ async function mockPlatform() {
   let failSummary = false
   /** Reply held back while the test controls when a read can answer. */
   let heldReply: (() => void) | undefined
-  const grant = (orderId: string, amount: string): void => {
+  const grant = (orderId: string, amount: string, extraCopy = ''): void => {
     unnotified.unshift({
       orderId, amount,
-      zh_CN: `已赠送您 ${amount} 元 DSH 体验赠金。`,
-      en_US: `You received a CNY ${amount} DSH trial credit.`,
+      zh_CN: `已赠送您 ${amount} 元 DSH 体验赠金。${extraCopy}`,
+      en_US: `You received a CNY ${amount} DSH trial credit.${extraCopy}`,
     })
   }
   /** @param value - granted bonus. @param locale - request language. @returns its wire fields. */
   const wire = (value: Granted, locale: string | undefined): unknown => ({
-    order_id: value.orderId, campaign: 'dsh_login_bonus', amount: value.amount, currency: 'CNY',
-    granted_at: new Date().toISOString(), expires_at: expiresAt(),
+    order_id: value.orderId, expires_at: value.orderId === ORDER_FIRST ? null : expiresAt(),
+    ...(value.orderId === ORDER_FIRST ? { title: '平台通知' } : {}),
     msg: locale === 'en_US' ? value.en_US : value.zh_CN,
   })
   const server: Server = createServer((req, res) => {
@@ -181,7 +182,7 @@ async function mockPlatform() {
 
 /** @param page - page under test. @returns every rendered bonus notice card. */
 function noticeCards(page: Page): Locator {
-  return page.locator('aside').filter({ hasText: '赠金已到账' })
+  return page.locator('aside[data-front]')
 }
 
 /** @param card - a rendered notice card. @returns its non-empty visible lines joined for the golden. */
@@ -566,6 +567,87 @@ describe.skipIf(MODE === 'record')('web e2e: bonus notice', () => {
     observations.push(`en.get locale=${String(enGet.locale)} query=${enGet.query}`)
     expect(enGet.locale).toBe('en_US')
     expect(enGet.query).toBe('')
+
+    await enPage.close()
+    await page.close()
+    platform.clearUnnotified()
+    platform.grant(ORDER_WEB, '4.00')
+    const webPage = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'zh-CN' })
+    tripwires.push(watchConsole(webPage))
+    await webPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const webNotice = await shownNotice(webPage, '已赠送您 4.00 元 DSH 体验赠金。')
+    await expect.poll(() => platform.acks.filter(item => item.orderId === ORDER_WEB).length).toBe(1)
+    observations.push(`web.notice=${webNotice} acks=1`)
+    await webPage.close()
+    platform.clearUnnotified()
+    platform.grant('stack-third', '23.00')
+    platform.grant('stack-second', '22.00', '\nMore details'.repeat(8))
+    platform.grant('stack-first', '21.00')
+    const ackStart = platform.acks.length
+    const stackPage = await openDesktopPage('zh-CN')
+    await stackPage.emulateMedia({ colorScheme: 'light' })
+    await stackPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const cards = noticeCards(stackPage)
+    await expect.poll(() => cards.count()).toBe(3)
+    await expect.poll(() => platform.acks.length).toBe(ackStart + 1)
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first'])
+    expect(await stackPage.getByRole('status').count()).toBe(1)
+    const second = cards.filter({ hasText: '22.00' })
+    const secondNode = await second.elementHandle()
+    const frontBox = await cards.first().boundingBox()
+    const backBox = await second.boundingBox()
+    expect(frontBox!.width).toBeCloseTo(280, 0)
+    expect(backBox!.width).toBeCloseTo(272, 0)
+    expect(backBox!.y).toBeCloseTo(frontBox!.y - 4, 0)
+    const transition = await second.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return `${style.transitionDuration} ${style.transitionTimingFunction}`
+    })
+    expect(transition).toBe('0.25s ease-out')
+    observations.push(`stack.initial cards=3 acks=stack-first widths=280,272 offset=-4 transition=${transition}`)
+    const artifactDir = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+    await mkdir(artifactDir, { recursive: true })
+    await stackPage.screenshot({ path: join(artifactDir, 'bonus-notice-stack-light.png') })
+    await stackPage.emulateMedia({ colorScheme: 'dark' })
+    await expect.poll(() => stackPage.locator('body').getAttribute('data-ds-dark-theme')).not.toBeNull()
+    await stackPage.screenshot({ path: join(artifactDir, 'bonus-notice-stack-dark.png') })
+    const promotion = await stackPage.evaluate(() => {
+      const front = document.querySelector<HTMLElement>('aside[data-front="true"]')!
+      const next = front.nextElementSibling as HTMLElement
+      const before = next.getBoundingClientRect()
+      front.querySelector('button')!.click()
+      const animation = next.getAnimations()[0]!
+      animation.pause()
+      animation.currentTime = 0
+      const start = next.getBoundingClientRect()
+      animation.currentTime = 125
+      const middle = next.getBoundingClientRect()
+      animation.finish()
+      const end = next.getBoundingClientRect()
+      return { before: { y: before.y, height: before.height }, start: { y: start.y, height: start.height },
+        middle: { y: middle.y, height: middle.height }, end: { y: end.y, height: end.height } }
+    })
+    expect(promotion.start.y).toBeCloseTo(promotion.before.y, 0)
+    expect(promotion.start.height).toBeCloseTo(promotion.before.height, 0)
+    expect(promotion.end.height).toBeGreaterThan(promotion.start.height + 100)
+    expect(promotion.middle.height).toBeGreaterThan(promotion.start.height)
+    expect(promotion.middle.height).toBeLessThan(promotion.end.height)
+    expect(promotion.middle.y).toBeLessThan(promotion.start.y)
+    expect(promotion.middle.y).toBeGreaterThan(promotion.end.y)
+    await expect.poll(() => cards.count()).toBe(2)
+    await expect.poll(async () => Math.round((await second.boundingBox())!.width)).toBe(280)
+    expect(await second.evaluate((element, previous) => element === previous, secondNode)).toBe(true)
+    expect(await second.getAttribute('data-front')).toBe('true')
+    await expect.poll(() => platform.acks.length).toBe(ackStart + 2)
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first', 'stack-second'])
+    observations.push('stack.promoted cards=2 acks=stack-first,stack-second width=280 same-node=true')
+    await second.getByRole('button', { name: '关闭', exact: true }).click()
+    await expect.poll(() => platform.acks.length).toBe(ackStart + 3)
+    expect(platform.acks.slice(ackStart).map(ack => ack.orderId)).toEqual(['stack-first', 'stack-second', 'stack-third'])
+    await cards.filter({ hasText: '23.00' }).getByRole('button', { name: '关闭', exact: true }).click()
+    await expect.poll(() => cards.count()).toBe(0)
+    observations.push('stack.dismissed cards=0 acks=stack-first,stack-second,stack-third')
+    await stackPage.close()
 
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'notice-flow.expected.md'), observations.join('\n'), MODE)
     for (const tripwire of tripwires) {
