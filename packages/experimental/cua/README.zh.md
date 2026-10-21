@@ -69,7 +69,7 @@ kind: "package-reference"
 
 权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入使用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。此设置独立于系统权限和应用授权。
 
-提供方将准备好的 helper、连接工厂和指引传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
+提供方将准备好的 helper、连接工厂和指引传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。其带类型的启动失败在请求写入和连接关闭时保留错误码及诊断。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
 
 `agentPreset` 默认为 `ptc`，将工具和指引限制到绑定该 preset 的 Agent。提供方使用现有 `agent/created`、`agent-preset/selected` 事件及 Agent 拥有的作用域，也处理启用前已存在的 Agent。提供方卸载和 Agent 销毁都会释放这些注册。preset 定义可以晚于提供方注册；名称用于筛选已绑定的 Agent，在匹配的 Agent 出现前不提供工具。不使用 preset 的独立组合可设置 `agentPreset: false` 来全局注册。Host 仍拥有权限、本机连接和取消操作，preset 定义保持不变。
 
