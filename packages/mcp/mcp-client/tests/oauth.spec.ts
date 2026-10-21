@@ -17,9 +17,7 @@ describe('MCP OAuth', () => {
     await expect(owner.start()).rejects.toThrow('authorization and WebServer')
     expect(await probeServer(world.ctx, world.config)).toMatchObject({ ok: false, closeConfirmed: true })
     const conflicting = { ...world.config, headers: { aUtHoRiZaTiOn: 'private' } }
-    expect(() => world.owner(conflicting)).toThrow('cannot be configured together')
     await expect(apply(world.ctx, conflicting)).rejects.toThrow('cannot be configured together')
-    expect(await probeServer(world.ctx, conflicting)).toMatchObject({ ok: false, closeConfirmed: true })
     expect(world.requests).toHaveLength(0)
     await owner.dispose()
     await expect(owner.start()).rejects.toThrow('owner is closed')

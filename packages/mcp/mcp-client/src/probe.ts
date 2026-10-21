@@ -82,9 +82,6 @@ export async function probeServer(ctx: Context, config: Config, options: McpProb
     const oauthConfig = resolved.transport === 'streamable-http' ? resolved.oauth : undefined
     const oauth = resolved.transport === 'streamable-http' && oauthConfig !== undefined
       ? await generation.run(async (signal) => {
-        if (Object.keys(resolved.headers).some(name => name.toLowerCase() === 'authorization')) {
-          throw new Error('MCP OAuth and an Authorization header cannot be configured together')
-        }
         const credentials = new (await import('./oauth-credentials.ts')).McpOAuthCredentials(ctx, oauthConfig)
         const grant = await credentials.read(new URL(resolved.url).href, signal)
         binding.remember(grant.tokens.access_token)

@@ -57,9 +57,6 @@ export class McpOAuthAuthorization {
     private readonly config: StreamableHttpConfig & { oauth: McpOAuthConfig },
     private readonly changed: () => void,
   ) {
-    if (Object.keys(config.headers).some(name => name.toLowerCase() === 'authorization')) {
-      throw new McpLocalError('MCP OAuth and an Authorization header cannot be configured together')
-    }
     this.credentials = new McpOAuthCredentials(ctx, config.oauth)
     this.binding = new McpTemplateBinding(ctx, config)
   }
