@@ -3,7 +3,7 @@
  * names exactly the files it ships; its templates parse and show their detail documents, and it never
  * bans reading DSH sources. The Web preset e2e measures whole-reference reads.
  */
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, matchesGlob, resolve, sep } from 'node:path'
@@ -165,6 +165,22 @@ describe('the shipped dsh-doc skill', () => {
     }
     expect(run('locate-docs.md').trim()).toBe(pkg)
     expect(run('upgrading.md')).toBe('3 ## v2.0.0\n6 ## v1.0.0\n')
+  })
+
+  // Desktop's real Electron and archive run in apps/desktop/tests/installed-docs-asar.built.e2e.ts.
+  it.skipIf(spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).status !== 0)('documents a PowerShell process form that waits for the runtime', (test) => {
+    const install = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-doc-pwsh-')))
+    test.onTestFinished(() => { rmSync(install, { recursive: true, force: true }) })
+    const pkg = join(install, 'node_modules', '@deepseek-ai', 'dsh-tool-bash')
+    mkdirSync(pkg, { recursive: true })
+    writeFileSync(join(pkg, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
+    const command = /```powershell\n([\s\S]+?)\n```/u.exec(readFileSync(join(skill, 'references', 'locate-docs.md'), 'utf8'))?.[1]
+    expect(command).toBeDefined()
+    const output = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', command ?? ''], {
+      encoding: 'utf8', env: { ...process.env, DSH_INSTALL_DIR: install, DSH_NODE_EXECUTABLE: process.execPath },
+    })
+    const lines = output.split(/\r?\n/u).filter(line => line !== '')
+    expect(lines).toEqual([pkg, 'exit 0'])
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {

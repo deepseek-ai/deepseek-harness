@@ -14,7 +14,7 @@ When the user asks what an upgrade affects, report the applicable guides and the
 
 ## Find and read them
 
-- Installed DSH: `docs/upgrade-guide/README.md` under the installation directory lists every guide in one `## v<T>` section per version directory, with a summary and English and Chinese paths. The index and its sections can exceed one read, so first print its section headings with their line numbers, then read each chosen section at most 12 lines per call with the file-read tool's offset and limit. With the runtime from `references/locate-docs.md`, in bash or, after setting `$env:ELECTRON_RUN_AS_NODE = '1'`, in PowerShell with `& $env:DSH_NODE_EXECUTABLE` and `$env:DSH_INSTALL_DIR`:
+- Installed DSH: `docs/upgrade-guide/README.md` under the installation directory lists every guide in one `## v<T>` section per version directory, with a summary and English and Chinese paths. The index and its sections can exceed one read, so first print its section headings with their line numbers, then read each chosen section at most 12 lines per call with the file-read tool's offset and limit. With the runtime from `references/locate-docs.md`, in bash, or in PowerShell through its process form with this script and the index path as the argument:
 
   ```sh
   ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" -e "require('node:fs').readFileSync(process.argv[1], 'utf8').split(/\r?\n/).forEach((line, index) => { if (line.startsWith('## ')) console.log(index + 1, line) })" "$DSH_INSTALL_DIR/docs/upgrade-guide/README.md"

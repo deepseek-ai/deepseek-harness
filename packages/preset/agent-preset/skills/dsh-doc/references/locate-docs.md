@@ -22,7 +22,29 @@ With inspection tools, `cordis_inspect_query` `Config.listConfigs` filtered by `
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" -e "console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))" @deepseek-ai/dsh-tool-bash
 ```
 
-In PowerShell, set `$env:ELECTRON_RUN_AS_NODE = '1'` and run `& $env:DSH_NODE_EXECUTABLE` with the same arguments. On Windows Desktop, do not run the Electron executable from PowerShell; read files with the file-read tool and report a package location you could not resolve as unverified. When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable whose packages are not on disk; do not substitute a `node` from `PATH`, and report package behavior as unverified. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
+In PowerShell, start the runtime as a process with redirected output: Desktop's Electron executable on Windows is a GUI program that the `&` operator does not wait for. Replace `$script` and `$arguments` for other reads:
+
+```powershell
+$script = @'
+console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))
+'@
+$arguments = @('@deepseek-ai/dsh-tool-bash')
+$start = [System.Diagnostics.ProcessStartInfo]::new($env:DSH_NODE_EXECUTABLE)
+foreach ($argument in @('-e', $script, '--') + $arguments) { $start.ArgumentList.Add($argument) }
+$start.Environment['ELECTRON_RUN_AS_NODE'] = '1'
+$start.UseShellExecute = $false
+$start.RedirectStandardOutput = $true
+$start.RedirectStandardError = $true
+$start.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+$start.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+$process = [System.Diagnostics.Process]::Start($start)
+$stderr = $process.StandardError.ReadToEndAsync()
+$stdout = $process.StandardOutput.ReadToEnd()
+$process.WaitForExit()
+$stdout; $stderr.Result; "exit $($process.ExitCode)"
+```
+
+When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable whose packages are not on disk; do not substitute a `node` from `PATH`, and report package behavior as unverified. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
 
 A package directory holds `README.md`, `src/`, and built `lib/`. Read the README first, then the `src/` file that owns the behavior.
 
