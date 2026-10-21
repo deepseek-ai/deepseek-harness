@@ -15,6 +15,8 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
     var count = 0
     var resized = false
     var closed = false
+    var panelSize: [CGFloat] = []
+    var buttonPoint: [CGFloat] = []
     var controls: [DispatchSourceSignal] = []
     var observer: Timer?
 
@@ -45,7 +47,13 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
             let control = DispatchSource.makeSignalSource(signal: number, queue: .main)
             control.setEventHandler { [weak self] in
                 guard let self else { return }
-                if number == SIGUSR1 { self.panel.close(); self.closed = true }
+                if number == SIGUSR1 {
+                    self.panel.close()
+                    // Releasing the retained panel destroys its WindowServer window instead of only hiding it.
+                    self.panel = nil
+                    self.button = nil
+                    self.closed = true
+                }
                 else { self.panel.setContentSize(NSSize(width: 280, height: 180)); self.resized = true }
                 self.persist()
             }
@@ -62,13 +70,16 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
     func persist() {
         let rows = CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [[String: Any]] ?? []
         let row = rows.first { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == panelID }
-        let rect = button.convert(button.bounds, to: nil)
+        if let panel, let button {
+            let rect = button.convert(button.bounds, to: nil)
+            panelSize = [panel.frame.width, panel.frame.height]
+            buttonPoint = [rect.midX, panel.frame.height - rect.midY]
+        }
         let data = try! JSONSerialization.data(withJSONObject: [
             "pid": getpid(), "mainWindowId": main.windowNumber, "panelWindowId": panelID,
             "panelLayer": row?[kCGWindowLayer as String] ?? -1,
             "panelOnScreen": row?[kCGWindowIsOnscreen as String] ?? false,
-            "panelSize": [panel.frame.width, panel.frame.height],
-            "buttonPoint": [rect.midX, panel.frame.height - rect.midY],
+            "panelSize": panelSize, "buttonPoint": buttonPoint,
             "count": count, "resized": resized, "closed": closed,
         ])
         try! data.write(to: URL(fileURLWithPath: statePath), options: .atomic)

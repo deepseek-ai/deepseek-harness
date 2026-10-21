@@ -340,6 +340,8 @@ describe('application and window observations', () => {
     const windows = [windowInfo(23), { ...windowInfo(24), title: 'Floating panel' }]
     f.setWindowRecords(windows)
     expect(await app.getWindows({ emit: false })).toEqual(windows)
+    f.dispatch.mockResolvedValueOnce(state({ focusedWindowId: 23, windows }))
+    await app.getAXState()
     f.dispatch.mockResolvedValueOnce(state({ windowId: 24, focusedWindowId: 23, windows }))
     const panel = await app.getWindow(24)
     await panel.getScreenshot()
