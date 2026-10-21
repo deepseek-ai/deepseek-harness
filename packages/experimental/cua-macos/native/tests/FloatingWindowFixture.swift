@@ -11,13 +11,14 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
     var main: NSWindow!
     var panel: FloatingPanel!
     var button: NSButton!
+    var closeButton: NSButton!
     var panelID = 0
     var count = 0
     var resized = false
     var closed = false
     var panelSize: [CGFloat] = []
     var buttonPoint: [CGFloat] = []
-    var controls: [DispatchSourceSignal] = []
+    var resizeControl: DispatchSourceSignal?
     var observer: Timer?
 
     init(statePath: String) { self.statePath = statePath }
@@ -25,6 +26,9 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
         main = NSWindow(contentRect: NSRect(x: 120, y: 180, width: 420, height: 300),
                         styleMask: [.titled, .closable], backing: .buffered, defer: false)
         main.title = "Floating fixture main"
+        closeButton = NSButton(title: "Close panel", target: self, action: #selector(closePanel))
+        closeButton.frame = NSRect(x: 280, y: 30, width: 120, height: 35)
+        main.contentView!.addSubview(closeButton)
         panel = FloatingPanel(contentRect: NSRect(x: 220, y: 250, width: 240, height: 140),
                               styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "Floating fixture panel"
@@ -42,24 +46,16 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panelID = panel.windowNumber
-        for number in [SIGUSR1, SIGUSR2] {
-            signal(number, SIG_IGN)
-            let control = DispatchSource.makeSignalSource(signal: number, queue: .main)
-            control.setEventHandler { [weak self] in
-                guard let self else { return }
-                if number == SIGUSR1 {
-                    self.panel.close()
-                    // Releasing the retained panel destroys its WindowServer window instead of only hiding it.
-                    self.panel = nil
-                    self.button = nil
-                    self.closed = true
-                }
-                else { self.panel.setContentSize(NSSize(width: 280, height: 180)); self.resized = true }
-                self.persist()
-            }
-            control.resume()
-            controls.append(control)
+        signal(SIGUSR2, SIG_IGN)
+        let control = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: .main)
+        control.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.panel.setContentSize(NSSize(width: 280, height: 180))
+            self.resized = true
+            self.persist()
         }
+        control.resume()
+        resizeControl = control
         // WindowServer visibility and frame updates settle after AppKit requests return.
         observer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.persist() }
         persist()
@@ -67,6 +63,13 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
         fflush(stdout)
     }
     @objc func increment() { count += 1; persist() }
+    @objc func closePanel() {
+        panel.close()
+        panel = nil
+        button = nil
+        closed = true
+        persist()
+    }
     func persist() {
         let rows = CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [[String: Any]] ?? []
         let row = rows.first { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == panelID }
@@ -75,11 +78,13 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
             panelSize = [panel.frame.width, panel.frame.height]
             buttonPoint = [rect.midX, panel.frame.height - rect.midY]
         }
+        let closeRect = closeButton.convert(closeButton.bounds, to: nil)
         let data = try! JSONSerialization.data(withJSONObject: [
             "pid": getpid(), "mainWindowId": main.windowNumber, "panelWindowId": panelID,
             "panelLayer": row?[kCGWindowLayer as String] ?? -1,
             "panelOnScreen": row?[kCGWindowIsOnscreen as String] ?? false,
             "panelSize": panelSize, "buttonPoint": buttonPoint,
+            "closePoint": [closeRect.midX, main.frame.height - closeRect.midY],
             "count": count, "resized": resized, "closed": closed,
         ])
         try! data.write(to: URL(fileURLWithPath: statePath), options: .atomic)

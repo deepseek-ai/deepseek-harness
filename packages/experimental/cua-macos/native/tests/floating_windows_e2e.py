@@ -95,7 +95,10 @@ def main():
                 target = {**target, 'snapshotId': fresh['snapshotId'], 'x': x, 'y': y}
                 helper.call('click', target)
                 wait_state(lambda value: value['count'] == 5)
-                os.kill(fixture.pid, signal.SIGUSR1)
+                # AppKit's current mouse event retains its target window. Closing from the main
+                # window replaces that event so the floating window can actually be destroyed.
+                close_x, close_y = actual['closePoint']
+                helper.call('click', {**owner, 'windowId': actual['mainWindowId'], 'x': close_x, 'y': close_y})
                 wait_state(lambda value: value['closed'] and not value['panelOnScreen'])
                 deadline = time.monotonic() + 10
                 while panel_id in [window['windowId'] for window in helper.call('listWindows', owner)]:
