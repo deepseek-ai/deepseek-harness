@@ -32,7 +32,7 @@ Status: implemented
 
 **管理器自身即 Remote 面。** `McpServerManager` 是 Typert Remote 服务：`watch` 在订阅时以及每次状态或条目变化后推送完整服务器列表，`restart` 与 `probe` 调用宿主操作。配置写入仍走 Settings Remote，管理器不提供写入方法，因此浏览器无法定义服务器命令。
 
-OAuth 刻意不在本次范围内：凭据记录与 authorization seam 加 MCP SDK 的 `OAuthClientProvider` 是预期归宿，`needs-auth` 状态位为那次变更保留。
+**OAuth 留在凭据与 authorization seam 上。** MCP SDK 的 `OAuthClientProvider` 在 mcp-client 内运行：被动连接只使用已提交的授权，没有可用授权时进入 `waiting-authorization`；显式登录经管理器的 `startAuthorization` 与 authorization seam 完成。每个条目拥有一个稳定的 `mcp-client/<id>` 凭据 key。
 
 ## 曾考虑的替代方案
 

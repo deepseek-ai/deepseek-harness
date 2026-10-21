@@ -23,7 +23,7 @@ Model Context Protocol (MCP) connects the model to tools supplied by external se
 
 MCP servers are opt-in. Configure one `@deepseek-ai/dsh-mcp-client` entry per server in the intended Cordis scope. Every shipped profile supplies the [tool registry](tools.md) and mounts the shared resource service once; users configure only client entries. Callers with no visible configured server receive no MCP prompt text or tools in native or PTC mode.
 
-The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients.
+The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server shows its account on the **Plugins** page through [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.md).
 
 | Choice | Configuration owner |
 |---|---|
@@ -201,6 +201,27 @@ register(name: string, entry: McpServerRegistration): () => void
  * incomplete, options are invalid, or a required credentials provider is missing.
  */
 async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
+
+/**
+ * Start explicit OAuth authorization, retaining the active grant until a successful commit.
+ * @param name - configured or registered OAuth entry, including disabled entries.
+ * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
+ */
+@Remote async startAuthorization(name: string): Promise<McpOAuthAttemptView>
+
+/**
+ * Cancel the selected attempt and drain its work; an admitted credential commit completes.
+ * @param name - managed entry.
+ * @param id - selected attempt; stale or absent attempts are ignored.
+ */
+@Remote async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void>
+
+/**
+ * Drain authorization, probes, and connections before deleting the local grant; retain client registration.
+ * A configuration change before deletion preserves the grant and rejects.
+ * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
+ */
+@Remote async signOut(name: string): Promise<void>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
@@ -213,13 +234,14 @@ Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager
 
 #### `mcp-manager/status` — parallel
 
-One managed server's status transitioned. Emitted for every published change while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.
+A managed server's connection status or authorization view changed; read `list()` for the current authorization view. Emitted while the manager is live and either the entry is configured or registered, or a runtime record remains. Removed entries may emit cleanup failures; `watch` and `list()` report removals. Lifecycle operations do not wait for listeners. Synchronous throws and returned promise rejections are logged without skipping other listeners.
 
 ```ts cordis-catalog
 /**
- * One managed server's status transitioned. Emitted for every published
- * change while the manager is live and either the entry is configured or
- * registered, or a runtime record remains. Removed entries may emit cleanup
+ * A managed server's connection status or authorization view changed;
+ * read `list()` for the current authorization view. Emitted while the
+ * manager is live and either the entry is configured or registered, or a
+ * runtime record remains. Removed entries may emit cleanup
  * failures; `watch` and `list()` report removals.
  * Lifecycle operations do not wait for listeners. Synchronous throws and
  * returned promise rejections are logged without skipping other listeners.

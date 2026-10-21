@@ -32,7 +32,7 @@ Installed application plugins also bring their own servers. Each must add its se
 
 **The manager is its own Remote surface.** `McpServerManager` is a Typert Remote service: `watch` streams the complete server list on subscription and after every status or entry change, and `restart` and `probe` call the Host operations. Configuration writes remain on the Settings Remote, and the manager exposes no write method, so a browser cannot define a server command.
 
-OAuth is deliberately out of scope: the credential-record and authorization seams plus the MCP SDK's `OAuthClientProvider` are the intended home, and a `needs-auth` status state is reserved for that change.
+**OAuth stays on the credential and authorization seams.** The MCP SDK's `OAuthClientProvider` runs inside mcp-client: passive connections use committed grants and enter `waiting-authorization` when none is usable, while explicit sign-in runs through the manager's `startAuthorization` and the authorization seam. Each entry owns one stable `mcp-client/<id>` credential key.
 
 ## Alternatives considered
 
