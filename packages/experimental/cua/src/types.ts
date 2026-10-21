@@ -192,7 +192,7 @@ export interface CuaApp extends CuaSurface {
   /**
    * Observe a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns a reusable window object with its initial AX state emitted.
+   * @returns a reusable window object with its initial AX state retained silently; getAXState emits it.
    */
   getWindow(windowId: number): Promise<CuaWindow>
   /**
@@ -244,7 +244,7 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and emit initial AX state.
+   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
    * @returns a handle tied to this process lifetime.
    */

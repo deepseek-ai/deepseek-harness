@@ -518,6 +518,7 @@ it('returns an image-admission failure without emitting a successful screenshot'
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
   expect(result.isError).toBe(true)
   expect(result.content.some(block => block.type === 'image')).toBe(false)
+  expect(JSON.stringify(result.content)).toContain('INVALID_IMAGE: Screenshot image admission failed for window 7')
 })
 
 it.each([
@@ -750,4 +751,21 @@ it('uses configured signed application grants without requesting a human answer'
   expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
   expect(native.instances).toHaveLength(1)
   expect(native.request).toHaveBeenCalledTimes(2)
+})
+
+it('retires failed cleanup without replaying an operation or retaining old handles', async () => {
+  const f = await setup()
+  await selectApplication(f)
+  const previous = native.instances[0]!
+  previous.disposed = true
+  native.dispose.mockRejectedValueOnce(new Error('cleanup acknowledgement missing'))
+  const failed = await f.execute('listApps')
+  expect(failed.isError).toBe(true)
+  expect(JSON.stringify(failed.content)).toContain('cleanup acknowledgement missing')
+  expect(native.instances).toHaveLength(1)
+  expect((await f.execute('getState', { appHandle: 'app-one' })).isError).toBe(true)
+  expect(native.instances).toHaveLength(1)
+  native.request.mockResolvedValueOnce([])
+  expect((await f.execute()).isError).toBe(false)
+  expect(native.instances).toHaveLength(2)
 })

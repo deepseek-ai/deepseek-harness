@@ -145,7 +145,10 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     lifetime.signal.throwIfAborted()
     const perform = async () => {
       lifetime.signal.throwIfAborted()
-      if (client?.disposed) await client.dispose()
+      if (client?.disposed) {
+        const previous = client
+        try { await previous.dispose() } finally { client = undefined }
+      }
       lifetime.signal.throwIfAborted()
       if (!client || client.disposed) client = new NativeClient(ctx, options.native, options.createChannel)
       return client.request(method, params, lifetime.signal)

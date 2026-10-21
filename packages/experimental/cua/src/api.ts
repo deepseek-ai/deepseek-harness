@@ -201,7 +201,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         },
         async getWindow(windowId): Promise<CuaWindow> {
           const window = { ...surface(appHandle, pid, windowId), windowId }
-          await window.getAXState()
+          await window.getAXState({ emit: false })
           return window
         },
         async typeText(text) { return action('typeText', { appHandle, text }) },
@@ -210,7 +210,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
         }) },
         async pressKey(key) { return action('pressKey', { appHandle, ...keyChord(key) }) },
       }
-      await app.getAXState()
+      await app.getAXState({ emit: false })
       return app
     },
   }

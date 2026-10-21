@@ -246,11 +246,11 @@ describe('application and window observations', () => {
     ])
     expect(first.windowId).toBe(23)
     expect(second.windowId).toBe(24)
-    expect(f.sink.text.mock.calls.map(([text]) => text)).toEqual(['Tree 1', 'Tree 2', 'Tree 3'])
+    expect(f.sink.text.mock.calls.map(([text]) => text)).toEqual([])
     await expect(second.getAXState({ emit: false, disableDiffing: true })).resolves.toBe('Tree 4')
     await second.click(3)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-4', elementIndex: 3 } })
-    expect(f.sink.text).toHaveBeenCalledTimes(3)
+    expect(f.sink.text).not.toHaveBeenCalled()
   })
 
   it('keeps a validated AXless window usable for screenshots and coordinate input', async () => {
@@ -258,7 +258,7 @@ describe('application and window observations', () => {
     const app = await f.api.getApp('Editor')
     f.dispatch.mockResolvedValueOnce(state({ windowId: 23, snapshotId: 'axless', tree: '', elements: [] }))
     const window = await app.getWindow(23)
-    expect(f.sink.text).toHaveBeenLastCalledWith('')
+    expect(f.sink.text).not.toHaveBeenCalled()
     await expect(window.getScreenshot()).resolves.toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
     await window.click([10, 20])
     await window.scroll({ x: 10, y: 20, deltaLinesX: 0, deltaLinesY: -1 })
@@ -363,7 +363,7 @@ describe('application and window observations', () => {
     await expect(app.getAXState()).rejects.toThrow('windows belong to another application')
     f.dispatch.mockResolvedValueOnce([otherWindow])
     await expect(app.getWindows()).rejects.toThrow('windows belong to another application')
-    expect(f.sink.text).toHaveBeenCalledTimes(1)
+    expect(f.sink.text).not.toHaveBeenCalled()
   })
 
   it('clears a failed refresh and obtains new state before a later screenshot', async () => {

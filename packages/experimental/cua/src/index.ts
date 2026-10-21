@@ -7,7 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
-import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
+import { admitEncodedImages, isAttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -240,14 +240,25 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const { attachments, target } = await screenshotStore(ctx, execution)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
         signal.throwIfAborted()
-        const refs = await admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }])
+        const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
+          try { return await operation() } catch (error) {
+            signal.throwIfAborted()
+            const code = isAttachmentError(error) ? error.code : 'SCREENSHOT_IMAGE_FAILED'
+            const summary = error instanceof Error ? error.message.slice(0, 300) : 'Image processing failed'
+            const cause = error instanceof Error && error.cause instanceof Error ? ` Cause: ${error.cause.message.slice(0, 300)}` : ''
+            throw new NativeError(code, `Screenshot ${name} failed for window ${screenshot.windowId} `
+              + `(${screenshot.pixelWidth}x${screenshot.pixelHeight}, ${screenshot.data.length} encoded bytes): `
+              + `${summary}${cause} No screenshot was delivered; capture fresh state before using image coordinates.`, { cause: error })
+          }
+        }
+        const refs = await stage('image admission', () => admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }]))
         signal.throwIfAborted()
         const attachment = refs[0] as ImageAttachmentRef
         const original = attachment.originalDimensions ?? attachment
         if (original.width !== screenshot.pixelWidth || original.height !== screenshot.pixelHeight) {
           throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot dimensions disagree with its decoded image')
         }
-        const image = await attachments.readImageRequest(attachment, target(attachment), signal)
+        const image = await stage('model image preparation', () => attachments.readImageRequest(attachment, target(attachment), signal))
         signal.throwIfAborted()
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
@@ -294,7 +305,19 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         signal.throwIfAborted()
         const operation = (async () => {
           const previous = clients.get(agent)
-          if (previous?.disposed) await previous.dispose()
+          if (previous?.disposed) {
+            try { await previous.dispose() } catch (error) {
+              // Retire the settled failed connection even when native cleanup could
+              // not be acknowledged. This call reports failure; a later selection
+              // may connect afresh, but must never reuse its handles or coordinates.
+              if (clients.get(agent) === previous) {
+                clients.delete(agent)
+                access.forget(agent)
+                owner.coordinates = new CuaCoordinates()
+              }
+              throw error
+            }
+          }
           signal.throwIfAborted()
           let client = clients.get(agent)
           if ('appHandle' in request.params && !client) {

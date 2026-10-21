@@ -444,3 +444,15 @@ it('does not reactivate old handles when stored permission was revoked and later
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
 })
+
+it('retires a control connection after reporting failed cleanup so later status can recover', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const previous = native.instances.at(-1)!
+  previous.disposed = true
+  previous.dispose.mockRejectedValue(new Error('cleanup was not acknowledged'))
+  await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('cleanup was not acknowledged')
+  await expect(f.ctx.cuaAccess.systemStatus()).resolves.toMatchObject({ platform: 'darwin' })
+  expect(native.instances.at(-1)).not.toBe(previous)
+  expect(previous.dispose).toHaveBeenCalledOnce()
+})
