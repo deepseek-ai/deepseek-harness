@@ -926,6 +926,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   McpServerRegistration: 'plugin-registered server entry is owned by packages/mcp/mcp-manager/README.md',
   McpProbeOptions: 'probe options are owned by packages/mcp/mcp-client/README.md',
   McpProbeResult: 'probe outcome union is owned by packages/mcp/mcp-client/README.md',
+  McpOAuthAttemptId: 'authorization attempt identity is owned by packages/mcp/mcp-client/README.md#oauth',
+  McpOAuthAttemptView: 'authorization progress is owned by packages/mcp/mcp-manager/README.md#oauth-authorization',
   AgentPreset: 'discovered preset record is owned by packages/preset/agent-preset-registry/README.md',
   AgentPresetRoster: 'path-free preset roster is owned by packages/preset/agent-preset-registry/README.md',
   PresetDefinition: 'declarative configuration is owned by packages/preset/agent-preset/README.md',

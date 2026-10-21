@@ -192,6 +192,16 @@ describe('mcp-manager', () => {
     mockListTools.mockResolvedValue(listing('remote'))
   })
 
+  it('requires OAuth configuration and a credential provider for explicit operations', async () => {
+    const { manager } = await mountWorld({ managerConfig: { servers: {
+      off: stdioEntry({ enabled: false }),
+      oauth: { transport: 'streamable-http', url: 'https://example.invalid', enabled: false, oauth: { credentialKey: 'mcp-client/oauth' } },
+    } } })
+    await expect(manager.startAuthorization('off')).rejects.toThrow('OAuth is not configured')
+    await expect(manager.signOut('off')).rejects.toThrow('OAuth is not configured')
+    await expect(manager.signOut('oauth')).rejects.toThrow('credentials provider')
+  })
+
   it('mounts composition-base servers without any settings provider', async () => {
     const { ctx, manager } = await mountWorld({
       withSettings: false,

@@ -22,9 +22,12 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Fiber, Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import { ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer, resolveReconnectPolicy } from '@deepseek-ai/dsh-mcp-client'
+import { OAuthSchema, ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer, resolveReconnectPolicy } from '@deepseek-ai/dsh-mcp-client'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import type { McpCloseResult, McpProbeOptions, McpProbeResult, ReconnectConfig } from '@deepseek-ai/dsh-mcp-client'
+import type { McpOAuthAttemptId, McpOAuthAttemptView, McpOAuthConfig, McpOAuthConfigInput } from '@deepseek-ai/dsh-mcp-client'
+import type { McpOAuthAuthorization } from '@deepseek-ai/dsh-mcp-client/oauth'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { assertTemplateSyntax } from '@deepseek-ai/dsh-mcp-client'
 import type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
@@ -41,6 +44,8 @@ export type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
  * would not.
  */
 export interface McpManagedServerEntry {
+  /** Optional OAuth configuration; each entry owns a distinct stable credential key. */
+  oauth?: McpOAuthConfig
   /** Which transport the instance uses. */
   transport: 'stdio' | 'streamable-http'
   /** stdio: executable used to start the server; `''` while unset. */
@@ -73,8 +78,9 @@ export interface Config {
   servers: Volatile<Record<string, McpManagedServerEntry>>
 }
 
-type EntryInput = Omit<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs'>
+type EntryInput = Omit<McpManagedServerEntry, 'oauth' | 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs'>
   & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs'>>
+  & { oauth?: McpOAuthConfigInput }
 interface ConfigInput {
   servers?: Record<string, EntryInput>
 }
@@ -85,6 +91,7 @@ export type McpServerRegistration = Omit<EntryInput, 'enabled'>
 type ResolvedEntry = VolatileSnapshot<McpManagedServerEntry>
 
 const ServerEntrySchema = z.object({
+  oauth: z.union([z.const(undefined), OAuthSchema]),
   transport: z.union(['stdio', 'streamable-http']).required(),
   command: z.string().default(''),
   args: z.array(String).default([]),
@@ -119,14 +126,26 @@ function templatedStrings(name: string, entry: ResolvedEntry): Array<[value: str
 
 /**
  * Reject entries the manager could not act on: an invalid entry key, a
- * missing or cross-transport field, or a malformed template token. Runs at
+ * missing or cross-transport field, a malformed template token, or an OAuth
+ * credential key another entry already owns. Runs at
  * composition load, at every settings write, and at registration, so a broken
  * entry is refused where it is written instead of silently disabling its server.
  * @param entries - resolved entries keyed by server name.
  */
 function validateEntries(entries: Readonly<Record<string, ResolvedEntry>>): void {
+  const oauthKeys = new Set<string>()
   for (const [name, entry] of Object.entries(entries)) {
     const path = `servers.${name}`
+    if (entry.oauth !== undefined) {
+      try { parseCredentialKey(entry.oauth.credentialKey) }
+      catch (error) { throw new Error(`${path}.oauth.credentialKey: ${(error as TypeError).message}`, { cause: error }) }
+      if (entry.transport !== 'streamable-http') throw new Error(path + ': OAuth requires streamable-http')
+      if (Object.keys(entry.headers).some(name => name.toLowerCase() === 'authorization')) {
+        throw new Error(path + ': OAuth and an Authorization header cannot be configured together')
+      }
+      if (oauthKeys.has(entry.oauth.credentialKey)) throw new Error(path + ': OAuth credentialKey is already assigned to another server')
+      oauthKeys.add(entry.oauth.credentialKey)
+    }
     if (!SERVER_NAME_PATTERN.test(name)) {
       throw new Error(`${path}: server name must match ${String(SERVER_NAME_PATTERN)} — rename the entry key`)
     }
@@ -166,6 +185,9 @@ function validateEntries(entries: Readonly<Record<string, ResolvedEntry>>): void
 
 /** One server's child instance, probes, and any cleanup failure retained by the manager. */
 interface ManagedRecord {
+  oauth?: McpOAuthAuthorization
+  /** Pending local grant deletion owns replacement of this record. */
+  signingOut?: boolean
   /** Entry before template expansion, retained for change detection. */
   entrySnapshot: ResolvedEntry
   /** The child mcp-client fiber. */
@@ -241,9 +263,9 @@ export default class McpServerManager extends TypertRemoteService {
       const raw: unknown = next()
       if (this !== owner) return raw
       const servers = McpServerManager.Config(raw as ConfigInput).servers.get()
-      validateEntries(servers)
       const taken = Object.keys(servers).find(name => registrations.has(name))
       if (taken !== undefined) throw new Error(`servers.${taken}: a plugin already registers this server name — rename the entry key`)
+      validateEntries({ ...servers, ...Object.fromEntries(registrations) })
       return raw
     })
     this.ctx.on('internal/plugin', (fiber) => {
@@ -268,12 +290,15 @@ export default class McpServerManager extends TypertRemoteService {
    */
   list(): McpManagedServerView[] {
     const entries = this.entries()
-    return [...new Set([...Object.keys(entries), ...this.instances.keys()])].map(name => ({
-      name,
-      configured: Object.hasOwn(entries, name),
-      status: this.statuses.get(name)
-        ?? (entries[name]?.enabled ? { state: 'connecting', attempt: 0 } : { state: 'disabled' }),
-    }))
+    return [...new Set([...Object.keys(entries), ...this.instances.keys()])].map((name) => {
+      const authorization = this.instances.get(name)?.oauth?.current()
+      return {
+        name,
+        configured: Object.hasOwn(entries, name),
+        status: this.currentStatus(name, entries),
+        ...authorization === undefined ? {} : { authorization },
+      }
+    })
   }
 
   /**
@@ -293,6 +318,7 @@ export default class McpServerManager extends TypertRemoteService {
       if (Object.hasOwn(this.config.servers.get(), name) || this.registrations.has(name)) {
         throw new Error(`mcp-manager: server "${name}" is already configured or registered`)
       }
+      validateEntries({ ...this.entries(), [name]: resolved })
       this.registrations.set(name, resolved)
       void this.entriesChanged(`registration of "${name}"`)
       return () => {
@@ -377,16 +403,8 @@ export default class McpServerManager extends TypertRemoteService {
    * incomplete, options are invalid, or a required credentials provider is missing.
    */
   async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult> {
-    if (this.stopped) throw new Error('mcp-manager: the manager is disposed')
-    const entry = this.entries()[name]
-    if (entry === undefined) throw new Error(`mcp-manager: unknown server "${name}"`)
-    let record = this.instances.get(name)
-    if (record === undefined) {
-      record = { entrySnapshot: entry, probes: new Map() }
-      this.instances.set(name, record)
-    }
-    if (record.retired || !deepEqualJson(entry, record.entrySnapshot)) throw new Error(`mcp-manager: configuration for "${name}" is changing`)
-    if (record.failure !== undefined) throw new Error(`mcp-manager: cleanup for "${name}" is incomplete; restart the Host`)
+    const record = this.recordFor(name)
+    const entry = record.entrySnapshot
     const lifetime = new AbortController()
     const owner = record
     const signal = options?.signal === undefined ? lifetime.signal : AbortSignal.any([lifetime.signal, options.signal])
@@ -402,9 +420,90 @@ export default class McpServerManager extends TypertRemoteService {
     return done
   }
 
+  /**
+   * Start explicit OAuth authorization, retaining the active grant until a successful commit.
+   * @param name - configured or registered OAuth entry, including disabled entries.
+   * @returns current attempt progress; absent services, changing entries, or failed cleanup reject.
+   */
+  @Remote
+  async startAuthorization(name: string): Promise<McpOAuthAttemptView> {
+    return (await this.authorizationFor(name)).start()
+  }
+
+  /**
+   * Cancel the selected attempt and drain its work; an admitted credential commit completes.
+   * @param name - managed entry.
+   * @param id - selected attempt; stale or absent attempts are ignored.
+   */
+  @Remote
+  async cancelAuthorization(name: string, id: McpOAuthAttemptId): Promise<void> {
+    await this.instances.get(name)?.oauth?.cancel(id)
+  }
+
+  /**
+   * Drain authorization, probes, and connections before deleting the local grant; retain client registration.
+   * A configuration change before deletion preserves the grant and rejects.
+   * @param name - configured or registered OAuth entry; cleanup failure preserves the grant and blocks replacement.
+   */
+  @Remote
+  async signOut(name: string): Promise<void> {
+    const record = this.recordFor(name)
+    const oauth = record.entrySnapshot.oauth
+    if (oauth === undefined) throw new Error('mcp-manager: OAuth is not configured for this server')
+    const credentials = this.ownerContext.get('credentials')
+    if (credentials === undefined) throw new Error('mcp-manager: OAuth requires a credentials provider')
+    const key = parseCredentialKey(OAuthSchema(oauth).credentialKey)
+    // Validation keeps credential keys unique, so only the unchanged entry owns the key. A rename while
+    // cleanup is awaited can hand the key to another entry, so deletion checks again after cleanup.
+    const assertUnchanged = (): void => {
+      if (this.instances.get(name) !== record || !deepEqualJson(this.entries()[name], record.entrySnapshot)) {
+        throw new Error('mcp-manager: server configuration changed before sign-out')
+      }
+    }
+    record.signingOut = true
+    this.retire(record)
+    await this.enqueue(async () => {
+      assertUnchanged()
+      const closed = await this.closeRecord(name, record)
+      if (!closed) throw new Error('mcp-manager: sign-out requires completed connection and authorization cleanup')
+      assertUnchanged()
+      try { await credentials.deleteRecord(key) }
+      finally {
+        this.instances.delete(name)
+        await this.remount(name)
+      }
+    }).finally(() => { record.signingOut = false })
+  }
+
+  private async authorizationFor(name: string): Promise<McpOAuthAuthorization> {
+    const record = this.recordFor(name)
+    const config = this.toClientConfig(name, record.entrySnapshot)
+    if (config.transport !== 'streamable-http' || config.oauth === undefined) throw new Error('mcp-manager: OAuth is not configured for this server')
+    const { McpOAuthAuthorization } = await import('@deepseek-ai/dsh-mcp-client/oauth')
+    if (record.retired || this.stopped) throw new Error(`mcp-manager: configuration for "${name}" is changing`)
+    return record.oauth ??= new McpOAuthAuthorization(this.ownerContext, { ...config, oauth: config.oauth }, () => {
+      this.notifyStatus(name, this.currentStatus(name))
+    })
+  }
+
+  private recordFor(name: string): ManagedRecord {
+    if (this.stopped) throw new Error('mcp-manager: the manager is disposed')
+    const entry = this.entries()[name]
+    if (entry === undefined) throw new Error(`mcp-manager: unknown server "${name}"`)
+    let record = this.instances.get(name)
+    if (record === undefined) {
+      record = { entrySnapshot: entry, probes: new Map() }
+      this.instances.set(name, record)
+    }
+    if (record.retired || !deepEqualJson(entry, record.entrySnapshot)) throw new Error(`mcp-manager: configuration for "${name}" is changing`)
+    if (record.failure !== undefined) throw new Error(`mcp-manager: cleanup for "${name}" is incomplete; restart the Host`)
+    return record
+  }
+
   private retire(record: ManagedRecord): void {
     record.retired = true
     record.detachStatus?.()
+    record.oauth?.retire()
     for (const lifetime of record.probes.keys()) lifetime.abort()
   }
 
@@ -459,7 +558,7 @@ export default class McpServerManager extends TypertRemoteService {
     const servers = this.entries()
     for (const [name, record] of this.instances) {
       const entry = servers[name]
-      if (!record.retired && entry !== undefined && deepEqualJson(entry, record.entrySnapshot)) continue
+      if ((!record.retired || record.signingOut) && entry !== undefined && deepEqualJson(entry, record.entrySnapshot)) continue
       await this.unmount(name, record)
     }
     for (const name of this.statuses.keys()) {
@@ -480,6 +579,10 @@ export default class McpServerManager extends TypertRemoteService {
 
   private async remount(name: string): Promise<void> {
     const record = this.instances.get(name)
+    if (record?.signingOut) {
+      if (!await this.closeRecord(name, record)) throw new Error(`mcp-manager: cleanup for "${name}" is incomplete; restart the Host`)
+      return
+    }
     if (record !== undefined && !await this.unmount(name, record)) {
       throw new Error(`mcp-manager: cleanup for "${name}" is incomplete; restart the Host`)
     }
@@ -524,10 +627,21 @@ export default class McpServerManager extends TypertRemoteService {
   }
 
   private async unmount(name: string, record: ManagedRecord): Promise<boolean> {
+    if (!await this.closeRecord(name, record)) return false
+    this.instances.delete(name)
+    return true
+  }
+
+  private async closeRecord(name: string, record: ManagedRecord): Promise<boolean> {
     this.retire(record)
-    await Promise.allSettled([...record.probes.values()])
+    await Promise.all([
+      record.handle?.dispose(),
+      record.oauth?.dispose().then((result) => {
+        if (result.cleanupError !== undefined) this.retainCleanupFailure(record, result)
+      }),
+      Promise.allSettled([...record.probes.values()]),
+    ])
     if (record.handle !== undefined) {
-      await record.handle.dispose()
       const result = connectionStatusOf(record.handle)?.closure()
       if (result !== undefined && (!result.closeConfirmed || result.cleanupError !== undefined)) this.retainCleanupFailure(record, result)
     }
@@ -535,7 +649,10 @@ export default class McpServerManager extends TypertRemoteService {
       this.setStatus(name, { state: 'failed', reason: 'cleanup', result: record.failure })
       return false
     }
-    this.instances.delete(name)
+    if (record.oauth?.current() !== undefined) {
+      delete record.oauth
+      this.notifyStatus(name, this.currentStatus(name))
+    }
     return true
   }
 
@@ -558,6 +675,16 @@ export default class McpServerManager extends TypertRemoteService {
     const previous = this.statuses.get(name)
     if (previous !== undefined && deepEqualJson(previous, status)) return
     this.statuses.set(name, status)
+    this.notifyStatus(name, status)
+  }
+
+  private currentStatus(name: string, entries = this.entries()): McpManagedServerStatus {
+    return this.statuses.get(name)
+      ?? (entries[name]?.enabled ? { state: 'connecting', attempt: 0 } : { state: 'disabled' })
+  }
+
+  /** Wake `watch` streams and emit `mcp-manager/status` while the manager is live. */
+  private notifyStatus(name: string, status: McpManagedServerStatus): void {
     if (this.stopped) return
     this.changed()
     void this.ctx.parallel('mcp-manager/status', name, status).catch((error: unknown) => {
@@ -596,6 +723,7 @@ export default class McpServerManager extends TypertRemoteService {
     }
     return McpClient.Config({
       transport: 'streamable-http',
+      ...entry.oauth === undefined ? {} : { oauth: { ...entry.oauth } },
       url: entry.url,
       headers: { ...entry.headers },
       ...shared,

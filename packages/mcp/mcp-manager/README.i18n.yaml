@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: f14f34fce35a8d90
 /deepseek-ai-dsh-mcp-manager/use-this-package:
-  en: f36f5244cd0b34f9
-  zh: a9df08b327869f1d
+  en: 4c9dd99712da7711
+  zh: 6f6551373a61f4aa
 /deepseek-ai-dsh-mcp-manager/use-this-package/when-to-choose-it:
   en: 5a005b1ef5f53881
   zh: d8bae243d10b2da5
@@ -30,11 +30,14 @@
   en: 313bcb35b12be8e1
   zh: a85f75db6b138547
 /deepseek-ai-dsh-mcp-manager/use-this-package/observing-and-recovering:
-  en: b831c9cf54caacf0
-  zh: c77cd97191a0d261
+  en: a83e0e764d34e422
+  zh: 00480804de3aa5b9
+/deepseek-ai-dsh-mcp-manager/use-this-package/oauth-authorization:
+  en: 86ad23ffe9337ec1
+  zh: 33671e9bacf7eb6e
 /deepseek-ai-dsh-mcp-manager/use-this-package/remote-operations:
-  en: 4432c6842413bc07
-  zh: 0b30f00fb6a0af39
+  en: a1ce437d00f20cf0
+  zh: a0eed983dc0e743b
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation:
   en: 8a74186fa5bfe79d
   zh: c7c952876ca2992b
@@ -57,8 +60,8 @@
   en: 7a8d0bf11425040b
   zh: b39181f89ba4fbe8
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
-  en: 4c85bea0533cc44a
-  zh: 73fdc5d1a90a3011
+  en: 22099e3ff8184922
+  zh: bc341ee2562e6394
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
-  en: 8b2c53fe07fdaf2d
-  zh: 7839d0302f02fa5b
+  en: 22b977acde90c5b7
+  zh: 756afde34c9bcd99
