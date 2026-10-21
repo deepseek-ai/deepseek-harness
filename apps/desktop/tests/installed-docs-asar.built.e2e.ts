@@ -28,21 +28,31 @@ try {
 `
 
 /**
- * PowerShell waits for the GUI-subsystem Electron executable only while its output is captured, so the
- * Windows form assigns the output and reads `$LASTEXITCODE` instead of letting it reach the console.
+ * The Electron executable is a GUI-subsystem program: PowerShell's call operator does not wait for it, so
+ * captured output arrives empty and the exit code is not its own. The Windows form starts it as a .NET
+ * process with redirected streams and waits for its exit code; the console encoding only lets this test
+ * decode what the probe relays.
  */
 const POWERSHELL_PROBE = `param([string]$Target, [string]$First, [string]$Count)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $script = @'
 ${READ_SCRIPT}
 '@
-$env:ELECTRON_RUN_AS_NODE = '1'
-$records = & $env:DSH_NODE_EXECUTABLE -e $script -- $Target $First $Count 2>&1
-$code = $LASTEXITCODE
-foreach ($record in $records) {
-  if ($record -is [System.Management.Automation.ErrorRecord]) { [Console]::Error.WriteLine($record.ToString()) }
-  else { [Console]::Out.WriteLine($record) }
-}
-exit $code
+$start = [System.Diagnostics.ProcessStartInfo]::new($env:DSH_NODE_EXECUTABLE)
+foreach ($argument in @('-e', $script, '--', $Target, $First, $Count)) { $start.ArgumentList.Add($argument) }
+$start.Environment['ELECTRON_RUN_AS_NODE'] = '1'
+$start.UseShellExecute = $false
+$start.RedirectStandardOutput = $true
+$start.RedirectStandardError = $true
+$start.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+$start.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+$process = [System.Diagnostics.Process]::Start($start)
+$stderr = $process.StandardError.ReadToEndAsync()
+$stdout = $process.StandardOutput.ReadToEnd()
+$process.WaitForExit()
+[Console]::Out.Write($stdout)
+[Console]::Error.Write($stderr.Result)
+exit $process.ExitCode
 `
 
 // macOS packaged-application coverage is manual; the POSIX form needs no output capture workaround.
