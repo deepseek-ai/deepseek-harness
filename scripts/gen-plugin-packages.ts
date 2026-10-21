@@ -1,6 +1,6 @@
 /**
  * Generate the loadable-plugin package list shipped inside the
- * `cordis-composition-reference` skill from the workspace manifests and the
+ * `dsh-doc` skill from the workspace manifests and the
  * config-catalog classification. `--check` exits 1 when the committed file is stale.
  */
 
@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { collectConfigCatalog, type CatalogEntry } from './gen-config-catalog.ts'
 
 const root = resolve(import.meta.dirname, '..')
-const OUT = 'packages/preset/agent-preset/skills/cordis-composition-reference/references/packages.md'
+const OUT = 'packages/preset/agent-preset/skills/dsh-doc/references/packages.md'
 
 interface Row {
   pkg: string

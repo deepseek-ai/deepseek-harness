@@ -1,11 +1,6 @@
----
-name: cordis-composition-reference
-description: Use when writing or reading a Cordis bundle patch or agent preset for this harness and you need the Loader YAML dialect (insert, override by id, group, disabled, isolate, !!js) or the list of installable Harness plugin packages and what each provides.
----
-
 # Cordis composition reference
 
-Reference material for bundle patches and preset plugin lists. Procedures live in `cordis-plugin-development` and `editing-cordis-compositions`.
+Reference material for bundle patches and preset plugin lists. Procedures live in `references/plugin-development.md` and `references/compositions.md`.
 
 ## Loader patch dialect
 
@@ -26,4 +21,4 @@ A row has `id`, `name` (the plugin package specifier; inserted relative paths ar
 
 ## Installable plugin packages
 
-`references/packages.md` lists every workspace package that exports a Cordis plugin, grouped by package group, with whether its row takes `config`. Search it with `grep -n <keyword>` rather than reading it whole. Plugins outside this list come from installed bundles; `plugin_manager` `list_bundles` names them.
+`references/packages.md` lists every workspace package that exports a Cordis plugin, one table per package group, with whether its row takes `config`. Read it in parts with the file-read tool's offset and limit rather than whole. Plugins outside this list come from installed bundles; `plugin_manager` `list_bundles` names them.

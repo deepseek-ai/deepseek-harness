@@ -75,7 +75,7 @@ package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-c
 
 ## 4. 编写包 README
 
-将包特有的服务 API、配置、事件、扩展点和设计说明放在前面。根据 [dsh-doc 元数据参考](../../.agents/skills/dsh-doc/references/metadata-links-i18n.md#the-kind-system)中的四种 kind 标签——组、参考、库或 bundle——选择 frontmatter 的 `kind`，使其匹配包在仓库中的位置与入口形态；每个 kind 恰好对应一个 README 模板。limitations 部分记录持久的消费方缺口和本包拥有的非显而易见的维护者约束；日常清理事项留在源码 TODO 或 Agent Note 中。间接的 Model Experience 语句可以点名暴露本包贡献的消费方，但不重述该消费方的实现。包 README 以如下规范序列结尾：
+将包特有的服务 API、配置、事件、扩展点和设计说明放在前面。根据 [dsh-doc-writing 元数据参考](../../.agents/skills/dsh-doc-writing/references/metadata-links-i18n.md#the-kind-system)中的四种 kind 标签——组、参考、库或 bundle——选择 frontmatter 的 `kind`，使其匹配包在仓库中的位置与入口形态；每个 kind 恰好对应一个 README 模板。limitations 部分记录持久的消费方缺口和本包拥有的非显而易见的维护者约束；日常清理事项留在源码 TODO 或 Agent Note 中。间接的 Model Experience 语句可以点名暴露本包贡献的消费方，但不重述该消费方的实现。包 README 以如下规范序列结尾：
 
 ````markdown
 ## Model Experience

@@ -1,8 +1,3 @@
----
-name: agent-experience
-description: Use when writing or changing a model-facing tool definition (name, description, parameter schema, or its system-prompt section), and when designing skills, context loading, or multi-step workflows, to make information discoverable and use context efficiently.
----
-
 - **Start with minimal context:** expose purpose, available actions, and constraints first; load detailed instructions when needed.
 - **Make discovery explicit:** every deferred resource needs a clear description and a reliable way to retrieve it.
 - **Keep critical constraints visible:** permissions, destructive effects, and required validation should appear before the relevant action.

@@ -1,10 +1,10 @@
 /**
- * Shipped creator skills: every rendered skill stays below the pruner threshold, referenced
- * files exist, templates parse and show their detail documents, and no skill bans reading DSH sources.
+ * The shipped dsh-doc skill: it is the package's only skill, renders below the pruner threshold, lists
+ * every file it ships, its templates parse and show their detail documents, and it never bans reading DSH sources.
  */
 import { execFileSync } from 'node:child_process'
-import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs'
-import { dirname, join, matchesGlob, resolve } from 'node:path'
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, matchesGlob, resolve, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
 import * as yaml from 'js-yaml'
@@ -13,10 +13,9 @@ import { codePointLength } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import { languageChain, localFiles, readPackageDocument } from '@deepseek-ai/dsh-plugin-detail'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, type TestContext } from 'vitest'
 
 const skills = fileURLToPath(new URL('../skills/', import.meta.url))
-const names = readdirSync(skills)
 
 /**
  * `packages/bundle/web-app/presets/standard.patch.yml` prunes a tool result only above `thresholdChars: 8192`
@@ -37,52 +36,52 @@ function markdownFiles(dir: string): string[] {
     .map(file => join(dir, file))
 }
 
-describe('the shipped creator skills', () => {
+describe('the shipped dsh-doc skill', () => {
+  const skill = join(skills, 'dsh-doc')
+  const templates = join(skill, 'templates')
   const repositorySkills = fileURLToPath(new URL('../../../../.agents/skills/', import.meta.url))
-  const alias = join(repositorySkills, 'agent-experience/SKILL.md')
-  const canonical = join(skills, 'agent-experience/SKILL.md')
 
-  it('keeps agent-experience in the package with a repository alias, not a second copy', () => {
-    expect(names).toContain('agent-experience')
-    expect(lstatSync(canonical).isFile()).toBe(true)
-    const linked = lstatSync(alias).isSymbolicLink()
-    // Git can materialize link targets as plain files on Windows with core.symlinks=false.
-    if (!linked) expect(process.platform).toBe('win32')
-    const target = linked ? readlinkSync(alias) : readFileSync(alias, 'utf8').trim()
-    expect(resolve(dirname(alias), target)).toBe(canonical)
-  })
-
-  it.for(['package', 'repository'] as const)('loads agent-experience from the %s skill root', async (source, test) => {
-    if (source === 'repository' && process.platform === 'win32' && !lstatSync(alias).isSymbolicLink()) {
-      test.skip(true, 'Repository discovery requires a checkout with symbolic links enabled.')
-    }
+  async function loadRoot(root: string, test: TestContext) {
     const ctx = new Context()
     test.onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillFileSystem, {
-      includeDefaultRoots: false, watch: false,
-      customSkillDirs: [source === 'package' ? skills : repositorySkills],
+    await ctx.plugin(SkillFileSystem, { includeDefaultRoots: false, watch: false, customSkillDirs: [root] })
+    return ctx
+  }
+
+  it('is the only skill the package skill root exposes', async (test) => {
+    const ctx = await loadRoot(skills, test)
+    expect((await ctx.skills.list()).map(entry => entry.name)).toEqual(['dsh-doc'])
+    expect((await ctx.skills.get('dsh-doc'))?.content).toBe(body('dsh-doc').trim())
+  })
+
+  it('leaves repository skills without a second dsh-doc and wraps the packaged tool-design reference', async (test) => {
+    const ctx = await loadRoot(repositorySkills, test)
+    const repository = (await ctx.skills.list()).map(entry => entry.name)
+    expect(repository).not.toContain('dsh-doc')
+    expect(repository).toEqual(expect.arrayContaining(['dsh-doc-writing', 'agent-experience']))
+    const wrapper = join(repositorySkills, 'agent-experience', 'SKILL.md')
+    expect(lstatSync(wrapper).isFile()).toBe(true)
+    const link = /\]\(([^)]+tool-design\.md)\)/u.exec(readFileSync(wrapper, 'utf8'))?.[1]
+    expect(link && resolve(dirname(wrapper), link)).toBe(join(skill, 'references', 'tool-design.md'))
+  })
+
+  it('renders below the pruner threshold and lists exactly the files it ships', () => {
+    const rendered = renderSkillContent({
+      name: 'dsh-doc', provider: 'filesystem', resourceBase: { kind: 'directory', path: skill }, content: body('dsh-doc'),
     })
-    expect((await ctx.skills.list()).map(skill => skill.name)).toContain('agent-experience')
-    const loaded = await ctx.skills.get('agent-experience')
-    expect(loaded?.path).toBe(realpathSync(canonical))
-    expect(loaded?.content).toBe(body('agent-experience').trim())
+    expect(codePointLength(rendered)).toBeLessThan(PRUNER_THRESHOLD_CHARS)
+    const referenced = new Set([...body('dsh-doc').matchAll(/`((?:references|templates)\/[^`]+)`/g)].map(match => match[1] ?? match[0]))
+    const shipped = readdirSync(skill, { recursive: true, encoding: 'utf8' })
+      .filter(file => file !== 'SKILL.md' && statSync(join(skill, file)).isFile())
+      .map(file => file.split(sep).join('/'))
+    expect([...referenced].sort()).toEqual(shipped.sort())
   })
 
-  it('render below the pruner threshold and name only files that exist', () => {
-    for (const name of names) {
-      const rendered = renderSkillContent({
-        name, provider: 'filesystem', resourceBase: { kind: 'directory', path: join(skills, name) }, content: body(name),
-      })
-      expect(codePointLength(rendered), name).toBeLessThan(PRUNER_THRESHOLD_CHARS)
-      const referenced = [...body(name).matchAll(/`((?:references|templates)\/[^`]+)`/g)].map(match => match[1] ?? match[0])
-      for (const path of referenced) expect(() => statSync(join(skills, name, path)), `${name}: ${path}`).not.toThrow()
-    }
-  })
-
-  it('keep whole-file plugin references below the pruner threshold with read line numbers', () => {
-    const references = join(skills, 'cordis-plugin-development', 'references')
-    for (const file of readdirSync(references)) {
+  it('keeps every whole-file reference below the pruner threshold with read line numbers', () => {
+    const references = join(skill, 'references')
+    // The generated package list is read in parts with offset and limit, as SKILL.md and locate-docs.md direct.
+    for (const file of readdirSync(references).filter(entry => entry !== 'packages.md')) {
       const lines = readFileSync(join(references, file), 'utf8').split('\n')
       // The read tool renders each line as `${number}: ${text}`.
       const numbered = lines.map((text, index) => `${String(index + 1)}: ${text}`).join('\n')
@@ -91,7 +90,6 @@ describe('the shipped creator skills', () => {
   })
 
   it('ship templates whose manifest, patch, and JavaScript parse', () => {
-    const templates = join(skills, 'cordis-plugin-development', 'templates')
     for (const name of readdirSync(templates)) {
       const dir = join(templates, name)
       const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh: { bundle: { patch: string } } }
@@ -104,7 +102,6 @@ describe('the shipped creator skills', () => {
   })
 
   it('ships discoverable, exported, packaged display resources with every plugin template', () => {
-    const templates = join(skills, 'cordis-plugin-development', 'templates')
     for (const name of readdirSync(templates)) {
       const dir = join(templates, name)
       const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
@@ -132,7 +129,7 @@ describe('the shipped creator skills', () => {
         ...locales, ...details, manifest.dsh.bundle.patch])
       for (const resource of resources) {
         const file = resource.replace(/^\.\//u, '')
-        expect(body('cordis-plugin-development'), file).toContain(`\`templates/${name}/${file}\``)
+        expect(body('dsh-doc'), file).toContain(`\`templates/${name}/${file}\``)
         expect(statSync(join(dir, file)).isFile(), file).toBe(true)
         // npm `files` publishes a listed directory with its contents.
         const published = manifest.files.some(pattern => matchesGlob(file, pattern) || file.startsWith(`${pattern}/`))
@@ -141,8 +138,8 @@ describe('the shipped creator skills', () => {
     }
   })
 
-  it.for(readdirSync(join(skills, 'cordis-plugin-development', 'templates')))('shows the %s template detail document on its bundle page', async (name) => {
-    const dir = join(skills, 'cordis-plugin-development', 'templates', name)
+  it.for(readdirSync(join(skills, 'dsh-doc', 'templates')))('shows the %s template detail document on its bundle page', async (name) => {
+    const dir = join(templates, name)
     const document = await readPackageDocument(localFiles(dir, '1.0.0'), '', languageChain('en'), 1 << 20, AbortSignal.timeout(10_000))
     const locale = JSON.parse(readFileSync(join(dir, 'locale', 'en.json'), 'utf8')) as { meta: { detail: string } }
     expect(document).toMatchObject({ origin: 'locale', path: locale.meta.detail })
@@ -150,13 +147,11 @@ describe('the shipped creator skills', () => {
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {
-    for (const name of names) {
-      for (const file of markdownFiles(join(skills, name))) {
-        const text = readFileSync(file, 'utf8')
-        expect(text, file).not.toMatch(/do not read (DSH |package |DSH package )?sources/i)
-        // Desktop ships the skill directory inside app.asar, which only the Host process can open.
-        expect(text, file).not.toMatch(/`(cat|cp|ls) /)
-      }
+    for (const file of markdownFiles(skill)) {
+      const text = readFileSync(file, 'utf8')
+      expect(text, file).not.toMatch(/do not read (DSH |package |DSH package )?sources/i)
+      // Desktop ships the skill directory inside app.asar, which only the Host process can open.
+      expect(text, file).not.toMatch(/`(cat|cp|ls) /)
     }
   })
 })

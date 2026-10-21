@@ -62,7 +62,7 @@ An existing plugin's metadata may remain unchanged when it still describes the r
 - `export function apply(ctx, config) {}` with optional `export const inject = ['tools']` and `export const Config`.
 - A service class as the default export.
 
-Register every resource inside `apply` with `ctx.effect` or `ctx.on` and return its cleanup. A plugin that declares `Config` validates the row's `config` at activation; query `Config.listConfigs` for an installed plugin's schema before writing its `config`, and follow `$defs` references in the returned document.
+Register every resource inside `apply` with `ctx.effect` or `ctx.on` and return its cleanup. A plugin that declares `Config` validates the row's `config` at activation; before writing an installed plugin's `config`, read its schema from `Config.listConfigs` through `cordis_inspect_query`, following `$defs` references, or from the owning package's README and source when inspection is unavailable.
 
 ## Install, enable, and observe
 

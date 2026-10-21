@@ -1,6 +1,6 @@
 # User actions and agent tools
 
-Expose the plugin UI's operations on application data and configuration to the agent. Pure view interactions, such as switching tabs or expanding details, do not need tools. Confirm the Host entry points and tools you use with `cordis_inspect_query` before relying on them.
+Expose the plugin UI's operations on application data and configuration to the agent. Pure view interactions, such as switching tabs or expanding details, do not need tools. Confirm the Host entry points and tools you use with `cordis_inspect_query` when available, otherwise in the owning package's README and source, before relying on them.
 
 ## One operation, two callers
 
