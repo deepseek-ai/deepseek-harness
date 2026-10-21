@@ -7,7 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
-import { admitEncodedImages, isAttachmentError } from '@deepseek-ai/dsh-attachment'
+import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -243,7 +243,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
           try { return await operation() } catch (error) {
             signal.throwIfAborted()
-            const code = isAttachmentError(error) ? error.code : 'SCREENSHOT_IMAGE_FAILED'
+            const code = attachments.isAttachmentError(error) ? error.code : 'SCREENSHOT_IMAGE_FAILED'
             const summary = error instanceof Error ? error.message.slice(0, 300) : 'Image processing failed'
             const cause = error instanceof Error && error.cause instanceof Error ? ` Cause: ${error.cause.message.slice(0, 300)}` : ''
             throw new NativeError(code, `Screenshot ${name} failed for window ${screenshot.windowId} `
