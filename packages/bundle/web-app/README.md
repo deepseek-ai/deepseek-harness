@@ -90,6 +90,8 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
+Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. The catalog contains its name and description; its instructions load on demand. Loading the skill does not change tools, files, or profile settings.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -145,6 +147,20 @@ Read these pages when you want to go deeper into the shared core, the browser re
 
 <a id="model-experience"></a>
 ## Model Experience
+
+### DSH documentation skill
+
+#### What the model sees
+
+Standard and Creator list `dsh-doc` in the skill catalog. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources.
+
+#### Token effect
+
+The preset contributes one catalog entry. A session with no other skills also receives the catalog's shared invocation instructions. Skill bodies and reference files enter context only when loaded.
+
+#### KV Cache effect
+
+The catalog is logged at the first step and remains stable until its entries change. Loading the skill appends tool output without changing the tool schemas.
 
 ### Web runtime variable
 

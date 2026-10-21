@@ -30,8 +30,8 @@
   en: df205a26b6d49168
   zh: e46ed7cf9e06248a
 /deepseek-ai-dsh-web-app/use-this-package/per-session-agent-setup:
-  en: fdf38cb6e1b24464
-  zh: c14a8bcac9d4e5cd
+  en: 5def4fed0db7225e
+  zh: e2f700d2054a56e9
 /deepseek-ai-dsh-web-app/understand-the-implementation:
   en: 323742a00cfe67b2
   zh: eff5245a82fc16e7
@@ -53,6 +53,18 @@
 /deepseek-ai-dsh-web-app/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill:
+  en: 276322084b9659d1
+  zh: 759aae367669520a
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/what-the-model-sees:
+  en: e17d286795e1e234
+  zh: 32b8e7497bdba374
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/token-effect:
+  en: a639f2167f49dd3d
+  zh: 7b627d16829f1c75
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/kv-cache-effect:
+  en: f4c47481baa2ab03
+  zh: 31360e2558fca7f5
 /deepseek-ai-dsh-web-app/model-experience/web-runtime-variable:
   en: 623bf8a0bf05599d
   zh: 398ded2e7b20c1ea

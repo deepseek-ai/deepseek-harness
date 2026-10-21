@@ -784,6 +784,101 @@ describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surfac
   }, 120_000)
 })
 
+describe('the standard preset documentation skill', () => {
+  it.for([false, true])('loads the packaged skill without adding tools (existing catalog: %s)', async (existingCatalog: boolean) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-standard-doc-'))
+    vi.stubEnv('DSH_HOME', join(root, 'home'))
+    vi.stubEnv('DSH_AGENTS_HOME', join(root, 'agents-home'))
+    vi.stubEnv('DSH_BUNDLED_SKILL_DIR', join(root, 'bundled-skills'))
+    let docCtx: Context | undefined
+    try {
+      const standard = composeEntries([webPatches('standard documentation')])
+        .find(row => row.id === 'preset-standard')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
+      docCtx = await bootWeb(root, [
+        { id: 'skill-badge', disabled: !existingCatalog },
+        { insert: [{
+          id: 'preset-standard-without-doc', name: '@deepseek-ai/dsh-agent-preset',
+          config: {
+            ...standard, id: 'standard-without-doc',
+            plugins: standard.plugins.map(row => row.id === 'skill-filesystem'
+              ? { ...row, config: { customSkillDirs: [] } }
+              : row),
+          },
+        }] },
+      ])
+      const testCtx = docCtx
+      const adapter = new MinimalCompactionAdapter()
+      testCtx.llm.registerAdapter(['standard-doc-test'], adapter)
+      const baseline = await testCtx.agents.create({
+        sessionId: SessionId('standard-doc-baseline'), meta: { cwd: root },
+        agentOptions: { provider: 'standard-doc-test', model: 'standard-doc-test' },
+        setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'standard-without-doc').then(() => undefined),
+      })
+      const standardAgent = await testCtx.agents.create({
+        sessionId: SessionId('standard-doc-current'), meta: { cwd: root },
+        agentOptions: { provider: 'standard-doc-test', model: 'standard-doc-test' },
+        setup: agentCtx => testCtx.agentPresets.mount(agentCtx, 'standard').then(() => undefined),
+      })
+      const baselineSkills = await testCtx.skills.list({ cwd: root, scope: baseline.agent })
+      const skills = await testCtx.skills.list({ cwd: root, scope: standardAgent.agent })
+      expect(skills.map(skill => skill.name).sort())
+        .toEqual([...baselineSkills.map(skill => skill.name), 'dsh-doc'].sort())
+      const definition = await testCtx.skills.get('dsh-doc', { cwd: root, scope: standardAgent.agent })
+      expect(definition?.path).toBe(await realpath(join(REPO_ROOT, 'packages/preset/agent-preset/skills/dsh-doc/SKILL.md')))
+      if (definition === undefined) throw new Error('standard has no packaged dsh-doc skill')
+      const schemas = testCtx.tools.schemas(standardAgent.agent)
+      expect(schemas).toEqual(testCtx.tools.schemas(baseline.agent))
+      expect(schemas.map(tool => tool.name)).not.toContain('cordis_inspect_list')
+      expect(schemas.map(tool => tool.name)).not.toContain('cordis_inspect_query')
+      for (const handle of [baseline, standardAgent]) {
+        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply ready.' }], source: { kind: 'user' } }))
+        await handle.agent.whenIdle()
+      }
+      const baselineCatalogs = baseline.agent.session.snapshotEvents().flatMap(event =>
+        event.type === 'user/message' && event.data.source.kind === 'skill-catalog' ? [event.data] : [])
+      const catalogs = standardAgent.agent.session.snapshotEvents().flatMap(event =>
+        event.type === 'user/message' && event.data.source.kind === 'skill-catalog' ? [event.data] : [])
+      expect(baselineCatalogs).toHaveLength(existingCatalog ? 1 : 0)
+      expect(catalogs).toHaveLength(1)
+      expect(catalogs[0]?.source).toMatchObject({
+        entries: skills.map(skill => ({ name: skill.name, description: skill.description })),
+      })
+      const requests = adapter.requests.filter(request => request.purpose === undefined)
+      expect(requests).toHaveLength(2)
+      expect(requests[0]?.tools).toEqual(requests[1]?.tools)
+      const catalogSize = (messages: typeof catalogs) => {
+        const text = messages.flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])).join('')
+        return {
+          utf8Bytes: Buffer.byteLength(text, 'utf8'), codePoints: Array.from(text).length,
+          heuristicTokens: messages.reduce((total, message) => total + testCtx.tokenMeter.estimateMessage(message), 0),
+        }
+      }
+      console.info('Standard dsh-doc catalog context', {
+        existingCatalog, before: catalogSize(baselineCatalogs), after: catalogSize(catalogs),
+      })
+      const requestTexts = requests.flatMap(request => request.messages.flatMap(message =>
+        message.content.flatMap(block => block.type === 'text' ? [block.text] : [])))
+      expect(requestTexts.some(text => text.includes(definition.content))).toBe(false)
+      expect(standardAgent.agent.session.snapshotEvents().filter(event => event.type === 'tool/call')).toEqual([])
+      const profileManifest = join(root, 'profiles/spec/package.json')
+      const before = await readFile(profileManifest, 'utf8')
+      const loaded = await testCtx.tools.execute({
+        agent: standardAgent.agent, callId: ToolCallId('standard-doc-load'),
+        name: 'skill', arguments: { name: 'dsh-doc' }, signal: new AbortController().signal,
+      })
+      expect(loaded.isError).toBe(false)
+      expect(loaded.content.some(block => block.type === 'text' && block.text.includes(definition.content))).toBe(true)
+      expect(testCtx.tools.schemas(standardAgent.agent)).toEqual(schemas)
+      expect(await readFile(profileManifest, 'utf8')).toBe(before)
+    } finally {
+      try { await docCtx?.fiber.dispose() } finally {
+        vi.unstubAllEnvs()
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  })
+})
+
 describe('a user preset declared from the shipped cordis rows', () => {
   /** The JSON text a `cordis_inspect_*` result renders. */
   function resultText(result: { content: ReadonlyArray<{ type: string; text?: string }> }): string {
