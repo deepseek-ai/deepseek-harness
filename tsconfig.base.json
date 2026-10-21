@@ -297,6 +297,7 @@
       "@deepseek-ai/dsh-client-ui-model-selection": ["./packages/client/ui-model-selection/src"],
       "@deepseek-ai/dsh-client-ui-deepseek-model-label-1017": ["./packages/client/ui-deepseek-model-label-1017/src"],
       "@deepseek-ai/dsh-client-ui-goal": ["./packages/client/ui-goal/src"],
+      "@deepseek-ai/dsh-client-ui-mcp-account": ["./packages/client/ui-mcp-account/src"],
       "@deepseek-ai/dsh-client-ui-message-feedback": ["./packages/client/ui-message-feedback/src"],
       "@deepseek-ai/dsh-client-ui-agent-preset": ["./packages/client/ui-agent-preset/src"],
       "@deepseek-ai/dsh-client-ui-permission-presets": ["./packages/client/ui-permission-presets/src"],

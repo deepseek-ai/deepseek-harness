@@ -419,6 +419,11 @@
     - id: ui-message-feedback
       name: '@deepseek-ai/dsh-client-ui-message-feedback'
 
+    # Account section, title tag, activation guidance, and notices that
+    # connector plugins register for their MCP servers on the Plugins page.
+    - id: ui-mcp-account
+      name: '@deepseek-ai/dsh-client-ui-mcp-account'
+
     # Model selection: the /model popupSelect + composer seat over session.models.
     - id: ui-model-selection
       name: '@deepseek-ai/dsh-client-ui-model-selection'

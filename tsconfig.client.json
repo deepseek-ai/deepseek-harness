@@ -122,6 +122,7 @@
     { "path": "./packages/client/ui-directory-picker-browse" },
     { "path": "./packages/client/ui-directory-picker-native" },
     { "path": "./packages/client/ui-goal" },
+    { "path": "./packages/client/ui-mcp-account" },
     { "path": "./packages/client/ui-message-feedback" },
     { "path": "./packages/client/ui-model-selection" },
     { "path": "./packages/client/ui-deepseek-model-label-1017" },

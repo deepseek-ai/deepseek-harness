@@ -86,6 +86,7 @@ kind: "package-group"
 | [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.zh.md) | 向「插件」设置贡献只读的 Host Loader 清单标签页 | — |
 | [`ui-deliverables/`](ui-deliverables/README.zh.md) | 生成改动文件卡片及其对比 tab、交付文件卡片与可点击的最终响应文件引用 | — |
+| [`ui-mcp-account/`](ui-mcp-account/README.zh.md) | 提供连接器插件为其 MCP 服务器在插件页面注册的账号区块、标题标签、开启后的引导与提示 | `ctx.mcpAccounts` |
 | [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 提供消息赞踩，以及从赞踩、`/feedback` 或会话标题栏菜单打开的反馈弹窗 | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动本地 Desktop 或 Host OS 选择器的原生目录选择界面 | — |

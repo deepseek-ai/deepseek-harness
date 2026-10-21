@@ -133,6 +133,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-conversation': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-approval': { kind: 'none', reason: 'Browser-side approval presentation; registers nothing model-facing.' },
   'packages/client/ui-chat': { kind: 'none', reason: 'Browser-side Chat presentation; registers nothing model-facing.' },
+  'packages/client/ui-mcp-account': { kind: 'none', reason: 'Browser-side account controls over the MCP manager Remote; the connector and the MCP client document the tools a grant exposes.' },
   'packages/client/ui-message-feedback': { kind: 'none', reason: 'Browser-side controls over log-only message feedback; ratings and notes never enter model context or change model-input tokens.' },
   'packages/client/ui-tool': { kind: 'none', reason: 'Browser-side Tool presentation layer; renders logged calls without changing model context.' },
   'packages/client/ui-schedule': { kind: 'none', reason: 'Browser-side catalog, editing, and deletion of Host Schedule records; dsh-schedule owns storage and delivery, and dsh-tool-schedule contributes the model-facing tools in a preset that mounts it.' },

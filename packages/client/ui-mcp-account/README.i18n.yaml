@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-mcp-account/README.md
+/:
+  en: 1119c5b18393051b
+  zh: 245df5eb6b9d7b47
+/deepseek-ai-dsh-client-ui-mcp-account:
+  en: bc4c3da94b874e94
+  zh: 2c191170a5f5d4a0
+/deepseek-ai-dsh-client-ui-mcp-account/summary:
+  en: fff3391cbc58677b
+  zh: e92e37c3b0092bc2
+/deepseek-ai-dsh-client-ui-mcp-account/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-mcp-account/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-client-ui-mcp-account/use-this-package/register-an-account:
+  en: e55f7ef3f1ea7da4
+  zh: 503bb7a7c57ae99b
+/deepseek-ai-dsh-client-ui-mcp-account/use-this-package/what-the-page-shows:
+  en: 621f9d0e583e589c
+  zh: 39036f710eaa292e
+/deepseek-ai-dsh-client-ui-mcp-account/use-this-package/failures:
+  en: 32863abaf3878c95
+  zh: b79b06bf9a9e93fb
+/deepseek-ai-dsh-client-ui-mcp-account/understand-the-implementation:
+  en: 91b2814a091dea67
+  zh: 9986a1eea283abba
+/deepseek-ai-dsh-client-ui-mcp-account/further-exploration:
+  en: 85c4d99ffc871cc0
+  zh: 900a989ad90b0472
+/deepseek-ai-dsh-client-ui-mcp-account/model-experience:
+  en: 92a4247546de6289
+  zh: 9d0147cca07afecd
+/deepseek-ai-dsh-client-ui-mcp-account/model-experience/kv-cache-effect:
+  en: 4cd0965a7997970e
+  zh: 690e5a9d945f7f6e
+/deepseek-ai-dsh-client-ui-mcp-account/known-limitations-and-deferred-work:
+  en: 86f4b15761c90353
+  zh: 9ac6ac46d7ecf623
+/deepseek-ai-dsh-client-ui-mcp-account/known-limitations-and-deferred-work/dev-note:
+  en: c8cb8dbf8308d7cf
+  zh: eebcbc895b62f912

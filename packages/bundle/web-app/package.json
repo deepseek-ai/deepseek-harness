@@ -88,6 +88,7 @@
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:*",
     "@deepseek-ai/dsh-client-ui-jobs": "workspace:*",
     "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-mcp-account": "workspace:*",
     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:*",
     "@deepseek-ai/dsh-client-ui-model-selection": "workspace:*",
     "@deepseek-ai/dsh-client-ui-deepseek-model-label-1017": "workspace:*",
