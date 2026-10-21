@@ -404,9 +404,12 @@ describe('release families', () => {
 
     expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/src/bin.ts']) })
       .toThrow(/@deepseek-ai\/dsh packed no documentation/)
-    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/docs/guide.md']) })
-      .toThrow(/@deepseek-ai\/dsh packed no source/)
     expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', 'package/docs/guide.md', 'package/src/bin.ts']) })
+      .toThrow(/@deepseek-ai\/dsh packed no upgrade guide index/)
+    const docs = ['package/docs/guide.md', 'package/docs/upgrade-guide/README.md']
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs]) })
+      .toThrow(/@deepseek-ai\/dsh packed no source/)
+    expect(() => { dsh.validatePayload(installed, ['package/lib/index.js', ...docs, 'package/src/bin.ts']) })
       .not.toThrow()
   })
 

@@ -1,8 +1,10 @@
 /** Stage the published documentation inside the published `dsh` package. */
 
-import { cp, mkdir, readdir, rm } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { JSON_SCHEMA, load as loadYaml } from 'js-yaml'
+import { rcompare } from 'semver'
 import { docsPages } from '../website/docs.ts'
 
 /** Repository root, resolved from this script rather than the invoking directory. */
@@ -20,6 +22,9 @@ const EXCLUDED_SUFFIX = '.i18n.yaml'
 
 /** Upgrade guides reach an installed reader and are not on the website. */
 const ALWAYS_PUBLISHED_DIRECTORY = 'upgrade-guide'
+
+/** Generated index of the staged upgrade guides; the repository tree has none. */
+const UPGRADE_GUIDE_INDEX = `${ALWAYS_PUBLISHED_DIRECTORY}/README.md`
 
 /**
  * Source-relative Markdown paths the documentation website publishes.
@@ -57,11 +62,78 @@ export async function stageDshDocs(
   published: ReadonlySet<string> = publishedDocuments(),
 ): Promise<void> {
   await rm(destination, { recursive: true, force: true })
-  for (const file of await stagedFiles(source, published)) {
+  const files = await stagedFiles(source, published)
+  for (const file of files) {
     const target = join(destination, file)
     await mkdir(dirname(target), { recursive: true })
     await cp(join(source, file), target)
   }
+  await mkdir(join(destination, ALWAYS_PUBLISHED_DIRECTORY), { recursive: true })
+  await writeFile(join(destination, UPGRADE_GUIDE_INDEX), await upgradeGuideIndex(source, files))
+}
+
+/** One upgrade guide pair as the generated index lists it. */
+interface IndexedGuide {
+  readonly item: string
+  readonly title: string
+  readonly summary: string
+  readonly summaryZh: string
+}
+
+/**
+ * Render the index of every staged upgrade guide, grouped by the release it upgrades from.
+ * @param source - Documentation root holding the guides.
+ * @param files - Staged source-relative paths.
+ * @returns the index Markdown; without staged guides it holds only the preamble.
+ * @throws When a guide lacks its Chinese counterpart, a `description`, or a level-one title.
+ */
+async function upgradeGuideIndex(source: string, files: readonly string[]): Promise<string> {
+  const versions = new Map<string, IndexedGuide[]>()
+  for (const file of files) {
+    const match = /^upgrade-guide\/v(?<version>[^/]+)\/(?<item>[^/]+)\/guide\.md$/u.exec(file)?.groups
+    if (match?.version === undefined || match.item === undefined) continue
+    const { version, item } = match
+    const english = await guideHeading(join(source, file))
+    const chinese = await guideHeading(join(source, file.replace(/\.md$/u, '.zh.md')))
+    const guides = versions.get(version) ?? []
+    guides.push({ item, title: english.title, summary: english.description, summaryZh: chinese.description })
+    versions.set(version, guides)
+  }
+  const cell = (text: string): string => text.replace(/\s+/gu, ' ').trim().replaceAll('|', '\\|')
+  const lines = [
+    '# Upgrade guides',
+    '',
+    'Generated when `@deepseek-ai/dsh` is packed. A `v<T>` section lists what to change when upgrading from release vT to the release after it; vT is the release being left, not the target. Paths are relative to this file.',
+    '',
+    '打包 `@deepseek-ai/dsh` 时生成。`v<T>` 一节列出从 vT 版本升级到其下一个版本时需要做的修改；vT 是升级前的版本，不是目标版本。路径相对于本文件。',
+  ]
+  for (const [version, guides] of [...versions].sort(([left], [right]) => rcompare(left, right))) {
+    lines.push('', `## v${version}`, '', '| Item | Summary | 摘要 | English | 中文 |', '| --- | --- | --- | --- | --- |')
+    for (const guide of guides) {
+      const directory = `v${version}/${guide.item}`
+      lines.push(`| ${cell(guide.title)} | ${cell(guide.summary)} | ${cell(guide.summaryZh)} | [${directory}/guide.md](${directory}/guide.md) | [${directory}/guide.zh.md](${directory}/guide.zh.md) |`)
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
+/**
+ * Read the frontmatter description and level-one title of one guide.
+ * @param path - Absolute guide path.
+ * @returns the guide's one-sentence description and title.
+ * @throws When the file is missing or lacks either field.
+ */
+async function guideHeading(path: string): Promise<{ readonly description: string; readonly title: string }> {
+  const text = await readFile(path, 'utf8')
+  // The same frontmatter rules as `verify-upgrade-guides`; the title is the first heading after it.
+  const frontmatter = /^---\r?\n(?<yaml>[\s\S]*?)\r?\n---\r?\n/u.exec(text)
+  const yaml = frontmatter?.groups?.yaml
+  const metadata = yaml === undefined ? undefined : loadYaml(yaml, { schema: JSON_SCHEMA }) as { description?: unknown } | null
+  const title = frontmatter === null ? undefined : /^# (?<title>.+?)\r?$/mu.exec(text.slice(frontmatter[0].length))?.groups?.title
+  if (typeof metadata?.description !== 'string' || title === undefined) {
+    throw new Error(`stage-dsh-docs: ${path} needs a frontmatter description and a level-one title`)
+  }
+  return { description: metadata.description, title }
 }
 
 /**

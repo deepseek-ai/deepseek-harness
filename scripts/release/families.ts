@@ -398,6 +398,9 @@ class DshFamily extends ReleaseFamily {
     if (!files.some(file => file.startsWith('package/docs/') && file.endsWith('.md'))) {
       throw new Error(`${member.name} packed no documentation`)
     }
+    if (!files.includes('package/docs/upgrade-guide/README.md')) {
+      throw new Error(`${member.name} packed no upgrade guide index`)
+    }
     if (!files.some(file => file.startsWith('package/src/') && file.endsWith('.ts'))) {
       throw new Error(`${member.name} packed no source`)
     }
