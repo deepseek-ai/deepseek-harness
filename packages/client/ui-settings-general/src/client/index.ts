@@ -24,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type {
   SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow,
 } from './shell-contract.ts'
@@ -81,7 +82,15 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.general.item', id: 'developer-tools', order: 15, locale: NS,
     inject: (): DeveloperToolsRowInjected => ({
       hooks: { developerTools: ctx.configForms.developerTools.enabled },
-      setEnabled: enabled => ctx.configForms.developerTools.setEnabled(enabled),
+      setEnabled: async (enabled) => {
+        const settings = ctx.configForms.get<{ enabled: boolean }>('ui-settings')
+        const previous = settings.getSnapshot().value?.enabled
+        const timestamp = Date.now()
+        await ctx.configForms.developerTools.setEnabled(enabled)
+        if (previous !== undefined && previous !== enabled && settings.getSnapshot().value?.enabled === enabled) {
+          ctx.get('productAnalytics')?.track('code_work_view_toggle', { is_enabled: enabled }, timestamp)
+        }
+      },
     }),
   }, DeveloperToolsRow))
   // Version information follows the core preferences.

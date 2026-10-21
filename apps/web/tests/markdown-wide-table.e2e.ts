@@ -20,8 +20,8 @@
 // NO_ADAPTER.
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
-import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { chromium, webkit } from 'playwright'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   SESSION_FORMAT_VERSION,
@@ -373,6 +373,44 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       .toBeGreaterThan(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
+
+  it.each(['chromium', 'webkit'] as const)('keeps wide tables horizontally scrollable without hover in %s', async (engine) => {
+    const touchBrowser = await ({ chromium, webkit })[engine].launch()
+    onTestFinished(() => touchBrowser.close())
+    // Mobile WebKit has no wheel driver; touch emulation also disables hover in its desktop viewport.
+    const context = await touchBrowser.newContext({
+      viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: engine === 'chromium', locale: 'en-US',
+    })
+    const touchPage = await context.newPage()
+    const touchConsole = watchConsole(touchPage)
+    onTestFailed(() => saveFailureShot(touchPage, `markdown-wide-table-touch-${engine}`))
+    await touchPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const group = touchPage.getByRole('treeitem').first()
+    await touchPage.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+    await group.click()
+    await touchPage.getByRole('treeitem').filter({ hasText: 'Markdown wide tables' }).click()
+    await touchPage.getByText(TAIL_MARKER, { exact: true }).waitFor()
+    expect(await touchPage.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false)
+    const wide = touchPage.locator('[class*="tableScroll"]', { hasText: WIDE_MARKER })
+    await wide.scrollIntoViewIfNeeded()
+    expect(await wide.evaluate(element => ({
+      overflow: getComputedStyle(element).overflowX,
+      overflowing: element.scrollWidth > element.clientWidth,
+      focused: element.matches(':focus-visible'),
+    }))).toEqual({ overflow: 'auto', overflowing: true, focused: false })
+    const box = await wide.boundingBox()
+    if (box === null) throw new Error('Wide table is not visible')
+    // A wheel input must scroll the native overflow container without hover or focus.
+    // Assigning scrollLeft would also work with overflow:hidden and miss this regression.
+    await touchPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await touchPage.mouse.wheel(5_000, 0)
+    await expect.poll(() => wide.evaluate(element => element.scrollLeft)).toBeGreaterThan(0)
+    await expect.poll(() => wide.evaluate((element) => {
+      const last = element.querySelector('thead th:last-child')!
+      return last.getBoundingClientRect().right <= element.getBoundingClientRect().right + 1
+    })).toBe(true)
+    expect(touchConsole.pageErrors).toEqual([])
+  })
 
   it('reveals the wide table scrollbar on hover only', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-wide-table-scrollbar'))

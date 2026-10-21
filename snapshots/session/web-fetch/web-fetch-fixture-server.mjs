@@ -1,7 +1,7 @@
 /**
  * Deterministic HTTP provider for the web-fetch snapshot scenario: a small
  * HTML page (headings, named entities, a GFM table, nested formatting) on a
- * OS-assigned loopback port behind the real address-pinned transport. Recording
+ * OS-assigned loopback port behind the real HTTP transport. Recording
  * and replay therefore exercise fetch and markdown rendering without external
  * network while retaining the recorded request URL.
  */
@@ -45,12 +45,7 @@ export async function apply(ctx) {
   let transportUrl
   let startupError
 
-  const resolveAddresses = async (hostname) => {
-    if (hostname !== 'public.test') throw new Error(`unexpected snapshot hostname: ${hostname}`)
-    return [{ address: '127.0.0.1', family: 4 }]
-  }
-
-  const provider = new HttpFetchProvider(LIMITS, resolveAddresses)
+  const provider = new HttpFetchProvider(LIMITS)
   const unregister = ctx.web.registerFetchProvider({
     id: provider.id,
     available: () => provider.available(),
@@ -76,6 +71,7 @@ export async function apply(ctx) {
       },
       onListening: (address) => {
         transportUrl = new URL(RECORDED_URL)
+        transportUrl.hostname = '127.0.0.1'
         transportUrl.port = String(address.port)
         readiness.resolve(undefined)
       },

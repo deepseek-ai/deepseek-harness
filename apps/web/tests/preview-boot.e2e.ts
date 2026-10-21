@@ -611,6 +611,21 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   await cards.first().waitFor({ timeout: 30_000 })
   const listed = await cards.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-plugin-package')))
   expect(listed.filter(name => name !== null && OPTIONAL_BUNDLES.includes(name)).length).toBeGreaterThan(0)
+  // Package assets resolve from the Worker image: ui-chat's injected mask is a Blob URL that decodes.
+  const mask = await page.evaluate(async () => {
+    const styles = [...document.querySelectorAll('style[data-plugin="@deepseek-ai/dsh-client-ui-chat"]')]
+      .map(style => style.textContent).join('\n')
+    const url = /url\((blob:[^)]+)\)/u.exec(styles)?.[1]
+    const unresolved = styles.includes('plugins/@deepseek-ai/dsh-client-ui-chat/assets/')
+    if (url === undefined) return { url: null, width: 0, unresolved }
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    return { url, width: image.naturalWidth, unresolved }
+  })
+  expect(mask.url).toMatch(/^blob:/u)
+  expect(mask.unresolved).toBe(false)
+  expect(mask.width).toBeGreaterThan(0)
   const result = await page.evaluate(async () => {
     type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
     const transport = (globalThis as typeof globalThis & {

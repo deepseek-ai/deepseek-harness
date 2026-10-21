@@ -28,6 +28,8 @@ For complete schemas grouped by Session format, use the [format references](hist
 
 The generated [catalog](../persistence-catalog.md) provides readable declarations and digests; the [schema inventory](../persistence-schema.json) contains the normalized types. Roots cover the logical Session header, the physical JSONL header line, the event envelope, and every repository-declared event. Referenced types contribute transitively to each affected root's digest.
 
+Each `.schema.json` file stores one node table keyed by the first 16 hexadecimal digits of each node's subgraph digest, with one root, type, or node per line. Roots and types locate their graphs through their own digests, so a type change rewrites only the changed nodes, their ancestors, and the affected digests. Generators own the exact text; verifiers reject any other layout.
+
 Each dated record has four sibling files:
 
 | File | Owner |

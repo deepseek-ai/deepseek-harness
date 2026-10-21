@@ -39,7 +39,8 @@ export interface DeepSeekSearchApiOptions extends DeepSeekWebAuth {
 /**
  * Validate a Search API response and project its sources into the web service.
  * @param response - untrusted JSON from the Search endpoint.
- * @returns sources with provider order and nullable publication dates preserved.
+ * @returns sources with provider order, the display `snippet`, the model-facing `summary`, and nullable
+ *   publication dates preserved.
  * @throws {@link WebError} when the response does not contain valid search results.
  */
 export function mapSearchResponse(response: unknown): WebSearchResult {
@@ -47,11 +48,13 @@ export function mapSearchResponse(response: unknown): WebSearchResult {
   const sources = response.results.map((item: unknown) => {
     if (!isRecord(item) || typeof item.url !== 'string' || item.url.length === 0
       || typeof item.title !== 'string' || typeof item.snippet !== 'string'
+      || (item.summary !== undefined && typeof item.summary !== 'string')
       || (item.date !== null && typeof item.date !== 'string')) throw invalidResponse()
     return {
       url: item.url,
       ...item.title.length > 0 ? { title: item.title } : {},
       ...item.snippet.length > 0 ? { snippet: item.snippet } : {},
+      ...typeof item.summary === 'string' && item.summary.length > 0 ? { summary: item.summary } : {},
       ...item.date !== null && item.date.length > 0 ? { publishedAt: item.date } : {},
     }
   })

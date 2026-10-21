@@ -111,6 +111,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private readonly materializing = new Set<string>()
   private readonly graphRows = new Map<string, BootModuleRow>()
   private readonly loadBundle: (url: string) => Promise<void>
+  private readonly resolveAsset: (reference: string) => string
   /** Last import or prefetch failure per graph row, cleared by a later success or invalidation. */
   private readonly importErrors = new Map<string, Error>()
   /** Batch URLs whose transport or execution already failed; rows still missing from them go straight to their one-resource URL. */
@@ -134,6 +135,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     })
     this.seed = new Map(Object.entries(options.staticModules))
     this.loadBundle = options.loadBundle ?? defaultLoadBundle
+    this.resolveAsset = options.resolveAsset ?? (reference => reference)
 
     for (const row of options.manifest.modules) {
       this.graphRows.set(row.id, row)
@@ -321,7 +323,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
   }
 
-  /** Build the synchronous module-table require and its asynchronous chunk operation. */
+  /** Build the synchronous module-table require, its asynchronous chunk operation, and its asset resolver. */
   private makeRequire(ownerId: string, edges: Set<string>): ClientBundleRequire {
     const require = (spec: string): unknown => {
       edges.add(spec)
@@ -335,6 +337,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
         + 'and no registered package factory (a build-time externals drift, or a dynamic dependency that did not arrive)',
       )
     }
+    require.asset = (reference: string): string => this.resolveAsset(reference)
     require.async = async (spec: string): Promise<unknown> => {
       edges.add(spec)
       if (!spec.startsWith('./')) return await this.import(spec)

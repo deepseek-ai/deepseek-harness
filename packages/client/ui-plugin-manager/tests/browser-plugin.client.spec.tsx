@@ -15,6 +15,7 @@ import { PluginManagerPage } from '../src/client/PluginManagerPage.tsx'
 import { PluginRefreshToast, type PluginRefreshToastFace } from '../src/client/PluginRefreshToast.tsx'
 import { PluginsPanelIcon } from '../src/client/PluginsPanelIcon.tsx'
 import type { PluginManagerFace } from '../src/client/manager-store.ts'
+import type { createNavigationStore } from '../src/client/navigation-store.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 beforeEach(() => { localStorage.clear() })
@@ -89,6 +90,32 @@ describe('ui-plugin-manager browser plugin', () => {
     expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
   })
 
+  it('opens the Plugins list from another panel and resets bundle details without opening installation', async () => {
+    const b = await bench()
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = b.slots.entries('main')[0]!
+    assert(entry.store && 'create' in entry.store)
+    const navigation = entry.store.create() as ReturnType<ReturnType<typeof createNavigationStore>['create']>
+    const injected: object = entry.inject!()
+    const face = injected as PluginManagerFace
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+
+    b.ctx.pluginNavigation.openBundle('dsh-navigation-test')
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'package', name: 'dsh-navigation-test' } })
+    navigation.actions.setTab('fixture-discover')
+    b.ctx.pluginNavigation.openList()
+    expect(b.panelInfo.getSnapshot().activePanelId).toBe(PANEL_ID)
+    expect(navigation.getSnapshot()).toEqual({ tab: 'installed', view: { kind: 'list' } })
+    expect(face.hooks.pluginManager.getSnapshot().install.open).toBe(false)
+    expect(b.list).not.toHaveBeenCalled()
+  })
+
   it('shares refresh failures with the overlay after navigation and releases both registrations across reloads', async () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
@@ -97,6 +124,7 @@ describe('ui-plugin-manager browser plugin', () => {
     const removeRoot = declare(b.slots)
     const mainInjected: object = b.slots.entries('main')[0]!.inject!()
     const face = mainInjected as PluginManagerFace
+    expect(b.ctx.pluginChanges.bundle('unlisted').getSnapshot()).toBe(false)
     const overlayInjected: object = b.slots.entries('shell.overlay')[0]!.inject!()
     const overlay = overlayInjected as PluginRefreshToastFace
     expect(overlay.hooks.pluginManager).toBe(face.hooks.pluginManager)
@@ -187,15 +215,16 @@ describe('ui-plugin-manager browser plugin', () => {
     face.ensure()
     await vi.waitFor(() => { expect(face.hooks.pluginManager.getSnapshot().status).toBe('ready') })
     expect(b.list).toHaveBeenCalledTimes(1)
-    // Bundle detail reads go to the Host by name; a profile change forgets them.
+    // A profile change invalidates reads without withdrawing the displayed document.
     face.loadDetail('dsh-a', '1.0.0', 'en', false)
-    await vi.waitFor(() => { expect(face.hooks.bundleDetails.getSnapshot()).not.toEqual({}) })
+    await vi.waitFor(() => { expect(Object.values(face.hooks.bundleDetails.getSnapshot())[0]?.status).toBe('ready') })
+    const loadedDetails = face.hooks.bundleDetails.getSnapshot()
     face.retryDetail('dsh-a', '1.0.0', 'en', false)
     expect(face.detailImage('dsh-a', 'README.md', 'a.png', false)).toContain('api/plugin-manager/detail-file?bundle=dsh-a')
     expect(face.hooks.locale.getSnapshot().active).toBe('zh')
     b.remote.emit('plugin-manager/changed', [{ reason: 'bundle' }])
     await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(2) })
-    expect(face.hooks.bundleDetails.getSnapshot()).toEqual({})
+    expect(face.hooks.bundleDetails.getSnapshot()).toEqual(loadedDetails)
     b.ctx.emit('connection/reset')
     await vi.waitFor(() => { expect(b.list).toHaveBeenCalledTimes(3) })
 
@@ -211,6 +240,7 @@ describe('ui-plugin-manager browser plugin', () => {
 
     await fiber.dispose()
     expect(b.ctx.get('pluginNavigation')).toBeUndefined()
+    expect(b.ctx.get('pluginChanges')).toBeUndefined()
     expect(b.slots.entries('main')).toHaveLength(0)
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)

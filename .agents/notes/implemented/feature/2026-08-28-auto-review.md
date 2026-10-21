@@ -30,19 +30,20 @@ The reviewer derives authority from existing Session facts. Text with `source.ki
 
 ### One complete reviewer request
 
-The integration uses only the latest `request/header.config` provider/model and the shipped adapter's default reasoning. It neither compares redundant route metadata nor copies the main agent's request. The request has five fixed partitions:
+The integration uses only the latest `request/header.config` provider/model and the shipped adapter's default reasoning. It neither compares redundant route metadata nor copies the main agent's request. The request is a fixed system prompt followed by user messages:
 
-| Partition | Retained input |
+| Part | Retained input |
 | --- | --- |
-| `REVIEW_POLICY` | Fixed classification, source authority, and strict result rules; allow executes immediately with Full access and no later confirmation |
-| `ENVIRONMENT` | Existing Session header `cwd` only |
-| `PROJECT_INSTRUCTIONS` | Visible project instructions with their original sources and constraint role |
-| `FILTERED_HISTORY` | Current compaction surface's sourced user/direct-parent messages, checkpoints, image/attachment facts, and historical call names with logged arguments |
-| `PENDING_ACTION` | Tool name, description, parameter schema, and parsed arguments |
+| System prompt `REVIEW_POLICY` | Fixed classification, source authority, message layout, and strict result rules; allow executes immediately with Full access and no later confirmation |
+| First user message `ENVIRONMENT` | Existing Session header `cwd` only |
+| One user message per retained item | Current compaction surface's sourced user/direct-parent messages, project instructions with the constraint role, checkpoints, image/attachment facts, historical call names with logged arguments, and a `tool-schema` item before the first call that used each reviewed schema, in surface order |
+| Final user message | The pending call with its logged arguments; the latest earlier `tool-schema` item with its mode and name gives the tool description and parameter schema |
 
-The reviewer builds those two action sections from the Session's complete action history: an authorization is the earlier call the `REVIEW_POLICY` source rules make eligible, and a duplicate or conflicting identity has to be visible anywhere in the log rather than inside a recent window, so neither the Session projections nor a bounded read serves the decision. The read is the deprecated synchronous `snapshotEvents()` under a line-scoped `typescript/no-deprecated` waiver.
+Each item is its own message and keeps the same text in later reviews: the pending call becomes a historical call, and the integration remembers, for each live Session, the schema each reviewed call showed so that it reappears at the same position. A review's messages therefore begin with all messages of the previous review. Providers that cache only at message ends, such as OpenAI implicit breakpoints on GPT-5.6 and later, or at a final marker with lookback, such as Anthropic `cache_control`, reuse the previous review; one growing user message let them reuse only the policy. The schema memory is process-local, so the first review after a restart omits earlier schemas and misses the cache once.
 
-The main agent's V3 `system/message` nodes, assistant text/reasoning, and tool results are excluded. The current call must belong to the open step recorded by `step/start`; missing step ownership fails closed. It appears only in `PENDING_ACTION`; an unstarted sibling has no historical call fact. Native schema comes from the latest request header. PTC captures a frozen schema at binding construction and passes it through the scheduler into `ToolExecution`; descriptions and parameter schemas never enter start/settle events or the Session/SDK wire. Missing, inconsistent, or ambiguous action facts reject the call without consulting the live registry. An oversized request fails closed without summarization, truncation, another compaction pass, or a small output-token budget.
+The reviewer builds the history and the pending call from the Session's complete action history: an authorization is the earlier call the `REVIEW_POLICY` source rules make eligible, and a duplicate or conflicting identity has to be visible anywhere in the log rather than inside a recent window, so neither the Session projections nor a bounded read serves the decision. The read is the deprecated synchronous `snapshotEvents()` under a line-scoped `typescript/no-deprecated` waiver.
+
+The main agent's V3 `system/message` nodes, assistant text/reasoning, and tool results are excluded. The current call must belong to the open step recorded by `step/start`; missing step ownership fails closed. It appears only as the final message; an unstarted sibling has no historical call fact. Native schema comes from the latest request header. PTC captures a frozen schema at binding construction and passes it through the scheduler into `ToolExecution`; descriptions and parameter schemas never enter start/settle events or the Session/SDK wire. Missing, inconsistent, or ambiguous action facts reject the call without consulting the live registry. An oversized request fails closed without summarization, truncation, another compaction pass, or a small output-token budget.
 
 ### Result and cancellation
 

@@ -529,7 +529,7 @@ export function deriveFlat(
 }
 
 /**
- * Merge immediate title/Workspace substring matches with ranked Host content
+ * Merge immediate title/Workspace/Session id substring matches with ranked Host content
  * matches. Local rows lead newest-first, content-only rows retain backend
  * order, and duplicate sessions receive the backend snippet in place.
  * @param list - session metadata authority.
@@ -579,6 +579,7 @@ export function deriveSearchResults(
     if (
       sessionTitle(summary).toLowerCase().includes(q)
       || labelOf(summary).toLowerCase().includes(q)
+      || summary.id.toLowerCase().includes(q)
     ) {
       local.push(summary)
     }

@@ -86,6 +86,22 @@ A controlled macOS arm64 diagnostic on Node 24.19.0, Chromium 149.0.7827.55 and 
 
 Complete local 240-turn runs produce Trajectory samples of 157.795/146.737/148.571 ms before the observer change and 130.184/191.247/157.543 ms afterward, with medians 148.571 and 157.543 ms. Both runs pass every fixed endpoint budget; no local speedup or hosted calibration is claimed. The readiness regression rejects a hidden searchbox or record despite a visible unrelated table row; restoring the original selector waits makes that test fail.
 
+### History selector invalidation
+
+The older-history control is the immediate sibling before the `display: contents` flow anchor. Leading spacing therefore uses `.column > .older + [data-slot="conversation.chat.flow"]`, preserving the earlier selector's specificity and visible-row filtering. An ancestor `.column:has(> .older)` combined with the descendant empty-row `:has()` makes unrelated draft mutations invalidate the history subtree. A temporary Chromium invalidation trace identified this exact spacing selector and style recalculations covering 13,591–13,641 elements. The trace is causal evidence, not a latency measurement: tracing itself adds substantial overhead.
+
+On Linux x64, Node 24.19.0 and Chromium 149.0.7827.55, separate three-sample runs of the unchanged browser benchmark measured these medians using the original and sibling selectors. Both retained all 25,409 DOM nodes and every trusted input overlapped the streaming reply.
+
+| Endpoint | Original selector | Sibling selector |
+|---|---:|---:|
+| Draft typing | 517.39 ms | 378.50 ms |
+| First reply | 1556.89 ms | 801.58 ms |
+| Stream main-thread task | 2540.59 ms | 1774.75 ms |
+
+These local runs both failed the independent open budget: their open medians were 1192.85 and 1666.99 ms. A separate six-sample diagnostic alternated the original and sibling selectors in the browser CSSOM before timing, using the same built artifacts. Its original/sibling open wall medians were 2598.99/1349.22 ms, while Chromium task medians were 325.67/305.90 ms. This finds no browser-computation regression in those samples, but does not explain the remaining wait or certify the whole benchmark. The alternating diagnostic measured typing medians of 350.18/362.82 ms, so the earlier typing improvement is not uniform across runs; first-reply medians were 1498.48/815.85 ms and stream-task medians 2449.69/1915.73 ms. The diagnostic changes are not shipped; workload, overlap assertions, budgets and benchmark source remain unchanged.
+
+Post-GC browser heap was 80.70/80.71 MiB. GNU time reported maximum RSS of 535.78/561.80 MiB for each benchmark command and its children; this is not input-phase memory or an aggregate browser-memory measurement. Moving the composer's selection reveal into an animation frame was rejected: profiling showed the style flush moved to another geometry read, without improving typing. The product fix removes the invalidation source instead.
+
 ## Alternatives considered
 
 **Use the Node fold as paint evidence.** Rejected because it never performs DOM mutation, layout, or browser scheduling. The focused reconnect case likewise makes no GUI speed claim.

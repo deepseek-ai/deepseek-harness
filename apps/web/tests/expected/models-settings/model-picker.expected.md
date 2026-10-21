@@ -1,7 +1,7 @@
-- dialog "选择要添加的模型":
-  - heading "选择要添加的模型" [level=2]
+- dialog "选择模型":
+  - heading "选择模型" [level=2]
   - button "关闭"
-  - paragraph: 以下是模型提供商的可用模型，勾选要添加的模型。
+  - paragraph: 以下是模型提供商的可用模型，勾选的模型即为模型列表。
   - searchbox "搜索模型"
   - button "取消全选"
   - list:
@@ -15,4 +15,4 @@
       - checkbox "MiniMax-M3" [checked]
       - text: MiniMax-M3
   - button "取消"
-  - button "添加所选"
+  - button "更新列表"

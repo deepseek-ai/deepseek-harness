@@ -1272,6 +1272,7 @@ describe('Weighted approval workflow', () => {
     expect(review.types).toEqual(['submitted', 'edited', 'dismissed'])
     expect(reviewEvent.permissions).toEqual({})
     expect(publisher.permissions).toEqual({
+      checks: 'write',
       contents: 'read',
       'pull-requests': 'write',
       statuses: 'write',

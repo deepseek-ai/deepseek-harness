@@ -41,6 +41,8 @@ kind: "package-reference"
 
 对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.workspaces` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。浏览类失败留在对话框自己的提示区内，因此本填充从不驱动持有方的 `onError` 分支。node 半部是一个空 `apply`，让插件留在宿主名单上。
 
+New folder 和 Cancel 操作使用共享 [Button](../ui-primitives/README.zh.md) 的内侧细描边，保留布局边框，并使小数宽度的按钮保持完整描边。
+
 </details>
 
 -----

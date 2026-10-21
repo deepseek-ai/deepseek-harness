@@ -15,6 +15,7 @@ import type {
   PropsRenderFactories, PropsStore, SlotHookFactory, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { ConnectionStateSource } from '@deepseek-ai/dsh-client-connection/client'
 import type { MarkdownFileMentions, MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: the Session-scope access Hook (`useAccess`) the Chat entries read.
@@ -325,8 +326,13 @@ export interface ChatViewInjected {
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
 }
 
-/** Existing Session-owned node sources shared by the view and its flow renderer. */
-export type ChatFlowDataInjected = Pick<ChatViewInjected, 'hooks' | 'keyedHooks'>
+/** Session-owned node sources shared with the view, plus the flow's connection state. */
+export type ChatFlowDataInjected = Pick<ChatViewInjected, 'keyedHooks'> & {
+  hooks: ChatViewInjected['hooks'] & {
+    /** Client connection lifecycle; the running clock pauses while it is not connected. */
+    connectionState: ConnectionStateSource
+  }
+}
 
 /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
 export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,

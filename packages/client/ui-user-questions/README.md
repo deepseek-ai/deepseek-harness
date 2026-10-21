@@ -31,6 +31,8 @@ When the agent asks a question, the attached card temporarily occupies the compo
 
 A multi-select draft keeps its selected labels while the user opens or edits the custom answer, so its submitted item may carry both `selected` and `custom`; a single-select custom answer remains exclusive. Question detail reuses the assistant-output `MarkdownText` primitive, including its GFM rendering and untrusted-content policy. The capped card keeps its title, navigation, and submission actions fixed while long detail and choices share an internal scroll region. "Skip" retains other drafts and emits the existing blank `{ selected: [] }` result for that item. Close is not an answer: a question the Host named by tool call only leaves the composer seat, and its `ask_user_question` tool call row brings the panel back; a request that carries no tool call has no row to return from, so closing it rejects the whole wait as `ASK_CANCELLED`.
 
+Fixed approval questions use the same pending-question and answer channel. A feature plugin can supply a higher-priority composer presentation. When none matches, the generic form keeps the offered options answerable; the caller still decides which responses grant permission.
+
 ### Reading a settled question back
 
 Each late reply is shown once, including when it opens a new Turn. Replies follow normal Chat process grouping and whole-Turn folding. Expand the containing Turn and work group to read a reply that has been folded away.

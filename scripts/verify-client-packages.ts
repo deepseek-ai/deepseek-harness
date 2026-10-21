@@ -1,11 +1,18 @@
 /**
- * Verify client package modes and the synchronous browser module-request graph.
+ * Verify client package modes, the synchronous browser module-request graph, and package-asset publication.
  */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { dirname, posix, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { transform } from 'lightningcss'
 import ts from 'typescript'
+import {
+  PACKAGE_ASSET_EXPORT,
+  PACKAGE_ASSET_EXPORT_TARGET,
+  PACKAGE_ASSET_FILES_ENTRY,
+  packageAssetMediaType,
+} from '../packages/client/modules/src/assets.ts'
 import { TypeScriptProject } from './ts-project.ts'
 
 const GATE = 'verify-client-packages'
@@ -16,18 +23,38 @@ const PLATFORM_SOURCE = 'packages/client/web/src/platform.ts'
 const PARSER_PRELOAD_SOURCE = 'packages/client/modules/src/index.ts'
 const STATIC_PRESET_SOURCE = 'packages/client/tsdown.client.ts'
 const CORDIS = '@deepseek-ai/cordis'
+/** Stylesheet requests the dynamic build preset compiles: CSS Modules, global sheets, and `?inline` text. */
+const STYLESHEET_REQUEST = /\.css(?:\?inline)?$/u
+const INLINE_STYLESHEET_QUERY = /\?inline$/u
+
+/** One source location whose reference makes the dynamic build preset emit a package asset. */
+export interface AssetReference {
+  /** Repository-relative, `/`-separated source or stylesheet path. */
+  readonly file: string
+  /** The JSON-quoted module specifier, or `url("<value>")` for a stylesheet reference. */
+  readonly reference: string
+}
 
 /** One workspace package's browser-module declaration. */
 export interface ClientDeclaration {
   readonly name: string
   readonly manifest: string
   readonly dynamic: boolean
+  /** String `dsh.client.platform`; undefined without a row or a string platform. */
+  readonly platform: string | undefined
   readonly external: readonly string[]
   readonly runtimeSourceUses: Readonly<Record<string, readonly string[]>>
   /** Exact runtime specifiers used to validate `dsh.client.external` declarations. */
   readonly runtimeSourceSpecifiers: Readonly<Record<string, readonly string[]>>
   /** Informational package dependencies declared by the row. */
   readonly inject: readonly string[]
+  /** Raw `exports["./assets/*"]` value; undefined when the manifest declares no such subpath. */
+  readonly assetExport: unknown
+  /**
+   * Package-asset references in a dynamic Web row's Client sources under `src/` and in the package stylesheets they
+   * import, sorted by file and then reference; empty for every other package.
+   */
+  readonly assetReferences: readonly AssetReference[]
 }
 
 /** One package directly under packages/client. */
@@ -112,6 +139,94 @@ export function collectRuntimeLocalSourceSpecifiers(path: string, source: string
   return collectSourceFileUses(sourceFile, true, 'local', includeRootRelative)
 }
 
+/**
+ * Collect package-asset module specifiers retained by one production source file.
+ * @param path - File path used to select TypeScript's parser mode.
+ * @param source - Source text to inspect.
+ * @returns Relative runtime imports, re-exports, and requires whose extension has a package-asset media type.
+ */
+export function collectSourceAssetSpecifiers(path: string, source: string): Set<string> {
+  const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
+  return new Set([...collectSourceFileUses(sourceFile, true, 'local')].filter(isAssetSpecifier))
+}
+
+function isAssetSpecifier(specifier: string): boolean {
+  return packageAssetMediaType(specifier) !== undefined
+}
+
+/**
+ * Collect the relative `url()` values of one stylesheet, which the dynamic build preset resolves to package assets.
+ * @param path - Stylesheet path; a `.module.css` name enables CSS Modules syntax, as in the build preset.
+ * @param source - Stylesheet text.
+ * @returns `url()` values in source order, excluding empty values, fragments, root-relative paths, and URLs with a
+ * scheme such as `data:` or `https:`.
+ * @throws when lightningcss cannot parse the stylesheet; the message names `path`.
+ */
+export function collectStylesheetAssetUrls(path: string, source: string): string[] {
+  const urls: string[] = []
+  try {
+    transform({
+      filename: path,
+      code: Buffer.from(source),
+      cssModules: path.endsWith('.module.css'),
+      visitor: {
+        Url(url) {
+          if (isRelativeStylesheetUrl(url.url)) urls.push(url.url)
+        },
+        // lightningcss does not visit the urls inside image-set(), so its options are read here.
+        Image(image) {
+          if (image.type !== 'image-set') return
+          for (const option of image.value.options) {
+            if (option.image.type === 'url' && isRelativeStylesheetUrl(option.image.value.url)) urls.push(option.image.value.url)
+          }
+        },
+      },
+    })
+  } catch (error) {
+    throw new Error(
+      GATE + ': cannot parse stylesheet ' + path + ': ' + (error instanceof Error ? error.message : String(error)),
+      { cause: error },
+    )
+  }
+  return urls
+}
+
+function isRelativeStylesheetUrl(url: string): boolean {
+  return url !== '' && !url.startsWith('#') && !url.startsWith('/') && !/^[a-z][a-z\d+.-]*:/iu.test(url)
+}
+
+/**
+ * Read package-asset references from the package stylesheets that Client sources import. The dynamic build preset
+ * compiles exactly these stylesheets; a stylesheet no Client source imports, such as a copied static payload, keeps
+ * its `url()` values unchanged.
+ * @param root - Absolute repository root.
+ * @param packageDirectory - Repository-relative, `/`-separated package directory.
+ * @param importers - Repository-relative, `/`-separated Client source paths and their runtime local module specifiers.
+ * @returns Imported `.css` and `.css?inline` stylesheets under the package's `src/`, in path order, and their references.
+ */
+export function readStylesheetAssetReferences(
+  root: string,
+  packageDirectory: string,
+  importers: ReadonlyMap<string, Iterable<string>>,
+): { readonly stylesheets: readonly string[]; readonly references: readonly AssetReference[] } {
+  const sourcePrefix = packageDirectory + '/src/'
+  const imported = new Set<string>()
+  for (const [file, specifiers] of importers) {
+    for (const specifier of specifiers) {
+      if (!specifier.startsWith('.') || !STYLESHEET_REQUEST.test(specifier)) continue
+      const stylesheet = posix.join(posix.dirname(file), specifier.replace(INLINE_STYLESHEET_QUERY, ''))
+      if (stylesheet.startsWith(sourcePrefix)) imported.add(stylesheet)
+    }
+  }
+  const stylesheets = [...imported].sort()
+  return {
+    stylesheets,
+    references: stylesheets.flatMap(file =>
+      collectStylesheetAssetUrls(file, readFileSync(resolve(root, file), 'utf8'))
+        .map(url => ({ file, reference: 'url(' + JSON.stringify(url) + ')' }))),
+  }
+}
+
 function importCarriesRuntimeValue(node: ts.ImportDeclaration): boolean {
   const clause = node.importClause
   if (clause === undefined) return true
@@ -190,7 +305,7 @@ export function readClientDeclarations(root: string): ClientDeclarations {
 
 /**
  * Return every client package policy violation.
- * @param facts - Package modes, manifests, source uses, and platform module lists.
+ * @param facts - Package modes, manifests, source uses, package-asset references, and platform module lists.
  * @returns Stable self-contained diagnostics.
  */
 export function collectClientPackageViolations(facts: ClientPackageFacts): string[] {
@@ -198,6 +313,7 @@ export function collectClientPackageViolations(facts: ClientPackageFacts): strin
     ...facts.malformed,
     ...collectModeViolations(facts),
     ...collectModuleViolations(facts),
+    ...collectAssetViolations(facts),
   ].sort((left, right) => left.localeCompare(right))
 }
 
@@ -440,9 +556,51 @@ function formatCycle(
   return manifest + ': synchronous dsh.client.external cycle: ' + chain + ' ' + (entry?.from ?? '')
 }
 
+/** Whether the dynamic build preset builds this package's browser face, the only face that emits package assets. */
+function buildsDynamicWebClient(declaration: ClientDeclaration): boolean {
+  return declaration.dynamic && declaration.platform === 'web'
+}
+
+function collectAssetViolations(facts: ClientPackageFacts): string[] {
+  const violations: string[] = []
+  const exportKey = 'exports[' + JSON.stringify(PACKAGE_ASSET_EXPORT) + ']'
+  for (const pkg of facts.declarations) {
+    const declared = pkg.assetExport !== undefined
+    const covered = buildsDynamicWebClient(pkg)
+    if (declared && pkg.assetExport !== PACKAGE_ASSET_EXPORT_TARGET) {
+      violations.push(
+        pkg.manifest + ': ' + exportKey + ' is ' + JSON.stringify(pkg.assetExport)
+        + '; it must be exactly ' + JSON.stringify(PACKAGE_ASSET_EXPORT_TARGET),
+      )
+    }
+    if (declared && !covered) {
+      violations.push(
+        pkg.manifest + ': ' + pkg.name + ' declares ' + exportKey + ' without a dsh.client row for platform "web";'
+        + ' only dynamic Web Client packages publish package assets',
+      )
+    }
+    if (!covered) continue
+    const first = pkg.assetReferences[0]
+    if (!declared && first !== undefined) {
+      violations.push(
+        pkg.manifest + ': ' + pkg.name + ' references package asset ' + first.reference + ' in ' + first.file
+        + ' but declares no ' + exportKey + '; add ' + JSON.stringify(PACKAGE_ASSET_EXPORT) + ': '
+        + JSON.stringify(PACKAGE_ASSET_EXPORT_TARGET) + ' and publish ' + JSON.stringify(PACKAGE_ASSET_FILES_ENTRY),
+      )
+    } else if (declared && first === undefined) {
+      violations.push(
+        pkg.manifest + ': ' + pkg.name + ' declares an unused ' + PACKAGE_ASSET_EXPORT + ' export;'
+        + ' no Client source or stylesheet it imports references a package asset',
+      )
+    }
+  }
+  return violations
+}
+
 interface Manifest {
   name?: unknown
   dsh?: unknown
+  exports?: unknown
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
   devDependencies?: Record<string, string>
@@ -457,27 +615,27 @@ function readDeclaration(
   if (typeof manifest.name !== 'string') return undefined
   const dsh = isRecord(manifest.dsh) ? manifest.dsh : undefined
   const rawClient = dsh?.client
-  if (rawClient === undefined) {
-    return {
-      name: manifest.name, manifest: manifestPath, dynamic: false, external: [], inject: [],
-      runtimeSourceUses: {}, runtimeSourceSpecifiers: {},
-    }
-  }
+  const assetExport = isRecord(manifest.exports) ? manifest.exports[PACKAGE_ASSET_EXPORT] : undefined
+  const rowless = {
+    name: manifest.name, manifest: manifestPath, dynamic: false, platform: undefined, external: [], inject: [],
+    runtimeSourceUses: {}, runtimeSourceSpecifiers: {}, assetExport, assetReferences: [],
+  } satisfies ClientDeclaration
+  if (rawClient === undefined) return rowless
   if (!isRecord(rawClient)) {
     malformed.push(manifestPath + ': ' + manifest.name + ' dsh.client must be an object')
-    return {
-      name: manifest.name, manifest: manifestPath, dynamic: false, external: [], inject: [],
-      runtimeSourceUses: {}, runtimeSourceSpecifiers: {},
-    }
+    return rowless
   }
   return {
     name: manifest.name,
     manifest: manifestPath,
     dynamic: true,
+    platform: typeof rawClient.platform === 'string' ? rawClient.platform : undefined,
     external: stringArray(rawClient.external, manifest.name, manifestPath, 'external', malformed),
     inject: stringArray(rawClient.inject, manifest.name, manifestPath, 'inject', malformed),
     runtimeSourceUses: {},
     runtimeSourceSpecifiers: {},
+    assetExport,
+    assetReferences: [],
   }
 }
 
@@ -563,9 +721,13 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
   const staticLinkedPackages = await readStaticLinkedRoster(root)
   const project = new TypeScriptProject(root, 'client')
   const sourceFiles = project.sourceFiles()
+  let webStylesheets = 0
   const declarations = bareDeclarations.map((declaration): ClientDeclaration => {
     const runtimeSourceUses = new Map<string, Set<string>>()
     const runtimeSourceSpecifiers = new Map<string, Set<string>>()
+    const assetReferences: AssetReference[] = []
+    const scansAssets = buildsDynamicWebClient(declaration)
+    const importers = new Map<string, ReadonlySet<string>>()
     const sourcePrefix = dirname(declaration.manifest) + '/src/'
     for (const sourceFile of sourceFiles) {
       if (sourceFile.isDeclarationFile) continue
@@ -581,6 +743,24 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
         locations.add(file)
         runtimeSourceSpecifiers.set(specifier, locations)
       }
+      if (!scansAssets) continue
+      const localSpecifiers = collectSourceFileUses(sourceFile, true, 'local')
+      importers.set(file, localSpecifiers)
+      for (const specifier of localSpecifiers) {
+        if (isAssetSpecifier(specifier)) assetReferences.push({ file, reference: JSON.stringify(specifier) })
+      }
+    }
+    if (scansAssets) {
+      // A Web row always has a browser half, so an empty source set means the Client program stopped covering it.
+      if (importers.size === 0) {
+        throw new Error(
+          GATE + ': the Client program loads no source under ' + sourcePrefix + ' for dynamic Web row '
+          + declaration.name + '; its package-asset references cannot be read',
+        )
+      }
+      const stylesheets = readStylesheetAssetReferences(root, dirname(declaration.manifest), importers)
+      webStylesheets += stylesheets.stylesheets.length
+      assetReferences.push(...stylesheets.references)
     }
     return {
       ...declaration,
@@ -592,8 +772,13 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
         [...runtimeSourceSpecifiers].sort(([left], [right]) => left.localeCompare(right))
           .map(([specifier, locations]) => [specifier, [...locations].sort()]),
       ),
+      assetReferences: assetReferences.sort((left, right) =>
+        left.file.localeCompare(right.file) || left.reference.localeCompare(right.reference)),
     }
   })
+  if (webStylesheets === 0) {
+    throw new Error(GATE + ': no dynamic Web row imports a stylesheet from its src/ directory; the stylesheet scan read an empty corpus')
+  }
   const byManifest = new Map(declarations.map(entry => [entry.manifest, entry]))
   const packages: ClientPackage[] = []
 
@@ -701,10 +886,12 @@ async function main(): Promise<void> {
 
   const dynamic = facts.packages.filter(pkg => pkg.dynamic).length
   const requests = facts.declarations.reduce((total, pkg) => total + pkg.external.length, 0)
+  const assetExports = facts.declarations.filter(pkg => pkg.assetExport !== undefined).length
   console.log(
     GATE + ': ' + String(facts.packages.length) + ' client packages (' + String(dynamic) + ' dynamic, '
-    + String(facts.packages.length - dynamic) + ' statically linked) satisfy package-mode and module-request rules; '
-    + String(requests) + ' explicit external request(s).',
+    + String(facts.packages.length - dynamic) + ' statically linked) satisfy package-mode, module-request, and '
+    + 'package-asset rules; ' + String(requests) + ' explicit external request(s), ' + String(assetExports)
+    + ' package-asset export(s).',
   )
 }
 

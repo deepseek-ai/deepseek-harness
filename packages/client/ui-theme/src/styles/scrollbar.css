@@ -84,8 +84,10 @@ body {
   background-clip: content-box;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--dsh-scrollbar-thumb-hover);
+@media (hover: hover) {
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--dsh-scrollbar-thumb-hover);
+  }
 }
 
 /* Both scrollbars meeting in a corner: no separate token, so the corner

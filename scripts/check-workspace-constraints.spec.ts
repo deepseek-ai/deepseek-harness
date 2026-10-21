@@ -294,16 +294,16 @@ describe('package payload constraints', () => {
     [{ import: './art/icon.svg', default: './art/fallback.svg' }, ['art/icon.svg', 'art/fallback.svg']],
     [['./art/icon.svg', './art/icon.svg'], ['art/icon.svg']],
   ] as const)('includes exported icon targets in the canonical payload: %j', (icon, expected) => {
-    expect(expectedDshPackageFiles({ exports: { './icon': icon } })).toEqual([...expected, 'lib/index.js', 'lib/types/**/*.d.ts'])
+    expect(expectedDshPackageFiles({ exports: { './icon': icon } })).toEqual([...expected, 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'])
   })
 
   it.each(['icon.svg', './icon.svg'])('includes and deduplicates manifest icon %s', (icon) => {
-    expect(expectedDshPackageFiles({ icon, exports: { './icon': './icon.svg' } })).toEqual(['icon.svg', 'lib/index.js', 'lib/types/**/*.d.ts'])
+    expect(expectedDshPackageFiles({ icon, exports: { './icon': './icon.svg' } })).toEqual(['icon.svg', 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'])
   })
 
   it('includes manifest, root, and subpath icon targets', () => {
     expect(expectedDshPackageFiles({ icon: './legacy.svg', exports: { './icon': './fallback.svg', './search/icon': './search.svg' } })).toEqual([
-      'legacy.svg', 'fallback.svg', 'search.svg', 'lib/index.js', 'lib/types/**/*.d.ts',
+      'legacy.svg', 'fallback.svg', 'search.svg', 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
     ])
   })
 
@@ -324,7 +324,7 @@ describe('package payload constraints', () => {
     { exports: { './search/locale/*.json': './z/*.json', './locale/*.json': './a/*.json' }, resources: ['a/*.json', 'z/*.json'] },
   ])('includes declared locale resources in the canonical payload: $exports', ({ exports, resources }) => {
     expect(expectedDshPackageFiles({ name: '@deepseek-ai/dsh-localized', exports })).toEqual([
-      ...resources, 'lib/index.js', 'lib/types/**/*.d.ts',
+      ...resources, 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
     ])
   })
 
@@ -344,7 +344,7 @@ describe('package payload constraints', () => {
     const detailFiles = detailDocumentFiles(dir)
     expect(detailFiles).toEqual(['docs'])
     expect(expectedDshPackageFiles({ exports: { './locale/*.json': './locale/*.json' } }, detailFiles)).toEqual([
-      'locale/*.json', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts',
+      'locale/*.json', 'docs', 'lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
     ])
   })
 
@@ -385,7 +385,7 @@ describe('package payload constraints', () => {
         './locale/zh.json': null,
         './locale/fr.json': { types: './locale/fr.d.ts' },
       },
-    })).toEqual(['lib/index.js', 'lib/types/**/*.d.ts'])
+    })).toEqual(['lib/index.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'])
   })
 
   it.each(['agent-team', 'agent-team-profile', 'auto-review', 'client-ui-agent-team', 'tool-agent-team'])(
@@ -423,6 +423,9 @@ describe('package payload constraints', () => {
       'lib/index.js',
       'cordis.patch.yml',
       'lib/types/**/*.d.ts',
+      'lib/types/**/*.d.ts.map',
+      'lib/**/*.js.map',
+      'src',
     ])
     expect(expectedDshPackageFiles({
       name: '@deepseek-ai/dsh-private-profile',
@@ -432,6 +435,9 @@ describe('package payload constraints', () => {
       'cordis.patch.yml',
       'layers/web.patch.yml',
       'lib/types/**/*.d.ts',
+      'lib/types/**/*.d.ts.map',
+      'lib/**/*.js.map',
+      'src',
     ])
   })
 
@@ -442,13 +448,75 @@ describe('package payload constraints', () => {
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
   })
+
+  it.each([
+    { './assets/*': './lib/assets/*' },
+    { './assets/*': { default: './lib/assets/*' } },
+  ])('publishes built package assets after the browser Client entries: %j', (assets) => {
+    expect(expectedDshPackageFiles({
+      exports: {
+        './client': { types: './lib/types/client/index.d.ts', node: './lib/client.node.js', default: './lib/client.js' },
+        './loader': './lib/loader.js',
+        ...assets,
+      },
+    })).toEqual([
+      'lib/index.js', 'lib/client.js', 'lib/client.node.js', 'lib/assets', 'lib/loader.js', 'lib/types/**/*.d.ts',
+      'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
+    ])
+  })
+
+  it.each([
+    {},
+    { './assets/*': './assets/*' },
+    { './assets/*': { types: './lib/assets/*' } },
+    { './assets/extra': './lib/assets/*' },
+  ])('does not publish package assets without the exact asset export target: %j', (assets) => {
+    expect(expectedDshPackageFiles({ exports: { './client': './lib/client.js', ...assets } }))
+      .toEqual(['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'])
+  })
+
+  it('rejects a package-asset export whose payload omits the built assets', () => {
+    const dir = 'packages/client/probe'
+    const manifest = {
+      name: '@deepseek-ai/dsh-client-probe',
+      type: 'module',
+      main: 'lib/index.js',
+      types: 'lib/types/index.d.ts',
+      exports: {
+        '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+        './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+        './assets/*': './lib/assets/*',
+      },
+      files: ['lib/index.js', 'lib/client.js', 'lib/assets', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src'],
+      peerDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+      devDependencies: { '@deepseek-ai/cordis': 'workspace:~' },
+    } satisfies WorkspaceManifest['manifest']
+    const payloadErrors = (candidate: WorkspaceManifest['manifest']): string[] =>
+      checkWorkspaceManifest({ dir, manifest: candidate }).filter(error => error.includes('package.json files must be'))
+    expect(payloadErrors(manifest)).toEqual([])
+    expect(payloadErrors({ ...manifest, files: manifest.files.filter(file => file !== 'lib/assets') })).toEqual([
+      expect.stringContaining('@deepseek-ai/dsh-client-probe: package.json files must be '
+        + '["lib/index.js","lib/client.js","lib/assets","lib/types/**/*.d.ts","lib/types/**/*.d.ts.map","lib/**/*.js.map","src"]'),
+    ])
+  })
+
+  it.each(['ui-chat', 'ui-settings-account'])(
+    'accepts the published package assets for %s and rejects their omission', (name) => {
+      const dir = `packages/client/${name}`
+      const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+      expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== 'lib/assets'),
+      } })).toEqual([expect.stringContaining('package.json files must be')])
+    },
+  )
 })
 
 it('publishes CLI runtime declarations and rejects a payload that omits them', () => {
   const manifest = JSON.parse(readFileSync(new URL('../apps/cli/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest })).toEqual([])
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest: { ...manifest, files: ['lib/*.js'] } }))
-    .toEqual([expect.stringContaining('@deepseek-ai/dsh: package.json files must be ["lib/*.js","lib/types/*.d.ts"]')])
+    .toEqual([expect.stringContaining('@deepseek-ai/dsh: package.json files must be ["lib/*.js","lib/*.js.map","lib/types/*.d.ts","lib/types/*.d.ts.map","docs","src"]')])
 })
 
 it('requires the shared Web injection entry in the published payload', () => {
@@ -528,7 +596,7 @@ it('requires the OAR license while rejecting unrelated payload files', () => {
   const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   const files = [
     'icon.svg', 'locale/*.json', 'lib/index.js',
-    'LICENSE-OAR', 'lib/types/**/*.d.ts',
+    'LICENSE-OAR', 'lib/types/**/*.d.ts', 'lib/types/**/*.d.ts.map', 'lib/**/*.js.map', 'src',
   ]
   expect(expectedDshPackageFiles(manifest)).toEqual(files)
   expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])

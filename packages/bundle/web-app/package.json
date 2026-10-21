@@ -40,7 +40,10 @@
     "presets/minimal.patch.yml",
     "presets/cordis.patch.yml",
     "lib/public-url-*.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "lib/**/*.js.map",
+    "src"
   ],
   "license": "MIT",
   "dsh": {
@@ -84,6 +87,7 @@
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:*",
     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:*",
     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-entry-customization": "workspace:*",
     "@deepseek-ai/dsh-client-ui-goal": "workspace:*",
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:*",
     "@deepseek-ai/dsh-client-ui-jobs": "workspace:*",
@@ -188,7 +192,8 @@
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
     "@deepseek-ai/dsh-host-product-telemetry-otel": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings-session-log": "workspace:*",
-    "@deepseek-ai/dsh-harness-dev-context": "workspace:*"
+    "@deepseek-ai/dsh-harness-dev-context": "workspace:*",
+    "@deepseek-ai/dsh-deliverable-file-references": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

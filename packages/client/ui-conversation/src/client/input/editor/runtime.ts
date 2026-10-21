@@ -39,6 +39,21 @@ interface DraftEditorRuntimeDeps {
  */
 const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
 
+/**
+ * Append one paragraph per line of `text` to the editor root and move the caret
+ * to the end. Must run inside an editor update.
+ * @param text - sanitized plain text.
+ */
+function $appendParagraphs(text: string): void {
+  const root = $getRoot()
+  for (const line of text.split('\n')) {
+    const paragraph = $createParagraphNode()
+    if (line !== '') paragraph.append($createTextNode(line))
+    root.append(paragraph)
+  }
+  root.selectEnd()
+}
+
 /** Undo merge window for contiguous typing, in ms (the old machine's mergeWindowMs). */
 const HISTORY_MERGE_DELAY_MS = 1000
 
@@ -173,15 +188,26 @@ export class DraftEditorRuntime {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
     if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0) return
     this.editor.update(() => {
-      const root = $getRoot()
-      root.clear()
-      for (const line of clean.split('\n')) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        root.append(paragraph)
-      }
-      root.selectEnd()
+      $getRoot().clear()
+      $appendParagraphs(clean)
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
+  }
+
+  /**
+   * Add plain text after the current draft as new paragraphs, keeping its text
+   * and references; an empty draft takes the text as its whole content.
+   * Placeholder-sanitized; the caret lands at the end; merged into history
+   * like {@link setDraft}.
+   * @param text - plain text to add.
+   */
+  appendDraft(text: string): void {
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    if (clean === '') return
+    if (this.projection.clipboardText === '' && this.projection.occurrences.length === 0) {
+      this.setDraft(clean)
+      return
+    }
+    this.editor.update(() => { $appendParagraphs(clean) }, { discrete: true, tag: HISTORY_MERGE_TAG })
   }
 
   /**

@@ -104,6 +104,7 @@ export class InputHub implements SessionInputResolver {
         const model = session.projections.faceOf('modelSelection').getSnapshot() as ModelSelectionProjection | undefined
         const plan = session.projections.faceOf('plan').getSnapshot() as PlanProjection | undefined
         const goal = session.projections.faceOf('goal').getSnapshot() as GoalProjection | null | undefined
+        const agentPreset = session.projections.faceOf('agentPreset').getSnapshot()
         const selection = model?.next ?? model?.lastUsed
         return Object.freeze({
           ...state.blank ? {} : { sessionId: state.sessionId },
@@ -113,6 +114,8 @@ export class InputHub implements SessionInputResolver {
           }) },
           runMode: plan?.active ? 'plan' : goal?.goal.phase === 'active' ? 'goal' : 'default',
           running: state.running,
+          newSession: state.blank,
+          ...typeof agentPreset === 'string' ? { agentPreset } : {},
         })
       },
       messageSubmitted: (submission) => { reportMessageSubmission(this.rootCtx, submission) },

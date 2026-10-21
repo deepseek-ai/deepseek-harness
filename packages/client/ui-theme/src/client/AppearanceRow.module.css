@@ -45,8 +45,10 @@
   cursor: pointer;
 }
 
-.themeCube:hover:not(.selected) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .themeCube:hover:not(.selected) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selected cube: #F5F6F7 fill + #ADB2B8 border (static token — the bluish-400

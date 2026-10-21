@@ -342,6 +342,25 @@ it('describes a bundle by its manifest and patch: one-liner, rows without a live
   expect((await manager.listBundles()).find(row => row.name === 'described')?.rows).toEqual([{ rowId: 'described-row', moduleName }])
 })
 
+it('projects each bundle\'s default GUI listing without changing its selection, and reports invalid declarations', async () => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules', 'extra', 'package.json')
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as { dsh: { bundle: { patch: string; listedByDefault?: boolean | string } } }
+  for (const listedByDefault of [false, true, undefined]) {
+    if (listedByDefault === undefined) delete manifest.dsh.bundle.listedByDefault
+    else manifest.dsh.bundle.listedByDefault = listedByDefault
+    writeFileSync(path, JSON.stringify(manifest))
+    const entry = (await manager.listBundles()).find(row => row.name === 'extra')
+    expect(entry?.listedByDefault).toBe(listedByDefault)
+    expect(entry?.enabled).toBe(true)
+    expect(entry?.error).toBeUndefined()
+  }
+  manifest.dsh.bundle.listedByDefault = 'hidden'
+  writeFileSync(path, JSON.stringify(manifest))
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ enabled: true,
+    error: { diagnostic: 'dsh.bundle.listedByDefault must be a boolean' } })
+})
+
 it('names where each installed bundle comes from as a spec pnpm installs', async () => {
   const { manager, dir, bundle, profile } = await fixture()
   const recorded: Record<string, string> = {

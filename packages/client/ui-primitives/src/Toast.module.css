@@ -69,8 +69,10 @@
   pointer-events: auto;
 }
 
-.action:hover {
-  opacity: 0.8;
+@media (hover: hover) {
+  .action:hover {
+    opacity: 0.8;
+  }
 }
 
 @keyframes dsh-toast-in {

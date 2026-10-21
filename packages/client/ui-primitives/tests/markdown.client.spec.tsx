@@ -61,6 +61,16 @@ describe('MarkdownText', () => {
     expect(screen.getByRole('link', { name: 'https://deepseek.com' })).toBeTruthy()
   })
 
+  it('keeps single tildes literal and strikes only double-tilde runs', () => {
+    const source = '约 10~20 分钟，或 30~40 分钟，~~删除~~'
+    for (const streaming of [false, true]) {
+      const rendered = render(<MarkdownText text={source} streaming={streaming} />)
+      expect([...rendered.container.querySelectorAll('del')].map(node => node.textContent)).toEqual(['删除'])
+      expect(rendered.container.textContent).toContain('约 10~20 分钟，或 30~40 分钟')
+      rendered.unmount()
+    }
+  })
+
   it('closes punctuation-terminated strong emphasis before adjacent CJK text', () => {
     const cases = [
       ['**注意：**内容', '注意：'],

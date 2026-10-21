@@ -71,17 +71,22 @@ function measureList(page: Page): Promise<ListMetrics> {
       probe.remove()
       return value
     }
-    // Computed pseudo style folds in hover even at rest, so inspect the cascade.
+    // Computed pseudo style folds in hover even at rest, so inspect active CSS groups.
     // Cross-origin sheets may throw and cannot contain the app-owned rule.
+    const styleRules = (rules: CSSRuleList): CSSStyleRule[] => [...rules].flatMap((rule) => {
+      if (rule instanceof CSSStyleRule) return [rule]
+      if (rule instanceof CSSMediaRule && !matchMedia(rule.conditionText).matches) return []
+      if (rule instanceof CSSSupportsRule && !CSS.supports(rule.conditionText)) return []
+      return rule instanceof CSSGroupingRule ? styleRules(rule.cssRules) : []
+    })
     const hoverRules = [...document.styleSheets]
       .flatMap((sheet) => {
         try {
-          return [...sheet.cssRules]
+          return styleRules(sheet.cssRules)
         } catch {
           return []
         }
       })
-      .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
       .filter(rule => rule.selectorText === '::-webkit-scrollbar-thumb:hover')
       .map(rule => rule.style.getPropertyValue('background-color'))
     const style = getComputedStyle(list)

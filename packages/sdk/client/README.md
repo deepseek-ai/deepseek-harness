@@ -59,6 +59,13 @@ Task-owning consumers can subscribe before `prompt()`, then call `request('sessi
 
 The client exports typed errors for every failure mode: `JsonRpcResponseError` (a wire error response, code and data preserved), `RequestTimeoutError` (a configured bound elapsed), `SdkProtocolError` (a response outside the documented protocol), and `TransportClosedError` (the runtime is gone — the message carries the exit code and a bounded stderr tail). `close()` requests protocol `shutdown` (bounded by `shutdownTimeoutMs`, default 1000 ms), then walks a stdin-EOF → SIGTERM → SIGKILL ladder until the process has exited; it is idempotent, and a closed client refuses reuse. `HarnessClientOptions.env` replaces the child environment entirely when given (`undefined` inherits the parent's); callers own credential policy — `scrubbedParentEnv` from `dsh-subprocess` is the shared scrub base for isolation-minded launches.
 
+<a id="native-user-questions"></a>
+### Native user questions
+
+Pass `onUserQuestion` to `DeepSeekHarness` or `HarnessClient` to answer the built-in `ask_user_question` tool through the native SDK protocol. The callback receives `{ requestId, sessionId, questions }` and `{ signal }`; return `{ answers: [{ id, selected, custom? }] }`, using one item per question id. Your application owns the UI or simulated-user policy. The SDK automatically advertises the callback at initialization and can receive answers while other requests are pending. `HarnessClient.initialize()` starts the process when needed; an explicit `start()` is optional.
+
+Observe the signal to release host work when the runtime cancels the question, disconnects, or the client closes. The SDK stops awaiting cancelled callbacks and ignores their later answers. A throwing callback reports a provider error; missing or malformed answers never count as approval. Without a callback, native in-process answerers remain available, and a missing answerer reports `NO_PROVIDER`.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -127,7 +134,7 @@ These limits define when the client is a poor fit or needs special care. They ar
 - **No bundled-runtime resolution** — the client resolves the same-version `@deepseek-ai/dsh` package (or a caller-provided `dshBin`); packaged-executable discovery stays Python-side until a TypeScript distribution consumer exists.
 - **No mid-turn cancel** — the wire has no prompt-cancel method; abandoning a turn means closing the runtime (see the [protocol limitations](../protocol/README.md#known-limitations-and-deferred-work)).
 - **No per-prompt result** — low-level `prompt()` returns only an enqueue receipt; high-level `run()` owns receipt-to-idle collection, and abandoning it means closing the runtime.
-- **Client→server notifications and server→client requests are unimplemented** on both wire ends; the transport carries them for future approval flows.
+- **Callbacks must release their own resources** — the SDK delivers cancellation through `AbortSignal`; application work that ignores it may continue after the SDK stops awaiting its answer.
 
 <a id="dev-note"></a>
 ### Dev Note

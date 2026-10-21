@@ -43,7 +43,7 @@ kind: "package-reference"
 
 Web 与桌面端的通用设置底部显示当前发布版本，使用构建注入的 `DSH_CLIENT_VERSION` 元数据和当前语言。缺少版本元数据的局部构建不显示该行。
 
-代码工作工具开关控制 [ui-settings](../ui-settings/README.zh.md#use-this-package) 定义的共享偏好 `ui-settings.enabled`。Web 和桌面端均提供此开关，立即跟随已接受的变更，并在写入完成前禁用重复输入。写入失败时显示本地化的重试提示。
+代码工作工具开关控制 [ui-settings](../ui-settings/README.zh.md#use-this-package) 定义的共享偏好 `ui-settings.enabled`。Web 和桌面端均提供此开关，立即跟随已接受的变更，并在写入完成前禁用重复输入。写入失败时显示本地化的重试提示。在桌面端，通过此开关做出的变更会经可选的[产品埋点](../product-analytics/README.zh.md)服务报告携带新值的 `code_work_view_toggle`，时间戳取点击时刻。只有改变已知值、且写入后偏好等于所请求值的写入才会报告；请求当前值、原值未知、写入失败以及在其他位置修改偏好均不报告。
 
 「通用」分区承载内置的代码工作工具行与当前版本行，以及功能包注册进 `settings.general.item` 的行。每个注册方拥有自己的行文案与行为。例如「外观」行位于 ui-theme。
 

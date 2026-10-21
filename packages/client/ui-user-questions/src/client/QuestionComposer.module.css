@@ -146,9 +146,11 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:disabled {
@@ -198,9 +200,14 @@
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.option:hover:not(:disabled),
 .optionSelected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .option:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .optionSelected {
@@ -335,10 +342,15 @@
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.customRow:hover,
 .customRow:focus-within:not(.customRowYielded),
 .customRowActive {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .customRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .customRow:focus-within:not(.customRowYielded),

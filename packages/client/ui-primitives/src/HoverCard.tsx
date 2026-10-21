@@ -18,6 +18,7 @@ const VIEWPORT_MARGIN = 8
 
 /**
  * Render an anchor with a hover-triggered preview card independently of nested tooltips.
+ * Touch entry does not open a preview or intercept the anchor's action.
  * @param props.anchor - the hover target (rendered in place inside a wrapper span).
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
@@ -290,7 +291,8 @@ export function HoverCard({
         if (!event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
       } : undefined}
       onPointerEnter={(event) => {
-        if (disabled || (inline && event.pointerType === 'touch')) return
+        if (disabled || event.pointerType === 'touch') return
+        if (event.pointerType === 'mouse' && !window.matchMedia('(any-hover: hover)').matches) return
         // Coming back inside during the grace (the gap, or the card itself)
         // keeps the current card rather than restarting the dwell.
         cancelClose()

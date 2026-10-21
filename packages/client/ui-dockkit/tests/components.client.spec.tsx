@@ -271,6 +271,7 @@ describe('DockSurface', () => {
     const intents = spyIntents()
     const { unmount } = renderSurface(controller, intents)
     fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }))
+    fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }).parentElement!)
     expect(intents.splitPane).toHaveBeenCalledWith(controller.getSnapshot().state.rootId)
     expect(intents.focusPane).not.toHaveBeenCalled()
     unmount()
@@ -280,6 +281,15 @@ describe('DockSurface', () => {
     expect(disabled.hasAttribute('disabled')).toBe(true)
     expect(disabled.parentElement?.getAttribute('aria-label')).toBe(TEST_LABELS.splitPaneDisabled)
     expect(disabled.getAttribute('data-dockkit-split-blocked')).toBe('budget')
+    intents.splitPane.mockClear()
+    const hint = disabled.parentElement!
+    fireEvent.pointerDown(hint, { pointerType: 'touch' })
+    fireEvent.click(hint)
+    expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPaneDisabled)
+    expect(intents.splitPane).not.toHaveBeenCalled()
+    expect(intents.focusPane).not.toHaveBeenCalled()
+    fireEvent.pointerDown(document.body, { pointerType: 'touch' })
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
   it('names the enabled split control through the shared tooltip, not a native title', () => {
@@ -288,10 +298,10 @@ describe('DockSurface', () => {
       renderSurface(seededController(), spyIntents())
       const button = screen.getByRole('button', { name: TEST_LABELS.splitPane })
       expect(button.hasAttribute('title')).toBe(false)
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPane)
-      fireEvent.mouseLeave(button)
+      fireEvent.pointerLeave(button)
       expect(screen.queryByRole('tooltip')).toBeNull()
     } finally {
       vi.useRealTimers()

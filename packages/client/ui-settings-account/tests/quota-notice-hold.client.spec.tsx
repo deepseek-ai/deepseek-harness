@@ -94,6 +94,7 @@ async function bench() {
     developerTools: { enabled: createSnapshotStore(true) },
     get: formFor,
   } as never)
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openRightbar: () => {}, closeRightbar: () => {} } as never)
   runtime.ctx.provide('sidebarRight', { openResource: () => {}, openTab: () => {} } as never)
   runtime.ctx.provide('sidebarRightTabs', {

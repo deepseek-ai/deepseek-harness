@@ -156,8 +156,9 @@ describe('client bundle dynamic imports', () => {
       })
       const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
       const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
-      expect(output).toContain('require.async("./client.terminal.js")')
-      expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
+      // The compressor rewrites string literals, so the quotes are not part of the contract.
+      expect(output).toMatch(/require\.async\((["'`])\.\/client\.terminal\.js\1\)/)
+      expect(output).not.toMatch(/Promise\.resolve\(\)\.then\(\(\)\s*=>\s*require\((["'`])\.\/client\.terminal\.js\1\)\)/)
     } finally {
       for (const bundle of builds) await bundle[Symbol.asyncDispose]()
     }

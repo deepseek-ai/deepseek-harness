@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。打开“插件 → Computer Use”并启用。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
+本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。打开“插件”，点击“实验性插件”旁的“更多”，再打开 Computer Use 并启用。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build

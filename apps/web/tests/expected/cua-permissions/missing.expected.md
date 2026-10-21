@@ -16,7 +16,7 @@
     - strong: Screen Recording
     - paragraph: In System Settings, allow Visual Studio Code.app to capture application windows.
     - button "Request permission"
-  - paragraph: Enable the application in System Settings. Follow the macOS prompt if it names another application.
+  - paragraph: Manage permissions in System Settings for the application named by macOS.
 - region "Manage applications Computer Use can access":
   - heading "Manage applications Computer Use can access" [level=3]
   - heading "Always-allowed applications" [level=4]

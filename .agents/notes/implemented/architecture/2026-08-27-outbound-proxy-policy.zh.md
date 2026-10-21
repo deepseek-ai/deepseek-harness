@@ -36,7 +36,7 @@ Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运�
 
 **拒绝是静默的，且绝不为被拒协议改道。** 用户填写而被本包拒绝的槽位，会让该协议保持直连，而不是继续回退到 `ALL_PROXY` 或 HTTP 代理，从而让诊断与实际路由一致。SOCKS URL、无法解析的字符串或不受支持的协议，会在 stderr 上报告并跳过——该变量可能是为其他工具导出的，它的笔误不应阻止 agent 启动。环境是唯一来源，因此不存在一个本应适用 `AGENTS.md` 「配置错误必须响」规则的配置面。
 
-**经由代理时，`web_fetch` 不再解析与固定地址。** 该提供方会校验一组公网地址并把连接固定到其上。经由代理时没有可固定的对象——origin 的 DNS 由代理执行——而固定后的直连会彻底绕开代理。因此代理转发的一跳跳过解析，配置代理即表示信任该代理进行目的地选择。被策略绕过的一跳，包括每一个 loopback 与每一条 `NO_PROXY` 条目，仍走原有的解析并固定路径。Kimi Code 与 Claude Code 各自独立得出了同一结论。
+**`web_fetch` 使用已安装的 dispatcher。** 该提供方的每个请求都经过进程级 dispatcher，因此代理转发的一跳经过代理，由代理执行 origin 的 DNS；被策略绕过的一跳，包括每一个 loopback 与每一条 `NO_PROXY` 条目，则直接连接。该提供方不限制目的地址（[web capability seam](2026-06-24-web-capability-seam.zh.md#restrict-fetch-to-public-addresses)）。
 
 URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与跨域重定向拒绝在每一跳上依然生效。
 
@@ -54,7 +54,7 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 **每个出网点都配有出网测试。** 各所属包中的 `egress.spec.ts` 通过假代理驱动实际传输，并检查观察到的路由。这些测试覆盖搜索后端、pi-ai 发现、走 HTTP 的 MCP、子 Node 进程、worker 线程和遥测的直连例外。它们可发现静态调用点检查无法观察到的依赖传输变化。
 
-**用门禁防止该缺陷复现。** `verify-no-bare-dispatcher` 解析 TypeScript AST——`scripts/AGENTS.md` 要求 source-ownership 门禁使用语法感知发现，而逐行正则漏掉了本仓库已在使用的 `{ dispatcher }` 简写，以及重命名导入后的 `new Alias(...)`。它在所属包之外拒绝 undici agent 构造与显式 `dispatcher` 选项。`proxyRouteFor(url)` 是受支持的替代；唯一一处确实自有传输的调用点——`web-fetch-http`，它把请求钉在已校验的地址上——用 `proxy-exempt:` 注释说明。这条规则之所以存在，是因为 `web-fetch-http` 里原本那行 `new Agent` 在写下时完全合理——那时根本还没有代理这回事，也没有任何机制会拦下它。
+**用门禁防止该缺陷复现。** `verify-no-bare-dispatcher` 解析 TypeScript AST——`scripts/AGENTS.md` 要求 source-ownership 门禁使用语法感知发现，而逐行正则漏掉了本仓库已在使用的 `{ dispatcher }` 简写，以及重命名导入后的 `new Alias(...)`。它在所属包之外拒绝 undici agent 构造与显式 `dispatcher` 选项。`proxyRouteFor(url)` 是受支持的替代；确实自有传输的调用点用 `proxy-exempt:` 注释说明。这条规则之所以存在，是因为 `web-fetch-http` 里原本那行 `new Agent` 在写下时完全合理——那时根本还没有代理这回事，也没有任何机制会拦下它。
 
 ## Alternatives considered
 
@@ -78,8 +78,6 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 由于不读取操作系统设置，面向用户的文档从补充材料变成了承重件：仅在代理软件里拨了「系统代理」开关的用户什么也得不到，且没有诊断。因此 `docs/user/guide/network-proxy.md` 说明了要导出哪些变量，以及为什么浏览器走代理而终端不走——这个「三套机制」的困惑是最常见的报障，且并非本 Harness 特有。
 
-`web_fetch` 的安全叙述现在有两种形态，其 README 已如实说明：直连的一跳保留地址校验与固定，代理转发的一跳把目的地选择交给运维方配置的代理。这是本次变更唯一改动的对外安全承诺。
-
 userland undici 能触及 Node 内置的 `fetch`，依赖于两者都会写入 legacy 的 `Symbol.for('undici.globalDispatcher.1')` 槽位。那是跨版本的隐式耦合而非约定——corepack#834 记录了它失效的实例——因此 `tests/install.spec.ts` 会驱动一次真实请求穿过 loopback 代理。破坏该耦合的版本升级会在那里失败，而不是流到线上。
 
 测试套件对开发者自身的环境免疫：每份 Vitest 配置都会先运行 `scripts/test-proxy-environment.ts`，在任何测试之前清除全部八个代理变量名的两种大小写形式；`install.spec.ts` 则在每个自行设值的用例前后还原本机的值。这是必需的。开发过程中，一个已导出的小写 `all_proxy` 曾决定了某个测试的结果，因为解析优先读取小写。
@@ -88,7 +86,7 @@ userland undici 能触及 Node 内置的 `fetch`，依赖于两者都会写入 l
 
 `packages/util/http-proxy` 有 84 个测试，per-file 覆盖率 100%。解析覆盖优先级、`ALL_PROXY` 兜底、空值遮蔽、SOCKS 与畸形值诊断，以及只设 https 变量时 `http:` 保持直连；路由以结构化方式覆盖整个 loopback 网段，绕过匹配覆盖后缀、端口、两种 IPv6 写法，以及刻意不匹配的 CIDR 条目。安装驱动一个真实的 loopback 代理，断言绝对形式的请求确实抵达、被绕过的目标不抵达，且 dispose 会还原 dispatcher、策略与环境。所有用例一律经 `installProxyFromEnvironment` 安装，因此没有测试能断言一次真实启动无法产生的策略对象。
 
-`packages/web/web-fetch-http/tests/proxy.spec.ts` 断言了最关键的那个决定：经由代理时公网地址解析器完全不被调用，而被绕过的一跳仍恰好调用一次，且跨域重定向拒绝在代理路径上依然成立。
+`packages/web/web-fetch-http/tests/proxy.spec.ts` 断言代理转发的一跳抵达代理、被绕过的一跳直接连接，且跨域重定向拒绝在代理路径上依然成立。
 
 `verify-no-bare-dispatcher.spec.ts` 证明该门禁能拒掉本包所要修复的那种写法、接受 `proxyRouteFor`、接受带注释的豁免，并在当前代码树上通过。
 

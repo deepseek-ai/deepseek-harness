@@ -284,17 +284,24 @@ export class SessionInputShell implements SessionInput {
 
   /**
    * Apply one new-task request to this already-initialized input model.
-   * @param options - replacement content and explicit permission to clear existing text.
+   * @param options - content to adopt and the handling of an existing draft.
    * @returns applied when the requested text is adopted, even if unchanged;
    * preserved when the current draft is kept; blocked after disposal or during a pending submission.
    */
   requestDraftInitialization(options: DraftInitializationOptions): DraftInitializationResult {
     if (this.draftInitializationBlocked()) return 'blocked'
-    if (options.prompt === undefined && options.clearPreviousDraft !== true) return 'preserved'
-    if (options.clearPreviousDraft !== true && (this.snapshot.draft !== '' || this.attachmentIds.length > 0)) {
-      return 'preserved'
+    const whenDraftExists = options.whenDraftExists ?? (options.clearPreviousDraft === true ? 'replace' : 'keep')
+    if (whenDraftExists === 'replace') {
+      this.setDraft(options.prompt ?? '')
+      return 'applied'
     }
-    this.setDraft(options.prompt ?? '')
+    if (options.prompt === undefined) return 'preserved'
+    if (this.snapshot.draft === '' && this.attachmentIds.length === 0) {
+      this.setDraft(options.prompt)
+      return 'applied'
+    }
+    if (whenDraftExists === 'keep') return 'preserved'
+    this.draftEditor.appendDraft(options.prompt)
     return 'applied'
   }
 

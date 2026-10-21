@@ -45,6 +45,7 @@ import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { installStopShortcut } from './stop-shortcut.ts'
 import { TRAJECTORY_VIEW_ID, resolveActiveView } from './view-selection.ts'
+import { createViewPins } from './view-pins.ts'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
@@ -225,6 +226,11 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     activateView(sessionId, readConversationViewPreference(sessionId))
   }
   const conversationViews = createSnapshotStore<readonly ViewTab[]>(viewTabs())
+  const viewPins = createViewPins()
+  const viewActions = {
+    getSnapshot: () => slots.entriesOfSlot('conversation.session.header.views.actions').length > 0,
+    subscribe: (listener: () => void) => slots.subscribe('conversation.session.header.views.actions', listener),
+  }
   const bindings = new Set<SessionBinding>()
   const trackedBindings = new WeakSet<SessionBinding>()
   const trackBinding = (binding: SessionBinding): void => {
@@ -433,10 +439,12 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       'conversation.session.header.corner': { kind: 'single', scope: 'session' },
+      'conversation.session.header.views.actions': { kind: 'list', scope: 'root' },
     },
     store: conversationStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionHeaderInjected => ({
-      hooks: { conversationViews },
+      hooks: { conversationViews, entryPins: viewPins.unpinned, entryActions: viewActions },
+      setPinned: viewPins.setPinned,
       open: (id) => { workspaceNavigation.openSession(id) },
       selectView: (view) => {
         activateView(sessionId, view)

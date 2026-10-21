@@ -38,8 +38,10 @@
   outline-offset: -2px;
 }
 
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* View-options dropdown card: labels are short, so a content-sized card reads
@@ -196,12 +198,14 @@
   height: 30px;
 }
 
-.searchButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+@media (hover: hover) {
+  .searchButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.searchExpanded .searchButton:hover {
-  background: transparent;
+  .searchExpanded .searchButton:hover {
+    background: transparent;
+  }
 }
 
 .searchInput {
@@ -244,8 +248,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.clearButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .clearButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Rail variant (own .rail class from the wide owner prop — the region never
@@ -291,8 +297,10 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.rail .searchButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .rail .searchButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* List seat: always mounted so the shell foot never moves. */
@@ -513,9 +521,11 @@
   margin-top: 0;
 }
 
-.sessionOverflowButton:hover {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .sessionOverflowButton:hover {
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .empty {

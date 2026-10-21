@@ -81,6 +81,7 @@ function bench(
     transportFailures?: Record<string, number>
     /** URLs whose script loads but registers only the listed ids (a runtime throw after those registrations). */
     registerOnly?: Record<string, string[]>
+    resolveAsset?: (reference: string) => string
   } = {},
 ): Bench {
   const fetched: string[] = []
@@ -144,6 +145,7 @@ function bench(
     },
     staticModules: opts.seed ?? {},
     ...(opts.defaultTransport === true ? {} : { loadBundle }),
+    ...(opts.resolveAsset === undefined ? {} : { resolveAsset: opts.resolveAsset }),
   })
   return { loader, target, fetched, gates }
 }
@@ -247,6 +249,16 @@ describe('lazy CJS arrival', () => {
     await b.loader.prefetch('a')
     await b.loader.prefetch('a')
     expect(b.fetched).toHaveLength(1)
+  })
+
+  it('resolves a package-asset reference through the carrier, or returns it unchanged without one', async () => {
+    const reference = 'plugins/a/assets/mark-0123456789ab.svg'
+    const factory: Factory = req => ({ url: req.asset(reference) })
+    const served = bench([row('a')], { a: factory })
+    expect(await served.loader.import('a', '', {})).toEqual({ url: reference })
+
+    const mapped = bench([row('a')], { a: factory }, { resolveAsset: asset => `blob:${asset}` })
+    expect(await mapped.loader.import('a', '', {})).toEqual({ url: `blob:${reference}` })
   })
 
   it('loads a package-local dynamic chunk only when its factory requests it', async () => {

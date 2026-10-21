@@ -1,5 +1,5 @@
 /**
- * Anonymous public HTTP(S) `WebFetchProvider` plugin. It contributes to the
+ * Anonymous HTTP(S) `WebFetchProvider` plugin. It contributes to the
  * `ctx.web` registry without owning the service.
  *
  * @module @deepseek-ai/dsh-web-fetch-http
@@ -17,7 +17,7 @@ export {
   LOCAL_FETCH_PROVIDER_ID,
   HttpFetchProvider,
 } from './provider.ts'
-export type { HttpFetchLimits, HttpFetchResolver } from './provider.ts'
+export type { HttpFetchLimits } from './provider.ts'
 
 /** Default `User-Agent`: an explicit product agent, never a browser disguise. */
 export const DEFAULT_USER_AGENT = 'deepseek-harness/0.0.1 (+https://github.com/deepseek-ai)'

@@ -3479,9 +3479,9 @@ describe('Task detail rule header and run-time card', () => {
       expect(link().className).toBe(within(detail).getByRole('button', { name: en['detail.more'] }).className)
       expect(within(link()).queryByText(en['detail.session'])).toBeNull()
       expect(within(link()).getByText(at.sessionId)).toBeDefined()
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBe(en['detail.session'])
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       fireEvent.click(link())
       expect(h.props.onOpenSession).toHaveBeenCalledExactlyOnceWith(at.sessionId)
 
@@ -3489,9 +3489,9 @@ describe('Task detail rule header and run-time card', () => {
       state = { ...workspaces, archivedSessionIds: [at.sessionId] }
       h.update({})
       expect(link().hasAttribute('disabled')).toBe(true)
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBe(en['detail.session'])
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       state = workspaces
       h.update({})
       const focused = link()
@@ -3507,9 +3507,9 @@ describe('Task detail rule header and run-time card', () => {
       // The same button changes layout, so keyboard focus survives the switch.
       expect(link()).toBe(focused)
       expect(document.activeElement).toBe(focused)
-      fireEvent.mouseEnter(detailContext(detail)!)
+      fireEvent.pointerEnter(detailContext(detail)!)
       expect(tooltip()).toBeUndefined()
-      fireEvent.mouseLeave(detailContext(detail)!)
+      fireEvent.pointerLeave(detailContext(detail)!)
       strip = 240
       act(() => { stripObserver().fire() })
       expect(compact()).toBe(false)

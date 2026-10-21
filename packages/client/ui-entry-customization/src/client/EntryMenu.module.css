@@ -1,0 +1,12 @@
+.entryRow { position: relative; }
+.entryName { display: flex; align-items: center; gap: 8px; padding-right: 28px; }
+.entryTitle { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.singleLine .entryTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinAnchor { position: absolute; right: 6px; top: 0; bottom: 0; display: flex; align-items: center; }
+.pinButton { width: 22px; height: 22px; padding: 0; color: var(--dsw-alias-label-tertiary); }
+
+@media (hover: hover) {
+  .pinButton:hover { color: var(--dsw-alias-label-primary); }
+  .pinAnchor[data-pinned='false'] { opacity: 0; }
+  .entryRow:hover .pinAnchor, .entryRow:focus-within .pinAnchor { opacity: 1; }
+}

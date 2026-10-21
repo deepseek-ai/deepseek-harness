@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-为所有智能体添加六个实验性全局终端工具。组合包拥有隔离的终端注册表和平台 shell 后端；终端仍由智能体拥有。 Web 和 Desktop 随附此功能，默认关闭。在插件页选择它即可启用。
+为所有智能体添加六个实验性全局终端工具。组合包拥有隔离的终端注册表和平台 shell 后端；终端仍由智能体拥有。 Web 和 Desktop 随附此功能，默认关闭，且不在插件页的组合包列表和详情页显示。
 
 ## 目录
 
@@ -25,9 +25,9 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-在 Web 或 Desktop 中打开插件页，在官方分组启用 **持久终端**。关闭后移除其配置层。
+在 `$DSH_HOME/profiles/<name>/package.json` 中（home 默认为 `~/.dsh`），将 `@deepseek-ai/dsh-experimental-terminal-bundle` 加入 `dsh.profile.bundles` 即可启用其配置层；从列表移除即可关闭。重启该 profile 后生效，详见 [profile 参考](../../../apps/cli/reference/README.zh.md#profile-boot)。[minimal 预设](../../bundle/web-app/presets/minimal.patch.yml) 独立加载自己的持久 shell，不依赖此组合包。
 
-启用或关闭组合包会在运行中的 Host 注册或移除其全局工具，因此所有预设（包括 minimal）中的每个智能体都会在下一次请求时看到变化。
+选中的配置层为 Host 中的每个智能体添加全局工具，覆盖所有预设（包括 minimal）。隐藏管理入口保留已有的启用配置；[升级说明](../../../docs/upgrade-guide/v0.2.1-rc.2/persistent-terminal-controls/guide.zh.md)介绍如何关闭此前启用的配置层。
 
 -----
 

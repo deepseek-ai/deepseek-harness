@@ -28,7 +28,7 @@ kind: "package-reference"
 
 对于单选题，`custom` 会覆盖选中的选项，且 `selected` 为空。对于多选题，`custom` 可以补充 `selected` 中的标签。UI 可以把跳过的条目保留为 `{ id, selected: [] }`，既维持现有回答形态，也保留该批次中的其他回答。
 
-问题可以携带呈现意图 `intent`，声明它就是某种已知决策，识别该标记的 UI 可以按该决策呈现；目前唯一的标记是 `plan-review`，其 `detail` 是待审阅的计划，`approve` 指明表示同意的选项。意图只改变呈现：遵循它的 UI 回答的选项标签与通用 UI 相同，不认识该标记的 UI 则渲染通用选项列表。`ask()` 会以 `BAD_INTENT` 拒绝两种类型无法表达的断言：`approve` 未命名该问题自己的任何选项，以及没有 `detail` 的问题声明了意图。`dsh-plan-mode` 在 `exit_plan_mode` 的审阅问题上设置它。
+问题可以携带呈现意图 `intent`。`plan-review` 指定批准选项，并将 `detail` 作为待审阅计划。`approval` 将一个阻塞式问题显示为拒绝、允许和可选的始终允许操作，可附带对象信息和本地化文案。操作标签必须互不相同，并完整对应已提供的选项，不支持多选或计时等待。`ask()` 以 `BAD_INTENT` 拒绝无效意图。两种呈现都返回原始选项标签，旧界面仍可显示通用选项列表。授权与持久化仍由调用方负责。
 
 请求包含 agent 时，`ask()` 会通过当前 `AgentRegistry` 验证该 agent 与注册表中的存活实例是同一对象，并且只允许运行时根调用。存活子级不能发起人机交互。不含 agent 的程序化请求仍会交给本地未限定 scope 的 waterfall listener，若无人接受则以 `NO_PROVIDER` 失败。
 

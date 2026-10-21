@@ -24,7 +24,7 @@ Enable macOS Computer Use from Plugins for existing and new PTC sessions. Window
 <a id="use-this-package"></a>
 ## Use this package
 
-This workflow targets developers running macOS Web or unpackaged Desktop from source. Open Plugins → Computer Use and enable the switch. The permission page identifies the responsible application reported by macOS when the optional system query is available. Request access and enable that application in System Settings; follow the application named by macOS if it differs from the detected source. For Web, run these commands from the repository root:
+This workflow targets developers running macOS Web or unpackaged Desktop from source. Open Plugins, select More beside Experimental plugins, then open Computer Use and enable the switch. The permission page identifies the responsible application reported by macOS when the optional system query is available. Request access and enable that application in System Settings; follow the application named by macOS if it differs from the detected source. For Web, run these commands from the repository root:
 
 ```sh
 pnpm run build

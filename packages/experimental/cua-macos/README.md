@@ -20,7 +20,7 @@ Inspect macOS permissions, select running applications and windows, read accessi
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-The helper supplies bounded 64-pixel PNG application icons for permission-page application lists. Icon reads do not launch an application or inspect its windows; executable and signing checks still determine authorization.
+The helper supplies bounded 64-pixel PNG application icons for permission prompts and saved-application lists. Icon reads do not launch an application or inspect its windows; executable and signing checks still determine authorization.
 
 The shared helper queries the process macOS considers responsible for it and captures that application’s name and icon before announcing readiness. A Desktop app launched from Terminal can therefore identify Terminal even when another GUI application sits between it and the helper. Permission queries retain this metadata after the responsible application exits and across connections sharing the helper. If the system query or application metadata is unavailable, the field is omitted and the UI uses the system prompt for guidance.
 

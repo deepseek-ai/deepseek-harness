@@ -44,6 +44,18 @@ import { shortName } from './presentation.ts'
 import { BundleDetailController, type BundleDetailsState } from './detail-store.ts'
 import type { LocaleSnapshot } from '@deepseek-ai/dsh-client-locale/client'
 
+/**
+ * Read whether a bundle has a pending management action.
+ * @param state Current manager snapshot.
+ * @param packageName Bundle whose controls and observers must wait.
+ * @returns Whether the bundle's management operation is still pending.
+ */
+export function bundleBusy(state: PluginManagerState, packageName: string): boolean {
+  return state.busy.includes(packageName) || state.update?.packageName === packageName
+    || (state.install.subject?.name === packageName && (isInstallPending(state.install.phase) || state.install.phase === 'checking'))
+
+}
+
 /** The action a failed notice names. */
 export type FailedAction = 'enable' | 'disable' | 'uninstall' | 'rowEnable' | 'rowDisable'
 
@@ -101,6 +113,8 @@ export interface PackageView {
   readonly meta?: PluginLocalizedMeta
   /** Whether the profile declares this dependency; availability separately describes its readable files. */
   readonly installed: boolean
+  /** GUI listing before explicit selection or profile installation; omission means true. */
+  readonly listedByDefault?: boolean
   /** Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts. */
   readonly source?: string
   /** Whether the installation ships the bundle for the person to switch on: official, off until selected, never removable. */
@@ -121,6 +135,8 @@ export interface PackageView {
 /** The typed spec as the Host read it, on the installing, installed, and failed screens. */
 export type InstallSubject = Extract<PluginSpecInspection, { status: 'accepted' }> & {
   readonly spec: string
+  /** The installation already provides this bundle; only explicit enablement remains. */
+  readonly bundled?: true
   /** Present for a catalog install or update: desired selection after installation. */
   readonly selection?: boolean
   /** Save an exact dependency version through the generic installer. */
@@ -235,9 +251,9 @@ export interface InstallState {
   readonly runs: readonly InstallRun[]
   /** Whether the run's command and output are unfolded, including after reopening. */
   readonly detailsOpen: boolean
-  /** The bundle the finished run added; ordinary installs await enablement, catalog operations carry their selection. */
+  /** The bundle ready for enablement, from an install run or the installation; catalog operations carry their selection. */
   readonly installed: string | null
-  /** The version the finished run installed, when its manifest declares one; null otherwise. */
+  /** The available bundle's manifest version; null when undeclared. */
   readonly installedVersion: string | null
   /** Whether the finished run's bundle waits for the next start to load. */
   readonly restartRequired: boolean
@@ -542,6 +558,7 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
     availability: bundle.availability,
     ...bundle.installTarget === undefined ? {} : { installTarget: bundle.installTarget },
     installed: bundle.installed,
+    ...bundle.listedByDefault === undefined ? {} : { listedByDefault: bundle.listedByDefault },
     optional: bundle.optional,
     removable: bundle.removable,
     updatable: bundle.updatable,
@@ -671,6 +688,22 @@ export class PluginManagerController {
     return this.store.getSnapshot()
   }
 
+  /**
+   * Observe existing bundle and row operations independently of the page's lifetime.
+   * @param packageName Bundle whose management activity is observed.
+   * @returns A read-only source; unsubscribe releases the caller's observation.
+   */
+  observeChanges(packageName: string): HostObservable<boolean> {
+    return {
+      getSnapshot: () => {
+        const state = this.getSnapshot()
+        return bundleBusy(state, packageName) || (state.packages.find(pkg => pkg.name === packageName)?.rows.some(row =>
+          row.entryId !== undefined && state.busy.includes(rowKey(row.entryId))) ?? false)
+      },
+      subscribe: listener => this.store.subscribe(listener),
+    }
+  }
+
   /** Stop publishing and drop every late settlement. */
   dispose(): void {
     this.disposed = true
@@ -720,7 +753,7 @@ export class PluginManagerController {
           void this.cancelInstall()
           return
         }
-        if (this.getSnapshot().install.phase === 'checking') this.finishAnalytics('cancelled')
+        if (this.getSnapshot().install.phase === 'checking' || this.getSnapshot().install.subject?.bundled) this.finishAnalytics('cancelled')
         this.abortInspect()
         this.registryRead = undefined
         this.patch({ install: IDLE_INSTALL })
@@ -1119,9 +1152,9 @@ export class PluginManagerController {
   }
 
   /**
-   * Check the typed spec, then install it. The Host reads what the spec
-   * names first; a refused spec returns to the field with the reason, an
-   * accepted one becomes the subject the next screens show while pnpm runs.
+   * Offer a default-hidden shipped bundle for explicit enablement, or check
+   * and install the typed spec. A refused spec returns to the field with its
+   * reason; an accepted one becomes the subject shown while pnpm runs.
    */
   private async runInstall(): Promise<void> {
     const state = this.getSnapshot()
@@ -1132,9 +1165,20 @@ export class PluginManagerController {
       this.analyticsAttempt = { input: sanitizeInstallInput(spec), started: Date.now() }
       this.ctx.get('productAnalytics')?.track('plugin_install_click', { input_value: sanitizeInstallInput(spec) })
     }
-    // A name the list already shows is refused at once, before the Host is asked.
     const listed = state.packages.find(pkg => pkg.name === spec)
     const catalogSubject = install.subject?.selection === undefined || install.subject.spec !== spec ? undefined : install.subject
+    if (listed?.availability === 'installation' && listed.optional && listed.listedByDefault === false
+      && !listed.enabled && listed.error === undefined && listed.readOnlyReason === undefined) {
+      this.abortInspect()
+      this.patch({ install: {
+        ...IDLE_INSTALL, open: true, spec, registries: install.registries, registry: install.registry,
+        phase: 'done', installed: listed.name, installedVersion: listed.version ?? null,
+        subject: { status: 'accepted', kind: 'registry', bundle: true, name: listed.name, spec, registry: null, bundled: true,
+          ...listed.version === undefined ? {} : { version: listed.version },
+          ...listed.description === undefined ? {} : { description: listed.description } },
+      } })
+      return
+    }
     if (listed !== undefined && listed.availability !== 'missing' && catalogSubject === undefined) {
       this.finishAnalytics('failed', 'already-installed')
       this.patchInstall({ phase: 'idle', inputError: { problem: listed.availability === 'installation' ? 'shipped' : 'already-installed', reason: spec } })
@@ -1371,9 +1415,8 @@ export class PluginManagerController {
   }
 
   /**
-   * Enable the bundle the finished install added, then close the dialog and
-   * mark it in the list. A refusal toasts and still closes: the list shows
-   * what did not switch on.
+   * Enable the bundle ready from an install or the installation, then close the dialog and
+   * mark it in the list. A refusal toasts and still closes.
    */
   private async enableInstalled(): Promise<void> {
     const install = this.getSnapshot().install
@@ -1383,6 +1426,8 @@ export class PluginManagerController {
     if (name !== null) {
       const result = await this.ctx.remote.pluginManager.setBundleEnabled(name, true)
       if (this.disposed) return
+      this.finishAnalytics(result.ok && result.value.application !== 'failed' ? 'success' : 'failed',
+        result.ok ? result.value.error?.code : result.error.code, name)
       try {
         this.applied(result, name)
         if (result.ok && (result.value.application === 'applied' || result.value.application === 'restart-required')) this.trackToggle(name, true)

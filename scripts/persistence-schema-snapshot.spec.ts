@@ -1,10 +1,10 @@
-/** Compact inventories retain root fingerprints and restore shared recursive type graphs. */
+/** Snapshot text stores one node table keyed by subgraph digest and restores every root and type graph. */
 
 import { describe, expect, it } from 'vitest'
 import { parseHistoricalPersistenceSnapshot, parsePersistenceSnapshot } from './persistence-changes.ts'
-import { canonicalizeSchema, persistenceSchemaSnapshot, schemaDigest, type PersistenceSchemaInventory } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, schemaDigest, type PersistenceSchemaInventory, type SchemaNode } from './persistence-schema-model.ts'
 import { reviewPersistenceSchemas } from './persistence-review.ts'
-import { renderPersistenceSchemaDefinitions, renderPersistenceSchemaIndex } from './render-persistence-schema.ts'
+import { renderPersistenceSchemaDefinitions } from './render-persistence-schema.ts'
 
 function inventory(): PersistenceSchemaInventory {
   const schema = canonicalizeSchema([
@@ -22,22 +22,51 @@ function inventory(): PersistenceSchemaInventory {
   }
 }
 
-describe('compact persistence snapshots', () => {
-  it('stores only root graphs and restores shared recursive definitions without changing reports', () => {
+interface SnapshotJson {
+  roots: Record<string, unknown>[]
+  types: Record<string, unknown>[]
+  nodes: Record<string, Record<string, unknown>>
+}
+
+function edit(text: string, change: (value: SnapshotJson) => void): string {
+  const value = JSON.parse(text) as SnapshotJson
+  change(value)
+  return JSON.stringify(value)
+}
+
+describe('persistence snapshot text', () => {
+  it('stores each shared node once and restores graphs without changing reports', () => {
     const original = inventory()
-    const snapshot = persistenceSchemaSnapshot(original)
-    expect(snapshot.roots).toEqual(original.roots)
-    expect(snapshot.types).toEqual(original.types.map(({ digest, names, sources }) => ({ digest, names, sources })))
-    const restored = parsePersistenceSnapshot(JSON.parse(JSON.stringify(snapshot)))
+    const text = encodePersistenceSnapshot(original)
+    const parsed = JSON.parse(text) as SnapshotJson
+    expect(Object.keys(parsed.nodes)).toHaveLength(3)
+    expect(parsed.roots[0]).toEqual({ key: 'SessionHeader', kind: 'header', digest: original.roots[0]!.digest })
+    expect(text.split('\n').every(line => !/"type": \d/u.test(line))).toBe(true)
+    const restored = parsePersistenceSnapshot(text)
     expect(restored).toEqual(original)
     expect(reviewPersistenceSchemas(original, restored)).toEqual(reviewPersistenceSchemas(original, original))
-    for (const rendering of ['current', 'historical'] as const) {
-      expect(renderPersistenceSchemaIndex(restored, 'en', undefined, 2, rendering))
-        .toBe(renderPersistenceSchemaIndex(original, 'en', undefined, 2, rendering))
-      expect(renderPersistenceSchemaDefinitions(restored, 'en', undefined, 2, rendering))
-        .toBe(renderPersistenceSchemaDefinitions(original, 'en', undefined, 2, rendering))
+    expect(parseHistoricalPersistenceSnapshot(text)).toEqual(original)
+    expect(encodePersistenceSnapshot(restored)).toBe(text)
+  })
+
+  it('changes only the new node and its ancestors when a union gains a variant', () => {
+    const graph = (variants: readonly string[]): PersistenceSchemaInventory => {
+      const nodes: SchemaNode[] = [
+        { kind: 'object', properties: [{ name: 'other', type: 1, optional: false }, { name: 'source', type: 2, optional: false }], indices: [] },
+        { kind: 'object', properties: [{ name: 'value', type: 3, optional: false }], indices: [] },
+        { kind: 'union', types: variants.map((_, index) => 4 + index) },
+        { kind: 'primitive', type: 'number' },
+        ...variants.map((value): SchemaNode => ({ kind: 'literal', value })),
+      ]
+      const schema = canonicalizeSchema(nodes, 0)
+      return { formatVersion: 1, roots: [{ key: 'SessionHeader', kind: 'header', digest: schemaDigest(schema), schema }], types: [] }
     }
-    expect(parseHistoricalPersistenceSnapshot(snapshot)).toEqual(original)
+    const keys = (value: PersistenceSchemaInventory): string[] =>
+      Object.keys((JSON.parse(encodePersistenceSnapshot(value)) as SnapshotJson).nodes)
+    const before = new Set(keys(graph(['a', 'c'])))
+    const after = keys(graph(['a', 'b', 'c']))
+    expect(after.filter(key => !before.has(key))).toHaveLength(3)
+    expect([...before].filter(key => !after.includes(key))).toHaveLength(2)
   })
 
   it.each([true, false])('retains independent recursive types with root graphs=%s', (withRoots) => {
@@ -48,45 +77,57 @@ describe('compact persistence snapshots', () => {
     ], 0)
     const independent = { digest: schemaDigest(schema), schema, names: ['example.ts#Independent', 'example.ts#Alias'], sources: ['example.ts'] }
     const original = { ...base, roots: withRoots ? base.roots : [], types: [independent, ...base.types] }
-    const snapshot = persistenceSchemaSnapshot(original)
-    expect(snapshot.types[0]).toEqual(independent)
-    if (withRoots) expect(snapshot.types.slice(1).every(type => type.schema === undefined)).toBe(true)
-    else expect(snapshot.types).toEqual(original.types)
-    const restored = parsePersistenceSnapshot(JSON.parse(JSON.stringify(snapshot)))
+    const restored = parsePersistenceSnapshot(encodePersistenceSnapshot(original))
     expect(restored).toEqual(original)
-    expect(parseHistoricalPersistenceSnapshot(snapshot)).toEqual(original)
-    expect(persistenceSchemaSnapshot(restored)).toEqual(snapshot)
     expect(renderPersistenceSchemaDefinitions(restored)).toBe(renderPersistenceSchemaDefinitions(original))
   })
 
-  it('reads legacy full graphs and keeps partial acknowledgement inventories empty', () => {
-    const original = inventory()
-    expect(parsePersistenceSnapshot(JSON.parse(JSON.stringify(original)))).toEqual(original)
-    const partial = { ...original, types: [] }
-    expect(parsePersistenceSnapshot(persistenceSchemaSnapshot(partial))).toEqual(partial)
+  it('rejects tampered node keys, unknown references, orphan nodes, and digest mismatches', () => {
+    const text = encodePersistenceSnapshot(inventory())
+    const rootKey = inventory().roots[0]!.digest.slice(0, 16)
+    const second = Object.keys((JSON.parse(text) as SnapshotJson).nodes).find(key => key !== rootKey)!
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => {
+      value.nodes = Object.fromEntries(Object.entries(value.nodes).map(([key, node]) => [key === rootKey ? 'f'.repeat(16) : key, node]))
+    }))).toThrow('key does not match')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.nodes[rootKey] = { kind: 'array', element: '0'.repeat(16) } })))
+      .toThrow('unknown schema node')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.nodes[second] = { kind: 'primitive', type: 'number' } })))
+      .toThrow('key does not match')
+    expect(() => parsePersistenceSnapshot(edit(encodePersistenceSnapshot({ ...inventory(), roots: [] }), (value) => { value.types = [] })))
+      .toThrow('not reachable from any root or type')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.roots[0]!.digest = 'f'.repeat(64) }))).toThrow('no schema node for digest prefix')
   })
 
-  it('rejects compact digests that do not identify a root subgraph', () => {
-    const snapshot = persistenceSchemaSnapshot(inventory())
-    const schema = canonicalizeSchema([{ kind: 'literal', value: 'unreachable' }], 0)
-    expect(() => parsePersistenceSnapshot({ ...snapshot, types: [{ digest: schemaDigest(schema), names: [], sources: [] }] }))
-      .toThrow('is not reachable from roots')
+  it('rejects node entries whose properties or union members are not in canonical order', () => {
+    const text = encodePersistenceSnapshot(inventory())
+    const nodes = (JSON.parse(text) as SnapshotJson).nodes
+    const [objectKey] = Object.entries(nodes).find(([, node]) => ((node.properties as unknown[] | undefined)?.length ?? 0) > 1)!
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => {
+      (value.nodes[objectKey]!.properties as unknown[]).reverse()
+    }))).toThrow('node is not canonical')
+    const unionSchema = canonicalizeSchema([
+      { kind: 'union', types: [1, 2] }, { kind: 'literal', value: 'a' }, { kind: 'literal', value: 'b' },
+    ], 0)
+    const union = encodePersistenceSnapshot({ formatVersion: 1, roots: [],
+      types: [{ digest: schemaDigest(unionSchema), schema: unionSchema, names: [], sources: [] }] })
+    const [unionKey] = Object.entries((JSON.parse(union) as SnapshotJson).nodes).find(([, node]) => node.kind === 'union')!
+    expect(() => parsePersistenceSnapshot(edit(union, (value) => {
+      const types = value.nodes[unionKey]!.types as string[]
+      value.nodes[unionKey]!.types = [types[0], ...types]
+    }))).toThrow('node is not canonical')
   })
 
-  it('still validates explicit legacy graphs instead of replacing them with root graphs', () => {
-    const original = inventory()
-    const schema = canonicalizeSchema([{ kind: 'primitive', type: 'number' }], 0)
-    expect(() => parsePersistenceSnapshot({ ...original, types: original.types.map(type => ({ ...type, schema })) }))
-      .toThrow('shared schema digest mismatch')
+  it('rejects valid content outside the canonical text layout', () => {
+    const text = encodePersistenceSnapshot(inventory())
+    expect(() => parsePersistenceSnapshot(JSON.stringify(JSON.parse(text), null, 2) + '\n')).toThrow('canonical layout')
   })
 
-  it('rejects invalid metadata and malformed explicit schemas in compact inventories', () => {
-    const snapshot = persistenceSchemaSnapshot(inventory())
-    const type = snapshot.types[0]!
-    expect(() => parsePersistenceSnapshot({ ...snapshot, types: [{ ...type, names: [3] }] })).toThrow('type name')
-    expect(() => parsePersistenceSnapshot({ ...snapshot, types: [{ ...type, sources: [3] }] })).toThrow('type source')
-    expect(() => parsePersistenceSnapshot({ ...snapshot, types: [{ ...type, schema: null }] })).toThrow('shared schema')
-    expect(() => parseHistoricalPersistenceSnapshot({ ...snapshot, types: [{ ...type, sources: ['types.ts:3'] }] }))
+  it('rejects invalid type metadata', () => {
+    const text = encodePersistenceSnapshot(inventory())
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.types[0]!.names = [3] }))).toThrow('type name')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.types[0]!.sources = [3] }))).toThrow('type source')
+    expect(() => parsePersistenceSnapshot(edit(text, (value) => { value.types[0]!.schema = {} }))).toThrow('unknown field schema')
+    expect(() => parseHistoricalPersistenceSnapshot(edit(text, (value) => { value.types[0]!.sources = ['types.ts:3'] })))
       .toThrow('must omit line numbers')
   })
 })

@@ -11,6 +11,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import { IconGlobeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ILayout, MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PropsRenderSlots, PropsRuntime, SlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { apply, inject } from '../src/client/index.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -21,6 +22,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 const ALPHA = 'sidebar-test-alpha' as MainPanelId
 const BETA = 'sidebar-test-beta' as MainPanelId
+const PLUGINS = 'plugins' as MainPanelId
+const SCHEDULES = 'schedules' as MainPanelId
 const runtimes = new Set<SlotTestRuntime>()
 
 afterEach(async () => {
@@ -29,10 +32,11 @@ afterEach(async () => {
   } finally {
     runtimes.clear()
     cleanup()
+    localStorage.clear()
   }
 })
 
-async function bench(collapsed = false) {
+async function bench(collapsed = false, track?: TrackProductEvent) {
   const runtime = await SlotTestRuntime.create()
   runtimes.add(runtime)
   const locale = new LocaleRuntime(runtime.ctx)
@@ -52,6 +56,7 @@ async function bench(collapsed = false) {
       ctx.provide('layout', layout)
       ctx.provide('uiWorkspace', { startSession: vi.fn() } as never)
       ctx.provide('locale', locale)
+      if (track !== undefined) ctx.provide('productAnalytics', { track } as never)
       ctx.effect(() => locale.register('common', { zh: commonZh, en: commonEn }), 'panel test: common locale')
       ctx.effect(() => locale.register('sidebar-panel-test', {
         zh: { alpha: '甲面板' }, en: { alpha: 'Alpha panel' },
@@ -78,6 +83,49 @@ async function bench(collapsed = false) {
   const sidebar = await runtime.mount({ inject: [...inject], apply })
   const view = runtime.renderRoot()
   return { runtime, locale, layout, sidebar, view }
+}
+
+/** A More menu occupant that exposes each owner callback as a plain button. */
+function ProbeActions({ entries, onOpen, onPinnedChange, onDismiss }: PropsRuntime<'sidebar.panellist.actions'>) {
+  return (
+    <>
+      {entries.map(entry => (
+        <span key={entry.id}>
+          <button type="button" role="menuitem" onClick={() => { onOpen(entry.id) }}>Open {entry.label}</button>
+          <button type="button" role="menuitem" onClick={() => { onPinnedChange(entry.id, !entry.pinned) }}>
+            {entry.pinned ? 'Unpin' : 'Pin'} {entry.label}
+          </button>
+        </span>
+      ))}
+      <button type="button" role="menuitem" onClick={onDismiss}>Dismiss</button>
+    </>
+  )
+}
+
+/** Requests a panel id that the test unregisters while the menu is open. */
+function StaleOpen({ onOpen }: PropsRuntime<'sidebar.panellist.actions'>) {
+  return <button type="button" role="menuitem" onClick={() => { onOpen(ALPHA) }}>Open removed panel</button>
+}
+
+/** Requests the official panels by id, including Plugins, which the menu entries omit. */
+function OfficialOpen({ onOpen }: PropsRuntime<'sidebar.panellist.actions'>) {
+  return (
+    <>
+      <button type="button" role="menuitem" onClick={() => { onOpen(PLUGINS) }}>Open Plugins by id</button>
+      <button type="button" role="menuitem" onClick={() => { onOpen(SCHEDULES) }}>Open Automation by id</button>
+    </>
+  )
+}
+
+async function mountProbeActions(runtime: SlotTestRuntime, id = 'probe', component = ProbeActions) {
+  return runtime.mount({
+    inject: ['slots'],
+    apply(ctx: Context) {
+      ctx.slots.inject('sidebar.panellist.actions', () => ctx.slots.register(
+        { name: 'sidebar.panellist.actions', id }, component,
+      ))
+    },
+  })
 }
 
 interface TestPanel {
@@ -275,5 +323,161 @@ describe('sidebar global panels', () => {
     expect(view.getByRole('heading', { name: 'Alpha content' })).toBeTruthy()
     act(() => { locale.setLocale('zh') })
     expect(view.queryByRole('navigation')).toBeNull()
+  })
+})
+
+describe('sidebar launcher pins', () => {
+  const PINS_KEY = 'dsh.slot.manual-order.sidebar.panellist.v1'
+
+  it('hides stored unpinned panels, keeps Plugins, and keeps the list while panels are registered', async () => {
+    localStorage.setItem(PINS_KEY, JSON.stringify({ unpinned: [ALPHA, BETA, PLUGINS, 'removed-plugin'] }))
+    const { runtime, locale, view } = await bench()
+    await mountPanels(runtime, locale)
+    const navigation = await view.findByRole('navigation', { name: 'Global panels' })
+    expect(within(navigation).queryAllByRole('button')).toEqual([])
+    await mountPanel(runtime, { id: PLUGINS, heading: 'Plugins content', label: 'Plugins', order: 0 })
+    await waitFor(() => {
+      expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Plugins'])
+    })
+    expect(runtime.slots.entries('main').map(entry => entry.options.key)).toEqual(['conversation', ALPHA, BETA, PLUGINS])
+  })
+
+  it('shows every panel when the stored list is not a string array', async () => {
+    localStorage.setItem(PINS_KEY, JSON.stringify({ unpinned: [ALPHA, 1] }))
+    const { runtime, locale, view } = await bench()
+    await mountPanels(runtime, locale)
+    const navigation = await view.findByRole('navigation', { name: 'Global panels' })
+    expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Beta panel', 'Alpha panel'])
+  })
+
+  it('shows More after the rows only while the actions list has registrations', async () => {
+    const { runtime, locale, view } = await bench()
+    const probe = await mountProbeActions(runtime)
+    expect(view.queryByRole('navigation')).toBeNull()
+    await mountPanels(runtime, locale)
+    const navigation = await view.findByRole('navigation', { name: 'Global panels' })
+    expect(within(navigation).getAllByRole('button').map(row => row.getAttribute('aria-label'))).toEqual(['Beta panel', 'Alpha panel', 'More'])
+    await probe.dispose()
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'More' })).toBeNull() })
+  })
+
+  it.each([false, true])('opens, pins, and dismisses through the More menu with collapsed=%s', async (collapsed) => {
+    const { runtime, locale, layout, view } = await bench(collapsed)
+    await mountPanels(runtime, locale)
+    await mountPanel(runtime, { id: PLUGINS, heading: 'Plugins content', label: 'Plugins', order: 0 })
+    await mountProbeActions(runtime)
+    const navigation = await view.findByRole('navigation', { name: 'Global panels' })
+    const more = await within(navigation).findByRole('button', { name: 'More' })
+    expect(more.textContent).toBe(collapsed ? '' : 'More')
+    expect(more.getAttribute('aria-haspopup')).toBe('menu')
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    const menu = within(view.getByRole('menu'))
+    expect(menu.getAllByRole('menuitem').map(row => row.textContent))
+      .toEqual(['Open Beta panel', 'Unpin Beta panel', 'Open Alpha panel', 'Unpin Alpha panel', 'Dismiss'])
+
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Unpin Alpha panel' }))
+    expect(JSON.parse(localStorage.getItem(PINS_KEY) ?? 'null')).toEqual({ unpinned: [ALPHA] })
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
+    expect(menu.getByRole('menuitem', { name: 'Pin Alpha panel' })).toBeTruthy()
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Open Alpha panel' }))
+    expect(layout.selectPanel).toHaveBeenLastCalledWith(ALPHA)
+    expect(view.getByRole('heading', { name: 'Alpha content' })).toBeTruthy()
+    // The open panel keeps its unpinned row as the current page until another panel is selected.
+    const alphaRow = await within(navigation).findByRole('button', { name: 'Alpha panel' })
+    expect(alphaRow.getAttribute('aria-current')).toBe('page')
+    act(() => { layout.selectPanel(BETA) })
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
+
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Pin Alpha panel' }))
+    await waitFor(() => { expect(within(navigation).getByRole('button', { name: 'Alpha panel' })).toBeTruthy() })
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Dismiss' }))
+    expect(view.queryByRole('menu')).toBeNull()
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('ignores an open request for a panel that is no longer registered', async () => {
+    const { runtime, locale, layout, view } = await bench()
+    const { alpha } = await mountPanels(runtime, locale)
+    await runtime.mount({
+      inject: ['slots'],
+      apply(ctx: Context) {
+        ctx.slots.inject('sidebar.panellist.actions', () => ctx.slots.register(
+          { name: 'sidebar.panellist.actions', id: 'stale' }, StaleOpen,
+        ))
+      },
+    })
+    fireEvent.click(await view.findByRole('button', { name: 'More' }))
+    await alpha.dispose()
+    fireEvent.click(view.getByRole('menuitem', { name: 'Open removed panel' }))
+    expect(layout.selectPanel).not.toHaveBeenCalled()
+  })
+})
+
+describe('sidebar entry click analytics', () => {
+  const MORE_CLICK = ['sidebar_menu_click', { menu_name: 'more', position: 'sidebar' }]
+
+  async function analyticsBench() {
+    const track = vi.fn<TrackProductEvent>()
+    const b = await bench(false, track)
+    await mountPanels(b.runtime, b.locale)
+    await mountPanel(b.runtime, { id: PLUGINS, heading: 'Plugins content', label: 'Plugins', order: 0 })
+    const schedules = await mountPanel(b.runtime, { id: SCHEDULES, heading: 'Automation content', label: 'Automation', order: 5 })
+    const navigation = await b.view.findByRole('navigation', { name: 'Global panels' })
+    await within(navigation).findByRole('button', { name: 'Automation' })
+    return { ...b, track, schedules, navigation }
+  }
+
+  it('reports the Plugins and Automation rows and leaves other panel rows unreported', async () => {
+    const { layout, track, navigation } = await analyticsBench()
+    for (const name of ['Plugins', 'Automation', 'Alpha panel', 'Beta panel']) {
+      fireEvent.click(within(navigation).getByRole('button', { name }))
+    }
+    expect(track.mock.calls).toEqual([
+      ['sidebar_menu_click', { menu_name: 'plugin', position: 'sidebar' }],
+      ['sidebar_menu_click', { menu_name: 'cron', position: 'sidebar' }],
+    ])
+    expect(layout.selectPanel.mock.calls).toEqual([[PLUGINS], [SCHEDULES], [ALPHA], [BETA]])
+    expect(track.mock.invocationCallOrder[0]).toBeLessThan(layout.selectPanel.mock.invocationCallOrder[0]!)
+  })
+
+  it('reports every More button click, whether it opens or closes the menu', async () => {
+    const { runtime, track, navigation } = await analyticsBench()
+    await mountProbeActions(runtime)
+    const more = await within(navigation).findByRole('button', { name: 'More' })
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(more)
+    expect(track.mock.calls).toEqual([MORE_CLICK, MORE_CLICK, MORE_CLICK])
+  })
+
+  it('reports official panels opened from the More menu at the sidebar_more position', async () => {
+    const { runtime, layout, track, navigation, view } = await analyticsBench()
+    await mountProbeActions(runtime)
+    await mountProbeActions(runtime, 'official', OfficialOpen)
+    fireEvent.click(await within(navigation).findByRole('button', { name: 'More' }))
+    const menu = within(view.getByRole('menu'))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Open Automation' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Open Alpha panel' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Open Plugins by id' }))
+    expect(track.mock.calls).toEqual([
+      MORE_CLICK,
+      ['sidebar_menu_click', { menu_name: 'cron', position: 'sidebar_more' }],
+      ['sidebar_menu_click', { menu_name: 'plugin', position: 'sidebar_more' }],
+    ])
+    expect(layout.selectPanel.mock.calls).toEqual([[SCHEDULES], [ALPHA], [PLUGINS]])
+  })
+
+  it('reports an official menu request whose panel unregistered without selecting it', async () => {
+    const { runtime, layout, track, schedules, navigation, view } = await analyticsBench()
+    await mountProbeActions(runtime, 'official', OfficialOpen)
+    fireEvent.click(await within(navigation).findByRole('button', { name: 'More' }))
+    await schedules.dispose()
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Automation' })).toBeNull() })
+    fireEvent.click(view.getByRole('menuitem', { name: 'Open Automation by id' }))
+    expect(track).toHaveBeenLastCalledWith('sidebar_menu_click', { menu_name: 'cron', position: 'sidebar_more' })
+    expect(layout.selectPanel).not.toHaveBeenCalled()
   })
 })
