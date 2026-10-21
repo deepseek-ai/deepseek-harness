@@ -8,7 +8,7 @@ import type { DoneMessage, ReplyMessage, ProgramBootData, ProgramToHost } from '
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
-import type { ProgramEvaluator } from './evaluators/types.ts'
+import type { ProgramEvaluator, ProgramImportHandler } from './evaluators/types.ts'
 
 const CapturedError = Error
 const capturedObjectCreate = Object.create
@@ -372,12 +372,14 @@ export function makeNamespaces(
  * @param port - host message port or test double.
  * @param data - the boot payload the host sent.
  * @param streams - stdout/stderr objects captured as program logs.
+ * @param importHandler - Runner-local import decisions; omission retains native loading.
  * @returns after posting the done message.
  */
 export async function runProgram(
   port: BootstrapPort,
   data: ProgramBootData,
   streams: { stdout: PatchableStream; stderr: PatchableStream },
+  importHandler?: ProgramImportHandler,
 ): Promise<void> {
   const logs = new LogBuffer(
     data.maxOutputBytes,
@@ -397,7 +399,7 @@ export async function runProgram(
   let evaluator: ProgramEvaluator | undefined
   try {
     const completion = Promise.withResolvers<unknown>()
-    evaluator = createProgramEvaluator(data.programFormat ?? 'function-body', (message) => { completion.reject(new CapturedError(message)) })
+    evaluator = createProgramEvaluator(data.programFormat ?? 'function-body', (message) => { completion.reject(new CapturedError(message)) }, importHandler)
     const globals = evaluator.globals
     const defineGlobal = (name: string, value: unknown): void => {
       Object.defineProperty(globals, name, { configurable: true, enumerable: true, writable: true, value })

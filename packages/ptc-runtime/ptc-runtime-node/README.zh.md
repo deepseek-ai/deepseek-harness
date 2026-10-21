@@ -131,6 +131,22 @@ Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中
 
 包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn 和 acorn-walk；源码执行导入已安装的包。
 
+### Runner 导入处理
+
+Runner 代码可以向 `runNodeMain()` 或 `runPersistentMain()` 传入 `ProgramImportHandler`。handler 属于子进程，与执行语法无关；它不是序列化的 Host 绑定或插件配置字段。VM Script 接受同步或异步决策；AsyncFunction 和 Node REPL 要求同步决策，返回 Promise 时会被拒绝。`node-script` 和 embedded 启动方式启用 `--experimental-vm-modules`；独立启动的 runner 在拦截 VM Script 导入时需要该标志。AsyncFunction 和 REPL 导入拦截不需要 VM 启动标志。
+
+对于已编译程序代码中的每次动态导入，handler 接收模块标识符、导入属性和程序编译时的绝对文件名。即使 cwd 改变，保存的函数仍保留该文件名。可返回的决策包括：
+
+- `{ type: 'default' }` 使用 Node 的加载器。
+- `{ type: 'redirect', specifier }` 使用替换后的模块标识符和原始属性调用 Node 的加载器。
+- `{ type: 'module', exports }` 将自有、可枚举的字符串属性暴露为模块导出，包括名为 `default` 的属性。
+
+默认导入和重定向导入相对于原始程序文件名解析，不会再次进入 handler；原生依赖中的导入保留各自的加载器。抛出值会使 `import()` 拒绝，不会回退。VM Script 还会传播异步 handler 的拒绝，并在调用 handler 前拒绝 source 阶段的导入。AsyncFunction 和 Node REPL 保留 Node 的 source 阶段加载规则。
+
+导出值可以是 runner 内的任意对象：原型、私有字段、闭包、循环引用和同步方法都保持正常行为。一个 exports 对象在每个求值器中标识一个模块；名称和值只捕获一次，引用的对象仍可修改。返回不同的 exports 对象会创建另一个模块，每次导入都会调用 handler。模块求值失败也会针对该 exports 对象缓存。可调用的 `then` 导出在 AsyncFunction 和 VM Script 中遵循 JavaScript 动态导入的 Promise 同化规则；Node REPL 会拒绝由此产生的非模块值，因此在 REPL 中需使用其他导出名。
+
+AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的全局导出桥接对象。经 VM 编译的工厂使用 Node 默认加载器调用原生 AsyncFunction 构造器，保留严格模式函数体语法和参数绑定。每个求值器与编译文件名组合使用独立的 source URL，确保 V8 构造器缓存保留正确的 import handler 和 referrer。REPL 使用 `AsyncLocalStorage` 区分共享 Node 基于 cwd 生成的导入 URL 的求值器。VM Script 使用 `importModuleDynamically` 与 `SyntheticModule`。清理时释放求值器缓存，并移除 hook 和桥接对象；Node 会将原生加载的 ESM 命名空间和 symbol 注册表键保留到进程退出。从已完成求值中发起的导入，以及求值完成后才返回的异步 handler 结果都会被拒绝；保存的函数在后续活动求值中调用时可以正常导入。
+
 ### 源码索引
 
 | 文件 | 职责 |
@@ -141,6 +157,8 @@ Host 擦除可擦除类型；需要启动进程时，在配置的执行世界中
 | [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止、绑定分派与清理 |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | 默认使用 REPL 的已安装入口，委托共用子进程循环 |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | 三种求值器的统一选择入口 |
+| [`src/imports/vm-modules.ts`](src/imports/vm-modules.ts) | Script 导入决策、原生加载委托与合成模块 |
+| [`src/imports/module-hooks.ts`](src/imports/module-hooks.ts) | AsyncFunction 和 REPL hook、求值器归属与导出桥接对象 |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction：严格模式异步函数体 |
 | [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL：交互式声明与保留的 context |
 | [`src/evaluators/vm-script.ts`](src/evaluators/vm-script.ts) | VM Script：Node 全局变量、声明与 Promise 完成值 |

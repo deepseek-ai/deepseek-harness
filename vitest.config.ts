@@ -171,6 +171,9 @@ const processBoundTests = [
   'packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts',
 ]
 
+// Custom VM import callbacks require a Node startup flag; scope it to their owning suites.
+const vmModulesTests = ['packages/ptc-runtime/ptc-runtime-node/tests/imports.spec.ts']
+
 // Claude Code's test-kit module names, served by the mods bridge's test support so the example mods' tests import them unchanged.
 const claudeCodeTestingAliases = {
   'claude-code/testing': fileURLToPath(new URL('./packages/experimental/claude-code-mods/tests/support/claude-code-testing.ts', import.meta.url)),
@@ -205,6 +208,7 @@ export default defineConfig({
           exclude: [
             ...platformUnsupportedTests,
             ...processBoundTests,
+            ...vmModulesTests,
             ...coverageExemptExcludes,
           ],
         },
@@ -223,6 +227,17 @@ export default defineConfig({
             ...platformUnsupportedTests,
             ...coverageExemptExcludes,
           ],
+        },
+      },
+      {
+        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        test: {
+          name: 'vm-modules',
+          execArgv: [...vitestExecArgv, '--experimental-vm-modules'],
+          pool: 'forks',
+          ...laneTestBudget,
+          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
+          include: vmModulesTests,
         },
       },
     ],

@@ -131,6 +131,22 @@ Source execution loads an erasable-only bootstrap closure without relying on sib
 
 Source containing `await` is checked for top-level await before native compilation, which can otherwise treat `await` as an identifier. Acorn parses an async wrapper, and acorn-walk traverses it using Node's REPL visitors, declaration hoisting and character-position edits. Computed class-method keys are traversed while method bodies remain separate evaluations. The transform boxes the final expression; the evaluator unwraps and awaits its value. Source that needs no lowering uses native compilation; submissions without `await` retain native syntax diagnostics. Dynamic `import()` expressions remain native and use the compiling Script's `importModuleDynamically` option. Both private process bundles include Acorn and acorn-walk; source execution imports the installed packages.
 
+### Runner import handling
+
+Runner code can pass a `ProgramImportHandler` to `runNodeMain()` or `runPersistentMain()`. The handler belongs to the child process and is independent of execution syntax; it is not a serialized host binding or a plugin configuration field. VM Script accepts synchronous or asynchronous decisions; AsyncFunction and Node REPL require synchronous decisions and reject a returned Promise. `node-script` and embedded launches enable `--experimental-vm-modules`; independently started runners need that flag to intercept VM Script imports. AsyncFunction and REPL interception need no VM startup flag.
+
+For each dynamic import in compiled program code, the handler receives the specifier, import attributes and the program's absolute compilation filename. Saved functions retain that filename even after cwd changes. The decisions are:
+
+- `{ type: 'default' }` uses Node's loader.
+- `{ type: 'redirect', specifier }` uses Node's loader with the replacement specifier and original attributes.
+- `{ type: 'module', exports }` exposes own enumerable string properties as module exports, including a property named `default`.
+
+Default and redirected imports resolve relative to the original program filename without reentering the handler; imports inside native dependencies keep their own loader. A thrown value rejects `import()` without fallback. VM Script also propagates async handler rejections and rejects source-phase imports before calling the handler. AsyncFunction and Node REPL retain Node's source-phase loading rules.
+
+Export values can be arbitrary runner-local objects: prototypes, private fields, closures, cycles and synchronous methods retain their normal behavior. One exports object identifies one module per evaluator; names and values are captured once, while referenced objects remain mutable. Returning a different exports object creates another module, and the handler is consulted on every import. Module evaluation failures remain cached for that exports object. A callable `then` export follows JavaScript's dynamic-import Promise assimilation in AsyncFunction and VM Script; Node REPL rejects the resulting non-module value, so use another export name there.
+
+AsyncFunction and Node REPL share synchronous `registerHooks` and a symbol-keyed global export bridge. A VM-compiled factory calls the native AsyncFunction constructor with Node's default loader, preserving strict function-body syntax and parameter bindings. Each evaluator and compilation filename has a distinct source URL so V8's constructor cache retains the correct import handler and referrer. REPL uses `AsyncLocalStorage` to distinguish evaluators sharing Node's cwd-based import URL. VM Script uses `importModuleDynamically` and `SyntheticModule`. Cleanup releases evaluator caches and removes hooks and bridges; Node retains natively loaded ESM namespaces and symbol registry keys until process exit. Imports started from a completed evaluation and async handler results arriving after completion reject; a saved function invoked by a later active evaluation can import normally.
+
 ### Source map
 
 | File | Role |
@@ -141,6 +157,8 @@ Source containing `await` is checked for top-level await before native compilati
 | [`src/worker.ts`](src/worker.ts) | Shared process launch, evaluation deadlines, binding dispatch and cleanup |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | Installed REPL-default entry delegating to the common child loop |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | Shared selection entry for the three evaluators |
+| [`src/imports/vm-modules.ts`](src/imports/vm-modules.ts) | Script import decisions, native delegation and synthetic modules |
+| [`src/imports/module-hooks.ts`](src/imports/module-hooks.ts) | AsyncFunction and REPL hooks, evaluator attribution and export bridge |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction: strict async function bodies |
 | [`src/evaluators/repl.ts`](src/evaluators/repl.ts) | Node REPL: interactive declarations and retained context |
 | [`src/evaluators/vm-script.ts`](src/evaluators/vm-script.ts) | VM Script: Node globals, declarations and Promise completion |

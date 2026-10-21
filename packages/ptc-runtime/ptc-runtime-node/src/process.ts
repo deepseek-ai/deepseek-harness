@@ -6,7 +6,7 @@ import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass,
 import type { BindingErrorConstructor, PendingCall, PatchableStream } from './bootstrap.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
-import type { ProgramEvaluator, ProgramFormat } from './evaluators/types.ts'
+import type { ProgramEvaluator, ProgramFormat, ProgramImportHandler, ProgramImportResult } from './evaluators/types.ts'
 import type { DoneMessage, ProgramBootData, ProgramToHost, ReplyMessage, RunMessage } from './protocol.ts'
 
 /** Process-owned environment, output and optional directory control consumed by the child. */
@@ -34,10 +34,12 @@ interface Evaluation {
  * @param maxMessageBytes - Maximum frame and queued-write bytes.
  * @param processState - Child environment, output streams, directory control and exit status.
  * @param defaultFormat - Syntax used by existing bootstraps when the host omits it.
+ * @param importHandler - Runner-local import decisions; omission retains native loading.
  * @returns After control closure and evaluator cleanup; malformed startup rejects.
  */
 export async function runNodeMain(
   stream: Duplex, maxMessageBytes: number, processState: ProgramProcess, defaultFormat: ProgramFormat = 'function-body',
+  importHandler?: ProgramImportHandler,
 ): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0 || maxMessageBytes > 0xffff_ffff) throw new Error('invalid control message limit')
   clearProgramEnvironment(processState)
@@ -111,6 +113,15 @@ export async function runNodeMain(
           evaluator = createProgramEvaluator(data.programFormat ?? defaultFormat, (error) => {
             const active = context.getStore()
             if (active?.active && error) active.finish(prepareException(error, active.logs.remainingOutputBytes(), active.maxOutputBytes))
+          }, importHandler === undefined ? undefined : (request) => {
+            const active = context.getStore()
+            if (!active?.active) throw new Error('PTC evaluation has ended; import modules from a new run_code evaluation')
+            const result = importHandler(request)
+            const checkActive = (decision: ProgramImportResult): ProgramImportResult => {
+              if (!active.active) throw new Error('PTC evaluation ended before its import completed')
+              return decision
+            }
+            return 'then' in result ? result.then(checkActive) : checkActive(result)
           })
           evaluator.globals.console = makeConsoleShim(logSink)
           Object.defineProperty(evaluator.globals, 'process', { configurable: true, enumerable: true, writable: true, value: processState })
