@@ -32,4 +32,4 @@ description: "创造模式用一个 `dsh-doc` skill 取代原有的四个 skill�
 
 3. 将 `customSkillDirs` 设为该包 `skills` 目录的组合无需修改。
 4. 重命名或删除项目 `.dsh/skills/` 或 `.agents/skills/` 中名为 `dsh-doc` 的 skill：项目 skill 优先级更高，会遮蔽随包提供的同名 skill。在 DSH 源码 checkout 中，将该 checkout 更新到包含本变更的修订版本；本变更会重命名仓库 skill。
-5. 新建一个创造模式会话；现有会话保留其启动时的 skill 目录。确认 skill 目录列出 `dsh-doc`，且不包含任何旧名称。
+5. 使用包含本变更的安装或修订版本新建一个创造模式会话，确认 skill 目录列出 `dsh-doc`，且不包含本包此前提供的四个 skill 中的任何一个。
