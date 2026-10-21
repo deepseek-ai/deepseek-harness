@@ -384,6 +384,24 @@ describe('MCP OAuth', () => {
     expect(refresh.headers.authorization).toBeUndefined()
   })
 
+  it('sends an advertised resource without a path verbatim in authorization, exchange, and refresh', async () => {
+    const world = await oauthWorld()
+    world.behavior.resource = world.origin
+    const owner = world.owner()
+    await owner.start()
+    const waiting = await phase(() => owner.current(), 'waiting-browser')
+    expect(new URL(waiting.authorizationUrl!).searchParams.get('resource')).toBe(world.origin)
+    expect(await callback(waiting)).toBe(200)
+    await phase(() => owner.current(), 'authorized')
+    const store = new McpOAuthCredentials(world.ctx, world.config.oauth)
+    const signal = new AbortController().signal
+    const grant = await store.read(world.config.url, signal)
+    await world.ctx.credentials.modifyRecord(store.key, async () => oauthRecord({ ...grant, expiresAt: 0 }))
+    expect(await store.transport(grant, signal, fetch).authProvider.token()).toBe('access-2')
+    expect(world.requests.filter(request => request.path === '/token').map(request => request.form.get('resource')))
+      .toEqual([world.origin, world.origin])
+  })
+
   it('keeps passive probes noninteractive and connects with a committed grant', async () => {
     const world = await oauthWorld()
     const missing = await probeServer(world.ctx, world.config)

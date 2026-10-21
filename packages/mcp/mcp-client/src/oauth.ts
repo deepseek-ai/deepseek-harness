@@ -305,7 +305,7 @@ export class McpOAuthAuthorization {
         clientInformation: information, authorizationCode: callback.code,
         ...callback.iss === undefined ? {} : { iss: callback.iss },
         codeVerifier: verifier, redirectUri,
-        ...resource === undefined ? {} : { resource: new URL(resource) },
+        ...resource === undefined ? {} : { resource },
         fetchFn: fetch,
       })
       this.binding.remember(tokens.access_token)

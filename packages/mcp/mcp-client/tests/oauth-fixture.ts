@@ -40,6 +40,7 @@ export async function oauthWorld(interactive = true) {
     rejection?: { status: number; challenge?: string }
     metadata?: false
     authorizationEndpoint?: string
+    resource?: string
   } = {}
   const mcp = createMcpHandler(({ requestInfo }) => {
     const server = new McpServer({ name: 'oauth-fixture', version: '1.0.0' }, { capabilities: { tools: {} } })
@@ -81,7 +82,7 @@ export async function oauthWorld(interactive = true) {
     if (behavior.metadata === false && path.startsWith('/.well-known/')) {
       response.writeHead(404).end()
     } else if (path.startsWith('/.well-known/oauth-protected-resource')) {
-      json({ resource: origin + '/mcp', authorization_servers: [origin], scopes_supported: ['tools'] })
+      json({ resource: behavior.resource ?? origin + '/mcp', authorization_servers: [origin], scopes_supported: ['tools'] })
     } else if (path === '/.well-known/oauth-authorization-server') {
       json({ issuer: origin, authorization_endpoint: behavior.authorizationEndpoint ?? origin + '/authorize', token_endpoint: origin + '/token', registration_endpoint: origin + '/register',
         response_types_supported: ['code'], grant_types_supported: ['authorization_code', 'refresh_token'], code_challenge_methods_supported: ['S256'],

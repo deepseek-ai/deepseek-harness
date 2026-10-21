@@ -188,7 +188,7 @@ export class McpOAuthCredentials {
         ...current.metadata === undefined ? {} : { metadata: current.metadata },
         clientInformation: client,
         refreshToken: current.tokens.refresh_token,
-        ...current.resource === undefined ? {} : { resource: new URL(current.resource) },
+        ...current.resource === undefined ? {} : { resource: current.resource },
         fetchFn: oauthFetch(signal, this.config.requestTimeoutMs),
       })
       const { expiresAt: _expiresAt, ...retained } = current
