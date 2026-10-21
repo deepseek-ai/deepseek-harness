@@ -4,7 +4,7 @@ Answer for the running version, and name the files that support each answer. Rea
 
 ## Version
 
-All DSH packages of one release share one version. This skill's base directory is `skills/dsh-doc` inside the `@deepseek-ai/dsh-agent-preset` package directory, so `../../package.json` relative to it holds the running version.
+The `version` in `package.json` under `DSH_INSTALL_DIR`, described below, is the running DSH version. Without that variable, use the source checkout's version, or `../../package.json` relative to this skill's base directory, which is the version of the `@deepseek-ai/dsh-agent-preset` package that ships this skill, and state which file the answer used.
 
 ## Documentation
 
