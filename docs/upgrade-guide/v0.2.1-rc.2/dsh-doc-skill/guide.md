@@ -31,5 +31,5 @@ This affects Creator mode users whose prompts, saved instructions, or own skills
    | `agent-experience/SKILL.md` | `dsh-doc/references/tool-design.md` |
 
 3. A composition that sets `customSkillDirs` to the package's `skills` directory needs no change.
-4. Rename or remove a skill named `dsh-doc` in a project's `.dsh/skills/` or `.agents/skills/`: project skills take precedence and would hide the packaged one. In a DSH source checkout, update to this release, which renames the repository skill.
-5. Start a new Creator mode session; sessions that loaded an old skill keep its paths. Confirm that the skill catalog lists `dsh-doc` and none of the old names.
+4. Rename or remove a skill named `dsh-doc` in a project's `.dsh/skills/` or `.agents/skills/`: project skills take precedence and would hide the packaged one. In a DSH source checkout, update the checkout to a revision that contains this change, which renames the repository skill.
+5. Start a new Creator mode session; existing sessions keep the skill catalog they started with. Confirm that the skill catalog lists `dsh-doc` and none of the old names.

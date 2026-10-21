@@ -1,6 +1,6 @@
 # Harness plugin practices
 
-These rules follow from Harness mechanisms. Confirm every Service method, Event name, and dispatch mode named here before relying on it, through `cordis_inspect_query` (`Service`, `Event`) when available or the owning package's source; the installed Harness is the authority.
+These rules follow from Harness mechanisms. Confirm every Service method, Event name, and dispatch mode named here before relying on it, through `cordis_inspect_query` (`Service`, `Event`) when available or the owning package's README and source; the installed Harness is the authority.
 
 ## Principles
 

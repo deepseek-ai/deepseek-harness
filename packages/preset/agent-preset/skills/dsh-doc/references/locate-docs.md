@@ -10,7 +10,7 @@ All DSH packages of one release share one version. This skill's base directory i
 
 Every shell call of a profile-launched DSH receives `DSH_INSTALL_DIR`, the directory of the `@deepseek-ai/dsh` package; in Desktop it lies inside `app.asar`. Print it with `echo "$DSH_INSTALL_DIR"` in bash or `$env:DSH_INSTALL_DIR` in PowerShell. Its `docs/` holds this version's documentation and the upgrade guides with their index, `docs/upgrade-guide/README.md`.
 
-In a source checkout, `DSH_INSTALL_DIR` is the checkout's `apps/cli` and has no `docs/`. A base directory ending in `packages/preset/agent-preset/skills/dsh-doc` with `pnpm-workspace.yaml` five levels up identifies the checkout root; read its `docs/user/index.md`, `packages/README.md`, `packages/<group>/<name>/`, and `docs/upgrade-guide/`.
+In a source checkout, `DSH_INSTALL_DIR` is the checkout's `apps/cli` and has no `docs/`. A base directory ending in `packages/preset/agent-preset/skills/dsh-doc` with `pnpm-workspace.yaml` five levels up identifies the checkout root; read its `docs/user/index.md`, `packages/README.md`, `packages/<group>/<name>/`, and `docs/upgrade-guide/` directly. The command below resolves only packages that the installation's `node_modules` can reach.
 
 When `DSH_INSTALL_DIR` is unset and the base directory does not identify a source checkout, DSH was started without a profile and its documentation cannot be located; say so.
 
@@ -22,7 +22,7 @@ With inspection tools, `cordis_inspect_query` `Config.listConfigs` filtered by `
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" -e "console.log(require('node:path').dirname(require.resolve(process.argv[1] + '/package.json', { paths: [process.env.DSH_INSTALL_DIR] })))" @deepseek-ai/dsh-tool-bash
 ```
 
-In PowerShell, set `$env:ELECTRON_RUN_AS_NODE = '1'` and run `& $env:DSH_NODE_EXECUTABLE` with the same arguments. On Windows, Desktop's Electron executable is a GUI program, so PowerShell may neither wait for it nor capture its output, and no Windows invocation has been verified; there, use the file-read tool and report a package location you could not resolve as unverified. When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable; do not substitute a `node` from `PATH`, which cannot open `app.asar`. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
+In PowerShell, set `$env:ELECTRON_RUN_AS_NODE = '1'` and run `& $env:DSH_NODE_EXECUTABLE` with the same arguments. On Windows Desktop, do not run the Electron executable from PowerShell; read files with the file-read tool and report a package location you could not resolve as unverified. When `DSH_NODE_EXECUTABLE` is unset, DSH runs as a single executable whose packages are not on disk; do not substitute a `node` from `PATH`, and report package behavior as unverified. When neither inspection nor these variables locate a package, report its behavior as unverified instead of guessing a path.
 
 A package directory holds `README.md`, `src/`, and built `lib/`. Read the README first, then the `src/` file that owns the behavior.
 

@@ -4,7 +4,8 @@
  * bans reading DSH sources. The Web preset e2e measures whole-reference reads.
  */
 import { execFileSync } from 'node:child_process'
-import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, matchesGlob, resolve, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { fileURLToPath } from 'node:url'
@@ -144,6 +145,26 @@ describe('the shipped dsh-doc skill', () => {
       }
       expect(text, file).not.toMatch(/cordis-plugin-development|editing-cordis-compositions|cordis-composition-reference|agent-experience/u)
     }
+  })
+
+  // The commands target bash; Windows Desktop is directed to the file-read tool instead.
+  it.skipIf(process.platform === 'win32')('documents shell commands that locate a package and list upgrade index sections', (test) => {
+    const install = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-doc-commands-')))
+    test.onTestFinished(() => rmSync(install, { recursive: true, force: true }))
+    const pkg = join(install, 'node_modules', '@deepseek-ai', 'dsh-tool-bash')
+    mkdirSync(pkg, { recursive: true })
+    writeFileSync(join(pkg, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
+    mkdirSync(join(install, 'docs', 'upgrade-guide'), { recursive: true })
+    writeFileSync(join(install, 'docs', 'upgrade-guide', 'README.md'), '# Upgrade guides\r\n\r\n## v2.0.0\r\n\r\n| row |\n## v1.0.0\n')
+    const run = (file: string) => {
+      const command = /```sh\n\s*(.+)\n\s*```/u.exec(readFileSync(join(skill, 'references', file), 'utf8'))?.[1]
+      expect(command, file).toBeDefined()
+      return execFileSync('bash', ['-c', command ?? ''], {
+        encoding: 'utf8', env: { ...process.env, DSH_INSTALL_DIR: install, DSH_NODE_EXECUTABLE: process.execPath },
+      })
+    }
+    expect(run('locate-docs.md').trim()).toBe(pkg)
+    expect(run('upgrading.md')).toBe('3 ## v2.0.0\n6 ## v1.0.0\n')
   })
 
   it('never forbid reading DSH package sources and never route skill files through the shell', () => {
