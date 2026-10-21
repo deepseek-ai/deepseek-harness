@@ -150,7 +150,7 @@ describe('the shipped dsh-doc skill', () => {
   // The commands target bash; Windows Desktop is directed to the file-read tool instead.
   it.skipIf(process.platform === 'win32')('documents shell commands that locate a package and list upgrade index sections', (test) => {
     const install = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-doc-commands-')))
-    test.onTestFinished(() => rmSync(install, { recursive: true, force: true }))
+    test.onTestFinished(() => { rmSync(install, { recursive: true, force: true }) })
     const pkg = join(install, 'node_modules', '@deepseek-ai', 'dsh-tool-bash')
     mkdirSync(pkg, { recursive: true })
     writeFileSync(join(pkg, 'package.json'), '{"name":"@deepseek-ai/dsh-tool-bash"}\n')
