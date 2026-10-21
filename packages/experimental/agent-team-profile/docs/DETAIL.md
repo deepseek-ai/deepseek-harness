@@ -1,11 +1,11 @@
-![A conversation titled Add rate limiting with its Agent Team button, and the panel it opens: two members and two shared tasks](preview.svg)
+![A conversation titled Add rate limiting with its Agent team button, and the panel it opens: two members and two shared tasks](preview.svg)
 
 Ask the agent you are talking to, the lead, to split a job. It creates named teammates, puts the work on a shared task board, waits for their results, and reports back.
 
 ## How to use
 
-- Ask in plain words, for example: "Use Agent Teams to split this task between two teammates, wait, and summarize."
-- Click **Agent Team** next to the conversation title to see **Members** and **Shared tasks**. Each task shows its status, **Owner**, **Write scopes**, and the tasks it is **Blocked by**.
+- Ask in plain words, for example: "Use agent teams to split this task between two teammates, wait, and summarize."
+- Click **Agent team** next to the conversation title to see **Members** and **Shared tasks**. Each task shows its status, **Owner**, **Write scopes**, and the tasks it is **Blocked by**.
 - Click a teammate to open its conversation and talk to it there.
 - The panel is read-only. To change tasks or teammates, ask the lead.
 

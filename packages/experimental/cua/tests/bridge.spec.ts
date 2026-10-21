@@ -26,6 +26,9 @@ it('uses the current tool binding when a retained app is called by another execu
   await expect(app.click(0)).resolves.toEqual({ dispatched: true, verified: false })
   expect(first).toHaveBeenCalledTimes(2)
   expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } })
+  expect(text).not.toHaveBeenCalled()
+  current = first
+  await app.getAXState()
   expect(text).toHaveBeenCalledWith('0 button')
 })
 

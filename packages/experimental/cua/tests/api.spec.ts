@@ -425,12 +425,12 @@ describe('input actions', () => {
     const app = await f.api.getApp('Editor')
     await app.click([500, 250], { relative: true })
     await app.hover([500, 250], { relative: true })
-    await app.drag([0, 0], [1000, 1000], { relative: true })
+    await app.drag([0, 0], [999, 999], { relative: true })
     await app.scroll({ x: 500, y: 250, relative: true, deltaLinesX: 0, deltaLinesY: -1 })
     expect(f.dispatch.mock.calls.slice(-4).map(([request]) => request.params)).toEqual([
       expect.objectContaining({ x: 500, y: 250, relative: true }),
       expect.objectContaining({ x: 500, y: 250, relative: true }),
-      expect.objectContaining({ fromX: 0, toX: 1000, relative: true }),
+      expect.objectContaining({ fromX: 0, toX: 999, relative: true }),
       expect.objectContaining({ x: 500, y: 250, relative: true }),
     ])
     await expect(app.click(1, { relative: true })).rejects.toThrow()
@@ -492,7 +492,7 @@ describe('input actions', () => {
     ['getState windowId: Too small: expected number to be >0', app => app.getWindow(0)],
     ['selectText text: Too small: expected string to have >=1 characters', app => app.selectText(0, '')],
     ['hover x: Invalid input: expected number, received NaN', app => app.hover([NaN, 0])],
-    ['hover x: Too big: expected number to be <=1000', app => app.hover([1001, 0], { relative: true })],
+    ['hover x: Too big: expected number to be <=999', app => app.hover([1000, 0], { relative: true })],
     ['click relative: not accepted for these arguments', app => app.click(650, { relative: true })],
   ])('reports a readable validation failure: %s', async (message, run) => {
     const f = fixture()

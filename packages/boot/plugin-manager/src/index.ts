@@ -511,6 +511,7 @@ export class PluginManager extends TypertRemoteService {
       const readOnlyReason = this.protectsManager(name) ? 'management-required' as const : undefined
       let availability: BundleInfo['availability'] = 'missing'
       let version: string | undefined
+      let listing: Pick<BundleInfo, 'listedByDefault'> = {}
       try {
         const info = bundleManifest(name, this.profile.dir, this.profile.installAnchor)
         availability = shipped ? 'installation' : 'profile'
@@ -521,6 +522,11 @@ export class PluginManager extends TypertRemoteService {
           continue
         }
         version = info.version
+        const listedByDefault = info.dsh?.bundle?.listedByDefault
+        if (listedByDefault !== undefined) {
+          if (typeof listedByDefault !== 'boolean') throw new Error('dsh.bundle.listedByDefault must be a boolean')
+          listing = { listedByDefault }
+        }
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
@@ -529,7 +535,7 @@ export class PluginManager extends TypertRemoteService {
         try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
         catch (error) { platformError = managementError(error) }
         const error = targetError ?? platformError
-        bundles.push({ name, official, availability, ...target, ...(version === undefined ? {} : { version }),
+        bundles.push({ name, official, availability, ...listing, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },
           ...sourceOf(info.name), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
@@ -538,7 +544,7 @@ export class PluginManager extends TypertRemoteService {
           ...error === undefined ? {} : { error } })
       } catch (error) {
         if (enabled || installed || optional || offered !== undefined) {
-          bundles.push({ name, official, availability, ...catalogMeta, ...target, ...(version === undefined ? {} : { version }),
+          bundles.push({ name, official, availability, ...listing, ...catalogMeta, ...target, ...(version === undefined ? {} : { version }),
             ...sourceOf(), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
             ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
             error: targetError ?? managementError(error), rows: [], overrides: [] })

@@ -58,3 +58,22 @@ export const en = {
   'time.months': '{n}mo',
   'time.years': '{n}y',
 } satisfies Record<ReferenceKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'section.files': 'ファイルとフォルダ',
+  'section.subagents': 'サブエージェント',
+  'section.sessions': 'セッション',
+  'candidate.noCwd': '（cwdなし）',
+  'crumb.root': 'ワークスペース',
+  'fileOpen.title': 'ファイルを開けませんでした',
+  'fileOpen.failed': '「{path}」を開けませんでした。再試行するか、このメッセージを閉じてください。',
+  'fileOpen.close': '閉じる',
+  'fileOpen.retry': '再試行',
+  'time.now': '今',
+  'time.minutes': '{n}分',
+  'time.hours': '{n}時間',
+  'time.days': '{n}日',
+  'time.months': '{n}か月',
+  'time.years': '{n}年',
+} satisfies Record<keyof typeof en, string>

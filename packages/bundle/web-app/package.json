@@ -77,6 +77,7 @@
     "@deepseek-ai/dsh-client-ui-approval": "workspace:*",
     "@deepseek-ai/dsh-client-ui-attachment": "workspace:*",
     "@deepseek-ai/dsh-client-ui-brand-official": "workspace:*",
+    "@deepseek-ai/dsh-message-quotes": "workspace:*",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
     "@deepseek-ai/dsh-client-ui-commands": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",

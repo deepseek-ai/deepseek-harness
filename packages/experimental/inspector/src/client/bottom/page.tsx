@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { InspectorSourceId } from '../../shared/bridge/ids.ts'
 import { bindInspectorKeyboard } from './keyboard.ts'
 import { InspectorResizeHandle } from './resize.tsx'
-import { zh, en } from './locales.ts'
+import { zh, en, ja } from './locales.ts'
 import css from './page.module.css'
 
 const ID = 'inspector.toggle' as ShortcutCommandId
@@ -58,7 +58,7 @@ function InspectorPage({ t, frontendUrl, close, bindFrame, usePanel }:
 export function registerInspectorPage(ctx: Context, sourceId: InspectorSourceId): void {
   const query = new URLSearchParams({ disableLocaleInfoBar: 'true', clientSourceId: sourceId })
   const frontendUrl = `inspector/devtools/devtools_app.html?${query}`
-  ctx.effect(() => ctx.locale.register('inspectorPanel', { zh, en }))
+  ctx.effect(() => ctx.locale.register('inspectorPanel', { zh, en, ja }))
   const t = ctx.locale.bind('inspectorPanel')
   ctx.slots.inject('shell.bottom', function* () {
     const panel = createSnapshotStore<PanelState>('unopened')

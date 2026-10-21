@@ -220,7 +220,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
     ctx.on('session/flush', (current) => { flushed.push(current.id) })
     const signal = new AbortController().signal
     await agentEvents(ctx, agent).waterfall(
-      'agent/pre-step', { messages: [], turn: 1, step: 1, signal },
+      'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
       () => Promise.resolve({ kind: 'enter', messages: [] }),
     )
     expect(flushed).toEqual([session.id])

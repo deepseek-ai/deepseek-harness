@@ -40,6 +40,7 @@ export const AssistantNodeView = memo(function AssistantNodeView({
       groupPart={groupPart}
       useDisclosure={useDisclosure}
       streaming={data.status === 'running'}
+      textInteractionSource={data.status === 'settled' && data.finalNode?.messageId !== undefined}
       interrupted={data.status === 'interrupted'}
       loadImage={loadImage}
       reasoningHidden={reasoningHidden}

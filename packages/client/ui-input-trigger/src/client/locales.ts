@@ -32,3 +32,16 @@ export const en = {
   'crumbs.aria': 'Folder navigation',
   'suggestions.aria': 'Trigger suggestions',
 } satisfies Record<MenuKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'command': 'コマンド',
+  'skill': 'スキル',
+  'subagent': 'サブエージェント',
+  'loading': '読み込み中…',
+  'drill.aria': 'フォルダを参照',
+  'drill.hint': 'フォルダを参照',
+  'drill.key': 'Tab',
+  'crumbs.aria': 'フォルダナビゲーション',
+  'suggestions.aria': '候補を表示',
+} satisfies Record<keyof typeof en, string>

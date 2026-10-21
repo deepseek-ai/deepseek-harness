@@ -18,8 +18,8 @@
   en: 246231cf2a529550
   zh: 5d27b8e444ecd0f7
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/configuration:
-  en: 161f3b32c782bab4
-  zh: bd923e3d31261032
+  en: 7e332cfe9cf45896
+  zh: 82cfb08dce3425ab
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
   en: c79baab0c0a49ca7
   zh: b90b78d0d75280fb
@@ -30,20 +30,20 @@
   en: ad72b8bdba6a3966
   zh: 28a20fb5fb7c622d
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/failures:
-  en: 7682e50f9dcfa25c
-  zh: ddcb3502e12be06f
+  en: 0ba661c7030f368c
+  zh: dc2be3553eda447d
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation:
   en: 9020b491a39e4bf5
   zh: bcd1b2b1a3bde7f3
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/launch-and-control:
-  en: 894cf1c1fdbe0092
-  zh: c1e1179391e89a3f
+  en: 94e08458a48b8c16
+  zh: 48087aaa4ef028b6
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-and-built-bootstraps:
-  en: e7251a2f7cb8f134
-  zh: f68c08c507992969
+  en: f9d796233bfb3b79
+  zh: f7c5803a6ccdf9c2
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-map:
-  en: 2a702f70cac410d1
-  zh: f275136c6019b56d
+  en: 6534d1c3a1e40c65
+  zh: 2aae909d97915ece
 /deepseek-ai-dsh-ptc-runtime-node/further-exploration:
   en: ac2e2ae13d3f1394
   zh: 5d08b9c658fcf83a
@@ -54,8 +54,8 @@
   en: 40294c1c31b74824
   zh: d91e7b78c0619c7e
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work:
-  en: 7b8d67207e35bbb3
-  zh: 246cd770e79078ac
+  en: c99f20872d7694d0
+  zh: b3a3193572afd8f3
 /deepseek-ai-dsh-ptc-runtime-node/known-limitations-and-deferred-work/dev-note:
   en: 6373aba4e08f7205
   zh: 2a8c33d1f2839df4

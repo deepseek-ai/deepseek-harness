@@ -13,9 +13,12 @@ Native CUA `permissionStatus` and `requestPermission` responses require a `platf
 
 The exported `CuaBackend` no longer accepts `description`. The shared executor owns the operation tool description; providers still supply platform instructions through `guidance`.
 
+The object API now reads initial AX state silently in `getApp` and `getWindow`. Selecting an application or window no longer automatically prints its AX tree.
+
 ## Migration
 
 1. If using the bundled native helper, upgrade the CUA packages together. No profile edit is needed.
 2. If setting `helperPath`, rebuild that helper against the current protocol. Add `platform: "darwin"` to macOS permission responses, or implement the Windows response fields in [`CuaSystemPermissionState`](../../../../packages/experimental/cua/src/access-types.ts).
 3. In custom provider integrations, remove `description` from the object passed to `installCua`. Keep platform instructions in `guidance`.
-4. Restart the provider and open Computer Use details. Confirm that status queries succeed and show the platform's access controls; rebuild custom TypeScript consumers to check the updated interface.
+4. If a script relies on selection to print the AX tree, explicitly call `await app.getAXState()` or `await window.getAXState()` afterward. Selection still initializes element indices.
+5. Restart the provider and open Computer Use details. Confirm that status queries succeed and show the platform's access controls; rebuild custom TypeScript consumers to check the updated interface.

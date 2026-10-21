@@ -329,6 +329,9 @@
     - id: ui-approval
       name: '@deepseek-ai/dsh-client-ui-approval'
 
+    - id: message-quotes
+      name: '@deepseek-ai/dsh-message-quotes'
+
     - id: ui-chat
       name: '@deepseek-ai/dsh-client-ui-chat'
 

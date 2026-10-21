@@ -54,6 +54,7 @@ describe('worktree tool through real Loader composition', () => {
       ['@deepseek-ai/dsh-agent', AgentRegistry],
       ['@deepseek-ai/dsh-session', SessionStore],
       ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
+
       ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
       ['@deepseek-ai/dsh-llm', LlmRuntime],
       ['@deepseek-ai/dsh-tools', ToolRuntime],

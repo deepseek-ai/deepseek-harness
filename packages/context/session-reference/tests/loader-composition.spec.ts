@@ -77,6 +77,7 @@ describe('session-reference real Loader composition', () => {
       source: { kind: 'user' },
     })
     const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+      modelSelection: { provider: 'mock', model: 'mock' },
       messages: [direct], turn: 1, step: 1, signal: new AbortController().signal,
     }, () => Promise.resolve({ kind: 'enter' as const, messages: [direct] }))
     expect(decision.kind).toBe('enter')

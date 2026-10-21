@@ -10,7 +10,7 @@ export const guideEn = {
   guideStandardIntro: 'Choose Standard mode when starting a new task. Describe what you want to accomplish, point to the relevant files, and explain how to check the result.',
   guideStandardExplanation: [
     '### How it works',
-    'The agent calls tools directly to read and edit files, search, and run terminal commands. It includes Skills, planning, goals, subagents, workflows, and context compaction.',
+    'The agent calls tools directly to read and edit files, search, and run terminal commands. It includes Skills, planning, goals, subagents, workflows, plugin management, and context compaction.',
     '### When to choose it',
     'Start here for everyday coding, file work, and research. Standard mode can also write scripts and process files in batches. PTC changes how tool calls are organized; it is not required for batch tasks.',
   ].join('\n\n'),
@@ -29,7 +29,7 @@ export const guideEn = {
     '### What reaches the model',
     'Tool results first reach the program, which can filter and combine them. The model receives what the program prints or returns; image results are attached separately. Nested tool calls are still recorded and remain subject to tool permissions.',
     '### Compared with Standard mode',
-    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow tool disabled. Speed and token use depend on the task and how the program handles its results.',
+    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow and plugin management tools disabled. Speed and token use depend on the task and how the program handles its results.',
   ].join('\n\n'),
   guidePtcUsage: [
     '### Check a set of configuration files',
@@ -54,7 +54,7 @@ export const guideEn = {
   guideCordisIntro: 'Choose Creator mode for a new task. Describe the capability you want, where it should appear, and how you will verify it.',
   guideCordisExplanation: [
     '### What you can create',
-    'Creator mode includes the standard task tools plus runtime inspection, persistent plugin management, and guidance for authoring Cordis plugins and agent presets. It can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
+    'Creator mode includes the standard task tools plus runtime inspection and guidance for authoring Cordis plugins and agent presets. It can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
     '### Plugins and modes',
     'A plugin adds capabilities to DSH, such as a tool, a service connection, or a UI entry. A mode is an agent preset that selects tools and defines how the agent works in a task. A plugin can be included in a custom preset.',
     '### How the result takes effect',
@@ -88,7 +88,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideStandardIntro: '新建任务时选择「标准模式」，说明要完成什么、相关文件在哪里，以及怎样判断任务完成。',
   guideStandardExplanation: [
     '### 工作方式',
-    'Agent 直接调用工具来读写文件、检索资料和执行终端命令。包含 Skills、计划、目标、子 Agent、工作流和上下文压缩等能力。',
+    'Agent 直接调用工具来读写文件、检索资料和执行终端命令。包含 Skills、计划、目标、子 Agent、工作流、插件管理和上下文压缩等能力。',
     '### 什么时候选',
     '日常编程、文件处理和资料整理可以从这里开始。标准模式也能编写脚本、批量处理文件；PTC 改变的是工具调用方式，批量任务并不必须使用 PTC。',
   ].join('\n\n'),
@@ -107,7 +107,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
     '### 哪些结果交给模型',
     '工具返回的数据先交给程序，经过筛选、计算或合并，再通过输出或返回值交给模型；图片结果会另行附加。程序中的工具调用仍会被记录，也仍受工具权限约束。',
     '### 与标准模式的区别',
-    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 工具。速度和 token 用量取决于具体任务与结果处理方式。',
+    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 和插件管理工具。速度和 token 用量取决于具体任务与结果处理方式。',
   ].join('\n\n'),
   guidePtcUsage: [
     '### 批量检查配置文件',
@@ -132,7 +132,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideCordisIntro: '新建任务时选择「创造模式」，说明希望增加什么能力、从哪里使用，以及怎样验证效果。',
   guideCordisExplanation: [
     '### 可以创造什么',
-    '创造模式具备标准任务工具，并增加运行时检查、持久化插件管理，以及 Cordis 插件和 Agent 预设的开发指引。可以编写插件来添加功能或界面，也可以组合工具和提示词，创建适合特定任务的模式。',
+    '创造模式具备标准任务工具，并增加运行时检查，以及 Cordis 插件和 Agent 预设的开发指引。可以编写插件来添加功能或界面，也可以组合工具和提示词，创建适合特定任务的模式。',
     '### 插件与模式的关系',
     '插件为 DSH 增加能力，例如工具、服务连接或界面入口。模式是一份 Agent 预设，用来选择任务可用的工具，并约定 Agent 的工作方式。自定义模式中也可以使用自己开发的插件。',
     '### 怎样让成果生效',
@@ -150,3 +150,26 @@ export const guideZh: Record<PresetGuideKey, string> = {
     '预期产出：可在新任务中选择的自定义模式。审查要求用于指导 Agent，实际可执行的操作仍由权限设置决定。',
   ].join('\n\n'),
 }
+
+/** Japanese copy, checked against the English keys. */
+export const guideJa = {
+  'modeExplanation': 'モードの詳細',
+  'howToUse': '使い方',
+  'guideSections': 'ガイドのセクション',
+  'guideExampleTask': 'タスク例',
+  'guideCopy': 'コピー',
+  'guideCopied': 'コピーしました',
+  'guideFootnotes': '脚注',
+  'guideStandardIntro': '新しいタスクを始めるときは標準モードを選びます。達成したいことを説明し、関連するファイルを示し、結果の確認方法を伝えてください。',
+  'guideStandardExplanation': '### 仕組み\n\nエージェントはツールを直接呼び出してファイルの読み取りや編集、検索、ターミナルコマンドの実行を行います。スキル、計画、目標、サブエージェント、ワークフロー、プラグイン管理、コンテキストの圧縮に対応しています。\n\n### 選ぶべき場面\n\n日々のコーディング、ファイル作業、調査はまずここから始めてください。標準モードではスクリプトの作成やファイルの一括処理も行えます。PTC はツール呼び出しの構成を変えるものであり、一括処理に必須ではありません。',
+  'guideStandardUsage': '### バグを修正する\n\n> 検索フォームを二度送信すると結果が消える原因を調べてください。修正して関連するテストを実行し、原因と変更内容を説明してください。\n\n期待される出力: コードの変更、関連するテスト結果、原因の説明。\n\n### プロジェクトのメモを整理する\n\n> このプロジェクト内の Markdown メモを読み、合意された決定と未解決の課題を、元ファイルへのリンク付きで要約してください。\n\n期待される出力: 元のメモと照合できる参照付きの要約。',
+  'guidePtcIntro': '新しいタスクを始めるときは PTC モードを選びます。入力ファイル、処理ルール、出力形式を指定してください。コードはエージェントが書きます。',
+  'guidePtcExplanation': '### ツールの呼び出され方\n\nPTC は Programmatic Tool Calling の略です。この組み込みプリセットでは、エージェントは run_code を使い、生成された SDK 経由でツールを呼び出す TypeScript プログラムを書きます。プログラムではループ、条件分岐、エラー処理、必要に応じて並行呼び出しを利用できます。\n\n### モデルに届くもの\n\nツールの結果はまずプログラムに届き、そこでフィルタリングや結合ができます。モデルが受け取るのはプログラムが出力または返した内容です。画像の結果は別途添付されます。ネストされたツール呼び出しも記録され、ツール権限の対象のままです。\n\n### 標準モードとの比較\n\nどちらのモードもコーディングや一括処理のタスクを扱えます。標準モードは個々のツールを直接公開し、PTC はツール呼び出しをコードで整理します。現在の PTC プリセットではワークフローとプラグイン管理ツールが無効になっています。速度とトークン消費はタスクやプログラムの結果の扱い方によって変わります。',
+  'guidePtcUsage': '### 設定ファイルのセットを検証する\n\n> configs/ 内のすべての JSON ファイルを検査してください。schema.json に基づき、必須フィールドの欠落と無効な値を一覧にしてください。問題ごとに 1 行の CSV を保存してください。読み取れないファイルもレポートに含め、残りの検査は続けてください。元のファイルは変更しないでください。\n\n期待される出力: 問題の要約と CSV レポート。プログラムは同じ検査を繰り返し、個々の失敗に対処し、結果を集約できます。\n\n### エラーログを要約する\n\n> logs/ 内のログファイルを分析してください。エラーをサービスとエラー種別でグループ化し、頻度上位 10 グループと各 1 件の例を示してください。完全な件数を CSV に保存してください。\n\n期待される出力: 上位のエラーグループと完全な件数表。中間データは要約がモデルに届く前にプログラム内で集約できます。',
+  'guideMinimalIntro': '新しいタスクには最小モードを選びます。比較を行う場合は、モデル、権限、入力、開始時のワークスペース状態を実行間で一定に保ってください。',
+  'guideMinimalExplanation': '### 含まれるもの\n\n永続的なシェルツール 1 つ、read_image、固定のシステムプロンプト。画像の読み取りには画像対応モデルが必要です。古い履歴はコンテキストの負荷に応じて自動的に圧縮されます。エージェントがアイドル状態のときに /compact を使えば手動で圧縮できます。この組み込みプリセットはスキル、計画、標準のランタイムコンテキストを読み込みません。\n\n### 選ぶべき場面\n\n実験や比較のベースラインとして使用します。シェルコマンド経由でファイルの読み取りやスクリプトの実行はできますが、長いタスクを管理するための組み込み手段は少なくなります。ツールが少ないからといって、初心者にとって必ずしも簡単になるわけではありません。',
+  'guideMinimalUsage': '### 小さなバグ修正で性能を比較する\n\n> このプロジェクトのテストを実行し、失敗の原因を見つけて最小限の修正をしてください。関連するテストを再度実行し、結果を報告してください。\n\n同じ開始状態から、標準モードと最小モードで同じタスクを別々に実行します。タスクの完了状況、ツール呼び出し、生じた変更を比較してください。最小モードはターミナルコマンドを通じて作業を行います。',
+  'guideCordisIntro': '新しいタスクにはクリエイターモードを選びます。実現したい機能、表示される場所、確認方法を説明してください。',
+  'guideCordisExplanation': '### 作成できるもの\n\nクリエイターモードには標準的なタスクツールに加え、ランタイムの検査、Cordis プラグインやエージェントプリセットの作成ガイドが含まれます。機能や UI を追加するプラグインを作成することも、特定の作業向けにツールとプロンプトを組み合わせたプリセットを作成することもできます。\n\n### プラグインとモード\n\nプラグインはツール、サービス接続、UI エントリなど、DSH に機能を追加します。モードはエージェントプリセットであり、ツールを選択し、タスク内でのエージェントの動作を定義します。プラグインはカスタムプリセットに含めることができます。\n\n### 結果を反映させる方法\n\nソースコードを生成するだけでなく、エージェントにインストールと確認を依頼してください。プラグインは変更内容によっては即座に読み込まれるか、再起動が必要になる場合があります。新しく作成したプリセットは、新しいタスクを始めるときに選択されます。',
+  'guideCordisUsage': '### UI を追加する\n\n> サイドバーにプロジェクトメモのエントリを追加する DSH プラグインを作成してください。このワークスペース内の Markdown ファイルを閲覧でき、選択したメモをプレビューできるようにしてください。インストールしてページが開くことを確認してください。\n\n期待される出力: 動作するエントリとプレビューページを備えた、インストール済みのプラグイン。残っている有効化手順があればそれも含みます。\n\n### ツールを追加する\n\n> このプロジェクトのテストレポートを読み、失敗したテストを要約するツールを備えたプラグインを作成してください。登録し、サンプルのレポートで確認してください。\n\n期待される出力: 呼び出し可能なツールを備えたプラグインと、確認済みのサンプル呼び出し。\n\n### 独自のモードを作成する\n\n> 標準モードをベースに「コードレビュー」モードを作成してください。潜在的なバグとテストの不足を優先し、ファイルパスと行番号を示し、ファイルを変更する前に確認を求めるようにしてください。選択可能なプリセットとして保存してください。\n\n期待される出力: 新しいタスク用のカスタムプリセット。これらのレビュー指示はエージェントを導くものであり、実行できる操作は権限設定によって決まります。',
+} satisfies Record<keyof typeof guideEn, string>

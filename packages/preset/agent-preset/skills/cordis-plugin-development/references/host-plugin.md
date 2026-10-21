@@ -30,7 +30,7 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
 
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. Complete this checklist before installation:
 
-- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin.
+- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin. Write English titles and other UI labels in sentence case: capitalize only the first word and proper nouns, as in `Git worktrees`.
 - Create an original icon or use artwork whose license permits redistribution, retaining any required attribution.
 - Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
 - Check that the icon is a valid image of the declared format and satisfies the path and size limits below. An accepted filename alone does not establish that its bytes render.
@@ -38,7 +38,7 @@ Plugin Manager and Settings read `meta.title` and `meta.description` from export
 For example, the locale file contains:
 
 ```json
-{ "meta": { "title": "My Decoration", "description": "Draws a badge under the composer." } }
+{ "meta": { "title": "My decoration", "description": "Draws a badge under the composer." } }
 ```
 
 ```json

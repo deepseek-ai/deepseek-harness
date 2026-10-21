@@ -139,6 +139,7 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.session [ConversationSession / DefaultConversationViews]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
+│     │  ├─ conversation.chat.text-interaction [list]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user,steering [UserMessageNodeView]

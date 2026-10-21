@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在插件管理器的官方分组中启用**开发者工具**，即可为当前 Web profile 选择 `@deepseek-ai/dsh-experimental-inspector-profile`。
+打开**插件**，点击**实验性插件**旁的**更多**并启用**开发者工具**；启用后它也会出现在主列表中。这会为当前 Web profile 选择 `@deepseek-ai/dsh-experimental-inspector-profile`。
 
 从 Sidebar 的新建 tab 菜单或引导页打开**会话数据诊断**。[Session Inspector](../session-inspector/README.zh.md) 提供一个视图，可选择原始数据或对话分组展示形式，初始选中原始数据。
 

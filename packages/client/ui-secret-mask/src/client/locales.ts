@@ -26,3 +26,9 @@ export const en = {
   'secret.reveal': 'Show secret',
   'secret.hide': 'Hide secret',
 } satisfies Record<SecretMaskKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'secret.reveal': 'シークレットを表示',
+  'secret.hide': 'シークレットを隠す',
+} satisfies Record<keyof typeof en, string>

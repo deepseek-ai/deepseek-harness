@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-message-feedback/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SessionLogDownloadController } from './controller.ts'
 import { SessionLogDownloadHeaderAction, type SessionLogDownloadHeaderInjected } from './HeaderAction.tsx'
-import { en, NS, zh, type SessionLogDownloadKey } from './locales.ts'
+import { en, ja, NS, zh, type SessionLogDownloadKey } from './locales.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -37,7 +37,7 @@ export function apply(ctx: ClientContext): void {
   const controller = new SessionLogDownloadController()
   ctx.provide('sessionLogDownload', controller)
   ctx.effect(() => async () => { await controller.dispose() }, 'session-log-download: browser download lifecycle')
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'session-log-download: browser dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'session-log-download: browser dictionaries')
   const feedbackAvailable = createSnapshotStore(false)
   ctx.inject(['feedbackUi'], (scope: ClientContext) => {
     scope.effect(() => {

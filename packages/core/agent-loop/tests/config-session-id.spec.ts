@@ -1,4 +1,4 @@
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -477,6 +477,34 @@ describe('config-driven session id', () => {
     expect(resumed.session.id).toBe('sticky-1')
     const derived = resumed.session.deriveMessages()
     expect(JSON.stringify(derived)).toContain('remember me')
+    await ctx2.fiber.dispose()
+  })
+
+  it.each([
+    { label: 'preserves the recorded effort on the same configured route', route: { provider: 'mock', model: 'mock' }, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'high' }, appended: 0 },
+    { label: 'applies an explicit configured effort', route: { provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('low') }, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'low' }, appended: 1 },
+    { label: 'keeps the recorded choice without a configured route', route: {}, expected: { provider: 'mock', model: 'mock', reasoningEffort: 'high' }, appended: 0 },
+  ])('config-driven resume $label', async ({ route, expected, appended }) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-cfg-resume-route-'))
+    dirs.push(root)
+    const ctx1 = await makeCoreContext()
+    await ctx1.plugin(JsonlSessionPersistence, { root })
+    await ctx1.plugin(AgentLoop, { agents: [] })
+    ctx1.llm.registerAdapter(['mock'], new MockAdapter([textResponse('first')]))
+    const h1 = await ctx1.agents.create({ sessionId: SessionId('sticky-route'), agentOptions: { provider: 'mock', model: 'mock' } })
+    h1.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'remember me' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx1, h1.agent)
+    h1.agent.model.select({ provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high') })
+    await h1.dispose()
+    await ctx1.fiber.dispose()
+
+    const ctx2 = await makeCoreContext()
+    await ctx2.plugin(JsonlSessionPersistence, { root })
+    await ctx2.plugin(AgentLoop, { agents: [{ id: SessionId('main'), ...route, resumeSessionId: SessionId('sticky-route') }] })
+    await expect.poll(() => ctx2.agents.get(SessionId('sticky-route')), { timeout: 5_000 }).toBeDefined()
+    const resumed = ctx2.agents.get(SessionId('sticky-route'))!
+    expect(resumed.model.current()).toEqual(expected)
+    expect(resumed.session.snapshotEvents().filter(event => event.type === 'model/selection')).toHaveLength(1 + appended)
     await ctx2.fiber.dispose()
   })
 

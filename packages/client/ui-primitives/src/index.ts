@@ -119,3 +119,7 @@ export {
 export { GuideArtworkBrowser, GuideArtworkFiles } from './guide-artwork.tsx'
 export { ImageLightbox } from './ImageLightbox.tsx'
 export type { ImageLightboxLabels } from './ImageLightbox.tsx'
+
+export { QuotePreview } from './QuotePreview.tsx'
+export type { QuotePreviewProps, QuotePreviewRemoval } from './QuotePreview.tsx'
+export { formatQuoteText } from './markdown/quote-text.ts'

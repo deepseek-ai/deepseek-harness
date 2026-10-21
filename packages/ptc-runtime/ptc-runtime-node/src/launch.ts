@@ -37,7 +37,7 @@ export function resolveLaunch(config?: LaunchConfig): LaunchConfig {
  * Select explicit arguments without inheriting host loader or inspector flags.
  * @param fs - Filesystem mapping host bootstrap assets into the process world.
  * @param config - resolved worker invocation.
- * @param maxMessageBytes - Validated frame and queued-write limit.
+ * @param maxMessageBytes - Validated message and queued-write limit.
  * @param persistent - Select the in-memory REPL bootstrap instead of the one-shot evaluator.
  * @returns Arguments following the resolved Node executable.
  */

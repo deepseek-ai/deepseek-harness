@@ -20,9 +20,10 @@ import type {
   SessionInput, SubmitAttempt, SubmitAttachment, SubmitOutcome,
 } from '../contract/input.ts'
 import type {
-  ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, DraftInput, DraftSnapshot, Occurrence, ReferenceInsert, TokenSpan,
+  ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, DraftQuote, DraftInput, DraftSnapshot, Occurrence, ReferenceInsert, TokenSpan,
 } from '../contract/draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission, MessageSubmissionState } from '../contract/composer-submission.ts'
+import { serializeDraftPrompt } from './prompt.ts'
 import { SubmitMachine } from './machine.ts'
 import { resolveDraftInput, snapshotDraft } from '../draft.ts'
 import { DraftEditorRuntime } from './editor/runtime.ts'
@@ -63,6 +64,10 @@ export interface SessionInputDeps {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
+  /** Live Session and composer-block policy for transcript insertion. */
+  quoteInsertionAllowed?: () => boolean
+  /** Current localized quote removal copy. */
+  quoteRemoveLabel?: () => string
   /** Command-plane attachment plumbing (the hub owns the conversation face and the copy). */
   commandAttachments: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -87,6 +92,10 @@ function guardOf(phase: InputState['phase']): 'plain' | 'claimed' | 'frozen' {
 function projectionContentChanged(prev: EditorProjection, next: EditorProjection): boolean {
   if (prev.clipboardText !== next.clipboardText || prev.detectText !== next.detectText) return true
   if (prev.command !== next.command) return true
+  if (prev.quotes.length !== next.quotes.length || prev.quotes.some((quote, i) => {
+    const old = next.quotes[i]
+    return old?.text !== quote.text || old.offset !== quote.offset
+  })) return true
   if (prev.occurrences.length !== next.occurrences.length) return true
   return next.occurrences.some((occ, i) => {
     const old = prev.occurrences[i]
@@ -103,6 +112,7 @@ const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
 interface DetachedDraft {
   readonly draft: string
   readonly occurrences: readonly Occurrence[]
+  readonly quotes: readonly DraftQuote[]
   readonly attachmentIds: readonly DraftAttachmentId[]
 }
 
@@ -122,6 +132,7 @@ export class SessionInputShell implements SessionInput {
   }
   /** The public provide-channel action face (one stable identity per session). */
   readonly actions: InputActions = {
+    insertQuote: text => this.insertQuote(text),
     captureInsertion: () => ({ ...this.caretSpan(), draftRev: this.rev }),
     insertText: (text, span) => {
       if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting' || this.disposed) return false
@@ -175,6 +186,7 @@ export class SessionInputShell implements SessionInput {
   constructor(private readonly deps: SessionInputDeps) {
     this.draftEditor = new DraftEditorRuntime({
       onUpdate: () => { this.onEditorUpdate() },
+      quoteLabels: () => ({ remove: this.deps.quoteRemoveLabel?.() ?? '' }),
       openReference: (source, reference) =>
         this.deps.inputTriggers?.()?.openReference(source, reference) ?? false,
       lexicon: () => this.lexicon.getSnapshot(),
@@ -221,11 +233,19 @@ export class SessionInputShell implements SessionInput {
   setDraft(text: DraftInput): void {
     const draft = resolveDraftInput(text)
     this.cancelCommandRestore()
-    if (draft.references.length === 0) this.draftEditor.setDraft(draft.text)
-    else this.draftEditor.restoreDraft(draft.text, draft.references)
+    if (draft.references.length === 0 && (draft.quotes?.length ?? 0) === 0) this.draftEditor.setDraft(draft.text)
+    else this.draftEditor.restoreDraft(draft.text, draft.references, draft.quotes, { remove: this.deps.quoteRemoveLabel?.() ?? '' })
     if (draft.command === undefined) return
     this.pendingCommand = { token: draft.command.token, rev: this.rev }
     this.restoreCommand()
+  }
+
+  /** @param text - selected transcript text. @returns whether the editable draft accepted the quote. */
+  insertQuote(text: string): boolean {
+    if (this.disposed || this.snapshot.phase !== 'plain' || this.deps.quoteInsertionAllowed?.() === false || text.trim() === '') return false
+    const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' })
+    if (inserted) this.focus()
+    return inserted
   }
 
   /**
@@ -272,7 +292,9 @@ export class SessionInputShell implements SessionInput {
   /** Current semantic document, stable until its content revision changes. */
   get draftSnapshot(): DraftSnapshot {
     if (this.draftSnapshotCache?.revision === this.rev) return this.draftSnapshotCache.value
-    const value = snapshotDraft(this.projection.clipboardText, this.projection.occurrences, this.projection.command?.token)
+    const value = snapshotDraft(
+      this.projection.clipboardText, this.projection.occurrences, this.projection.command?.token, this.projection.quotes,
+    )
     this.draftSnapshotCache = { revision: this.rev, value }
     return value
   }
@@ -744,45 +766,27 @@ export class SessionInputShell implements SessionInput {
     const attachmentIds = [...this.attachmentIds]
     this.attachmentIds = []
     const occurrences = this.projection.occurrences
-    const record = { draft, occurrences, attachmentIds }
+    const quotes = this.projection.quotes
+    const record = { draft, occurrences, quotes, attachmentIds }
     this.detachedDrafts.set(attempt.seq, record)
     if (this.failedRestoreRev === this.rev) {
       this.failedDetached.clear()
       this.failedRestoreRev = undefined
     }
-    if (occurrences.length === 0) {
-      this.settleSink(attempt, this.deps.defaultSink(draft.trim(), attachmentIds, mode, attempt.signal))
-      return
-    }
     const inputTriggers = this.deps.inputTriggers?.()
-    void Promise.all(occurrences.map(async (o) => {
-      if (inputTriggers === undefined) throw new Error(`no serializer for reference source "${o.source}"`)
-      return {
-        offset: o.offset,
-        length: o.length,
-        text: await inputTriggers.serializeReference(o.source, o.ref, attempt.signal),
-      }
-    })).then(
-      (parts) => {
-        if (this.disposed) return
-        // Splice model forms over their clipboard ranges (offsets are
-        // clipboard-projection; parts arrive offset-sorted since chips walk in
-        // document order).
-        let out = ''
-        let cursor = 0
-        for (const part of parts) {
-          out += draft.slice(cursor, part.offset) + part.text
-          cursor = part.offset + part.length
-        }
-        out += draft.slice(cursor)
-        this.settleSink(attempt, this.deps.defaultSink(out.trim(), attachmentIds, mode, attempt.signal))
-      },
-      (error: unknown) => {
-        if (this.dead(attempt)) return
-        const message = error instanceof Error ? error.message : String(error)
-        this.settleDetachedFailure(attempt, message)
-      },
-    )
+    const prompt = serializeDraftPrompt(snapshotDraft(draft, occurrences, undefined, quotes), async (source, ref) => {
+      if (inputTriggers === undefined) throw new Error(`no serializer for reference source "${source}"`)
+      return inputTriggers.serializeReference(source, ref, attempt.signal)
+    })
+    const send = (text: string): void => {
+      if (this.dead(attempt)) return
+      this.settleSink(attempt, this.deps.defaultSink(text, attachmentIds, mode, attempt.signal))
+    }
+    if (!(prompt instanceof Promise)) { send(prompt); return }
+    void prompt.then(send, (error: unknown) => {
+      if (this.dead(attempt)) return
+      this.settleDetachedFailure(attempt, error instanceof Error ? error.message : String(error))
+    })
   }
 
   private notifySubmission(submission: MessageSubmission | undefined): void {
@@ -832,17 +836,19 @@ export class SessionInputShell implements SessionInput {
     const separator = '\n\n'
     let draft = ''
     const occurrences: Occurrence[] = []
+    const quotes: DraftQuote[] = []
     for (const record of records) {
       const base = draft.length + (draft === '' ? 0 : separator.length)
       if (draft !== '') draft += separator
       draft += record.draft
+      quotes.push(...record.quotes.map(quote => ({ ...quote, offset: base + quote.offset })))
       for (const occurrence of record.occurrences) {
         occurrences.push({ ...occurrence, offset: base + occurrence.offset })
       }
     }
     this.restoringFailures = true
     try {
-      this.draftEditor.restoreDraft(draft, occurrences)
+      this.draftEditor.restoreDraft(draft, occurrences, quotes, { remove: this.deps.quoteRemoveLabel?.() ?? '' })
       this.draftEditor.clearHistory()
       this.failedRestoreRev = this.rev
     } finally {

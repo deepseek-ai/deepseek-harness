@@ -10,7 +10,7 @@ Web 插件页只提供两个可选 bundle：Agent Teams 与语音输入。Auto r
 
 ## 决策
 
-`OPTIONAL_BUNDLES` 管理安装随附且默认关闭的选项，包括维护中的可选能力与实验性能力。每个 bundle 声明 `icon`，并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`；官方分组显示这些元数据。Bundle 的展示方式不决定其[实验性状态](../../../../packages/experimental/README.zh.md#status)。隔离检查校验准入，并继续拒绝非实验 bundle 的实验性依赖。
+`OPTIONAL_BUNDLES` 管理安装随附且默认关闭的选项，包括维护中的可选能力与实验性能力。每个 bundle 声明 `icon`，并导出带 `meta.title` 与 `meta.description` 的 `./locale/*.json`；[插件管理页](../../../../packages/client/ui-plugin-manager/README.zh.md#use-this-package)为符合展示条件的组合包显示这些元数据，并保留默认隐藏项的显式启用入口。Bundle 的展示方式不决定其[实验性状态](../../../../packages/experimental/README.zh.md#status)。隔离检查校验准入，并继续拒绝非实验 bundle 的实验性依赖。
 
 可选 bundle 的依赖随每次 `dsh` 安装下载。[思考过程翻译](2026-10-05-anonymous-reasoning-translation.zh.md)使用三个实验包，不增加第三方运行时依赖。因此准入需要考虑安装成本，以及开关能否在不增加配置表单的情况下提供可用组合。外部浏览器与 Cua Driver 提供方仍使用显式组合，因为它们会增加较大的运行时或要求外部可执行文件。Stagehand 需要模型凭据；Python PTC 替换核心提供方，并与 TypeScript workflow 消费方冲突。演示性钩子、webhook 与模组不进入名单。[Session Inspector](../feature/2026-09-24-session-inspector.zh.md) 管理 Inspector 特有的激活行为。
 

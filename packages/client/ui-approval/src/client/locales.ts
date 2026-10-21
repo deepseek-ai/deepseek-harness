@@ -24,3 +24,14 @@ export const en = {
   allowOnce: 'Allow once',
   allowAlways: 'Always allow',
 } satisfies Record<ApprovalKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'waiting': '承認待ち',
+  'detail.aria': '承認の詳細',
+  'escalation': 'ツール {toolName} が特権実行を要求しています',
+  'reject': '拒否',
+  'allow': '許可',
+  'allowOnce': '1 回だけ許可',
+  'allowAlways': '常に許可',
+} satisfies Record<keyof typeof en, string>

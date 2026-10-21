@@ -450,6 +450,17 @@ export class HarnessSdkJsonRpcServer {
     const handle = await (resume ? this.ctx.agents.resume({
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
+      // The initialized route replaces the restored Session's model selection.
+      setup: (_agentCtx, agent) => {
+        const previous = agent.model.current()
+        const selection = { ...agentOptions }
+        if (selection.reasoningEffort === undefined && previous !== undefined
+          && previous.provider === selection.provider && previous.model === selection.model
+          && previous.reasoningEffort !== undefined) {
+          selection.reasoningEffort = previous.reasoningEffort
+        }
+        agent.model.select(selection)
+      },
     }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
       meta: { cwd: this.cwd },

@@ -55,6 +55,7 @@
    centered on the same axis as the input box (which caps at chat + 16px); the
    scroller itself stays full-bleed. */
 .column {
+  position: relative;
   max-width: var(--dsh-chat-content-width);
   width: 100%;
   margin: 0 auto;
@@ -66,10 +67,10 @@
    `hidden="until-found"` retains a searchable zero-height box; hidden and empty
    Seats do not contribute spacing. The older-history control precedes the anchor;
    an ancestor :has() here also invalidates the history on unrelated descendant edits. */
-:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
-  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
+  ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
 .column > .older + :global([data-slot="conversation.chat.flow"])
-  > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
+  > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
   margin-top: var(--dsh-chat-flow-gap, 6px);
 }
 
@@ -426,4 +427,14 @@
 /* Host open-path refusal: same dialog family as the workspace folder error. */
 .modalAction {
   min-width: 72px;
+}
+
+/* Local surfaces do not contribute flex spacing or selected message text. */
+.column > .textInteraction {
+  position: absolute;
+  /* Remain below the sticky composer while scroll placement catches up. */
+  z-index: 6;
+  visibility: hidden;
+  margin: 0;
+  width: max-content;
 }

@@ -20,9 +20,10 @@ import { turnBoundaryProjectionDefinition } from './projection.ts'
 
 export * from './runtime-types.ts'
 export * from './types.ts'
+export { AgentModel, modelSelectionProjectionDefinition, installModelSelection } from './model-selection.ts'
+export type { ModelSelectionProjectionState } from './model-selection.ts'
 export type * from './projection.ts'
 export * from './consumed-work.ts'
-export * from './model-selection.ts'
 export { agentCarrier, agentEvents, assembleContextFor, emitAgentEvent } from './dispatch.ts'
 export type { AgentEventDispatch, AgentSubjectEvent } from './dispatch.ts'
 
@@ -95,7 +96,7 @@ export interface CreateAgentOptions {
    * The factory validates and snapshots the seed before publication.
    */
   readonly seed?: readonly SessionEvent[]
-  /** Per-agent options (model, …). */
+  /** Route fallback and output controls; see {@link AgentOptions} for live accessor semantics. */
   readonly agentOptions?: AgentOptions
   /** Optional creation-only cancellation signal; detached before the returned handle becomes visible. */
   readonly signal?: AbortSignal
@@ -129,7 +130,7 @@ export interface ResumeAgentOptions {
   readonly resumeSessionId: SessionId
   /** Live parent Agent for runtime ownership; omit for a root Agent. */
   readonly parentAgent?: Agent
-  /** Per-agent options (model, …). */
+  /** Route fallback and output controls; see {@link AgentOptions} for live accessor semantics. */
   readonly agentOptions?: AgentOptions
   /** Optional creation-only cancellation signal for persistence load/setup; detached before return. */
   readonly signal?: AbortSignal

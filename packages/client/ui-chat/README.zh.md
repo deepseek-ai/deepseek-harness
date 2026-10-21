@@ -72,6 +72,8 @@ Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，
 
 明确选择会立即更新所有使用方；Host 接受的设置会校正实时值，因此写入被拒绝或尚未应答时保持所选模式，直到 Host 应答。
 
+窄屏浏览器设置中，偏好标签与控件的间距缩小；Windows 和 macOS 桌面窗口保留标准间距。
+
 偏好菜单在发布新选择之前，先将焦点还给触发按钮，且不引起滚动。
 
 <a id="completed-turn-footer"></a>
@@ -171,6 +173,10 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 </details>
 
 -----
+
+Chat view 在标记了 `data-text-interaction-source` 的业务节点上检测选区和右键手势。选区两端必须定位到同一个来源容器。已展示的用户内容和已完成的 Assistant 文本或 reasoning 参与交互；Tool、注入上下文、流式或中断的 Assistant 文本以及 Markdown 控件不参与。
+
+`ctx.uiConversation.interactions` 将有效手势分发给插件注册项，并把对应组件交给 Chat view。操作展示位置在已有 Chat 列内绝对定位，限制在 composer seat 及其 dock 上方。外层容器保留组件的外描边与阴影，内部滚动由组件负责。选区滚出该可见范围时暂时隐藏操作，滚回后恢复。Chat 负责视口可见性、定位、外部指针按下、Escape、新选区、来源失效与卸载清理；主动关闭保留浏览器选区，布局变化不会重新打开操作。[Message quotes](../../session/message-quotes/README.zh.md) 负责引用的接管条件和插入。
 
 <a id="model-experience"></a>
 ## 模型体验
