@@ -34,3 +34,19 @@ export const en = {
   'action.edit': 'Edit goal',
   'action.clear': 'Clear goal',
 } satisfies Record<GoalKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'phase.active': '進行中の目標',
+  'phase.active.disarmed': '非アクティブな目標',
+  'phase.paused': '一時停止中の目標',
+  'phase.blocked': 'ブロックされた目標',
+  'objective.aria': '目標の目的',
+  'commandInput.aria': 'コマンド入力',
+  'action.save': '目標を保存',
+  'action.cancel': '編集をキャンセル',
+  'action.pause': '目標を一時停止',
+  'action.resume': '目標を再開',
+  'action.edit': '目標を編集',
+  'action.clear': '目標をクリア',
+} satisfies Record<keyof typeof en, string>

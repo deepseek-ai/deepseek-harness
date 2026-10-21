@@ -44,6 +44,7 @@ async function harness(direct = false) {
     runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId,
   })
   const step = (overrides = {}) => agentEvents(ctx, agent).waterfall('agent/pre-step', {
+    modelSelection: { provider: 'mock', model: 'mock' },
     turn: 1, step: 1, messages, signal: controller.signal, ...overrides,
   }, next)
   return { ctx, fiber, parent, other, session, agent, controller, decision, next, start, step }

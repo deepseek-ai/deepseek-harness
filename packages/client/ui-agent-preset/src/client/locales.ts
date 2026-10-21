@@ -1,6 +1,6 @@
 /** Locale bundles for the agent-preset hero chip, header label, and management section. */
 
-import { guideEn, guideZh, type PresetGuideKey } from './guide-locales.ts'
+import { guideEn, guideJa, guideZh, type PresetGuideKey } from './guide-locales.ts'
 
 /** Locale keys these surfaces render. */
 export type AgentPresetSettingsKey =
@@ -125,3 +125,36 @@ export const zh: Record<AgentPresetSettingsKey, string> = {
 // Settings plugin list inlines the same fold over this plugin's dictionaries.
 export { isBuiltInPreset, presetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
 export type { PresetDisplaySource, PresetDisplayText } from '@deepseek-ai/dsh-agent-preset-registry/display'
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  ...guideJa,
+  'builtInGroup': '組み込み',
+  'customGroup': 'カスタム',
+  'sectionIntro': 'エージェントのツールと動作を選択します。日々のタスクには標準モードを、DSH に機能を追加するにはクリエイターモードを使用してください。',
+  'seatHint': '新しいタスクで使用するエージェントプリセットを選択',
+  'headerHint': 'このタスクの開始時に選択されたエージェントプリセット',
+  'nav': 'エージェントプリセット',
+  'setDefault': '新しいタスクの既定に設定',
+  'view': '設定を表示',
+  'presetStandardName': '標準モード',
+  'presetStandardDescription': 'コード、ファイル、情報を扱います。検索、編集、ターミナルコマンドなどのツールを必要に応じて利用でき、ほとんどのタスクに適しています。',
+  'presetPtcName': 'PTC モード',
+  'presetPtcDescription': '標準モードのすべての機能を含みます。ツールを一括で呼び出し、その結果を絞り込み、整理、重複排除、集計、要約するタスクに適しています。',
+  'presetMinimalName': '最小モード',
+  'presetMinimalDescription': 'エージェントはターミナルと画像読み取りを使用し、コンテキスト圧縮にも対応します。基本的な性能のテストや比較に役立ちます。',
+  'presetCordisName': 'クリエイターモード',
+  'presetCordisDescription': '会話を通じて DSH をカスタマイズします。機能や UI を追加するプラグインをエージェントに書かせたり、ツールとプロンプトを組み合わせて独自のモードを作成したりできます。',
+  'inUse': '新しいタスクの既定',
+  'noDescription': '説明はありません。',
+  'brokenBadge': '読み込みに失敗',
+  'switchRefused': '{name} に切り替えられませんでした: {reason}',
+  'standardUnavailable': '標準モードは利用できません。復元するか、利用可能な別のモードを選択してください。',
+  'close': '閉じる',
+  'creatorDraft': 'エージェントにプリセット作成を手伝ってもらう',
+  'createPlugin': 'エージェントにプラグインを作成してもらう',
+  'createPluginDescription': 'クリエイターモードに入り、独自の DSH プラグインを作成',
+  'createPluginChecking': 'クリエイターモードが利用可能か確認中',
+  'createPluginUnavailable': '一時的に利用できません。このメニューを開き直して再試行してください',
+  'createPluginMissing': 'この構成にはクリエイターモードが含まれていません',
+} satisfies Record<keyof typeof en, string>

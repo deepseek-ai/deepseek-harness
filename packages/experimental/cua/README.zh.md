@@ -20,7 +20,7 @@ kind: "package-reference"
 - [已知限制与后续工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
-应用授权使用现有 User Questions 选项，仍独立于会话的工具审批策略。提供方只接受一个准确匹配所给选项的标签，附带自由文本的回答不会授权。本机图标用于权限页展示，不进入保存的身份信息或模型结果。系统权限、持久授权与拒绝记录、图标分别查询。
+应用授权从 `src/locales.ts` 提供中英日展示文案。它使用 User Questions 的固定审批呈现，仍独立于会话的工具审批策略。本机图标用于授权提示和权限页展示，不进入保存的身份信息或模型结果。系统权限、持久授权与拒绝记录、图标分别查询，各项结果返回后即可显示。
 
 -----
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按会话和应用身份保存在内存中，Agent 或 helper 重建后仍可复用，重启 DSH 或关闭 Computer Use 后失效。长期许可要求平台验证可执行文件身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
-动作返回 `dispatched:true, verified:false`；请读取新状态以验证结果。坐标操作默认使用最近返回截图中的像素；成功观察窗口后，传入 `relative: true` 可使用 0～1000 的整数比例。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为原生窗口 point。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
+动作返回 `dispatched:true, verified:false`；请读取新状态以验证结果。坐标操作默认使用最近返回截图中的像素；成功观察窗口后，传入 `relative: true` 可使用 0～999 的整数坐标。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为原生窗口 point。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
 `click(target, { holdMs: 800 })` 按住鼠标按钮 800 毫秒后松开。`holdMs` 接受非负整数，双击时应用于每次按下；0 表示按下后立即松开，不额外等待。提供方配置 `maxClickHoldMs` 限制显式按住时长，默认 5000 毫秒。指定时长后，AX 索引和坐标目标都使用鼠标事件；省略时保留普通点击行为。按住时间计入操作超时，取消或超时会松开按钮。已接收的输入无法撤销；辅助进程被强制终止时无法保证松开。
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 <details>
 <summary>共享执行与平台职责</summary>
 
-权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入使用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。此设置独立于系统权限和应用授权。
+权限 Remote 还通过 `ptcConfiguration()` 和 `enablePersistentPtc()` 支持详情页的执行方式设置。查询读取现有执行器和可编辑的 profile 条目。显式写入从 Node 提供方的 `resolvePersistentExecution` 辅助函数获取执行设置，再用 `configEditor.edit()` 保留其他字段并按正常 Loader 规则重载；已是持久化模式的执行器保持不变。CUA 将 Node 提供方声明为 peer 依赖，使这些设置与已安装的提供方版本一致。此设置独立于系统权限和应用授权。
 
 提供方将准备好的 helper、连接工厂和指引传给 [installCua](src/index.ts)。[NativeClient](src/native-client.ts) 负责请求关联、字节上限、取消确认和失败处理。平台连接器负责启动和连接清理。共享执行器为每个 Agent 保留一个连接，并在销毁时等待进行中的图像写入。
 

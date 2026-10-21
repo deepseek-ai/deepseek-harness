@@ -184,6 +184,8 @@ export function readWorkspaceManifests(repositoryRoot: string): WorkspaceManifes
 }
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
+  // Tools entry points share error classes and invocation stages through runtime chunks.
+  '@deepseek-ai/dsh-tools': ['lib/pipeline.js', 'lib/shared-*.js'],
   // The embedded OAR implementation retains its upstream license.
   '@deepseek-ai/dsh-experimental-subagent-oar': ['LICENSE-OAR'],
   // CUA publishes its client API and attributed native source for local macOS builds.
@@ -208,8 +210,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-ptc-runtime-python': ['py/**/*.py'],
   '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice': ['runtime/assets.json'],
-  // Node execution modes each launch a separately bundled bootstrap.
-  '@deepseek-ai/dsh-ptc-runtime-node': ['lib/process.js', 'lib/persistent-process.js'],
+  // Node profile configuration and process bootstraps have separate bundles.
+  '@deepseek-ai/dsh-ptc-runtime-node': ['lib/configuration.js', 'lib/process.js', 'lib/persistent-process.js'],
   // The Inspector owns a Worker and a mirrored frontend outside package export paths.
   '@deepseek-ai/dsh-experimental-inspector': ['lib/client.*.js', 'lib/worker.js', 'lib/devtools/**'],
   // Creator's composition guidance travels with the declaration package.
@@ -576,6 +578,10 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     }
     if (rootEntry?.default !== './lib/index.js') {
       errors.push(`${label}: package.json exports["."].default must be "./lib/index.js"`)
+    }
+    if (manifest.name === '@deepseek-ai/dsh-tools'
+      && !hasExportPair(manifest, './pipeline', './lib/types/pipeline.d.ts', './lib/pipeline.js')) {
+      errors.push(`${label}: exports["./pipeline"] must expose lib/types/pipeline.d.ts and lib/pipeline.js`)
     }
     const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))
     if (!sameStringList(manifest.files, expectedFiles)) {

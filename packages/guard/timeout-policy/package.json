@@ -37,6 +37,8 @@
   "devDependencies": {
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   }

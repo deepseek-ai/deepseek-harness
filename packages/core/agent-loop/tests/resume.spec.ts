@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { ToolCallId, createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -9,7 +10,8 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset, SessionSeq, Session, SessionId, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture, TOOL_RUNTIME_SCHEDULER } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 
@@ -40,6 +42,7 @@ async function mountPersistentHarness(root: string, adapter: MockAdapter, compre
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   // The backend mounts BEFORE the loop so root teardown unwinds the loop
   // first: live agents drain their writers into still-open handles.
@@ -872,6 +875,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(JsonlSessionPersistence, { root })
@@ -991,9 +995,17 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
         name: 'probe', description: 'probe', parameters: {},
         async execute() { return [{ type: 'text', text: 'unexpected execution' }] },
       }))
-      first.tools[TOOL_RUNTIME_SCHEDULER].prepare = () => { throw new Error('scheduler prepare failed') }
       const sessionId = SessionId('failed-tool-history')
       const initial = await first.agents.create({ sessionId, agentOptions: { provider: 'mock', model: 'mock' } })
+      const executor = new NativeToolExecutor.NativeToolExecutor(initial.agent.ctx)
+      executor.execute = async (input) => {
+        if (input.log === undefined || input.agent === undefined) throw new Error('test expects a logged Agent step')
+        const { agent, log: { turn, step } } = input
+        const call = input.calls[0]!
+        agent.session.append('tool/call', { turn, step, callId: call.id, name: call.name, arguments: call.arguments })
+        throw new Error('executor failed after accepting its first call')
+      }
+      initial.agent.ctx.tools.setExecutor(executor)
       const failed = waitForIdle(first, initial.agent)
       initial.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'try tools' }], source: { kind: 'user' } }))
       await failed
@@ -1007,7 +1019,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
         event.data.message.toolCallId, event.data.error?.code,
       ])).toEqual([[ToolCallId('started'), TOOL_OUTCOME_UNKNOWN], [ToolCallId('pending'), TOOL_NOT_STARTED]])
       expect(stored.at(-1)).toMatchObject({
-        type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'UNKNOWN', message: 'scheduler prepare failed' } } },
+        type: 'turn/end', data: { reason: { kind: 'error', error: { code: 'UNKNOWN', message: 'executor failed after accepting its first call' } } },
       })
 
       const continued = mode === 'resume'
@@ -1087,6 +1099,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     ctx.llm.registerAdapter(['mock'], adapter)
@@ -1344,6 +1357,7 @@ describe('configured-start failure edges', () => {
     await configured.plugin(SessionProjectionRegistry)
     await configured.plugin(SystemPrompt)
     await configured.plugin(ToolRuntime)
+    await configured.plugin(NativeToolExecutor)
     await configured.plugin(AgentRegistry)
     await configured.plugin(JsonlSessionPersistence, { root })
     configured.llm.registerAdapter(['mock'], new MockAdapter([]))
@@ -1378,6 +1392,7 @@ describe('configured-start failure edges', () => {
     await configured.plugin(SessionProjectionRegistry)
     await configured.plugin(SystemPrompt)
     await configured.plugin(ToolRuntime)
+    await configured.plugin(NativeToolExecutor)
     await configured.plugin(AgentRegistry)
     await configured.plugin(JsonlSessionPersistence, { root })
     configured.llm.registerAdapter(['mock'], new MockAdapter([]))

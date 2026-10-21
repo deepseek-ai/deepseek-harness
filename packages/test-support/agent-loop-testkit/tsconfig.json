@@ -40,6 +40,12 @@
     },
     {
       "path": "../../fs/fs-local"
+    },
+    {
+      "path": "../../core/tool-executor-native"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

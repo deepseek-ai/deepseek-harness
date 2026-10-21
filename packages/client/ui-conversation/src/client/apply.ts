@@ -46,7 +46,7 @@ import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { installStopShortcut } from './stop-shortcut.ts'
 import { TRAJECTORY_VIEW_ID, resolveActiveView } from './view-selection.ts'
 import { createViewPins } from './view-pins.ts'
-import { en, NS, zh, type ConversationKey } from './locales.ts'
+import { en, ja, NS, zh, type ConversationKey } from './locales.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -185,7 +185,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     yield slots.register({ name: 'conversation.user.text.node', key: 'session', priority: 100 }, SessionReference)
   })
 
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)
   const conversationStore = createConversationStore()
   const submissionPolicy = new ComposerSubmissionPolicy(

@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Web e2e scenario: fresh round trip. A real chromium types a prompt into the
 // real composer; the wire, Remote gateway, agent loop, and the REAL bash tool (echo
 // in the temp workspace) all run; the model adapter is dsh-llm-replay (keyless)
@@ -249,7 +250,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
         setup: agentCtx => probe.ctx.agentPresets.mount(agentCtx).then(() => undefined),
       })
       try {
-        const result = await probe.ctx.tools.execute({
+        const result = await executeToolFixture(probe.ctx, {
           signal: AbortSignal.timeout(5_000),
           callId: ToolCallId('web-url-probe'),
           name: 'bash',

@@ -1,3 +1,5 @@
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -36,13 +38,8 @@ import SubagentRuntime, {
 import type {} from '@deepseek-ai/dsh-shell'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import ToolRuntime, {
-  defineContentToolFixture,
-  RUN_CODE_NAME,
-  TOOL_ABORTED_BEFORE_DISPATCH,
-  type PreToolDecision,
-  type ToolExecutionToken,
-} from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, type PreToolDecision, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ApprovalService, { setApprovalPolicy, type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import * as AutoReview from '@deepseek-ai/dsh-experimental-auto-review'
 
@@ -147,6 +144,7 @@ async function harness(
     yield (await ctx.plugin(SessionProjectionRegistry)).dispose
     yield (await ctx.plugin(SystemPrompt, {})).dispose
     yield (await ctx.plugin(ToolRuntime)).dispose
+    yield (await ctx.plugin(NativeToolExecutor)).dispose
     yield ctx.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('auto-review tests do not execute shell requests') },
@@ -272,7 +270,7 @@ function requestSections(request: GenerateOptions): Record<string, unknown> {
   }
 }
 
-function expectReviewFailure(result: Awaited<ReturnType<Context['tools']['execute']>>, cause?: string): void {
+function expectReviewFailure(result: Awaited<ReturnType<typeof executeToolFixture>>, cause?: string): void {
   if (!result.isError) throw new Error('the reviewed call executed')
   expect(result.error.info).toEqual({ name: 'AutoReviewFailedError', code: 'AUTO_REVIEW_FAILED' })
   const prefix = 'Auto review of tool "probe" failed; its body was not executed: auto-review: '
@@ -398,7 +396,7 @@ describe('native review request', () => {
       arguments: { path: 'second-ptc-history' },
     })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: currentCallId,
       name: 'probe',
@@ -529,7 +527,7 @@ describe('native review request', () => {
     ], 1, 2)
     appendNativeCall(session, callId, 'probe', '{"path":"current"}', 1, 2)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId,
       name: 'probe',
@@ -602,7 +600,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId,
       name: 'probe',
@@ -641,7 +639,7 @@ describe('native review request', () => {
       type: 'tool-call', id: incompleteCallId, name: 'probe', arguments: '{}',
     }])
     appendNativeCall(incomplete, incompleteCallId, 'probe', '{}')
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: incompleteCallId,
       name: 'probe',
@@ -694,7 +692,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent: agentFor(session),
     })
     expect(result.isError).toBe(true)
@@ -725,7 +723,7 @@ describe('native review request', () => {
     const callId = ToolCallId('unverified-creation-call')
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent: agentFor(session),
     })
     expect(result.isError).toBe(true)
@@ -758,7 +756,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId,
       name: 'probe',
@@ -793,7 +791,7 @@ describe('native review request', () => {
     const firstId = ToolCallId('append-only-first')
     appendAssistant(session, [{ type: 'tool-call', id: firstId, name: 'probe', arguments: '{"path":"a"}' }])
     appendNativeCall(session, firstId, 'probe', '{"path":"a"}')
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId: firstId, name: 'probe', arguments: { path: 'a' }, agent,
     })
 
@@ -802,7 +800,7 @@ describe('native review request', () => {
     const secondId = ToolCallId('append-only-second')
     appendAssistant(session, [{ type: 'tool-call', id: secondId, name: 'probe', arguments: '{"path":"b"}' }], 1, 2)
     appendNativeCall(session, secondId, 'probe', '{"path":"b"}', 1, 2)
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId: secondId, name: 'probe', arguments: { path: 'b' }, agent,
     })
 
@@ -852,7 +850,7 @@ describe('native review request', () => {
       appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
       appendNativeCall(session, callId, 'probe', '{}')
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId,
         name: 'probe',
@@ -883,7 +881,7 @@ describe('native review request', () => {
     const emptyId = ToolCallId('empty-arguments')
     appendAssistant(session, [{ type: 'tool-call', id: emptyId, name: 'probe', arguments: '' }])
     appendNativeCall(session, emptyId, 'probe', '')
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: emptyId,
       name: 'probe',
@@ -895,7 +893,7 @@ describe('native review request', () => {
     session.append('step/end', { turn: 1, step: 1 })
     appendAssistant(session, [{ type: 'tool-call', id: invalidId, name: 'probe', arguments: 'not-json' }], 1, 2)
     appendNativeCall(session, invalidId, 'probe', 'not-json', 1, 2)
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: invalidId,
       name: 'probe',
@@ -951,7 +949,7 @@ describe('native review request', () => {
       const callId = ToolCallId(`legal-${item.id}-call`)
       appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
       appendNativeCall(session, callId, 'probe', '{}')
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId,
         name: 'probe',
@@ -967,8 +965,9 @@ describe('native review request', () => {
         ? 'Auto review denied tool "probe"'
         : `Auto review denied tool "probe": ${item.expectedReason}`)
       expect(displayReasons.at(-1)).toEqual(item.expectedReason === undefined
-        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。' }
-        : { en: `Auto review denied this call: ${item.expectedReason}`, zh: `Auto review 拒绝了此调用：${item.expectedReason}` })
+        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。', ja: '自動認可レビューがこの呼び出しを拒否しました。' }
+        : { en: `Auto review denied this call: ${item.expectedReason}`, zh: `Auto review 拒绝了此调用：${item.expectedReason}`,
+          ja: `自動認可レビューがこの呼び出しを拒否しました：${item.expectedReason}` })
     }
 
     expect(probe.runs()).toBe(2)
@@ -991,7 +990,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
     })
 
@@ -1018,7 +1017,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
     })
 
@@ -1114,7 +1113,7 @@ describe('native review request', () => {
       const callId = ToolCallId(`${id}-call`)
       appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
       appendNativeCall(session, callId, 'probe', '{}')
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId,
         name: 'probe',
@@ -1147,7 +1146,7 @@ describe('native review request', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
     })
 
@@ -1189,7 +1188,7 @@ describe('PTC and bypass semantics', () => {
       arguments: { path: 'inside' },
     })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       rootCallId: outerCallId,
       parent: Symbol('outer execution') as ToolExecutionToken,
@@ -1284,7 +1283,7 @@ describe('PTC and bypass semantics', () => {
       arguments: { path: 'current' },
     })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       rootCallId: outerCallId,
       parent: Symbol('outer execution') as ToolExecutionToken,
@@ -1323,20 +1322,20 @@ describe('PTC and bypass semantics', () => {
     const ordinaryAgent = agentFor(ordinary)
     const auto = autoSession(ctx, 'outer-run-code')
 
-    await expect(ctx.tools.execute({
+    await expect(executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('without-agent'),
       name: 'probe',
       arguments: {},
     })).resolves.toMatchObject({ isError: false })
-    await expect(ctx.tools.execute({
+    await expect(executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('ordinary'),
       name: 'probe',
       arguments: {},
       agent: ordinaryAgent,
     })).resolves.toMatchObject({ isError: false })
-    await expect(ctx.tools.execute({
+    await expect(executeModelToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('outer-run-code'),
       name: RUN_CODE_NAME,
@@ -1408,7 +1407,7 @@ describe('out-of-process delegation boundary', () => {
       type: 'tool-call', id: deniedId, name: 'delegate_remote', arguments: rawArgs,
     }])
     appendNativeCall(session, deniedId, 'delegate_remote', rawArgs)
-    const denied = await ctx.tools.execute({
+    const denied = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: deniedId,
       name: 'delegate_remote',
@@ -1433,7 +1432,7 @@ describe('out-of-process delegation boundary', () => {
       type: 'tool-call', id: allowedId, name: 'delegate_remote', arguments: rawArgs,
     }], 2, 1)
     appendNativeCall(session, allowedId, 'delegate_remote', rawArgs, 2, 1)
-    const allowed = await ctx.tools.execute({
+    const allowed = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: allowedId,
       name: 'delegate_remote',
@@ -1507,7 +1506,7 @@ describe('cancellation and integration teardown', () => {
       const callId = ToolCallId(`shutdown-${outcome}-call`)
       appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
       appendNativeCall(session, callId, 'probe', '{}')
-      const pending = ctx.tools.execute({
+      const pending = executeToolFixture(ctx, {
         signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
       })
       await entered.promise
@@ -1565,7 +1564,7 @@ describe('cancellation and integration teardown', () => {
     appendNativeCall(session, callId, 'probe', '{}')
     const controller = new AbortController()
 
-    const pending = ctx.tools.execute({ signal: controller.signal, callId, name: 'probe', arguments: {}, agent })
+    const pending = executeToolFixture(ctx, { signal: controller.signal, callId, name: 'probe', arguments: {}, agent })
     await entered.promise
     controller.abort(new Error('caller stopped'))
     expect(adapter.requests[0]?.signal?.aborted).toBe(true)
@@ -1594,7 +1593,7 @@ describe('cancellation and integration teardown', () => {
       const callId = ToolCallId(`dispose-${outcome}-call`)
       appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
       appendNativeCall(session, callId, 'probe', '{}')
-      const pending = ctx.tools.execute({
+      const pending = executeToolFixture(ctx, {
         signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
       })
       await entered.promise
@@ -1604,7 +1603,7 @@ describe('cancellation and integration teardown', () => {
       expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
       expect(ctx.permissionPresets.names).toContain(AUTO_PRESET)
 
-      const afterClose = await ctx.tools.execute({
+      const afterClose = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId: ToolCallId(`after-close-${outcome}`),
         name: 'probe',
@@ -1639,7 +1638,7 @@ describe('cancellation and integration teardown', () => {
     appendNativeCall(second.session, callId, 'probe', '{}')
     let observedPreset: string | undefined
     let selectionFailure: unknown
-    let competingCall: ReturnType<typeof ctx.tools.execute> | undefined
+    let competingCall: ReturnType<typeof executeToolFixture> | undefined
     ctx.on('session/event', (session, event) => {
       if (session !== first.session || event.type !== 'permission/preset'
         || event.data.preset !== 'danger-full-access') return
@@ -1649,7 +1648,7 @@ describe('cancellation and integration teardown', () => {
       } catch (error) {
         selectionFailure = error
       }
-      competingCall = ctx.tools.execute({
+      competingCall = executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId,
         name: 'probe',
@@ -1691,7 +1690,7 @@ describe('cancellation and integration teardown', () => {
     const callId = ToolCallId('dispose-downstream-call')
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       signal: new AbortController().signal, callId, name: 'probe', arguments: {}, agent,
     })
     await downstreamEntered.promise
@@ -1726,7 +1725,7 @@ describe('cancellation and integration teardown', () => {
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
 
-    await expect(ctx.tools.execute({
+    await expect(executeToolFixture(ctx, {
       signal: controller.signal, callId, name: 'probe', arguments: {}, agent,
     })).resolves.toMatchObject({
       isError: true,
@@ -1759,6 +1758,7 @@ describe('cancellation and integration teardown', () => {
     await invalid.plugin(SessionProjectionRegistry)
     await invalid.plugin(SystemPrompt, {})
     await invalid.plugin(ToolRuntime)
+    await invalid.plugin(NativeToolExecutor)
     invalid.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('unused') },
@@ -1916,7 +1916,7 @@ describe('logged-fact failures', () => {
       const { session, agent } = autoSession(ctx, id)
       const callId = ToolCallId(`${id}-call`)
       prepare(session, callId)
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId,
         name: 'probe',
@@ -1939,7 +1939,7 @@ describe('logged-fact failures', () => {
     const callId = ToolCallId('missing-cwd-call')
     appendAssistant(session, [{ type: 'tool-call', id: callId, name: 'probe', arguments: '{}' }])
     appendNativeCall(session, callId, 'probe', '{}')
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId,
       name: 'probe',
@@ -2048,7 +2048,7 @@ describe('logged-fact failures', () => {
         session.append('step/start', { turn: 1, step: 1 })
       }
       item.starts(session, outer, inner)
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         rootCallId: item.execute?.root ?? outer,
         parent: Symbol('parent') as ToolExecutionToken,

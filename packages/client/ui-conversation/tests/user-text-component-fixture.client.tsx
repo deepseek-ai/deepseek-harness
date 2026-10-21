@@ -7,6 +7,8 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type { UserTextInput, UserTextNodeOwnerProps } from '../src/client/contract/slots.ts'
 import type { UserTextNode } from '../src/client/contract/user-text.ts'
 import { UserTextRegistry } from '../src/client/conversation/user-text-registry.ts'
+import { QuotedUserText } from '@deepseek-ai/dsh-message-quotes/src/client/QuotedUserText.tsx'
+import { quoteRule } from '@deepseek-ai/dsh-message-quotes/src/client/quote-rule.ts'
 import { UserText, PlainUserText, SessionReference } from '../src/client/user-text/UserText.tsx'
 import { sessionReferenceRule } from '../src/client/user-text/session-reference-rule.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from '../src/client/user-text/whitespace-rules.ts'
@@ -15,6 +17,8 @@ import { SkillReference } from '../../ui-skill/src/client/SkillReference.tsx'
 import { fileReferenceRule, folderReferenceRule } from '../../ui-reference/src/client/user-text-rules.ts'
 import { FileReference, FolderReference } from '../../ui-reference/src/client/FileReference.tsx'
 import { zh as referenceZh } from '../../ui-reference/src/client/locales.ts'
+import { createSecretRule } from '../../ui-secret-mask/src/client/secret-rule.ts'
+import { SecretText } from '../../ui-secret-mask/src/client/SecretText.tsx'
 import { goalCommandReferenceRule } from '../../ui-goal/src/client/user-text-rules.ts'
 import { GoalCommandReference } from '../../ui-goal/src/client/GoalCommandReference.tsx'
 
@@ -37,7 +41,7 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
   onTestFinished(async () => { await ctx.fiber.dispose() })
   const registry = new UserTextRegistry(ctx)
   for (const rule of [
-    sessionReferenceRule, skillReferenceRule, fileReferenceRule, folderReferenceRule,
+    quoteRule, createSecretRule(), sessionReferenceRule, skillReferenceRule, fileReferenceRule, folderReferenceRule,
     goalCommandReferenceRule, collapseWhitespaceRule, trimWhitespaceRule,
   ]) registry.register(rule)
   const useUserTextRevision = bindSnapshotSelector({
@@ -54,6 +58,8 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
     const owner = input as UserTextNodeOwnerProps & { node: UserTextNode }
     switch (owner.node.id) {
       // The production components only read these owner, action and locale seats in these units.
+      case 'quote': return createElement(QuotedUserText, owner as ComponentProps<typeof QuotedUserText>)
+      case 'secret': return createElement(SecretText, { ...owner, t } as ComponentProps<typeof SecretText>)
       case 'text': return createElement(PlainUserText, owner as ComponentProps<typeof PlainUserText>)
       case 'session': return createElement(SessionReference, owner as ComponentProps<typeof SessionReference>)
       case 'file': return createElement(FileReference, { ...owner, openFile, t } as ComponentProps<typeof FileReference>)
@@ -63,7 +69,9 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
       default: return options?.fallback ?? null
     }
   }
-  return input => createElement(UserText, {
-    ...input, useUserTextRevision, createUserTextEvaluator, reportTransformFailure, renderSlot,
+  const renderText = (input: UserTextInput) => createElement(UserText, {
+    ...input,
+    useUserTextRevision, createUserTextEvaluator, reportTransformFailure, renderSlot,
   } as UserTextProps)
+  return renderText
 }

@@ -33,15 +33,15 @@
     - status
     - switch "启用 语音输入"
   - listitem:
+    - button "查看 自定义插件市场": 自定义插件市场
+    - text: 实验性 在插件页添加「发现」标签页，从你添加的插件市场索引浏览和安装插件。
+    - status
+    - switch "启用 自定义插件市场"
+  - listitem:
     - button "查看 自动授权审查": 自动授权审查
     - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
     - status
     - switch "启用 自动授权审查"
-  - listitem:
-    - button "查看 开发者工具": 开发者工具
-    - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
-    - status
-    - switch "启用 开发者工具"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:

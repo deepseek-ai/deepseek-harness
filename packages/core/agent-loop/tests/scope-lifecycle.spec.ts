@@ -1,10 +1,12 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context, symbols, type EffectMeta, type Fiber } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentRegistry, { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -21,6 +23,7 @@ async function harnessWithLoop(adapter: MockAdapter = new MockAdapter([textRespo
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: 'You are the deployment.' })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], adapter)

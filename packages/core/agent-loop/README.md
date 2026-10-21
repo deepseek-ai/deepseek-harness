@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. `maxParallelToolCalls` limits concurrent parallel-safe calls, and exclusive calls retain ordering. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
+`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. The selected tool executor owns dispatch, concurrency, cancellation, and tool logging. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
 
 ## Table of Contents
 
@@ -29,12 +29,11 @@ Mount `dsh-agent-loop` in any composition that should run agents. It supplies th
 
 ### Configure declarative agents
 
-Agents declared in the config start automatically when the plugin loads. Each entry needs an `id` label; a model call additionally requires both `provider` and `model` (`agent/request` may supply a missing pair before dispatch).
+Agents declared in config start automatically when the plugin loads. Each entry needs an `id` label; a model step also needs both `provider` and `model` in the Session selection or initial options before prompt assembly.
 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
   config:
-    maxParallelToolCalls: 10
     agents:
       - id: 'main'
         provider: deepseek
@@ -45,16 +44,17 @@ Agents declared in the config start automatically when the plugin loads. Each en
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxParallelToolCalls` | `10` | Parallel-safe tool calls in flight per step; `1` is serial |
 | `agents[].id` | required | Stable label; a fresh session mints `${id}-session-<uuid>` unless `sessionId` is set |
-| `agents[].provider` / `agents[].model` | — | Model route; both required before dispatch |
-| `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; `agent/request` may override it |
+| `agents[].provider` / `agents[].model` | — | Model route; both required before step preparation |
+| `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; later choices are recorded in the Session |
 | `agents[].maxTokens` | — | Positive per-request output-token cap |
 | `agents[].cwd` | — | Workspace directory for a fresh session |
 | `agents[].sessionId` | — | Exact identity: first use creates, a remount resumes materialized history |
 | `agents[].resumeSessionId` | — | Load this persisted session instead of creating one; mutually exclusive with `sessionId` |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` is a volatile Config field sampled for the next tool group; `agents` remains startup configuration.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` remains a volatile positive-integer Config field with default `10`; `1` selects serial execution. The loop passes its current value to each batch's `execute()` call, taking precedence over executor configuration. Live edits apply to the next batch; `agents` remains startup configuration.
+
+A configured resume records the declared route as the Session selection before publication. Programmatic resume preserves the Session choice unless its setup explicitly records another route; initial `agentOptions` alone do not override saved history.
 
 ### Create or resume agents programmatically
 
@@ -72,7 +72,7 @@ Every inbox mutation commits one normalized `agent/inbox/spliced` event. The pro
 
 ### What a step does
 
-Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. Parallel-safe calls may overlap up to `maxParallelToolCalls`; exclusive calls run alone as ordering barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
+Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. The loop passes the complete raw call batch to `ctx.tools.execute()`; built-in executors preserve model-order results and exclusive barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
 
 -----
 
@@ -90,6 +90,8 @@ The package is the one concrete implementation of the public `Agent` contract. I
 
 ### Request headers and adapter defaults
 
+Before prompt assembly, the loop calls `agent.model.current()` and captures provider, model, and optional explicit reasoning effort for the step and its retries. `AssembleContext.modelSelection` and `agent/pre-step.modelSelection` carry that selection; prompt variables use its route, and omitted effort uses adapter defaults. The deprecated `agent/request` hook remains available to existing listeners and may replace other controls such as sampling. Changing provider or model, or adding, changing, or clearing reasoning effort rejects the step before input is committed. A later recorded choice applies to the next step, including a tool continuation in the same turn.
+
 After `agent/request`, `ctx.llm.prepareCall()` validates adapter-owned fields and resolves reasoning-effort and output-token defaults under the active turn signal. The loop retains that exact adapter through resolution, `request/header` logging, and dispatch. It writes a full header for the first request, a changed envelope (config or tools — the prompt is not part of the header), an explicit message-series start, a request after a surface replacement or image-offload decision, and resume; unchanged steps, retries, and ordinary later turns in the same series inherit the latest header, and an in-history prompt append is not a replacement, so the request that follows it inherits the header too. Beside the header, the loop logs `request/context` — provider, model, `contextWindow`, and the route's `systemPromptUpdate` mode from `prepareCall()` — only when one of those differs from the latest snapshot. Before the next waterfall, the loop removes adapter-default fields so the current route resolves them again, while explicit settings persist. An unhandled route still fails with `NO_ADAPTER`.
 
 The loop deep-freezes each derived message identity on its first request and reuses that proof only within the same agent. Restored messages keep their identity; request construction does not freeze their containing event wrappers. Each request freezes its local canonical header, fresh message array, and envelope while leaving the cancellation signal live. The [archived request-freeze decision](../../../.agents/notes/archived/simplification/2026-09-06-agent-request-freeze-evidence.md) explains ownership and measurement.
@@ -101,9 +103,7 @@ The loop deep-freezes each derived message identity on its first request and reu
 | [`src/index.ts`](src/index.ts) | Plugin entry: `AgentLoop` service, config schema, declarative agent startup, factory registration |
 | [`src/agent.ts`](src/agent.ts) | The concrete `ReactLoopAgent` driver: inbox, turn/step machine, cancellation |
 | [`src/inbox.ts`](src/inbox.ts) | Package-internal `ReactLoopInbox`: durable projection, structural commands, and loop-only claim state |
-| [`src/tool-calls.ts`](src/tool-calls.ts) | Tool scheduling: exclusive barriers and the bounded parallel pool |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
-| [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
 
 ### Creation and teardown
 
@@ -117,7 +117,7 @@ The loop is the production acquisition point for session write handles. When `ct
 
 ### Turn and step flow
 
-The driver owns one agent for its lifetime and runs inside `ctx.agents.withInitiator(agent, ...)`. `AgentLoop` registers the standard `inbox` projection for its service lifetime, so cold reads work before any Agent exists and after all Agents unload. Its package-internal `ReactLoopInbox` uses that shared projection for structural commands and loop-only claims. At a turn boundary it opens the durable turn, then atomically claims pending next-step input plus one queued prompt; between steps it claims only next-step input. The driver assembles the prompt and tools and runs `agent/pre-step`; the fallback projects runtime context after listeners run. A rejected decision or empty first batch opens no step. On the first attempt after acceptance, `step/start` precedes the `agent/request` waterfall and `prepareCall()`; neither async phase sees the pending system prompt or accepted users committed to history, and cancellation during either commits neither. For every attempt, the loop then synchronously reconciles the rendered prompt against the surviving `system/message` nodes using the prepared call capability, refreshes registered runtime facts without reassembling the bound prompt or tools, appends the accepted `user/message` batch only on the first attempt with its owned context candidate replaced in place, and restores removed runtime context, logs the header and context as needed, and derives and freezes the request before streaming through that bound prepared call. Retries reuse the same rendered assembly without repeating assembly, `agent/pre-step`, or user admission. Reconciliation sees pre-step and retry compaction; a broken series consolidates the prompt at the head rather than appending an update after already-committed users. The request is `header.config`, `deriveMessages()`, and `header.tools`; it carries no `system` field. Each model attempt emits one process-local `start`, emits every `chunk` only after the matching durable assistant-frame settlement, and emits exactly one terminal `end`; final assembly or message-append failure settles it as `aborted`, while `committed` follows the durable `assistant/message`. Each successful model call appends one message anchor, and a cancelled stream appends an `interrupted: true` anchor with the delivered prefix so the next request contains what the user saw. Within a step, exclusive calls form barriers and parallel-safe calls use the bounded rolling pool; policy, durable results... (line truncated to 2000 chars)
+The driver owns one agent for its lifetime and runs inside `ctx.agents.withInitiator(agent, ...)`. `AgentLoop` registers the standard `inbox` projection for its service lifetime, so cold reads work before any Agent exists and after all Agents unload. It also owns `modelSelection` and constructs an `AgentModel` for each Agent, with the public [Model API](../agent/README.md#model-selection). Its package-internal `ReactLoopInbox` uses that shared projection for structural commands and loop-only claims. At a turn boundary it opens the durable turn, then atomically claims pending next-step input plus one queued prompt; between steps it claims only next-step input. The driver assembles the prompt and tools and runs `agent/pre-step`; the fallback projects runtime context after listeners run. A rejected decision or empty first batch opens no step. On the first attempt after acceptance, `step/start` precedes the `agent/request` waterfall and `prepareCall()`; neither async phase sees the pending system prompt or accepted users committed to history, and cancellation during either commits neither. For every attempt, the loop then synchronously reconciles the rendered prompt against the surviving `system/message` nodes using the prepared call capability, refreshes registered runtime facts without reassembling the bound prompt or tools, appends the accepted `user/message` batch only on the first attempt with its owned context candidate replaced in place, and restores removed runtime context, logs the header and context as needed, and derives and freezes the request before streaming through that bound prepared call. Retries reuse the same rendered assembly without repeating assembly, `agent/pre-step`, or user admission. Reconciliation sees pre-step and retry compaction; a broken series consolidates the prompt at the head rather than appending an update after already-committed users. The request is `header.config`, `deriveMessages()`, and `header.tools`; it carries no `system` field. Each model attempt emits one process-local `start`, emits every `chunk` only after the matching durable assistant-frame settlement, and emits exactly one terminal `end`; final assembly or message-append failure settles it as `aborted`, while `committed` follows the durable `assistant/message`. Each successful model call appends one message anchor, and a cancelled stream appends an `interrupted: true` anchor with the delivered prefix so the next request contains what the user saw. Within a step, exclusive calls form barriers and parallel-safe calls use the bounded rolling pool; policy, durable results... (line truncated to 2000 chars)
 
 Prompt admission uses the actual `prepareCall()` result, not the preceding `request/context`. With no system node, even an empty prompt is appended (reserving node 0 without a wire message). On an incapable route or at a new request series, a non-empty rendering is consolidated at the first system node: each non-empty later system node receives a logged per-node empty replacement, then the head is rewritten if needed. Dormant empty tails need no replacement and do not determine the effective text. Consolidation applies even when the latest effective text is unchanged. On a continuing `in-history` series, an unchanged effective prompt produces no event and a non-empty change appends. An empty rendering clears every non-empty later system node through a logged per-node empty replacement, then empties the head if needed, regardless of route or series state. No older instructions remain model-visible. An empty head with no active later system node means no prompt; repeated clears and resume leave it empty. A restored non-empty prompt follows the same route/series rule: a continuing capable route may append it, while an incapable route or new series refills the head. A step starts a series when the pre-step decision declares `startsRequestSeries` or `session.surface.contentGeneration` changed since attachment or the last request (a replacement or image-offload decision). Visible tool-schema changes force prompt consolidation only when the prepared route lacks `toolUpdate`. Routes supporting both tool and system-prompt updates can append a changed prompt and activate added tools without rewriting earlier messages. If another admission condition replaces a system node, the request starts a new series with current tool declarations. Resume and a provider or model swap alone continue the series; the prepared route still governs admission. Per-node empty replacements preserve intervening history without a surface delete operation.
 

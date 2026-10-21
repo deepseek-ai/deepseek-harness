@@ -1,3 +1,4 @@
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -5,18 +6,17 @@ import { pathToFileURL } from 'node:url'
 import { Duplex, PassThrough } from 'node:stream'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
-import type { ProgramEvaluator, ProgramFormat, ProgramImportHandler, ProgramImportRequest, ProgramImportResult } from '../src/evaluators/types.ts'
-import { JsonChannel } from '../src/channel.ts'
+import type { ProgramEvaluator, ProgramImportHandler, ProgramImportRequest, ProgramImportResult } from '../src/evaluators/types.ts'
+import { createProcessRpc } from '../src/rpc.ts'
 import { decodePtcJsonWire } from '../src/json-wire.ts'
 import { runNodeMain } from '../src/process.ts'
 import { runPersistentMain } from '../src/persistent-process.ts'
-import { runProgram } from '../src/bootstrap.ts'
-import type { ProgramBootData, ProgramToHost } from '../src/protocol.ts'
+import type { HostMethods, ProgramMethods } from '../src/protocol.ts'
 
 type EvaluationResult = Parameters<Parameters<ProgramEvaluator['evaluate']>[1]>[0]
 const formats = ['function-body', 'script', 'repl'] as const
 
-function evaluator(format: ProgramFormat, handler?: ProgramImportHandler) {
+function evaluator(format: PtcProgramFormat, handler?: ProgramImportHandler) {
   const instance = createProgramEvaluator(format, () => {}, handler)
   onTestFinished(() => { instance.close() })
   const run = (code: string) => new Promise<EvaluationResult>((resolve) => {
@@ -427,7 +427,7 @@ it('retains import filenames for identical async-function bodies compiled in dif
   } finally { process.chdir(cwd) }
 })
 
-async function runner(handler: ProgramImportHandler, retained = false, format: 'script' | 'repl' = 'script') {
+async function runner(handler: ProgramImportHandler, retained = false, format: PtcProgramFormat = 'script', retainsState = true) {
   const first = new PassThrough()
   const second = new PassThrough()
   const child = Duplex.from({ readable: first, writable: second })
@@ -436,23 +436,17 @@ async function runner(handler: ProgramImportHandler, retained = false, format: '
   host.on('error', () => {})
   const state = { env: {}, stdout: { write: () => true }, stderr: { write: () => true }, chdir() {} }
   const ready: PromiseWithResolvers<void> = Promise.withResolvers()
-  const pending = new Map<number, ReturnType<typeof Promise.withResolvers<Record<string, unknown>>>>()
-  let sequence = 0
-  const peer = new JsonChannel(host, 100_000, (raw) => {
-    const message = raw as { type?: string; id: number; payload: Record<string, unknown> }
-    if (message.type === 'ready') ready.resolve()
-    else if (message.payload.type === 'done') pending.get(message.id)?.resolve(message.payload)
-  }, (error) => { ready.reject(error); for (const completion of pending.values()) completion.reject(error) })
+  const peer = createProcessRpc<ProgramMethods, HostMethods>(host, 100_000, {
+    ready() { ready.resolve() },
+    async invoke() { throw new Error('unexpected binding call') },
+    log() {},
+    outputLimit() {},
+  }, [], (error) => { ready.reject(error) })
   const main = retained ? runPersistentMain(child, 100_000, state, format, handler) : runNodeMain(child, 100_000, state, format, handler)
-  onTestFinished(async () => { peer.close(); child.destroy(); host.destroy(); await main })
+  onTestFinished(async () => { peer.$close(); child.destroy(); host.destroy(); await main })
   await ready.promise
-  const run = async (code: string, programFormat: ProgramFormat = format) => {
-    const id = ++sequence
-    const completion = Promise.withResolvers<Record<string, unknown>>()
-    pending.set(id, completion)
-    await peer.send({ type: 'run', id, cwd: process.cwd(), data: { code, programFormat, namespaces: [], maxOutputBytes: 10_000 } satisfies ProgramBootData })
-    const result = await completion.promise
-    pending.delete(id)
+  const run = async (code: string, programFormat: PtcProgramFormat = format) => {
+    const result = await peer.run(process.cwd(), { code, programFormat, namespaces: [], maxOutputBytes: 10_000, retainsState })
     if (result.error) throw new Error(JSON.stringify(result.error))
     return decodePtcJsonWire(result.value)
   }
@@ -488,14 +482,7 @@ it('rejects a late handler result before constructing its module', async () => {
   expect(read).not.toHaveBeenCalled()
 })
 
-it.each(formats)('passes the runner handler through the standalone bootstrap for %s', async (programFormat) => {
-  const messages: ProgramToHost[] = []
-  await runProgram({ postMessage(message) { messages.push(message) }, on() {} }, {
-    code: `${programFormat === 'function-body' ? 'return ' : ''}(await import('runner:answer')).answer()`,
-    programFormat, namespaces: [], maxOutputBytes: 1000,
-  }, { stdout: { write: () => true }, stderr: { write: () => true } }, () => ({ type: 'module', exports: { answer: () => 42 } }))
-  expect(messages).toHaveLength(1)
-  const completion = messages.find(message => message.type === 'done')
-  expect(completion).toBeDefined()
-  expect(decodePtcJsonWire(completion?.value)).toBe(42)
+it.each(formats)('passes the runner handler through a temporary process evaluation for %s', async (programFormat) => {
+  const r = await runner(() => ({ type: 'module', exports: { answer: () => 42 } }), false, programFormat, false)
+  expect(await r.run(`${programFormat === 'function-body' ? 'return ' : ''}(await import('runner:answer')).answer()`)).toBe(42)
 })

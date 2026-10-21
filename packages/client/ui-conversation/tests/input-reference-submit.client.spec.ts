@@ -293,7 +293,7 @@ describe('submit transaction hardening', () => {
 
 it('captures click and Enter submission intent before async admission, excluding empty submits', async () => {
   const report = vi.fn()
-  const submissionState = vi.fn(() => ({ runMode: 'default' as const, running: false }))
+  const submissionState = vi.fn(() => ({ runMode: 'default' as const, running: false, newSession: false }))
   const shell = new SessionInputShell({ actx: {} as Context, defaultSink: async () => ({ kind: 'success' }), commandAttachments, submissionState, messageSubmitted: report })
   try {
     shell.submit('queue', 'click')
@@ -327,7 +327,7 @@ it.each(['capture', 'report'])('analytics %s failure does not interrupt a messag
 it.each(['handled', 'claim', 'message'] as const)('counts only a message after asynchronous slash adjudication: %s', async (kind) => {
   const pending = Promise.withResolvers<PickOutcome>()
   const report = vi.fn()
-  const submissionState = vi.fn(() => ({ runMode: 'default' as const, running: false }))
+  const submissionState = vi.fn(() => ({ runMode: 'default' as const, running: false, newSession: false }))
   const command = vi.fn(async (): Promise<SubmitOutcome> => ({ kind: 'success' }))
   const sink = vi.fn(async (): Promise<SubmitOutcome> => ({ kind: 'success' }))
   const inputTriggers: InputTriggerController = {
@@ -366,7 +366,7 @@ it('retains occurrence time and Session facts across arbitration and independent
   let now = 100
   const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
   const shell = new SessionInputShell({ actx: {} as Context, commandAttachments,
-    submissionState: () => Object.freeze({ runMode: running ? 'plan' : 'default', running }),
+    submissionState: () => Object.freeze({ runMode: running ? 'plan' : 'default', running, newSession: false }),
     messageSubmitted: submitted,
     inputTriggers: () => ({
       launcher: { getSnapshot: () => null, subscribe: () => () => {} },
@@ -386,10 +386,10 @@ it('retains occurrence time and Session facts across arbitration and independent
     expect(submitted).not.toHaveBeenCalled()
     pending.resolve(undefined)
     await vi.waitFor(() => { expect(submitted).toHaveBeenCalledOnce() })
-    expect(submitted).toHaveBeenLastCalledWith({ timestamp: 100, source: 'click', mode: 'steer', state: { running: true, runMode: 'plan' } })
+    expect(submitted).toHaveBeenLastCalledWith({ timestamp: 100, source: 'click', mode: 'steer', state: { running: true, runMode: 'plan', newSession: false } })
     shell.setDraft('second')
     shell.actions.submit()
-    expect(submitted).toHaveBeenLastCalledWith({ timestamp: 200, mode: 'queue', state: { running: false, runMode: 'default' } })
+    expect(submitted).toHaveBeenLastCalledWith({ timestamp: 200, mode: 'queue', state: { running: false, runMode: 'default', newSession: false } })
     await vi.waitFor(() => { expect(sink).toHaveBeenCalledTimes(2) })
     secondSend.resolve({ kind: 'error', text: 'second rejected' })
     firstSend.resolve({ kind: 'error', text: 'first rejected' })

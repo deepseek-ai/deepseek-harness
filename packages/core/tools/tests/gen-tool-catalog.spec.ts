@@ -67,6 +67,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
 
   it('attributes each harvested tool with its registering plugin source', async () => {
     const catalog = await collectToolCatalog()
+    const ptc = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-executor-ptc')
+    expect(ptc?.sources.run_code).toBe('packages/core/tool-executor-ptc/src/ptc.ts')
     const bash = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-bash')
     expect(bash?.sources.bash).toBe('packages/shell/tool-bash/src/index.ts')
     const control = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-subagent-control')

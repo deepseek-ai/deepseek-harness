@@ -19,8 +19,11 @@ import type {
   CreateAgentOptions,
   ResumeAgentOptions,
   SessionStartSource,
+  ModelSelection,
+  ModelSelectionProjectionState,
   InboxState,
 } from '@deepseek-ai/dsh-agent'
+import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
@@ -253,7 +256,7 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls: Volatile<number>
-  /** Agents created or resumed at plugin startup. */
+  /** Agents created or resumed at plugin startup; a resumed agent records its configured route as the Session's model selection. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
     id: string
@@ -308,6 +311,7 @@ export class AgentLoop extends Service implements AgentFactory {
   private readonly ownership: FactoryOwnership
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
+  private modelProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
   private inboxProjectionHandle!: ProjectionHandle<InboxState>
 
   constructor(ctx: Context, config: Config) {
@@ -325,12 +329,13 @@ export class AgentLoop extends Service implements AgentFactory {
   protected async [Service.init](): Promise<void> {
     const ctx = this.runtime.ctx
     const ownership = this.ownership
-    // The inbox remains readable until agent teardown finishes.
+    // Agent projections remain readable until teardown finishes.
     ctx.effect(() => () => ownership.dispose(), 'agentLoop.transactions()')
+    this.modelProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
     this.inboxProjectionHandle = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => ctx.agents.setFactory(this), 'agentLoop.setFactory()')
-    ctx.systemPrompt.variable('provider', context => context.agent?.options.provider)
-    ctx.systemPrompt.variable('model', context => context.agent?.options.model)
+    ctx.systemPrompt.variable('provider', context => context.modelSelection?.provider ?? context.agent?.options.provider)
+    ctx.systemPrompt.variable('model', context => context.modelSelection?.model ?? context.agent?.options.model)
 
     for (const { id, sessionId, cwd, resumeSessionId, ...options } of this.config.agents) {
       const meta = cwd === undefined ? {} : { cwd }
@@ -355,6 +360,7 @@ export class AgentLoop extends Service implements AgentFactory {
           void this.resumeWith(ctx, childCtx.sessionPersistence, {
             resumeSessionId,
             agentOptions: options,
+            setup: (_agentCtx, agent) => { this.applyConfiguredRoute(agent, options) },
           }).catch((error: unknown) => {
             this.reportConfiguredStartupFailure(id, 'resume', resumeSessionId, error)
           })
@@ -362,6 +368,19 @@ export class AgentLoop extends Service implements AgentFactory {
         return fiber.dispose
       }, `agentLoop.resume(${id})`)
     }
+  }
+
+  private applyConfiguredRoute(agent: Agent, options: AgentOptions): void {
+    const { provider, model, reasoningEffort } = options
+    if (!provider || !model) return
+    const previous = agent.model.current()
+    const selection: ModelSelection = { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+    if (selection.reasoningEffort === undefined && previous !== undefined
+      && previous.provider === selection.provider && previous.model === selection.model
+      && previous.reasoningEffort !== undefined) {
+      selection.reasoningEffort = previous.reasoningEffort
+    }
+    agent.model.select(selection)
   }
 
   /** Report a contained declarative-start failure to identity-bound consumers. */
@@ -397,7 +416,11 @@ export class AgentLoop extends Service implements AgentFactory {
     await this.waitForDrainingConfiguredIdentity(ownerCtx, sessionId)
     if (!this.ownership.isActive()) return
     try {
-      await this.resumeWith(ownerCtx, persistence, { resumeSessionId: sessionId, agentOptions })
+      await this.resumeWith(ownerCtx, persistence, {
+        resumeSessionId: sessionId,
+        agentOptions,
+        setup: (_agentCtx, agent) => { this.applyConfiguredRoute(agent, agentOptions) },
+      })
       return
     } catch (error: unknown) {
       if (!this.ownership.isActive()) return
@@ -543,10 +566,16 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
+    const modelProjectionHandle = this.modelProjectionHandle
     const inboxProjectionHandle = this.inboxProjectionHandle
     try {
       unfollowOwner = ownerCtx.effect(function* () {
-        const created = machine = new ReactLoopAgent(loopCtx, id, options, session, () => inboxProjectionHandle.stateOf(session), lastTurn)
+        const created = machine = new ReactLoopAgent(
+          loopCtx, id, options, session,
+          () => modelProjectionHandle.stateOf(session),
+          () => inboxProjectionHandle.stateOf(session),
+          lastTurn,
+        )
         machineReady.resolve()
         // Adopt the scope on its original fiber so it cannot unload before teardown.
         // A loop already unloading during minting owns the provisional scope itself.

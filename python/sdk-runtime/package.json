@@ -126,6 +126,7 @@
     "@deepseek-ai/dsh-tool-bash-persistent": "workspace:*",
     "@deepseek-ai/dsh-tool-call-timeout-policy": "workspace:*",
     "@deepseek-ai/dsh-tool-cordis": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
     "@deepseek-ai/dsh-tool-fs-search": "workspace:*",
     "@deepseek-ai/dsh-tool-goal": "workspace:*",

@@ -1,10 +1,11 @@
 /** Select one child evaluator without process-lifetime policy. */
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { createAsyncFunctionEvaluator } from './async-function.ts'
 import { createReplEvaluator } from './repl.ts'
 import { createVmScriptEvaluator } from './vm-script.ts'
-import type { ProgramEvaluator, ProgramEvaluatorOptions, ProgramFormat, ProgramImportHandler } from './types.ts'
+import type { ProgramEvaluator, ProgramEvaluatorOptions, ProgramImportHandler } from './types.ts'
 
-const evaluators: Record<ProgramFormat, (options: ProgramEvaluatorOptions) => ProgramEvaluator> = {
+const evaluators: Record<PtcProgramFormat, (options: ProgramEvaluatorOptions) => ProgramEvaluator> = {
   'function-body': createAsyncFunctionEvaluator,
   repl: createReplEvaluator,
   script: createVmScriptEvaluator,
@@ -18,7 +19,7 @@ const evaluators: Record<ProgramFormat, (options: ProgramEvaluatorOptions) => Pr
  * @returns Globals, evaluation entry point, and resource cleanup.
  */
 export function createProgramEvaluator(
-  format: ProgramFormat, reportError: (message: string) => void, importHandler?: ProgramImportHandler,
+  format: PtcProgramFormat, reportError: (message: string) => void, importHandler?: ProgramImportHandler,
 ): ProgramEvaluator {
   return evaluators[format]({ reportError, ...importHandler === undefined ? {} : { importHandler } })
 }

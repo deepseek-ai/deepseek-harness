@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-experimental-webworker-runtime": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@types/node": "^22.20.1",
     "@types/ws": "8.18.1",
@@ -72,5 +73,8 @@
     "@deepseek-ai/dsh-experimental-cot-translation-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
     "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-message-quotes": "workspace:*"
   }
 }

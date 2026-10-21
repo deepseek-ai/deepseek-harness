@@ -53,6 +53,14 @@ describe.each([
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('keeps the environment when an unfinished binding rejection is handled', async () => {
+    const { run } = await setup()
+    const release = Promise.withResolvers<null>()
+    onTestFinished(() => { release.resolve(null) })
+    expect((await run('var kept = 1; void tools.value({}).catch(() => {}); kept', { bindings: bindings(() => release.promise) })).value).toBe(1)
+    expect((await run('kept')).value).toBe(1)
+  })
+
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
@@ -148,6 +156,25 @@ describe.each([
     expect((await temporary('let temporary = 8;')).error).toBeUndefined()
     expect((await temporary('typeof temporary')).value).toBe('undefined')
     expect((await run('privateValue')).value).toBe(7)
+  })
+
+  it.each([
+    ['timeout', 'await new Promise(() => {})'],
+    ['abort', 'await tools.value({}); await new Promise(() => {})'],
+    ['output-limit', '"x".repeat(10_000)'],
+    ['worker-exit', 'process.exit(7)'],
+  ] as const)('reports temporary %s without claiming the owner state was cleared', async (kind, program) => {
+    const { run, runtime, cwd } = await setup({ maxOutputBytes: 256 })
+    expect((await run('let retained = 7; retained')).value).toBe(7)
+    const controller = new AbortController()
+    const result = await runtime.run(runtime.resolve({
+      program, cwd, signal: controller.signal, timeoutMs: kind === 'timeout' ? 100 : null,
+      bindings: bindings(async () => { controller.abort('cancel temporary evaluation'); return null }),
+    }))
+    expect(result.error?.kind).toBe(kind)
+    expect(result.error?.message).not.toContain('retained variables were cleared')
+    if (kind === 'abort') expect(result.error?.message).toBe('cancel temporary evaluation')
+    expect((await run('retained')).value).toBe(7)
   })
 
   it('releases an owner and reports missing variables until the caller recreates them', async () => {

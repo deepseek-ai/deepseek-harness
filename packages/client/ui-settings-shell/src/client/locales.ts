@@ -53,3 +53,21 @@ export const zh: Record<ShellSettingsLocaleKey, string> = {
 export function formLabels(t: (key: ShellSettingsLocaleKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'シェル',
+  'description': '各コマンドの実行時間と出力量を制限します。',
+  'timeoutMs': 'コマンドのタイムアウト (ms)',
+  'timeoutMsHint': '1つのコマンドが強制終了されるまでに実行できる時間。',
+  'maxOutputBytes': 'ストリームごとの出力上限 (バイト)',
+  'maxOutputBytesHint': 'この上限を超えた出力は失われず、一時ファイルに書き出されます。',
+  'overridden': '上書き済み',
+  'reset': 'デフォルトに戻す',
+  'readOnly': 'このデプロイでは設定が読み取り専用で保存されます。',
+  'unavailable': 'このプラグインは読み込まれていないため、現在設定できません。',
+  'save': '保存',
+  'saving': '保存中…',
+  'saveFailed': 'デプロイがこれらの値を受け付けませんでした。修正のため残されています。',
+  'invalidNumber': '数値を入力するか、空欄のままにするとデフォルトが使用されます。',
+} satisfies Record<keyof typeof en, string>

@@ -1,12 +1,13 @@
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { Parser } from 'acorn'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
-import type { ProgramEvaluator, ProgramFormat } from '../src/evaluators/types.ts'
+import type { ProgramEvaluator } from '../src/evaluators/types.ts'
 import { processTopLevelAwait } from '../src/evaluators/vm-script-await.ts'
 
 type EvaluationResult = Parameters<Parameters<ProgramEvaluator['evaluate']>[1]>[0]
 
-function evaluator(format: ProgramFormat = 'script') {
+function evaluator(format: PtcProgramFormat = 'script') {
   const instance = createProgramEvaluator(format, () => {})
   onTestFinished(() => { instance.close() })
   const run = (code: string) => new Promise<EvaluationResult>((resolve) => {
@@ -71,8 +72,12 @@ it.each([
   'await Promise.resolve(); using resource = null;', 'await using resource = null;',
 ])('reports a complete-submission syntax error without transformer frames: %s', async (code) => {
   const result = await evaluator().run(code)
-  expect(result).toHaveProperty('error.message', expect.stringContaining('SyntaxError'))
-  if (!result.ok) expect(String(result.error)).not.toContain('vm-script-await')
+  expect(result.ok).toBe(false)
+  if (!result.ok) {
+    expect(String(result.error)).toContain('SyntaxError')
+    expect(result.error).toHaveProperty('stack', expect.stringContaining('SyntaxError'))
+    expect(result.error).toHaveProperty('stack', expect.not.stringContaining('vm-script-await'))
+  }
 })
 
 it('keeps block-scoped disposable bindings local to the awaited evaluation', async () => {
@@ -80,13 +85,13 @@ it('keeps block-scoped disposable bindings local to the awaited evaluation', asy
   expect(await e.value('let disposed = false; { using item = { [Symbol.dispose]() { disposed = true } }; await Promise.resolve(); }; disposed')).toBe(true)
 })
 
-it('preserves thrown primitives and contains hostile error formatting', async () => {
+it('preserves thrown primitives and the original cross-realm error', async () => {
   const e = evaluator()
   expect(await e.run('throw "failure"')).toEqual({ ok: false, error: 'failure' })
-  expect(await e.run('const error = new Error("hidden"); Object.defineProperty(error, "stack", { get() { throw 1 } }); throw error'))
-    .toMatchObject({ ok: false, error: { message: 'program threw an unrenderable value' } })
-  expect(await e.run('const bare = new Error("bare failure"); bare.stack = undefined; throw bare'))
-    .toMatchObject({ ok: false, error: { message: 'bare failure' } })
+  const original = await e.value('const error = new Error("hidden"); Object.defineProperty(error, "stack", { get() { throw 1 } }); error')
+  const result = await e.run('throw error')
+  expect(result.ok).toBe(false)
+  if (!result.ok) expect(result.error).toBe(original)
 })
 
 it.each(['const invalid = ; await 1\n', 'await\\a\n', 'await  = 1\n'])('leaves earlier or ambiguous syntax to native compilation: %s', (code) => {
@@ -121,7 +126,9 @@ it('preserves parser infrastructure failures without rewriting them as syntax er
   const parse = vi.spyOn(Parser, 'parse').mockImplementation(() => { throw failure })
   try {
     expect(() => processTopLevelAwait('await 1\n')).toThrow(failure)
-    expect(await evaluator().run('await 1')).toHaveProperty('error.message', failure.stack)
+    const result = await evaluator().run('await 1')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe(failure)
   }
   finally { parse.mockRestore() }
 })

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "工作区依赖",
+    "description": "提供内置 Python、Node.js 和 pnpm 的绝对路径。"
+  }
+}

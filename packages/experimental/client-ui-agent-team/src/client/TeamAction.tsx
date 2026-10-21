@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import type {} from '@deepseek-ai/dsh-agent/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   TeamMemberProjection,

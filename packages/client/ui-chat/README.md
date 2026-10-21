@@ -72,6 +72,8 @@ The composer statistics are two `conversation.composer.dock` list entries: `acti
 
 Explicit selections update every consumer immediately; accepted Host settings reconcile the live value, so a refused or pending write keeps the selected mode until the Host answers.
 
+In narrow browser settings, preference labels use a smaller gutter before their controls. Windows and macOS desktop windows retain the standard spacing.
+
 Preference menus restore focus to their trigger without scrolling before publishing a new selection.
 
 <a id="completed-turn-footer"></a>
@@ -171,6 +173,10 @@ Active-Turn highlighting is approximate: `readVisibleTurn` binary-searches the f
 </details>
 
 -----
+
+The Chat view detects selection and context-menu gestures on business nodes marked with `data-text-interaction-source`. Both selection endpoints must resolve to the same source container. Displayed user content and settled Assistant text or reasoning participate; tools, injected context, streaming or interrupted Assistant text, and Markdown controls do not.
+
+`ctx.uiConversation.interactions` dispatches eligible gestures to plugin registrations and supplies their component to the Chat view. The action surface is absolutely positioned inside the existing Chat column, above the composer seat and its dock. Its wrapper preserves the component's outer stroke and shadow; components own internal scrolling. Scrolling the selection outside that visible region temporarily hides the surface; returning restores it. Chat owns viewport visibility, placement, outside pointer presses, Escape, new selections, source invalidation, and disposal; explicit dismissal preserves browser selection and layout changes do not reopen the surface. [Message quotes](../../session/message-quotes/README.md) owns quotation eligibility and insertion.
 
 <a id="model-experience"></a>
 ## Model Experience

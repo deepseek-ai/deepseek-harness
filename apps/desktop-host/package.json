@@ -30,6 +30,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
-    "@deepseek-ai/dsh-skill": "workspace:*"
+    "@deepseek-ai/dsh-skill": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*"
   }
 }

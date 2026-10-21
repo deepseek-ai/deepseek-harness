@@ -370,10 +370,20 @@ describe('gate graph validation', () => {
     expect(ids).toEqual([
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'product-use', 'official-bundle-catalog', 'provider-data', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'node-next-types',
-      'optional-dependency-imports', 'client-packages', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
+      'optional-dependency-imports', 'client-packages', 'installer-locales', 'locale-metadata', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
       'plugin-record-callers', 'no-unknown-casts', 'no-top-level-await',
       'cordis-config', 'runtime-closure',
     ])
+  })
+
+  it('includes JSON resource checks in local and CI aggregates', () => {
+    for (const mode of ['i18n', 'check-all', 'ci-static', 'hygiene'] as const) {
+      const ids = withPnpmEntrypoint(() => gatesForMode(mode).map(gate => gate.id))
+      expect(ids).toEqual(expect.arrayContaining(['installer-locales', 'locale-metadata']))
+      if (mode !== 'i18n') expect(ids).not.toContain('locale-dictionaries')
+    }
+    expect(withPnpmEntrypoint(() => gatesForMode('i18n').map(gate => gate.id)))
+      .toEqual(['installer-locales', 'locale-metadata', 'locale-dictionaries'])
   })
 
   it('caps the local hygiene aggregate at eight workers', () => {

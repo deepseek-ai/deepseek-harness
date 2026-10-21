@@ -7,10 +7,10 @@ export const NS = 'cotTranslation'
 /** English copy and key source. */
 export const en = {
   provider: 'Translation service', google: 'Google', bing: 'Bing',
-  deepseekAccount: 'DeepSeek Flash — Account (paid)', deepseekOfficial: 'DeepSeek Flash — Official API (paid)',
+  deepseekAccount: 'DeepSeek Flash — account (paid)', deepseekOfficial: 'DeepSeek Flash — official API (paid)',
   providerUnavailableOption: '{provider} — unavailable',
-  providerUnavailable: 'This provider is unavailable. Configure your DeepSeek account or Official API provider, or choose an available service.',
-  paidNotice: 'Each uncached fragment sends a separate paid DeepSeek Flash request through the selected account or Official API credentials. Reopening reasoning reuses saved results; changing the provider, language, source text, or request settings may send a new paid request.',
+  providerUnavailable: 'This provider is unavailable. Configure your DeepSeek account or official API provider, or choose an available service.',
+  paidNotice: 'Each uncached fragment sends a separate paid DeepSeek Flash request through the selected account or official API credentials. Reopening reasoning reuses saved results; changing the provider, language, source text, or request settings may send a new paid request.',
   anonymousNotice: 'Bing and Google need no translation login or API key. Their anonymous endpoints may reject or limit requests.', targetLanguage: 'Target language',
   targetLanguageHint: 'auto follows the UI language; language codes such as zh, en, and ja also work.',
   privacy: 'Expanded reasoning is sent to the selected service. It may contain private code or conversation details.',
@@ -51,3 +51,39 @@ export const zh: Record<CotTranslationKey, string> = {
 export function formLabels(t: (key: CotTranslationKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'provider': '翻訳サービス',
+  'google': 'Google',
+  'bing': 'Bing',
+  'deepseekAccount': 'DeepSeek Flash — アカウント (有料)',
+  'deepseekOfficial': 'DeepSeek Flash — 公式 API (有料)',
+  'providerUnavailableOption': '{provider} — 利用不可',
+  'providerUnavailable': 'このプロバイダーは利用できません。DeepSeek アカウントまたは公式 API プロバイダーを設定するか、利用可能なサービスを選択してください。',
+  'paidNotice': 'キャッシュされていないフラグメントごとに、選択したアカウントまたは公式 API の認証情報を通じて、個別の有料 DeepSeek Flash リクエストが送信されます。推論を再度開くと保存済みの結果が再利用されますが、プロバイダー、言語、ソーステキスト、またはリクエスト設定を変更すると、新たな有料リクエストが送信される場合があります。',
+  'anonymousNotice': 'Bing と Google は翻訳のログインや API キーが不要です。これらの匿名エンドポイントはリクエストを拒否したり制限したりする場合があります。',
+  'targetLanguage': '翻訳先の言語',
+  'targetLanguageHint': 'auto は UI の言語に従います。zh、en、ja などの言語コードも使用できます。',
+  'privacy': '展開された推論は選択したサービスに送信されます。非公開のコードや会話の詳細が含まれている可能性があります。',
+  'translation': '翻訳を表示',
+  'original': '原文を表示',
+  'retry': '再試行',
+  'failed': '翻訳に失敗しました。原文を表示しています。',
+  'translating': '推論を翻訳中',
+  'invalidProvider': '翻訳サービスを選択してください。',
+  'invalidLanguage': 'auto または zh、en、ja などの言語コードを入力してください。',
+  'overridden': '上書き済み',
+  'reset': 'デフォルトに戻す',
+  'unavailable': '翻訳設定を利用できません。',
+  'readOnly': 'このデプロイでは設定は読み取り専用で保存されます。',
+  'saveFailed': 'このデプロイでは値が受け入れられませんでした。修正のために値はそのまま残されています。',
+  'save': '保存',
+  'saving': '保存中…',
+  'copy': 'コピー',
+  'copied': 'コピーしました',
+  'codeTitle': 'コードブロック',
+  'wrap': '折り返し',
+  'unwrap': '折り返しを解除',
+  'footnotes': '脚注',
+} satisfies Record<keyof typeof en, string>

@@ -14,6 +14,7 @@
  * red, revert.
  */
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -41,6 +42,7 @@ describe('dsh-tool-fs-search real-load-path guard', () => {
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(LocalSubprocessRuntime)
 
     const loader = Object.create(Loader.prototype) as Loader

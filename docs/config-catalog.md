@@ -16,7 +16,7 @@ Each package entry labels its data with three identifiers: `inject` lists the se
 
 - `inject`: `agents` · `llm` · `sessionPersistence` · `sessions`
 - `refs`: `Stream` (`@agentclientprotocol/sdk`)
-- `source`: [`packages/acp/acp/src/index.ts:75`](../packages/acp/acp/src/index.ts)
+- `source`: [`packages/acp/acp/src/index.ts:74`](../packages/acp/acp/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the provider/model selection used for each ACP-created agent. */
@@ -96,7 +96,7 @@ export interface Config {
 
 - `inject`: `agents` · `sessions` · `llm` · `tools` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md) · `Volatile` (`@deepseek-ai/cosmokit`)
-- `source`: [`packages/core/agent-loop/src/index.ts:250`](../packages/core/agent-loop/src/index.ts)
+- `source`: [`packages/core/agent-loop/src/index.ts:253`](../packages/core/agent-loop/src/index.ts)
 
 ```ts config-catalog
 /** Agent-loop plugin configuration. */
@@ -106,7 +106,7 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls: Volatile<number>
-  /** Agents created or resumed at plugin startup. */
+  /** Agents created or resumed at plugin startup; a resumed agent records its configured route as the Session's model selection. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
     id: string
@@ -162,11 +162,13 @@ export interface Config {
 ## `@deepseek-ai/dsh-agent-tool-presentation`
 
 - `inject`: `tools`
-- `refs`: [`ToolPresentationMode`](subsystems/tools.md)
-- `source`: [`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
+- `source`: [`packages/core/agent-tool-presentation/src/index.ts:25`](../packages/core/agent-tool-presentation/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config. */
+/**
+ * Plugin config.
+ * @deprecated Select the native or PTC executor plugin directly instead of configuring a mode.
+ */
 export interface Config {
   /**
    * The form this agent's model sees. `native` sends every visible schema,
@@ -175,7 +177,7 @@ export interface Config {
    * without this row already gets, so an omitted value would mean the row was
    * composed for nothing.
    */
-  mode: ToolPresentationMode
+  mode: 'native' | 'ptc'
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-tool-presentation -->
@@ -2606,7 +2608,7 @@ export interface Config {
   maxOutputBytes?: number
   /** V8 old-generation heap limit in MiB; native allocations are excluded. */
   maxOldGenerationSizeMb?: number
-  /** Maximum control frame, outstanding argument and queued control-output bytes. */
+  /** Maximum control message, outstanding binding-argument and queued control-output bytes. */
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
@@ -3272,7 +3274,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-spill-policy`
 
 - `inject`: `tools`
-- `source`: [`packages/spill/spill-policy/src/index.ts:25`](../packages/spill/spill-policy/src/index.ts)
+- `source`: [`packages/spill/spill-policy/src/index.ts:26`](../packages/spill/spill-policy/src/index.ts)
 
 ```ts config-catalog
 /** Optional result-retention budget. */
@@ -3851,6 +3853,23 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
+<a id="deepseek-aidsh-tool-executor-ptc"></a>
+
+## `@deepseek-ai/dsh-tool-executor-ptc`
+
+- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
+- `source`: [`packages/core/tool-executor-ptc/src/config.ts:5`](../packages/core/tool-executor-ptc/src/config.ts)
+
+```ts config-catalog
+/** Program execution limits. */
+export interface Config {
+  /** Maximum overlapping concurrency-safe program subcalls. */
+  maxParallelSubCalls: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->
 <a id="deepseek-aidsh-tool-fs"></a>
 
@@ -4322,43 +4341,6 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-workspace-dependencies -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tools -->
-<a id="deepseek-aidsh-tools"></a>
-
-## `@deepseek-ai/dsh-tools`
-
-- `inject`: `systemPrompt`
-- `source`: [`packages/core/tools/src/index.ts:675`](../packages/core/tools/src/index.ts)
-
-```ts config-catalog
-/** Plugin config: how the registered tools are presented to the model. */
-export interface Config {
-  /**
-   * Model presentation. `native` (default) sends every visible schema; `ptc`
-   * sends only `run_code` plus a generated SDK prompt and collapses the
-   * executor to the same surface (a model-direct call may only name
-   * `run_code`; `run_code` SDK sub-dispatches keep every visible tool).
-   * PTC mode requires a `ctx.ptcRuntime` whose `language`
-   * has a registered SDK renderer (TypeScript or Python) and fails prompt
-   * assembly when it is absent or has no renderer. Under `ptc`, native names
-   * in `toolOrder` are invalid.
-   */
-  mode?: ToolPresentationMode
-  /**
-   * Concurrency cap for a `run_code` program's overlapping sub-calls
-   * (default 10, the loop scheduler's own default). Sub-calls follow the
-   * native scheduling contract — only calls whose tools classify
-   * concurrency-safe overlap; exclusive calls form barriers — so `1`
-   * restores strictly serial dispatch. Must be a positive integer.
-   */
-  maxParallelSubCalls?: number
-}
-
-/** How the registry presents its tools to the model (see {@link Config.mode}). */
-export type ToolPresentationMode = 'native' | 'ptc'
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tools -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-typert-loader -->
 <a id="deepseek-aidsh-typert-loader"></a>
 
@@ -4787,6 +4769,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-llm` | — | [`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts) |
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
+| `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
@@ -4802,9 +4785,11 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-terminal` | — | [`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts) |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` · `agents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |
+| `@deepseek-ai/dsh-tools` | `systemPrompt` | [`packages/core/tools/src/index.ts`](../packages/core/tools/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |
 | `@deepseek-ai/dsh-workspace` | `storageDomain` · `sessionPersistence` | [`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts) |
@@ -4901,6 +4886,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
+| `@deepseek-ai/dsh-tool-testkit` | — | [`packages/test-support/tool-testkit/src/index.ts`](../packages/test-support/tool-testkit/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |
 | `@deepseek-ai/dsh-typert-protocol` | — | [`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts) |
 | `@deepseek-ai/dsh-typert-registry` | — | [`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts) |

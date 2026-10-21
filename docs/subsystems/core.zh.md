@@ -65,10 +65,12 @@ interface AgentHandle {
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** The provider route and model this agent's requests use. */
+  /** Route fallback and output controls; live accessors apply until the Session records a selection or request. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
+  /** Agent-owned access to durable model selection for future steps. */
+  readonly model: Model
   /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
@@ -197,20 +199,86 @@ type AssistantStreamFrame =
 `running` 描述整个驱动器的排空区间，可能跨越连续的排队轮次；它不能证明某个轮次仍然打开。dispose 会把 agent 从注册表移除并发出 `agent/disposed`；它不是一个终态 status 值。`followup()` 不返回句柄：其 `MessageId` 标识的是持久的 inbox 插入、认领与丢弃事实，而非之后的助手输出或轮次结束。`whenIdle()` 观察的是整个 agent，因此只有当调用方明确拥有从回执到空闲的这段区间时，才能把它称为一次 run（[决策](../../.agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.zh.md)）。
 
 ```ts type-equiv
-/** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
+/**
+ * Merge-extensible agent options. Route fields may be live accessors until the
+ * Session records a selection or request; step preparation captures their value.
+ * Persona belongs to system-prompt sections.
+ */
 interface AgentOptions {
   /** Provider route (must have a registered adapter at call time). */
   provider?: string
   /** Model id interpreted by the selected provider adapter. */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
-  reasoningEffort?: ReasoningEffortId
+  reasoningEffort?: ReasoningEffortId | undefined
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
 ```
 
-在 `agent/request` 之后，分发要求 `provider` 与 `model` 都存在。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+步骤准备在提示词组装前要求 `provider` 与 `model` 都存在。已弃用的 `agent/request` hook 可以更改请求控制参数，但必须保留该路由。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+
+`AgentLoop` 在 `ctx.sessionProjections` 上注册 `modelSelection`，并通过每个 `agent.model` 实例提供选择操作。`model/selection` 记录完整选择，但不进入模型历史。匹配的请求头会清除 `pending`，最近请求仍保留为 `lastUsed`。适配器默认的推理强度会被省略，使后续请求重新解析默认值。只有尚未记录选择或请求时，`next` 才为 null，此时由 `AgentOptions` 提供路由。[Agent 模型 API](../../packages/core/agent/README.zh.md)说明选择优先级与恢复策略。
+
+```ts type-equiv
+/** Agent-owned access to the model choice for future steps. */
+interface Model {
+  /**
+   * Resolve the choice for the next step to begin preparation. Recorded choices
+   * take precedence over the last request and then the Agent's live options.
+   * This read neither starts a step nor changes an already-prepared step.
+   * @returns a detached choice, or undefined when no source names both provider and model.
+   */
+  current(): Readonly<ModelSelection> | undefined
+
+  /**
+   * Replace the next step's complete selection. Omitted effort follows adapter
+   * defaults without inheriting a previous effort or resolving defaults here.
+   * An equal recorded choice is a no-op; an options-only fallback is
+   * always recorded. Callers own model availability and capability validation.
+   * The append uses the Session's existing persistence and failure guarantees.
+   * @param selection - complete provider, model, and optional explicit effort.
+   */
+  select(selection: Readonly<ModelSelection>): void
+
+}
+```
+
+```ts type-equiv
+/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+interface ModelSelection {
+  /** Registered provider route. */
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
+}
+```
+
+```ts type-equiv
+/**
+ * Durable model-selection state for one Session. An effort the adapter
+ * defaulted on a recorded request is omitted, so later requests resolve the
+ * default again instead of pinning it as a choice.
+ */
+interface ModelSelectionProjectionState {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Later recorded selection not yet used by a matching model request. */
+  readonly pending: ModelSelection | null
+}
+```
+
+```ts type-equiv
+/** Client view of the durable model-selection fold. */
+interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+```
 
 inbox 即投递词汇——agent 以持久投影形式拥有的两条有序待处理消息列表：
 
@@ -988,43 +1056,14 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
  * @param payload.signal - the current turn's cancellation signal.
+ * @param payload.modelSelection - captured step selection, retained across retries; omitted effort uses adapter defaults.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; modelSelection: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
 Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
-
-Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agentrequest--waterfall"></a>
-
-#### `agent/request` — waterfall
-
-Replace the frozen call configuration. `await next()` yields the config the machine would use (agent options on the first request, the logged header afterwards); return a replacement to switch. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
-
-```ts cordis-catalog
-/**
- * Replace the frozen call configuration. `await next()` yields the config
- * the machine would use (agent options on the first request, the logged
- * header afterwards); return a replacement to switch. On step admission,
- * this runs after assembly and `step/start`, before the system prompt and
- * accepted user batch are committed. Cancellation here or during subsequent
- * `prepareCall()` resolution commits neither. The prepared call capability
- * governs prompt admission. Model-visible content must use logged channels;
- * this waterfall cannot mutate messages.
- * @param payload.agent - the agent making the model call.
- * @param payload.turn - the open turn number.
- * @param payload.step - the step whose request this is.
- * @param payload.signal - the current turn's explicit abort signal.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
- * @mode waterfall
-*/
-'agent/request'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<LlmCallConfig>): Promise<LlmCallConfig>
-```
-
-Types: [LlmCallConfig](llm-streaming.zh.md) · [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 

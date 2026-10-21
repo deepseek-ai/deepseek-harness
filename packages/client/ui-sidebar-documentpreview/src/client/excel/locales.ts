@@ -31,3 +31,22 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     sidebarExcel: ExcelPreviewKey
   }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'スプレッドシート',
+  'language': 'ja-JP',
+  'loading': 'ドキュメントをレンダリング中...',
+  'invalid': 'このスプレッドシートを開けませんでした。形式、内容、またはパスワード保護を確認してください。',
+  'tooLarge': 'このブックはプレビューのサイズ上限を超えています。',
+  'timeout': 'このブックを開く際にタイムアウトしました。より小さいファイルをお試しください。',
+  'encoding': 'このテキストエンコーディングを読み取れませんでした。ファイルをBOM付きのUTF-8またはUTF-16で保存して再試行してください。',
+  'formulaWarning': 'このブックには数式が含まれています。表示される結果が欠落または不正確な場合があります。',
+  'unsupportedNotice': 'このプレビューはこのブックの{features}をサポートしていません。完全な表示にはシステムアプリケーションで開いてください。',
+  'charts': 'グラフ',
+  'images': '画像',
+  'shapes': '図形',
+  'conditionalFormatting': '条件付き書式',
+  'featureSeparator': '、',
+  'retry': '再試行',
+} satisfies Record<keyof typeof en, string>

@@ -48,3 +48,19 @@ export const zh: Record<AgentLoopSettingsLocaleKey, string> = {
 export function formLabels(t: (key: AgentLoopSettingsLocaleKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'エージェントループ',
+  'description': 'エージェントのツール呼び出しのディスパッチ方法を制御します。',
+  'maxParallel': '並列ツール呼び出し',
+  'maxParallelHint': '1ステップ内で同時に実行される並列安全呼び出しの上限。',
+  'overridden': '上書き済み',
+  'reset': 'デフォルトにリセット',
+  'readOnly': 'このデプロイメントでは設定は読み取り専用で保存されます。',
+  'unavailable': 'このプラグインは読み込まれていないため、現在設定できません。',
+  'save': '保存',
+  'saving': '保存中…',
+  'saveFailed': 'デプロイがこれらの値を受け付けませんでした。修正のために残されています。',
+  'invalidNumber': '数値を入力するか、空欄のままにするとデフォルトが使用されます。',
+} satisfies Record<keyof typeof en, string>

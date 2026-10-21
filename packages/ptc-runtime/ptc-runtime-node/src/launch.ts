@@ -41,7 +41,7 @@ export function resolveLaunch(config?: LaunchConfig): LaunchConfig {
  * @param persistent - Whether the selected mode requires retained-process launch support.
  * @returns Arguments following the resolved Node executable.
  */
-export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number, persistent: boolean = false): string[] {
+export function bootstrapArgs(fs: Pick<FileSystem, 'processPathFromHostPath'>, config: LaunchConfig, maxMessageBytes: number, persistent = false): string[] {
   switch (config.kind) {
     case 'embedded':
       if (persistent) throw new Error('Persistent PTC requires a node-script launch')

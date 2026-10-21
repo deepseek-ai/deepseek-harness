@@ -1,3 +1,6 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,7 +72,7 @@ async function load(exclusive = false, mode?: string, toolCallTimeoutMs?: number
   roots.push(root)
   const model = new FixtureModel()
   const modules = new Map<string, unknown>([
-    ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['llm', Llm],
+    ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['toolExecutor', NativeToolExecutor], ['llm', Llm],
     ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections],
     ['fs', LocalFileSystem], ['workingDirectory', WorkingDirectory],
     ['model', { inject: ['llm'], apply(ctx: Context) { ctx.effect(() => ctx.llm.registerAdapter(['fixture'], model)) } }],
@@ -103,11 +106,11 @@ async function warm(ctx: Context, agent: Agent, signal = new AbortController().s
 }
 
 function execute(ctx: Context, agent: Agent, name = TOOL) {
-  return ctx.tools.execute({ agent, name, arguments: name === TOOL ? { label: 'direct' } : {}, callId: ToolCallId('direct'), signal: new AbortController().signal })
+  return executeToolFixture(ctx, { agent, name, arguments: name === TOOL ? { label: 'direct' } : {}, callId: ToolCallId('direct'), signal: new AbortController().signal })
 }
 
 function resource(ctx: Context, agent: Agent | undefined, name = 'read_mcp_resource', server = 'browser-fixture', callId = name) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     ...agent === undefined ? {} : { agent }, name,
     arguments: { server, ...name === 'read_mcp_resource' ? { uri: 'browser-fixture://state' } : {} },
     callId: ToolCallId(callId), signal: new AbortController().signal,
@@ -351,7 +354,7 @@ describe('Session MCP Loader composition', () => {
     expect((await resource(ctx, child.agent, 'read_mcp_resource', 'docs')).value)
       .toEqual({ contents: [{ uri: 'docs://memo', text: 'Independent document.' }] })
     for (const args of [null, 'invalid arguments']) {
-      expect((await ctx.tools.execute({ agent: child.agent, name: 'read_mcp_resource', arguments: args, callId: ToolCallId('invalid-resource'), signal: new AbortController().signal })).isError).toBe(true)
+      expect((await executeToolFixture(ctx, { agent: child.agent, name: 'read_mcp_resource', arguments: args, callId: ToolCallId('invalid-resource'), signal: new AbortController().signal })).isError).toBe(true)
     }
     expect(browserState(await resource(ctx, parent.agent)).counter).toBe(0)
     await parent.dispose()
@@ -424,7 +427,7 @@ describe('Session MCP Loader composition', () => {
       sessionId: SessionId('ptc-first-request'), agentOptions: { provider: 'fixture', model: 'fixture' },
       setup: (inner, agent) => {
         initializing = agent
-        inner.tools.presentAs('ptc')
+        inner.plugin(PtcToolExecutor)
         inner.on('agent/created', () => {
           agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Describe the available browser tools.' }], source: { kind: 'user' } }))
         }, { prepend: true })

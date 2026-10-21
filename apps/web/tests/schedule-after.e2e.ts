@@ -1,4 +1,5 @@
 /** Keyless assembled-Web evidence for conversational Schedule delivery. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -354,7 +355,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
       source: { kind: 'user' },
     })
     await workspace.attachSession(afterHandle.agent.id)
-    const afterCreated = await scaffold.ctx.tools.execute({
+    const afterCreated = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000),
       callId: ToolCallId('schedule-after-create'),
       name: 'schedule_create',
@@ -420,7 +421,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
     })
     await scaffold.ctx.schedule.delete({ sessionId: everyHandle.agent.id, id: wake.id })
     await workspace.attachSession(everyHandle.agent.id)
-    const everyListed = await scaffold.ctx.tools.execute({
+    const everyListed = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000),
       callId: ToolCallId('schedule-every-list'),
       name: 'schedule_list',
@@ -1181,7 +1182,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     })
     const time = clock.format(new Date(Date.now() + 3_600_000))
     const prompt = 'Inspect the daily calendar rule'
-    const result = await scaffold.ctx.tools.execute({
+    const result = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000), callId: ToolCallId('schedule-daily-catalog-create'),
       name: 'schedule_create', arguments: { prompt, title: prompt, daily: { time, time_zone: timeZone } }, agent,
     })

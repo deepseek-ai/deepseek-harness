@@ -150,7 +150,7 @@ RESTART_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "restart"
 )
 RESTART_SNAPSHOT_FILENAMES = (
-    "result.json", "requests.json", "session.1.v4.jsonl", "session.2.v4.jsonl",
+    "result.json", "requests.json", "session.1.v4.jsonl", "session.2.v4.jsonl", "resume.json",
 )
 RECOVERY_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "scheduler-recovery"
@@ -258,7 +258,8 @@ def write_advanced_profile_patch(
 ) -> Path:
     """Write the shared custom, snapshot, and restart profile patch."""
     return write_profile_patch(root, name, sessions, [
-        {"id": "tools", "config": {"mode": mode}},
+        {"id": "tool-executor-native", "disabled": mode != "native"},
+        {"id": "tool-executor-ptc", "disabled": mode != "ptc"},
         {
             "id": "system-prompt",
             "config": {
@@ -1761,10 +1762,10 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
         patch = write_advanced_profile_patch(root, "restart.patch.yml", sessions)
         first_request = len(MockModelHandler.requests)
 
-        def connect() -> DeepSeekHarness:
+        def connect(model: str = "smoke-model") -> DeepSeekHarness:
             return DeepSeekHarness(
                 provider="deepseek-official",
-                model="smoke-model",
+                model=model,
                 cwd=str(root),
                 dsh_bin=str(executable),
                 dsh_home=str(dsh_home),
@@ -1812,13 +1813,8 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             root,
             sessions,
         )
-        compare_snapshot_files(
-            files, update_snapshots, RESTART_SNAPSHOT_DIRECTORY, RESTART_SNAPSHOT_FILENAMES,
-            native_writer_output=True,
-        )
-
         before_resume = logs[RESTART_FIRST_SESSION_ID]
-        with connect() as harness:
+        with connect("resumed-smoke-model") as harness:
             session = harness.resume_session(RESTART_FIRST_SESSION_ID)
             if session.id != RESTART_FIRST_SESSION_ID:
                 raise AssertionError(f"resume changed the saved identity: {session.id}")
@@ -1855,6 +1851,28 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             raise AssertionError(f"resume did not continue the saved turn sequence: {turns}")
         if RESUME_TEXT not in render_jsonl(restored):
             raise AssertionError("resumed response was not appended to the saved session")
+
+        selection_events = [
+            {"type": record["type"], "data": record["data"]}
+            for record in restored[len(before_resume):]
+            if record.get("type") == "model/selection"
+        ]
+        if selection_events != [{"type": "model/selection", "data": {
+            "provider": "deepseek-official", "model": "resumed-smoke-model",
+        }}]:
+            raise AssertionError(f"resume did not persist the initialized model: {selection_events}")
+        if requests[0].get("model") != "resumed-smoke-model":
+            raise AssertionError(f"resumed request ignored the initialized model: {requests[0]}")
+        files["resume.json"] = json.dumps({
+            "model": requests[0].get("model"),
+            "final_response": resumed.final_response,
+            "eventTypes": [event.get("type") for event in resumed.events],
+            "selectionEvents": selection_events,
+        }, indent=2, ensure_ascii=False) + "\n"
+        compare_snapshot_files(
+            files, update_snapshots, RESTART_SNAPSHOT_DIRECTORY, RESTART_SNAPSHOT_FILENAMES,
+            native_writer_output=True,
+        )
 
 
 def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapshots: bool) -> None:

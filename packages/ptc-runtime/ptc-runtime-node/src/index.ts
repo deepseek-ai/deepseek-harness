@@ -1,7 +1,7 @@
 /** Node PTC provider with uniform admission and configurable evaluation and process ownership. */
 import { Context } from '@deepseek-ai/cordis'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -24,7 +24,7 @@ export class NodePtcRuntime extends PtcRuntime {
   private readonly execution: ReturnType<typeof createExecution>
   private readonly processes: PolicyProcesses
 
-  override get programFormat(): 'function-body' | 'repl' | 'script' { return this.execution.mode.format }
+  override get programFormat(): PtcProgramFormat { return this.execution.mode.format }
   override get retainsState(): boolean { return this.execution.mode.retainsState }
   override get executionInstructions(): string { return this.execution.mode.executionInstructions }
   private readonly config: ResolvedConfig

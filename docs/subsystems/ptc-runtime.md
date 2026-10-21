@@ -103,6 +103,11 @@ interface PtcRunResult {
 }
 ```
 
+```ts type-equiv
+/** Source evaluation form, independent of retained program state. */
+type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+```
+
 `programFormat` distinguishes async function bodies, REPL statements, and scripts. REPL and Script programs accept top-level `await`, declarations, and a final expression; top-level `return` is not supported. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../../packages/ptc-runtime/ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. `retainsState` reports memory retention independently of source syntax. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends; cleanup failures reject that call. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
 
 ## Bindings: host functions as program globals

@@ -22,7 +22,7 @@ interface AskUserQuestionOption {
 
 ## Presentation intent
 
-`AskUserQuestionIntent` optionally declares a known decision kind. It is tagged on `kind` so intents can be added; a UI that does not recognise a tag renders the generic option list. An intent changes presentation only — a UI honouring it answers with the same option labels a generic UI would send, so the caller reads the same answer fields either way. `approve` names the affirmative option instead of relying on option order. `ask()` rejects the two assertions no type can carry: an `approve` naming none of its own question's options, and an intent on a question with no `detail`.
+`AskUserQuestionIntent` changes presentation while preserving option labels and the caller’s decision policy. `plan-review` names the approve option and requires plan detail. `approval` requires one blocking question with detail and distinct reject, approve and optional always-allow labels covering exactly the offered options. It rejects multi-select and timed waits. The CUA frontend renders its fixed approvals through the existing composer chain; ordinary questions and plan review keep their existing renderers.
 
 ```ts type-equiv
 /**
@@ -43,6 +43,23 @@ type AskUserQuestionIntent = {
   approve: string
   /** Logged tool invocation whose arguments contain the reviewed plan. */
   callId?: ToolCallId
+} | {
+  /** A blocking permission decision with fixed actions and no free-text answer. */
+  kind: 'approval'
+  /** Option label granting the scope described by the caller. */
+  approve: string
+  /** Option label refusing the requested access. */
+  reject: string
+  /** Optional persistent grant offered only when the caller supports it. */
+  always?: string
+  /** Metadata for human recognition; the caller admits icon sources, which the UI may load as URLs. Never an authorization identity. */
+  subject?: { name: string; icon?: string }
+  /** Localized question and limited-grant label; fixed cards own reject/always wording. Option labels remain answer values. */
+  display?: {
+    question: { en: string; [locale: string]: string }
+    detail?: { en: string; [locale: string]: string }
+    approve?: { en: string; [locale: string]: string }
+  }
 }
 ```
 

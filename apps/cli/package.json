@@ -155,6 +155,7 @@
     "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@types/js-yaml": "^4.0.9",

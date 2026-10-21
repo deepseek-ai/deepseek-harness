@@ -35,6 +35,7 @@ export type Mode =
   | 'hygiene'
   | 'doc-sync'
   | 'doc-quick'
+  | 'i18n'
 
 type GateResultStatus = 'passed' | 'failed' | 'skipped'
 type GateState = 'pending' | 'running' | GateResultStatus
@@ -169,11 +170,12 @@ function parseMode(raw: string | undefined): Mode {
     case 'check-all':
     case 'hygiene':
     case 'doc-sync':
+    case 'i18n':
     case 'doc-quick':
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -363,6 +365,8 @@ export function gatesForMode(selected: Mode): Gate[] {
       return docSyncLeafGates()
     case 'doc-quick':
       return docQuickLeafGates()
+    case 'i18n':
+      return i18nGates(true)
   }
 }
 
@@ -385,12 +389,21 @@ function ciSharedStaticGates(): Gate[] {
   ]
 }
 
+function i18nGates(includeDictionaries: boolean): Gate[] {
+  return [
+    pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
+    pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'Japanese plugin metadata' }),
+    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' })] : [],
+  ]
+}
+
 function sharedHygieneGates(): Gate[] {
   return [
     pnpmScript('optional-dependency-imports', 'verify-optional-dependency-imports', {
       label: 'optional dependency imports',
     }),
     pnpmScript('client-packages', 'verify-client-packages', { label: 'client packages' }),
+    ...i18nGates(false),
     pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
     pnpmScript('client-route-resolution', 'verify-client-route-resolution', { label: 'client route resolution' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),

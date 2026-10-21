@@ -1,5 +1,5 @@
 /** Chinese first-run copy from the onboarding requirements. */
-export const onboardingCopy = {
+export const onboardingZh = {
   onboardingArtworkLocale: 'zh',
   onboardingWelcome: '欢迎使用',
   onboardingBrand: 'DeepSeek Harness',
@@ -42,7 +42,7 @@ export const onboardingCopy = {
 } as const
 
 /** English first-run copy with the same keys as the Chinese dictionary. */
-export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> = {
+export const onboardingEn: Record<keyof typeof onboardingZh, string> = {
   onboardingArtworkLocale: 'en',
   onboardingWelcome: 'Welcome to',
   onboardingBrand: 'DeepSeek Harness',
@@ -83,3 +83,46 @@ export const onboardingEnglishCopy: Record<keyof typeof onboardingCopy, string> 
   onboardingRetry: 'Retry',
   onboardingLoading: 'Loading settings…',
 }
+
+/** Japanese copy, checked against the English keys. */
+export const onboardingJa = {
+  'onboardingArtworkLocale': 'en',
+  'onboardingWelcome': 'ようこそ',
+  'onboardingBrand': 'DeepSeek Harness',
+  'onboardingIntroduction': 'DeepSeek Harness はローカルフォルダで動作し、ツールを使ってお使いのコンピューター上のファイルを読み書きします。情報の調査や整理、ドキュメントやスプレッドシートの作成、コードの作成、問題のトラブルシューティングなどに役立ちます。',
+  'onboardingStart': '始める',
+  'onboardingCredit': 'クレジットを追加',
+  'onboardingCreditDescription': 'DeepSeek Harness は、モデルとツールが使用したトークンに基づいてクレジットを消費します。タスクを中断なく実行し続けるために、事前にクレジットを追加してください。残高はエージェントがタスクを実行している間のみ使用されます。',
+  'onboardingTopUp': 'クレジットを追加',
+  'onboardingLater': '次へ',
+  'onboardingFundedTopUp': 'クレジットを追加',
+  'onboardingPurposePrefix': '',
+  'onboardingPurposeSuffix': 'にどのような作業を任せたいですか？',
+  'onboardingPurposeDescription': 'お仕事のスタイルに合わせてインターフェースとツールを調整します。',
+  'onboardingOffice': 'オフィス・クリエイティブ作業',
+  'onboardingOfficeDescription': 'ドキュメントの編集、データの整理、プレゼンテーションの作成など',
+  'onboardingDevelopment': 'コーディング・開発',
+  'onboardingDevelopmentDescription': 'コードの編集、デバッグ、コマンドの実行、プロジェクトファイルの管理など',
+  'onboardingContinue': '続ける',
+  'onboardingProcess': 'どの程度の詳細を表示しますか？',
+  'onboardingProcessDescription': 'これは進捗の表示方法を変えるだけで、DeepSeek Harness の機能には影響しません。',
+  'onboardingCompact': '結果のみ',
+  'onboardingCompactDescription': 'シンプルでクリーンなインターフェースで結果だけを表示します',
+  'onboardingStandard': '重要な詳細',
+  'onboardingStandardDescription': '結果を中心に、重要なステップとアクションのみを表示します',
+  'onboardingDetailed': 'すべての詳細',
+  'onboardingDetailedDescription': 'デバッグやトラブルシューティングをしやすいよう、すべてのプロセスを表示します',
+  'onboardingEnter': 'アプリを開く',
+  'onboardingBack': '戻る',
+  'onboardingSkip': 'スキップ',
+  'onboardingSkipTitle': 'セットアップをスキップしますか？',
+  'onboardingSkipDescription': '進捗、パフォーマンス、利用状況の表示方法や Coding Tools の有効化は、設定 → 一般でいつでも変更できます。',
+  'onboardingKeepSetting': 'セットアップを続ける',
+  'onboardingNoCreditTitle': 'クレジットの追加をスキップしますか？',
+  'onboardingNoCreditDescription': 'クレジットがないと DeepSeek Harness は新しいタスクを開始できません。後から設定 → アカウントで追加できます。',
+  'onboardingUnderstood': '了解',
+  'onboardingGoTopUp': 'クレジットを追加',
+  'onboardingSaveFailed': '設定を保存できませんでした。もう一度お試しください。',
+  'onboardingRetry': '再試行',
+  'onboardingLoading': '設定を読み込んでいます…',
+} satisfies Record<keyof typeof onboardingEn, string>

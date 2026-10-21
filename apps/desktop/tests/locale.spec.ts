@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { en, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, zh } from '../src/locale.ts'
+import { en, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, ja, zh } from '../src/locale.ts'
 
 describe('desktop locale dictionaries', () => {
-  it('ships the same key set in English and Chinese', () => {
+  it('ships the same key set in English, Chinese, and Japanese', () => {
     expect(Object.keys(zh)).toEqual(Object.keys(en))
+    expect(Object.keys(ja)).toEqual(Object.keys(en))
+    expect(resolveDesktopLocale('JA-jp')).toEqual({ id: 'ja', messages: ja })
     expect(resolveDesktopLocale('zh-Hans-CN').messages).toEqual(zh)
     expect(resolveDesktopLocale('en-US').messages).toEqual(en)
     expect(resolveDesktopLocale('fr-FR').messages).toEqual(en)
@@ -17,11 +19,11 @@ describe('desktop locale dictionaries', () => {
   it('prefers an explicit supported choice, then the first supported system language', () => {
     expect(resolveDesktopStartupLocale('zh', ['en-US']).id).toBe('zh-CN')
     expect(resolveDesktopStartupLocale('EN', ['zh-CN']).id).toBe('en')
-    expect(resolveDesktopStartupLocale(null, ['ja-JP', 'zh-Hant', 'en-US']).id).toBe('zh-CN')
+    expect(resolveDesktopStartupLocale(null, ['ja-JP', 'zh-Hant', 'en-US']).id).toBe('ja')
     expect(resolveDesktopStartupLocale(null, ['en-US', 'zh-CN']).id).toBe('en')
-    expect(resolveDesktopStartupLocale(null, ['ja-JP']).id).toBe('en')
+    expect(resolveDesktopStartupLocale(null, ['ja-JP']).id).toBe('ja')
     expect(resolveDesktopStartupLocale(null, []).id).toBe('en')
-    expect(resolveDesktopStartupLocale('ja', ['zh-CN']).id).toBe('zh-CN')
+    expect(resolveDesktopStartupLocale('ja', ['zh-CN']).id).toBe('ja')
   })
 
 })

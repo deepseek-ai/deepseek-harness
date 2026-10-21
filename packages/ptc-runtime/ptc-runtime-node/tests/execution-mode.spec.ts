@@ -5,6 +5,13 @@ import { expect, it } from 'vitest'
 import NodeRuntime from '../src/index.ts'
 import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
+import { resolvePersistentExecution } from '../src/configuration.ts'
+
+it.each([undefined, 'function-body', 'repl', 'script'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
+  const { runtime } = await mountRuntime(new Context(), resolvePersistentExecution(programFormat))
+  expect(runtime.retainsState).toBe(true)
+  expect(runtime.programFormat).toBe(programFormat === 'script' ? 'script' : 'repl')
+})
 
 it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
   const { runtime } = await mountRuntime(new Context(), config)

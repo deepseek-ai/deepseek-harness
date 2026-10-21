@@ -160,7 +160,7 @@ interface ToolArgsMap {
     /** children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent. */
     scope?: "children" | "descendants";
   } & Record<string, JsonValue>;
-  /** Declare existing files as final deliverables for the user. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
+  /** Declare existing files as final deliverables for the user. Hosts may show presented files only after your turn ends, so call it once the files are final. If the user needs to review files earlier, such as before a tool call that waits for their answer, link them in your message instead. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
   present: {
     /** Usually the 1-2 most important deliverables; at most 4 per call. */
     files: {

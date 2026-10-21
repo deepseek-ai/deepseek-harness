@@ -56,7 +56,7 @@ import { RowActionToast } from './session-actions/RowActionToast.tsx'
 import { registerToasts } from './toast/register.ts'
 import { SessionIdMenuItem } from './session-actions/SessionId.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
-import { en, zh, type WorkspaceKey } from './locales.ts'
+import { en, ja, zh, type WorkspaceKey } from './locales.ts'
 
 export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
 export type {
@@ -132,7 +132,7 @@ export function apply(ctx: Context): void {
         : ctx.remoteAccess.source('workspace', workspaceId, action),
     },
   })
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-workspace: dictionaries')
   const shortcutControls = createWorkspaceShortcutControls()
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {

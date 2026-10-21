@@ -1,5 +1,6 @@
-import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -268,7 +269,7 @@ describe('SubagentModelSelectionConfig', () => {
     })
     const agent = await createAgent(ctx, 'enforced')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('disallowed-session-route'),
       name: 'subagent',
@@ -323,6 +324,7 @@ describe('SubagentModelSelectionConfig', () => {
     const next = () => Promise.resolve({ kind: 'enter' as const, messages: [] })
     const payload = {
       agent: enabled.agent,
+      modelSelection: { provider: 'mock', model: 'mock' },
       messages: [],
       turn: 1,
       step: 1,
@@ -359,7 +361,7 @@ describe('SubagentModelSelectionConfig', () => {
       expect(ctx.tools.get('subagent', parent)).toBeDefined()
       expect(ctx.tools.get('subagent', child)).toBeUndefined()
       expect(ctx.tools.get('list_subagent_models', child)).toBeUndefined()
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         name: 'subagent', callId: ToolCallId('filtered-delegation'), arguments: {},
         agent: child, signal: new AbortController().signal,
       })

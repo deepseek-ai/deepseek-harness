@@ -24,3 +24,14 @@ export const en = {
   'panels.more': 'More',
   'version.copied': 'Version copied',
 } satisfies Record<SidebarKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'session.new': '新規セッション',
+  'session.new.label': '新規セッション',
+  'toggle.open': 'サイドバーを開く',
+  'toggle.collapse': 'サイドバーを折りたたむ',
+  'panels.label': 'グローバルパネル',
+  'panels.more': 'その他',
+  'version.copied': 'バージョンをコピーしました',
+} satisfies Record<keyof typeof en, string>

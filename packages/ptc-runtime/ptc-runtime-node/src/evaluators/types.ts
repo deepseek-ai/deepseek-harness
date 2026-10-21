@@ -1,6 +1,4 @@
 /** Evaluation syntax and operations shared by the three child evaluators. */
-/** Supported child evaluation syntax, independent of process lifetime. */
-export type ProgramFormat = 'function-body' | 'repl' | 'script'
 
 /** An import requested by a program or its VM-loaded ESM dependencies in the runner process. */
 export interface ProgramImportRequest {

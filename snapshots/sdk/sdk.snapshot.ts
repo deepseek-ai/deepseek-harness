@@ -627,6 +627,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...legacySdkCompositions.has(scenario.manifest.composition) ? [legacySdkContextPatch] : [],
     ...authoredPatches(scenario, !recording),
     ...assertions.patches ?? [],
+    ...scenario.name === 'session-resume' && !recording ? [join(scenario.dir, 'replay.cordis.yml')] : [],
   ]
     .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
@@ -683,7 +684,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...resumeReplayFile === undefined ? {} : { DSH_SNAPSHOT_OVERRIDE: resumeReplayFile },
   }
 
-  const createHarness = (): DeepSeekHarness => new DeepSeekHarness({
+  const createHarness = (model = route.model): DeepSeekHarness => new DeepSeekHarness({
     profile: scenario.manifest.profile,
     patches,
     dshHome,
@@ -693,7 +694,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     requestTimeoutMs: 110_000,
     cwd,
     provider: route.provider,
-    model: route.model,
+    model,
   })
   let harness = createHarness()
   try {
@@ -735,7 +736,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           subscription.close()
           await harness.close()
           await prepareTurnReplay(action.turn)
-          harness = createHarness()
+          harness = createHarness('deepseek-v4-pro')
           await harness.start()
           subscription = harness.client.subscribeSessionTree(sessionId)
           await expect(harness.resumeSession('missing-session')).rejects.toThrow()
@@ -1107,7 +1108,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const events = results.flatMap(result => result.events)
         const headers = events.filter(event => event.type === 'request/header')
           .map(event => (event.data.header as { tools: { name: string }[] }).tools.map(tool => tool.name))
-        expect(headers).toHaveLength(2)
+        expect(headers, JSON.stringify(events.filter(event => event.type === 'turn/end' || event.type === 'tool/result'))).toHaveLength(2)
         expect(headers[0]).toContain('bash')
         expect(headers[0]).not.toContain('run_code')
         expect(headers[1]).toEqual(['run_code'])
@@ -1125,7 +1126,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         }
       }
       if (assertions.expectedFinalResponse !== undefined) {
-        expect(results.at(-1)?.finalResponse, `${scenario.name}: final response`).toBe(assertions.expectedFinalResponse)
+        const failures = results.flatMap(result => result.events).filter(event => event.type === 'turn/end' || event.type === 'tool/result')
+        expect(results.at(-1)?.finalResponse, `${scenario.name}: final response; outcomes: ${JSON.stringify(failures)}`).toBe(assertions.expectedFinalResponse)
         const parent = ordered[0]
         if (parent === undefined) throw new Error(`${scenario.name}: no primary session log`)
         const turnEnds = records(parent.content).filter(record => record.type === 'turn/end')

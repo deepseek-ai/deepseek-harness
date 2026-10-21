@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Git ワークツリー",
+    "description": "エージェントが新しい Git ブランチとワークツリーを作成し、そこで作業を続けられます。",
+    "detail": "docs/DETAIL.md"
+  }
+}

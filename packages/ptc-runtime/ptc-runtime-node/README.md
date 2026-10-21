@@ -25,7 +25,7 @@ Execute model-written TypeScript with host-provided async functions. The default
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this provider in a composition that supplies `fs`, `subprocess`, `sandbox` and `sandboxPolicy`. PTC mode in `dsh-tools` supplies the calling Session's directory and standing policy; direct runtime consumers resolve those options before execution.
+Mount this provider in a composition that supplies `fs`, `subprocess`, `sandbox` and `sandboxPolicy`. `dsh-tool-executor-ptc` supplies the calling Session's directory and standing policy; direct runtime consumers resolve those options before execution.
 
 ### Configuration
 
@@ -52,12 +52,14 @@ Configure the provider row after its required services are available:
 | `maxTimeoutMs` | `600,000` | Elapsed deadline ceiling applied by the resolver |
 | `maxOutputBytes` | `67,108,864` | Combined serialized logs and completion or diagnostic budget |
 | `maxOldGenerationSizeMb` | `512` | V8 old-generation heap limit in MiB |
-| `maxMessageBytes` | `134,217,728` | Limit for a control frame, outstanding argument bytes and queued control writes |
+| `maxMessageBytes` | `134,217,728` | Limit for a control message, outstanding binding-argument bytes and queued control writes |
 | `maxPendingCalls` | `128` | Maximum simultaneous host binding calls |
 | `graceMs` | `3,000` | Managed termination and output-drain grace |
 | `launch` | Local carrier | Explicit `{ kind: "node-script", executable, bootstrapPath? }` or `{ kind: "embedded", executable }` in the subprocess world |
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-ptc-runtime-node) defines accepted config fields. `resolve(request)` defaults cwd to the sandbox policy workspace root and supplies the numeric or null deadline choice and execution policy; `run(spec)` accepts those resolved inputs and does not fill missing values.
+
+Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-ptc-runtime-node/configuration` to select retained execution from the effective program format. Merge both returned settings atomically: Script keeps its syntax, while function bodies switch to the REPL.
 
 ### Execution and results
 
@@ -93,19 +95,19 @@ In REPL mode, each live Agent keeps its own process and top-level variables, fun
 
 Memory is best-effort and never saved to disk. Restart, Agent disposal, provider unload, cancellation, timeout, protocol failure, output overflow, or process exit clears it. Missing variables raise normal reference errors; reacquire handles and recreate declarations. Exceptions in the active evaluation settle once and preserve earlier mutations. In REPL mode, exceptions from callbacks belonging to a completed evaluation are not reported in a later result. In Script mode, uncaught callback exceptions can terminate the retained process; await asynchronous work before completing an evaluation. The Session still records programs, tool dispatches and visible results; restoring a Session or forking an Agent starts with empty memory. Each evaluation resets the process working directory to its resolved cwd; program calls to `process.chdir()` do not persist across evaluations. Direct Node access follows the resolved file policy. A retained owner cannot change mode, workspace root, additional writable roots, or Session identity until its environment is released.
 
-Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Permission setters record the new mode synchronously. The runtime immediately invalidates affected processes and begins cancellation when the Session mode changes, including idle environments. The next program waits for their cleanup before starting; cleanup failure blocks that program and remains retryable. Permission-setting success does not mean old processes have finished stopping. A one-time approved escalation uses a separate environment and awaits its cleanup before returning; it cannot read the standing environment's variables or retain new declarations. Concurrent runs for one owner reject until execution and required cleanup complete; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle stdout is discarded and idle stderr retains only the bounded diagnostic tail. Await child-process completion before ending an evaluation. Process-exit diagnostics include the exit code and retained stderr tail; idle failures are written to the host logger. If process observation fails during cleanup, releasing the owner retries termination; new runs remain blocked until cleanup succeeds. Pipes that fail to drain after confirmed process exit produce a diagnostic but do not prevent releasing the environment.
+Service consumers pass an object as `stateOwner` to reuse its environment and await `release(owner)` when finished. Requests without an owner run in temporary processes. Their failures leave other owners' retained variables intact and do not report clearing them. Permission setters record the new mode synchronously. The runtime immediately invalidates affected processes and begins cancellation when the Session mode changes, including idle environments. The next program waits for their cleanup before starting; cleanup failure blocks that program and remains retryable. Permission-setting success does not mean old processes have finished stopping. A one-time approved escalation uses a separate environment and awaits its cleanup before returning; it cannot read the standing environment's variables or retain new declarations. Concurrent runs for one owner reject until execution and required cleanup complete; distinct owners may run concurrently. An idle environment has no expiration timer and keeps its process until release or failure. Raw stdout/stderr have no evaluation identity: bytes received during an evaluation share its output budget, even when written by an earlier child process; idle stdout is discarded and idle stderr retains only the bounded diagnostic tail. Await child-process completion before ending an evaluation. Process-exit diagnostics include the exit code and retained stderr tail; idle failures are written to the host logger. If process observation fails during cleanup, releasing the owner retries termination; new runs remain blocked until cleanup succeeds. Pipes that fail to drain after confirmed process exit produce a diagnostic but do not prevent releasing the environment.
 
 ### Deadlines and cancellation
 
 For calls carrying a Session policy, a mode change cancels admission even while waiting for cleanup or process startup. Restoring the previous mode does not revive a canceled call.
 
-The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tools](../../core/tools/README.md#ptc-mode). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The provider owns execution syntax, output syntax and state-retention guidance in `executionInstructions`. The tool consumer appends those mode-specific rules to its model-visible schema without inferring persistence from `programFormat`.
+The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.md). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The provider owns execution syntax, output syntax and state-retention guidance in `executionInstructions`. The tool consumer appends those mode-specific rules to its model-visible schema without inferring persistence from `programFormat`.
 
 Omitting `timeoutMs` uses the configured elapsed default; numeric requests are validated and capped. Service callers can explicitly pass `timeoutMs: null` to omit the elapsed timer, as the workflow adapter does; `run_code` continues to accept only positive numeric overrides. An enabled deadline covers runtime setup and execution, including time awaiting nested tools or approval. It is not a CPU meter. Timeout or cancellation stops a synchronous loop through the host's managed process owner; successful per-call completion also cleans that managed range. The timer stops when an outcome is selected, before cleanup, so the returned call can take longer than its execution deadline while cleanup settles.
 
 ### Failures
 
-Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; malformed or excessive control traffic is `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit or failed managed cleanup is `worker-exit`. The substrate-independent failure name remains `worker-exit` for process providers. Lossy completions are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
+Program parse errors and thrown exceptions are `exception`; deadline expiry is `timeout`; cancellation is `abort`; unparsable or oversized control traffic and invalid program messages are `protocol`; unavailable confinement is `sandbox-unavailable`; early process exit or failed managed cleanup is `worker-exit`. The substrate-independent failure name remains `worker-exit` for process providers. Lossy completions are `invalid-output`, and an oversized outer result is `output-limit`, retaining the fitting log prefix. Invalid or unsupported options and calls after disposal reject as caller misuse.
 
 -----
 
@@ -123,13 +125,15 @@ The host owns policy, deadlines, binding lookup and process cleanup. The child o
 
 The host strips erasable types and, when starting a process, resolves the executable and bootstrap in the configured execution world, awaits argv confinement through `ctx.sandbox`, then spawns through `ctx.subprocess`. Cancellation is checked again after confinement, so a provider returning after cancellation cannot start the program. After adopting the inherited control channel, the child retains only executable-search, Windows system, and temporary paths in its OS environment and replaces the program-visible `process.env` with an empty dictionary. Windows ACL setup receives the parent's distinct `TEMP` and `TMP` values for shared grant locks, then replaces both with its private directory before starting the program. These native paths keep nested process creation and native temporary-file APIs functional. The host preserves `ELECTRON_RUN_AS_NODE` only for child startup so the Desktop executable runs the Node bootstrap; the bootstrap removes the selector before evaluating model code. The heap limit uses Node argv or a provider-created `NODE_OPTIONS` value for packaged executables; ambient loader and inspector flags are discarded.
 
-Length-framed JSON travels separately from stdout/stderr. Every evaluation carries its identity, cwd, syntax and binding declarations through the same run protocol. The host bounds frames and queued writes, validates call identity and binding lookup before dispatch, and refuses invalid traffic. The child keeps the channel open between evaluations until the host closes it. Host shutdown before the first evaluation is a normal close; malformed startup traffic reports its original protocol error even if closing interrupts the readiness write. Later binding replies are ignored after an evaluation's terminal frame; its callbacks cannot emit further binding calls or captured logs. `JsonChannel` owns write tracking and drainage; decoded replies settle binding calls directly. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
+The host calls the child’s `run()` method through birpc; injected bindings call the host’s `invoke()` method, and captured output uses notifications. birpc owns request correlation, remote results, and rejection delivery. Newline-delimited JSON travels over the inherited control pipe separately from stdout/stderr. The RPC adapter bounds each line and the native write queue and rejects pending calls when the pipe closes; birpc answers calls to methods an endpoint does not own with an error, and runs no method after the pipe closes. The host validates binding names and lossless JSON before dispatch; one pipe delivers each evaluation's messages before its result, so messages carry no evaluation identity. Execution deadlines remain host-owned, including calls that await approval.
+
+Per-call completion leaves unfinished binding waits pending and stops binding calls and captured output notifications. The child keeps the control pipe open until the host receives its result and closes the pipe. Output capture meters serialized logs plus the completion or diagnostic; fixed result-envelope fields and sandbox metadata are outside that ledger.
 
 ### Source and built bootstraps
 
-Source execution loads an erasable-only bootstrap closure without relying on sibling built exports; its evaluator modules and installed Acorn and import-meta-resolve dependencies must be available in the execution world. Built script execution uses `process.js` for every mode; `persistent-process.js` delegates to the same loop with a REPL default for hosts that omit program syntax. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
+Source execution loads an erasable-only bootstrap closure without relying on sibling built exports; its evaluator modules and installed Acorn, birpc and import-meta-resolve dependencies must be available in the execution world. Built script execution uses `process.js` for every mode; `persistent-process.js` delegates to the same loop with a REPL default for hosts that omit program syntax. Persistent mode requires a `node-script` launch. A remote script deployment supplies the matching `launch.bootstrapPath`. Embedded carriers launch their private worker through `launch.executable`. `resolveLaunch()` selects the local default during construction; an explicit remote invocation never depends on whether the client itself is packaged. A host path is never assumed to name the same remote file.
 
-Source containing `await` is checked for top-level await before native compilation, which can otherwise treat `await` as an identifier. Acorn parses an async wrapper, and acorn-walk traverses it using Node's REPL visitors, declaration hoisting and character-position edits. Computed class-method keys are traversed while method bodies remain separate evaluations. The transform boxes the final expression; the evaluator unwraps and awaits its value. Source that needs no lowering uses native compilation; submissions without `await` retain native syntax diagnostics. Dynamic `import()` expressions remain native and use the compiling Script's `importModuleDynamically` option. Both private process bundles include Acorn, acorn-walk and import-meta-resolve; source execution imports the installed packages.
+Source containing `await` is checked for top-level await before native compilation, which can otherwise treat `await` as an identifier. Acorn parses an async wrapper, and acorn-walk traverses it using Node's REPL visitors, declaration hoisting and character-position edits. Computed class-method keys are traversed while method bodies remain separate evaluations. The transform boxes the final expression; the evaluator unwraps and awaits its value. Source that needs no lowering uses native compilation; submissions without `await` retain native syntax diagnostics. Dynamic `import()` expressions remain native and use the compiling Script's `importModuleDynamically` option. Both private process bundles include Acorn, acorn-walk, birpc and import-meta-resolve; source execution imports the installed packages.
 
 <a id="runner-import-handling"></a>
 ### Runner import handling
@@ -154,6 +158,7 @@ AsyncFunction and Node REPL share synchronous `registerHooks` and a symbol-keyed
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node provider: common admission, cancellation and service delegation |
 | [`src/config.ts`](src/config.ts) | Execution mode, validated limits and defaults |
+| [`src/configuration.ts`](src/configuration.ts) | Retained-execution settings for profile editors |
 | [`src/execution.ts`](src/execution.ts) | Mode selection, request resolution and temporary or retained process ownership |
 | [`src/worker.ts`](src/worker.ts) | Shared process launch, evaluation deadlines, binding dispatch and cleanup |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | Installed REPL-default entry delegating to the common child loop |
@@ -166,9 +171,10 @@ AsyncFunction and Node REPL share synchronous `registerHooks` and a symbol-keyed
 | [`src/evaluators/vm-script-await.ts`](src/evaluators/vm-script-await.ts) | VM Script top-level await lowering and retained declarations |
 | [`src/output-stream.ts`](src/output-stream.ts) | Bounded stream capture and process-output draining |
 | [`src/launch.ts`](src/launch.ts) | Executable/bootstrap arguments and execution-world asset mapping |
-| [`src/process.ts`](src/process.ts) | Common child handshake, evaluator lifetime and direct binding replies |
-| [`src/bootstrap.ts`](src/bootstrap.ts) | Program evaluation, binding proxies and output capture |
-| [`src/channel.ts`](src/channel.ts) | Framing, bounded writes and protocol failures |
+| [`src/process.ts`](src/process.ts) | Common child handshake, evaluator lifetime and binding RPC |
+| [`src/bootstrap.ts`](src/bootstrap.ts) | Binding proxies, JSON validation, cross-realm exception formatting and output capture |
+| [`src/rpc.ts`](src/rpc.ts) | Typed birpc transport, message limits and connection lifetime |
+| [`src/protocol.ts`](src/protocol.ts) | Host and program methods, and validation of untrusted program results |
 | [`src/output-ledger.ts`](src/output-ledger.ts) | Host accounting for the outer result |
 
 </details>
@@ -190,7 +196,7 @@ Read the service contract before using the provider directly; the decisions expl
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through PTC mode in `dsh-tools` and `dsh-workflow-ptc`, which present program outcomes through their own tool results. Intermediate binding traffic stays outside model history; the outer result follows the ordinary tool spill policy.
+Indirectly, through `dsh-tool-executor-ptc` and `dsh-workflow-ptc`, which present program outcomes through their own tool results. Intermediate binding traffic stays outside model history; the outer result follows the ordinary tool spill policy.
 
 #### KV Cache effect
 
@@ -213,6 +219,7 @@ These limits qualify the execution guarantees and retained output.
 - **In-memory environments retain one process per live owner** — idle owners keep their process and heap until explicit release, owner disposal or failure. Fan-out can retain many processes; idle expiration remains deferred.
 - **Output caps reject rather than retain every byte** — spill can preserve only the bounded result delivered by this provider.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
+- **The control protocol has no version handshake** — a preinstalled `launch.bootstrapPath` or SSH helper must come from the client's release; another release's bootstrap fails at its first control message.
 - **The console shim has five methods** — `log`, `info`, `warn`, `error` and `debug`.
 
 <a id="dev-note"></a>

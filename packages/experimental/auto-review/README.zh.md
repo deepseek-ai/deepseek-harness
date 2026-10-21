@@ -50,7 +50,7 @@ pnpm dsh plugin --profile web remove @deepseek-ai/dsh-experimental-auto-review
 
 ```sh
 dsh plugin --profile headless add @deepseek-ai/dsh-experimental-auto-review
-DSH_TOOLS_MODE=native dsh headless --permission-mode auto --approval-policy never --json - < task.txt > run.jsonl
+dsh headless --permission-mode auto --approval-policy never --json - < task.txt > run.jsonl
 ```
 
 如需从此 checkout 单次运行，可传入 `--patch /absolute/path/to/packages/experimental/auto-review/cordis.patch.yml`，无需安装 profile 层。Auto integration 不可用时，权限预设选择会在读取 stdin 或开始模型工作前失败。Auto 使用完全主机访问权限；此模式不需要 `--add-dir`。原生工具让每个工具 body 都经过审查；PTC 的直接 Node 效果仍不在审查范围内。
@@ -75,7 +75,7 @@ Auto 在每个受支持调用的 body 执行前审查一次，包括每个已开
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml)把本包自身插入为 `auto-review` 行。[`src/index.ts`](src/index.ts)要求 approval、LLM、permission、Session 与 tools 服务，然后在同一个 effect 中安装 preset contribution 和置前的 pre-execute listener。Review 结束后，拒绝会读取 Session 的审批策略：`never` 下为最终拒绝；`ask` 下 listener 先交给后续 pre-execute listener，只有它们放行调用时才返回 tools 流水线的 `ask` 决定，因此后续的拒绝、取消或 `ask`（带自己的理由）优先。`ask` 决定携带英文审计理由，以及保留原始 reviewer 理由的本地化提示文本。[权限 owner](../../interaction/permission-presets/README.zh.md)提供当前身份和进程目录；Auto 使用 Full access 的沙箱值与 `ask` 审批策略，不改变工具定义。
+[`cordis.patch.yml`](cordis.patch.yml)把本包自身插入为 `auto-review` 行。[`src/index.ts`](src/index.ts)要求 approval、LLM、permission、Session 与 tools 服务，然后在同一个 effect 中安装 preset contribution 和置前的 pre-execute listener。Review 结束后，拒绝会读取 Session 的审批策略：`never` 下为最终拒绝；`ask` 下 listener 先交给后续 pre-execute listener，只有它们放行调用时才返回 tools 流水线的 `ask` 决定，因此后续的拒绝、取消或 `ask`（带自己的理由）优先。`ask` 决定携带英文审计理由，以及由 `src/locales.ts` 提供且保留原始 reviewer 理由的中英日提示文本。[权限 owner](../../interaction/permission-presets/README.zh.md)提供当前身份和进程目录；Auto 使用 Full access 的沙箱值与 `ask` 审批策略，不改变工具定义。
 
 Reviewer 以固定策略作为 system prompt，随后依次发送：一条仅含 cwd 的环境 user 消息、按 surface 顺序每个保留 Session 条目一条消息，最后是待审调用。项目指令出现在其进入 surface 的位置，并带约束角色。首次使用某个已审 schema 的调用之前有一条 `tool-schema` 条目；integration 为存活 Session 记住每次已审调用的 schema，使后续评审在同一位置重复它。原生 schema 来自最新 request header。PTC binding 冻结其 schema，经由调度器传入临时执行元数据；开始与结算事件都不序列化描述或参数 schema。主 agent 的 `system/message` 节点、assistant 正文与 reasoning、tool results 全部排除。外层评审输入是冻结的 `RequestUserInput`，不含持久身份或来源；保留历史在评审文本中仍携带原始来源。[决策记录](../../../.agents/notes/implemented/feature/2026-08-28-auto-review.zh.md)拥有权威、生命周期与 child 继承的理由。
 

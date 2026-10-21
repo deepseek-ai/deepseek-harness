@@ -29,14 +29,6 @@
     path: ':memory:'
     openAt: never
 
-- id: tools
-  config:
-    # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc) opts a whole dsh
-    # process into PTC mode while per-session tool-presentation selection is being
-    # designed; unset keeps the schema default (native). Remove the env seam
-    # once the web UI owns the choice per session.
-    mode: !!js process.env.DSH_TOOLS_MODE
-
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 
 # `dsh.client` rows are the browser roster the modules node half scans into
@@ -328,6 +320,9 @@
 
     - id: ui-approval
       name: '@deepseek-ai/dsh-client-ui-approval'
+
+    - id: message-quotes
+      name: '@deepseek-ai/dsh-message-quotes'
 
     - id: ui-chat
       name: '@deepseek-ai/dsh-client-ui-chat'

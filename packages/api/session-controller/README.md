@@ -90,7 +90,7 @@ References keep local Session data, scoped Contexts, and history streams alive, 
 
 GUI model selection requires the exact provider/model pair in the available catalog; unavailable choices reject with `session/model-unavailable`. Prompt admission retains the saved route without a catalog availability gate, so request execution reports missing credentials or unavailable models. `initializeDefaultModel()` saves the first available account model after login when no other provider has a configured API key; credential checks use configured references independently of model availability. A provider with no available models rejects initialization with `session/provider-models-unavailable`. Availability never substitutes another model or rewrites a Session selection.
 
-A successful `selectModel` response acknowledges the Session-local selection without waiting for the default profile setting to save. Default saves run in the background in submission order; a failure logs a warning and leaves the Session selection intact. New Sessions read the last successfully saved default.
+A successful `selectModel` response acknowledges the recorded Session selection without waiting for the default profile setting to save. The loop registers its projection; a change applies to the next step while a prepared step retains its captured choice. Default saves run in the background in submission order; a failure logs a warning and leaves the Session selection intact. A Session with no recorded selection or request reads the last successfully saved default through live `AgentOptions` accessors. An explicit choice is recorded even when it equals that default. Omitting reasoning effort clears the explicit effort and lets each request use the adapter default.
 
 -----
 
@@ -105,6 +105,8 @@ A successful `selectModel` response acknowledges the Session-local selection wit
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-session-controller) is the exhaustive source for accepted fields and their JSDoc.
 
 -----
+
+Blockquotes travel as ordinary prompt text without quote metadata. Local submission echoes and durable messages use the same text rendering rules; queue edits replace content while retaining prompt correlation.
 
 <a id="model-experience"></a>
 ## Model Experience

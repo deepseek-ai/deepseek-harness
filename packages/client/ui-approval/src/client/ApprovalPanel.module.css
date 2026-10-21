@@ -67,3 +67,26 @@
     --dsh-button-outline-color: transparent;
   }
 }
+
+.subject {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+}
+
+.subject img {
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.description {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.withSubject .body { text-align: left; }
+.withSubject .actionRow { flex-wrap: wrap; }

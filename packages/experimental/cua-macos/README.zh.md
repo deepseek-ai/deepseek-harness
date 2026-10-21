@@ -20,7 +20,7 @@ kind: "package-reference"
 - [已知限制与后续工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
-helper 为权限页的应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，授权仍由可执行文件和签名校验决定。
+helper 为授权提示和已授权应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，授权仍由可执行文件和签名校验决定。
 
 共享 helper 查询 macOS 为它记录的责任进程，在发布就绪状态前保存对应应用的名称和图标。因此，从 Terminal 启动 Desktop 时，即使中间还有另一个 GUI 应用，也能识别到 Terminal。责任应用退出后，权限查询仍保留这些信息，后续复用该 helper 的连接读取同一份记录。系统查询或应用信息不可用时省略该字段，由界面引导用户按系统弹窗选择授权对象。
 
@@ -104,7 +104,7 @@ void await app.getScreenshot()
 
 截图要求附件服务可用，并确认当前模型支持图片输入。共享附件接入校验规范 Base64、图像数据及配置容量，然后保存一次图片。程序调用方仍可取得原生数据，模型内容包含坐标元数据和持久图片引用。响应字节上限在解析前执行。
 
-hover、click、scroll 和 drag 的绝对坐标默认使用最近返回截图中的像素。传入 `relative: true` 时使用窗口宽高的千分比整数；省略或传入 `false` 时使用像素。相对坐标可基于成功的 AX 读取或截图，绝对坐标必须先截图。Host 根据实际送入模型的图片尺寸换算原生 point，包含附件归一化和模型请求阶段的缩放。1000 映射到窗口边缘以内。坐标选项不适用于 AX 元素索引。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，原始调用即使不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
+hover、click、scroll 和 drag 的绝对坐标默认使用最近返回截图中的像素。传入 `relative: true` 时使用0～999 的千分比整数；省略或传入 `false` 时使用像素。相对坐标可基于成功的 AX 读取或截图，绝对坐标必须先截图。Host 根据实际送入模型的图片尺寸换算原生 point，包含附件归一化和模型请求阶段的缩放。999 映射到窗口边缘以内。坐标选项不适用于 AX 元素索引。窗口宽高与最近一次观察不同时，在输入前返回 `WINDOW_CHANGED`，原始调用即使不传快照 ID 也会检查；重新读取 AX 或截图后再操作。单纯移动窗口不使窗口内坐标失效。截图和鼠标输入会核对所选窗口的辅助功能框与显示边界；已知两者不一致时，在发送任何鼠标事件前返回 `WINDOW_CHANGED`。当 AX 保留完整窗口框时，这也会拦住 Stage Manager 变换后的窗口。需要重新读取状态；激活应用或抬起窗口仍须显式调用。元素声明的 AX 动作保持可用。缺少 AX 几何时保留无 AX 路径，不代表变换后的窗口一定可以操作。
 
 保留的对象会在每次调用时获取当前工具绑定。外部运行时负责持久化、导入、取消和最终表达式值的序列化。截图返回编码字节及其 MIME 类型、像素尺寸和窗口 ID，标准工具链负责将图片作为附件传递一次。`emit: false` 只控制对象层的输出。使用其他分派器的宿主可以通过 `./api` 的 `createCuaApi` 创建对象。
 
@@ -155,7 +155,7 @@ AppKit sheet 可以通过其窗口 ID 单独选择，也会出现在所属文档
 ##### 操作指导文本（原文）
 
 ```markdown
-Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps or cua.getState to discover running applications, and findApps(query) to search installed applications by name, bundle ID or absolute path. getApp requests user consent before launching a stopped application in the background, or before observations and input on a running one. If access is denied or revoked, stop using that application until the user explicitly permits another authorization request. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. Raw getState returns AX text and snapshotId. Menu-bar entries are shown by default; includeMenus=true expands their contents. details=true adds identifiers, global-point bounds and complete action names. Both options also apply to getAXState. Each read replaces the indices for that app/window scope. Use its element indices only with that snapshotId. Raw screenshot and coordinate operations require a windowId. Coordinates are pixels in the latest returned screenshot, measured from its top-left. Set relative:true for integer thousandths from 0 to 1000 instead. The Host converts both modes to native window points; AX detail bounds remain global macOS points. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
+Use cua with method getCapabilities and params {} to inspect permissions and sessionLocked. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI attempts and ask the user to unlock macOS. A null sessionLocked means no usable console session was verified. After unlocking, read fresh state; screenshots from a locked desktop are not current observations. Use listApps or cua.getState to discover running applications, and findApps(query) to search installed applications by name, bundle ID or absolute path. getApp requests user consent before launching a stopped application in the background, or before observations and input on a running one. If access is denied or revoked, stop using that application until the user explicitly permits another authorization request. Never switch tools to bypass a refusal. Keep the returned appHandle; every app operation requires it. listWindows returns window IDs and point bounds. Raw getState returns AX text and snapshotId. Menu-bar entries are shown by default; includeMenus=true expands their contents. details=true adds identifiers, global-point bounds and complete action names. Both options also apply to getAXState. Each read replaces the indices for that app/window scope. Use its element indices only with that snapshotId. Raw screenshot and coordinate operations require a windowId. Coordinates are pixels in the latest returned screenshot, measured from its top-left. Set relative:true for integer thousandths from 0 to 999 instead. The Host converts both modes to native window points; AX detail bounds remain global macOS points. A verified window can expose no AX elements. Its empty snapshot permits screenshots and coordinate input; element-index actions require an element from a fresh AX observation.
 
 Initialize the object API once in persistent PTC. Reuse its variables in later calls; put temporary declarations inside { ... } blocks to avoid redeclaration errors. All object methods are async. getAXState returns text, not a structured state object. Its text separates values and placeholders, and reports subroles, help, URLs, disabled/focused/selected/expanded state and UTF-16 selection ranges when available. Writability is true, false or unknown on relevant controls; omitted state fields do not assert false. selection=unavailable means the reported range exceeds the observed text. Compact output omits ordinary Press/Pick (click), ShowMenu (right click) and ScrollToVisible actions; details=true lists every available action. Use the displayed action name with performSecondaryAction; ambiguous aliases require the complete name from details=true. Truncation reports the reached provider limit. Narrow the window or increase that provider limit before reading again.
 
@@ -214,7 +214,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 <a id="known-limitations-and-deferred-work"></a>
 
 - 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
-- 坐标使用包含标题栏的返回截图像素；`relative: true` 使用千分比整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
+- 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。

@@ -1,3 +1,4 @@
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Boots the shipped Web composition over the built dist this lane already uses
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
@@ -484,6 +485,7 @@ const EXPECTED_TOOLS = [
   'job_output',
   'list_agents',
   'list_subagent_models',
+  'plugin_manager',
   'present',
   'read',
   'read_image',
@@ -678,7 +680,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // `tool-bash` is a preset row and `tasks` is a host registry; the producer
     // resolves it with `ctx.get`, so a registry hidden behind a preset realm
     // fails here — with every task control still listed in the catalog above.
-    const started = await ctx.tools.execute({
+    const started = await executeModelToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-bash-background'),
       name: 'bash',
@@ -700,7 +702,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The controller reads what the producer started: same registry, one
     // owner. A per-preset registry would list nothing here even on success.
-    const listed = await ctx.tools.execute({
+    const listed = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-list'),
       name: 'job_list',
@@ -713,7 +715,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.
-    const collected = await ctx.tools.execute({
+    const collected = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-output'),
       name: 'job_output',
@@ -1035,7 +1037,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
       // contribution performs no review, so success proves the failed shipped
       // integration left no pre-execute listener behind. It is not supported
       // Auto execution behavior.
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId: ToolCallId('shipped-auto-init-rollback-write'),
         name: 'write',

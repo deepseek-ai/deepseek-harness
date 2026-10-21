@@ -79,3 +79,23 @@ export const en: Record<OpenInAppKey, string> = {
 
 /** Key domain of the `open-in-app` namespace (zh is the source of truth). */
 export type OpenInAppKey = keyof typeof zh
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  ...PRODUCT_NAMES,
+  'open.title': '{app}で開く',
+  'path.appDefault': '{app}（デフォルト）',
+  'path.appsError': 'アプリケーションを読み込めませんでした',
+  'shortcut.busy': 'ワークスペースを開いています',
+  'shortcut.unavailable': '現在のワークスペースまたはローカルアプリケーションを利用できません',
+  'open.tooltip': 'ローカルで開く',
+  'path.open': '開く',
+  'path.more': 'その他の開き方',
+  'path.reveal': 'ファイルの場所を表示',
+  'path.openError': '開けませんでした。もう一度お試しください。',
+  'path.revealError': 'ファイルの場所を表示できませんでした。もう一度お試しください。',
+  'app.finder': 'Finder',
+  'app.explorer': 'エクスプローラー',
+  'app.filemanager': 'ファイル',
+  'app.terminal': 'ターミナル',
+} satisfies Record<keyof typeof en, string>

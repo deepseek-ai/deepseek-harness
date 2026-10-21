@@ -702,6 +702,81 @@ describe('PluginManagerController', () => {
     await vi.waitFor(() => { expect(state().install.inputError).toEqual({ problem: 'unknown', reason: 'offline' }) })
   })
 
+  it('offers a default-hidden shipped bundle by name, permits cancellation, and enables without installing', async () => {
+    let enabled = false
+    const shipped: BundleInfo = { ...BUNDLE, name: '@acme/shipped-exploration', installed: false, official: true,
+      availability: 'installation', optional: true, removable: false, listedByDefault: false }
+    const { plugins, face, state, controller, track } = bench({
+      listBundles: vi.fn(() => Promise.resolve(ok([{ ...shipped, enabled }]))),
+      setBundleEnabled: vi.fn(() => { enabled = true; return Promise.resolve(ok(APPLIED)) }),
+    })
+    await controller.load()
+    expect(state().packages[0]?.listedByDefault).toBe(false)
+    face.openInstall()
+    face.editInstallSpec(shipped.name)
+    face.runInstall()
+    expect(state().install).toMatchObject({ phase: 'done', installed: shipped.name, subject: { bundled: true }, runs: [] })
+    expect(plugins.setBundleEnabled).not.toHaveBeenCalled()
+    face.closeInstall()
+    expect(enabled).toBe(false)
+    expect(track).toHaveBeenCalledWith('install_plugin_result', expect.objectContaining({ error_reason: 'user_cancelled' }))
+    face.openInstall()
+    face.editInstallSpec(shipped.name)
+    face.runInstall()
+    face.enableInstalled()
+    face.enableInstalled()
+    await vi.waitFor(() => { expect(state().install.open).toBe(false) })
+    expect(plugins.setBundleEnabled).toHaveBeenCalledExactlyOnceWith(shipped.name, true)
+    expect(state().packages[0]?.enabled).toBe(true)
+    expect(state().highlight).toBe(shipped.name)
+    expect(plugins.inspect).not.toHaveBeenCalled()
+    expect(plugins.installBundle).not.toHaveBeenCalled()
+    expect(track).toHaveBeenCalledWith('install_plugin_result', expect.objectContaining({ is_success: true, plugin_name: shipped.name }))
+    // The same name cannot start another activation after it is enabled.
+    face.openInstall()
+    face.editInstallSpec(shipped.name)
+    face.runInstall()
+    expect(state().install.inputError?.problem).toBe('shipped')
+  })
+
+  it('reports a refused bundled activation without downloading a replacement', async () => {
+    const shipped: BundleInfo = { ...BUNDLE, name: '@acme/shipped-exploration', installed: false, official: true,
+      availability: 'installation', optional: true, removable: false, listedByDefault: false }
+    const { plugins, face, state, controller } = bench({
+      listBundles: vi.fn(() => Promise.resolve(ok([shipped]))),
+      setBundleEnabled: vi.fn(() => Promise.resolve(ok(failed({ code: 'operation-error', diagnostic: 'activation refused' })))),
+    })
+    await controller.load()
+    face.openInstall()
+    face.editInstallSpec(shipped.name)
+    face.runInstall()
+    face.enableInstalled()
+    await vi.waitFor(() => { expect(state().install.open).toBe(false) })
+    expect(state().notice).toMatchObject({ kind: 'failed', action: 'enable', packageName: shipped.name, reason: 'activation refused' })
+    expect(state().packages[0]?.enabled).toBe(false)
+    expect(plugins.installBundle).not.toHaveBeenCalled()
+  })
+
+  it('accepts a bundled package without optional version or description and reports a lost activation reply', async () => {
+    const shipped: BundleInfo = { name: '@acme/shipped-exploration', installed: false, official: true, enabled: false,
+      availability: 'installation', optional: true, removable: false, updatable: false, listedByDefault: false, rows: [], overrides: [] }
+    const { plugins, face, state, controller } = bench({
+      listBundles: vi.fn(() => Promise.resolve(ok([shipped]))),
+      setBundleEnabled: vi.fn(() => Promise.resolve(refused('gateway/internal', 'offline'))),
+    })
+    await controller.load()
+    face.openInstall()
+    face.editInstallSpec(shipped.name)
+    face.runInstall()
+    expect(state().install.installedVersion).toBeNull()
+    expect(state().install.subject).not.toHaveProperty('version')
+    expect(state().install.subject).not.toHaveProperty('description')
+    face.enableInstalled()
+    await vi.waitFor(() => { expect(state().install.open).toBe(false) })
+    expect(state().notice).toMatchObject({ kind: 'failed', action: 'enable', reason: 'offline' })
+    expect(plugins.installBundle).not.toHaveBeenCalled()
+  })
+
   it('leaves the check or the failed screen for the spec at once', async () => {
     const inspectGate = deferred<ReturnType<typeof ok<typeof INSPECTED>>>()
     const { plugins, face, state, controller } = bench({

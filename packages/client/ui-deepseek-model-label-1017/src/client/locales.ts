@@ -8,3 +8,8 @@ export type LabelKey = keyof typeof zh
 
 /** English badge copy. */
 export const en: Record<LabelKey, string> = { 'badge.label': '1017' }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'badge.label': '1017',
+} satisfies Record<keyof typeof en, string>

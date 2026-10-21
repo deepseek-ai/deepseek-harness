@@ -224,6 +224,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/spill/spill-local': { kind: 'indirect', reason: 'The storage backend delegates model rendering to spill consumers.' },
   'packages/test-support/session-snapshot': { kind: 'none', reason: 'The test harness observes and normalizes transcripts without changing live requests.' },
   'packages/test-support/agent-loop-testkit': { kind: 'none', reason: 'The test helper mounts services but neither drives nor modifies model requests.' },
+  'packages/test-support/tool-testkit': { kind: 'none', reason: 'Fixture helpers define and execute test tools without making model requests.' },
   'packages/test-support/loader-smoke': { kind: 'none', reason: 'The test harness submits an ordinary user task but delegates prompt and tool composition to the loaded tree.' },
   'packages/test-support/llm-mock-server': { kind: 'none', reason: 'The test server substitutes provider wire behavior without invoking a real model.' },
   'packages/test-support/llm-replay': { kind: 'none', reason: 'The keyless adapter invokes no provider model.' },

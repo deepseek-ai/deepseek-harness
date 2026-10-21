@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "永続ターミナル",
+    "description": "複数のツール呼び出しの間もシェルプロセスを実行し続けます。",
+    "detail": "docs/DETAIL.md"
+  }
+}

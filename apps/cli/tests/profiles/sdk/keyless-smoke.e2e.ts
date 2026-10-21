@@ -58,7 +58,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
     { label: 'reports max-token turns with mapping enabled through env', envValue: 'true', editorEnabled: false },
     { label: 'reports max-token turns with mapping disabled through env', envValue: 'false', editorEnabled: false },
     { label: 'allows an explicit patch to enable str_replace_editor', envValue: undefined, editorEnabled: true },
-    { label: 'uses desktop tools through the PTC environment switch', envValue: undefined, editorEnabled: false, ptc: true },
+    { label: 'uses the PTC executor overlay despite the retired environment selector', envValue: undefined, editorEnabled: false, ptc: true },
   ])('$label', async (scenario) => {
     const { envValue, editorEnabled } = scenario
     const ptc = 'ptc' in scenario && scenario.ptc
@@ -92,6 +92,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       '--profile',
       'sdk',
       ...(editorEnabled ? ['--patch', editorPatch] : []),
+      ...(ptc ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -99,7 +100,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
         DSH_HOME: join(root, '.dsh'),
         DSH_PERMISSION_MODE: 'danger-full-access',
         DSH_TELEMETRY_DISABLED: '1',
-        DSH_TOOLS_MODE: ptc ? 'ptc' : 'native',
+        DSH_TOOLS_MODE: ptc ? 'native' : 'ptc',
         DEEPSEEK_API_KEY: 'keyless-smoke-no-call',
         DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
         ...(envValue === undefined ? {} : { DSH_MAX_TOKENS_AS_SUCCESS: envValue }),

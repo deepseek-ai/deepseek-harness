@@ -1,5 +1,5 @@
 /**
- * Lossless-JSON snapshots without workspace runtime imports in the source bootstrap.
+ * Lossless-JSON snapshots shared by the host and the source bootstrap closure.
  * @module @deepseek-ai/dsh-ptc-runtime-node/json-wire
  */
 

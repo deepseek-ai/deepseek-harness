@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-plugin-manager/types'
 import type {} from '@deepseek-ai/dsh-plugin-market/types'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { DiscoverSection } from './DiscoverSection.tsx'
-import { en, zh, type PluginMarketLocaleKey } from './locales.ts'
+import { en, ja, zh, type PluginMarketLocaleKey } from './locales.ts'
 import { DiscoverController } from './market-store.ts'
 
 export type { DiscoverFace, DiscoverState } from './market-store.ts'
@@ -36,7 +36,7 @@ export const inject = ['slots', 'locale', 'remote', 'remote.pluginMarket', 'remo
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plugin-market: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-plugin-market: dictionaries')
   const controller = new DiscoverController(ctx, () => document.baseURI)
   ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-market: controller')
   ctx.effect(() => {

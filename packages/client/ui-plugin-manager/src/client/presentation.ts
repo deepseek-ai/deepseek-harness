@@ -117,7 +117,6 @@ const EXPERIMENTAL_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
-  '@deepseek-ai/dsh-experimental-terminal-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-session-titles-bundle',
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',

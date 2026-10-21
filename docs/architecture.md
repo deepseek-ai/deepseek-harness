@@ -83,7 +83,7 @@ A **step** is one model request plus the tools it calls. A **turn** is zero or m
 ```text
 turn/start
   claim next-step input plus one queued message
-  assemble prompt sections + tool schemas
+  snapshot Session model selection; assemble prompt sections + tool schemas
   -> agent/pre-step; project runtime context at fallback
                                      reject | enter(messages, startsRequestSeries?)
      reject, or a first enter rewritten empty -> close the turn with no step
@@ -107,13 +107,15 @@ turn/end
 
 One inbox feeds the driver; injected context waits for a waking message. AgentLoop’s durable `inbox` projection exposes pending input without live Agents.
 
-`agent/pre-step` decides the accepted input. Listeners may rewrite or reject claimed messages; a rejected or empty first claim closes a durable turn without a step. An enter decision may set `startsRequestSeries`: the loop logs a fresh `request/header` (reason `series`, or `change` with `startsSeries: true` when the envelope also changed). Wrapping listeners preserve that declaration with `{ ...decision, messages }`. After assembly and `step/start`, `agent/request` and `prepareCall()` resolve the actual route before the system prompt and accepted users are committed; cancellation during either async phase commits neither. Prepared call capabilities govern prompt admission, not preceding `request/context`. Each attempt refreshes registered runtime facts, reconciles the bound prompt, admits users once, and restores removed runtime context, logs header/context as needed, and freezes the request before streaming the bound call. Retries do not repeat assembly or `agent/pre-step`. Surface replacements and image-offload decisions after attachment start a new request series, including during the first resumed pre-step; unchanged resume continues the series. The first admitted step reserves the system head before user messages even for an empty prompt (no wire message). The prompt travels only as `system/message` history: an empty rendering clears all active system nodes, leaving no old prompt model-visible; capable routes append non-empty updates after cached history, including supported tool updates; incapable routes and new request series consolidate non-empty prompt text at the first system node, with logged empty replacements for non-empty later system nodes ([decision](../.agents/notes/implemented/architecture/2026-09-02-system-prompt-as-surface-node.md); [decision rule](../packages/core/agent-loop/README.md#understand-the-implementation)).
+The loop snapshots Session model selection before assembly and shares it through `AssembleContext.modelSelection` and `agent/pre-step.modelSelection`; retries retain that selection, and omitted reasoning effort uses adapter defaults. `agent/pre-step` decides the accepted input. Listeners may rewrite or reject claimed messages; a rejected or empty first claim closes a durable turn without a step. An enter decision may set `startsRequestSeries`: the loop logs a fresh `request/header` (reason `series`, or `change` with `startsSeries: true` when the envelope also changed). Wrapping listeners preserve that declaration with `{ ...decision, messages }`. After assembly and `step/start`, the deprecated `agent/request` hook adjusts controls without changing the provider, model, or effort selection, and `prepareCall()` binds the adapter before the system prompt and accepted users are committed; cancellation during either async phase commits neither. Prepared call capabilities govern prompt admission, not preceding `request/context`. Each attempt refreshes registered runtime facts, reconciles the bound prompt, admits users once, and restores removed runtime context, logs header/context as needed, and freezes the request before streaming the bound call. Retries do not repeat assembly or `agent/pre-step`. Surface replacements and image-offload decisions after attachment start a new request series, including during the first resumed pre-step; unchanged resume continues the series. The system prompt travels as `system/message` history: empty text clears it, capable routes append updates, and other routes consolidate it at the first system node. [Agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) owns prompt admission and replacement details.
 
 The loop sends immutable requests with live cancellation and reuses freeze evidence for frozen identities; [agent-loop](../packages/core/agent-loop/README.md) owns construction and cancellation causes.
 
 Failed steps [record missing tool results](../packages/core/agent-loop/README.md#understand-the-implementation).
 
 Details: the [sequence diagram](agent-lifecycle.md), the [tool pipeline](tool-execution-pipeline.md), and [cancellation and error recovery](subsystems/core.md#the-agent-handle).
+
+[`ctx.tools.execute()`](subsystems/tools.md) receives raw batches and concurrency limits.
 
 ## Session log
 
@@ -123,7 +125,7 @@ Session consumers know only the current logical format. Header-only `stat` and `
 
 **Model-visible means logged.** Every model request must be reconstructable from the log. New model-visible inputs require session events. Plugins changing existing message content register [pure message projections](subsystems/session.md#plugin-owned-message-projections); detached readers supply the same definitions explicitly. Tool changes are capability-independent; [Session tool history](../packages/core/session/README.md) supplies provider declarations.
 
-**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events incrementally, and carriers batch cropped client views with `snapshot()`. Domain services await registration during activation, retain private handles, and expose business methods for other plugins. Releasing registration removes global participation; retained handles continue folding Session events. `AgentRegistry` owns turn and step state and exposes `turnBoundaryOf(session)` ([registration lifecycle](../packages/session/session-projection/README.md)).
+**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events incrementally, and carriers batch cropped client views with `snapshot()`. Domain services await registration during activation, retain private handles, and expose business methods for other plugins. Releasing registration removes global participation; retained handles continue folding Session events. `AgentRegistry` owns turn and step state and exposes `turnBoundaryOf(session)` ([registration lifecycle](../packages/session/session-projection/README.md)). `AgentLoop` owns `modelSelection` and constructs each Agent’s `model` instance alongside its inbox.
 
 [Working directories](subsystems/working-directory.md) supply user context and execution paths without changing original project identity, sandbox write roots, or existing process directories.
 

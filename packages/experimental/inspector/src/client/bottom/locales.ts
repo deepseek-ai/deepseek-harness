@@ -1,4 +1,4 @@
-/** Localized labels for the NodeJS Inspector bottom panel and command. */
+/** Localized labels for the NodeJS inspector bottom panel and command. */
 export const zh = {
   title: 'NodeJS 诊断',
   toggle: '展开或收起 NodeJS 诊断',
@@ -9,11 +9,11 @@ export const zh = {
 
 /** English labels checked against the bottom-panel dictionary. */
 export const en: Record<keyof typeof zh, string> = {
-  title: 'NodeJS Inspector',
-  toggle: 'Toggle NodeJS Inspector',
+  title: 'NodeJS inspector',
+  toggle: 'Toggle NodeJS inspector',
   close: 'Collapse',
-  resize: 'Resize NodeJS Inspector panel',
-  frameTitle: 'NodeJS Inspector',
+  resize: 'Resize NodeJS inspector panel',
+  frameTitle: 'NodeJS inspector',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -22,3 +22,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     inspectorPanel: keyof typeof zh
   }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'NodeJS インスペクター',
+  'toggle': 'NodeJS インスペクターの表示切り替え',
+  'close': '折りたたむ',
+  'resize': 'NodeJS インスペクターパネルのサイズ変更',
+  'frameTitle': 'NodeJS インスペクター',
+} satisfies Record<keyof typeof en, string>

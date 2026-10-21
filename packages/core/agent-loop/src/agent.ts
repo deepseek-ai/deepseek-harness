@@ -11,12 +11,14 @@ import type {
   AgentOptions,
   AgentStatus,
   CancelOptions,
+  ModelSelection,
+  ModelSelectionProjectionState,
   InboxTarget,
   InboxState,
   PreStepDecision,
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
-import { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
+import { AgentModel, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import {
   LlmError,
@@ -32,12 +34,12 @@ import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnE
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+import { ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
 import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
-import { executeToolCalls } from './tool-calls.ts'
 
 type Phase =
   | { kind: 'idle'; lastTurn: number }
@@ -58,6 +60,7 @@ type PreparedStep =
     messages: UserMessage[]
     startsRequestSeries?: true
     assembly: PromptAssembly
+    selection: Readonly<ModelSelection>
   }
 
 /** Remove adapter-derived values before plugins propose the next request config. */
@@ -96,6 +99,7 @@ function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
 
 /** Drives one session through turn and step boundaries. */
 export class ReactLoopAgent implements Agent {
+  readonly model: AgentModel
   readonly inbox: ReactLoopInbox
   private phase: Phase
   private activityDone: Promise<void> = Promise.resolve()
@@ -124,6 +128,7 @@ export class ReactLoopAgent implements Agent {
     public readonly id: SessionId,
     public readonly options: AgentOptions,
     public readonly session: Session,
+    readModel: () => ModelSelectionProjectionState,
     readInbox: () => InboxState,
     lastTurn: number,
   ) {
@@ -131,6 +136,7 @@ export class ReactLoopAgent implements Agent {
     this.dispatch = agentEvents(loopCtx, this)
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
+    this.model = new AgentModel(readModel, session, options)
     this.inbox = new ReactLoopInbox(readInbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
@@ -269,10 +275,14 @@ export class ReactLoopAgent implements Agent {
     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
     const signal = this.phase.abort.signal
     const claimed = this.inbox.claim(target, position.turn)
-    const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
+    const selection = this.model.current()
+    if (selection === undefined) {
+      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or record a model selection`)
+    }
+    const assembly = await this.loopCtx.systemPrompt.assemble({ ...assembleContextFor(this, signal), modelSelection: selection })
     signal.throwIfAborted()
     const decision = await this.dispatch.waterfall(
-      'agent/pre-step', { messages: claimed, ...position, signal },
+      'agent/pre-step', { messages: claimed, ...position, signal, modelSelection: selection },
       (): Promise<PreStepDecision> => {
         const sections = renderContextSections(assembly)
         const context = this.runtimeContext.project(joinContextSections(sections), sections)
@@ -284,7 +294,7 @@ export class ReactLoopAgent implements Agent {
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
-    return { ...decision, assembly }
+    return { ...decision, assembly, selection }
   }
 
   /** Whether the assembled tool schemas differ from the logged request header's. */
@@ -407,8 +417,10 @@ export class ReactLoopAgent implements Agent {
     const renderedPrompt = renderPrompt(assembly)
     let firstAttempt = true
     while (true) {
-      const { config, preparedCall } = await this.prepareRequest(turn, step, signal)
-      const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, assembleContextFor(this, signal))
+      const { config, preparedCall } = await this.prepareRequest(turn, step, decision.selection, signal)
+      const currentContext = this.loopCtx.systemPrompt.refreshContext(assembly, {
+        ...assembleContextFor(this, signal), modelSelection: decision.selection,
+      })
       const sections = renderContextSections(currentContext)
       const context = this.runtimeContext.project(joinContextSections(sections), sections)
       signal.throwIfAborted()
@@ -548,11 +560,23 @@ export class ReactLoopAgent implements Agent {
 
         const toolCalls = message.content.filter(block => block.type === 'tool-call')
         if (toolCalls.length === 0) return { kind: 'completed' }
-        const { concluded } = await executeToolCalls(
-          this.loopCtx, turn, step, toolCalls, signal,
-          context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
-        )
-        return concluded ? { kind: 'completed' } : null
+        const maxParallelToolCalls = this.loopCtx.agentLoop.config.maxParallelToolCalls.get()
+        try {
+          const result = await this.loopCtx.tools.execute({
+            calls: toolCalls, signal, agent: this, log: { turn, step },
+            maxParallelToolCalls,
+          })
+          for (const context of result.additionalContexts) {
+            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+          }
+          return result.concluded ? { kind: 'completed' } : null
+        } catch (error: unknown) {
+          if (!(error instanceof ToolBatchExecutionError)) throw error
+          for (const context of error.partial.additionalContexts) {
+            this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])
+          }
+          throw error.cause
+        }
       } catch (error: unknown) {
         if (!live.ended) live.abandon()
         throw error
@@ -560,43 +584,34 @@ export class ReactLoopAgent implements Agent {
     }
   }
 
-  /** Resolve request config and bind its adapter before admitting model-visible input. */
+  /** Resolve request config for the step's selection and bind its adapter before admitting model-visible input. */
   private async prepareRequest(
     turn: number,
     step: number,
+    selection: Readonly<ModelSelection>,
     signal: AbortSignal,
   ): Promise<{ config: LlmCallConfig; preparedCall?: PreparedLlmCall }> {
     const { session } = this
 
-    // A loop instance starts from its declared route, restoring only an explicit
-    // effort owned by that exact model. Later steps re-resolve marked defaults.
-    const persistedHeader = session.requestHeader()
-    const persistedConfig = persistedHeader?.config
-    const route = { provider: this.options.provider ?? '', model: this.options.model ?? '' }
-    const persistedReasoningEffort = persistedConfig?.provider === route.provider
-      && persistedConfig.model === route.model
-      && persistedHeader?.adapterDefaults?.reasoningEffort !== true
-      ? persistedConfig.reasoningEffort
-      : undefined
-    const reasoningEffort = this.options.reasoningEffort ?? persistedReasoningEffort
+    // A loop instance seeds output controls from its options until it logs its
+    // own header; later steps re-resolve marked defaults.
     const maxTokens = this.options.maxTokens
-    const seedConfig = deepFreeze(structuredClone(
-      this.requestHeaderLogged
-        // oxlint-disable-next-line typescript/no-non-null-assertion -- the instance logged the header it now folds
-        ? requestProposal(persistedHeader!)
-        : {
-          ...route,
-          ...reasoningEffort === undefined ? {} : { reasoningEffort },
-          ...maxTokens === undefined ? {} : { maxTokens },
-        },
-    ))
+    const persisted: Partial<LlmCallConfig> = this.requestHeaderLogged
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- the instance logged the header it now folds
+      ? requestProposal(session.requestHeader()!)
+      : maxTokens === undefined ? {} : { maxTokens }
+    const { provider: _provider, model: _model, reasoningEffort: _effort, ...controls } = persisted
+    const seedConfig = deepFreeze(structuredClone({ ...controls, ...selection }))
     const proposedConfig = await this.dispatch.waterfall(
       'agent/request', { turn, step, signal },
       () => Promise.resolve(seedConfig),
     )
     signal.throwIfAborted()
-    if (!proposedConfig.provider || !proposedConfig.model) {
-      throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or supply both via the agent/request waterfall`)
+    if (proposedConfig.provider !== selection.provider || proposedConfig.model !== selection.model) {
+      throw new Error(`agent "${this.id}": agent/request proposed "${proposedConfig.provider}/${proposedConfig.model}" after step preparation fixed "${selection.provider}/${selection.model}"; use agent.model.select() before step preparation`)
+    }
+    if (proposedConfig.reasoningEffort !== selection.reasoningEffort) {
+      throw new Error(`agent "${this.id}": agent/request proposed reasoning effort "${proposedConfig.reasoningEffort ?? 'adapter default'}" after step preparation fixed "${selection.reasoningEffort ?? 'adapter default'}"; use agent.model.select() before step preparation`)
     }
     let config: LlmCallConfig
     let preparedCall: PreparedLlmCall | undefined

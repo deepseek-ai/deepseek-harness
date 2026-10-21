@@ -1,8 +1,10 @@
-import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 /** Agent controls use the same manager methods as the Web and bound inventory reads. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -14,7 +16,7 @@ import type PluginManager from '../src/index.ts'
 import type { BundleInfo } from '../src/types.ts'
 import * as tool from '../src/tools.ts'
 
-function resultText(result: Awaited<ReturnType<ToolRuntime['execute']>>): string {
+function resultText(result: ToolExecutionResult): string {
   if (typeof result.value !== 'string') throw new Error('Expected a serialized manager result')
   return result.value
 }
@@ -35,11 +37,12 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
   ctx.provide('pluginManager', manager as unknown as PluginManager)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode })
   if (approval !== undefined) await ctx.plugin(ApprovalService, { policy: approval })
   const fiber = await ctx.plugin(tool)
-  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => ctx.tools.execute({ name: 'plugin_manager', arguments: args,
+  const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => executeToolFixture(ctx, { name: 'plugin_manager', arguments: args,
     ...agent === undefined ? {} : { agent },
     callId: ToolCallId('manager-call'), signal })
   return { ctx, manager, call, fiber }
@@ -223,7 +226,7 @@ it('paginates inventories with an explicit continuation and total', async () => 
   expect(resultText(await call({ action: 'list_bundles' }))).toContain('"name":"bundle"')
 })
 
-it('keeps UI translation metadata out of model-facing plugin and bundle lists', async () => {
+it('keeps UI translation and listing metadata out of model-facing plugin and bundle lists', async () => {
   const { call, manager } = await fixture()
   const meta = { title: { en: 'Plugin', zh: '插件' }, error: 'UI-only diagnostic' }
   manager.listPlugins.mockImplementationOnce(async () => [{ entryId: 'include:plugin', enabled: true, meta }])
@@ -231,7 +234,7 @@ it('keeps UI translation metadata out of model-facing plugin and bundle lists', 
     entries: [{ entryId: 'include:plugin', enabled: true }], total: 1, nextOffset: null,
   })
   manager.listBundles.mockImplementationOnce(async () => [{
-    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
+    name: 'bundle', source: 'bundle@^1.0.0', enabled: true, listedByDefault: false, meta, rows: [{ rowId: 'plugin', moduleName: 'plugin', meta }],
   }])
   expect(JSON.parse(resultText(await call({ action: 'list_bundles' })))).toEqual({
     entries: [{ name: 'bundle', source: 'bundle@^1.0.0', enabled: true, rows: [{ rowId: 'plugin', moduleName: 'plugin' }] }], total: 1, nextOffset: null,

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code mods UI",
+    "description": "入力欄の上に各セッションの拡張ツリーを表示し、ボタン操作をブリッジサービスに送信します。"
+  }
+}

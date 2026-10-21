@@ -63,6 +63,7 @@
     "@deepseek-ai/dsh-terminal-bash": "workspace:*",
     "@deepseek-ai/dsh-token-meter": "workspace:*",
     "@deepseek-ai/dsh-tool-bash-persistent": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
     "@deepseek-ai/dsh-tool-pwsh-persistent": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",

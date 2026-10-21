@@ -2,11 +2,10 @@
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedConfig } from './config.ts'
-import type { ProgramFormat } from './evaluators/types.ts'
 import { validateBindings } from './bindings.ts'
 import type { PolicyProcesses } from './policy-processes.ts'
 import { ProgramWorker } from './worker.ts'
@@ -14,7 +13,7 @@ import { ProgramWorker } from './worker.ts'
 /** Syntax, state retention and model guidance selected during provider construction. */
 export interface ExecutionMode {
   /** Child evaluator selected independently of process lifetime. */
-  readonly format: ProgramFormat
+  readonly format: PtcProgramFormat
   /** Whether caller-owned objects retain processes between runs. */
   readonly retainsState: boolean
   /** Model-facing syntax, output and recovery rules. */
@@ -105,7 +104,7 @@ class NodeExecution {
         ...spec.sandboxPolicy.additionalWritableRoots === undefined
           ? {}
           : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
-      }, this.processes, this.mode)
+      }, this.processes, this.mode, owner !== undefined)
       this.workers.add(worker)
       if (owner !== undefined) this.owners.set(owner, worker)
     }

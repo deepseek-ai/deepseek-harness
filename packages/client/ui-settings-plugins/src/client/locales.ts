@@ -20,3 +20,12 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   tabs: '插件视图',
   empty: '本部署没有开放任何插件视图。',
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'nav': '組み込みプラグイン',
+  'title': '組み込みプラグイン',
+  'intro': 'このデプロイメントに含まれるプラグインを確認します。',
+  'tabs': 'プラグインビュー',
+  'empty': 'このデプロイメントにはプラグインビューがありません。',
+} satisfies Record<keyof typeof en, string>

@@ -8,6 +8,8 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/japanese-plugin-metadata.e2e.ts",
+    "apps/web/tests/rich-text-quotes.e2e.ts",
     "apps/web/tests/hover-input.e2e.ts",
     "apps/web/tests/collapse-timing.e2e.ts",
     "apps/web/tests/notice-wake-tail.e2e.ts",
@@ -80,6 +82,7 @@
     "apps/web/tests/cua-optin.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
+    "apps/web/tests/schedule-phone.e2e.ts",
     "apps/web/tests/worktree-opt-in.e2e.ts",
     "apps/web/tests/session-inspector.e2e.ts",
     "apps/web/tests/shared-inspector.e2e.ts",
@@ -142,6 +145,7 @@
     "apps/web/tests/official-subagent-bundle.e2e.ts",
     "apps/web/tests/present.e2e.ts",
     "apps/web/tests/present-svg.e2e.ts",
+    "apps/web/tests/present-after-closing-reply.e2e.ts",
     "apps/web/tests/composer-draft-scroll.e2e.ts",
     "apps/web/tests/composer-focus.e2e.ts",
     "apps/web/tests/composer-placeholder.e2e.ts",
@@ -243,6 +247,7 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
     { "path": "./packages/experimental/cot-translation-bundle" },
     { "path": "./packages/experimental/session-search" },
@@ -402,6 +407,8 @@
     { "path": "./packages/experimental/auto-review" },
     { "path": "./packages/experimental/claude-code-mods" },
     { "path": "./packages/core/tools" },
+    { "path": "./packages/core/tool-executor-native" },
+    { "path": "./packages/core/tool-executor-ptc" },
     { "path": "./packages/core/agent-tool-presentation" },
     { "path": "./packages/skill/skill" },
     { "path": "./packages/experimental/skill-badge" },
@@ -471,6 +478,7 @@
     { "path": "./packages/spill/spill-policy" },
     { "path": "./packages/guard/timeout-policy" },
     { "path": "./packages/test-support/agent-loop-testkit" },
+    { "path": "./packages/test-support/tool-testkit" },
     { "path": "./packages/acp/acp" },
     { "path": "./packages/bundle/acp-app" },
     { "path": "./packages/bundle/base" },

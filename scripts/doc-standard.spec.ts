@@ -81,6 +81,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/subprocess/win32-process': 'Low-level Win32 process and Job Object primitives.',
   'packages/test-support/session-snapshot': 'Test infrastructure; mounts nothing into a product composition.',
   'packages/test-support/agent-loop-testkit': 'Test helper library; mounts nothing into a product composition.',
+  'packages/test-support/tool-testkit': 'Tool fixture library; exports helpers without a plugin entry.',
   'packages/test-support/client-runtime': 'Browser-side test infrastructure.',
   'packages/test-support/llm-mock-server': 'Test server library; substitutes provider wire behavior.',
   'packages/test-support/loader-smoke': 'Test harness library; mounts nothing into a product composition.',

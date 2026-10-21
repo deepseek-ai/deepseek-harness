@@ -8,6 +8,9 @@
 
 import type { SandboxEnforcement, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
+/** Source evaluation form, independent of retained program state. */
+export type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so

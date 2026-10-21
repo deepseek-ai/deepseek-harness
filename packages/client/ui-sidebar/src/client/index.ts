@@ -14,7 +14,7 @@ import type { SidebarPanelMetadata, SidebarRootInjected } from './contract/slots
 import { createPanelPins } from './panel-pins.ts'
 import { HeaderLeadingControls } from './HeaderLeadingControls.tsx'
 import { SidebarRoot } from './SidebarRoot.tsx'
-import { en, zh, type SidebarKey } from './locales.ts'
+import { en, ja, zh, type SidebarKey } from './locales.ts'
 
 export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
@@ -45,7 +45,7 @@ export const inject = ['slots', 'layout', 'uiWorkspace', 'locale', 'shortcuts']
  */
 export function apply(ctx: ClientContext): void {
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-sidebar: dictionaries')
   const panels = createSnapshotStore<readonly SidebarPanelMetadata[]>([])
   const syncPanels = (): void => {
     const next = ctx.slots.entriesOfSlot('sidebar.panellist').map(({ options }) => {
@@ -73,11 +73,9 @@ export function apply(ctx: ClientContext): void {
     // (current Session Workspace, then recent Workspace).
     startSession: (workspaceId) => { workspaceNavigation.startSession(workspaceId) },
     toggleSidebar: () => { ctx.layout.toggleSidebar() },
-    selectPanel: (id) => {
-      if (id === 'plugins' || id === 'schedules') ctx.get('productAnalytics')?.track('sidebar_menu_click', { menu_name: id === 'plugins' ? 'plugin' : 'cron' })
-      ctx.layout.selectPanel(id)
-    },
+    selectPanel: (id) => { ctx.layout.selectPanel(id) },
     setPinned: panelPins.setPinned,
+    trackEntryClick: (attributes) => { ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes) },
     hooks: { panels, shortcuts: ctx.shortcuts.catalog, entryPins: panelPins.unpinned, entryActions },
   })
   ctx.slots.inject('sidebar', () => ctx.slots.register({

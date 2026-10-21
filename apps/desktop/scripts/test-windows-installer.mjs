@@ -1,4 +1,5 @@
 /** Builds an isolated native payload through the production NSIS configuration and exercises its UI. */
+import { readInstallerLocales, renderInstallerStrings } from './installer-locales.mjs'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
@@ -107,8 +108,8 @@ SectionEnd
   const compiler = await getMakeNsisPath()
   await execute(compiler.path, ['/V2', payloadSource], { ...childOptions, env: { ...childOptions.env, ...compiler.env } })
   if (sign) await sign({ path: join(payload, `${productName}.exe`), hash: 'sha256', isNest: false })
-  const sourceStrings = await readFile(join(appRoot, 'installer', 'strings.nsh'), 'utf8')
-  for (const language of ['en_US', 'zh_CN']) {
+  for (const locale of readInstallerLocales()) {
+    const language = locale.id
     const config = createElectronBuilderConfig()
     if (sign) {
       config.win.forceCodeSigning = true
@@ -117,9 +118,7 @@ SectionEnd
     const languageOutput = join(output, language)
     await mkdir(languageOutput)
     const strings = join(languageOutput, 'strings.nsh')
-    const languageId = language === 'en_US' ? 'ENGLISH' : 'SIMPCHINESE'
-    await writeFile(strings, sourceStrings.split('\n').filter((line) =>
-      !line.startsWith('LangString ') || line.includes(`\${LANG_${languageId}}`)).join('\n'))
+    await writeFile(strings, renderInstallerStrings([locale]), 'utf8')
     const include = join(languageOutput, 'include.nsh')
     await writeFile(include, `!define INSTALLER_BUILD_DIR "${join(output, 'ui')}"\n!define INSTALLER_STRINGS_FILE "${strings}"\n!include "${join(appRoot, 'scripts', 'installer.nsh')}"\n`)
     await build({ projectDir: appRoot, prepackaged: payload, targets: Platform.WINDOWS.createTarget(['nsis'], Arch.x64), publish: 'never',
@@ -132,7 +131,7 @@ SectionEnd
       join(appRoot, 'tests', uninstallOnly ? 'windows-uninstall-smoke.ps1' : 'windows-installer-smoke.ps1'),
       '-Installer', join(languageOutput, 'installer-test.exe'),
       '-ProductName', productName, '-RegistryKey', guid, '-OutputDirectory', languageOutput,
-      ...uninstallOnly ? ['-Language', languageId, '-PackageName', packageName] : []], childOptions)
+      '-Language', language, ...uninstallOnly ? ['-PackageName', packageName] : []], childOptions)
     process.stdout.write(`${language}\n${result.stdout}`)
   }
   succeeded = true

@@ -57,6 +57,15 @@ Under `html[data-platform='darwin']` (set only by the desktop preload) the expan
 
 Scrollbars in the column are a pointer affordance: the shell rebinds the scrollbar indirection to `transparent` whenever the pointer is outside the column and keeps the thumb drawn for 2s after the pointer leaves, so a list nobody is pointing at carries no bar. The reservation that keeps rows from moving belongs to the scrolling region (ui-workspace), so revealing a thumb never reflows.
 
+### Click analytics
+
+On Desktop, the official navigation controls report `sidebar_menu_click` with `menu_name` and `position` before they act. Without the analytics service, the controls only navigate. Selecting a panel by other means reports nothing, and the sidebar reports no exposure events.
+
+- The expanded brand and the New Session button report `menu_name=new_session` with `position=sidebar`. While the Windows caption hosts the collapsed New Session button, that button reports `position=titlebar`; the macOS New Session control beside the traffic lights also reports `position=titlebar`.
+- The **Plugins** and **Automation tasks** rows report `menu_name=plugin` and `menu_name=cron` with `position=sidebar`. Other panel rows report nothing.
+- Each **More** button click reports `menu_name=more` with `position=sidebar`, whether it opens or closes the menu.
+- A More menu row that opens Plugins or Automation tasks through `onOpen(id)` reports `menu_name=plugin` or `menu_name=cron` with `position=sidebar_more`. The report precedes the registration check, so a request for a panel that has unregistered still counts although nothing is selected.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -65,7 +74,7 @@ Scrollbars in the column are a pointer affordance: the shell rebinds the scrollb
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The shell is pure composition: `SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared brand, the `sidebar.workspaces` and `sidebar.settings` child slots, and injected navigation callbacks. Panel entries and their optional titles use the same composition path. Panel metadata is derived from list registrations and locale changes; selection belongs to the layout store.
+The shell is pure composition: `SidebarRootComponentProps` composes the layout owner share, the global `useSessions` and `useWorkspaces` hooks, the declared brand, the `sidebar.workspaces` and `sidebar.settings` child slots, and injected navigation callbacks. Panel entries and their optional titles use the same composition path. Panel metadata is derived from list registrations and locale changes; selection belongs to the layout store. The injected `trackEntryClick(attributes)` forwards to `ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes)`, and `selectPanel` only selects, so each control supplies its own entry and position.
 
 ### Slot discipline
 

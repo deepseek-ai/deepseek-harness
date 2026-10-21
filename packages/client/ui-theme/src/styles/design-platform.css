@@ -287,7 +287,6 @@ body {
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-50);
   --dsw-specific-sidebar-nav-item-active-accent: var(--dsw-static-deepseek-100);
   --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-100);
-  --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-75);
   --dsw-specific-tip: var(--dsw-static-neutral-bluish-60);
 
   background-color: var(--dsw-alias-bg-base);
@@ -411,7 +410,6 @@ body[data-ds-dark-theme] {
   --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-900);
   --dsw-specific-sidebar-nav-item-active-accent: var(--dsw-static-neutral-bluish-800);
   --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-750);
-  --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-tip: var(--dsw-static-neutral-bluish-800);
 }
 

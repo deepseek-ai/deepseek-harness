@@ -157,7 +157,7 @@ Prefix-stable while identity, persona, variables, section text, and order render
 
 #### What the model sees
 
-For shipped tools, the model receives the per-agent-visible subset of the [generated tool schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tools), ordered by configuration or lexicographically after restrictions and assembly interception. Extensions can contribute additional definitions through the same registry. Sections and schema providers are separate assembly inputs. A restriction does not remove a section registration: tool-guidance plugins use `text({ scope })` and `ctx.tools.get(name, scope)` to return empty text or select applicable fragments. Arbitrary static sections are not automatically rewritten.
+For shipped tools, the model receives the per-agent-visible subset of the [generated tool schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-executor-ptc), ordered by configuration or lexicographically after restrictions and assembly interception. Extensions can contribute additional definitions through the same registry. Sections and schema providers are separate assembly inputs. A restriction does not remove a section registration: tool-guidance plugins use `text({ scope })` and `ctx.tools.get(name, scope)` to return empty text or select applicable fragments. Arbitrary static sections are not automatically rewritten.
 
 #### Token effect
 

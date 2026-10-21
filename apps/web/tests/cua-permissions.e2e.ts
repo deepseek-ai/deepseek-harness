@@ -56,32 +56,39 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }])
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
-    callId: ToolCallId('cua-app-approval'), name: 'run_code',
-    arguments: { code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
-      description: 'Request application access' } })
-  const approval = page.locator('[data-question-key]')
+    calls: [{ type: 'tool-call', id: ToolCallId('cua-app-approval'), name: 'run_code',
+      arguments: JSON.stringify({ code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
+        description: 'Request application access' }) }] })
+  const approval = page.locator('[data-approval-key]')
   await Promise.race([approval.waitFor(), grant.then((result) => {
     throw new Error(`Application selection completed before consent: ${JSON.stringify(result)}`)
   })])
-  expect(await approval.textContent()).toContain('Fixture')
-  await approval.getByRole('radio', { name: 'Always allow', exact: true }).click()
-  await approval.getByRole('button', { name: 'Submit', exact: true }).click()
-  expect((await grant).isError).toBe(false)
+  expect(await approval.getByText('Fixture', { exact: true }).count()).toBe(1)
+  expect(await approval.getByRole('textbox').count()).toBe(0)
+  expect(await approval.locator('[data-approval-scroll]').evaluate(element => getComputedStyle(element).textAlign)).toBe('left')
+  expect(await approval.getByRole('button', { name: 'Always allow', exact: true })
+    .evaluate(button => getComputedStyle(button.parentElement!).flexWrap)).toBe('wrap')
+  await expect.poll(() => approval.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
+  expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
+    await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
+  await approval.getByRole('button', { name: 'Always allow', exact: true }).click()
+  expect((await grant).results).toMatchObject([{ result: { isError: false } }])
   await approval.waitFor({ state: 'hidden' })
   await page.getByRole('button', { name: 'Plugins', exact: true }).click()
   const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
   expect(await card.getByRole('button', { name: /Accessibility permission|Screen Recording permission/ }).count()).toBe(0)
   await page.setViewportSize({ width: 1680, height: 600 })
   const plugins = page.locator('[data-plugin-panel]')
-  const openDetails = page.getByRole('button', { name: 'View Computer Use', exact: true })
+  const openDetails = page.getByRole('button', { name: 'View Computer use', exact: true })
   await openDetails.scrollIntoViewIfNeeded()
   expect(await plugins.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   await openDetails.click()
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await panel.getByRole('region', { name: 'Authorize Computer Use', exact: true }).getByRole('group').count()).toBe(4)
-  expect(await panel.getByRole('region', { name: 'Manage applications Computer Use can access', exact: true }).count()).toBe(1)
+  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(4)
+  expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
   expect(await accessibility.getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
@@ -146,7 +153,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
-  await plugins.locator('[data-detail-document] h1').waitFor()
+  const preview = plugins.locator('[data-detail-document] img')
+  await preview.waitFor()
+  await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })
   const trace = await page.evaluateHandle(() => {
     const errors: string[] = []
     const stable = [...document.querySelectorAll('[data-cua-settings] [role="alert"]')].map(node => node.textContent?.trim())
@@ -177,7 +186,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     return { errors, layouts, documents, stop: () => { observer.disconnect(); cancelAnimationFrame(frame) } }
   })
   try {
-    const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer Use', exact: true })
+    const toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: 'Enable Computer use', exact: true })
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       if (width === 390) await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'attached' })
