@@ -26,6 +26,9 @@ const STANDARD_FILE_DESCRIPTORS = [0, 1, 2] as const
 const F_GETFD = 1
 const F_SETFD = 2
 const FD_CLOEXEC = 1
+const F_GETFL = 3
+const F_SETFL = 4
+const O_NONBLOCK = 0x800
 
 let cachedExecve: LinuxExecve | undefined
 
@@ -65,6 +68,16 @@ export function loadLinuxExecve(): LinuxExecve {
       if (flags === -1) throw systemError(koffi.errno(), 'fcntl')
       if ((flags & FD_CLOEXEC) === 0) continue
       if (nativeFcntl(fd, F_SETFD, flags & ~FD_CLOEXEC) === -1) {
+        throw systemError(koffi.errno(), 'fcntl')
+      }
+    }
+    // Node may mark inherited stdio nonblocking while bootstrapping. Native
+    // targets (including WSL interop) expect blocking streams; leaving this flag
+    // set can silently drop output when the parent cannot drain it immediately.
+    for (const fd of STANDARD_FILE_DESCRIPTORS) {
+      const flags = nativeFcntl(fd, F_GETFL, 0)
+      if (flags === -1) throw systemError(koffi.errno(), 'fcntl')
+      if ((flags & O_NONBLOCK) !== 0 && nativeFcntl(fd, F_SETFL, flags & ~O_NONBLOCK) === -1) {
         throw systemError(koffi.errno(), 'fcntl')
       }
     }

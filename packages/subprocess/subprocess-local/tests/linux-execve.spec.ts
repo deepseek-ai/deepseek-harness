@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => {
@@ -9,7 +10,8 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
   it.each([undefined, 'pipe'] as const)('preserves inherited stdio with control %s and reports execve errno', async (control) => {
     const nativeExecve = vi.fn(() => -1)
     const nativeFcntl = vi.fn((fd: number, command: number) => {
-      if (command === 2) return 0
+      if (command === 2 || command === 4) return 0
+      if (command === 3) return [0x802, 1, 0x801][fd]
       return fd === 7 ? 1 : [1, 0, 5][fd]
     })
     const func = vi.fn((declaration: string) => declaration.includes('execve')
@@ -43,6 +45,7 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
       [2, 1, 0],
       [2, 2, 4],
       ...control === 'pipe' ? [[7, 1, 0], [7, 2, 0]] : [],
+      [0, 3, 0], [0, 4, 2], [1, 3, 0], [2, 3, 0], [2, 4, 1],
     ])
     expect(nativeExecve).toHaveBeenCalledExactlyOnceWith(
       '/missing/tool',
@@ -108,4 +111,18 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
     expect(nativeExecve).not.toHaveBeenCalled()
     expect(errno).toHaveBeenCalledOnce()
   })
+})
+
+it.skipIf(process.platform !== 'linux')('passes blocking standard streams to a real native executable after Node initializes them', () => {
+  const moduleUrl = new URL('../src/linux-execve.ts', import.meta.url).href
+  const script = `import { loadLinuxExecve } from ${JSON.stringify(moduleUrl)};
+    void process.stdin; void process.stdout; void process.stderr;
+    loadLinuxExecve()('/bin/cat', ['cat', '/proc/self/fdinfo/0', '/proc/self/fdinfo/1', '/proc/self/fdinfo/2'], process.env);`
+  const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx/esm'), '--input-type=module', '-e', script],
+    { encoding: 'utf8', timeout: 10_000 })
+  expect(result.error).toBeUndefined()
+  expect(result.status, result.stderr).toBe(0)
+  const flags = [...result.stdout.matchAll(/^flags:\s+(\d+)$/gm)].map(match => parseInt(match[1]!, 8))
+  expect(flags).toHaveLength(3)
+  expect(flags.map(value => value & 0x800)).toEqual([0, 0, 0])
 })
