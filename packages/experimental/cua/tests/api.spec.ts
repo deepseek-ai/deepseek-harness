@@ -334,6 +334,25 @@ describe('application and window observations', () => {
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
   })
 
+  it('captures and clicks an explicitly selected floating panel while the main window keeps focus', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const windows = [windowInfo(23), { ...windowInfo(24), title: 'Floating panel' }]
+    f.setWindowRecords(windows)
+    expect(await app.getWindows({ emit: false })).toEqual(windows)
+    f.dispatch.mockResolvedValueOnce(state({ windowId: 24, focusedWindowId: 23, windows }))
+    const panel = await app.getWindow(24)
+    await panel.getScreenshot()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
+    await app.getWindows({ emit: false })
+    await panel.click([10, 20])
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
+      appHandle: 'app-17', snapshotId: 'changed', windowId: 24, x: 10, y: 20, mouseButton: 'left', clickCount: 1,
+    } })
+    await app.getScreenshot()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } })
+  })
+
   it('does not select a focused window absent from the application observation', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
