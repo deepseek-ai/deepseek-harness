@@ -679,7 +679,14 @@ describe('dsh-tool-team', () => {
     const request = adapter.requests.findLast(request => request.sessionId === childId)!
     expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable.`)
     expect(runtimeContextText(request)).not.toContain('You are the Team Lead.')
-    expect(runtimeContextText(request)).not.toContain('Your parent agent id')
+    const source = request.messages.findLast(message => message.source?.kind === 'runtime-context')?.source
+    if (source?.kind !== 'runtime-context' || source.form !== 'snapshot') throw new Error('expected runtime context snapshot')
+    expect(source.sections.find(section => section.name === 'team:identity')).toMatchObject({
+      text: expect.not.stringContaining('Your parent agent id'),
+    })
+    expect(source.sections.find(section => section.name === 'subagent:communication')).toMatchObject({
+      text: expect.stringContaining(`Your parent agent id is ${JSON.stringify(parent.agent.id)}`),
+    })
     expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
       && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
     await orphan.dispose()
