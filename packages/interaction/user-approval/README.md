@@ -25,7 +25,7 @@ Use this package to require a one-shot decision before a sensitive tool action p
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this service when sensitive tool actions should pause for a human or machine decision instead of running unconditionally. The tools pipeline and the sandboxed bash tool route their `ask` decisions through this seam and fail closed when it is absent, so interactive deployments mount it with at least one answerer.
+Compose this service when sensitive tool actions should pause for a human or machine decision instead of running unconditionally. It requires `sessionProjections`; shipped profiles already provide that service. The tools pipeline and the sandboxed bash tool route their `ask` decisions through this seam and fail closed when it is absent, so interactive deployments mount it with at least one answerer.
 
 ### Composing answerers
 
@@ -36,6 +36,7 @@ Answerers are `approval/request` waterfall listeners: return an outcome to answe
 The effective policy is the one set for the session, falling back to the configured default. `ask` (the default) delegates to the composed answerers; `never` rejects every request deterministically before interactive dispatch — the strict headless stance for CI and unattended runs.
 
 ```yaml
+- name: '@deepseek-ai/dsh-session-projection'
 - name: '@deepseek-ai/dsh-user-approval'
   config:
     policy: ask
@@ -69,7 +70,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `ApprovalService`: request dispatch, policy fold and write path, runtime-context contribution |
+| [`src/index.ts`](src/index.ts) | `ApprovalService`: request dispatch, private approval state, policy write path, runtime-context contribution |
 | [`src/types.ts`](src/types.ts) | `ApprovalRequestId` brand and outcome types |
 
 ### Dispatch
@@ -77,6 +78,10 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 `decide()` races the answerer waterfall against the request signal and contains every answerer failure: a throwing listener fails the question closed to `unavailable`, and a rogue non-vocabulary return is normalized to `unavailable`. The `never` policy is enforced inside the service before waterfall dispatch, so a listener registered later with `prepend` cannot bypass the deterministic rejection. The request must be turn-enclosed because the turn is the durable log's commit/replay boundary — a bare event between turns is indistinguishable from a crash tail.
 
 ### Policy and the runtime-context snapshot
+
+The private host-only `approvalState` projection stores the policy override and whether a turn is open. Its size does not grow with the number of events. The registry includes it in persisted checkpoints; the event log remains authoritative. Its pure updates never dispatch questions or grant permission.
+
+Service activation waits for projection registration and fails if registration fails. The service keeps the returned reader private. The host and registry own Session recovery; approval methods do not load history or call hydration from a synchronous read. See the [registration and recovery API](../../session/session-projection/README.md). Pending questions, answerers, and grants remain in the runtime.
 
 The system-prompt contribution `approval:policy` states the complete current meaning of the effective policy — `ask` with its fail-closed consequence, or `never` with its non-escalation consequence — after retained history, so switching policy appends a new full snapshot instead of rewriting the stable request header. `setPolicy()` also injects a sourced user message announcing the change for the next step.
 
@@ -154,6 +159,7 @@ These limits define when the seam is a poor fit or needs special composition car
 - **Only one-shot grants exist** — the outcome vocabulary has `allowed-once` but no `allow-always`, remembered rule, revocation, or grant store; session policy is only `ask` / `never`.
 - **The request carries no tool arguments** — an answerer sees the tool name, reason, and optional call id; the ACP machine channel requires a call id and delegates requests without one.
 - **No built-in answerer** — headless or incompletely composed deployments resolve `unavailable` and fail closed; the service itself never prompts a human.
+- **Pending approvals are process-local** — checkpoints restore policy and turn state, not pending answerer promises or one-shot grants. Recovery does not resubmit questions or repeat runtime effects.
 
 <a id="dev-note"></a>
 ### Dev Note

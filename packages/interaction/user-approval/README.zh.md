@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当敏感工具操作应当暂停等待人或机器的决定、而非无条件执行时，组合此服务。工具流水线与沙箱 bash 工具会通过此 seam 路由 `ask` 决定，并在该 seam 缺失时以拒绝方式关闭，因此交互式部署至少应组合一个应答者。
+当敏感工具操作应当暂停等待人或机器的决定、而非无条件执行时，组合此服务。它要求 `sessionProjections`；发布的配置已提供该服务。工具流水线与沙箱 bash 工具会通过此 seam 路由 `ask` 决定，并在该 seam 缺失时以拒绝方式关闭，因此交互式部署至少应组合一个应答者。
 
 ### 组合应答者
 
@@ -36,6 +36,7 @@ kind: "package-reference"
 有效策略取会话中已设置的策略，并回退到配置的默认值。`ask`（默认）委托给已组合的应答者；`never` 在交互式分发之前确定性地拒绝每个请求——这是 CI 与无人值守运行采用的严格无头模式。
 
 ```yaml
+- name: '@deepseek-ai/dsh-session-projection'
 - name: '@deepseek-ai/dsh-user-approval'
   config:
     policy: ask
@@ -69,7 +70,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `ApprovalService`：请求分发、策略折叠与写入路径、运行时上下文贡献 |
+| [`src/index.ts`](src/index.ts) | `ApprovalService`：请求分发、私有审批状态、策略写入路径、运行时上下文贡献 |
 | [`src/types.ts`](src/types.ts) | `ApprovalRequestId` brand 与结果类型 |
 
 ### 分发
@@ -77,6 +78,10 @@ kind: "package-reference"
 `decide()` 让应答者 waterfall 与请求信号赛跑，并隔离所有应答者故障：抛出异常的监听器会使问题以 `unavailable` 关闭，不属于结果词汇的异常返回值也会规范化为 `unavailable`。`never` 策略在服务内部、waterfall 分发之前执行，因此之后以 `prepend` 注册的监听器也无法绕过确定性的拒绝。请求必须处于未结束的轮次内，因为轮次是持久日志的提交／回放边界——轮次之间的裸事件与崩溃尾部无法区分。
 
 ### 策略与运行时上下文快照
+
+私有的 Host 端 `approvalState` Projection 保存策略覆盖值，以及当前轮次是否仍未结束。其大小不随事件数增长。注册表会将它保存到持久化检查点；事件日志仍是真源。其纯状态更新不会发起问题或授予权限。
+
+服务激活会等待 Projection 注册完成；注册失败会使激活失败。服务私有持有返回的读取句柄。宿主和注册表负责会话恢复；审批方法不会在同步读取时加载历史或调用 hydration。参见[注册与恢复 API](../../session/session-projection/README.zh.md)。待处理问题、应答者和授权仍由运行时负责。
 
 系统提示词贡献 `approval:policy` 在保留历史之后陈述有效策略的完整当前含义——`ask` 及其以拒绝方式关闭的后果，或 `never` 及其非升权后果——因此切换策略会追加一份新的完整快照，而不会改写稳定的请求头。`setPolicy()` 还会注入一条带来源的用户消息，为下一步宣布变更。
 
@@ -154,6 +159,7 @@ Approval prompts are disabled in this session: actions that require approval are
 - **仅存在一次性授权**：结果词汇包含 `allowed-once`，但不含 `allow-always`、已记住的规则、撤销或授权存储；会话策略只有 `ask`／`never`。
 - **请求不携带工具参数**：应答者会看到工具名称、原因和可选调用 id；ACP（Agent Client Protocol）机器通道要求调用 id，并会委托不含 id 的请求。
 - **没有内置应答者**：无头或组合不完整的部署会返回 `unavailable` 并以拒绝方式关闭；服务自身绝不会提示人类。
+- **待处理审批仅在进程内有效**：检查点恢复策略和轮次状态，不恢复待处理应答的 Promise 或一次性授权。恢复不会重新提交问题或重复运行时副作用。
 
 <a id="dev-note"></a>
 ### 开发备注

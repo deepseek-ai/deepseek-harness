@@ -1268,11 +1268,8 @@
     "d423bbcd1caff7aab2e2de52564efbc9061e775620a530157805a43d851c6fe9": 1
   },
   "packages/interaction/user-approval/tests/approval.spec.ts": {
-    "3261a2af17649cc35cf8698e3b7278101044ed1a07efce757615616e0f918d3a": 1,
     "4dd1f265ec710503bb27f057a582099a1e9d8b5db80fb45f148e32fd2afb5325": 2,
     "744b30e13b6390439c34f4970441a292a07f4ac3d26f25e9be75d1b5c18f4f33": 1,
-    "971ec45a1146ab52f2fb13f75b782d5d35c0fb2ddba1fb9ccab14cc54f7291d5": 1,
-    "a6a2f2761dfd14ff3624a7f8684b025d6aa733d41cac4381db7c83f2a38f0c35": 1,
     "f33c4a795e2cda267cb28d2937c632d56134b8e6438d21e4bf74da2735b1c154": 1
   },
   "packages/interaction/user-questions/tests/user-questions.spec.ts": {

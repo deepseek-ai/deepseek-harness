@@ -4374,7 +4374,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-user-approval`
 
-- `source`: [`packages/interaction/user-approval/src/index.ts:135`](../packages/interaction/user-approval/src/index.ts)
+- `inject`: `sessionProjections`
+- `source`: [`packages/interaction/user-approval/src/index.ts:147`](../packages/interaction/user-approval/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config. All optional — `static Config` supplies the defaults. */

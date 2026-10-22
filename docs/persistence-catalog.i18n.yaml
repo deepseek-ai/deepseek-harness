@@ -39,8 +39,8 @@
   en: 1e65aa4c24a595ee
   zh: fe7f527c5e45d6a6
 /session-persistence-event-catalog/events/approval/approval-policy-log-only:
-  en: d520080fbb669b54
-  zh: a4459a534c1c96c5
+  en: 13ecb3c4d92a39e2
+  zh: 98ca36fea1b799ec
 /session-persistence-event-catalog/events/assistant:
   en: 44426b6cd0dc01cf
   zh: 44426b6cd0dc01cf
@@ -969,8 +969,8 @@
   en: bb7b3652609ac651
   zh: bdde4e652413c5eb
 /session-persistence-event-catalog/resolved-persistence-types/approvalpolicy:
-  en: 670f484e05d50fa7
-  zh: 7c107f338ea6cf81
+  en: c78bdd273133a02f
+  zh: 2cbbc4d9c7e0a726
 /session-persistence-event-catalog/resolved-persistence-types/assistantmessage:
   en: 2a8bc13a30855b26
   zh: 87f1f5fd2882a411
@@ -1884,8 +1884,8 @@
   en: 3028b222670ce5ad
   zh: cae4c9437e560d61
 /session-persistence-event-catalog/resolved-persistence-types/policy-source:
-  en: 00f1d435f82d2753
-  zh: c2ab108ad2748a6c
+  en: 88fd92dff7aa505f
+  zh: b400712b3ef749aa
 /session-persistence-event-catalog/resolved-persistence-types/preset:
   en: 8ebd37343b638773
   zh: bf7ffa9a60ca42a8
