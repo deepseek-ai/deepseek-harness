@@ -38,7 +38,7 @@ export interface ActivationObserver {
 
 /**
  * Publish one lifecycle edge with per-listener exception containment. Run edges
- * carry the Team root that keys scoped dispatch; provider removal has no
+ * carry the subagent tree root that keys scoped dispatch; provider removal has no
  * parent carrier and reaches listeners unscoped.
  *
  * The service owns this closure because scoped dispatch keys its carrier by the
@@ -57,7 +57,7 @@ export type LifecycleEmitter = {
  * returned promise is logged without starving peer listeners, changing the run,
  * or — for provider removal, which fires from a disposer — breaking teardown.
  * @param ctx - the service's own context, owning dispatch and the logger.
- * @param carrier - resolve the scoped dispatch carrier for one Team root.
+ * @param carrier - resolve the scoped dispatch carrier for one subagent tree root.
  * @returns the emitter both observers and the provider registry publish through.
  */
 export function createLifecycleEmitter(
@@ -90,7 +90,7 @@ export function createLifecycleEmitter(
  * @param emit - the contained lifecycle emitter.
  * @param provider - the provider name recorded in the durable descriptor.
  * @param childId - the durable child session id.
- * @param root - the exact live Team root keying scoped dispatch.
+ * @param root - the exact live subagent tree root keying scoped dispatch.
  * @param parentSessionId - durable direct creator retained through disposal.
  * @returns the observer whose edges this epoch publishes.
  */

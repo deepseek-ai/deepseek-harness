@@ -2220,7 +2220,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "The agent id of another member of your Team, as shown by list_agents."
+      "description": "The agent id of another member of your subagent tree, as shown by list_agents."
     },
     "message": {
       "type": "string",

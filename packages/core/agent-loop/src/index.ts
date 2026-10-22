@@ -444,7 +444,7 @@ export class AgentLoop extends Service implements AgentFactory {
     session: Session,
     callerSignal?: AbortSignal,
     handle?: SessionHandle,
-    parentAgent?: Agent,
+    ownerAgent?: Agent,
   ): PreparedAgent {
     assertAgentOptions(options)
     ownerCtx.fiber.assertActive()
@@ -599,7 +599,7 @@ export class AgentLoop extends Service implements AgentFactory {
             detachSession = agent.ctx.sessions.enter(session)
             // The mounted backend routes announced live events into the active
             // write handle by session id; the loop only owns the handle itself.
-            detachAgent = loopCtx.agents.enter(agent, parentAgent)
+            detachAgent = loopCtx.agents.enter(agent, ownerAgent)
             agent.ctx.sessions.announce(session)
             assertLive()
             await loopCtx.agents.announce(agent, source, abort.signal)
@@ -724,7 +724,7 @@ export class AgentLoop extends Service implements AgentFactory {
         options.signal,
         'startup',
         stored,
-        options.parentAgent,
+        options.ownerAgent,
       )
     })()
     this.ownership.trackWrapper(published)
@@ -741,13 +741,13 @@ export class AgentLoop extends Service implements AgentFactory {
     signal: AbortSignal | undefined,
     source: SessionStartSource,
     stored?: StoredSession,
-    parentAgent?: Agent,
+    ownerAgent?: Agent,
   ): Promise<AgentHandle> {
     using ownedPreparation = preparation
     const session = ownedPreparation.session
     let prepared: PreparedAgent
     try {
-      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle, parentAgent)
+      prepared = this.prepare(ownerCtx, id, agentOptions, session, signal, stored?.handle, ownerAgent)
     } catch (error: unknown) {
       await stored?.handle.close().catch(() => {})
       throw error
@@ -859,7 +859,7 @@ export class AgentLoop extends Service implements AgentFactory {
           options.signal,
           'resume',
           owned,
-          options.parentAgent,
+          options.ownerAgent,
         )
       } finally {
         preparation?.[Symbol.dispose]()

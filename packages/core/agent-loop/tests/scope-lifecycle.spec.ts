@@ -249,7 +249,7 @@ describe('agent scope lifecycle', () => {
     const child = await root.agent.ctx.agents.create({
       sessionId: SessionId('runtime-child'),
       agentOptions: { model: 'mock' },
-      parentAgent: root.agent,
+      ownerAgent: root.agent,
     })
 
     expect(ctx.agents.list()).toEqual([root.agent, child.agent])

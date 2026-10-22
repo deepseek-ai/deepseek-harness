@@ -120,7 +120,7 @@ describe('list_agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — team lead\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
   })
 
   it('omits external leaves without diagnostics', async () => {
@@ -131,7 +131,7 @@ describe('list_agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — team lead`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -144,7 +144,7 @@ describe('list_agents', () => {
     }
     expect(Object.keys(parameters.properties ?? {})).toEqual([])
     expect(parameters.required ?? []).toEqual([])
-    expect(schemas[0]?.description).toContain('You can message any other Team member')
+    expect(schemas[0]?.description).toContain('You can message any other agent in the subagent tree')
     expect(schemas[0]?.description).toContain('You can interrupt only your own descendants')
   })
 
@@ -153,7 +153,7 @@ describe('list_agents', () => {
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — team lead`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -208,7 +208,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — team lead\n`
+      `${parent.id} [inactive] — root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — real child\n`
       + `running-child [running] parent=${parent.id} depth=1 — still working\n`
       + `waiting-child [inactive] parent=${parent.id} depth=1 — waiting on descendants`,
@@ -242,7 +242,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — team lead\n`
+      `${parent.id} [inactive] — root agent\n`
       + `historical-one-shot [diagnostic: unavailable] parent=${parent.id} depth=1\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — summarize the doc`,
     )
@@ -321,7 +321,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — team lead\n`
+      `${parent.id} [inactive] — root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — waiting branch\n`
       + `${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
     )
@@ -369,13 +369,13 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — team lead\n`
+      `${parent.id} [inactive] — root agent\n`
       + 'deep-leaf [inactive] parent=one-shot-mid depth=2 — deep leaf\n'
       + `broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
     )
   })
 
-  it('shows the same complete Team from the root and each branch', async () => {
+  it('shows the same complete subagent tree from the root and each branch', async () => {
     const release = Promise.withResolvers<undefined>()
     const releaseDelta = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -399,7 +399,7 @@ describe('list_agents', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
     const expected = [
-      `${parent.id} [inactive] — team lead`,
+      `${parent.id} [inactive] — root agent`,
       `${alpha} [running] parent=${parent.id} depth=1 — alpha task`,
       `${beta} [inactive] parent=${parent.id} depth=1 — beta task`,
       `${gamma} [inactive] parent=${parent.id} depth=1 — gamma task`,

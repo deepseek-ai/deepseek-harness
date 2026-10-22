@@ -105,9 +105,7 @@ function install(agent: Agent, ctx: Context): () => void {
             : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
         } catch (error: unknown) {
           if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
-          const parentId = agent.session.header.parentSession
-          const parent = parentId === undefined ? '' : ` Your parent agent id is ${JSON.stringify(parentId)}.`
-          return `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent is unavailable.${parent} Continue independent work; Team discovery and messaging require an active root.`
+          return `Your agent id is ${JSON.stringify(agent.id)}. Your Team root agent is unavailable. Continue independent work; shared tasks, subagent discovery, and messaging require an active root.`
         }
       },
     }))

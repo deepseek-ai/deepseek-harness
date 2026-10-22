@@ -76,6 +76,8 @@ Electron 使用 Electron Node 模式启动私有 Desktop Host。Host 调用共�
 - **投递准入**（`agent-controller/admission`）在外部输入进入收件箱之前暂留或拒绝它。
 - **能力事件**无需导入循环即可向某个 seam（`fs/*`、`tools/*`、`telemetry/*`）附加策略和适配器。
 
+`ownerAgent` 指定运行归属，独立于 Session 创建来源（[创建和恢复](../packages/core/agent/README.zh.md)）。
+
 AgentLoop 在启动已排队工作前等待串行 `agent/created`，初始化失败则回滚。卸载在 Agent teardown 期间保留所需资源；[agent-loop](../packages/core/agent-loop/README.zh.md#understand-the-implementation)定义顺序。
 
 [事件映射](event-producer-consumer.zh.md)列出每个事件的生产方与消费方。

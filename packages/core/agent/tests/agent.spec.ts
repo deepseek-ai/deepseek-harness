@@ -352,11 +352,11 @@ describe('AgentRegistry factory seam', () => {
     }, { inject: ['agents'] }))
     expect(calls.create[0]?.ownerCtx.fiber).toBe(callerFiber)
     expect(calls.resume[0]?.ownerCtx.fiber).toBe(callerFiber)
-    expect(calls.create[0]?.options.parentAgent).toBeUndefined()
-    expect(calls.resume[0]?.options.parentAgent).toBeUndefined()
+    expect(calls.create[0]?.options.ownerAgent).toBeUndefined()
+    expect(calls.resume[0]?.options.ownerAgent).toBeUndefined()
   })
 
-  it('keeps the runtime parent in options separately from the caller context', async () => {
+  it('keeps the runtime owner in options separately from the caller context', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
@@ -365,9 +365,11 @@ describe('AgentRegistry factory seam', () => {
     const parent = stubAgent('parent')
     const unregister = await ctx.agents.register(parent)
 
-    await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent })
+    await ctx.agents.create({ sessionId: SessionId('child'), ownerAgent: parent })
+    await ctx.agents.resume({ resumeSessionId: SessionId('stored-child'), ownerAgent: parent })
 
-    expect(calls.create[0]?.options.parentAgent).toBe(parent)
+    expect(calls.create[0]?.options.ownerAgent).toBe(parent)
+    expect(calls.resume[0]?.options.ownerAgent).toBe(parent)
     await unregister()
   })
 

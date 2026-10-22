@@ -56,6 +56,7 @@ describe('wait_agent', () => {
     expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
     expect(renderContextSnapshot(assembled)).not.toContain('Your agent id')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
+    expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
   })
 
   it('is available without Team mode and leaves pending input for normal admission', async () => {

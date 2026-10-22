@@ -50,7 +50,7 @@ The limits section on the **Plugins → Subagent** page edits the Host’s `suba
 
 ### Activation capacity
 
-Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each Team. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
+Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
 
 The current `maxActiveSubagents` value is sampled before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
 
@@ -66,7 +66,7 @@ In-process spawn accepts an independent `agentPreset`; fork and external backend
 
 ### Messaging, interrupting, and discovering
 
-`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the Team root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts validate the durable direct-creator address and require a live Team root; the creator may be offline. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
+`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the subagent tree root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts validate the durable direct-creator address and require a live subagent tree root; the creator may be offline. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
 
 ### Failure and recovery
 
@@ -85,7 +85,7 @@ This section explains how the service is built and where the observable behavior
 ### Design concept
 
 - **One service, many providers.** The service is a named-provider registry; each backend registers under a unique name and a request picks one by name.
-- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, Team ownership, and disposal. Each activation retains a local AgentHandle or external SubagentRun directly; local inbox and idle state belong only to the local variant.
+- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, runtime ownership, and disposal. Each activation retains a local AgentHandle or external SubagentRun directly; local inbox and idle state belong only to the local variant.
 - **Fulfillment is publication.** `startActivation()` returns only after the child is accepted and its handle can cancel that exact execution.
 - **Trusted same-process values.** Requests, descriptors, and results are borrowed immutable; serialization and hostile-input validation belong at process and wire boundaries.
 
@@ -94,10 +94,10 @@ This section explains how the service is built and where the observable behavior
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
-| [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, Team ownership, settlement, and disposal |
+| [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, runtime ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Team messages, return guidance, and settlement notices |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard Team messaging markers |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, return guidance, and settlement notices |
+| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard agent messaging markers |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
@@ -116,7 +116,7 @@ External providers mint a fresh `SubagentRun.id` for each execution in the runti
 
 ### Activation settlement
 
-The manager reserves child identity and capacity, materializes a local Agent or external execution, and accepts the initial task. Local admission closes after Agent activity and pending input finish, with activity revalidated after the final Session flush. Both local and external activations deliver their result after handle cleanup, capacity release, and settlement notifications. Host waits on the Team root join progressing members and their cleanup, including failed executions; idle members with parked input remain resident without delaying host completion. Ordinary members do not wait for descendants. Closing admission and disposing the handle prevent late work from entering a released Agent. Parent delivery emits its notice after settlement only if the creator is still online; caller delivery leaves collection to the awaiting workflow. Headless hosts repeat `agent.whenIdle()` and `waitForChildren(agent)` until no child work remains and the parent stays idle with an unchanged Session sequence across the child check, so completion notices can produce the final parent answer.
+The manager reserves child identity and capacity, materializes a local Agent or external execution, and accepts the initial task. Local admission closes after Agent activity and pending input finish, with activity revalidated after the final Session flush. Both local and external activations deliver their result after handle cleanup, capacity release, and settlement notifications. Host waits on the subagent tree root join progressing members and their cleanup, including failed executions; idle members with parked input remain resident without delaying host completion. Ordinary members do not wait for descendants. Closing admission and disposing the handle prevent late work from entering a released Agent. Parent delivery emits its notice after settlement only if the creator is still online; caller delivery leaves collection to the awaiting workflow. Headless hosts repeat `agent.whenIdle()` and `waitForChildren(agent)` until no child work remains and the parent stays idle with an unchanged Session sequence across the child check, so completion notices can produce the final parent answer.
 
 A local Agent failure without a subsequently committed `turn/end` settles as `error` independently of its descendants. Unclaimed input cannot keep that failed activation resident. A later committed turn ending supersedes the live failure and supplies the recovered outcome.
 
@@ -131,9 +131,9 @@ Targets without a saved preset use the host composition and retain their histori
 
 ### Ownership and invariants
 
-- **The manager owns accepted work** — unpublished failures roll back; published handles cancel and release only their exact activation. Every instance belongs to the Team root; creation parent ids remain unchanged.
+- **The manager owns accepted work** — unpublished failures roll back; published handles cancel and release only their exact activation. Every instance belongs to the subagent tree root; creation parent ids remain unchanged.
 - **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
-- **Agent-message authority follows the tree** — the exact live sender and target must belong to one root. Cold delivery verifies the target descriptor and creation catalogs before restoring only the target. Final inbox admission rechecks the sender and Team root; failed restoration releases the new instance.
+- **Agent-message authority follows the tree** — the exact live sender and target must belong to one root. Cold delivery verifies the target descriptor and creation catalogs before restoring only the target. Final inbox admission rechecks the sender and subagent tree root; failed restoration releases the new instance.
 - **The descriptor is log-only** — a session event absent from model history and retained across compaction; the writer records the resolved child provider, model, and reasoning effort for cold resume. Historical one-shot descriptors remain readable.
 - **This runtime answers archive admission for children** ([seam](../../workspace/workspace/README.md)) — `workspace/session-activity` reports the live subagent descendants inside a turn as the `subagent` family, found by the durable lineage this package records (`parentSession` with the subagent origin, any depth, never a fork) and labelled from each child's descriptor through a live Session observation when the Session query service is composed, otherwise by id; `workspace/session-stop` cancels each of them with the parent cause, one at a time, so one child refusing its cancel is logged while its siblings still stop. The parent's own turn, its jobs, and the archived-lineage step gate belong to the API Session Controller.
 

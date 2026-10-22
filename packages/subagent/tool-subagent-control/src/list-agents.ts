@@ -64,9 +64,9 @@ export function registerListAgents(ctx: Context, interrupt: boolean): void {
   ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
-      'List your entire Team: the root agent and all reachable continuable descendants, including yourself. '
+      'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
-      + 'You can message any other Team member listed as running or inactive. '
+      + 'You can message any other agent in the subagent tree listed as running or inactive. '
       + (interrupt ? 'You can interrupt only your own descendants. ' : '')
       + 'running means it is working; inactive means it is not currently working. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
@@ -116,7 +116,7 @@ export function registerListAgents(ctx: Context, interrupt: boolean): void {
         return [{
           type: 'text',
           text: entries.map((entry) => {
-            if (entry.kind === 'root') return `${entry.id} [${entry.status}] — team lead`
+            if (entry.kind === 'root') return `${entry.id} [${entry.status}] — root agent`
             const at = ` parent=${String(entry.parent)} depth=${String(entry.depth)}`
             return entry.kind === 'diagnostic'
               ? `${entry.id} [diagnostic: ${entry.reason}]${at}`

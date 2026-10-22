@@ -44,7 +44,7 @@ kind: "package-reference"
 
 ### send_message
 
-通过 `agent_id` 向另一个 Team 成员发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
+通过 `agent_id` 向同一 subagent 树中的另一个 agent 发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
 
 ### interrupt_agent
 
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级 id与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉领导独立 Team。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。后代行包含直接父级 id 与相对根的深度。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
 
 -----
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 投递与信号所有权
 
-执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；Team 根管理运行时实例和容量。
+执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；subagent 树根管理运行时实例和容量。
 
 ### 列表投影
 
@@ -86,7 +86,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 共享控制工具注册 |
-| [`src/list-agents.ts`](src/list-agents.ts) | 整个 Team 的发现与活动投影 |
+| [`src/list-agents.ts`](src/list-agents.ts) | 整棵 subagent 树的发现与活动投影 |
 | [`src/wait-agent.ts`](src/wait-agent.ts) | 当前调用者的收件箱等待和清理 |
 
 </details>
@@ -139,11 +139,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `message delivered to agent <id>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 Team 或输入被拒绝时，返回错误结果。
+接受时返回 `message delivered to agent <id>`；规范输出携带已接受的 `messageId`。目标不属于调用方的 subagent 树或输入被拒绝时，返回错误结果。
 
 #### Token 影响
 
-每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的 id向 Team 内成员发送后续消息。
+每次调用返回一条简短确认；回复通过单独指定收件人的消息到达。使用 `list_agents` 中的 id 向 subagent 树内成员发送后续消息。
 
 #### KV Cache 影响
 
@@ -153,11 +153,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — team lead`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成。
+首行为 `<id> [<status>] — root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成。
 
 #### Token 影响
 
-随整个 Team 列出的行数线性增长。没有游标或上限。
+随整棵 subagent 树列出的行数线性增长。没有游标或上限。
 
 #### KV Cache 影响
 
@@ -171,7 +171,7 @@ kind: "package-reference"
 这些限制说明控制工具无法观察或引导什么；它们是当前包约束。
 
 - **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
-- **消息需要在线 Team 根**——中间创建者可以离线。仅恢复目标，占用一个共享容量名额。无关树、外部目标与一次性目标不能接收消息。
+- **消息需要在线 subagent 树根**——中间创建者可以离线。仅恢复目标，占用一个共享容量名额。无关树、外部目标与一次性目标不能接收消息。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `inactive` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 

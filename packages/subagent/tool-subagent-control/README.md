@@ -44,7 +44,7 @@ Set `config.interrupt: false` to omit `interrupt_agent` and its guidance in `lis
 
 ### send_message
 
-Sends a message to another Team member by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+Sends a message to another agent in the same subagent tree by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
@@ -57,7 +57,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate Teams.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
 
 -----
 
@@ -75,7 +75,7 @@ Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, c
 
 ### Delivery and signal ownership
 
-The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the Team root owns runtime instances and capacity.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the subagent tree root owns runtime instances and capacity.
 
 ### Listing projection
 
@@ -86,7 +86,7 @@ The execution signal owns work only until inbox acceptance. Accepted messages ca
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Shared control-tool registration |
-| [`src/list-agents.ts`](src/list-agents.ts) | Whole-Team discovery and activity projection |
+| [`src/list-agents.ts`](src/list-agents.ts) | Whole-tree discovery and activity projection |
 | [`src/wait-agent.ts`](src/wait-agent.ts) | Exact-caller inbox wait and cleanup |
 
 </details>
@@ -139,11 +139,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s Team or rejected admission produces an errored result.
+`message delivered to agent <id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s subagent tree or rejected admission produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; replies arrive as separately addressed messages. Use ids from `list_agents` for follow-ups across the Team.
+One short acknowledgement per call; replies arrive as separately addressed messages. Use ids from `list_agents` for follow-ups across the subagent tree.
 
 #### KV Cache effect
 
@@ -153,11 +153,11 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — team lead`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion.
 
 #### Token effect
 
-Grows linearly with the whole Team’s listed rows. There is no cursor or cap.
+Grows linearly with the whole subagent tree’s listed rows. There is no cursor or cap.
 
 #### KV Cache effect
 
@@ -171,7 +171,7 @@ Append-only; each result follows the reusable request prefix.
 These limits define what the control tools cannot observe or steer; they are current package constraints.
 
 - **A delivered message has no independent result** — acceptance returns only its inbox `messageId`; later target work lands in that target's durable Session and is never collected through this tool. A reply is another explicitly addressed `send_message`, not this call's result.
-- **Messaging requires a live Team root** — intermediate creators may be offline. Only the target resumes, consuming one shared capacity slot. Unrelated trees and external or one-shot targets cannot receive messages.
+- **Messaging requires a live subagent tree root** — intermediate creators may be offline. Only the target resumes, consuming one shared capacity slot. Unrelated trees and external or one-shot targets cannot receive messages.
 - **Listing is a snapshot, not a delivery promise** — it may race publication, disposal, or a later message, and another process may activate a child this process reports as `inactive`; cross-process accuracy requires a shared lease. `interrupt_agent` performs the authoritative live-lineage check itself, so discovery staleness cannot grant authority.
 - **No pagination or deletion** — the complete stably ordered set is returned, and persisted children remain listed for as long as their sessions remain in persistence; a service-level bound or delete operation is a later product decision.
 

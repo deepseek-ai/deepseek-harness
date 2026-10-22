@@ -206,7 +206,7 @@ describe('tree-wide messages', () => {
     await expect(ctx.subagents.sendMessage(sender, a, [], { signal })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('restores only the target within Team capacity while its creator remains offline', async () => {
+  it('restores only the target within subagent tree capacity while its creator remains offline', async () => {
     const { ctx, parent, adapter } = await setup({
       a: ['hang'], branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')],
     }, 2)

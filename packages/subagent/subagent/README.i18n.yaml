@@ -24,8 +24,8 @@
   en: 86c982223fab1a3a
   zh: 3d220d8ed84eab9a
 /deepseek-ai-dsh-subagent/use-this-package/activation-capacity:
-  en: 4fc839e4615959e6
-  zh: 39948945b77ab8fa
+  en: 4b40bd380bea81ce
+  zh: 896a584190981168
 /deepseek-ai-dsh-subagent/use-this-package/local-and-external-children:
   en: 013644290e74493e
   zh: 05014c3c3773edeb
@@ -33,8 +33,8 @@
   en: a740e5e9bdd661d9
   zh: 712a5458fc8b3615
 /deepseek-ai-dsh-subagent/use-this-package/messaging-interrupting-and-discovering:
-  en: 4c91b1d897ff73fa
-  zh: 0c65fb3bb7de1244
+  en: fcd8cea487c0e894
+  zh: 1aad1b014d640d52
 /deepseek-ai-dsh-subagent/use-this-package/failure-and-recovery:
   en: 896bf2515524c01f
   zh: 1f1413710e58e4f6
@@ -42,23 +42,23 @@
   en: 74d91b364b23f88d
   zh: 19cc558105efe8df
 /deepseek-ai-dsh-subagent/understand-the-implementation/design-concept:
-  en: 9526209274745343
-  zh: de4cc224782dc52e
+  en: bbbb54cbe1cc56f7
+  zh: 8cd5a9bdf85ff150
 /deepseek-ai-dsh-subagent/understand-the-implementation/source-map:
-  en: d139816838ae22e3
-  zh: b567153dd1f90f56
+  en: 4e9848aeca655933
+  zh: 441e9bad89a9a6ea
 /deepseek-ai-dsh-subagent/understand-the-implementation/provider-preparation-and-structured-output:
   en: 196f7b89e7fad0fb
   zh: 87d2f8f7257ff145
 /deepseek-ai-dsh-subagent/understand-the-implementation/activation-settlement:
-  en: 166d385d83a23e2f
-  zh: 8ea3de8baea043e4
+  en: 87219775ff406254
+  zh: 0d933ef0b3f2d86e
 /deepseek-ai-dsh-subagent/understand-the-implementation/restoring-child-composition:
   en: 843f9f4319ca2ae3
   zh: 218bf355816d4ff6
 /deepseek-ai-dsh-subagent/understand-the-implementation/ownership-and-invariants:
-  en: 8e8ffafeb001ade5
-  zh: d1b4b992305b6df2
+  en: 8b9c2bf434b3ab0c
+  zh: 5da0a877769dcadc
 /deepseek-ai-dsh-subagent/further-exploration:
   en: 5b0f408dd901d90a
   zh: e11866d5fd878327

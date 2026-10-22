@@ -874,7 +874,7 @@ describe('continuable image Queue prompts', () => {
     },
   }
 
-  it('checks the Team root model before accepting an image from a member', async () => {
+  it('checks the subagent tree root model before accepting an image from a member', async () => {
     const { ctx, parent } = await setup(['hang'])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const sender = ctx.agents.get(started.childId)!
@@ -1137,7 +1137,7 @@ describe('direct-child Queue residency routing', () => {
       .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('requires direct creation ancestry for host prompts even within one Team', async () => {
+  it('requires direct creation ancestry for host prompts even within one subagent tree', async () => {
     const { ctx, parent } = await setup(['hang', 'hang', 'hang'])
     const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const second = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
@@ -1333,7 +1333,7 @@ describe('continuable child ownership', () => {
     }
   })
 
-  it('releases a finished creator while its child remains owned by the Team root', async () => {
+  it('releases a finished creator while its child remains owned by the subagent tree root', async () => {
     const releaseCreator = Promise.withResolvers<undefined>()
     const releaseLeaf = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -1624,7 +1624,7 @@ describe('continuable durability and teardown', () => {
     }, { timeout: 5_000 })
   })
 
-  it('disposes every Team instance on manager teardown', async () => {
+  it('disposes every subagent tree instance on manager teardown', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child done'), gate: hold.promise },
@@ -1711,7 +1711,7 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it('does not drain a Team when only an ordinary member closes', async () => {
+  it('does not drain a subagent tree when only an ordinary member closes', async () => {
     const { ctx, parent } = await setup(['hang', 'hang'])
     const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const child = ctx.agents.get(creator.childId)!
@@ -1816,7 +1816,7 @@ describe('continuable durability and teardown', () => {
       .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('drains the Team after an intermediate creator leaves the registry', async () => {
+  it('drains the subagent tree after an intermediate creator leaves the registry', async () => {
     const releaseIntermediate = Promise.withResolvers<undefined>()
     const releaseDescendant = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -2818,7 +2818,7 @@ describe('continuable adjacent-Agent delivery', () => {
       signal: testSignal,
     })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
-      message: 'agent has no active Team owner',
+      message: 'agent has no active runtime owner',
     })
 
     await handle.dispose()
@@ -2866,7 +2866,7 @@ describe('continuable adjacent-Agent delivery', () => {
     })
   })
 
-  it.each(['absent', 'replaced'] as const)('rejects delivery when the Team root is %s', async (state) => {
+  it.each(['absent', 'replaced'] as const)('rejects delivery when the subagent tree root is %s', async (state) => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
@@ -2892,7 +2892,7 @@ describe('continuable adjacent-Agent delivery', () => {
     await waitNoActivation(ctx, started.childId)
   })
 
-  it('propagates the Team root inbox rejection', async () => {
+  it('propagates the subagent tree root inbox rejection', async () => {
     const releaseChild = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('child answer'), gate: releaseChild.promise },
@@ -3470,7 +3470,7 @@ describe('continuable errors', () => {
   it('rejects delegation from an unregistered instance and input to a closing startup', async () => {
     const { ctx, parent } = await setup(['hang'])
     const unmanaged = await ctx.agents.create({
-      parentAgent: parent, sessionId: SessionId('unmanaged'),
+      ownerAgent: parent, sessionId: SessionId('unmanaged'),
       meta: { parentSession: parent.id, origin: 'subagent' },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
@@ -3507,7 +3507,7 @@ describe('continuable errors', () => {
     await drained
   })
 
-  it.each([1, 2])('closes the Team only after pending startup at depth %s rolls back', async (depth) => {
+  it.each([1, 2])('closes the subagent tree only after pending startup at depth %s rolls back', async (depth) => {
     const { ctx, parent } = await setup(Array.from({ length: depth }, () => 'hang' as const))
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     const child = ctx.agents.get(started.childId)!

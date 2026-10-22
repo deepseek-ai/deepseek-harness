@@ -26,7 +26,7 @@ const contexts: Context[] = []
 /** Resident idle recipients exercise delivery without scheduling model work. */
 async function resident(ctx: Context, root: Agent, id: string): Promise<Agent> {
   return (await ctx.agents.create({
-    sessionId: SessionId(id), parentAgent: root, agentOptions: { provider: 'mock', model: 'mock' },
+    sessionId: SessionId(id), ownerAgent: root, agentOptions: { provider: 'mock', model: 'mock' },
   })).agent
 }
 
@@ -235,7 +235,7 @@ describe('Tree-owned task boards', () => {
   ] as const)('rejects a queued %s after its caller is %s', async (action, stopped) => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('queued-caller'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: SessionId('queued-caller'), ownerAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
     })
     const task = await ctx.agentTeams.createTask(lead, { subject: 'existing', description: 'remains unclaimed' })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
@@ -637,7 +637,7 @@ describe('Task-board wait notifications', () => {
     const { ctx, lead, adapter } = await setup([])
     const alpha = await resident(ctx, lead, 'notify-alpha')
     const beta = (await ctx.agents.create({
-      sessionId: SessionId('notify-beta'), parentAgent: lead, meta: { parentSession: alpha.id },
+      sessionId: SessionId('notify-beta'), ownerAgent: lead, meta: { parentSession: alpha.id },
       agentOptions: { provider: 'mock', model: 'mock' },
     })).agent
     const unrelated = await ctx.agentLoop.create(SessionId('unrelated'), { provider: 'mock', model: 'mock' })

@@ -87,7 +87,7 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Identity comes from `ctx.subagents.rootOf(agent)`, without a separate membership service. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
+One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Identity comes from `ctx.subagents.rootOf(agent)`, without a separate membership service. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 

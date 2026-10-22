@@ -209,7 +209,7 @@ describe('Session MCP Loader composition', () => {
     const first = await ctx.agents.create({ sessionId: SessionId('first') })
     const second = await ctx.agents.create({ sessionId: SessionId('second'), agentOptions: { provider: 'fixture', model: 'fixture' } })
     const child = await ctx.agents.create({
-      sessionId: SessionId('child'), parentAgent: first.agent, agentOptions: { provider: 'fixture', model: 'fixture' },
+      sessionId: SessionId('child'), ownerAgent: first.agent, agentOptions: { provider: 'fixture', model: 'fixture' },
       setup: (_inner, agent) => { bindScopeParent(agent, first.agent) },
     })
     await warm(ctx, first.agent)
@@ -319,7 +319,7 @@ describe('Session MCP Loader composition', () => {
     await ctx.systemPrompt.assemble()
     const owner = await ctx.agents.create({ sessionId: SessionId('parent') })
     const child = await ctx.agents.create({
-      sessionId: SessionId('child'), parentAgent: owner.agent,
+      sessionId: SessionId('child'), ownerAgent: owner.agent,
       setup: (_inner, agent) => { bindScopeParent(agent, owner.agent) },
     })
     await warm(ctx, owner.agent)
@@ -335,7 +335,7 @@ describe('Session MCP Loader composition', () => {
     ctx.mcpResources.register('docs', { request: async () => ({ contents: [{ uri: 'docs://memo', text: 'Independent document.' }] }) })
     const parent = await ctx.agents.create({ sessionId: SessionId('resource-parent') })
     const child = await ctx.agents.create({
-      sessionId: SessionId('resource-child'), parentAgent: parent.agent,
+      sessionId: SessionId('resource-child'), ownerAgent: parent.agent,
       setup: (_inner, agent) => { bindScopeParent(agent, parent.agent) },
     })
     expect(renderPrompt(await warm(ctx, parent.agent))).toContain('BROWSER_FIXTURE_INSTRUCTION')
@@ -367,7 +367,7 @@ describe('Session MCP Loader composition', () => {
     await ctx.plugin(McpResources)
     const parent = await ctx.agents.create({ sessionId: SessionId('parent') })
     const child = await ctx.agents.create({
-      sessionId: SessionId('child'), parentAgent: parent.agent,
+      sessionId: SessionId('child'), ownerAgent: parent.agent,
       setup: (_inner, agent) => { bindScopeParent(agent, parent.agent) },
     })
     await warm(ctx, parent.agent)

@@ -51,7 +51,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       agent_id: {
         type: 'string',
         required: true,
-        description: 'The agent id of another member of your Team, as shown by list_agents.',
+        description: 'The agent id of another member of your subagent tree, as shown by list_agents.',
       },
       message: {
         type: 'string',

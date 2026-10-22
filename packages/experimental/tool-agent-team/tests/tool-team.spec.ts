@@ -282,11 +282,11 @@ describe('dsh-tool-team', () => {
   it('identifies nested descendants with the tree root rather than their direct parent', async () => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('identity-child'), parentAgent: lead,
+      sessionId: SessionId('identity-child'), ownerAgent: lead,
       meta: { parentSession: lead.id, origin: 'subagent' },
     })
     const nested = await ctx.agents.create({
-      sessionId: SessionId('identity-nested'), parentAgent: lead,
+      sessionId: SessionId('identity-nested'), ownerAgent: lead,
       meta: { parentSession: child.agent.id, origin: 'subagent' },
     })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
@@ -525,7 +525,7 @@ describe('dsh-tool-team', () => {
     })
     try {
       const child = await ctx.agents.create({
-        sessionId: id, parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+        sessionId: id, ownerAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
       })
       expect(teamTools(await assembly(ctx, child.agent))).toEqual(TEAM_TOOLS)
       const created = await execute(ctx, child.agent, 'team_task_create', {
@@ -542,7 +542,7 @@ describe('dsh-tool-team', () => {
   it('ends every current wait in the committing tree without waking an unrelated tree', async () => {
     const { ctx, lead, adapter } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('waiting-child'), parentAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: SessionId('waiting-child'), ownerAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
     })
     const unrelated = await ctx.agents.create({
       sessionId: SessionId('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },
@@ -673,11 +673,12 @@ describe('dsh-tool-team', () => {
     })
     const result = await execute(ctx, orphan.agent, 'team_task_list', {})
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('agent has no active Team owner')
+    expect(text(result)).toContain('agent has no active runtime owner')
     await runTurn(orphan.agent, 'continue ordinary work')
     const request = adapter.requests.findLast(request => request.sessionId === childId)!
-    expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable. Your parent agent id is "temporary-parent".`)
+    expect(runtimeContextText(request)).toContain(`Your agent id is ${JSON.stringify(childId)}. Your Team root agent is unavailable.`)
     expect(runtimeContextText(request)).not.toContain('You are the Team Lead.')
+    expect(runtimeContextText(request)).not.toContain('Your parent agent id')
     expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
       && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
     await orphan.dispose()
@@ -692,7 +693,7 @@ describe('dsh-tool-team', () => {
     await expect(assembly(ctx, lead)).rejects.toBe(failure)
   })
 
-  it('reports unavailable identity without inventing a parent id', async () => {
+  it('reports unavailable identity without a creation-parent hint', async () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')

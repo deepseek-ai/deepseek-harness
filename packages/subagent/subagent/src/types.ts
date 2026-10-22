@@ -85,7 +85,7 @@ export interface SubagentRunInfo {
    * after that provider is unregistered.
    */
   readonly provider: string
-  /** Durable direct creator, independent of the live Team root. */
+  /** Durable direct creator, independent of the live subagent tree root. */
   readonly parentSessionId: SessionId
   /** The child agent's id. */
   readonly id: SessionId
@@ -102,7 +102,7 @@ export interface SubagentRunEndInfo {
   readonly runId: SubagentRunId
   /** The same provider name carried by the paired start event. */
   readonly provider: string
-  /** Durable direct creator, independent of the live Team root. */
+  /** Durable direct creator, independent of the live subagent tree root. */
   readonly parentSessionId: SessionId
   /** The child agent's id. */
   readonly id: SessionId

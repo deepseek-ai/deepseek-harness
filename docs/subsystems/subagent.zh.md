@@ -2,7 +2,7 @@
 
 [English](subagent.md) | 中文
 
-统一的 activation API 管理本地对话和外部执行。subagent 树定义 Team，与可选任务板无关。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责当前调用者的收件箱等待；实验性 Team 工具添加共享任务、任务策略和 Team 身份。
+统一的 activation API 管理本地对话和外部执行。创建祖先关系、运行归属和通信由 subagent 树管理。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责当前调用者的收件箱等待；实验性 Team 工具添加共享任务、任务策略和 Team 身份。
 
 ## 能力与 activation 请求
 
@@ -439,17 +439,17 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Resolve the root shared by an Agent and its teammates.
+ * Resolve the root shared by an Agent and its other agents in its subagent tree.
  * @param caller - exact live Agent whose subagent ancestry selects the tree.
  * @returns the live root; ordinary Session forks lead independent trees.
- * @throws when the caller or its runtime Team owner is unavailable.
+ * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
 
 /**
- * Join progressing Team work for its root. Idle members with parked input
+ * Join progressing subagent tree work for its root. Idle members with parked input
  * stay resident without delaying host completion. Ordinary members return false.
- * @param parent - exact live Agent; only the Team root joins member work.
+ * @param parent - exact live Agent; only the subagent tree root joins member work.
  * @returns whether work was joined; hosts recheck root idle after true.
  */
 async waitForChildren(parent: Agent): Promise<boolean>
@@ -457,7 +457,7 @@ async waitForChildren(parent: Agent): Promise<boolean>
 /**
  * Steer one model-authored message to another member of the same subagent tree.
  * A running target receives it at its next step; an idle target starts a turn.
- * A cold target resumes under its runtime Team root without restoring
+ * A cold target resumes under its runtime subagent tree root without restoring
  * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
  * stops only pre-acceptance work and never retracts an accepted message.
  * @param sender - exact live root or resident continuable Agent originating the message.
@@ -487,10 +487,10 @@ async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], 
 interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
 
 /**
- * Close admission and stop all instances in the selected Teams, then await
+ * Close admission and stop all instances in the selected subagent trees, then await
  * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
- * until each exact root leaves the registry; unrelated Teams remain live.
- * @param parents - exact live Team roots entering teardown.
+ * until each exact root leaves the registry; unrelated subagent trees remain live.
+ * @param parents - exact live subagent tree roots entering teardown.
  * @returns once all admitted startup and member cleanup have settled.
  * @throws an aggregate error after all branches settle when any failed.
  */
@@ -539,7 +539,7 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
 
 /**
  * Deliver one browser-authored message to a continuable child through the
- * live Team root under its durable creation address, retaining the caller-minted request identity and
+ * live subagent tree root under its durable creation address, retaining the caller-minted request identity and
  * validated browser zone on the accepted message. Success identifies the
  * message the child's inbox accepted; later execution is independent of this
  * call. Queue delivery targets a later turn; steer delivery targets the
@@ -609,11 +609,11 @@ Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/suba
 
 #### `subagent/end` — emit
 
-A published child settled. Scope-filtered dispatch uses the same Team-root carrier as `subagent/start`, so the lifecycle pair reaches the same scoped audience.
+A published child settled. Scope-filtered dispatch uses the same subagent tree-root carrier as `subagent/start`, so the lifecycle pair reaches the same scoped audience.
 
 ```ts cordis-catalog
 /**
- * A published child settled. Scope-filtered dispatch uses the same Team-root
+ * A published child settled. Scope-filtered dispatch uses the same subagent tree-root
  * carrier as `subagent/start`, so the lifecycle pair reaches the
  * same scoped audience.
  * @param info - run identity, durable direct creator `parentSessionId`, and terminal outcome.
@@ -664,14 +664,14 @@ Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/suba
 
 #### `subagent/start` — emit
 
-A provider established a published child. For in-process providers, `ctx.agents.get(info.id)` resolves during this notification. Scope-filtered dispatch keys the carrier by the Team root, so a root-scoped listener observes all Team activations. Paired with `subagent/end`.
+A provider established a published child. For in-process providers, `ctx.agents.get(info.id)` resolves during this notification. Scope-filtered dispatch keys the carrier by the subagent tree root, so a root-scoped listener observes all subagent tree activations. Paired with `subagent/end`.
 
 ```ts cordis-catalog
 /**
  * A provider established a published child. For in-process providers,
  * `ctx.agents.get(info.id)` resolves during this notification.
- * Scope-filtered dispatch keys the carrier by the Team root, so a
- * root-scoped listener observes all Team activations. Paired with
+ * Scope-filtered dispatch keys the carrier by the subagent tree root, so a
+ * root-scoped listener observes all subagent tree activations. Paired with
  * `subagent/end`.
  * @param info - provider, child identity, and durable direct creator `parentSessionId`.
  * @mode emit

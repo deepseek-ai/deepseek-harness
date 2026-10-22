@@ -139,11 +139,11 @@ describe('HarnessSdkJsonRpcServer', () => {
     try {
       const root = await ctx.agents.create({ sessionId: SessionId('root'), meta: { cwd: storageDir } })
       const creator = await ctx.agents.create({
-        sessionId: SessionId('creator'), parentAgent: root.agent,
+        sessionId: SessionId('creator'), ownerAgent: root.agent,
         meta: { cwd: storageDir, parentSession: root.agent.id, origin: 'subagent' },
       })
       const child = await ctx.agents.create({
-        sessionId: SessionId('leaf'), parentAgent: root.agent,
+        sessionId: SessionId('leaf'), ownerAgent: root.agent,
         meta: { cwd: storageDir, parentSession: creator.agent.id, origin: 'subagent' },
       })
       await creator.dispose()
@@ -590,7 +590,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('parentless-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
+        ownerAgent: parentHandle.agent,
       })
       await settleSubagent(ctx, parentHandle.agent, {
         provider: 'spawn',
@@ -653,7 +653,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('remote-run-id'),
         meta: { cwd: storageDir, parentSession: SessionId('collision-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
+        ownerAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -692,7 +692,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('continuation-child'),
         meta: { cwd: storageDir, parentSession: SessionId('continuation-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
+        ownerAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -738,7 +738,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('old-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: oldParent.agent,
+        ownerAgent: oldParent.agent,
       })
       const first = Promise.withResolvers<SubagentResult>()
       const sameLifetime = Promise.withResolvers<SubagentResult>()
@@ -782,7 +782,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('new-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: newParent.agent,
+        ownerAgent: newParent.agent,
       })
       const secondRun = await startLifecycleFixture(ctx, 'reused', {
         parent: newParent.agent,
@@ -840,7 +840,7 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('provider-reuse-child'),
         meta: { cwd: storageDir, parentSession: SessionId('provider-reuse-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parent.agent,
+        ownerAgent: parent.agent,
       })
       const localResult = Promise.withResolvers<SubagentResult>()
       const remoteResult = Promise.withResolvers<SubagentResult>()
@@ -938,14 +938,14 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('fallback-child-session'),
         meta: { cwd: storageDir, parentSession: SessionId('fallback-parent') },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
+        ownerAgent: parentHandle.agent,
       })
       const fallbackChild = handle.agent
       failedHandle = await parentHandle.agent.ctx.agents.create({
         sessionId: SessionId('failed-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
+        ownerAgent: parentHandle.agent,
       })
       const missedStartResult = Promise.withResolvers<SubagentResult>()
       const disposeMissedStartProvider = ctx.subagents.registerProvider({

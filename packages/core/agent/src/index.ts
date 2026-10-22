@@ -65,8 +65,8 @@ export type AgentSetup = (
 export interface CreateAgentOptions {
   /** The live agent/session identity. */
   readonly sessionId: SessionId
-  /** Live parent Agent for runtime ownership; omit for a root Agent. */
-  readonly parentAgent?: Agent
+  /** Live Agent owning the runtime instance; omit for a root. Independent of Session creation lineage. */
+  readonly ownerAgent?: Agent
   /**
    * Session creation metadata: validated absolute `cwd`, `parentSession`
    * fork lineage, the `isSeeded` fork marker, the coarse `origin`
@@ -127,8 +127,8 @@ export interface CreateAgentOptions {
 export interface ResumeAgentOptions {
   /** The persisted session id to load and use as the live agent/session identity. */
   readonly resumeSessionId: SessionId
-  /** Live parent Agent for runtime ownership; omit for a root Agent. */
-  readonly parentAgent?: Agent
+  /** Live Agent owning the runtime instance; omit for a root. Independent of Session creation lineage. */
+  readonly ownerAgent?: Agent
   /** Per-agent options (model, …). */
   readonly agentOptions?: AgentOptions
   /** Optional creation-only cancellation signal for persistence load/setup; detached before return. */
@@ -186,7 +186,7 @@ export interface AgentFactory {
    * transaction and resulting lifecycle to that owner; it must not infer
    * ownership from the factory object's registration context.
    * @param ownerCtx - caller-bound context that owns the transaction and live handle.
-   * @param options - agent/session identity, configuration, optional live parent, and setup.
+   * @param options - agent/session identity, configuration, optional live owner, and setup.
    * @returns the owned handle after setup and both creation announcements complete.
    */
   createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle>
@@ -198,7 +198,7 @@ export interface AgentFactory {
    * Publication follows the same setup-commit and ordered boundary as
    * {@link createAgent}.
    * @param ownerCtx - caller-bound context that owns load, setup, and the live handle.
-   * @param options - persisted identity, configuration, optional live parent, and setup.
+   * @param options - persisted identity, configuration, optional live owner, and setup.
    * @returns the owned handle after setup, both announcements, and loop start complete.
    */
   resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle>
@@ -405,7 +405,7 @@ export class AgentRegistry extends Service {
    * agent): this constructs the agent and its session. Rejects if no factory is
    * registered or creation/setup fails. The resolved {@link AgentHandle} lets
    * the owner tear down exactly this agent.
-   * @param options - shared identity, optional live parent, session seed/metadata, and agent options.
+   * @param options - shared identity, optional live owner, session seed/metadata, and agent options.
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async create(options: CreateAgentOptions): Promise<AgentHandle> {
@@ -424,7 +424,7 @@ export class AgentRegistry extends Service {
    * Load a persisted session and resume an agent on it through the registered
    * factory. Rejects if no factory is registered; the factory rejects if
    * session persistence is not configured or persistence/setup fails.
-   * @param options - persisted identity, optional live parent, configuration, and setup.
+   * @param options - persisted identity, optional live owner, configuration, and setup.
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async resume(options: ResumeAgentOptions): Promise<AgentHandle> {
@@ -443,7 +443,7 @@ export class AgentRegistry extends Service {
    * emits are scope-filtered regardless of which context invoked `register`
    * (calling through `agent.ctx` scopes EFFECTS; dispatch scoping always
    * requires passing the carrier). The entry is a runtime root; factory-backed
-   * creation uses `options.parentAgent` for child ownership. Await the registration before using the agent.
+   * creation uses `options.ownerAgent` for child ownership. Await the registration before using the agent.
    * @param agent - the already-constructed agent to record in the store.
    * @returns the awaitable Cordis effect disposer (single-shot; a repeat call
    *   returns undefined without awaiting an in-flight teardown). Exact

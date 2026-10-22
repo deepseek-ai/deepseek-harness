@@ -120,7 +120,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(schemas[0]!.description).not.toContain('job id')
     expect(schemas[0]!.description).toContain('receives it at its next step')
     expect(props.agent_id).toMatchObject({
-      description: 'The agent id of another member of your Team, as shown by list_agents.',
+      description: 'The agent id of another member of your subagent tree, as shown by list_agents.',
     })
   })
 
@@ -309,7 +309,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('unavailable')
   })
 
-  it('rejects a caller outside the child\'s Team', async () => {
+  it('rejects a caller outside the child\'s subagent tree', async () => {
     const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
@@ -326,7 +326,7 @@ describe('dsh-tool-subagent-control', () => {
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('not a member of this Team')
+    expect(text(result)).toContain('not a member of this subagent tree')
   })
 
   it('fails loud when invoked without a calling agent', async () => {

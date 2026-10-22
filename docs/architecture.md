@@ -74,6 +74,8 @@ Events are the extension points, and picking the right domain is the first decis
 - **Delivery admission** (`agent-controller/admission`) holds or refuses outside input before it enters the inbox.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
+`ownerAgent` selects runtime ownership independently of Session lineage ([creation and resume](../packages/core/agent/README.md)).
+
 AgentLoop awaits serial `agent/created` before queued work and rolls back failed initialization. Unload retains resources through Agent teardown; [agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) defines ordering.
 
 The [event map](event-producer-consumer.md) lists every event's producers and consumers.

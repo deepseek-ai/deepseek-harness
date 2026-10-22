@@ -87,7 +87,7 @@ kind: "package-reference"
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。身份从 `ctx.subagents.rootOf(agent)` 派生，不使用独立成员关系服务。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。身份从 `ctx.subagents.rootOf(agent)` 派生，不使用独立成员关系服务。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
