@@ -125,15 +125,15 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-The logged `subagent:communication` runtime context names the current Agent and, for delegated children, its direct creator using JSON-encoded ids. It points to `send_message` and `list_agents`. The context is absent when the standard messaging definition is hidden, replaced, or excluded from the step. Tool descriptions explain when to send findings and that sending does not end the turn; automatic result delivery remains owned by the subagent service.
+The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded id and how to send findings that change the parent’s next action. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
-One short context entry, independent of tree size, containing at most two ids.
+One short context entry per delegated child, independent of tree size.
 
 #### KV Cache effect
 
-Identity is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the ids again from the target Session.
+Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the parent id again from the target Session.
 
 ### Interrupt result
 

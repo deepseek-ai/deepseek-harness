@@ -193,28 +193,36 @@ describe('dsh-tool-subagent-control', () => {
     const guidance = text(prompt.data)
 
     expect(guidance).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    expect(guidance).toContain(`Your agent id is ${JSON.stringify(started.childId)}`)
     expect(guidance).not.toContain(parent.id)
   })
 
-  it('omits communication context without an Agent or when the standard tool is shadowed or excluded', async () => {
+  it('limits communication context to delegated children with the admitted standard tool', async () => {
     const { ctx, parent } = await setup([])
-    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
-    expect(await communication()).toContain(`Your agent id is ${JSON.stringify(parent.id)}`)
-    expect(await communication()).not.toContain('Your parent agent id')
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({}))).not.toContain('Your agent id')
-    const off = parent.ctx.tools.register(defineTool({
+    const { agent: child } = await ctx.agents.create({
+      sessionId: SessionId('communication-child'), ownerAgent: parent,
+      meta: { origin: 'subagent', parentSession: parent.id },
+    })
+    const { agent: fork } = await ctx.agents.create({
+      sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
+    for (const agent of [undefined, parent, fork]) {
+      expect(renderContextSnapshot(await ctx.systemPrompt.assemble(agent === undefined ? {} : { agent, scope: agent })))
+        .not.toContain('Your parent agent id')
+    }
+    const off = child.ctx.tools.register(defineTool({
       name: 'send_message', description: 'A different tool.', parameters: {},
       output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
       execute: () => Promise.resolve({}),
     }))
-    expect(await communication()).not.toContain('Your agent id')
+    expect(await communication()).not.toContain('Your parent agent id')
     off()
-    expect(await communication()).toContain('Your agent id')
-    parent.ctx.tools.restrict({ deny: ['send_message'] })
-    const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet })))
-      .not.toContain('Your agent id')
+    expect(await communication()).toContain('Your parent agent id')
+    child.ctx.tools.restrict({ deny: ['send_message'] })
+    const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet })))
+      .not.toContain('Your parent agent id')
     toolSet.dispose()
   })
 
@@ -230,7 +238,7 @@ describe('dsh-tool-subagent-control', () => {
     const childRequest = JSON.stringify(adapter.requests[0]!.messages)
     expect(childRequest.includes('Your final answer is delivered automatically')).toBe(delivery === 'parent')
     expect(childRequest).not.toContain('send_message')
-    expect(childRequest).not.toContain('Your agent id')
+    expect(childRequest).not.toContain('Your parent agent id')
     expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
@@ -388,8 +396,12 @@ describe('dsh-tool-subagent-control', () => {
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(tool, config)
     const parent = await ctx.agentLoop.create(SessionId('hmr-parent'), { provider: 'mock', model: 'mock' })
-    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
-    expect(await communication()).toContain('Your agent id')
+    const { agent: child } = await ctx.agents.create({
+      sessionId: SessionId('hmr-child'), ownerAgent: parent,
+      meta: { origin: 'subagent', parentSession: parent.id },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain('Your parent agent id')
     const names = ['send_message', 'list_agents', 'wait_agent']
     if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
@@ -401,9 +413,9 @@ describe('dsh-tool-subagent-control', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
     for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
-    expect(await communication()).not.toContain('Your agent id')
+    expect(await communication()).not.toContain('Your parent agent id')
     const reloaded = await ctx.plugin(tool)
-    expect(await communication()).toContain('Your agent id')
+    expect(await communication()).toContain('Your parent agent id')
     for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
       expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
     }

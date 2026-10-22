@@ -46,8 +46,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'send_message',
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
-      + 'Returns delivery confirmation, not the agent\'s answer. Sending a message does not end your turn. '
-      + 'Send findings when they change what another agent should do next.',
+      + 'Returns delivery confirmation, not the agent\'s answer.',
     parameters: {
       agent_id: {
         type: 'string',
@@ -95,11 +94,12 @@ export function apply(ctx: Context, config: Config = {}): void {
     required: true,
     interpolate: false,
     text: ({ agent, scope, toolSet }) => {
-      if (agent === undefined || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
-      const parentId = agent.session.header.origin === 'subagent' ? agent.session.header.parentSession : undefined
-      return `Your agent id is ${JSON.stringify(agent.id)}.`
-        + (parentId === undefined ? '' : ` Your parent agent id is ${JSON.stringify(parentId)}.`)
-        + ' Use send_message to communicate with another member of your subagent tree; list_agents shows their ids.'
+      if (agent === undefined || agent.session.header.origin !== 'subagent'
+        || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
+      const parentId = JSON.stringify(agent.session.header.parentSession)
+      return `Your parent agent id is ${parentId}. Use `
+        + `send_message({ agent_id: ${parentId}, message: "<finding>" }) when a finding changes what the `
+        + 'parent should do next; sending a message does not end your turn.'
     },
   })
 

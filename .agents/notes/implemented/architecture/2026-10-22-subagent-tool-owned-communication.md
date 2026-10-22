@@ -10,7 +10,7 @@ The continuation manager inspected a Symbol on the standard messaging tool befor
 
 ## Decision
 
-`tool-subagent-control` owns messaging instructions and communication identity. Its tool description explains when to send findings and that sending does not finish a turn. Its logged runtime context reads the current Agent id and the delegated child's direct creator from the Session header. The context is emitted only when the plugin's own tool definition is admitted in the current scope and step; ordinary Session forks do not acquire a subagent parent. Dynamic ids follow inherited history without changing the shared system prompt or tool schema.
+`tool-subagent-control` owns messaging instructions and parent addressing. Its logged runtime context gives delegated children their direct creator’s id from the Session header, explains when to send findings, and states that sending does not finish a turn. The context is emitted only for delegated children when the plugin’s own tool definition is admitted in the current scope and step; roots and ordinary Session forks receive none. Communication guidance follows inherited history without changing the shared system prompt or tool schema.
 
 The manager owns result delivery. Local activations with `delivery: 'parent'` receive automatic-result guidance even without messaging tools; caller-owned activations receive no parent-delivery promise. Settlement timing, recipients, output, and suppression of closing text after a final message to the parent remain unchanged. Tool visibility grants no messaging authority.
 
