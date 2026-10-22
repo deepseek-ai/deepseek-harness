@@ -120,6 +120,20 @@ kind: "package-reference"
 
 加载会追加一条工具结果，不会改写之前的上下文。
 
+### Plugin CLIs 条目
+
+#### 模型看到的内容
+
+本行在私有 PATH 条目中声明了 `tmeet`，因此该行加载、且 Shell 在本 Host 上运行时，系统提示词中 [Shell 环境](../../shell/shell-env/README.zh.md#model-experience)的 Plugin CLIs 一节会列出 `` `tmeet` (tencent-meeting) ``。
+
+#### Token 影响
+
+该条目只给这一节增加几个 token；这一节本身的文字归 Shell 环境所有。
+
+#### KV Cache 影响
+
+加载或卸载该行会改变这一节的文字，provider 的缓存复用可能在第一个变化的 token 处结束。
+
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>

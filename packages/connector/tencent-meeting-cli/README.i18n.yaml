@@ -62,6 +62,18 @@
 /deepseek-ai-dsh-tencent-meeting-cli/model-experience/loaded-skill-body/kv-cache-effect:
   en: 1f6b842a95e14ce4
   zh: d32b51405eabddc4
+/deepseek-ai-dsh-tencent-meeting-cli/model-experience/plugin-clis-entry:
+  en: 821d3974b859741d
+  zh: 127fac5248c9a7f1
+/deepseek-ai-dsh-tencent-meeting-cli/model-experience/plugin-clis-entry/what-the-model-sees:
+  en: 535adeab980d8547
+  zh: d89eece754131cea
+/deepseek-ai-dsh-tencent-meeting-cli/model-experience/plugin-clis-entry/token-effect:
+  en: bfc2ae22042ca709
+  zh: 5919b9395c51541e
+/deepseek-ai-dsh-tencent-meeting-cli/model-experience/plugin-clis-entry/kv-cache-effect:
+  en: 6def0febc136ef06
+  zh: 12ea269eb16a0b91
 /deepseek-ai-dsh-tencent-meeting-cli/known-limitations-and-deferred-work:
   en: 937ece823d3ecd31
   zh: af37e751efc26050

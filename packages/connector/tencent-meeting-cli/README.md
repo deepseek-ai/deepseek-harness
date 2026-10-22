@@ -120,6 +120,20 @@ Each load adds the entry body to the retained tool history. The guide, about 18,
 
 Loading appends a tool result and does not rewrite earlier context.
 
+### Plugin CLIs entry
+
+#### What the model sees
+
+The row declares `tmeet` with its private PATH entry, so the [Shell environment](../../shell/shell-env/README.md#model-experience) Plugin CLIs section of the system prompt lists `` `tmeet` (tencent-meeting) `` while the row is loaded and the shell runs on this Host.
+
+#### Token effect
+
+The entry adds a few tokens to that section; the section's own text belongs to Shell environment.
+
+#### KV Cache effect
+
+Loading or unloading the row changes the section text, and provider cache reuse may end at the first changed token.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
