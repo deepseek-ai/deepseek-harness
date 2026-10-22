@@ -448,7 +448,7 @@ describe('projectToolUpdates', () => {
     expect(projected.tools).toEqual([deferred])
     expect(projected.messages).toEqual(mode === 'in-history'
       ? [prompt, added, removed, restored]
-      : [prompt, added])
+      : [prompt, restored])
   })
 
   it('uses current declarations without updates when history is missing or the prefix omits an update', () => {
@@ -562,17 +562,26 @@ describe('projectToolUpdates', () => {
     expect(JSON.stringify({ messages, history })).toBe(saved)
   })
 
-  it('keeps the original baseline when only later-added tools are replaced', () => {
+  it.each([false, true])('rebuilds after removing a later-activated tool (replacement=%s)', (replace) => {
     const replacement = { name: 'replacement', description: 'Replacement', parameters: {} }
-    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }])
-    const swapped = developer([{ type: 'tool-addition', toolName: 'replacement' }, { type: 'tool-removal', toolName: 'fetch' }])
+    const retained = { name: 'retained', description: 'Retained', parameters: {} }
+    const later = { name: 'later', description: 'Later', parameters: {} }
+    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }, { type: 'tool-addition', toolName: 'retained' }])
+    const swapped = developer([
+      ...replace ? [{ type: 'tool-addition' as const, toolName: 'replacement' }] : [],
+      { type: 'tool-removal', toolName: 'fetch' },
+    ])
+    const next = developer([{ type: 'tool-addition', toolName: 'later' }])
     const history: ToolHistory = { tools: [search], updates: [
-      { messageId: added.id, additions: [fetch] }, { messageId: swapped.id, additions: [replacement] },
+      { messageId: added.id, additions: [fetch, retained] },
+      { messageId: swapped.id, additions: replace ? [replacement] : [] },
+      { messageId: next.id, additions: [later] },
     ] }
-    const projected = projectToolUpdates([prompt, added, prompt, swapped], [search, replacement], 'addition-only', history)
-    expect(projected.tools).toEqual([search, { ...replacement, deferLoading: true }])
+    const active = [search, retained, ...replace ? [replacement] : [], later]
+    const projected = projectToolUpdates([prompt, added, prompt, swapped, next], active, 'addition-only', history)
+    expect(projected.tools).toEqual([search, retained, ...replace ? [replacement] : [], { ...later, deferLoading: true }])
     expect(projected.messages[0]).toBe(prompt)
-    expect(roles(projected.messages)).toEqual([[{ type: 'tool-addition', toolName: 'replacement' }]])
+    expect(roles(projected.messages)).toEqual([[{ type: 'tool-addition', toolName: 'later' }]])
   })
 
   it.each([false, true])('preserves explicitly deferred baseline activation across a reset (activated=%s)', (activated) => {

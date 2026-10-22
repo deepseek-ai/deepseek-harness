@@ -379,11 +379,7 @@ function withoutDeveloperMessages(messages: readonly RequestMessage[]): readonly
   return retained.length === messages.length ? messages : retained
 }
 
-function toolDeclarations(
-  tools: readonly ToolSchema[] | undefined,
-  mode: ToolUpdate,
-  history: ToolHistory,
-): Map<string, ToolSchema> {
+function toolDeclarations(history: ToolHistory): Map<string, ToolSchema> {
   const declarations = new Map(history.tools.map(tool => [tool.name, tool]))
   for (const update of history.updates) {
     for (const tool of update.additions) {
@@ -394,32 +390,16 @@ function toolDeclarations(
     }
   }
 
-  switch (mode) {
-    case 'in-history':
-      // Removal blocks disable tools without discarding their historical definitions.
-      return declarations
-    case 'addition-only': {
-      // Without removal support, the declaration list must omit inactive tools.
-      const activeNames = new Set(tools?.map(tool => tool.name))
-      for (const name of declarations.keys()) {
-        if (!activeNames.has(name)) declarations.delete(name)
-      }
-      return declarations
-    }
-    /* v8 ignore next 2 -- closed-union exhaustiveness guard */
-    default:
-      return assertNever(mode)
-  }
+  return declarations
 }
 
-/** Reset only when a removal changes the initially loaded definitions; later removals retain the earlier prefix. */
+/** Rebuild declarations after removals that addition-only routes cannot represent in history. */
 function rebaseAdditionOnlyHistory(
   history: ToolHistory,
   messages: ReadonlyMap<MessageId, readonly ContentBlock[]>,
 ): ToolHistory {
   const available = new Map(history.tools.map(tool => [tool.name, tool]))
   let baseline = history.tools
-  let immediate = new Set(baseline.filter(tool => !tool.deferLoading).map(tool => tool.name))
   let retainedFrom = 0
   for (const [index, update] of history.updates.entries()) {
     const additions = new Map(update.additions.map(tool => [tool.name, tool]))
@@ -430,13 +410,12 @@ function rebaseAdditionOnlyHistory(
         const { deferLoading: _loading, ...tool } = additions.get(block.toolName) as ToolSchema
         available.set(tool.name, tool)
       } else if (block.type === 'tool-removal') {
-        reset ||= immediate.has(block.toolName)
+        reset = true
         available.delete(block.toolName)
       }
     }
     if (reset) {
       baseline = [...available.values()]
-      immediate = new Set(baseline.filter(tool => !tool.deferLoading).map(tool => tool.name))
       retainedFrom = index + 1
     }
   }
@@ -447,7 +426,7 @@ function rebaseAdditionOnlyHistory(
  * Construct provider declarations from session-folded history without changing logged active tools.
  * Unsupported routes and incomplete history use current declarations without developer updates.
  * Explicitly deferred baseline tools become available only after their first retained addition.
- * Addition-only routes rebuild their baseline when an initially loaded tool is removed;
+ * Addition-only routes rebuild their baseline whenever a tool is removed;
  * later additions remain deferred and superseded tool blocks are omitted without dropping other content.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.
  * @param tools - currently active tool schemas.
@@ -481,7 +460,7 @@ export function projectToolUpdates(
   }
 
   const projectedHistory = toolUpdate === 'addition-only' ? rebaseAdditionOnlyHistory(history, updates) : history
-  const declarations = toolDeclarations(tools, toolUpdate, projectedHistory)
+  const declarations = toolDeclarations(projectedHistory)
   const updateIds = new Set(history.updates.map(update => update.messageId))
   const retainedUpdateIds = new Set(projectedHistory.updates.map(update => update.messageId))
   // Deferred baseline tools still need their first addition to become available.

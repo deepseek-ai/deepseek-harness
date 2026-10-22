@@ -24,9 +24,16 @@ export function apply(ctx: Context): void {
         agent.ctx.tools.register(defineContentToolFixture({
           name: 'snapshot_ping', description: 'Return pong once.', parameters: {},
           async execute() {
-            agent.ctx.tools.register(defineContentToolFixture({
+            const removeLater = agent.ctx.tools.register(defineContentToolFixture({
               name: 'snapshot_later', description: 'Return later.', parameters: {},
-              async execute() { return [{ type: 'text', text: 'later' }] },
+              async execute() {
+                removeLater()
+                agent.ctx.tools.register(defineContentToolFixture({
+                  name: 'snapshot_final', description: 'Return final.', parameters: {},
+                  async execute() { return [{ type: 'text', text: 'final' }] },
+                }))
+                return [{ type: 'text', text: 'later' }]
+              },
             }))
             return [{ type: 'text', text: 'pong' }]
           },
@@ -59,6 +66,13 @@ export function apply(ctx: Context): void {
         assert.deepEqual(request.messages.filter(message => message.role === 'system'), [
           { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: 'snapshot_later' } }] },
         ])
+        break
+      case 4:
+        assert.deepEqual(request.tools, [
+          { name: 'snapshot_ping', description: 'Return pong once.', input_schema: { type: 'object', properties: {} } },
+          { name: 'snapshot_final', description: 'Return final.', input_schema: { type: 'object', properties: {} } },
+        ])
+        assert.deepEqual(request.messages.filter(message => message.role === 'system'), [])
         break
       default:
         assert.fail('Unexpected request after the replacement tool call completed')
