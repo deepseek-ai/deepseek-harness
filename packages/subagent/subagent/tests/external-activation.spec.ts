@@ -130,7 +130,7 @@ describe('external subagent activations', () => {
     await backend.cleaning.promise
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     const disposal = activation.dispose()
@@ -159,7 +159,7 @@ describe('external subagent activations', () => {
     const error = new Error('backend execution failed')
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     backend.result.reject(error)
@@ -175,7 +175,7 @@ describe('external subagent activations', () => {
     }
     await expect(activation.result).rejects.toBe(error)
     await expect(waiting).resolves.toBe(true)
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it('cancels the external process once when the receipt is repeatedly disposed', async () => {
@@ -273,7 +273,7 @@ describe('external subagent activations', () => {
       backend.cleanup.resolve(undefined)
       await rejected
     }
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it.each(['parent', 'caller'] as const)('delivers the full failed result with %s delivery', async (delivery) => {

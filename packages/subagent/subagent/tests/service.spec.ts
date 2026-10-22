@@ -105,7 +105,7 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
 describe('SubagentRuntime', () => {
   it('has no owned child work before the Agent service is mounted', async () => {
     const { subagents } = await service(false)
-    await expect(subagents.waitForChildren(fakeParent())).resolves.toBe(false)
+    await expect(subagents.waitForTreeWork(fakeParent())).resolves.toBe(false)
   })
 
   it('releases its catalog projection binding with the service fiber', async () => {

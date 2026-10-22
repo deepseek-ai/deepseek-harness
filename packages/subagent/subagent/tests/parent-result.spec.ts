@@ -31,7 +31,7 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
     },
   })
   try {
-    await ctx.subagents.waitForChildren(parent)
+    await ctx.subagents.waitForTreeWork(parent)
     await parent.whenIdle()
     expect(adapter.requests).toHaveLength(2)
     expect(adapter.requests[0]!.tools?.some(tool => tool.name === 'send_message') ?? false).toBe(availability === 'unused')

@@ -303,11 +303,11 @@ export class SubagentRuntime extends TypertRemoteService {
   /**
    * Join progressing subagent tree work for its root. Idle members with parked input
    * stay resident without delaying host completion. Ordinary members return false.
-   * @param parent - exact live Agent; only the subagent tree root joins member work.
+   * @param root - exact live subagent tree root whose member work is awaited.
    * @returns whether work was joined; hosts recheck root idle after true.
    */
-  async waitForChildren(parent: Agent): Promise<boolean> {
-    return this.manager?.waitForChildren(parent) ?? false
+  async waitForTreeWork(root: Agent): Promise<boolean> {
+    return this.manager?.waitForTreeWork(root) ?? false
   }
 
   /**

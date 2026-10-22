@@ -303,7 +303,7 @@ export class HarnessSdkJsonRpcServer {
       this.assertLiveAgent(rec, params.sessionId)
       await agent.whenIdle()
       const idleSeq = agent.session.seq
-      const children = await subagents?.waitForChildren(agent)
+      const children = await subagents?.waitForTreeWork(agent)
       this.assertLiveAgent(rec, params.sessionId)
       if (!children && agent.status === 'idle' && agent.session.seq === idleSeq) {
         if (rec.failure !== undefined) throw rec.failure.error

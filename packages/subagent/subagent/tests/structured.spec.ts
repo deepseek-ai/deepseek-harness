@@ -481,7 +481,7 @@ describe('in-process structured output', () => {
     await ctx.subagents.sendMessage(parent, run.childId, [{ type: 'text', text: 'continue normally' }], {
       signal: testToolSignal,
     })
-    await ctx.subagents.waitForChildren(parent)
+    await ctx.subagents.waitForTreeWork(parent)
     expect(adapter.requests).toHaveLength(2)
     expect(toolNames(adapter.requests[1]!)).not.toContain(STRUCTURED_OUTPUT_TOOL)
   })

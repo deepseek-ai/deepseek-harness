@@ -193,7 +193,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const parent = ctx.agents.get(SessionId('main'))!
       const observed = Promise.withResolvers<undefined>()
       const children = Promise.withResolvers<boolean>()
-      vi.spyOn(ctx.subagents, 'waitForChildren')
+      vi.spyOn(ctx.subagents, 'waitForTreeWork')
         .mockImplementationOnce(() => { observed.resolve(undefined); return children.promise })
         .mockResolvedValue(false)
       let settled = false

@@ -1338,7 +1338,7 @@ describe('continuable child ownership', () => {
       expect(leafAgent.session.header.parentSession).toBe(creator.childId)
       expect(ctx.agents.isOwnedBy(leaf.childId, parent)).toBe(true)
       expect(ctx.agents.isOwnedBy(leaf.childId, child)).toBe(false)
-      await expect(ctx.subagents.waitForChildren(leafAgent)).resolves.toBe(false)
+      await expect(ctx.subagents.waitForTreeWork(leafAgent)).resolves.toBe(false)
       await expect(ctx.subagents.sendMessage(leafAgent, parent.id, message('still here'), { signal: testSignal }))
         .resolves.toBeTypeOf('string')
       releaseLeaf.resolve(undefined)
@@ -2316,7 +2316,7 @@ describe('continuable review regressions', () => {
     }
     const observed = vi.fn()
     void started.result.then(observed, observed)
-    const waiting = ctx.subagents.waitForChildren(parent)
+    const waiting = ctx.subagents.waitForTreeWork(parent)
     turn.resolve(undefined)
     try {
       await cleaning.promise
@@ -2411,7 +2411,7 @@ describe('continuable review regressions', () => {
     try {
       hold.resolve(undefined)
       await flushing.promise
-      waiting = ctx.subagents.waitForChildren(parent)
+      waiting = ctx.subagents.waitForTreeWork(parent)
       await vi.waitFor(() => { expect(resultObserved).toHaveBeenCalled() })
       releaseFlush.resolve(undefined)
       await expect(waiting).resolves.toBe(true)
@@ -3553,7 +3553,7 @@ describe('continuable errors', () => {
       expect(ctx.agents.get(child.id)).toBeUndefined()
       expect(ctx.agents.get(owner.id)).toBeUndefined()
       expect(ctx.agents.get(parent.id)).toBe(parent)
-      await expect(ctx.subagents.waitForChildren(parent)).resolves.toBe(false)
+      await expect(ctx.subagents.waitForTreeWork(parent)).resolves.toBe(false)
     } finally {
       releaseStartup.resolve(undefined)
       releaseCleanup.resolve(undefined)

@@ -229,15 +229,15 @@ export class SubagentManager {
 
   /**
    * Join progressing subagent tree work for its root, leaving idle parked inboxes resident.
-   * @param parent - exact live Agent; ordinary members do not join their descendants.
+   * @param root - exact live subagent tree root; ordinary members return false.
    * @returns whether work was joined and the host must recheck root completion.
    */
-  async waitForChildren(parent: Agent): Promise<boolean> {
-    if (this.rootOf(parent) !== parent) return false
+  async waitForTreeWork(root: Agent): Promise<boolean> {
+    if (this.rootOf(root) !== root) return false
     let observed = false
     while (true) {
-      const pending = [...this.materializations].filter(item => item.root === parent)
-      const children = [...this.resident.values()].filter(item => item.root === parent)
+      const pending = [...this.materializations].filter(item => item.root === root)
+      const children = [...this.resident.values()].filter(item => item.root === root)
       observed ||= children.some(item => item.kind === 'local' && item.handle.agent.status !== 'idle')
       await Promise.all(children.flatMap(item => item.kind === 'local' ? [item.handle.agent.whenIdle()] : []))
       const waits: Promise<unknown>[] = pending.map(item => item.settled)
@@ -260,8 +260,8 @@ export class SubagentManager {
         continue
       }
       // A descendant can be published while whenIdle follows another child.
-      if ([...this.materializations].some(item => item.root === parent && !pending.includes(item))
-        || [...this.resident.values()].some(item => item.root === parent && !children.includes(item))) continue
+      if ([...this.materializations].some(item => item.root === root && !pending.includes(item))
+        || [...this.resident.values()].some(item => item.root === root && !children.includes(item))) continue
       return observed
     }
   }
