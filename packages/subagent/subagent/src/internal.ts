@@ -43,7 +43,6 @@ export const deliverSubagentPrompt = Symbol.for('dsh.subagent.deliverPrompt')
 /** Runtime face required by the host-only prompt adapters. */
 export interface HostPromptDeliverer {
   [deliverSubagentPrompt](
-    parentSessionId: SessionId,
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
@@ -55,8 +54,7 @@ export interface HostPromptDeliverer {
 /**
  * Queue one host-protocol message without exposing another Service operation.
  * @param runtime - subagent runtime owning continuation residency.
- * @param parentSessionId - durable direct creator authorizing delivery.
- * @param childId - durable direct-child session id.
+ * @param childId - durable continuable subagent session id.
  * @param content - host-authored content to deliver.
  * @param source - durable host-protocol source descriptor.
  * @param signal - caller cancellation before inbox acceptance.
@@ -64,14 +62,12 @@ export interface HostPromptDeliverer {
  */
 export function queueHostSubagentPrompt(
   runtime: SubagentRuntime,
-  parentSessionId: SessionId,
   childId: SessionId,
   content: ContentBlock[],
   source: MessageSource,
   signal: AbortSignal,
 ): Promise<MessageId> {
   return (runtime as unknown as HostPromptDeliverer)[deliverSubagentPrompt](
-    parentSessionId,
     childId,
     content,
     source,

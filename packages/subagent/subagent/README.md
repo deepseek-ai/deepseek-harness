@@ -66,7 +66,7 @@ In-process spawn accepts an independent `agentPreset`; fork and external backend
 
 ### Messaging, interrupting, and discovering
 
-`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the subagent tree root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts validate the durable direct-creator address and require a live subagent tree root; the creator may be offline. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
+`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the subagent tree root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Agent interruption requires ancestor authority. Browser prompts and user interrupts address only the child Session; the Gateway checks the corresponding action on that Session before any side effect. Parent or global grants do not imply child access. Prompts require a live subagent tree root; the creator may be offline. User interrupts perform no restoration and accept absent targets as no-ops. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
 
 ### Failure and recovery
 
@@ -97,7 +97,7 @@ This section explains how the service is built and where the observable behavior
 | [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, runtime ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
 | [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, return guidance, and settlement notices |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard agent messaging markers |
+| [`src/internal.ts`](src/internal.ts) | Host-only Queue adapter plus standard agent messaging markers |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |

@@ -286,9 +286,7 @@ export class Session implements SessionFace {
       const routedContent = content as Exclude<PromptContentPart, { readonly type: 'file' }>[]
       const routed = await this.remote.subagents.prompt({
         requestId: requestId ?? randomUUID() as SessionRequestId,
-        parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
-        mode: 'continuable',
         delivery: mode,
         content: routedContent,
         clientTimeZone: resolvedClientTimeZone(),
@@ -336,18 +334,14 @@ export class Session implements SessionFace {
   /**
    * Stop the active turn while the Host preserves pending inbox work; failures
    * land in promptError (same error-strip display slot). A subagent address
-   * routes through `subagents.interruptByParent`, whose durable parent-address
-   * authority works without a live parent Agent.
+   * routes through `subagents.interruptByUser`, authorized on the target Session
+   * without requiring a live parent Agent.
    * @returns the cancel result.
    */
   async cancel(): Promise<RemoteResult<{ accepted: true }>> {
     const address = this.address
     const result = address !== undefined
-      ? await this.remote.subagents.interruptByParent(
-        address.childSessionId,
-        address.parentSessionId,
-        'continuable',
-      )
+      ? await this.remote.subagents.interruptByUser(address.childSessionId)
       : await this.remote.session.cancel({ sessionId: this.sessionId })
     if (!result.ok) {
       this.promptError = { op: 'stop', error: result.error }

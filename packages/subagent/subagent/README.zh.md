@@ -66,7 +66,7 @@ kind: "package-reference"
 
 ### 消息、中断与发现
 
-`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 subagent 树根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。中断仍要求祖先权限。浏览器提示词校验持久化的直接创建者地址，并要求 subagent 树根在线；创建者可以离线。提示词选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。直接子级发现通过 `listChildren(parentSessionId, signal?)` 读取 `subagentCatalog`，持有并释放优先在线的 Session observation。递归发现保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。
+`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 subagent 树根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。Agent 中断要求祖先权限。浏览器提示词和用户中断仅按子 Session 寻址；Gateway 在任何副作用之前检查该 Session 上对应操作的权限。父级或 global 授权不意味着子级访问权。提示词要求 subagent 树根在线；创建者可以离线。用户中断不恢复目标，目标缺席时接受为无操作。提示词选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。直接子级发现通过 `listChildren(parentSessionId, signal?)` 读取 `subagentCatalog`，持有并释放优先在线的 Session observation。递归发现保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。
 
 ### 失败与恢复
 
@@ -97,7 +97,7 @@ kind: "package-reference"
 | [`src/manager.ts`](src/manager.ts) | 统一管理启动、消息准入、冷恢复、运行归属、结算与释放 |
 | [`src/activation.ts`](src/activation.ts) | 执行期记录、容量槽、子级锁与本地输出捕获 |
 | [`src/continuation-messages.ts`](src/continuation-messages.ts) | agent 消息、返回指引与结算通知 |
-| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 与 Steer 适配器，以及标准 agent 消息标记 |
+| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 适配器，以及标准 agent 消息标记 |
 | [`src/structured.ts`](src/structured.ts) | Activation 局部结构化捕获与保护 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |

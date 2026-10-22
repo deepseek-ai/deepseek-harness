@@ -70,19 +70,16 @@ export type SubagentAddress =
     | { readonly mode: 'unknown' }
   )
 
-/** One Agent inbox destination, as the prompt request selects it. */
-export type SubagentDelivery = SubagentPromptRequest['delivery']
+/** One Agent inbox destination for a continuation message. */
+export type SubagentDelivery = 'queue' | 'steer'
 
-/** One human message addressed to a continuable direct child. */
+/** One human message addressed to a continuable subagent. */
 export interface SubagentPromptRequest {
   /** Identity persisted on the accepted message, minted before the call. */
   readonly requestId: SubagentPromptRequestId
-  readonly parentSessionId: SessionId
   readonly childSessionId: SessionId
-  /** Required discriminator retained from the browser control address. */
-  readonly mode: 'continuable'
   /** Whether this message queues a later turn or targets the nearest step. */
-  readonly delivery: 'queue' | 'steer'
+  readonly delivery: SubagentDelivery
   /**
    * Browser prompt parts delivered as the child's user message. The Host
    * admits and persists image parts before delivery, so the wire never
@@ -120,7 +117,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'subagent/invalid-time-zone': { readonly value: string }
     /** The addressed child cannot take a continuation. */
     'subagent/not-resumable': { readonly childSessionId: SessionId }
-    /** The claimed parent does not own the addressed child. */
+    /** The supplied address or live subagent-tree identity could not be verified. */
     'subagent/unauthorized': { readonly childSessionId: SessionId }
     /** Image admission or model image-capability refusal. */
     'subagent/attachment-invalid': { readonly reason: string }

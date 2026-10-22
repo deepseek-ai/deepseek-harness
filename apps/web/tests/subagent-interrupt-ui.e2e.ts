@@ -1,7 +1,7 @@
 // Web e2e scenario: the composer's independent Stop interrupts a running
 // continuable child. The child holds its model turn open through a replay
 // hang entry; the browser proves Send and Stop coexist regardless of the
-// creator's list availability, the subagents/interruptByParent
+// creator's list availability, the subagents/interruptByUser
 // (never session.cancel) transport, the parked follow-up, and the FIFO resume
 // on a waking send.
 //
@@ -237,7 +237,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
 
       const aborted = waitForAbortedTurn(scaffold, childId)
       const interruptResponse = page.waitForResponse(response =>
-        new URL(response.url()).pathname === '/api/subagents/interruptByParent')
+        new URL(response.url()).pathname === '/api/subagents/interruptByUser')
       await stop.click()
       expect(((await (await interruptResponse).json()) as {
         result: { ok: boolean; value?: { accepted: boolean } }
@@ -250,9 +250,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       // second hang keeps the next interrupt case independent from this stop.
       await scaffold.ctx.subagents.prompt({
         requestId: 'interrupt-ui-rearm-wake' as SubagentPromptRequestId,
-        parentSessionId: parent.id,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: REARM_WAKE }],
       }, new AbortController().signal)
@@ -263,7 +261,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     }
   }, 60_000)
 
-  it('interrupts through subagents/interruptByParent, parks the follow-up, and resumes it FIFO', async () => {
+  it('interrupts through subagents/interruptByUser, parks the follow-up, and resumes it FIFO', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-interrupt-flow'))
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
@@ -333,7 +331,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     const stop = page.getByRole('button', { name: 'Stop generating' })
     expect(await stop.count()).toBe(1)
     const interruptResponse = page.waitForResponse(response =>
-      new URL(response.url()).pathname === '/api/subagents/interruptByParent')
+      new URL(response.url()).pathname === '/api/subagents/interruptByUser')
     await stop.click()
     expect(((await (await interruptResponse).json()) as {
       result: { ok: boolean; value?: { accepted: boolean } }

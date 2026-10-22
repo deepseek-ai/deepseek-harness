@@ -57,12 +57,12 @@ export interface SubagentActivation {
 }
 
 /**
- * Authority under which one interrupt request is admitted. `user` carries the
- * durable direct-parent address a human client presented; `ancestor` carries
- * the exact live Agent object whose recorded lineage must contain the caller.
+ * Authority under which one interrupt request is admitted. `user` is a trusted
+ * host operation; Remote callers need permission on the target Session before
+ * invoking it. `ancestor` carries an exact live Agent in the target's creation ancestry.
  */
 export type SubagentInterruptAuthority =
-  | { readonly kind: 'user'; readonly parentSessionId: SessionId }
+  | { readonly kind: 'user' }
   | { readonly kind: 'ancestor'; readonly agent: Agent }
 
 /** Options for one model-authored message within a subagent tree. */

@@ -49,11 +49,11 @@ import type { Activation, ActivationResource, LocalActivation } from './activati
 
 /** Inputs shared by model steering and human prompt delivery. */
 type ChildDeliveryOptions = {
-  readonly delivery: 'steer' | 'queue'
+  readonly delivery: SubagentDelivery
   readonly source: MessageSource
   readonly signal: AbortSignal
   /** Recheck the original model caller at final inbox admission. */
-  readonly authorize?: (activation?: Activation) => void
+  readonly authorize?: () => void
 }
 
 /** Package-private hooks supplied by the owning service. */
@@ -173,7 +173,7 @@ export class SubagentManager {
   /**
    * Interrupt one live continuable child's current turn under the supplied authority.
    * @param targetSessionId - the durable child session id to interrupt.
-   * @param authority - the human parent address or exact live ancestor Agent.
+   * @param authority - a trusted user operation or exact live ancestor Agent.
    */
   interrupt(
     targetSessionId: SessionId,
@@ -196,14 +196,8 @@ export class SubagentManager {
     }
     const activation = this.resident.get(targetSessionId)
     if (activation === undefined) return
-    if (authority.kind === 'user') {
-      if (activation.ancestors.at(-1) !== authority.parentSessionId) {
-        throw new SubagentError(
-          `subagent "${targetSessionId}" belongs to another parent session`,
-          'UNAUTHORIZED',
-        )
-      }
-    } else if ((this.rootOf(authority.agent) !== activation.root || !activation.ancestors.includes(authority.agent.id))) {
+    if (authority.kind === 'ancestor'
+      && (this.rootOf(authority.agent) !== activation.root || !activation.ancestors.includes(authority.agent.id))) {
       throw new SubagentError(
         `subagent "${targetSessionId}" is not a live descendant of agent "${authority.agent.id}"`,
         'UNAUTHORIZED',
@@ -549,41 +543,25 @@ export class SubagentManager {
   }
 
   /**
-   * Queue one human-authored prompt as a distinct direct-child turn.
-   * @param parentSessionId - durable direct creator authorizing delivery.
-   * @param childId - durable direct-child session id.
+   * Deliver one host-authored prompt through the target's live subagent tree root.
+   * Remote callers must be authorized for the target Session before invoking this operation.
+   * @param childId - durable continuable subagent session id.
    * @param content - model-visible prompt blocks.
-   * @param source - durable attribution for the human prompt.
-   * @param signal - caller cancellation before inbox acceptance.
+   * @param options - inbox destination, durable attribution, and cancellation before acceptance.
    * @returns the accepted durable message id.
    */
-  async queuePrompt(
-    parentSessionId: SessionId,
+  async deliverPrompt(
     childId: SessionId,
     content: ContentBlock[],
-    source: MessageSource,
-    signal: AbortSignal,
+    options: Pick<ChildDeliveryOptions, 'delivery' | 'source' | 'signal'>,
   ): Promise<MessageId> {
-    return this.deliverFromParent(parentSessionId, childId, content, { source, signal, delivery: 'queue' })
-  }
-
-  /**
-   * Steer one host-authored prompt to a direct continuable child.
-   * @param parentSessionId - durable direct creator authorizing delivery.
-   * @param childId - durable direct-child session id.
-   * @param content - model-visible prompt blocks.
-   * @param source - durable attribution for the host prompt.
-   * @param signal - caller cancellation before inbox acceptance.
-   * @returns the accepted durable message id.
-   */
-  async steerPrompt(
-    parentSessionId: SessionId,
-    childId: SessionId,
-    content: ContentBlock[],
-    source: MessageSource,
-    signal: AbortSignal,
-  ): Promise<MessageId> {
-    return this.deliverFromParent(parentSessionId, childId, content, { source, signal, delivery: 'steer' })
+    options.signal.throwIfAborted()
+    let root = this.resident.get(childId)?.root
+    if (root === undefined) {
+      using source = await this.observeContinuation(childId, options.signal)
+      ;({ root } = await this.resolveCreationAncestry(source, options.signal))
+    }
+    return this.deliverToMember(root, childId, content, options)
   }
 
   /** Admit local input synchronously before any teardown can begin. */
@@ -1085,35 +1063,6 @@ export class SubagentManager {
     }
   }
 
-  /** Preserve direct-parent authorization for human host prompts. */
-  private async deliverFromParent(
-    parentSessionId: SessionId, childId: SessionId, content: ContentBlock[], options: ChildDeliveryOptions,
-  ): Promise<MessageId> {
-    options.signal.throwIfAborted()
-    const resident = this.resident.get(childId)
-    const creator = this.ctx.agents.get(parentSessionId)
-    let root: Agent
-    if (resident !== undefined) {
-      root = resident.root
-    } else if (creator !== undefined) {
-      root = this.rootOf(creator)
-    } else {
-      using source = await this.observeContinuation(childId, options.signal)
-      if (source.header.parentSession !== parentSessionId) {
-        throw new SubagentError(`subagent "${childId}" belongs to another parent session`, 'UNAUTHORIZED')
-      }
-      ;({ root } = await this.resolveCreationAncestry(source, options.signal))
-    }
-    return this.deliverToMember(root, childId, content, {
-      ...options,
-      authorize: (activation) => {
-        if (activation?.ancestors.at(-1) !== parentSessionId) {
-          throw new SubagentError(`subagent "${childId}" belongs to another parent session`, 'UNAUTHORIZED')
-        }
-      },
-    })
-  }
-
   /** Serialize target restoration and inbox admission; closure is awaited outside the lock. */
   private async deliverToMember(
     root: Agent, childId: SessionId, content: ContentBlock[], options: ChildDeliveryOptions,
@@ -1252,7 +1201,7 @@ export class SubagentManager {
   ): MessageId {
     const message = createUserMessage({ content, source: options.source })
     options.signal.throwIfAborted()
-    options.authorize?.(activation)
+    options.authorize?.()
     this.assertAdmitting(parent)
     try {
       this.deliver(activation, message, options.delivery)

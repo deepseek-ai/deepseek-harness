@@ -115,7 +115,7 @@ describe('continuable policy inheritance', () => {
       parent.session.append('permission/preset', { preset: preset === 'auto' ? 'danger-full-access' : 'auto' })
       current.mockImplementation(() => { throw new Error('cold resume must not read parent permission') })
       await queueHostSubagentPrompt(
-        ctx.subagents, parent.id, started.childId,
+        ctx.subagents, started.childId,
         [{ type: 'text', text: 'continue please' }], { kind: 'user' }, new AbortController().signal,
       )
       await waitNoActivation(ctx, started.childId)
@@ -273,7 +273,6 @@ describe('continuable policy inheritance', () => {
     setSandboxMode(parent.session, 'danger-full-access')
     await queueHostSubagentPrompt(
       ctx.subagents,
-      parent.id,
       started.childId,
       [{ type: 'text', text: 'continue please' }],
       { kind: 'user' },

@@ -333,33 +333,29 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Deliver one host-protocol message to a direct continuable child.
+   * Deliver one trusted host-protocol message to a continuable subagent.
    * Symbol-keyed so host adapters can preserve their own source descriptors without
    * widening the public Service Definition or impersonating an Agent sender.
-   * @param parentSessionId - durable direct creator authorizing delivery.
-   * @param childId - durable direct-child session id.
+   * @param childId - durable continuable subagent session id.
    * @param content - host-authored content to deliver.
    * @param source - durable host-protocol source descriptor.
    * @param signal - caller cancellation before inbox acceptance.
    * @param delivery - Queue as a distinct turn or Steer at the nearest step.
    * @returns the accepted message's inbox id.
    */
-  private [deliverSubagentPrompt](
-    parentSessionId: SessionId,
+  protected [deliverSubagentPrompt](
     childId: SessionId,
     content: ContentBlock[],
     source: MessageSource,
     signal: AbortSignal,
     delivery: SubagentDelivery,
   ): Promise<MessageId> {
-    return delivery === 'steer'
-      ? this.requireManager().steerPrompt(parentSessionId, childId, content, source, signal)
-      : this.requireManager().queuePrompt(parentSessionId, childId, content, source, signal)
+    return this.requireManager().deliverPrompt(childId, content, { delivery, source, signal })
   }
 
   /**
-   * Interrupt one live child's current execution under a human parent
-   * address or an exact live ancestor Agent. Fire-and-return: the cancel
+   * Interrupt one live child's current execution under a trusted user
+   * operation or an exact live ancestor Agent. Fire-and-return: the cancel
    * signal is issued before this returns, but the target may keep running
    * until it observes the signal. Unclaimed pending inbox work, the Activation,
    * and published descendants are preserved; claimed work is not requeued.
@@ -368,7 +364,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * is an accepted no-op, as is a manager-less composition, which cannot own a
    * live Activation.
    * @param targetSessionId - the durable child session id to interrupt.
-   * @param authority - the human parent address or exact live ancestor Agent.
+   * @param authority - a trusted user operation or exact live ancestor Agent.
    * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
    *   live target.
    */
@@ -441,8 +437,8 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Deliver one browser-authored message to a continuable child through the
-   * live subagent tree root under its durable creation address, retaining the caller-minted request identity and
+   * Deliver one browser-authored message to a continuable child through its
+   * live subagent tree root, retaining the caller-minted request identity and
    * validated browser zone on the accepted message. Success identifies the
    * message the child's inbox accepted; later execution is independent of this
    * call. Queue delivery targets a later turn; steer delivery targets the
@@ -450,7 +446,8 @@ export class SubagentRuntime extends TypertRemoteService {
    * Image parts are admitted and persisted through the attachment store
    * before delivery, and the child's model must accept image input.
    * Cold resume at capacity rejects with `subagent/delivery-unavailable`.
-   * @param request - durable address, delivery, minted identity, content, and optional browser zone.
+   * Access is checked on the target Session before attachment admission or restoration.
+   * @param request - target id, delivery, minted identity, content, and optional browser zone.
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
    * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
@@ -458,9 +455,9 @@ export class SubagentRuntime extends TypertRemoteService {
    *   `subagent/not-resumable`, `subagent/unauthorized`,
    *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
    */
-  @Remote('prompt')
+  @Remote({ name: 'prompt', resources: { session: request => request.childSessionId } })
   async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
-    const { parentSessionId, childSessionId, clientTimeZone, delivery } = request
+    const { childSessionId, clientTimeZone, delivery } = request
     validateControlRequest('subagent.prompt', request)
     const canonicalTimeZone = clientTimeZone === undefined
       ? undefined
@@ -491,13 +488,10 @@ export class SubagentRuntime extends TypertRemoteService {
         content = await attachments.admitPromptContent(request.content)
       }
       return {
-        messageId: await this[deliverSubagentPrompt](
-          parentSessionId,
+        messageId: await this.requireManager().deliverPrompt(
           childSessionId,
           content,
-          source,
-          signal,
-          delivery,
+          { source, signal, delivery },
         ),
       }
     } catch (error: unknown) {
@@ -506,37 +500,20 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Remote face of {@link interrupt} under one durable parent address. No
-   * catalog, history, persistence, or parent Agent lookup runs: the core
-   * primitive alone authorizes the address against the live Activation, which
-   * is what keeps a live child interruptible while its parent Agent is offline.
+   * Remote face of {@link interrupt}, authorized on the target Session by the Gateway.
+   * No catalog, history, persistence, or parent Agent lookup runs.
    * Absent, idle, and already-completed targets are accepted no-ops there.
    * @param childSessionId - durable child session id to interrupt.
-   * @param parentSessionId - durable direct parent whose authority is claimed.
-   * @param mode - required continuable-address discriminator.
    * @returns acknowledgement that the cancel signal was admitted, not that the target is quiescent.
    * @throws {RemoteError} `gateway/bad-request` for an empty id,
-   *   `subagent/unauthorized` when the address does not own the live target,
    *   otherwise `gateway/internal`.
    */
-  @Remote('interruptByParent')
-  interruptByParent(
-    childSessionId: SessionId,
-    parentSessionId: SessionId,
-    mode: 'continuable',
-  ): SubagentInterruptReceipt {
-    validateControlRequest('subagent.interrupt', { childSessionId, parentSessionId, mode })
+  @Remote({ name: 'interruptByUser', resources: { session: childSessionId => childSessionId } })
+  interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt {
+    validateControlRequest('subagent.interrupt', { childSessionId })
     try {
-      this.interrupt(childSessionId, { kind: 'user', parentSessionId })
+      this.interrupt(childSessionId, { kind: 'user' })
     } catch (error: unknown) {
-      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') {
-        throw new RemoteError(
-          'subagent/unauthorized',
-          'subagent does not belong to this parent',
-          { childSessionId },
-          { cause: error },
-        )
-      }
       throw new RemoteError('gateway/internal', 'subagent interrupt failed', {}, { cause: error })
     }
     return { accepted: true }

@@ -199,7 +199,6 @@ describe('SubagentRuntime', () => {
     // nothing to stop and nothing to authorize against.
     expect(() => { subagents.interrupt(SessionId('child'), {
       kind: 'user',
-      parentSessionId: SessionId('parent-1'),
     }) }).not.toThrow()
   })
 

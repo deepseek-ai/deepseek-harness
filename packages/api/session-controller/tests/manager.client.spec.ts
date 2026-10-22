@@ -869,8 +869,7 @@ describe('subagent catalogs', () => {
     expect(remote.subagents.prompt.mock.calls.map(([request]) => request)).toEqual([
       {
         requestId: expect.any(String) as unknown as string,
-        parentSessionId: S1, childSessionId: S2,
-        mode: 'continuable',
+        childSessionId: S2,
         delivery: 'queue',
         content: [{ type: 'text', text: 'continue' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,

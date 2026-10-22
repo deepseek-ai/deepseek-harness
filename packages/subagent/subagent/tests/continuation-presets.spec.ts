@@ -1,7 +1,7 @@
 /** Independent spawn presets and compatibility of persisted child compositions. */
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -16,6 +16,7 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { managerState } from './manager-internals.ts'
 import { queueHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -92,13 +93,13 @@ function startSpec(parent: Agent, agentPreset?: string, provider = 'separate') {
 }
 
 async function settled(ctx: Context, childId: SessionId) {
-  await vi.waitFor(() => { expect(ctx.agents.get(childId)).toBeUndefined() })
+  await managerState(ctx).resident.get(childId)?.result.promise
   return loadStoredSession(ctx.sessionPersistence, childId)
 }
 
-function continueChild(ctx: Context, parent: Agent, childId: SessionId) {
+function continueChild(ctx: Context, childId: SessionId) {
   return queueHostSubagentPrompt(
-    ctx.subagents, parent.id, childId,
+    ctx.subagents, childId,
     [{ type: 'text', text: 'continue' }], { kind: 'user' }, new AbortController().signal,
   )
 }
@@ -187,7 +188,7 @@ describe('continuable child presets', () => {
     await spawn.dispose()
     expect(ctx.subagents.getProvider('separate')).toBeUndefined()
 
-    await continueChild(ctx, parent, started.childId)
+    await continueChild(ctx, started.childId)
     const stored = await settled(ctx, started.childId)
     expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
       .toEqual([['preset_only'], ['preset_only']])
@@ -234,7 +235,7 @@ describe('continuable child presets', () => {
     expect(created.events.flatMap(event => event.type === 'agent-preset/selected' ? [event.data.agentPreset] : []))
       .toEqual(['coding', 'reviewing'])
 
-    await continueChild(ctx, parent, started.childId)
+    await continueChild(ctx, started.childId)
     await settled(ctx, started.childId)
     expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
       .toEqual([['reviewing_only'], ['reviewing_only']])
@@ -269,7 +270,7 @@ describe('continuable child presets', () => {
     await historical.dispose()
     await ctx.agentPresets.recompose(parent.ctx, 'reviewing')
 
-    await continueChild(ctx, parent, childId)
+    await continueChild(ctx, childId)
     const stored = await settled(ctx, childId)
     expect(stored.meta.agentPreset).toBe(agentPreset)
     expect(stored.events.some(event => event.type === 'agent-preset/selected')).toBe(false)
@@ -294,7 +295,7 @@ describe('continuable child presets', () => {
     expect(created.events.findIndex(event => event.type === 'agent-preset/selected'))
       .toBeGreaterThan(created.events.findIndex(event => event.type === 'subagent/descriptor'))
 
-    await continueChild(ctx, parent, started.childId)
+    await continueChild(ctx, started.childId)
     await settled(ctx, started.childId)
     expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
       .toEqual([['reviewing_only'], ['reviewing_only']])
@@ -311,7 +312,7 @@ describe('continuable child presets', () => {
     expect(created.events.slice(0, created.inheritedEventCount).some(event => event.type === 'agent-preset/selected')).toBe(true)
     expect(created.events.slice(created.inheritedEventCount).some(event => event.type === 'agent-preset/selected')).toBe(false)
     await unregister.get('reviewing')!()
-    await expect(continueChild(ctx, parent, started.childId)).rejects.toMatchObject({
+    await expect(continueChild(ctx, started.childId)).rejects.toMatchObject({
       code: 'NOT_RESUMABLE', cause: { code: 'agent-preset/not-found' },
     })
     expect(adapter.requests).toHaveLength(2)
@@ -328,7 +329,7 @@ describe('continuable child presets', () => {
       await ctx.agentPresets.register({ id: 'reviewing', plugins: [{ name: 'cordis:missing-plugin' }] })
     }
 
-    await expect(continueChild(ctx, parent, started.childId)).rejects.toMatchObject({
+    await expect(continueChild(ctx, started.childId)).rejects.toMatchObject({
       code: 'NOT_RESUMABLE',
       cause: { code: failure === 'missing' ? 'agent-preset/not-found' : 'agent-preset/invalid' },
     })
@@ -346,7 +347,7 @@ describe('continuable child presets', () => {
     await settled(ctx, started.childId)
     await presets.dispose()
 
-    await expect(continueChild(ctx, parent, started.childId)).rejects.toMatchObject({
+    await expect(continueChild(ctx, started.childId)).rejects.toMatchObject({
       code: 'NOT_RESUMABLE',
       message: `subagent "${started.childId}" has no agent preset projection for restoration`,
     })

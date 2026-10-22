@@ -215,12 +215,12 @@ interface SubagentSendMessageOptions {
 
 ```ts type-equiv
 /**
- * Authority under which one interrupt request is admitted. `user` carries the
- * durable direct-parent address a human client presented; `ancestor` carries
- * the exact live Agent object whose recorded lineage must contain the caller.
+ * Authority under which one interrupt request is admitted. `user` is a trusted
+ * host operation; Remote callers need permission on the target Session before
+ * invoking it. `ancestor` carries an exact live Agent in the target's creation ancestry.
  */
 type SubagentInterruptAuthority =
-  | { readonly kind: 'user'; readonly parentSessionId: SessionId }
+  | { readonly kind: 'user' }
   | { readonly kind: 'ancestor'; readonly agent: Agent }
 ```
 
@@ -468,8 +468,8 @@ async waitForChildren(parent: Agent): Promise<boolean>
 async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>
 
 /**
- * Interrupt one live child's current execution under a human parent
- * address or an exact live ancestor Agent. Fire-and-return: the cancel
+ * Interrupt one live child's current execution under a trusted user
+ * operation or an exact live ancestor Agent. Fire-and-return: the cancel
  * signal is issued before this returns, but the target may keep running
  * until it observes the signal. Unclaimed pending inbox work, the Activation,
  * and published descendants are preserved; claimed work is not requeued.
@@ -478,7 +478,7 @@ async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], 
  * is an accepted no-op, as is a manager-less composition, which cannot own a
  * live Activation.
  * @param targetSessionId - the durable child session id to interrupt.
- * @param authority - the human parent address or exact live ancestor Agent.
+ * @param authority - a trusted user operation or exact live ancestor Agent.
  * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
  *   live target.
  */
@@ -536,8 +536,8 @@ listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<Subagent
 listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>
 
 /**
- * Deliver one browser-authored message to a continuable child through the
- * live subagent tree root under its durable creation address, retaining the caller-minted request identity and
+ * Deliver one browser-authored message to a continuable child through its
+ * live subagent tree root, retaining the caller-minted request identity and
  * validated browser zone on the accepted message. Success identifies the
  * message the child's inbox accepted; later execution is independent of this
  * call. Queue delivery targets a later turn; steer delivery targets the
@@ -545,7 +545,8 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  * Image parts are admitted and persisted through the attachment store
  * before delivery, and the child's model must accept image input.
  * Cold resume at capacity rejects with `subagent/delivery-unavailable`.
- * @param request - durable address, delivery, minted identity, content, and optional browser zone.
+ * Access is checked on the target Session before attachment admission or restoration.
+ * @param request - target id, delivery, minted identity, content, and optional browser zone.
  * @param signal - carrier cancellation, owning the call until inbox acceptance.
  * @returns the accepted message's inbox identity.
  * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
@@ -553,23 +554,18 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  *   `subagent/not-resumable`, `subagent/unauthorized`,
  *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
  */
-@Remote('prompt') async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>
+@Remote({ name: 'prompt', resources: { session: request => request.childSessionId } }) async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>
 
 /**
- * Remote face of {@link interrupt} under one durable parent address. No
- * catalog, history, persistence, or parent Agent lookup runs: the core
- * primitive alone authorizes the address against the live Activation, which
- * is what keeps a live child interruptible while its parent Agent is offline.
+ * Remote face of {@link interrupt}, authorized on the target Session by the Gateway.
+ * No catalog, history, persistence, or parent Agent lookup runs.
  * Absent, idle, and already-completed targets are accepted no-ops there.
  * @param childSessionId - durable child session id to interrupt.
- * @param parentSessionId - durable direct parent whose authority is claimed.
- * @param mode - required continuable-address discriminator.
  * @returns acknowledgement that the cancel signal was admitted, not that the target is quiescent.
  * @throws {RemoteError} `gateway/bad-request` for an empty id,
- *   `subagent/unauthorized` when the address does not own the live target,
  *   otherwise `gateway/internal`.
  */
-@Remote('interruptByParent') interruptByParent( childSessionId: SessionId, parentSessionId: SessionId, mode: 'continuable', ): SubagentInterruptReceipt
+@Remote({ name: 'interruptByUser', resources: { session: childSessionId => childSessionId } }) interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt
 
 /**
  * Register a provider under its name. Registration is effect-scoped and HMR

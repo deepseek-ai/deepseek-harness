@@ -70,7 +70,7 @@ function textCompletion(text: string): object {
   }
 }
 
-describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over the real composition', () => {
+describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the real composition', () => {
   let scaffold: WebScaffold
   let sidecarRoot: string
   let readyFile: string
@@ -134,9 +134,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const queued = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: FOLLOWUP }],
       },
@@ -144,10 +142,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     expect(queued).toMatchObject({ ok: true })
 
     const settled = scaffold.whenTurnSettled()
-    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByParent', {
+    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByUser', {
       childSessionId: childId,
-      parentSessionId: parentId,
-      mode: 'continuable',
     })
     expect(interrupted).toMatchObject({ ok: true, value: { accepted: true } })
     // accepted acknowledges the admitted cancel, not quiescence: wait for the
@@ -169,9 +165,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const waking = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: WAKING }],
       },

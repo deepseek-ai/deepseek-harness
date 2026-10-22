@@ -107,7 +107,7 @@ function deliverInput(
   const content: ContentBlock[] = [{ type: 'text', text: 'Correction: submit answer 42 instead.' }]
   return delivery === 'steer'
     ? ctx.subagents.sendMessage(parent, childId, content, { signal: testToolSignal })
-    : queueHostSubagentPrompt(ctx.subagents, parent.id, childId, content, { kind: 'user' }, testToolSignal)
+    : queueHostSubagentPrompt(ctx.subagents, childId, content, { kind: 'user' }, testToolSignal)
 }
 
 describe('in-process structured output', () => {

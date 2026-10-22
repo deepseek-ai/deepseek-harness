@@ -20,7 +20,7 @@ function rejecting(message: string): SessionRemotes {
     $stream: () => { throw new Error('unused') },
     commands: { execute: reject },
     session: { prompt: reject, cancel: reject },
-    subagents: { list: reject, prompt: reject, interruptByParent: reject },
+    subagents: { list: reject, prompt: reject, interruptByUser: reject },
   } as unknown as SessionRemotes
 }
 
