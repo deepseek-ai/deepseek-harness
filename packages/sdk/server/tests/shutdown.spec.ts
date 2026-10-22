@@ -51,7 +51,7 @@ describe('SDK descendant shutdown', () => {
       gates.set(id, gate)
       const receipt = await ctx.subagents.startActivation({
         provider: 'local-test', childId: id, label: 'parked child', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'work' }] },
+        parent, prompt: [{ type: 'text', text: 'work' }],
       })
       receipts.push(receipt)
       await gate.entered.promise

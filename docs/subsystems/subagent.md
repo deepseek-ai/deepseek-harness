@@ -8,7 +8,7 @@ The unified activation API manages local conversations and external executions. 
 
 Every backend uses startActivation. Capability flags validate request options; prepareContinuable selects local Agent creation, while start selects one external execution. The model-facing tool uses parent delivery. Workflow and code mode consumers can await caller results without injecting another parent message. Historical children with unavailable descriptors remain discoverable as `mode: 'unknown'` without granting continuation capabilities; the [package README](../../packages/subagent/subagent/README.md) defines catalog persistence.
 
-Optional `request.cwd` selects the child's initial directory; relative paths resolve against the parent's current effective directory. Omitting it captures that directory at admission. Local child Sessions retain the parent's original project, and cold resume retains their logged directory state.
+Optional `cwd` selects the child's initial directory; relative paths resolve against the parent's current effective directory. Omitting it captures that directory at admission. Local child Sessions retain the parent's original project, and cold resume retains their logged directory state.
 
 ```ts type-equiv
 /**
@@ -28,15 +28,13 @@ interface SubagentCapabilities {
 
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
-interface SubagentActivationSpec {
+interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 'signal'> {
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
   readonly label: string
   /** Optional reserved identity for a local child; external backends allocate their own ids. */
   readonly childId?: SessionId
-  /** Task, parent, and backend-supported execution options. */
-  readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
   readonly signal: AbortSignal
   /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
@@ -63,9 +61,8 @@ interface SubagentActivation {
 
 ```ts type-equiv
 /**
- * Task and optional capabilities supplied to a backend. startActivation carries
- * these fields in request while owning its label, cancellation, and delivery
- * policy separately.
+ * Task and optional capabilities supplied to a backend. The activation spec
+ * shares these task options and defines its own label and cancellation policy.
  */
 interface SubagentStartRequest {
   /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */

@@ -50,7 +50,7 @@ async function installDelegationTool(ctx: BridgeHarness['ctx']): Promise<() => b
       if (exec.agent === undefined) throw new Error('delegation fixture requires an Agent')
       const child = await ctx.subagents.startActivation({
         provider: 'local-test', label: 'later child', delivery: 'caller', signal: exec.signal,
-        request: { parent: exec.agent, prompt: [{ type: 'text', text: 'later child task' }] },
+        parent: exec.agent, prompt: [{ type: 'text', text: 'later child task' }],
       })
       const result = await child.result
       delegated = result.stopReason === 'completed'

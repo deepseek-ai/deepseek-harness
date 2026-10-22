@@ -153,7 +153,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       provider: 'spawn',
       label: LABEL,
       signal: new AbortController().signal,
-      request: { prompt: [{ type: 'text', text: INITIAL }], parent },
+      prompt: [{ type: 'text', text: INITIAL }], parent,
     })
     childId = started.childId
     await waitFor(() => existsSync(readyFile), 'the held child turn to open')

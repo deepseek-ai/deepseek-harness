@@ -83,11 +83,9 @@ function startSpec(parent: Agent, agentPreset?: string, provider = 'separate') {
     provider,
     label: 'preset work',
     delivery: 'parent' as const,
-    request: {
-      parent,
-      prompt: [{ type: 'text' as const, text: 'work' }],
-      ...(agentPreset === undefined ? {} : { agentPreset }),
-    },
+    parent,
+    prompt: [{ type: 'text' as const, text: 'work' }],
+    ...(agentPreset === undefined ? {} : { agentPreset }),
     signal: new AbortController().signal,
   }
 }

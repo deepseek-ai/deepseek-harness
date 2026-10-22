@@ -129,7 +129,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
   const started = await ctx.subagents.startActivation({
     provider,
     label: `${description ?? 'shared'} task`,
-    request: { prompt: [{ type: 'text', text: prompt }], parent: lead },
+    prompt: [{ type: 'text', text: prompt }], parent: lead,
     signal: SIGNAL,
     delivery: 'parent',
   })

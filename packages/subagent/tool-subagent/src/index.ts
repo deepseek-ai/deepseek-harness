@@ -325,7 +325,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           const started = await runtimeCtx.subagents.startActivation({
             provider: config.provider,
             label: args.description,
-            request,
+            ...request,
             signal: exec.signal,
             delivery: 'parent',
           })

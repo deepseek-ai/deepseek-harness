@@ -152,10 +152,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       provider: 'spawn',
       label: LABEL,
       signal: new AbortController().signal,
-      request: {
-        prompt: [{ type: 'text', text: INITIAL_PROMPT }],
-        parent,
-      },
+      prompt: [{ type: 'text', text: INITIAL_PROMPT }],
+      parent,
     })
     childId = started.childId
     await waitForAgentToSettle(scaffold, childId)

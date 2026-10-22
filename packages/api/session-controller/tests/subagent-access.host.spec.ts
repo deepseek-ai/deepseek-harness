@@ -54,7 +54,7 @@ async function harness() {
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   const run = await ctx.subagents.startActivation({
     provider: 'test', label: 'access target', delivery: 'caller',
-    request: { parent, prompt: [{ type: 'text', text: 'hold' }] },
+    parent, prompt: [{ type: 'text', text: 'hold' }],
     signal: new AbortController().signal,
   })
   await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })

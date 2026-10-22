@@ -388,10 +388,8 @@ describe('in-process structured output', () => {
         if (exec.agent === undefined) throw new Error('expected the structured parent')
         descendant = await ctx.subagents.startActivation({
           provider: 'spawn', label: 'Nested work', signal: testToolSignal, delivery: 'parent',
-          request: {
-            parent: exec.agent, prompt: [{ type: 'text', text: 'Work until released' }],
-            agentOptions: { provider: 'descendant', model: 'mock' },
-          },
+          parent: exec.agent, prompt: [{ type: 'text', text: 'Work until released' }],
+          agentOptions: { provider: 'descendant', model: 'mock' },
         })
         return [{ type: 'text', text: 'Child accepted' }]
       },
@@ -433,7 +431,7 @@ describe('in-process structured output', () => {
         if (exec.agent === undefined) throw new Error('expected the structured parent')
         await ctx.subagents.startActivation({
           provider: 'delayed-answer', label: 'Compute answer', signal: testToolSignal, delivery: 'parent',
-          request: { parent: exec.agent, prompt: [{ type: 'text', text: 'Compute the answer' }] },
+          parent: exec.agent, prompt: [{ type: 'text', text: 'Compute the answer' }],
         })
         return [{ type: 'text', text: 'Answer computation accepted' }]
       },

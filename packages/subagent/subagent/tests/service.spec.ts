@@ -98,7 +98,7 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
     ?? (await ctx.agents.create({ sessionId: request.parent.id })).agent
   const { label, signal, ...options } = request
   return subagents.startActivation({
-    provider, label: label ?? provider, request: { ...options, parent }, signal, delivery,
+    provider, label: label ?? provider, ...options, parent, signal, delivery,
   })
 }
 
@@ -208,7 +208,7 @@ describe('SubagentRuntime', () => {
       delivery: 'parent',
       provider: 'unused',
       label: 'unused child',
-      request: baseRequest(),
+      ...baseRequest(),
       signal: new AbortController().signal,
     })).rejects.toMatchObject({ code: 'NO_PROVIDER' })
     await expect(subagents.sendMessage(
@@ -226,7 +226,7 @@ describe('SubagentRuntime', () => {
     await expect(subagents.startActivation({
       provider: provider.name,
       label: 'Unavailable runtime',
-      request: baseRequest(),
+      ...baseRequest(),
       signal: new AbortController().signal,
       delivery: 'caller',
     })).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
@@ -255,7 +255,7 @@ describe('SubagentRuntime', () => {
       provider: provider.name,
       label: 'Reserved team child',
       childId: SessionId('reserved-child'),
-      request: { parent, prompt: [{ type: 'text', text: 'Work' }] },
+      parent, prompt: [{ type: 'text', text: 'Work' }],
       signal: new AbortController().signal,
       delivery: 'caller',
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
@@ -653,7 +653,7 @@ it('rejects a disposed parent before starting provider execution', async () => {
   await handle.dispose()
   await expect(subagents.startActivation({
     provider: provider.name, label: 'work', delivery: 'caller', signal: new AbortController().signal,
-    request: { parent: handle.agent, prompt: [] },
+    parent: handle.agent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   expect(provider.startCount).toBe(0)
 })

@@ -141,7 +141,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'fork',
       label: 'fork child',
-      request: { prompt: [{ type: 'text', text: 'fork task' }], parent },
+      prompt: [{ type: 'text', text: 'fork task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -177,7 +177,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'encoded parent',
-      request: { prompt: [{ type: 'text', text: 'encoded task' }], parent },
+      prompt: [{ type: 'text', text: 'encoded task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -201,7 +201,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -240,7 +240,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -274,7 +274,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -316,7 +316,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -400,7 +400,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -457,7 +457,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -466,7 +466,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'grandchild',
-      request: { prompt: [{ type: 'text', text: 'grandchild work' }], parent: child },
+      prompt: [{ type: 'text', text: 'grandchild work' }], parent: child,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -495,7 +495,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'target',
-      request: { prompt: [{ type: 'text', text: 'a' }], parent },
+      prompt: [{ type: 'text', text: 'a' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -503,7 +503,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'sibling',
-      request: { prompt: [{ type: 'text', text: 'b' }], parent },
+      prompt: [{ type: 'text', text: 'b' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -535,7 +535,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'settled child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)

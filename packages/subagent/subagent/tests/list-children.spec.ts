@@ -76,7 +76,7 @@ async function startChild(
   const started = await ctx.subagents.startActivation({ delivery: 'parent',
     provider: 'spawn',
     label,
-    request: { prompt: [{ type: 'text', text: `task: ${label}` }], parent },
+    prompt: [{ type: 'text', text: `task: ${label}` }], parent,
     signal: testSignal,
   })
   await vi.waitFor(() => {

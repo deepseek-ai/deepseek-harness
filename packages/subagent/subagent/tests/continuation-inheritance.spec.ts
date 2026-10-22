@@ -63,7 +63,7 @@ function startSpec(parent: Agent, provider = 'spawn') {
   return {
     provider,
     label: 'child task',
-    request: { prompt: [{ type: 'text' as const, text: 'child task' }], parent },
+    prompt: [{ type: 'text' as const, text: 'child task' }], parent,
     signal: new AbortController().signal,
   }
 }

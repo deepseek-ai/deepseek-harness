@@ -84,7 +84,7 @@ async function start(ctx: Context, parent: Agent, marker: string, description = 
   const started = await ctx.subagents.startActivation({
     provider: 'spawn',
     label: description,
-    request: { prompt: [{ type: 'text', text: `TASK:${marker}` }], parent },
+    prompt: [{ type: 'text', text: `TASK:${marker}` }], parent,
     signal,
     delivery: 'caller',
   })

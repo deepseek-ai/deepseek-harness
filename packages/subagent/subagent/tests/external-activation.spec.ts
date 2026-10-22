@@ -28,7 +28,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
     ctx, parent, controller,
     start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
-      request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
+      parent, prompt: [{ type: 'text', text: 'Work independently' }],
     }),
     records: () => ctx.sessionProjections.snapshot(parent.session, ['subagentCatalog']).values.subagentCatalog,
   }
@@ -104,7 +104,7 @@ describe('external subagent activations', () => {
       try {
         await expect(fixture.ctx.subagents.startActivation({
           provider: 'external', label: 'Unpublished work', signal: fixture.controller.signal, delivery: 'parent',
-          request: { parent, prompt: [{ type: 'text', text: 'Must not publish' }] },
+          parent, prompt: [{ type: 'text', text: 'Must not publish' }],
         })).rejects.toMatchObject({ code: change === 'drain' ? 'DRAINING' : 'UNAUTHORIZED' })
         await drain
         expect(backend.dispose).toHaveBeenCalledTimes(1)
@@ -367,7 +367,7 @@ it('refuses a reserved Session id for an external provider before dispatch', asy
   const fixture = await setup(start)
   await expect(fixture.ctx.subagents.startActivation({
     provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
-    signal: fixture.controller.signal, request: { parent: fixture.parent, prompt: [] },
+    signal: fixture.controller.signal, parent: fixture.parent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
   expect(start).not.toHaveBeenCalled()
 })

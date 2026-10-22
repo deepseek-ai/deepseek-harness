@@ -113,7 +113,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the 
       provider: 'spawn',
       label: 'event-sourcing researcher',
       signal: new AbortController().signal,
-      request: { prompt: [{ type: 'text', text: INITIAL }], parent },
+      prompt: [{ type: 'text', text: INITIAL }], parent,
     })
     childId = started.childId
     // The hang entry writes readyFile after its prefix chunks, immediately

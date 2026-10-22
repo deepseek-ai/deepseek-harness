@@ -381,7 +381,7 @@ describe('headless runner', () => {
         if (turns === 1) {
           await test.ctx.subagents.startActivation({
             provider: 'external', label: 'work', delivery: 'parent', signal: new AbortController().signal,
-            request: { parent, prompt: [] },
+            parent, prompt: [],
           })
           await cleaning.promise
           appendTurn(session, 1, message, 'waiting for child', true)
