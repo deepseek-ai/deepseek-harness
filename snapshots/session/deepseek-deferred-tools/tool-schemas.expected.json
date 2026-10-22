@@ -19,6 +19,24 @@
           "properties": {}
         }
       }
+    ],
+    [
+      {
+        "name": "snapshot_later",
+        "description": "Return later.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "snapshot_ping",
+        "description": "Return pong once.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
     ]
   ]
 }

@@ -50,7 +50,7 @@ async function boot(models?: Messages.Options['models']) {
 const tool = { name: 'lookup_value', description: 'Read the requested value. Always call this tool to obtain a value.', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } }
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () => {
-  it('calls a deferred tool after every baseline tool has been removed', async () => {
+  it('calls a replacement tool after every baseline tool has been removed', async () => {
     const model = 'deepseek-flash'
     const ctx = await boot([{ id: model, toolUpdate: 'addition-only' }])
     const update = createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [

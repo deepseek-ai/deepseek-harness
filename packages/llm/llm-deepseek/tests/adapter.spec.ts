@@ -276,7 +276,7 @@ describe('direct Messages HTTP', () => {
 })
 
 describe('Cordis provider composition', () => {
-  it('keeps a replacement tool deferred after the last baseline tool is removed', async () => {
+  it('declares the replacement immediately after the last baseline tool is removed', async () => {
     const { ctx, http } = await boot()
     const baseline = { name: 'old_tool', description: 'Old tool', parameters: {} }
     const added = { name: 'new_tool', description: 'New tool', parameters: {} }
@@ -290,12 +290,10 @@ describe('Cordis provider composition', () => {
     const response = await assemble(ctx.llm.stream(request), 'deepseek-flash')
     expect(response.assembler.finish.kind).toBe('stop')
     expect(http.requests[0]?.body.tools).toEqual([
-      { name: 'DeferredToolPlaceholder', description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.', input_schema: { type: 'object', properties: {} } },
-      { name: added.name, description: added.description, input_schema: {}, defer_loading: true },
+      { name: added.name, description: added.description, input_schema: {} },
     ])
     expect(http.requests[0]?.body.messages).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-      { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: added.name } }] },
     ])
     expect(JSON.stringify(request)).toBe(saved)
   })

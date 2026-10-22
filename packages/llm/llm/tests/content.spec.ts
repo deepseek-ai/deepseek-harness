@@ -501,9 +501,8 @@ describe('projectToolUpdates', () => {
     expect(projected.tools).toEqual([])
     expect(projected.messages).toEqual([prompt, prompt, prompt])
     const partial = projectToolUpdates([prompt, swapped, prompt], [fetch], 'addition-only', { tools: [search], updates: [history.updates[0]!] })
-    expect(partial.tools).toEqual([{ ...fetch, deferLoading: true }])
-    expect(partial.messages[1]).not.toBe(swapped)
-    expect(roles(partial.messages)).toEqual([[{ type: 'tool-addition', toolName: 'fetch' }]])
+    expect(partial.tools).toEqual([fetch])
+    expect(partial.messages).toEqual([prompt, prompt])
   })
 
   it('re-offers an unchanged restored tool through its recorded blocks', () => {
@@ -521,8 +520,8 @@ describe('projectToolUpdates', () => {
       [{ type: 'tool-addition', toolName: 'search' }],
     ])
     const additionOnly = projectToolUpdates(messages, [search, fetch], 'addition-only', history)
-    expect(additionOnly.tools).toEqual([search, fetch])
-    expect(roles(additionOnly.messages)).toEqual([])
+    expect(additionOnly.tools).toEqual([fetch, { ...search, deferLoading: true }])
+    expect(roles(additionOnly.messages)).toEqual([[{ type: 'tool-addition', toolName: 'search' }]])
   })
 
   it('declares a deferred tool once across removal and re-addition', () => {
@@ -540,5 +539,73 @@ describe('projectToolUpdates', () => {
     expect(roles(inHistory.messages)).toHaveLength(3)
     const additionOnly = projectToolUpdates(messages, [search, fetch], 'addition-only', history)
     expect(roles(additionOnly.messages)).toEqual([[{ type: 'tool-addition', toolName: 'fetch' }]])
+  })
+
+  it('rebases on a baseline removal and defers additions after the reset', () => {
+    const later = { name: 'later', description: 'Later', parameters: {} }
+    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }, { type: 'text', text: 'Keep this guidance.' }])
+    const removed = developer([{ type: 'tool-removal', toolName: 'search' }, { type: 'text', text: 'Keep this too.' }])
+    const next = developer([{ type: 'tool-addition', toolName: 'later' }])
+    const history: ToolHistory = { tools: [search], updates: [
+      { messageId: added.id, additions: [fetch] }, { messageId: removed.id, additions: [] },
+      { messageId: next.id, additions: [later] },
+    ] }
+    const messages = [prompt, added, prompt, removed, prompt, next]
+    const saved = JSON.stringify({ messages, history })
+    const projected = projectToolUpdates(messages, [fetch, later], 'addition-only', history)
+    expect(projected.tools).toEqual([fetch, { ...later, deferLoading: true }])
+    expect(roles(projected.messages)).toEqual([
+      [{ type: 'text', text: 'Keep this guidance.' }], [{ type: 'text', text: 'Keep this too.' }],
+      [{ type: 'tool-addition', toolName: 'later' }],
+    ])
+    expect(projected.messages.at(-1)).toBe(next)
+    expect(JSON.stringify({ messages, history })).toBe(saved)
+  })
+
+  it('keeps the original baseline when only later-added tools are replaced', () => {
+    const replacement = { name: 'replacement', description: 'Replacement', parameters: {} }
+    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }])
+    const swapped = developer([{ type: 'tool-addition', toolName: 'replacement' }, { type: 'tool-removal', toolName: 'fetch' }])
+    const history: ToolHistory = { tools: [search], updates: [
+      { messageId: added.id, additions: [fetch] }, { messageId: swapped.id, additions: [replacement] },
+    ] }
+    const projected = projectToolUpdates([prompt, added, prompt, swapped], [search, replacement], 'addition-only', history)
+    expect(projected.tools).toEqual([search, { ...replacement, deferLoading: true }])
+    expect(projected.messages[0]).toBe(prompt)
+    expect(roles(projected.messages)).toEqual([[{ type: 'tool-addition', toolName: 'replacement' }]])
+  })
+
+  it.each([false, true])('preserves explicitly deferred baseline activation across a reset (activated=%s)', (activated) => {
+    const deferred = { name: 'pending', description: 'Pending', parameters: {}, deferLoading: true as const }
+    const activate = developer([{ type: 'tool-addition', toolName: 'pending' }])
+    const swapped = developer([{ type: 'tool-removal', toolName: 'search' }, { type: 'tool-addition', toolName: 'fetch' }])
+    const history: ToolHistory = { tools: [search, deferred], updates: [
+      ...activated ? [{ messageId: activate.id, additions: [deferred] }] : [],
+      { messageId: swapped.id, additions: [fetch] },
+    ] }
+    const messages = [prompt, ...activated ? [activate] : [], swapped]
+    const projected = projectToolUpdates(messages, [fetch, deferred], 'addition-only', history)
+    expect(projected.tools).toEqual([
+      { name: 'pending', description: 'Pending', parameters: {}, ...activated ? {} : { deferLoading: true } }, fetch,
+    ])
+    expect(roles(projected.messages)).toEqual([])
+    const reoffered = developer([{ type: 'tool-addition', toolName: 'pending' }])
+    const later = projectToolUpdates([...messages, reoffered], [fetch, deferred], 'addition-only', {
+      tools: history.tools, updates: [...history.updates, { messageId: reoffered.id, additions: [deferred] }],
+    })
+    expect(later.tools).toEqual(projected.tools)
+    expect(roles(later.messages)).toEqual(activated ? [] : [[{ type: 'tool-addition', toolName: 'pending' }]])
+  })
+
+  it('uses each rebuilt baseline to detect subsequent replacements', () => {
+    const replacement = { name: 'replacement', description: 'Replacement', parameters: {} }
+    const first = developer([{ type: 'tool-removal', toolName: 'search' }, { type: 'tool-addition', toolName: 'fetch' }])
+    const second = developer([{ type: 'tool-removal', toolName: 'fetch' }, { type: 'tool-addition', toolName: 'replacement' }])
+    const history: ToolHistory = { tools: [search], updates: [
+      { messageId: first.id, additions: [fetch] }, { messageId: second.id, additions: [replacement] },
+    ] }
+    const projected = projectToolUpdates([prompt, first, prompt, second], [replacement], 'addition-only', history)
+    expect(projected.tools).toEqual([replacement])
+    expect(roles(projected.messages)).toEqual([])
   })
 })

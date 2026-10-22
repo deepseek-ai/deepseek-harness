@@ -3,6 +3,7 @@
 import type { ContentBlock, ImageBlock, LlmImageRequestBudget, ToolSchema, ToolUpdate, ToolHistory } from './types.ts'
 import type { RequestMessage } from './types.ts'
 import type { Message } from './message.ts'
+import type { MessageId } from './brand.ts'
 import type {
   AttachmentStore, FileAttachmentRef, ImageAttachmentRef, ImageMediaType, RequestImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
@@ -411,10 +412,43 @@ function toolDeclarations(
   }
 }
 
+/** Reset only when a removal changes the initially loaded definitions; later removals retain the earlier prefix. */
+function rebaseAdditionOnlyHistory(
+  history: ToolHistory,
+  messages: ReadonlyMap<MessageId, readonly ContentBlock[]>,
+): ToolHistory {
+  const available = new Map(history.tools.map(tool => [tool.name, tool]))
+  let baseline = history.tools
+  let immediate = new Set(baseline.filter(tool => !tool.deferLoading).map(tool => tool.name))
+  let retainedFrom = 0
+  for (const [index, update] of history.updates.entries()) {
+    const additions = new Map(update.additions.map(tool => [tool.name, tool]))
+    let reset = false
+    // Completeness was checked before projection; Session resolves every addition's definition.
+    for (const block of messages.get(update.messageId) as readonly ContentBlock[]) {
+      if (block.type === 'tool-addition') {
+        const { deferLoading: _loading, ...tool } = additions.get(block.toolName) as ToolSchema
+        available.set(tool.name, tool)
+      } else if (block.type === 'tool-removal') {
+        reset ||= immediate.has(block.toolName)
+        available.delete(block.toolName)
+      }
+    }
+    if (reset) {
+      baseline = [...available.values()]
+      immediate = new Set(baseline.filter(tool => !tool.deferLoading).map(tool => tool.name))
+      retainedFrom = index + 1
+    }
+  }
+  return retainedFrom === 0 ? history : { tools: baseline, updates: history.updates.slice(retainedFrom) }
+}
+
 /**
  * Construct provider declarations from session-folded history without changing logged active tools.
  * Unsupported routes and incomplete history use current declarations without developer updates.
  * Explicitly deferred baseline tools become available only after their first retained addition.
+ * Addition-only routes rebuild their baseline when an initially loaded tool is removed;
+ * later additions remain deferred and superseded tool blocks are omitted without dropping other content.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.
  * @param tools - currently active tool schemas.
  * @param toolUpdate - the resolved route's update mode.
@@ -440,16 +474,18 @@ export function projectToolUpdates(
     // Current schemas alone cannot resolve definitions referenced by past updates.
     return { messages: withoutDeveloperMessages(messages), tools }
   }
-  const messageIds = new Set(messages.flatMap(message => message.role === 'developer' ? [message.id] : []))
-  if (history.updates.some(update => !messageIds.has(update.messageId))) {
+  const updates = new Map(messages.flatMap(message => message.role === 'developer' ? [[message.id, message.content] as const] : []))
+  if (history.updates.some(update => !updates.has(update.messageId))) {
     // An auxiliary prefix may omit updates needed to activate historical declarations.
     return { messages: withoutDeveloperMessages(messages), tools }
   }
 
-  const declarations = toolDeclarations(tools, toolUpdate, history)
+  const projectedHistory = toolUpdate === 'addition-only' ? rebaseAdditionOnlyHistory(history, updates) : history
+  const declarations = toolDeclarations(tools, toolUpdate, projectedHistory)
   const updateIds = new Set(history.updates.map(update => update.messageId))
+  const retainedUpdateIds = new Set(projectedHistory.updates.map(update => update.messageId))
   // Deferred baseline tools still need their first addition to become available.
-  const offered = new Set(history.tools.filter(tool => !tool.deferLoading).map(tool => tool.name))
+  const offered = new Set(projectedHistory.tools.filter(tool => !tool.deferLoading).map(tool => tool.name))
   const projectedMessages: RequestMessage[] = []
   for (const message of messages) {
     if (message.role !== 'developer') {
@@ -462,6 +498,7 @@ export function projectToolUpdates(
     const content = message.content.filter((block) => {
       switch (block.type) {
         case 'tool-addition':
+          if (!retainedUpdateIds.has(message.id)) return false
           // Only declared tools that are not already available need activation.
           if (!declarations.has(block.toolName) || offered.has(block.toolName)) return false
           offered.add(block.toolName)

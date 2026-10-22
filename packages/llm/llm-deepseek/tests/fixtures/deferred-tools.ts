@@ -24,6 +24,10 @@ export function apply(ctx: Context): void {
         agent.ctx.tools.register(defineContentToolFixture({
           name: 'snapshot_ping', description: 'Return pong once.', parameters: {},
           async execute() {
+            agent.ctx.tools.register(defineContentToolFixture({
+              name: 'snapshot_later', description: 'Return later.', parameters: {},
+              async execute() { return [{ type: 'text', text: 'later' }] },
+            }))
             return [{ type: 'text', text: 'pong' }]
           },
         }))
@@ -42,13 +46,18 @@ export function apply(ctx: Context): void {
         assert.deepEqual(request.tools?.map(tool => tool.name), ['snapshot_initial'])
         break
       case 2:
+        assert.deepEqual(request.tools, [
+          { name: 'snapshot_ping', description: 'Return pong once.', input_schema: { type: 'object', properties: {} } },
+        ])
+        assert.deepEqual(request.messages.filter(message => message.role === 'system'), [])
+        break
       case 3:
         assert.deepEqual(request.tools, [
-          { name: 'DeferredToolPlaceholder', description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.', input_schema: { type: 'object', properties: {} } },
-          { name: 'snapshot_ping', description: 'Return pong once.', input_schema: { type: 'object', properties: {} }, defer_loading: true },
+          { name: 'snapshot_ping', description: 'Return pong once.', input_schema: { type: 'object', properties: {} } },
+          { name: 'snapshot_later', description: 'Return later.', input_schema: { type: 'object', properties: {} }, defer_loading: true },
         ])
         assert.deepEqual(request.messages.filter(message => message.role === 'system'), [
-          { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: 'snapshot_ping' } }] },
+          { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: 'snapshot_later' } }] },
         ])
         break
       default:
