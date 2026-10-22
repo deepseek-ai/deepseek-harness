@@ -113,7 +113,7 @@ describe('list_agents', () => {
     const { ctx, parent } = await setup([textResponse('private result')])
     const started = await ctx.subagents.startActivation({
       delivery: 'caller', provider: 'spawn', label: 'workflow child',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await started.result
@@ -162,7 +162,7 @@ describe('list_agents', () => {
     const started = await ctx.subagents.startActivation({ delivery: 'parent',
       provider: 'spawn',
       label: 'real child',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -236,7 +236,7 @@ describe('list_agents', () => {
     const started = await ctx.subagents.startActivation({ delivery: 'parent',
       provider: 'spawn',
       label: 'summarize the doc',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -301,7 +301,7 @@ describe('list_agents', () => {
     const started = await ctx.subagents.startActivation({ delivery: 'parent',
       provider: 'spawn',
       label: 'waiting branch',
-      request: { prompt: [{ type: 'text', text: 'branch work' }], parent },
+      prompt: [{ type: 'text', text: 'branch work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -309,7 +309,7 @@ describe('list_agents', () => {
     const grandchild = await ctx.subagents.startActivation({ delivery: 'parent',
       provider: 'spawn',
       label: 'nested leaf',
-      request: { prompt: [{ type: 'text', text: 'leaf work' }], parent: child },
+      prompt: [{ type: 'text', text: 'leaf work' }], parent: child,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -388,7 +388,7 @@ describe('list_agents', () => {
     const { ctx, parent } = await setupWith(adapter)
     const start = async (label: string) => (await ctx.subagents.startActivation({
       delivery: 'caller', provider: 'spawn', label,
-      request: { prompt: [{ type: 'text', text: label }], parent }, signal: testToolSignal,
+      prompt: [{ type: 'text', text: label }], parent, signal: testToolSignal,
     })).childId
     const alpha = await start('alpha task')
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })

@@ -120,7 +120,7 @@ for (const backend of backends) {
       const started = await first.ctx.subagents.startActivation({
         provider: 'spawn',
         label: 'restart worker',
-        request: { prompt: [{ type: 'text', text: 'finish before restart' }], parent: firstLead },
+        prompt: [{ type: 'text', text: 'finish before restart' }], parent: firstLead,
         signal: SIGNAL,
         delivery: 'caller',
       })

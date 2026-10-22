@@ -27,7 +27,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
     ctx, parent,
     start: (owner: Agent = parent) => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: new AbortController().signal, delivery,
-      request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+      parent: owner, prompt: [{ type: 'text', text: 'work' }],
     }),
   }
 }

@@ -123,7 +123,7 @@ function startSpec(parent: Agent, provider = 'spawn', signal: AbortSignal = test
   return {
     provider,
     label: 'child task',
-    request: { prompt: [{ type: 'text' as const, text: 'child task' }], parent },
+    prompt: [{ type: 'text' as const, text: 'child task' }], parent,
     signal,
   }
 }
@@ -630,11 +630,9 @@ describe('SubagentRuntime.startActivation', () => {
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
-      request: {
-        prompt: message('selected reasoning'),
-        parent,
-        agentOptions: { reasoningEffort: effort },
-      },
+      prompt: message('selected reasoning'),
+      parent,
+      agentOptions: { reasoningEffort: effort },
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
@@ -766,7 +764,7 @@ describe('SubagentRuntime.startActivation', () => {
     await expect(ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
-      request: { prompt: message('deep'), parent, maxDepth: 0 },
+      prompt: message('deep'), parent, maxDepth: 0,
     })).rejects.toThrow(/exceeds maxDepth 0/)
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([SessionId('parent')])
   })
@@ -776,7 +774,7 @@ describe('SubagentRuntime.startActivation', () => {
     await expect(ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
-      request: { prompt: message('deep'), parent, maxDepth: Number.NaN },
+      prompt: message('deep'), parent, maxDepth: Number.NaN,
     })).rejects.toThrow(/non-negative safe integer/)
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([SessionId('parent')])
   })
@@ -3840,11 +3838,9 @@ describe('continuable errors', () => {
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       ...startSpec(parent),
-      request: {
-        prompt: message('routed work'),
-        parent,
-        agentOptions: { provider: 'mock', model: 'child-model', reasoningEffort: effort },
-      },
+      prompt: message('routed work'),
+      parent,
+      agentOptions: { provider: 'mock', model: 'child-model', reasoningEffort: effort },
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)

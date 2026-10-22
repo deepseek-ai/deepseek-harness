@@ -101,10 +101,8 @@ describe('web e2e: sidebar subagent activity', () => {
       provider: 'spawn',
       label: 'sidebar activity child',
       signal: new AbortController().signal,
-      request: {
-        prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
-        parent: parentHandle.agent,
-      },
+      prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
+      parent: parentHandle.agent,
     })
     childId = started.childId
     await waitForRunningChild(scaffold, adapter, childId)

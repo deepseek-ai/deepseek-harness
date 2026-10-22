@@ -54,7 +54,7 @@ async function setup() {
       label: 'child task',
       delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent: owner, prompt: [{ type: 'text', text: 'child task' }] },
+      parent: owner, prompt: [{ type: 'text', text: 'child task' }],
     })
     starts.push(started)
     return started

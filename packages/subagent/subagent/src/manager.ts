@@ -319,19 +319,18 @@ export class SubagentManager {
    * @returns the durable child id and accepted initial prompt message id.
    */
   async startLocal(spec: SubagentActivationSpec): Promise<SubagentActivation & { messageId: MessageId }> {
-    const request = spec.request
-    const parent = request.parent
+    const parent = spec.parent
     this.assertAdmitting(parent)
     const ancestry = this.ancestryForChild(parent)
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       const persistence = spec.delivery === 'caller' ? this.ctx.get('sessionPersistence') : this.requirePersistence()
-      assertSubagentMaxDepth(request.maxDepth)
+      assertSubagentMaxDepth(spec.maxDepth)
       const childId = spec.childId ?? brandString<SessionId>(randomUUID())
       this.assertChildIdAvailable(childId)
-      const childDepth = resolveChildDepth(parent, request.maxDepth)
+      const childDepth = resolveChildDepth(parent, spec.maxDepth)
       // Snapshot before any await: invalid descriptor JSON rejects the call
       // before a child exists, and the detached value is what reaches the log.
-      const agentOptions = resolveChildAgentOptions(parent, request.agentOptions, childDepth)
+      const agentOptions = resolveChildAgentOptions(parent, spec.agentOptions, childDepth)
       const agentProvider = agentOptions.provider
       const agentModel = agentOptions.model
       const agentReasoningEffort = agentOptions.reasoningEffort
@@ -347,7 +346,7 @@ export class SubagentManager {
       // parent's future, not to this child.
       const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
 
-      const cwd = await this.resolveDirectory(request, signal)
+      const cwd = await this.resolveDirectory(spec, signal)
       const prepared = await this.host.prepareContinuable(spec.provider, {
         sessionId: childId,
         cwd,
@@ -382,16 +381,16 @@ export class SubagentManager {
             parent,
             cwd,
             seed,
-            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined, request.agentPreset),
+            meta: childSessionMeta(parent, childDepth, prepared.seed !== undefined, spec.agentPreset),
             inheritedEventCount,
             delegatedPolicies,
             descriptor,
           },
           agentOptions,
-          composition: { agentPreset: request.agentPreset },
+          composition: { agentPreset: spec.agentPreset },
           signal,
           delivery: spec.delivery,
-          outputSchema: spec.request.outputSchema,
+          outputSchema: spec.outputSchema,
         })
         established = activation
         const child = requireLocalActivation(activation).handle.agent
@@ -399,8 +398,8 @@ export class SubagentManager {
         return await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller'
-            ? withResultDeliveryGuidance(request.prompt)
-            : request.prompt,
+            ? withResultDeliveryGuidance(spec.prompt)
+            : spec.prompt,
           { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,
           () => {
@@ -419,28 +418,29 @@ export class SubagentManager {
    * @returns the accepted activation and its result/disposal capabilities.
    */
   async startExternal(spec: SubagentActivationSpec): Promise<SubagentActivation> {
-    const parent = spec.request.parent
+    const { provider, delivery, childId: _childId, ...request } = spec
+    const parent = request.parent
     this.assertAdmitting(parent)
     const pendingId = brandString<SessionId>(randomUUID())
     const ancestry = this.ancestryForChild(parent)
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       let activation: Activation | undefined
       try {
-        const cwd = await this.resolveDirectory(spec.request, signal)
+        const cwd = await this.resolveDirectory(spec, signal)
         activation = await this.materialize({
           kind: 'external',
           childId: pendingId,
-          provider: spec.provider,
+          provider,
           ...ancestry,
           signal,
-          delivery: spec.delivery,
-          start: signal => this.host.startExternal(spec.provider, {
-            ...spec.request, cwd, label: spec.label, signal,
+          delivery,
+          start: signal => this.host.startExternal(provider, {
+            ...request, cwd, signal,
           }),
         })
         this.assertAdmitting(parent)
         signal.throwIfAborted()
-        if (spec.delivery === 'parent') {
+        if (delivery === 'parent') {
           establishExternalCatalogChild(parent.session, activation.childId, spec.label)
         }
         this.accept(activation)

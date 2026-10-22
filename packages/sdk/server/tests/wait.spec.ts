@@ -66,7 +66,7 @@ describe('SDK session/wait with parked child input', () => {
       for (let level = 0; level < depth; level++) {
         const started = await ctx.subagents.startActivation({
           provider: 'local-test', label: 'interruptible child', delivery: 'caller', signal: new AbortController().signal,
-          request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+          parent: owner, prompt: [{ type: 'text', text: 'work' }],
         })
         closeChildren ??= () => started.dispose()
         child = ctx.agents.get(started.childId)!
@@ -118,7 +118,7 @@ describe('SDK session/wait failures', () => {
       const warnings = vi.spyOn(ctx.logger, 'warn')
       const child = await ctx.subagents.startActivation({
         provider: 'local-test', label: 'child failure', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'delegated task' }] },
+        parent, prompt: [{ type: 'text', text: 'delegated task' }],
       })
       await expect(child.result).resolves.toMatchObject({ stopReason: 'error' })
       expect(observed).toEqual([failure])

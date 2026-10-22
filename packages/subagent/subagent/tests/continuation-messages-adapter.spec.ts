@@ -61,7 +61,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { parent, prompt: [{ type: 'text', text: 'child task' }] },
+      parent, prompt: [{ type: 'text', text: 'child task' }],
       signal: new AbortController().signal,
     })
     await settled.promise

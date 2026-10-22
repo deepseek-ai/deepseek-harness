@@ -77,7 +77,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
   const started = await ctx.subagents.startActivation({
     provider,
     label: `${description ?? 'shared'} responsibility`,
-    request: { prompt: content(`${description ?? 'shared'} initial`), parent: lead },
+    prompt: content(`${description ?? 'shared'} initial`), parent: lead,
     signal: SIGNAL,
     delivery: 'parent',
   })
@@ -151,7 +151,7 @@ describe('Tree-owned task boards', () => {
     const unnamed = await waitRunning(ctx, await spawn(ctx, lead, undefined))
     const grandchildId = (await ctx.subagents.startActivation({
       provider: 'spawn', label: 'nested', delivery: 'caller', signal: SIGNAL,
-      request: { prompt: content('nested'), parent: named },
+      prompt: content('nested'), parent: named,
     })).childId
     const grandchild = await waitRunning(ctx, grandchildId)
 
