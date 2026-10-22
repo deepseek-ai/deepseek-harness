@@ -517,12 +517,12 @@ describe('dsh-tool-team', () => {
     await replacement.dispose()
   })
 
-  it('installs tools once when the plugin activates between Session and Agent creation announcements', async () => {
+  it('installs tools once when the plugin activates as Agent creation dispatch begins', async () => {
     const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
     const id = SessionId('install-during-publication')
-    const stop = ctx.on('session/created', (session) => {
-      if (session.id === id) toolTeam.apply(ctx)
+    const stop = ctx.on('internal/dispatch', (_type, name) => {
+      if (name === 'agent/created' && ctx.agents.get(id) !== undefined) toolTeam.apply(ctx)
     })
     try {
       const child = await ctx.agents.create({
