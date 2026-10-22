@@ -1793,10 +1793,6 @@
   "packages/subagent/subagent/tests/continuation.spec.ts": {
     "ae5776af8c1e9965a4eca94bcbc07b65da8d2e9e24e4570d2141b34d60b4f90f": 1
   },
-  "packages/subagent/subagent/tests/control.spec.ts": {
-    "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 1,
-    "764cefa4ddc93e5b865cade70e780d8d471ef51e58148e838681ed4cf0bd7b4a": 1
-  },
   "packages/subagent/subagent/tests/service.spec.ts": {
     "41a1501a36d265ae52c5893b26e9e92eacc1012a379afb2948a31d153bcbac2a": 1,
     "514d368a1007506da97412cee4b14191025685d1693f2c68442bb466b5054e02": 1,
