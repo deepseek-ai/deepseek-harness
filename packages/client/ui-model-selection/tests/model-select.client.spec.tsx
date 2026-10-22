@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -456,6 +457,71 @@ describe('ModelSelect keyboard walk', () => {
     fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
     return select
   }
+
+  it.each([
+    { device: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5 },
+    { device: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5 },
+  ].flatMap(device => [1, 5].map(modelCount => ({ ...device, modelCount }))))(
+    'retains menu keyboard focus on $device with $modelCount models without automatically focusing search',
+    async ({ userAgent, platform, maxTouchPoints, modelCount }) => {
+      for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
+        const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
+        Object.defineProperty(navigator, name, { configurable: true, value })
+        onTestFinished(() => {
+          if (descriptor === undefined) Reflect.deleteProperty(navigator, name)
+          else Object.defineProperty(navigator, name, descriptor)
+        })
+      }
+      vi.resetModules()
+      const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+      const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+      onTestFinished(() => { device.mockRestore() })
+      const select = vi.fn()
+      render(<ModelSelect renderSlot={renderLabel} locked={false} available
+        directory={createSnapshotStore(state({ groups: modelGroups(modelCount) }))}
+        load={vi.fn()} select={select} t={t}
+      />)
+      const trigger = screen.getByRole('button', { name: /选择模型/ })
+      fireEvent.click(trigger)
+      expect(document.activeElement).toBe(trigger)
+
+      const modelCell = screen.getByRole('menuitem', { name: /^模型/ })
+      const effortCell = screen.getByRole('menuitem', { name: /推理等级/ })
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+      fireEvent.keyDown(modelCell, { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(effortCell)
+      fireEvent.keyDown(effortCell, { key: 'Tab' })
+      const high = screen.getByRole('menuitemradio', { name: 'High' })
+      const max = screen.getByRole('menuitemradio', { name: /Max/ })
+      expect(document.activeElement).toBe(high)
+      fireEvent.keyDown(high, { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(max)
+      fireEvent.keyDown(max, { key: 'Escape' })
+
+      const restoredEffortCell = screen.getByRole('menuitem', { name: /推理等级/ })
+      expect(document.activeElement).toBe(restoredEffortCell)
+      fireEvent.keyDown(restoredEffortCell, { key: 'ArrowUp' })
+      const restoredModelCell = screen.getByRole('menuitem', { name: /^模型/ })
+      expect(document.activeElement).toBe(restoredModelCell)
+      fireEvent.keyDown(restoredModelCell, { key: 'Tab' })
+      const model = screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })
+      expect(document.activeElement).toBe(model)
+      if (modelCount > 4) {
+        const search = screen.getByRole('searchbox')
+        expect(document.activeElement).not.toBe(search)
+        fireEvent.keyDown(model, { key: 'ArrowDown' })
+        expect(document.activeElement).toBe(search)
+      } else {
+        expect(screen.queryByRole('searchbox')).toBeNull()
+      }
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /^模型/ }))
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(screen.queryByRole('menu')).toBeNull()
+      await waitFor(() => { expect(document.activeElement).toBe(trigger) })
+      expect(select).not.toHaveBeenCalled()
+    },
+  )
 
   it.each(['model', 'effort'])('prevents button mousedown defaults in the %s pane without selecting it', (pane) => {
     const select = mountOpen()

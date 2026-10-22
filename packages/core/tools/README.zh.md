@@ -63,6 +63,7 @@ ctx.tools.register(defineTool({
 
 统一 schema DSL 支持 `string`、`number`、`integer`、`boolean`、`null`、`array`、`object`、仅供作者使用的 `json` 与恰好匹配一个分支的 `oneOf`；`InferValue` 在 16 层容器内保留精确类型，之后加宽为 `JsonValue`。原始 JSON Schema（`JsonSchemaNode`）是与 subagent、工作流和 MCP 共享的协议级对应类型。
 
+<a id="conditional-tools"></a>
 ### 条件工具
 
 `register(definition, { when })` 为每个模型步骤计算一次同步或异步条件。条件接收 `{ agent, modelSelection, signal }`；`modelSelection` 是步骤准备时为该步骤所有请求尝试捕获的提供方、模型与推理强度，与 `AssembleContext.modelSelection` 相同。返回 false 会从执行器的描述、PTC 绑定和执行集合中排除工具。条件抛错会以 `TOOL_ACTIVATION_FAILED` 中止步骤准备，不会被当成正常不可用。条件必须响应取消，不得改变注册或执行工具操作。

@@ -107,8 +107,10 @@ describe('web e2e: plugin manager', () => {
     const headerScaffold = await launchWebScaffold()
     try {
       // Pin the extremes; at intermediate widths, the rendered font and locale
-      // determine whether the two intrinsic items fit beside each other.
-      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside', 390: 'below', 430: 'below' }
+      // determine whether the two intrinsic items fit beside each other. Narrow
+      // widths shrink the actions to icons before they wrap; the collapsed-bar case
+      // pins those widths.
+      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside' }
       for (const language of ['en', 'zh'] as const) {
         const context = await browser.newContext({
           viewport: { width: 1680, height: 1000 }, locale: language === 'en' ? 'en-US' : ZH_BROWSER_LOCALE,
@@ -121,7 +123,7 @@ describe('web e2e: plugin manager', () => {
           const title = language === 'en' ? 'Plugins' : '插件'
           await probe.getByRole('button', { name: title, exact: true }).click()
           const panel = probe.locator('[data-plugin-panel]')
-          const header = panel.locator(':scope > header')
+          const header = panel.locator('[data-plugin-bar] > header')
           await header.getByRole('heading', { name: title, exact: true }).waitFor()
           await probe.evaluate(() => document.fonts.ready)
           const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
@@ -129,13 +131,23 @@ describe('web e2e: plugin manager', () => {
           await add.focus()
           const measure = () => header.evaluate((element) => {
             const heading = element.firstElementChild!
-            const actions = element.lastElementChild!
-            const headingRect = heading.getBoundingClientRect()
+            const actions = element.querySelector('[data-plugin-toolbar]')!
+            const titleRect = heading.querySelector('h1')!.getBoundingClientRect()
+            const introRect = heading.querySelector('h1 + div')!.getBoundingClientRect()
+            const headingRect = {
+              right: Math.max(titleRect.right, introRect.right),
+              bottom: Math.max(titleRect.bottom, introRect.bottom),
+              width: Math.max(titleRect.right, introRect.right) - Math.min(titleRect.left, introRect.left),
+            }
             const actionRect = actions.getBoundingClientRect()
             const headerRect = element.getBoundingClientRect()
             const intrinsicHeading = heading.cloneNode(true) as HTMLElement
+            intrinsicHeading.querySelectorAll('[data-plugin-header-part]').forEach((part) => {
+              part.removeAttribute('data-plugin-header-part')
+              part.removeAttribute('style')
+            })
             Object.assign(intrinsicHeading.style, {
-              position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
+              display: 'block', position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
             })
             element.append(intrinsicHeading)
             let intrinsicHeadingWidth: number
@@ -194,10 +206,12 @@ describe('web e2e: plugin manager', () => {
             if (pinned !== undefined) expect(placement).toBe(pinned)
             facts.push(`${language} ${width}px: actions ${pinned === undefined ? 'beside or below (according to intrinsic fit)' : placement} the heading, single-line; contained; information follows subtitle; focus retained`)
           }
-          await probe.setViewportSize({ width: 390, height: 1000 })
+          // Force less room than even the icon actions need beside the heading.
+          await probe.setViewportSize({ width: 240, height: 1000 })
           const previousWrap = await header.evaluate((element) => {
             const style = element.style
             const previous = { value: style.getPropertyValue('flex-wrap'), priority: style.getPropertyPriority('flex-wrap') }
+            element.parentElement!.removeAttribute('data-natural')
             style.setProperty('flex-wrap', 'nowrap')
             return previous
           })
@@ -210,8 +224,10 @@ describe('web e2e: plugin manager', () => {
             await header.evaluate((element, previous) => {
               if (previous.value === '') element.style.removeProperty('flex-wrap')
               else element.style.setProperty('flex-wrap', previous.value, previous.priority)
+              element.parentElement!.setAttribute('data-natural', '')
             }, previousWrap)
           }
+          await probe.setViewportSize({ width: 390, height: 1000 })
           await expect.poll(async () => validLayout(await measure())).toBe(true)
           const menuTrigger = header.getByRole('button', { name: language === 'en' ? 'Choose how to add a plugin' : '选择添加插件方式' })
           await menuTrigger.click()
@@ -226,11 +242,171 @@ describe('web e2e: plugin manager', () => {
       }
       await compareOrRefreshGolden(
         join(SNAPSHOT_DIR, 'header-responsive.expected.md'),
-        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 390px fails the same measured layout check in both locales; restoring wrap passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
+        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 240px fails the same measured layout check in both locales; restoring wrap and 390px passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
         MODE,
       )
     } finally {
       await headerScaffold.close()
+    }
+  })
+
+  it('uses icon actions before shrinking tabs and wraps only when both still cannot fit', async () => {
+    const compactScaffold = await launchWebScaffold({
+      profile: { packages: [], bundles: ['@deepseek-ai/dsh-experimental-plugin-market-bundle'] },
+    })
+    const context = await browser.newContext({ viewport: { width: 1280, height: 480 }, locale: 'en-US', reducedMotion: 'reduce' })
+    try {
+      const probe = await context.newPage()
+      await probe.goto(compactScaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: 'Plugins', exact: true }).click()
+      const panel = probe.locator('[data-plugin-panel]')
+      const bar = panel.locator('[data-plugin-bar]')
+      const body = panel.locator('[data-plugin-body]')
+      const refresh = bar.getByRole('button', { name: 'Refresh', exact: true })
+      const add = bar.getByRole('button', { name: 'Add plugin', exact: true })
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      await bar.getByRole('tablist').waitFor()
+      await add.focus()
+      for (const [width, icons, narrowTabs, wraps] of [
+        [1280, false, false, false], [600, true, false, false],
+        [470, true, true, false], [390, true, true, true], [300, true, true, true],
+      ] as const) {
+        await probe.setViewportSize({ width, height: 480 })
+        await body.evaluate((element) => { element.scrollTop = 180 })
+        await probe.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
+        await expect.poll(() => bar.evaluate((element) => {
+          const tablist = element.querySelector('[role="tablist"]')!
+          const toolbar = element.querySelector('[data-plugin-toolbar]')!
+          const action = toolbar.querySelector('button')!
+          const tabRect = tablist.getBoundingClientRect(), actions = toolbar.getBoundingClientRect()
+          const actionRect = action.getBoundingClientRect()
+          const wrapped = actions.top >= tabRect.bottom
+          return {
+            icons: getComputedStyle(action.lastElementChild!).display === 'none',
+            narrowTabs: tabRect.width < 240,
+            wraps: wrapped,
+            centered: wrapped || Math.abs(tabRect.top + tabRect.height / 2 - actionRect.top - actionRect.height / 2) < 1,
+          }
+        }), { message: `compact toolbar at ${width}px` }).toEqual({ icons, narrowTabs, wraps, centered: true })
+        expect(await add.evaluate(element => element === document.activeElement)).toBe(true)
+        // The collapsed bar hides the title visually but keeps the page's heading for assistive technology.
+        expect(await bar.getByRole('heading', { name: 'Plugins', level: 1, exact: true }).count()).toBe(1)
+      }
+      // A short list keeps its range even when the available travel cannot fully compact the tabs.
+      await probe.setViewportSize({ width: 1280, height: 480 })
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
+      const range = await body.evaluate(element => element.scrollHeight - element.clientHeight)
+      await probe.setViewportSize({ width: 1280, height: 480 + range - 30 })
+      await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      await probe.mouse.move(800, 400)
+      await probe.mouse.wheel(0, 200)
+      await expect.poll(() => body.evaluate(element => element.scrollTop)).toBe(30)
+      expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      expect(await bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
+      await probe.setViewportSize({ width: 390, height: 480 })
+      // Locator hover scrolls its target into view, and scrolling this list moves the header controls away from
+      // the pointer; once the resized header stops moving, move the pointer onto each control instead.
+      const pointAt = async (target: Locator): Promise<void> => {
+        await expect.poll(() => target.evaluate(element => new Promise<boolean>((resolve) => {
+          const before = element.getBoundingClientRect()
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            const after = element.getBoundingClientRect()
+            resolve(before.x === after.x && before.y === after.y)
+          }))
+        }))).toBe(true)
+        const bounds = await target.boundingBox()
+        if (bounds === null) throw new Error('Header control is not visible')
+        await probe.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      }
+      await pointAt(refresh)
+      await probe.getByRole('tooltip', { name: 'Refresh', exact: true }).waitFor()
+      await pointAt(add)
+      await probe.getByRole('tooltip', { name: 'Add plugin', exact: true }).waitFor()
+      await bar.getByRole('button', { name: 'Choose how to add a plugin', exact: true }).click()
+      await probe.getByRole('menu').waitFor()
+      await probe.keyboard.press('Escape')
+      await probe.getByRole('menu').waitFor({ state: 'hidden' })
+      await add.click()
+      await probe.getByRole('dialog').waitFor()
+    } finally {
+      await context.close()
+      await compactScaffold.close()
+    }
+  })
+
+  it('keeps the plugin page title and actions pinned while the cards scroll', async () => {
+    await page.setViewportSize({ width: 1000, height: 480 })
+    const panel = await openPluginsPanel()
+    const body = panel.locator('[data-plugin-body]')
+    try {
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      const headerTop = () => panel.locator('[data-plugin-bar] > header').evaluate(element => element.getBoundingClientRect().top)
+      const bar = panel.locator('[data-plugin-bar]')
+      const barHeight = () => bar.evaluate(element => element.getBoundingClientRect().height)
+      const resting = await headerTop()
+      const restingHeight = await barHeight()
+      const refreshButton = bar.getByRole('button', { name: '刷新', exact: true })
+      const addButton = bar.getByRole('button', { name: '添加插件', exact: true })
+      const restingActions = await Promise.all([refreshButton.boundingBox(), addButton.boundingBox()])
+      expect(resting).toBe(await panel.evaluate(element => element.getBoundingClientRect().top))
+      const restingBarBottom = await bar.evaluate(element => element.getBoundingClientRect().bottom)
+      expect(await body.locator('[data-plugin-group]').first().evaluate(element => element.getBoundingClientRect().top))
+        .toBeCloseTo(restingBarBottom + 32, 1)
+      await body.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      const bottom = await body.evaluate(element => element.scrollTop)
+      expect(bottom).toBeGreaterThan(100)
+      expect(await headerTop()).toBe(resting)
+      // The painted bar compacts while its document-flow height remains unchanged.
+      await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact') === true)
+      expect(await barHeight()).toBe(restingHeight)
+      expect(await bar.evaluate(element => getComputedStyle(element, '::after').borderBottomWidth)).not.toBe('0px')
+      expect(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element, '::before').height))).toBe(64)
+      expect(await body.evaluate(element => element.getBoundingClientRect().top)).toBe(resting)
+      expect(await Promise.all([refreshButton.boundingBox(), addButton.boundingBox()]))
+        .toEqual(restingActions.map((bounds) => {
+          if (bounds === null) throw new Error('Plugin toolbar action is not visible')
+          return { ...bounds, y: bounds.y - 12 }
+        }))
+      // Reverse keyboard navigation scrolls each focused control into view below the bar, never under it.
+      await panel.locator('[data-plugin-package] [role="switch"]').last().focus()
+      const barBottom = await bar.evaluate(element => element.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(element, '::before').height))
+      const hidden: string[] = []
+      for (let step = 0; step < 30; step++) {
+        await page.keyboard.press('Shift+Tab')
+        const focus = await page.evaluate(() => {
+          const element = document.activeElement
+          const box = element?.getBoundingClientRect()
+          return {
+            inBody: element?.closest('[data-plugin-body]') !== null && element?.closest('[data-plugin-bar]') === null,
+            top: box?.top ?? 0,
+            name: element?.getAttribute('aria-label') ?? element?.textContent ?? '',
+          }
+        })
+        if (!focus.inBody) break
+        if (focus.top < barBottom) hidden.push(`${focus.name} at ${String(focus.top)}`)
+      }
+      expect(hidden).toEqual([])
+      expect(await body.evaluate(element => element.scrollTop)).toBeLessThan(bottom)
+      expect(await headerTop()).toBe(resting)
+      await page.setViewportSize({ width: 1680, height: 480 })
+      await body.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact') === true)
+      await expect.poll(() => panel.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const barElement = element.querySelector('[data-plugin-bar]')!
+        const barBounds = barElement.getBoundingClientRect()
+        const bodyBounds = element.querySelector('[data-plugin-body]')!.getBoundingClientRect()
+        const dividerStyle = getComputedStyle(barElement, '::after')
+        return {
+          left: barBounds.left + Number.parseFloat(dividerStyle.left) - bounds.left,
+          right: barBounds.right - Number.parseFloat(dividerStyle.right) - bounds.right,
+          gap: bodyBounds.top - barBounds.top,
+        }
+      })).toEqual({ left: 0, right: 0, gap: 0 })
+    } finally {
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await page.setViewportSize({ width: 1680, height: 1000 })
     }
   })
 
@@ -263,7 +439,7 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('role')).toBe('status')
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
-        const actions = panel.locator(':scope > header > div:last-child button')
+        const actions = panel.locator('[data-plugin-bar] > header > div:last-child button')
         expect(await actions.count()).toBe(3)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
         expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
@@ -278,7 +454,7 @@ describe('web e2e: plugin manager', () => {
             return { x, y, width, height }
           }
           return {
-            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
+            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector('[data-plugin-bar] > header')),
             groupHeader: rect(element.firstElementChild),
             rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
               const head = row.firstElementChild
@@ -559,7 +735,9 @@ describe('web e2e: plugin manager', () => {
       await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
       facts.push('Mouse hover after touch: refresh tooltip visible')
       await probe.mouse.move(0, 843)
-      expect(await help.count()).toBe(0)
+      // Tab moved focus to the icon-only Add plugin button, whose focus tooltip stays; the hovered ones leave.
+      expect(await probe.getByRole('tooltip').filter({ hasText: '刷新' }).count()).toBe(0)
+      expect(await probe.getByRole('tooltip').filter({ hasText: '在这里配置官方插件' }).count()).toBe(0)
       await input.detach()
       await probe.clock.resume()
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'touch-tooltips.expected.md'),
@@ -1258,7 +1436,8 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md', 'touch-tooltips.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
+      'touch-tooltips.expected.md',
     ])
   })
 })

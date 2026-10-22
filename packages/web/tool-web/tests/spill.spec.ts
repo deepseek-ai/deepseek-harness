@@ -68,11 +68,20 @@ afterEach(async () => {
   rmSync(spillRoot, { recursive: true, force: true })
 })
 
-/** A web_fetch call carrying a session owner (so the policy can scope the spill). */
-function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
+/**
+ * A web_fetch call carrying a session owner (so the policy can scope the spill), run inside that
+ * owner's step admission because web_fetch is a conditional registration.
+ */
+async function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
   const agent = { session: { header: { id: SessionId('web-sess') } } }
   const exec = { callId: ToolCallId('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as unknown as ToolExecution
-  return executeToolFixture(ctx, exec)
+  if (exec.agent === undefined) throw new Error('the spill fixture call needs its session owner')
+  const toolSet = await ctx.tools.resolve({ agent: exec.agent, modelSelection: { provider: 'test', model: 'test' }, signal: exec.signal })
+  try {
+    return await executeToolFixture(ctx, { ...exec, toolSet })
+  } finally {
+    toolSet.dispose()
+  }
 }
 
 describe('web_fetch spill showcase', () => {

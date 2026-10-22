@@ -810,6 +810,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   PresetOption: 'permission-presets.md',
   PresetSpec: 'permission-presets.md',
   WebRoute: 'web-server.md',
+  WebResourceRoute: 'web-server.md',
   IndexInjection: 'web-server.md',
   StorageBackend: 'storage.md',
   StorageForms: 'storage.md',

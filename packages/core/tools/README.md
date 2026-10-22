@@ -63,6 +63,7 @@ ctx.tools.register(defineTool({
 
 The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, author-only `json`, and exact-one `oneOf`; `InferValue` preserves exact types through 16 container levels before widening to `JsonValue`. A raw JSON Schema (`JsonSchemaNode`) is the wire-level counterpart shared with subagents, workflows, and MCP.
 
+<a id="conditional-tools"></a>
 ### Conditional tools
 
 `register(definition, { when })` evaluates a synchronous or asynchronous condition once for each model step. The condition receives `{ agent, modelSelection, signal }`; `modelSelection` is the provider, model, and reasoning effort that step preparation captured for every request attempt in the step, the same value as `AssembleContext.modelSelection`. False omits the tool from the executor's description, PTC bindings, and execution. A thrown condition fails step preparation as `TOOL_ACTIVATION_FAILED`; it is not treated as ordinary unavailability. Conditions must observe cancellation and must not change registrations or perform tool work.

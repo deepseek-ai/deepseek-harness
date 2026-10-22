@@ -8,6 +8,7 @@
 // root listener routes them through the keymap commands); draft writes drive
 // the shell (jsdom's beforeinput lacks the ranges Lexical needs).
 
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import './control-row-dom.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
@@ -1447,6 +1448,81 @@ describe('running and lock semantics', () => {
     textarea.focus = (options?: FocusOptions) => { focused.push(options?.preventScroll) }
     act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
     expect(focused).toEqual([true])
+  })
+
+  it.each([
+    { name: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5, automatic: false },
+    { name: 'Android phone', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 0, automatic: false },
+    { name: 'Android tablet', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 5, automatic: false },
+    { name: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5, automatic: false },
+    { name: 'Mac', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0, automatic: true },
+    { name: 'Windows touchscreen', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 5, automatic: true },
+  ])('composer focus and submission respect device classification: $name', async ({ userAgent, platform, maxTouchPoints, automatic }) => {
+    for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
+      const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
+      Object.defineProperty(navigator, name, { configurable: true, value })
+      onTestFinished(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(navigator, name)
+        else Object.defineProperty(navigator, name, descriptor)
+      })
+    }
+    vi.resetModules()
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+    onTestFinished(() => { device.mockRestore() })
+    const outside = document.createElement('input')
+    document.body.append(outside)
+    onTestFinished(() => { outside.remove() })
+    outside.focus()
+
+    const { view, textarea, props, shell, button, sink } = bench({ draft: 'draft' })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+    act(() => { outside.focus() })
+    act(() => { view.rerender(<InputBar {...props} disabled />) })
+    act(() => { view.rerender(<InputBar {...props} />) })
+    expect(document.activeElement).toBe(automatic ? textarea : outside)
+
+    act(() => { outside.focus() })
+    fireEvent.mouseDown(view.container.querySelector('[data-composer-card]')!, { button: 0 })
+    expect(document.activeElement).toBe(textarea)
+
+    writeDraft(shell, '')
+    expect(document.activeElement).toBe(textarea)
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(sink).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(textarea)
+
+    for (const gesture of ['click', 'enter'] as const) {
+      writeDraft(shell, `send by ${gesture}`)
+      act(() => { textarea.focus() })
+      if (gesture === 'click') {
+        fireEvent.mouseDown(button, { button: 0 })
+        fireEvent.click(button)
+      } else {
+        fireEvent.keyDown(textarea, { key: 'Enter' })
+      }
+      await act(async () => {})
+      expect(sink).toHaveBeenLastCalledWith(`send by ${gesture}`, [], 'queue', expect.any(AbortSignal))
+      expect(shell.snapshot.draft).toBe('')
+      expect(document.activeElement === textarea).toBe(automatic)
+    }
+
+    writeDraft(shell, '/goal ')
+    act(() => {
+      shell.beginCommand(
+        { name: 'goal', token: '/goal ', submit: () => Promise.resolve({ kind: 'error', text: 'Missing goal' }) },
+        { start: 0, end: 6, draftRev: shell.snapshot.draftRev },
+      )
+      textarea.focus()
+    })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    await act(async () => {})
+    expect(shell.snapshot.phase).toBe('claimed')
+    expect(shell.snapshot.draft).toBe('/goal ')
+    expect(document.activeElement).toBe(textarea)
   })
 
   it('a persisted draft adopted after mount does not steal focus from another control', () => {

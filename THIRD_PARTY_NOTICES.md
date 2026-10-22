@@ -160,6 +160,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `app-builder-lib@26.17.0` — [`patches/app-builder-lib@26.17.0.patch`](patches/app-builder-lib@26.17.0.patch)
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
+- `lexical@0.49.0` — [`patches/lexical@0.49.0.patch`](patches/lexical@0.49.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
 
 ## Chrome DevTools frontend

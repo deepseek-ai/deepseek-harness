@@ -59,7 +59,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Every call returns `started subagent <childId>` after the runtime accepts the child. It does not wait for the child's result. The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
 
-For every backend, the runtime automatically delivers the completion notice and any final answer if the calling Agent is still online when the child finishes. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
+For every backend, the runtime automatically delivers the completion notice if the calling Agent is still online when the child finishes. The notice includes the final answer unless the child sent that Agent a message just before finishing. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
 
 `maxDepth` caps recursion (`0` forbids delegation); omission reads the current Host `subagent.maxDepth` setting, initially `1`, at each delegation. A numeric depth requires a provider with the `depthLimit` capability; `'provider-managed'` leaves the budget to an out-of-process provider. The tool stays visible at the cap; each attempted start checks the calling agent's current depth and rejects with an errored result.
 

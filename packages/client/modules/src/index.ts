@@ -28,11 +28,9 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
 import { Readable } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { Service } from '@deepseek-ai/cordis'
@@ -251,6 +249,19 @@ function transforStreamBody(stream: Readable): ReadableStream<Uint8Array> {
     },
     async cancel() {
       await chunks.return?.()
+    },
+  })
+}
+
+/**
+ * Expose a held bundle buffer as a Response body without copying it: the
+ * single chunk is the buffer itself, which readers must not modify.
+ */
+function heldBody(buffer: Buffer): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(buffer)
+      controller.close()
     },
   })
 }
@@ -689,7 +700,7 @@ export class ClientModuleRegistry extends Service {
 
     const registerWebCarrier = (webCtx: Context): void => {
       webCtx.effect(
-        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, handler: this.serveBundle }),
+        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, resource: request => this.fetchBundle(request) }),
         'client-modules: bundle route',
       )
     }
@@ -723,14 +734,16 @@ export class ClientModuleRegistry extends Service {
    * body. Each bundle body is built once on its first `GET`; script
    * construction never reads maps. A package asset is read on every request
    * and answers 304 without a body when `If-None-Match` equals its entity tag;
-   * its body holds the file open until the caller consumes or cancels it.
+   * its body holds the file open until the caller consumes or cancels it. A
+   * bundle, map, or chunk body is the held buffer itself, not a copy, so a
+   * caller must not modify its bytes.
    * @param request - shell-carrier request for a `/plugins` resource.
    * @returns the exact response also exposed by the optional Web route.
    */
   async fetchBundle(request: Request): Promise<Response> {
     const resource = await this.bundleResource(request.method, request.url, request.headers.get('if-none-match') ?? undefined)
     const body = resource.body === undefined ? null
-      : resource.body instanceof Readable ? transforStreamBody(resource.body) : Uint8Array.from(resource.body)
+      : resource.body instanceof Readable ? transforStreamBody(resource.body) : heldBody(resource.body)
     return new Response(body, {
       status: resource.status,
       ...(resource.headers === undefined ? {} : { headers: resource.headers }),
@@ -1256,21 +1269,6 @@ export class ClientModuleRegistry extends Service {
     return { status: 404 }
   }
 
-  private readonly serveBundle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
-    const response = await this.bundleResource(req.method, req.url ?? '/', req.headers['if-none-match'])
-    res.writeHead(response.status, response.headers)
-    if (!(response.body instanceof Readable)) {
-      res.end(response.body)
-      return
-    }
-    try {
-      await pipeline(response.body, res)
-    } catch (error) {
-      // The browser cancelled the request, as leaving an onboarding step does; pipeline already closed the file.
-      if ((error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') throw error
-    }
-  }
 }
 
 export default ClientModuleRegistry

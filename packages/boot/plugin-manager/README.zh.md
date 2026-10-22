@@ -57,6 +57,8 @@ kind: "package-reference"
 
 `installBundle` 在启动 pnpm 前通过 `git ls-remote` 检查 GitHub 仓库，使用 profile 目录及安装器的 Git 与代理配置。`githubConnectionTimeoutMs` 默认为 5000 毫秒，只限制这次检查，不限制包下载或构建。检查禁用凭据助手和认证提示；只有网络失败与超时会停止安装，通过现有失败类型与诊断日志返回，并标记 `failedAt: 'spec-host'`。认证、仓库查找及其他失败继续交给 pnpm，包括其 HTTPS 到 SSH 的回退。取消安装或销毁管理器会停止检查及其子进程。注册表包、本地路径、压缩包和其他 Git 主机跳过此检查。仓库可达后，下载或组合包验证仍可能失败。
 
+HTTP(S) Git URL 指向 pnpm 没有 HTTPS 到 SSH 回退的主机（即 `hosted-git-info` 不认识的任何主机，例如自托管 GitLab）时，在启动 pnpm 前通过 `git ls-remote` 探测。探测使用安装器的 Git 配置与凭据助手，并禁用 Git 的终端与 askpass 提示；在 POSIX 上探测也没有控制终端，因此 SSH 无法提示。HTTP(S) 无法读取仓库而 `ssh://git@<host>/<path>` 可以读取时，pnpm 以该 SSH URL 加上原片段安装，profile 也记录该 URL。否则按原 spec 安装。每次探测受 `gitTransportTimeoutMs` 限制，默认为 5000 毫秒；取消安装或销毁管理器会停止探测。带凭据或查询串的 URL 跳过探测。
+
 注册表按顺序询问。计划从 `options.registry` 开始，否则从配置的 `registry`（`null` 即 pnpm 自身配置指定的那个）开始，并在一个注册表不可达、超时或答复没有这个包或版本（尚未同步的镜像会如此）时继续问 `fallbackRegistries`。配置集合之外的注册表只问它自己，因而私有源永远不会落到公共源；pnpm 自身的注册表只在它指向的地址（每次做计划前经 `pnpm config get registry` 读出）是 npm 官方源或某个备选源时才算集合成员，否则视为私有源只问它自己。pnpm 自身配置已经指向的注册表只问一次。查询以 `--registry` 运行 `pnpm view` 且不带 pnpm 自身的重试，所以死掉的注册表会在 `inspectTimeoutMs` 内报告并转问下一个；pnpm 把拒绝以 JSON 打印在 stdout，读法与 stderr 相同。安装保留 pnpm 的重试设置。`registries()` 把配置集合和 pnpm 指向的地址答复给选择器。[注册表 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-18-plugin-install-registries.zh.md) 拥有理由。
 
 可在浏览器使用的 `@deepseek-ai/dsh-plugin-manager/registry` 入口导出 `OFFICIAL_NPM_REGISTRY` 和 `NPMMIRROR_REGISTRY`，供消费方识别这两个公共注册表。
@@ -65,7 +67,7 @@ kind: "package-reference"
 
 `waitForInstall(requestId)` 让客户端在响应丢失后等待活动安装的结果，包括不可取消的应用阶段。它返回与原调用相同的结果，请求不在活动中时返回 `null`。已完成的结果不保留；`null` 不表示成功或已取消。
 
-pnpm 11 拦下依赖脚本时，失败的安装在 `pendingBuilds` 里报告 profile 中所有待决定的包名，包括先前尝试留下的，以及本次运行报告为已忽略的。pnpm 只在能够交互提示时才把这些条目写入 `pnpm-workspace.yaml`，因此由管理器自行记录本次运行报告的包名；失败的运行会恢复 `package.json` 与 `pnpm-lock.yaml`，但有意不恢复 `pnpm-workspace.yaml`。Web 插件页提供**允许这些脚本并重试**；工具可以在用户于对话中批准这些脚本后，通过 `install_bundle` 的 `approvedBuilds` 代为授权。服务只校验待决定的名字，不核实对话中的批准。授权按包名保存在当前 profile，允许以宿主用户的权限执行命令，并在再次安装失败后保留。只能批准当前未决定的名字；已有的拒绝与通配规则不能通过此操作覆盖。`allowBuilds` 里出现 YAML 锚点或别名时拒绝授权。重试保留原来的启用选择。
+pnpm 11 拦下依赖脚本时，失败的安装在 `pendingBuilds` 里报告 profile 中所有待决定的 `allowBuilds` 键，包括先前尝试留下的键、本次运行报告为已忽略的包名，以及 pnpm 为其拒绝准备的 git 托管包建议的键。git URL 携带凭据（密码，或 HTTP(S) 上的用户名）的键不会被记录，因此该安装只提供手动批准。pnpm 只在能够交互提示时才把这些条目写入 `pnpm-workspace.yaml`，因此由管理器自行记录本次运行报告的包名；失败的运行会恢复 `package.json` 与 `pnpm-lock.yaml`，但有意不恢复 `pnpm-workspace.yaml`。Web 插件页提供**允许这些脚本并重试**；工具可以在用户于对话中批准这些脚本后，通过 `install_bundle` 的 `approvedBuilds` 代为授权。服务只校验待决定的名字，不核实对话中的批准。授权按记录的键保存在当前 profile，该键会把 git 托管包固定到其提交，允许以宿主用户的权限执行命令，并在再次安装失败后保留。只能批准当前未决定的名字；已有的拒绝与通配规则不能通过此操作覆盖。`allowBuilds` 里出现 YAML 锚点或别名时拒绝授权。重试保留原来的启用选择。
 
 <a id="version-compatibility-and-exemptions"></a>
 ### 版本兼容性与豁免
@@ -85,6 +87,7 @@ CLI 提供 `dsh plugin --profile <profile> version-exemptions`、`allow-version 
 | `pnpmCommand` | `pnpm` | pnpm 可执行文件名或路径，与 `dsh plugin` 命令一样通过 `PATH` 解析。 |
 | `inspectTimeoutMs` | `20000` | 单次检查所做注册表查询的上限，单位毫秒。 |
 | `githubConnectionTimeoutMs` | `5000` | 安装前 GitHub 仓库连接检查的时限，单位毫秒。 |
+| `gitTransportTimeoutMs` | `5000` | 安装前对自托管 Git 仓库每次 HTTP(S) 与 SSH 访问探测的时限，单位毫秒。 |
 | `registry` | pnpm 自身配置 | 查询与安装首先询问的注册表，http(s) URL；缺省为 pnpm 自身配置指定的那个。 |
 | `fallbackRegistries` | `['https://registry.npmmirror.com/']` | 前一个注册表不可达或没有该包副本时依次询问的注册表，http(s) URL；pnpm 自身的注册表只在它指向 npm 官方源或这里的某一个时才进入顺序。 |
 | `outputBytes` | `16384` | 每次操作返回的 pnpm 诊断字节上限；完整输出保留在返回的日志路径中。 |
@@ -158,9 +161,11 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 <a id="known-limitations-and-deferred-work"></a>
 
 - Web 一次批准显示出来的整组待决定包，没有逐包选择。
+- 插件移到更新的提交后，已批准的 git 键仍留在 `pnpm-workspace.yaml` 中；没有任何机制移除过期的批准。
 - 命令改动锁文件时，pnpm 按默认注册表校验锁文件中的每个 tarball URL。某个包从其他注册表安装后，使用默认注册表安装另一个包，或在重启后删除该包，可能以 `ERR_PNPM_TARBALL_URL_MISMATCH` 失败。
 - 更新把目标保存为确切版本，失败后的重新安装也把原版本保存为确切版本，即使 profile 原先保存的是范围。有 HMR 时，重新安装的组合包排到选中列表末尾，这可能改变哪个组合包的配置优先。
 - 更新把移除与安装作为两次 profile 操作运行，其他操作可能在两者之间运行。
+- 在 Windows 上，Git 传输探测沿用父进程的控制台，SSH 的主机密钥或密码提示可能出现在启动终端中，直到 `gitTransportTimeoutMs` 到期。在 POSIX 上，`known_hosts` 中没有的主机会让 SSH 探测失败，因此在接受一次主机密钥（例如执行 `ssh -T git@<host>`）之前一直走 HTTPS。凭据助手对话框或 ssh-agent 确认（例如 Touch ID 或 `ssh-add -c` 对话框）超过时限时算作探测失败；HTTPS 探测超时时，可达的 SSH 形式会写入 profile。私有仓库在 pnpm 启动前最多等待两倍 `gitTransportTimeoutMs`。SSH 形式固定使用 `git` 用户和 SSH 默认端口，其他 SSH 端点需要 `url.<base>.insteadOf` 规则。两种探测都失败时，诊断是 pnpm 的 HTTPS 失败，不报告 SSH 探测失败的原因。
 - 依赖需要新的构建脚本批准的新版本会更新失败，并重新安装为原版本；移除该包后通过普通安装批准其脚本。
 - 没有 HMR 时，替换包需要重启进程。在 Plugin Manager 之外重新链接仍处于安装状态的包，需要等待重启。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。

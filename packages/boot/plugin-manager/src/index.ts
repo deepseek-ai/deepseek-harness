@@ -36,6 +36,7 @@ import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGithubConnection } from './github-connection.ts'
+import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
 import { newerVersions, VERSION_FIELDS, VERSION_LIST_FIELDS, versionFacts } from './versions.ts'
 import type {
   BundleDetail, BundleInfo, BundleRowInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, ManagementError,
@@ -59,6 +60,8 @@ export interface Config {
   inspectTimeoutMs?: number
   /** Maximum duration of the GitHub repository connection check before installation, in milliseconds. */
   githubConnectionTimeoutMs?: number
+  /** Maximum duration of each HTTP(S) and SSH access probe of a self-hosted Git repository before installation, in milliseconds. */
+  gitTransportTimeoutMs?: number
   /** Maximum time one captured package run may print nothing before the manager terminates it, in milliseconds. */
   idleTimeoutMs?: number
   /** The registry lookups and installations ask first, as an http(s) URL; absent, the one pnpm's own configuration names. */
@@ -249,7 +252,7 @@ function bundleSelection(manifest: ProfileManifest): readonly string[] {
 
 /**
  * The package an installation spec names before pnpm runs: a registry name, a local directory's manifest name, or the
- * dependency saved with this git or tarball spec, compared as the plugin list shows saved specs.
+ * dependency saved with this git or tarball spec or the SSH form of its Git URL, compared as the plugin list shows saved specs.
  * @param spec The installation spec.
  * @param dependencies The profile's saved dependencies.
  * @param profileDir The profile directory saved local paths are relative to.
@@ -259,7 +262,8 @@ function specPackageName(spec: string, dependencies: Readonly<Record<string, str
   const parsed = parsedForRegistry(spec)
   if (parsed.kind === 'registry') return parsed.name
   if (parsed.kind === 'path') return packageName(parsed.path)
-  const specs = parsed.kind === 'tarball' && parsed.path !== undefined ? [spec, `file:${parsed.path}`] : [spec]
+  const alternative = parsed.kind === 'tarball' && parsed.path !== undefined ? `file:${parsed.path}` : sshGitSpec(parsed)
+  const specs = alternative === undefined ? [spec] : [spec, alternative]
   return Object.entries(dependencies).find(([dependency, saved]) => specs.includes(dependencySpec(dependency, saved, profileDir)))?.[0]
 }
 
@@ -300,6 +304,7 @@ export class PluginManager extends TypertRemoteService {
     lockWaitMs: z.number().step(1).min(0).default(120000),
     inspectTimeoutMs: z.number().step(1).min(1000).default(20000),
     githubConnectionTimeoutMs: z.number().step(1).min(1000).default(5000),
+    gitTransportTimeoutMs: z.number().step(1).min(1000).default(5000),
     idleTimeoutMs: z.number().step(1).min(1000).default(600000),
     registry: z.string().pattern(REGISTRY_URL),
     fallbackRegistries: z.array(z.string().pattern(REGISTRY_URL)).default([NPMMIRROR_REGISTRY]),
@@ -324,6 +329,7 @@ export class PluginManager extends TypertRemoteService {
   private readonly lockWaitMs: number
   private readonly inspectTimeoutMs: number
   private readonly githubConnectionTimeoutMs: number
+  private readonly gitTransportTimeoutMs: number
   private readonly idleTimeoutMs: number
   private readonly pnpmCommand: string
   private readonly versionListLimit: number
@@ -345,6 +351,7 @@ export class PluginManager extends TypertRemoteService {
     this.lockWaitMs = (config as Required<Config>).lockWaitMs
     this.inspectTimeoutMs = (config as Required<Config>).inspectTimeoutMs
     this.githubConnectionTimeoutMs = (config as Required<Config>).githubConnectionTimeoutMs
+    this.gitTransportTimeoutMs = (config as Required<Config>).gitTransportTimeoutMs
     this.idleTimeoutMs = (config as Required<Config>).idleTimeoutMs
     this.pnpmCommand = (config as Required<Config>).pnpmCommand
     this.versionListLimit = (config as Required<Config>).versionListLimit
@@ -827,7 +834,9 @@ export class PluginManager extends TypertRemoteService {
   /**
    * Install a package using the same pnpm implementation as dsh plugin. GitHub
    * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
-   * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. A run
+   * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An
+   * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
+   * find that only SSH can read it. A run
    * that fails, is cancelled, or adds a package without a bundle patch restores
    * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
    * @param spec One package spec, including local paths relative to the invocation directory.
@@ -862,10 +871,11 @@ export class PluginManager extends TypertRemoteService {
       let version: string | undefined
       try {
         result.registries = []
-        const connection = checkGithubConnection(parsedForRegistry(spec), this.profile.dir, {
-          timeoutMs: this.githubConnectionTimeoutMs, outputBytes: this.outputBytes,
-          signal: AbortSignal.any([this.abort.signal, control.abort.signal]),
-          ...this.profile.packageManager?.env === undefined ? {} : { env: this.profile.packageManager.env },
+        const parsed = parsedForRegistry(spec)
+        const signal = AbortSignal.any([this.abort.signal, control.abort.signal])
+        const env = this.profile.packageManager?.env === undefined ? {} : { env: this.profile.packageManager.env }
+        const connection = checkGithubConnection(parsed, this.profile.dir, {
+          timeoutMs: this.githubConnectionTimeoutMs, outputBytes: this.outputBytes, signal, ...env,
         })
         this.packageOperations.add(connection)
         let connectionFailure: PackageResult | undefined
@@ -877,6 +887,12 @@ export class PluginManager extends TypertRemoteService {
           result.failedAt = 'spec-host'
           throw new Error(connectionFailure.output)
         }
+        const transport = chooseGitTransport(parsed, this.profile.dir, { timeoutMs: this.gitTransportTimeoutMs, signal, ...env })
+        this.packageOperations.add(transport)
+        let installSpec: string
+        try { installSpec = await transport }
+        finally { this.packageOperations.delete(transport) }
+        if (stopped()) throw new InstallCancelledError()
         // The last run is the result's; the registries asked stay listed whatever the outcome.
         const plan = registryPlan(options?.registry, await this.registries())
         let run: PackageResult | undefined
@@ -888,7 +904,7 @@ export class PluginManager extends TypertRemoteService {
           result.registries.push(registry)
           used = registry
           announce('installing', { registry, index: index + 1, total: plan.length })
-          run = await this.runPnpm(['add', spec, ...options?.saveExact === true ? ['--save-exact'] : [], ...registryArguments(registry)], control.abort.signal, requestId)
+          run = await this.runPnpm(['add', installSpec, ...options?.saveExact === true ? ['--save-exact'] : [], ...registryArguments(registry)], control.abort.signal, requestId)
           result.packageResult = run
           if (stopped()) throw new InstallCancelledError()
           // A compatibility refusal is the package's own answer, so no other registry is asked.
@@ -901,7 +917,7 @@ export class PluginManager extends TypertRemoteService {
           delete result.failedAt
           // A run this manager terminated got no answer from the registry at all, so no registry explains it.
           if (run.timedOut === true) break
-          const failedAt = attributeFailure(run.kind, run.output, parsedForRegistry(spec))
+          const failedAt = attributeFailure(run.kind, run.output, parsedForRegistry(installSpec))
           if (failedAt !== 'other') result.failedAt = failedAt
           if (failedAt !== 'registry' || index === plan.length - 1) break
         }
@@ -911,7 +927,7 @@ export class PluginManager extends TypertRemoteService {
         const succeeded = run.exitCode === 0 && run.timedOut !== true
         if (succeeded) delete result.failedAt
         if (!succeeded) {
-          // pnpm-workspace.yaml is not restored, so the names it left undecided, or reported as ignored, are offered for approval.
+          // pnpm-workspace.yaml is not restored, so the names it left undecided, or reported as blocked, are offered for approval.
           try { result.pendingBuilds = await recordPendingBuilds(this.profile.dir, run.output) }
           catch (error) {
             this.ownerContext.logger.warn('Could not read pending build approvals after pnpm failed', error)

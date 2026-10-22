@@ -24,6 +24,8 @@ Upstream workspace: `cordis-workspace` (local checkout: `~/repos/cordis-workspac
 | `hmr/` | `@deepseek-ai/cordis-plugin-hmr` | `@cordisjs/plugin-hmr` | 1.0.15 | https://github.com/deepseek-harness/cordis (`packages/hmr`) | `abb0a307cb1d3b0947f455d590cf5ba922d4caa4` |
 | `logger-console/` | `@deepseek-ai/cordis-plugin-logger-console` | `@cordisjs/plugin-logger-console` | 1.0.0 | https://github.com/deepseek-harness/cordis (`packages/logger-console`) | `abb0a307cb1d3b0947f455d590cf5ba922d4caa4` |
 
+**Partial Loader sync:** the package baseline remains 1.0.0-rc.5. `loader/src/resolve.ts` and the bare-specifier fallback in `loader/src/config/tree.ts` use the resolver implementation from Cordis `v4.0.0-rc.11` (Loader 1.0.0-rc.8). The [resolver adaptations](#resolver-adaptations) below record the local differences from that newer source.
+
 Third-party dependencies of the vendored packages stay on npm: `@standard-schema/spec`, `js-yaml`, `chokidar`, `picomatch`, `@babel/code-frame`, `supports-color`, `node-addon-require-builtin`.
 
 Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordisjs/utils`, `@cordisjs/element`, `@cordisjs/unyaml` (dev-time YAML import hook only).
@@ -50,7 +52,7 @@ Keep this log exhaustive — every divergence from upstream must be listed.
 16. **`cordis/package.json` publishes `src`**: added `src` to the `files` list, joining the other eight vendored packages. Cordis declares `"./src/*": "./src/*"` in its exports, so a tarball without `src` publishes an export map pointing at absent files; the release change judgement also reads `files` to decide whether a diff reaches the payload, and a package whose only published paths are build output has no tracked path to match.
 17. **`@deepseek-ai` rescope**: every vendored manifest `name`, every internal dependency entry among the vendored set, and every module specifier that reaches them use the scoped names in the manifest table's `npm name` column. Directory names, version numbers, and dependency ranges are unchanged, and no upstream runtime identifier is renamed — `Symbol.for('schemastery')` and Schemastery's `vendor:` metadata field keep their upstream values. Re-apply with `pnpm run rescope-vendor --apply` after a sync; the table's two name columns are the mapping, restated for consumers in [docs/rescope.md](../docs/rescope.md).
 18. **Entry `disabled` interpolation in `loader/src/config/entry.ts`**: a `disabled: !!js` expression evaluates against the loader context at every mount decision; the raw node stays in the options, so write-back keeps the `!!js` form. `disabled` is the only interpolated metadata field. Covered by `packages/boot/app-boot/tests/user-patches.spec.ts` and `apps/cli/tests/windows-shell.spec.ts`.
-19. **`loader/src/internal.ts` runtime shape detection**: `ModuleLoader.fromInternal()` classifies the internal loader by which module-job API it owns — `getOrCreateModuleJob` for v2, `getModuleJobForImport` for v1 — instead of by Node major version. Upstream tags every major `>= 24` as v2, but the v2 interface arrived in Node 24.12.0, so 24.0–24.11.1 report major 24 while still carrying the v1 loader; consumers then called `resolveSync` with reversed parameters and every call threw. `dsh web` served an empty client graph (`__DSH_BOOT__.entries: []`) and HMR partial reload resolved no entry URL, both behind swallowed or warn-level errors. Arity cannot discriminate the two shapes, because each reports `resolveSync.length === 2`. A loader owning neither API is left unclassified rather than guessed, so consumers take their documented no-internals path. Covered on the `node-compat` Node version matrix, which pins 24.9 for the mistagged range.
+19. **`loader/src/internal.ts` runtime API detection (upstream in Cordis rc.11)**: classification by available module-job APIs already matches rc.11. It replaces the Node-major check in the pinned Loader rc.5 baseline; no additional detection patch is required when syncing to rc.11. Covered by the Node compatibility matrix.
 
 20. **`loader/src/config/entry.ts` fiber identity**: stores the original fiber from the registry result’s context instead of its PromiseLike wrapper. Configuration updates and service notifications therefore mutate the same lifecycle state; updating a provider and consumer together cannot strand the consumer in `PENDING`. Covered by `packages/boot/hmr/tests/modules.spec.ts` and the built profile reload regression in `apps/cli/tests/built-bin.e2e.ts`.
 
@@ -61,6 +63,13 @@ Keep this log exhaustive — every divergence from upstream must be listed.
 23. **`loader/src/config/entry.ts` module identity**: retains each entry's raw import result as `moduleNamespace`, before plugin export normalization. HMR matches that object to Node's cached module namespace and updates it after a successful reload. `EntryTree.import()` keeps its existing arguments and return value; `loader/README.md` documents the additive field.
 
 24. **`timer/locale/{en,zh}.json` display metadata**: local English and Chinese titles and descriptions for the Settings plugin inventory. `timer/package.json` exports and publishes these locale resources.
+
+### Resolver adaptations
+
+Relative to the resolver source in Cordis `v4.0.0-rc.11`:
+
+- **Web build imports:** `loader/src/resolve.ts` uses default imports for Node builtin modules to support the Web shell's browser externalization. The shell supplies its own module loader.
+- **Package-scope cache keys:** `loader/src/resolve.ts` normalizes directory paths with `path.resolve()` before finding the package scope. A root config and a nested config in the same package therefore share the same cached resolver promise and helper-file write. Covered by `scripts/cordis-loader-resolve.spec.ts`.
 
 ## Sync procedure
 

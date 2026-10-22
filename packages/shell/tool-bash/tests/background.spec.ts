@@ -231,7 +231,7 @@ describe('foreground commands as jobs', () => {
       const body = text(result)
       expect(body).toContain('early-output')
       expect(body).toContain(`[still running after 250ms; moved to background job ${jobId}]`)
-      expect(body).toContain('read newer output with job_output, stop it with job_kill')
+      expect(body.endsWith(`moved to background job ${jobId}]`)).toBe(true)
       expect(body.indexOf('early-output')).toBeLessThan(body.indexOf('[still running'))
 
       const jobs = ctx.jobs
@@ -461,9 +461,7 @@ describe('foreground commands as jobs', () => {
 describe('renderPromoted', () => {
   it('pins the promoted text with and without pre-promotion output', () => {
     expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 120_000, output: '' })).toBe(
-      '[still running after 120000ms; moved to background job bash-7]\n'
-      + 'The command keeps running in the background. You will be notified when it finishes; '
-      + 'read newer output with job_output, stop it with job_kill.',
+      '[still running after 120000ms; moved to background job bash-7]',
     )
     // A partial line gains the separating newline exactly once.
     expect(renderPromoted({ jobId: 'bash-7', timeoutMs: 250, output: 'partial' }))

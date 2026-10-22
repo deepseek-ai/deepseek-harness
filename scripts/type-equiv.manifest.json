@@ -1948,6 +1948,16 @@
     },
     {
       "doc": "docs/subsystems/web-server.md",
+      "symbol": "WebResource",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
+      "symbol": "WebResourceRoute",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
       "symbol": "Config",
       "source": "packages/host/webserver/src/index.ts"
     },

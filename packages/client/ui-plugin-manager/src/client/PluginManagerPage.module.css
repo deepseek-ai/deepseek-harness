@@ -1,4 +1,5 @@
-/* Plugin manager page: a centred column with its header, notices, and the package cards.
+/* Plugin manager page: the main header and content share one scroller; the header retains its flow height.
+   The More list has a separate fixed head, and detail views scroll with their content.
 
    Hover affordances sit under @media (hover: hover): a tap latches :hover, which
    would strand a card, row, or control in its pointer-only state. Text fields take
@@ -6,25 +7,142 @@
    for a focused field under 16px and leaves the page pannable afterwards. */
 
 .page {
+  --plugin-page-inset: clamp(24px, 4vw, 48px);
+  /* Every head row's top inset; the collapsed page bar narrows it. */
+  --plugin-page-top-inset: 28px;
   --bundle-progress-size: 14px;
   --bundle-toggle-gap: 8px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  /* Inline inset only: the 28px top inset belongs to the head row
+     (`.pageHead`, `.detailTop`, `.moreHead`). macOS window dragging is owned by a row's own box,
+     so an inset above that box leaves a top strip no drag region covers. */
+  padding: 0 var(--plugin-page-inset);
+  color: var(--dsw-alias-label-primary);
+}
+
+.page > * {
+  flex: none;
+  width: 100%;
+  max-width: 960px;
+}
+
+.pageBody > .pageBar {
+  container: plugin-page-bar / inline-size;
+  align-self: flex-start;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% + 2 * var(--plugin-page-inset) + var(--plugin-page-scrollbar-width, 0px));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
+  box-sizing: border-box;
+  padding-inline: var(--plugin-page-inset);
+}
+
+.pageBar > .pageHead {
+  align-self: center;
+  width: 100%;
+  max-width: 960px;
+}
+
+/* Spans the page's full width, so its scrollbar sits at the page edge, and re-centres the column inside. */
+.page > .pageBody {
+  flex: 1;
+  min-height: 0;
+  width: calc(100% + 2 * var(--plugin-page-inset));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 32px;
   box-sizing: border-box;
-  height: 100%;
-  overflow: auto;
-  /* Inline and bottom insets only: the 28px top inset belongs to the head row
-     (`.pageHead`, `.detailTop`). macOS window dragging is owned by a row's own box,
-     so an inset above that box leaves a top strip no drag region covers. */
-  padding: 0 clamp(24px, 4vw, 48px) 48px;
-  color: var(--dsw-alias-label-primary);
+  padding: 0 var(--plugin-page-inset) 48px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  scroll-padding-top: var(--plugin-header-scroll-padding, 0px);
 }
 
-.page > * {
+/* The initial list inset scrolls away; the scroll viewport meets the fixed bar directly. */
+.page > :not(.pageBody) + .pageBody {
+  padding-top: 32px;
+}
+
+.pageBody > * {
+  flex: none;
   width: 100%;
   max-width: 960px;
+}
+
+/* Endpoint copies never enter the scroll layout or the accessibility tree. */
+.pageBody > .pageBar[data-measuring] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pageBody > .pageBar[data-natural] {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageHead {
+  position: relative;
+  height: var(--plugin-header-rest-height);
+  clip-path: inset(0 0 max(0px, calc(var(--plugin-header-rest-height) - var(--plugin-header-paint-height))) 0);
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageHeading {
+  display: contents;
+}
+
+.pageBar[data-natural] [data-plugin-header-part] {
+  position: absolute;
+  left: var(--plugin-part-x);
+  top: var(--plugin-part-y);
+  width: var(--plugin-part-width);
+  margin: 0;
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageTabs {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageTabList {
+  pointer-events: auto;
+}
+
+.pageBar[data-natural]::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--plugin-header-paint-height, var(--plugin-header-rest-height));
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
+
+.pageBar[data-natural][data-compact]::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: var(--plugin-header-compact-height);
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .pageHead {
@@ -36,7 +154,7 @@
   box-sizing: border-box;
   /* The page's former top inset: the row starts at the window's top edge, so the whole
      strip above the page content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 /* macOS hiddenInset titlebar: the frame's top clearance keeps the head below
@@ -44,12 +162,13 @@
    owns the window drag over its own box — clearance included — so this page's
    top strip drags without a frame band. */
 :global([data-platform='darwin']) .pageHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .pageHeading {
   min-width: 0;
   max-width: 100%;
+  order: 1;
 }
 
 .pageTitle {
@@ -86,6 +205,7 @@
   gap: 8px 16px;
   min-width: 0;
   white-space: nowrap;
+  order: 2;
 }
 
 .addMenu {
@@ -1263,9 +1383,9 @@ label.registryOption {
 .detailTop,
 .moreHead {
   display: flex;
-  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+  /* The same top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 .detailTop {
@@ -1274,7 +1394,7 @@ label.registryOption {
 
 :global([data-platform='darwin']) .detailTop,
 :global([data-platform='darwin']) .moreHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .crumb {
@@ -1565,16 +1685,119 @@ label.registryOption {
   display: none;
 }
 
-/* Installed and contributed tabs under the page header, aligned with the title; the negative margin halves
-   the page's 32px row gap, so the tabs read as part of the header. */
+/* Installed and contributed tabs under the page header at rest; the scrolled bar
+   pulls them onto the actions' row. */
 .pageTabs {
   display: flex;
-  margin-top: -16px;
+  order: 3;
+  flex: 1 1 100%;
+}
+
+/* Keep spacing inside the compact bar, above its divider rather than outside the scroll viewport. */
+.pageBar[data-compact]:not([data-natural]) {
+  --plugin-page-top-inset: 16px;
+
+  padding-bottom: 16px;
+}
+
+/* With the sidebar open, native window controls sit in the sidebar rather than above the page. */
+:global([data-platform='darwin']) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  padding-top: var(--plugin-page-top-inset);
+}
+
+/* Collapsing the sidebar moves those controls above the page; the compact bar then clears them. */
+:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  --plugin-page-top-inset: 8px;
+
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
+}
+
+/* The collapsed bar's divider spans the page like the scrolled list and its scrollbar. */
+.pageBar[data-compact]:not([data-natural])::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  pointer-events: none;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageHead {
+  align-items: center;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageIntro {
+  display: none;
+}
+
+/* Visually hidden rather than removed, so the page keeps its only heading for assistive technology. */
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageHeading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageTabs {
+  order: 1;
+  flex: 0 0 auto;
 }
 
 .pageTabList {
   width: fit-content;
   min-width: 240px;
+}
+
+@container plugin-page-bar (width < 600px) {
+  .pageBarWithTabs .pageHead {
+    align-items: center;
+  }
+
+  .pageBarWithTabs .pageHeading {
+    flex-basis: 100%;
+  }
+
+  .pageBarWithTabs .pageTabs {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .pageBarWithTabs .toolbar {
+    order: 3;
+  }
+
+  .toolbarLabel {
+    display: none;
+  }
+
+  .pageHead .addButton,
+  .pageHead .addPrimary {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
+  /* The icon actions keep their width; a wrapped update note stays within the head. */
+  .toolbar {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  .updatesNote {
+    order: 3;
+    flex-basis: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
+
+/* Keep the usual tab width until the icon actions and their gaps need its space. */
+@container plugin-page-bar (width < 372px) {
+  .pageTabList {
+    min-width: 0;
+  }
 }
 
 /* The Installed groups keep the page's row gap inside their tab panel. */

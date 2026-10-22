@@ -209,7 +209,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice and any final answer.'
+          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
           + (subagentProvider.prepareContinuable !== undefined
             ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' This backend does not accept follow-up messages.')

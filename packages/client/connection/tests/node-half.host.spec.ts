@@ -35,7 +35,7 @@ function fakeHttpServer(
   return {
     host,
     protocol,
-    register(route) {
+    register(route: WebRoute) {
       if (routes.some(candidate => candidate.kind === route.kind && candidate.path === route.path)) {
         throw new Error(`duplicate route ${route.path}`)
       }

@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -23,6 +23,9 @@ import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as ClaudeCodeMods from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
+// Keep workspace imports in Vitest's source graph even when the config has a package scope.
+vi.mock('@deepseek-ai/cordis-plugin-loader/src/resolve.ts', () => ({ createResolve: () => undefined }))
+
 const FIXTURES = resolve(import.meta.dirname, 'fixtures')
 
 let ctx: Context | undefined
@@ -37,6 +40,7 @@ afterEach(async () => {
 
 it('loads from cordis.yml, counts the model\'s tool calls, and answers /tally through the composed command registry', async () => {
   root = await mkdtemp(join(tmpdir(), 'dsh-cc-mods-composition-'))
+  await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module' }))
   const configPath = join(root, 'cordis.yml')
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-llm', LlmRuntime],
@@ -66,8 +70,6 @@ it('loads from cordis.yml, counts the model\'s tool calls, and answers /tally th
   context.baseUrl = pathToFileURL(root).href + '/'
   await context.plugin(Loader)
   context.loader.builtins.include = Include
-  // Without a Node internal loader the Loader imports bare names through this
-  // test runner's module graph, which resolves workspace packages to `src`.
   context.loader.internal = undefined
   await context.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
   await context.loader.await()

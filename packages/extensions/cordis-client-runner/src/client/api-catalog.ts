@@ -282,7 +282,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'register(definition: ThemeDefinition): () => void',
         description: 'Register a theme. Duplicate id throws (single occupant per id; the built-in pair counts; `system` is a preference, not a registrable id).',
-        parameters: [{ name: 'definition', description: 'theme id, colorScheme, and alias-token overrides.' }],
+        parameters: [{ name: 'definition', description: 'theme id, colorScheme, alias-token overrides, and optional icon replacements; the runtime keeps a frozen copy of `icons`. Invalid icon replacements throw a `TypeError` naming the theme and icon.' }],
         returns: 'disposer. Disposing the theme backing the active preference resets the preference to the default so the UI never keeps tokens of an unregistered theme.',
       },
       {
@@ -646,6 +646,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'HostObservable',
     declaration: 'export type HostObservable<T> = ObservableSnapshot<T>;',
+  },
+  {
+    name: 'IconGlyph',
+    declaration: 'export type IconGlyph = keyof typeof ICON_ARTWORK;',
+  },
+  {
+    name: 'IconReplacements',
+    declaration: 'export type IconReplacements = Readonly<Partial<Record<IconSymbolId, string>>>;',
+  },
+  {
+    name: 'IconSymbolId',
+    declaration: 'export type IconSymbolId = `dsw-icon-${IconGlyph}-${IconWeight}`;',
+  },
+  {
+    name: 'IconWeight',
+    declaration: 'export type IconWeight = \'regular\' | \'medium\';',
   },
   {
     name: 'InjectFace',
@@ -1049,7 +1065,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeDefinition',
-    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n}',
+    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n    icons?: IconReplacements | undefined;\n}',
   },
   {
     name: 'ThemePreference',

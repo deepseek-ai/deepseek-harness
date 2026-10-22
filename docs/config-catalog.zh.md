@@ -1612,7 +1612,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-frontend-static`
 
 - `inject`: `webServer` · `connection`
-- `source`: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+- `source`: [`packages/host/frontend-static/src/index.ts:34`](../packages/host/frontend-static/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the dist anchor. */
@@ -1697,7 +1697,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-host-webserver`
 
-- `source`: [`packages/host/webserver/src/index.ts:79`](../packages/host/webserver/src/index.ts)
+- `source`: [`packages/host/webserver/src/index.ts:97`](../packages/host/webserver/src/index.ts)
 
 ```ts config-catalog
 /** Web server listen, TLS, and response-compression config. */
@@ -2474,7 +2474,7 @@ export interface PlanModeConfig {
 
 - `inject`: `loader` · `profileContext`
 - `refs`: [`NpmFileSource`](subsystems/boot.zh.md)
-- `source`: [`packages/boot/plugin-manager/src/index.ts:51`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:52`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -2489,6 +2489,8 @@ export interface Config {
   inspectTimeoutMs?: number
   /** Maximum duration of the GitHub repository connection check before installation, in milliseconds. */
   githubConnectionTimeoutMs?: number
+  /** Maximum duration of each HTTP(S) and SSH access probe of a self-hosted Git repository before installation, in milliseconds. */
+  gitTransportTimeoutMs?: number
   /** Maximum time one captured package run may print nothing before the manager terminates it, in milliseconds. */
   idleTimeoutMs?: number
   /** The registry lookups and installations ask first, as an http(s) URL; absent, the one pnpm's own configuration names. */
@@ -3947,7 +3949,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-jobs`
 
 - `inject`: `tools` · `jobs` · `systemPrompt`
-- `source`: [`packages/jobs/tool-jobs/src/index.ts:41`](../packages/jobs/tool-jobs/src/index.ts)
+- `source`: [`packages/jobs/tool-jobs/src/index.ts:43`](../packages/jobs/tool-jobs/src/index.ts)
 
 ```ts config-catalog
 /** Configures bounded `job_output` waits and completion-notice delivery. */
@@ -3967,6 +3969,13 @@ export interface Config {
    * the next user input.
    */
   maxConsecutiveWakes?: number
+  /**
+   * Largest complete completion notice, in UTF-8 bytes, that carries the
+   * job's output and final result inline (default 2048); a larger one, or one
+   * over the producer's `outputLimitBytes`, leaves them for `job_output`. 0
+   * never inlines.
+   */
+  inlineOutputBytes?: number
 }
 
 /**
@@ -4270,7 +4279,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-web`
 
 - `inject`: `tools` · `web` · `systemPrompt`
-- `source`: [`packages/web/tool-web/src/index.ts:37`](../packages/web/tool-web/src/index.ts)
+- `source`: [`packages/web/tool-web/src/index.ts:39`](../packages/web/tool-web/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
@@ -4460,7 +4469,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:34`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:36`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /** Settings read by the next search or fetch without re-registering either provider. */
@@ -4511,7 +4520,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-search-deepseek/src/index.ts:49`](../packages/web/web-search-deepseek/src/index.ts)
+- `source`: [`packages/web/web-search-deepseek/src/index.ts:51`](../packages/web/web-search-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `apply` fills env-var and constant defaults). */

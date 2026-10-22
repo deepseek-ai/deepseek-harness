@@ -31,6 +31,7 @@ import {
   parseToolSchemasSnapshot,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  REPLAY_CREDENTIAL_ENV,
   restorePinnedToolSchemas,
   scrubSessionSnapshot,
   scrubSystemPrompts,
@@ -910,6 +911,7 @@ async function verifyProviderCwdResume(
   expect(primary?.header.cwd).not.toBe(cwd)
   const otherHostCwd = await mkdtemp(join(tmpdir(), 'dsh-provider-resume-'))
   const env = {
+    ...REPLAY_CREDENTIAL_ENV,
     DSH_HOME: join(cwd, '.dsh'),
     DSH_SNAPSHOT: 'replay',
     DSH_SNAPSHOT_FILE: fixture,
@@ -1352,6 +1354,7 @@ describe('headless recorded-session snapshots', () => {
             ? 0
             : 1,
           env: {
+            ...(replaying ? REPLAY_CREDENTIAL_ENV : {}),
             DSH_SNAPSHOT: replaying ? 'replay' : 'record',
             DSH_SNAPSHOT_PROVIDER: model.provider,
             DSH_SNAPSHOT_MODEL: model.model,

@@ -1,10 +1,31 @@
 /** DOM and keymap bindings installed by the InputBar's existing effects. */
 import type { MouseEvent, MutableRefObject, RefObject } from 'react'
 import type { LexicalEditor } from 'lexical'
+import { $getRoot } from 'lexical'
+import { focusWithoutRing, isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerKeyboard } from '../../contract/draft-editor.ts'
 import type { BusyEnterBehavior } from '../../contract/composer-submission.ts'
 import { resolveSubmitMode } from '../submission-policy.ts'
 import { registerComposerKeymap } from './keymap.ts'
+import { DRAFT_SUBMITTED_TAG } from './runtime.ts'
+
+/**
+ * Transfer mobile editor focus after a submission empties the draft.
+ * A control the user already focused retains focus.
+ * @param editor - the Session-owned editor.
+ * @param destination - stable, focusable non-text element that retains the composer's keyboard position.
+ * @returns the update-listener cleanup.
+ */
+export function installDraftKeyboardDismissal(editor: LexicalEditor, destination: RefObject<HTMLElement>): () => void {
+  return editor.registerUpdateListener(({ editorState, tags }) => {
+    if (!tags.has(DRAFT_SUBMITTED_TAG) || !isMobileDevice()) return
+    const input = editor.getRootElement()
+    if (input === null || input.ownerDocument.activeElement !== input) return
+    if (editorState.read(() => $getRoot().getTextContentSize() === 0) && destination.current !== null) {
+      focusWithoutRing(destination.current, { preventScroll: true })
+    }
+  })
+}
 
 interface DraftViewGate {
   locked: boolean

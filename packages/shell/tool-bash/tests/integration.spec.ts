@@ -210,7 +210,7 @@ describe('bash tool through the agent loop', () => {
     expect(resultText(toolResult)).toContain('[exit code: 9]')
   })
 
-  it('background: start ack → completion wakes the idle agent → job_output collects it', async () => {
+  it('background: start ack → completion wakes the idle agent with the output inline', async () => {
     // The command blocks on a sentinel this test creates only after the agent
     // has gone idle, so settlement cannot fold into the still-running turn.
     // Without that fence a fast command can settle before step 2's pre-step
@@ -257,25 +257,26 @@ describe('bash tool through the agent loop', () => {
       const found = events(agent).findLast(event => event.type === 'tool/result')
       return found === undefined ? '' : resultText(found)
     }
-    await pollUntil(() => events(agent).some(isNotice) && lastResultText().includes('bg-ok'))
+    await pollUntil(() => events(agent).some(isNotice) && lastResultText().includes('[status: completed'))
     // Two turns: the user's, then the one the completion opened by itself.
     expect(events(agent).filter(event => event.type === 'turn/start')).toHaveLength(2)
 
-    // The notice carries the gated command as its label, so this pins the id,
-    // the terminal status, and the producer identity; the verbatim notice text
-    // and its bounding are pinned in the tool-jobs unit tests.
+    // The notice carries the gated command as its label and the job's output,
+    // so this pins the id, the terminal status, the output, and the producer
+    // identity; the verbatim notice text and its bounding are pinned in the
+    // tool-jobs unit tests.
     const notice = events(agent).find(isNotice)!
     const noticeText = notice.data.content
       .filter(block => block.type === 'text').map(block => block.text).join('')
     expect(noticeText).toContain(`background job ${jobId} (bash: `)
-    expect(noticeText).toContain('finished [status: completed, exit code: 0]')
+    expect(noticeText).toContain('finished [status: completed, exit code: 0]. Output:\nbg-ok')
     expect(notice.data.source).toMatchObject({
       kind: 'tool-jobs',
       form: 'notice',
     })
     const readResult = findEvent(events(agent), 'tool/result', 'last')
     expect(readResult.data.message.isError).toBe(false)
-    expect(resultText(readResult)).toContain('bg-ok')
-    expect(resultText(readResult)).toContain('[status: completed, exit code: 0]')
+    // The notice already delivered the output, so the read has nothing new.
+    expect(resultText(readResult)).toBe('(no new output)\n[status: completed, exit code: 0]')
   })
 })

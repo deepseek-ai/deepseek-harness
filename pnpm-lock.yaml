@@ -18,6 +18,7 @@ patchedDependencies:
   '@yao-pkg/pkg@6.21.0': 4d4861969595629311f7d90a0b34b15481c96d5682d828a151a104c69d4616d3
   app-builder-lib@26.17.0: b70dc2a2a78ffabb80a4f14fafc7c103237f2b0a207e1f296fa1c1387ea29348
   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
+  lexical@0.49.0: 54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356
   node-pty@1.2.0-beta.15: 9d30053266d0f39d3debe894c675867f6782da6bcadbc94a693b3cfb9eff8ed0
 
 importers:
@@ -2150,6 +2151,9 @@ importers:
       execa:
         specifier: ^10.0.1
         version: 10.0.1
+      hosted-git-info:
+        specifier: ^9.0.3
+        version: 9.0.3
       semver:
         specifier: ^7.8.5
         version: 7.8.5
@@ -2220,6 +2224,9 @@ importers:
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:*
         version: link:../../interaction/user-approval
+      '@types/hosted-git-info':
+        specifier: ^3.0.5
+        version: 3.0.5
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
@@ -4112,7 +4119,7 @@ importers:
         version: 2.1.1
       lexical:
         specifier: ^0.49.0
-        version: 0.49.0(typescript@6.0.3)
+        version: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -26456,14 +26463,14 @@ snapshots:
       '@lexical/selection': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
       '@types/trusted-types': 2.0.7
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
   '@lexical/dragon@0.49.0(typescript@6.0.3)':
     dependencies:
       '@lexical/extension': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26472,7 +26479,7 @@ snapshots:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
       '@preact/signals-core': 1.14.4
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26480,7 +26487,7 @@ snapshots:
     dependencies:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
       happy-dom: 20.11.6
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -26491,7 +26498,7 @@ snapshots:
     dependencies:
       '@lexical/extension': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26501,7 +26508,7 @@ snapshots:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
       '@lexical/selection': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26515,7 +26522,7 @@ snapshots:
       '@lexical/html': 0.49.0(typescript@6.0.3)
       '@lexical/internal': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26526,21 +26533,21 @@ snapshots:
       '@lexical/extension': 0.49.0(typescript@6.0.3)
       '@lexical/selection': 0.49.0(typescript@6.0.3)
       '@lexical/utils': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
   '@lexical/selection@0.49.0(typescript@6.0.3)':
     dependencies:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
   '@lexical/text@0.49.0(typescript@6.0.3)':
     dependencies:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -26548,7 +26555,7 @@ snapshots:
     dependencies:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
       '@lexical/selection': 0.49.0(typescript@6.0.3)
-      lexical: 0.49.0(typescript@6.0.3)
+      lexical: 0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3)
     optionalDependencies:
       typescript: 6.0.3
 
@@ -30414,7 +30421,7 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
 
-  lexical@0.49.0(typescript@6.0.3):
+  lexical@0.49.0(patch_hash=54c4413db208cf234cb68c6a837f2523d3b319aa17911f1da385af08362e1356)(typescript@6.0.3):
     dependencies:
       '@lexical/internal': 0.49.0(typescript@6.0.3)
     optionalDependencies:

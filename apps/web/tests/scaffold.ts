@@ -48,6 +48,7 @@ import {
   redactSessionSnapshotIds,
   normalizeSessionSnapshots,
   parseSessionFixtureName,
+  REPLAY_CREDENTIAL_ENV,
   scrubModelRequestBulk,
   scrubSessionSnapshot,
   sessionFixtureFiles,
@@ -499,10 +500,15 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     throw new Error('deepSeekMissingCredential is a keyless replay/refresh option')
   }
   const maskDeepSeekCredential = mode !== 'record' && options.deepSeekMissingCredential === true
+  // A keyless run that replays recorded model calls pins the snapshot replay placeholder: shipped
+  // compositions offer web_search only while a DeepSeek search key is configured, and recordings
+  // ran with a real key. Other runs keep the launching environment, as their goldens do.
+  const pinDeepSeekCredential = mode !== 'record' && !maskDeepSeekCredential
+    && options.replayFixture !== undefined && options.replayProvidersOnly !== true
   const originalDeepSeekCredential = process.env.DEEPSEEK_API_KEY
   let credentialEnvironmentRestored = false
   const restoreCredentialEnvironment = (): void => {
-    if (credentialEnvironmentRestored || !maskDeepSeekCredential) return
+    if (credentialEnvironmentRestored || (!maskDeepSeekCredential && !pinDeepSeekCredential)) return
     credentialEnvironmentRestored = true
     if (originalDeepSeekCredential === undefined) {
       Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
@@ -562,6 +568,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     throw error
   }
   if (maskDeepSeekCredential) Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+  if (pinDeepSeekCredential) Object.assign(process.env, REPLAY_CREDENTIAL_ENV)
 
   // The include patch set — the same layer stack the profile boot composes
   // (bundle patches in dsh.profile.bundles order), applied over the SAME empty root (a

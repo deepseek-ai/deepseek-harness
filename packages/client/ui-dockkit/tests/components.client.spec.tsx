@@ -999,19 +999,40 @@ describe('tab drags', () => {
     expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
   })
 
-  it('previews a caret at the slot under the pointer and reports that slot on release', () => {
+  it('previews only strip slots that change the tab order', () => {
     const { intents, first, fileTabId, chip } = twoPanes()
     // Left of the first chip's midpoint: slot 0.
     drag(chip(fileTabId), FILE_CHIP, [30, 18], false)
     expect(document.querySelector('[data-dockkit-caret]')?.getAttribute('data-dockkit-caret')).toBe('0')
-    // Past both chips: the slot after the last one, drawn at the strip's end.
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 300, clientY: 18 })
-    expect(document.querySelector('[data-dockkit-caret]')?.getAttribute('data-dockkit-caret')).toBe('2')
-    fireEvent.pointerUp(window, { pointerId: 7, clientX: 300, clientY: 18 })
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 120, clientY: 18 })
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 30, clientY: 18 })
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 30, clientY: 18 })
     // The slot counts the dragged chip itself; the planner turns it into a reorder.
-    expect(intents.placeTab).toHaveBeenCalledWith(fileTabId, first, 2)
+    expect(intents.placeTab).toHaveBeenCalledWith(fileTabId, first, 0)
     expect(gestureIntents(intents)).toEqual(['placeTab'])
     expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+  })
+
+  it.each([30, 300])('does not offer a strip placement for the lone Start tab at x=%s', (x) => {
+    const controller = seededController()
+    controller.setExpanded(true)
+    const panes = dockPaneIds(controller.getSnapshot().state)
+    layOut(panes, 520)
+    const intents = spyIntents()
+    renderSurface(controller, intents)
+    const chip = screen.getByRole('tab')
+    drag(chip, [51, 18], [x, 18], false)
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: x, clientY: 18 })
+    expect(gestureIntents(intents)).toEqual([])
+
+    drag(chip, [51, 18], [260, 590], false)
+    expect(document.querySelector('[data-dockkit-drop-active]')?.getAttribute('data-dockkit-dock-zone')).toBe('bottom')
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 260, clientY: 590 })
+    expect(intents.dropTab).toHaveBeenCalledExactlyOnceWith(chip.getAttribute('data-dockkit-tab'), panes[0], 'bottom')
   })
 
   it('reports a slot in another pane\'s strip as a placement there', () => {

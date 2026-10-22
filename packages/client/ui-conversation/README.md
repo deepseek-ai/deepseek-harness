@@ -70,9 +70,13 @@ The existing semantic `DraftSnapshot` retains quote text and clipboard-coordinat
 
 The shared image slot props keep display choices separate from durable references: `thumbnail` requests a contained attachment-list thumbnail, while `compact` requests a cropped gallery tile. An optional per-image `label` supplies the accessible display name; loading and cache identity still use the original attachment reference. `MessageImagesContentInput` adds optional complete `MessageImageLabels` for the root-scoped `conversation.images.content` Factory. Message, tool, and Factory inputs carry the view's authorized `loadImage` callback explicitly; loading and URL caching remain with the resource owner. [ui-attachment](../ui-attachment/README.md) provides this Factory and owns rendering and the lightbox.
 
+The composer uses a minimum 16px draft font on coarse-pointer devices to avoid focus-triggered browser zoom; larger font preferences still apply.
+
 The composer measures its expanded control groups after size, content, visibility, or font-loading changes. If they cannot share a line, the row sets `--dsh-composer-model-text-display: none` and `--dsh-composer-model-icon-display: block` for the model seat; their defaults are `block` and `none`. Wrapping remains available if even the icon cannot fit.
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
+
+The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
 The context-occupancy button shows a ring and percentage below the input card, after the Session statistics. Clicking it opens the token breakdown in a panel kept inside the viewport, including when no statistics are shown; the button stays hidden until context usage and capacity are available.
 

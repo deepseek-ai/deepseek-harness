@@ -54,6 +54,8 @@ type ChildDeliveryOptions = {
   readonly signal: AbortSignal
   /** Recheck the original model caller at final inbox admission. */
   readonly authorize?: () => void
+  /** Record successful inbox admission before another asynchronous operation can intervene. */
+  readonly onAccepted?: () => void
 }
 
 /** Package-private hooks supplied by the owning service. */
@@ -508,9 +510,15 @@ export class SubagentManager {
     if (sender.id === targetId) throw new SubagentError('send_message requires another agent in the subagent tree', 'UNAUTHORIZED')
     this.assertAdmitting(sender)
     const message = createAgentMessage(sender, content)
+    const activation = this.resident.get(sender.id)
     return this.deliverToMember(root, targetId, [...message.content], {
       signal: options.signal, delivery: 'steer', source: message.source,
       authorize: () => { this.assertAdmitting(sender) },
+      onAccepted: () => {
+        if (activation?.kind === 'local' && activation.ancestors.at(-1) === targetId) {
+          activation.omitClosingText = true
+        }
+      },
     })
   }
 
@@ -792,7 +800,15 @@ export class SubagentManager {
           setup,
         })
 
-      resource = { kind: 'local', handle, outputStart: handle.agent.session.seq, structured, failureAt: undefined, poke: Promise.withResolvers<void>() }
+      resource = {
+        kind: 'local',
+        handle,
+        outputStart: handle.agent.session.seq,
+        structured,
+        failureAt: undefined,
+        poke: Promise.withResolvers<void>(),
+        omitClosingText: false,
+      }
     }
     const activation: Activation = {
       releaseSlot,
@@ -816,8 +832,19 @@ export class SubagentManager {
       if (activation.kind === 'local') {
         observeLocalFailure(activation, wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/inserted', wakeSettlement)
-        activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
+        activation.handle.agent.ctx.on('agent/inbox/claimed', () => {
+          // Claimed input means the closing text may report work the child's
+          // last message to its parent did not.
+          activation.omitClosingText = false
+          wakeSettlement()
+        })
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
+        // A tool call logged after the message also voids it; logged calls
+        // cannot be skipped by tool policy. `send_message` is not concurrency
+        // safe, so a later call in its step is logged after it executes.
+        activation.handle.agent.ctx.on('session/event', (_session, event) => {
+          if (event.type === 'tool/call') activation.omitClosingText = false
+        })
       }
       // Listeners may read the resident Agent or drain it immediately. Publish
       // after residency and inbox listeners, as the last rollback-protected step.
@@ -1027,7 +1054,7 @@ export class SubagentManager {
       const parent = this.ctx.agents.get(parentId)
       if (parent === undefined || this.rootOf(parent) !== activation.root) return
       const message = createSettlementMessage(
-        activation.childId, terminal, activationAgent(activation) !== undefined,
+        activation.childId, terminal, activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1078,6 +1105,7 @@ export class SubagentManager {
           this.assertAdmitting(root)
           const message = createUserMessage({ content, source: options.source })
           this.sendWaking(root, message, options.delivery)
+          options.onAccepted?.()
           return { messageId: message.id }
         }
         const activation = this.resident.get(childId)
@@ -1208,6 +1236,7 @@ export class SubagentManager {
     } finally {
       this.wake(activation)
     }
+    options.onAccepted?.()
     return message.id
   }
 

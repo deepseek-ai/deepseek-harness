@@ -70,9 +70,13 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 共享图片插槽属性将展示选择与持久化引用分开：`thumbnail` 请求完整缩放的附件列表缩略图，`compact` 请求裁剪的图片方块。每张图片可通过可选的 `label` 提供无障碍展示名称；加载和缓存标识仍使用原始附件引用。`MessageImagesContentInput` 为 root 作用域的 `conversation.images.content` Factory 增加可选的完整 `MessageImageLabels`。消息、工具及 Factory 输入显式携带视图提供的授权 `loadImage` 回调；读取和 URL 缓存仍由资源所有者负责。[ui-attachment](../ui-attachment/README.zh.md) 提供该 Factory，负责渲染与灯箱。
 
+在粗指针设备上，composer 的草稿字号至少为 16px，以避免获得焦点时浏览器自动放大；更大的字号偏好仍然生效。
+
 控件组的尺寸、内容、可见性或字体加载状态变化后，composer 测量展开状态下的控件组。若无法排在同一行，控制栏为模型位设置 `--dsh-composer-model-text-display: none` 和 `--dsh-composer-model-icon-display: block`；两者默认值分别为 `block` 和 `none`。若连图标也放不下，仍允许换行。
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
+
+composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 
 上下文占用按钮在输入卡片下方、会话统计右侧显示圆环和百分比。点击按钮可在视口内的面板查看 token 构成，没有统计项时面板也不会越界；上下文用量和容量尚不可用时，按钮保持隐藏。
 

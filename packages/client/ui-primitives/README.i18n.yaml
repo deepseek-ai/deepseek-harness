@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-primitives/use-this-package:
-  en: d2f5701274be5110
-  zh: d60e2617136a6f26
+  en: 10be7f75a1576575
+  zh: abf2905d89b0da48
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/component-catalog:
-  en: 8e9f354ef0f81d22
-  zh: 8ee59b6bb7a7198e
+  en: 75e1681dcfc61a14
+  zh: 3eda3143730f83e1
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/controls-and-icons:
-  en: fff68b60f4abdc7e
-  zh: 5cf5952ec78f7f91
+  en: dbd7f0e74c45a762
+  zh: 7efbfbf5500cc835
 /deepseek-ai-dsh-client-ui-primitives/use-this-package/rendering-agent-output:
   en: 02f310acbae29955
   zh: 1e41393d5d714b2d
@@ -33,8 +33,8 @@
   en: 846ac0f563a53a64
   zh: bb89d7647bdcc1ab
 /deepseek-ai-dsh-client-ui-primitives/understand-the-implementation/source-map:
-  en: 44eb32370cbeafe8
-  zh: 728009c66375c6bb
+  en: fd510d34404eb090
+  zh: d05b0890db929ae6
 /deepseek-ai-dsh-client-ui-primitives/understand-the-implementation/input-modality:
   en: cb61e1a37d6c27e5
   zh: 1f3fa79dd5ab2e45
@@ -54,8 +54,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-primitives/known-limitations-and-deferred-work:
-  en: 31117d1844eb3c19
-  zh: 741eea7d78e00d3f
+  en: 5a1e9d041b556b0e
+  zh: c66b4e7d5f77162d
 /deepseek-ai-dsh-client-ui-primitives/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

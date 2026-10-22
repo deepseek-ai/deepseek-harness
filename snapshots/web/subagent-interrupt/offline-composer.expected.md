@@ -10,7 +10,7 @@
     - tab "Chat" [selected]
     - tab "Trajectory"
   - button "More conversation views"
-- text: "Explain event sourcing in one sentence.Your parent agent id is \"session-{{uuid}}\". Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ agent_id: \"session-{{uuid}}\", message: \"<finding>\" }) when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
+- text: "Explain event sourcing in one sentence.Your parent agent id is \"session-{{uuid}}\". Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. Use send_message({ agent_id: \"session-{{uuid}}\", message: \"<finding>\" }) when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
 - button "Copy"
 - paragraph: partial
 - status: Deep diving
