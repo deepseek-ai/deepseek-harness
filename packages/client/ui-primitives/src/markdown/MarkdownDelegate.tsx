@@ -13,7 +13,9 @@ export type MarkdownExternalLinkHandler = (href: string) => void
 export interface MarkdownDelegate {
   /** Image previews for decoded local paths in this owner's workspace. */
   readonly fileImages?: {
+    fileDrag: import('../file-drag-actions.ts').FileDragActions
     resolve: (path: string) => string | undefined
+    resourceAddress?: ((path: string) => string) | undefined
     labels: ImageLightboxLabels & { open: string; loading: string; failed: string }
   } | undefined
   /** Ordinary HTTP(S) activation; absent handlers retain native anchor behavior. */

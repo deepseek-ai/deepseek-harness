@@ -38,6 +38,16 @@ type SessionNodeItemProps = ComponentProps<typeof SessionNodeItemComponent>
 const renderNoRowEntries: RowRenderSlot = () => null
 
 // Direct row specs use the real required Slot share, empty unless the case supplies entries.
+/**
+ * Browser double-click: the second press carries detail 2 and must not disarm.
+ * @param el - the double-clicked element.
+ */
+function realDoubleClick(el: Element): void {
+  fireEvent.mouseDown(el, { detail: 1 }); fireEvent.mouseUp(el, { detail: 1 }); fireEvent.click(el, { detail: 1 })
+  fireEvent.mouseDown(el, { detail: 2 }); fireEvent.mouseUp(el, { detail: 2 }); fireEvent.click(el, { detail: 2 })
+  fireEvent.doubleClick(el)
+}
+
 function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, ...props }: Omit<
   SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'
 > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'>>) {
@@ -126,7 +136,7 @@ describe('Workspace and Session hover handoff', () => {
   })
 })
 
-const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
+const dataTransfer = { effectAllowed: '', dropEffect: '', setData: vi.fn(), setDragImage: vi.fn() }
 
 /** jsdom lacks DragEvent — the fireEvent fallback drops clientY, so pin it on the built event. */
 function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number): void {
@@ -135,6 +145,102 @@ function fireDrag(row: HTMLElement, kind: 'dragOver' | 'drop', clientY: number):
   Object.defineProperty(event, 'dataTransfer', { value: { ...dataTransfer } })
   fireEvent(row, event)
 }
+
+describe('native row drag previews', () => {
+  function fixture(kind: 'workspace' | 'session') {
+    const drag = dragProps()
+    const view = render(kind === 'workspace'
+      ? <ProjectRowItem group={{
+        key: 'workspace', workspaceId: wid('workspace'), cwd: '/workspace', createdAt: 0,
+        label: 'Draggable row', sessionCount: 0, expanded: true, containsCurrent: false, sessions: [],
+      }} onToggle={vi.fn()} onCreate={vi.fn()} drag={drag} t={t} />
+      : <SessionNodeItem node={{
+        id: sid('session'), title: 'Draggable row', blank: false, running: false,
+        runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+      }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
+    const row = screen.getByRole('treeitem')
+    stubRect(row)
+    row.style.paddingInlineStart = '32px'
+    const transfer = {
+      effectAllowed: '', setData: vi.fn(),
+      setDragImage: vi.fn<(image: HTMLElement, x: number, y: number) => void>(),
+    }
+    const start = () => {
+      const event = createEvent.dragStart(row, { dataTransfer: transfer })
+      Object.defineProperties(event, { clientX: { value: 65 }, clientY: { value: 112 } })
+      fireEvent(row, event)
+      return transfer.setDragImage.mock.calls.at(-1)![0]
+    }
+    return { ...view, row, drag, transfer, start }
+  }
+
+  it.each(['workspace', 'session'] as const)('uses an inert offscreen %s copy without changing the source row', (kind) => {
+    const { row, drag, transfer, start } = fixture(kind)
+    const originalStyle = row.getAttribute('style')
+    fireEvent.dragEnd(row)
+    expect(drag.end).not.toHaveBeenCalled()
+    const image = start()
+    expect(transfer.setDragImage).toHaveBeenCalledWith(image, 65, 12)
+    expect(transfer.effectAllowed).toBe('move')
+    expect(transfer.setData).toHaveBeenCalledWith('text/plain', kind)
+    expect(drag.start).toHaveBeenCalledOnce()
+    expect(image.parentElement).toBe(document.body)
+    expect(image.inert).toBe(true)
+    expect(image.getAttribute('aria-hidden')).toBe('true')
+    const controls = image.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')
+    expect(controls.length).toBeGreaterThan(0)
+    expect([...controls].every(control => control.tabIndex === -1)).toBe(true)
+    expect(image.style.left).toBe('-200px')
+    expect(image.style.width).toBe('200px')
+    expect(image.style.height).toBe('34px')
+    expect((image.firstElementChild as HTMLElement).style.paddingInlineStart).toBe('32px')
+    expect(image.querySelector('[data-row-key]')).toBeNull()
+    expect(image.textContent).toBe(row.textContent)
+    expect(image.firstElementChild).not.toBe(row)
+    expect(screen.getAllByRole('treeitem')).toEqual([row])
+    expect(row.getAttribute('style')).toBe(originalStyle)
+    expect(row.getAttribute('draggable')).toBe('true')
+  })
+
+  it.each(['workspace', 'session'] as const)('keeps %s dragging active when the browser rejects its preview', (kind) => {
+    const { drag, transfer, start } = fixture(kind)
+    transfer.setDragImage.mockImplementation(() => { throw new DOMException('Image unavailable') })
+    const image = start()
+    expect(drag.start).toHaveBeenCalledOnce()
+    expect(vi.mocked(drag.start).mock.invocationCallOrder[0])
+      .toBeLessThan(transfer.setDragImage.mock.invocationCallOrder[0]!)
+    expect(image.isConnected).toBe(false)
+    fireEvent.dragEnd(screen.getByRole('treeitem'))
+    expect(drag.end).toHaveBeenCalledOnce()
+  })
+
+  it('finishes a Session drag when the source becomes archived before drag end', () => {
+    const { row, drag, start, rerender } = fixture('session')
+    const image = start()
+    rerender(<SessionNodeItem node={{
+      id: sid('session'), title: 'Draggable row', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: true,
+    }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
+    expect(row.getAttribute('draggable')).toBe('false')
+    fireEvent.dragEnd(row)
+    expect(image.isConnected).toBe(false)
+    expect(drag.end).toHaveBeenCalledOnce()
+  })
+
+  it.each(['workspace', 'session'] as const)('removes %s previews on replacement, drag end, and unmount', (kind) => {
+    const { row, drag, start, unmount } = fixture(kind)
+    const first = start()
+    const second = start()
+    expect(first.isConnected).toBe(false)
+    expect(second.isConnected).toBe(true)
+    fireEvent.dragEnd(row)
+    expect(second.isConnected).toBe(false)
+    expect(drag.end).toHaveBeenCalledOnce()
+    const third = start()
+    unmount()
+    expect(third.isConnected).toBe(false)
+  })
+})
 
 describe('workspace browser rows', () => {
   it('keeps the leading status cell in the hierarchy-free flat list', () => {
@@ -551,7 +657,7 @@ describe('workspace browser rows', () => {
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
       if (trigger === 'hover') {
-        fireEvent.mouseEnter(create)
+        fireEvent.pointerEnter(create)
         act(() => { vi.advanceTimersByTime(500) })
       } else {
         fireEvent.keyDown(document, { key: 'Tab' })
@@ -560,7 +666,7 @@ describe('workspace browser rows', () => {
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
-      if (trigger === 'hover') fireEvent.mouseLeave(create, { relatedTarget: row })
+      if (trigger === 'hover') fireEvent.pointerLeave(create, { relatedTarget: row })
       else fireEvent.blur(create, { relatedTarget: row })
       expect(screen.queryByRole('tooltip')).toBeNull()
       expect(screen.getByText('/projects/project')).toBeTruthy()
@@ -580,12 +686,12 @@ describe('workspace browser rows', () => {
       const row = screen.getByRole('treeitem')
       const create = screen.getByRole('button', { name: '在“Project”中新建会话' })
       fireEvent.pointerEnter(row.parentElement as HTMLElement)
-      fireEvent.mouseEnter(create)
+      fireEvent.pointerEnter(create)
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.getByRole('tooltip').textContent).toBe('新会话')
       expect(screen.getByText('/projects/project')).toBeTruthy()
 
-      fireEvent.mouseLeave(create, { relatedTarget: row })
+      fireEvent.pointerLeave(create, { relatedTarget: row })
       expect(screen.queryByRole('tooltip')).toBeNull()
       expect(screen.getByText('/projects/project')).toBeTruthy()
     } finally {
@@ -869,7 +975,6 @@ describe('workspace browser rows', () => {
 
       fireEvent(title, new MouseEvent('pointerout', { bubbles: true, relatedTarget: archive }))
       fireEvent(archive, new MouseEvent('pointerover', { bubbles: true, relatedTarget: title }))
-      fireEvent.mouseEnter(archive)
       if (dwell === 800) expect(card()).not.toBeNull()
       act(() => { vi.advanceTimersByTime(499) })
       expect(screen.queryByRole('tooltip')).toBeNull()
@@ -884,7 +989,6 @@ describe('workspace browser rows', () => {
 
       fireEvent(archive, new MouseEvent('pointerout', { bubbles: true, relatedTarget: title }))
       fireEvent(title, new MouseEvent('pointerover', { bubbles: true, relatedTarget: archive }))
-      fireEvent.mouseLeave(archive, { relatedTarget: title })
       rerender(<SessionNodeItem node={{ ...node, running: true }} currentId={undefined} now={0}
         onOpen={vi.fn()} renderSlot={renderSlot} t={t} />)
       act(() => { vi.advanceTimersByTime(1000) })
@@ -1098,6 +1202,19 @@ describe('workspace browser rows', () => {
     expect(screen.queryByRole('img', { name: '已置顶' })).toBeNull()
   })
 
+  it.each(['blank', 'archived'] as const)('ignores child drag end on a %s Session row', (state) => {
+    const drag = dragProps({ active: true, marker: 'before' })
+    render(<SessionNodeItem node={{
+      id: sid('not-draggable'), title: 'Not draggable', blank: state === 'blank', running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: state === 'archived',
+    }} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag} t={t} />)
+    const row = screen.getByRole('treeitem')
+    expect(row.getAttribute('draggable')).toBe('false')
+    fireEvent.dragEnd(row.firstElementChild!)
+    fireEvent.dragEnd(row)
+    expect(drag.end).not.toHaveBeenCalled()
+  })
+
   it('marks an archived row and blocks dragging it', () => {
     const node: SessionNode = {
       id: sid('s1'), title: 'Stored', blank: false, running: false,
@@ -1124,14 +1241,45 @@ describe('workspace browser rows', () => {
     }
     const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
       onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.doubleClick(screen.getByText('Named'))
+    realDoubleClick(screen.getByText('Named'))
     expect(onRenameRequest).toHaveBeenCalledWith(node.id, 'Named')
-    expect(onOpen).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledWith(node.id)
 
     // A blank placeholder has no content to rename: double-click is inert.
     view.rerender(<SessionNodeItem node={{ ...node, blank: true }} currentId={undefined} now={0}
       onOpen={onOpen} onRenameRequest={onRenameRequest} t={t} />)
-    fireEvent.doubleClick(screen.getByText('新会话'))
+    realDoubleClick(screen.getByText('新会话'))
+    expect(onRenameRequest).toHaveBeenCalledOnce()
+  })
+
+  it('does not rename when the first click of the pair only activated the window', () => {
+    const onRenameRequest = vi.fn()
+    const onOpen = vi.fn()
+    const node: SessionNode = {
+      id: sid('s1'), title: 'Named', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    }
+    render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={onOpen}
+      onRenameRequest={onRenameRequest} t={t} />)
+    const title = screen.getByText('Named')
+    // macOS delivers only the second press of a window-activating pair.
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.click(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onOpen).toHaveBeenCalledWith(node.id)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // A press seen before the window lost focus does not arm the next pair.
+    fireEvent.mouseDown(title, { detail: 1 })
+    fireEvent.blur(window)
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.doubleClick(title)
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    // One armed press renames once.
+    realDoubleClick(title)
+    fireEvent.mouseDown(title, { detail: 2 })
+    fireEvent.doubleClick(title)
     expect(onRenameRequest).toHaveBeenCalledOnce()
   })
 
@@ -1302,7 +1450,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed history as %s', (
   render(<SessionNodeItem node={node} currentId={node.id} now={0} onOpen={vi.fn()}
     renderSlot={() => null} onRenameRequest={onRenameRequest} t={translate} />)
   expect(screen.getByText(label)).toBeTruthy()
-  fireEvent.doubleClick(screen.getByText(label))
+  realDoubleClick(screen.getByText(label))
   expect(onRenameRequest).toHaveBeenCalledWith(node.id, '')
 })
 

@@ -19,6 +19,14 @@
   padding-right: 48px;
 }
 
+/* Narrow settings panel: the 48px gutter separates the label from its control
+   across a wide row and only squeezes the label here. */
+@media (max-width: 767px) {
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .rowText {
+    padding-right: 16px;
+  }
+}
+
 .title {
   font-size: 14px;
   font-weight: 400;
@@ -79,9 +87,18 @@
   opacity: 0;
 }
 
-.stepper:hover .arrows,
+@media (hover: hover) {
+  .stepper:hover .arrows {
+    opacity: 1;
+  }
+}
+
 .stepper:focus-within .arrows {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .arrows { opacity: 1; }
 }
 
 /* Arrow buttons: small chips carrying a translucent wash of the layer-1
@@ -101,8 +118,10 @@
   cursor: pointer;
 }
 
-.arrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .arrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .arrow:disabled {
@@ -125,8 +144,10 @@
   cursor: pointer;
 }
 
-.expander:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .expander:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .expander svg {

@@ -23,3 +23,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     documentMarkdown: MarkdownPreviewKey
   }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'viewer.label': 'Markdown',
+  'code.copy': 'コピー',
+  'code.copied': 'コピーしました',
+  'footnotes': '脚注',
+} satisfies Record<keyof typeof en, string>

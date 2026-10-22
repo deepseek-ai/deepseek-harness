@@ -1,4 +1,5 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -92,7 +93,7 @@ async function setup(model?: { provider: string; model: string }) {
   await mountAgentLoopTestHarness(ctx)
   const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), ...model ? { agentOptions: model } : {} })
   let index = 0
-  const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => ctx.tools.execute({
+  const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => executeToolFixture(ctx, {
     agent: handle.agent, signal, callId: ToolCallId(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
   })
   return { ctx, provider, handle, execute }
@@ -306,7 +307,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
   const f = await setup()
   await f.execute()
   const other = await f.ctx.agents.create({ sessionId: SessionId('native-lifecycle-other') })
-  await f.ctx.tools.execute({
+  await executeToolFixture(f.ctx, {
     agent: other.agent, signal: new AbortController().signal, callId: ToolCallId('other-owner'),
     name: 'cua', arguments: { method: 'listApps', params: {} },
   })
@@ -342,7 +343,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
 it('rejects malformed and unowned operations before acquiring a helper', async () => {
   const f = await setup()
   expect((await f.execute('screenshot', { pid: 9, windowId: 7 })).isError).toBe(true)
-  const unowned = await f.ctx.tools.execute({
+  const unowned = await executeToolFixture(f.ctx, {
     signal: new AbortController().signal, callId: ToolCallId('unowned'), name: 'cua', arguments: { method: 'listApps', params: {} },
   })
   expect(unowned.isError).toBe(true)
@@ -453,8 +454,8 @@ it('maps the actual model-request image pixels back to native points without sto
   native.request.mockResolvedValue({ dispatched: true, verified: false })
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 500, y: 500, relative: true })).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 999, y: 999, relative: true })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
 })
 
 it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dimensions that disagree with decoded bytes: %j', async (invalid) => {

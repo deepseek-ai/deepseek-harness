@@ -165,6 +165,7 @@ for line in sys.stdin:
     )
 
     with DeepSeekHarness(
+        approval_requests=True,
         model="deepseek-v4-flash",
         reasoning_effort="max",
         max_tokens=4096,
@@ -211,6 +212,7 @@ for line in sys.stdin:
     assert dumped_env["DSH_SESSION_ROOT"] is None
     assert dumped_env["DSH_CORDIS_CONFIG"] is None
     assert json.loads(init_dump.read_text()) == {
+        "approvalRequests": True,
         "cwd": str(tmp_path),
         "provider": "deepseek-official",
         "model": "deepseek-v4-flash",

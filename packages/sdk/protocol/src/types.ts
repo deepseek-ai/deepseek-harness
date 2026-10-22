@@ -17,6 +17,8 @@ import type { AskUserQuestionAnswer, AskUserQuestionItem } from '@deepseek-ai/ds
 export interface InitializeParams {
   /** Working directory recorded on every SDK-created session's header. */
   cwd: string
+  /** Enable server-to-client approval/request calls; omission leaves existing answerers in control. */
+  approvalRequests?: boolean
   /** Provider route every SDK-created agent runs on. */
   provider: string
   /** Model name every SDK-created agent runs on (the server may mount a fallback adapter; see `HarnessSdkJsonRpcServer.initialize`). */
@@ -180,4 +182,27 @@ export interface HarnessSdkRequestMap {
   'session/working-directory/get': { params: SessionWorkingDirectoryParams; result: SessionWorkingDirectoryResult }
   'session/working-directory/set': { params: SessionWorkingDirectorySetParams; result: SessionWorkingDirectoryResult }
   'shutdown': { params: undefined; result: Record<string, never> }
+}
+
+/** Internal approval projected to the SDK client without live runtime objects. */
+export interface ApprovalRequestParams {
+  /** Session owning the operation, including an in-process SDK descendant. */
+  sessionId: string
+  /** Tool whose operation needs approval. */
+  toolName: string
+  /** Exact tool call, when the asker supplied one. */
+  callId?: string
+  /** Asker-supplied explanation, when available. */
+  reason?: string
+}
+
+/** One-shot client decision; grants never persist beyond this operation. */
+export interface ApprovalRequestResult {
+  /** Only allowed-once permits the operation. */
+  outcome: 'allowed-once' | 'rejected' | 'cancelled'
+}
+
+/** Requests sent by the server after the client explicitly enables them. */
+export interface HarnessSdkClientRequestMap {
+  'approval/request': { params: ApprovalRequestParams; result: ApprovalRequestResult }
 }

@@ -1,5 +1,7 @@
 /** Real Loader composition preserves retrievable source text outside the bounded preview. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -51,6 +53,7 @@ describe('session-reference real Loader composition', () => {
       ['@deepseek-ai/dsh-working-directory', workingDirectoryPlugin],
       ['@deepseek-ai/dsh-system-prompt', systemPromptPlugin],
       ['@deepseek-ai/dsh-tools', toolsPlugin],
+      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
       ['@deepseek-ai/dsh-fs-local', fsPlugin],
       ['@deepseek-ai/dsh-tool-fs', toolFsPlugin],
       ['@deepseek-ai/dsh-session-query-sqlite', queryPlugin],
@@ -77,6 +80,7 @@ describe('session-reference real Loader composition', () => {
       source: { kind: 'user' },
     })
     const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+      modelSelection: { provider: 'mock', model: 'mock' },
       messages: [direct], turn: 1, step: 1, signal: new AbortController().signal,
     }, () => Promise.resolve({ kind: 'enter' as const, messages: [direct] }))
     expect(decision.kind).toBe('enter')
@@ -110,7 +114,7 @@ describe('session-reference real Loader composition', () => {
     const readLines: string[] = []
     let totalLines = Infinity
     for (let offset = 1; offset <= totalLines; offset += 7) {
-      const read = await ctx.tools.execute({
+      const read = await executeToolFixture(ctx, {
         name: 'read', callId: ToolCallId(`read-${offset}`),
         arguments: { file_path: notice.fullSnapshot.locator, offset, limit: 7 },
         signal: new AbortController().signal,

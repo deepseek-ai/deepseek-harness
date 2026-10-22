@@ -161,7 +161,7 @@ it('streams live policy changes and rejects intake disabled during identity look
   const next = iterator.next()
   // Loader commits the stable Config reference before publishing this notification.
   const { updateVolatile, createVolatile } = await import('../../../../vendor/cosmokit/src/volatile.ts')
-  const config = b.fiber.config as import('../src/index.ts').Config
+  const config = b.fiber.effectiveConfig as import('../src/index.ts').Config
   updateVolatile(config.enabled, createVolatile(false))
   b.fiber.ctx.emit('loader/volatile-update', [['enabled']])
   expect(await next).toEqual({ value: false, done: false })

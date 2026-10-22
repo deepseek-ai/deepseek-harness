@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -40,7 +41,7 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
     if (exec.name === 'wait_agent' && exec.agent === agent) entered.resolve(undefined)
     return result
   })
-  const result = ctx.tools.execute({
+  const result = executeToolFixture(ctx, {
     name: 'wait_agent', callId: ToolCallId('wait'), arguments: args, agent, signal,
   })
   await entered.promise
@@ -250,7 +251,7 @@ describe('wait_agent', () => {
 
   it('rejects calls without a live calling agent', async () => {
     const { ctx, agent, handle } = await setup()
-    const missing = await ctx.tools.execute({
+    const missing = await executeToolFixture(ctx, {
       name: 'wait_agent', callId: ToolCallId('missing'), arguments: {}, signal: new AbortController().signal,
     })
     expect(missing).toMatchObject({ isError: true, error: { info: { code: 'WAIT_UNAVAILABLE' } } })

@@ -4,7 +4,8 @@ import { spawn } from 'node:child_process'
 import { Duplex, type Readable, type Writable } from 'node:stream'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { JsonChannel } from '../../packages/ptc-runtime/ptc-runtime-node/src/channel.ts'
+import { createProcessRpc } from '../../packages/ptc-runtime/ptc-runtime-node/src/rpc.ts'
+import type { HostMethods, ProgramMethods } from '../../packages/ptc-runtime/ptc-runtime-node/src/protocol.ts'
 import { decodePtcJsonWire } from '../../packages/ptc-runtime/ptc-runtime-node/src/json-wire.ts'
 import { SUBPROCESS_CONTROL_ENV, SUBPROCESS_CONTROL_FD } from '../../packages/subprocess/subprocess/src/control.ts'
 
@@ -40,18 +41,17 @@ export async function probeRestrictedWorker(
   const streams: ReadonlyArray<Readable | Writable | null | undefined> = child.stdio
   const control = streams[SUBPROCESS_CONTROL_FD]
   assert(control instanceof Duplex)
-  const channel = new JsonChannel(control, 1_048_576, (raw) => {
-    const message = z.object({ type: z.string(), value: z.unknown().optional(), error: z.unknown().optional() }).parse(raw)
-    if (message.type === 'ready') {
-      const code = `const fs=await import('node:fs/promises'); const denied=[]; for(const path of ${JSON.stringify([join(checkout, 'package.json'), hostNode])}) { try { await fs.readFile(path); denied.push('readable') } catch(error) { denied.push(error.code) } } return {executable:process.execPath,env:Object.keys(process.env),denied};`
-      void channel.send({ type: 'boot', data: { code, namespaces: [], maxOutputBytes: 65_536 } })
-        .catch((error: unknown) => { completed.reject(error) })
-    } else if (message.type === 'done') {
-      if (message.error !== undefined) completed.reject(new Error(JSON.stringify(message.error)))
-      else completed.resolve(decodePtcJsonWire(message.value))
-      channel.close()
-    } else completed.reject(new Error(`Unexpected restricted-worker message: ${message.type}`))
-  }, (error) => { completed.reject(error) })
+  const code = `const fs=await import('node:fs/promises'); const denied=[]; for(const path of ${JSON.stringify([join(checkout, 'package.json'), hostNode])}) { try { await fs.readFile(path); denied.push('readable') } catch(error) { denied.push(error.code) } } return {executable:process.execPath,env:Object.keys(process.env),denied};`
+  // The probe program calls no bindings and prints nothing, so the host serves only readiness.
+  const channel = createProcessRpc<ProgramMethods, Pick<HostMethods, 'ready'>>(control, 1_048_576, {
+    ready() {
+      void channel.run(workspace, { code, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
+        if (result.error !== undefined) completed.reject(new Error(JSON.stringify(result.error)))
+        else completed.resolve(decodePtcJsonWire(result.value))
+        channel.$close()
+      }, (error: unknown) => { completed.reject(error) })
+    },
+  }, [], (error) => { completed.reject(error) })
   const force = setTimeout(() => { child.kill('SIGKILL') }, 20_000)
   try {
     const result = z.object({ executable: z.string(), env: z.array(z.string()), denied: z.array(z.enum(['EPERM', 'EACCES'])) }).parse(await completed.promise)
@@ -60,7 +60,7 @@ export async function probeRestrictedWorker(
     assert.equal(result.denied.length, 2)
     await exited
   } finally {
-    channel.close()
+    channel.$close()
     child.kill('SIGTERM')
     try { await exited } finally { clearTimeout(force) }
   }

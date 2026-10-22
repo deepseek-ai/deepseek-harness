@@ -1,6 +1,13 @@
-/* Plugin manager page: a centred column with its header, notices, and the package cards. */
+/* Plugin manager page: a centred column with its header, notices, and the package cards.
+
+   Hover affordances sit under @media (hover: hover): a tap latches :hover, which
+   would strand a card, row, or control in its pointer-only state. Text fields take
+   a 16px floor under @media (pointer: coarse): iOS Safari zooms the visual viewport
+   for a focused field under 16px and leaves the page pannable afterwards. */
 
 .page {
+  --bundle-progress-size: 14px;
+  --bundle-toggle-gap: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -164,9 +171,14 @@
   color: color-mix(in srgb, var(--dsw-alias-label-secondary) 60%, var(--dsw-alias-label-tertiary));
 }
 
-.groupMore:hover,
 .groupMore:focus-visible {
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .groupMore:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .moreHead {
@@ -177,19 +189,6 @@
 .moreBack {
   width: 28px;
   padding: 0;
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* The group's explanation, folded behind a hover/focus tooltip. */
-.groupInfo {
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
-  color: var(--dsw-alias-label-caption);
-}
-
-.groupInfo:hover,
-.groupInfo:focus-visible {
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -311,8 +310,16 @@
   position: relative;
 }
 
-.cardLink:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+/* Press feedback carries the tap: with hover fenced off, a card would otherwise
+   read as inert between touch-down and release. */
+.cardLink:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .cardLink:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cardOpen {
@@ -380,9 +387,9 @@
 .skeletonDescription { width: min(280px, 85%); }
 .skeletonIcon { border-color: transparent; }
 
-/* Keep text-column metrics while leaving the action area blank. */
+/* Switch.module.css owns the 36px switch; ongoing StateDot occupies the reserved progress size. */
 .skeletonActions {
-  width: 36px;
+  width: calc(36px + var(--bundle-toggle-gap) + var(--bundle-progress-size));
   height: 20px;
 }
 
@@ -405,6 +412,29 @@
   gap: 8px;
 }
 
+.bundleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bundle-toggle-gap);
+}
+
+.toggleProgress {
+  display: inline-flex;
+  width: var(--bundle-progress-size);
+  height: var(--bundle-progress-size);
+}
+
+.toggleProgress > svg { width: 100%; height: 100%; }
+
+.progressAnnouncement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The toolbar's icon action, round like the message-row actions. */
 .iconButton {
   display: inline-flex;
@@ -419,9 +449,15 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+.iconButton:active:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .iconButton:disabled {
@@ -499,8 +535,14 @@
   cursor: pointer;
 }
 
-.deleteButton:hover:not(:disabled) {
+.deleteButton:active:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-interactive-bg-hover));
+}
+
+@media (hover: hover) {
+  .deleteButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-interactive-bg-hover));
+  }
 }
 
 .deleteButton:disabled {
@@ -634,8 +676,10 @@
   cursor: pointer;
 }
 
-.guideToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .guideToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .guideChevron {
@@ -765,8 +809,10 @@
   cursor: pointer;
 }
 
-.registryToggle:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .registryToggle:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .registryToggle:disabled {
@@ -819,8 +865,10 @@
   cursor: pointer;
 }
 
-.registryOption:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .registryOption:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* An offered registry is one row: the radio beside its title and the line under it. */
@@ -954,9 +1002,11 @@ label.registryOption {
   cursor: pointer;
 }
 
-.wizardClose:hover {
-  background: var(--dsw-alias-bg-layer-3);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .wizardClose:hover {
+    background: var(--dsw-alias-bg-layer-3);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .wizardHero {
@@ -1240,8 +1290,10 @@ label.registryOption {
   cursor: pointer;
 }
 
-.crumb:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .crumb:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .crumb:focus-visible {
@@ -1466,9 +1518,11 @@ label.registryOption {
   cursor: pointer;
 }
 
-.rowOpen:hover .rowId {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+@media (hover: hover) {
+  .rowOpen:hover .rowId {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 .rowOpenIcon {
@@ -1476,8 +1530,10 @@ label.registryOption {
   color: var(--dsw-alias-label-tertiary);
 }
 
-.rowOpen:hover .rowOpenIcon {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .rowOpen:hover .rowOpenIcon {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .rowState {
@@ -1577,8 +1633,10 @@ button.versionSummary {
   cursor: pointer;
 }
 
-button.versionSummary:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  button.versionSummary:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .versionSummary[aria-expanded='true'] {
@@ -1940,5 +1998,13 @@ button.versionSummary:focus-visible {
 
   .versionSpacer {
     display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .installField input[type='text'],
+  .registryCustomField,
+  .partsFilter input {
+    font-size: 16px;
   }
 }

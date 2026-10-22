@@ -1,0 +1,13 @@
+version: 1
+scenario: background-wait-steer
+profile: sdk
+composition: sdk-background-wait
+recording: authored
+header:
+  class: sdk-background-wait
+  pin: true
+replay:
+  override: true
+# Refresh caveat: `DSH_SNAPSHOT=refresh` cannot re-tokenize the job id inside
+# tool text yet (shared harness defect tracked in #6710), so replay is the
+# committed path for this fixture.

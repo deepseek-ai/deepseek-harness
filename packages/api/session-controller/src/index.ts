@@ -117,7 +117,6 @@ export interface SessionControllerInternals {
 /** Host service backing the generated `ctx.remote.session` namespace. */
 export class SessionController extends TypertRemoteService {
   static inject = [
-    'agentController',
     'agentDefaultModel',
     'agents',
     'attachments',
@@ -170,7 +169,7 @@ export class SessionController extends TypertRemoteService {
     const ctx = this.ctx
     ctx.typert.resources.register('session', { field: 'sessionId' })
     this.agents = new ApiSessionAgentController(ctx)
-    await this.agents.initialize()
+    this.agents.initialize()
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
     ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
       const result = await this.agents.resolveAgent(sessionId)
@@ -214,15 +213,6 @@ export class SessionController extends TypertRemoteService {
       ctx.emit('api-session/error', agent.id, errorChain(error))
     })
     ctx.on('session/event', (session, event) => {
-      if (event.type === 'request/header') {
-        const agent = ctx.agents.get(session.id)
-        if (agent?.session === session) this.agents.consumeSelection(
-          agent,
-          event.data.header.config.provider,
-          event.data.header.config.model,
-          event.data.header.config.reasoningEffort,
-        )
-      }
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
       ctx.emit('api-session/activity', session.id, event.time)
     })
@@ -459,14 +449,10 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Admit one prompt after explicitly resuming its Session. The prompt is
-   * delivered through `ctx.agentController`, whose `agent-controller/admission`
-   * stage runs before it enters the inbox, so the call can wait for a listener
-   * that holds it.
+   * Admit one prompt after explicitly resuming its Session.
    * @param request - Session identity, prompt content, source metadata, and delivery mode.
-   * @param signal - caller cancellation; it also stops a prompt waiting for or held at the admission stage.
+   * @param signal - caller cancellation before prompt admission begins.
    * @returns acknowledgement that the Agent accepted the prompt.
-   * @throws `session/prompt-rejected` when an admission listener refuses the prompt or fails.
    */
   @Remote('prompt')
   async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue> {
@@ -492,7 +478,7 @@ export class SessionController extends TypertRemoteService {
       ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
       ...(principal === undefined ? {} : { principal }),
     }
-    return this.commands.prompt(request, source, signal)
+    return this.commands.prompt(request, source)
   }
 
   /**

@@ -152,14 +152,6 @@ class EditOutput(TypedDict):
     before: str
     after: str
 
-class ExitPlanModeArgs(TypedDict):
-    # The complete plan, as markdown, starting with a # heading that names it.
-    plan: str
-    # Additional keys beyond those declared are allowed.
-
-class ExitPlanModeOutput(TypedDict):
-    approved: bool
-
 class GetGoalOutput1(TypedDict):
     goal: None
 
@@ -526,8 +518,6 @@ class Tools(Protocol):
         """Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say \"goal\"; not for single-turn work."""
     async def edit(self, args: EditArgs) -> EditOutput:
         """Edit an existing UTF-8 text file by replacing literal text."""
-    async def exit_plan_mode(self, args: ExitPlanModeArgs) -> ExitPlanModeOutput:
-        """Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again."""
     async def get_goal(self, args: dict[str, Any]) -> GetGoalOutput1 | GetGoalOutput2:
         """Read the current session goal, including the id and revision that update_goal requires."""
     async def glob(self, args: GlobArgs) -> GlobOutput:

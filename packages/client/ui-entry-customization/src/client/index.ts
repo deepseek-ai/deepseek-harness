@@ -1,6 +1,8 @@
 /** Rows for the More menus of the left sidebar, Conversation View tabs, and right-sidebar guide. */
 import type { Context } from '@deepseek-ai/cordis'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -8,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { EntryMenuContent, type EntryMenuInjected, type EntryRegion } from './EntryMenuContent.tsx'
-import { en, zh } from './locales.ts'
+import { en, ja, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -17,20 +19,33 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Services used by the menu rows' footer actions. */
-export const inject = ['slots', 'locale', 'pluginNavigation', 'uiWorkspace']
+/** Services used by the menu rows' footer actions; the optional `pluginNavigation` shows the discovery row while present. */
+export const inject = ['slots', 'locale', 'uiWorkspace']
 
 /**
  * Register the same menu rows into each region's More menu.
- * @param ctx - Browser context with slot, locale, plugin navigation, and Workspace services.
+ * @param ctx - Browser context with slot, locale, and Workspace services, and the optional plugin navigation.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh }))
+  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh, ja }))
   const t = ctx.locale.bind('entryCustomization')
+  // The Plugins page provides its navigation only while the current Peer may use it.
+  const pluginNavigation = createSnapshotStore(false)
+  ctx.inject(['pluginNavigation'], (scope: Context) => {
+    scope.effect(() => {
+      pluginNavigation.set(true)
+      return () => { pluginNavigation.set(false) }
+    }, 'entry-customization: plugin navigation presence')
+  })
   const injected = (region: EntryRegion): EntryMenuInjected => ({
     region,
-    browsePlugins: () => { ctx.pluginNavigation.openList() },
+    hooks: { pluginNavigation },
+    browsePlugins: () => {
+      ctx.get('productAnalytics')?.track('more_menu_item_click', { region, action: 'browse_plugins' })
+      ctx.get('pluginNavigation')?.openList()
+    },
     createPlugin: () => {
+      ctx.get('productAnalytics')?.track('more_menu_item_click', { region, action: 'create_plugin' })
       ctx.uiWorkspace.startSession(undefined, {
         agentPreset: 'cordis', prompt: t(`createPrompt.${region}`), whenDraftExists: 'append',
       })

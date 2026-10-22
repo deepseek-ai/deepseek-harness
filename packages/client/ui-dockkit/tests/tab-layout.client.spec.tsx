@@ -38,6 +38,66 @@ function mounted(controller = seededController(), options: Partial<ComponentProp
   return { controller, view, redraw, callbacks, node, body: (id: TabId) => node(`[data-body="${id}"]`) }
 }
 
+it.each([
+  { active: false, targetControl: false },
+  { active: true, targetControl: false },
+  { active: false, targetControl: true },
+  { active: true, targetControl: true },
+])('closes a tab by middle click without selecting it first (active: $active, close control: $targetControl)', ({ active, targetControl }) => {
+  const controller = seededController()
+  const first = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
+  const second = controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+  const h = mounted(controller)
+  const focus = vi.spyOn(h.callbacks, 'onFocusTab')
+  const close = vi.spyOn(h.callbacks, 'onCloseTab').mockImplementation((id) => {
+    controller.closeTab(id)
+    h.redraw()
+  })
+  const target = active ? second : first
+  const chip = h.node(`[data-dockkit-tab="${target}"]${targetControl ? ' [data-dockkit-tab-close]' : ''}`)
+  fireEvent.pointerDown(chip, { button: 1, pointerId: 7 })
+  expect(fireEvent.mouseDown(chip, { button: 1 })).toBe(false)
+  expect(close).not.toHaveBeenCalled()
+  expect(h.callbacks.onTabPressed).not.toHaveBeenCalled()
+  fireEvent.pointerUp(chip, { button: 1, pointerId: 7 })
+  fireEvent.mouseUp(chip, { button: 1 })
+  expect(fireEvent(chip, new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }))).toBe(false)
+  expect(close).toHaveBeenCalledExactlyOnceWith(target)
+  expect(focus).not.toHaveBeenCalled()
+  expect(h.view.container.querySelector(`[data-dockkit-tab="${target}"]`)).toBeNull()
+  expect(h.node(`[data-dockkit-tab="${active ? first : second}"]`).getAttribute('aria-selected')).toBe('true')
+})
+
+it('keeps an unclosable tab on middle click', () => {
+  const h = mounted()
+  vi.spyOn(h.callbacks, 'canCloseTab').mockReturnValue(false)
+  h.redraw()
+  const chip = h.node('[data-dockkit-tab]')
+  fireEvent(chip, new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }))
+  expect(h.callbacks.onCloseTab).not.toHaveBeenCalled()
+  expect(h.node('[data-dockkit-tab]')).toBe(chip)
+})
+
+it('does not treat a middle click inside the tab menu as a click on the tab title', () => {
+  const h = mounted()
+  fireEvent.contextMenu(h.node('[data-dockkit-tab]'))
+  const item = h.view.getByRole('menuitem', { name: TEST_LABELS.closeTab })
+  fireEvent(item, new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true }))
+  expect(h.callbacks.onCloseTab).not.toHaveBeenCalled()
+})
+
+it('keeps primary selection and secondary menus separate from middle-click closing', () => {
+  const h = mounted()
+  const chip = h.node('[data-dockkit-tab]')
+  for (const button of [0, 2]) {
+    expect(fireEvent.mouseDown(chip, { button })).toBe(true)
+    fireEvent.pointerDown(chip, { button, pointerId: 7 })
+    expect(fireEvent(chip, new MouseEvent('auxclick', { button, bubbles: true, cancelable: true }))).toBe(true)
+  }
+  expect(h.callbacks.onTabPressed).toHaveBeenCalledTimes(1)
+  expect(h.callbacks.onCloseTab).not.toHaveBeenCalled()
+})
+
 it('retains visited bodies and hands keyboard focus to the newly selected strip', () => {
   const controller = seededController()
   controller.setExpanded(true)

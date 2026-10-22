@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { expect, it } from 'vitest'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import {
   packPreviewFixture, packRepositoryImage, previewFixtures, WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'
@@ -776,7 +776,7 @@ async function openSessionInspector(page: Page): Promise<void> {
   // The showcase opens with a file tab in the right sidebar; a new tab shows the guide entries.
   await page.getByRole('button', { name: 'New tab', exact: true }).click()
   await page.locator('[data-sidebar-right-guide-entry="session-inspector-log"]').click({ timeout: 30_000 })
-  await page.getByRole('table', { name: 'Raw Log', exact: true }).waitFor({ timeout: 15_000 })
+  await page.getByRole('table', { name: 'Raw log', exact: true }).waitFor({ timeout: 15_000 })
   expect(await setBundle(page, INSPECTOR_BUNDLE, false)).toBe('applied')
 }
 

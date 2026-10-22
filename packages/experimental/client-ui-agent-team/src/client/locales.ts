@@ -49,3 +49,25 @@ export const en = {
   'status.in_progress': 'In progress',
   'status.completed': 'Completed',
 } satisfies Record<TeamKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'trigger': 'タスクボード',
+  'loading': 'タスクボードを読み込み中…',
+  'unavailable': 'タスクボードは利用できません',
+  'failure': '保存されたタスクレコードが無効です: {message}',
+  'empty': '共有タスクはまだありません。会話から作成してください。',
+  'tasks': '共有タスク',
+  'owner': 'オーナー',
+  'lead': 'リード',
+  'unowned': 'オーナーなし',
+  'blockedBy': 'ブロック元',
+  'writeScopes': '書き込みスコープ',
+  'ready': '準備完了',
+  'blocked': '依存関係によりブロック中',
+  'task.expand': 'もっと見る',
+  'task.collapse': '折りたたむ',
+  'status.pending': '保留中',
+  'status.in_progress': '進行中',
+  'status.completed': '完了',
+} satisfies Record<keyof typeof en, string>

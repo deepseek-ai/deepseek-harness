@@ -271,6 +271,7 @@ describe('DockSurface', () => {
     const intents = spyIntents()
     const { unmount } = renderSurface(controller, intents)
     fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }))
+    fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }).parentElement!)
     expect(intents.splitPane).toHaveBeenCalledWith(controller.getSnapshot().state.rootId)
     expect(intents.focusPane).not.toHaveBeenCalled()
     unmount()
@@ -280,6 +281,15 @@ describe('DockSurface', () => {
     expect(disabled.hasAttribute('disabled')).toBe(true)
     expect(disabled.parentElement?.getAttribute('aria-label')).toBe(TEST_LABELS.splitPaneDisabled)
     expect(disabled.getAttribute('data-dockkit-split-blocked')).toBe('budget')
+    intents.splitPane.mockClear()
+    const hint = disabled.parentElement!
+    fireEvent.pointerDown(hint, { pointerType: 'touch' })
+    fireEvent.click(hint)
+    expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPaneDisabled)
+    expect(intents.splitPane).not.toHaveBeenCalled()
+    expect(intents.focusPane).not.toHaveBeenCalled()
+    fireEvent.pointerDown(document.body, { pointerType: 'touch' })
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
   it('names the enabled split control through the shared tooltip, not a native title', () => {
@@ -288,10 +298,10 @@ describe('DockSurface', () => {
       renderSurface(seededController(), spyIntents())
       const button = screen.getByRole('button', { name: TEST_LABELS.splitPane })
       expect(button.hasAttribute('title')).toBe(false)
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPane)
-      fireEvent.mouseLeave(button)
+      fireEvent.pointerLeave(button)
       expect(screen.queryByRole('tooltip')).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -968,6 +978,27 @@ describe('DockSurface', () => {
 })
 
 describe('tab drags', () => {
+  it('keeps a dragged tab when the middle button is released while the primary button stays down', () => {
+    const controller = seededController()
+    const tabId = controller.openContent({ contentId: 'file:a', title: 'a.txt', kind: 'file' })
+    const state = controller.getSnapshot().state
+    const paneId = getPane(state, state.rootId).id
+    layOut([paneId], 420)
+    const intents = spyIntents()
+    intents.closeTab.mockImplementation(controller.closeTab.bind(controller))
+    intents.placeTab.mockImplementation(controller.placeTab.bind(controller))
+    renderSurface(controller, intents)
+    const chip = screen.getByRole('tab', { name: /a\.txt/u })
+
+    drag(chip, FILE_CHIP, [30, 18], false)
+    fireEvent(chip, new MouseEvent('auxclick', { button: 1, buttons: 1, bubbles: true, cancelable: true }))
+    expect(intents.closeTab).not.toHaveBeenCalled()
+    fireEvent.pointerUp(window, { pointerId: 7, button: 0, buttons: 0, clientX: 30, clientY: 18 })
+    expect(intents.placeTab).toHaveBeenCalledExactlyOnceWith(tabId, paneId, 0)
+    expect(getPane(controller.getSnapshot().state, paneId).tabs[0]).toBe(tabId)
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+  })
+
   it('previews a caret at the slot under the pointer and reports that slot on release', () => {
     const { intents, first, fileTabId, chip } = twoPanes()
     // Left of the first chip's midpoint: slot 0.

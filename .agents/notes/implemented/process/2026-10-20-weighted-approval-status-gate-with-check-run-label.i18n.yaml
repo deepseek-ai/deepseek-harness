@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-20-weighted-approval-status-gate-with-check-run-label.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run:
+  en: a1f0f9fd657c7d35
+  zh: e8fa02fb5bde6075
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/problem:
+  en: 8e854872edfc0729
+  zh: 6f3ed495fcb690a4
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/decision:
+  en: 03de94946d7532d7
+  zh: cf2f585f715d3295
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/verification:
+  en: 8298cff64cce6467
+  zh: a121d509c2302c00
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/alternatives-considered:
+  en: 197255cd82aabef7
+  zh: dc03f4bf77150f22
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-adds-a-decision-check-run/consequences:
+  en: 25e1ac1c8cab089a
+  zh: 84e10cccb1b9eda7

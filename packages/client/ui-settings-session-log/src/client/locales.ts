@@ -13,3 +13,11 @@ export const zh: Record<keyof typeof en, string> = {
   saved: '设置已保存',
   failed: '无法保存设置',
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': '公式モデル API 使用時にセッションログをアップロード',
+  'description': 'DeepSeek のモデルと製品の改善にご協力ください。',
+  'saved': '設定を保存しました',
+  'failed': '設定を保存できませんでした',
+} satisfies Record<keyof typeof en, string>

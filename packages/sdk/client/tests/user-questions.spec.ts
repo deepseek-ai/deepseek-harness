@@ -98,3 +98,20 @@ it.each(['close', 'disconnect'] as const)('aborts host work when the client or r
   expect(signal.aborted).toBe(true)
   await pending
 })
+
+it('keeps native questions active beside the approval request handler', async () => {
+  const answer = { answers: [{ id: 'format', selected: ['CSV'] }] }
+  const f = await client(async () => answer)
+  const approvals: string[] = []
+  f.client.onRequest(async (method) => {
+    approvals.push(method)
+    return { outcome: 'allowed-once' }
+  })
+  const [question, approval] = await Promise.all([
+    f.client.request('test/question', { requestId: 'native' }),
+    f.client.request('test/question', { requestId: 'approval', method: 'approval/request' }),
+  ])
+  expect(question).toEqual({ answer, error: null })
+  expect(approval).toEqual({ answer: { outcome: 'allowed-once' }, error: null })
+  expect(approvals).toEqual(['approval/request'])
+})

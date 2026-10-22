@@ -6,10 +6,12 @@
  * A chip is a capsule carrying one control, its close, shown over its right
  * end while the chip is active, hovered, or focused; the context menu
  * (secondary press) carries the same close plus whatever the embedder appends.
- * Both close routes draw only while the embedder's `canCloseTab` allows, and
- * a pane's lone chip whose close is withheld draws quiet — no capsule, no
- * hover fill — since there is nothing to select against and nothing to do to
- * it.
+ * A middle click anywhere on the chip, including its close control, closes
+ * without selecting the tab, unless another mouse button is still held.
+ * The embedder's `canCloseTab`
+ * governs all close routes. A pane's lone chip whose close is withheld draws
+ * quiet — no capsule, no hover fill — since there is nothing to select against
+ * and nothing to do to it.
  * Between neighbouring chips sits a slot: a fixed-width box drawing a
  * hairline, blank beside the active chip, and the drop caret when a drag
  * targets that index, so a caret never widens the row; the two end slots
@@ -282,9 +284,18 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
                 // replaced — which would abandon every drag. A drag that ends
                 // elsewhere fires no click, and its own operation carries focus.
                 onPointerDown={(event) => {
-                  // A secondary press is the menu, never a drag.
-                  if (event.button === 2) return
+                  if (event.button !== 0) return
                   callbacks.onTabPressed(tabId, event)
+                }}
+                onMouseDown={(event) => {
+                  // Prevent middle-button autoscroll or selection paste before release.
+                  if (event.button === 1) event.preventDefault()
+                }}
+                onAuxClick={(event) => {
+                  if (event.button !== 1) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  if (closable && event.buttons === 0) callbacks.onCloseTab(tabId)
                 }}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -365,10 +376,11 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
       )}
       <div className={css.stripFill} data-dockkit-strip-fill />
       {!(callbacks.hideSplitWhenBlocked && block !== undefined) && (
-        <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500}>
+        <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500} openOnClick={block !== undefined}>
           <span
             tabIndex={block === undefined ? undefined : 0}
             aria-label={block === undefined ? undefined : splitBlockedTitle(callbacks.labels, block)}
+            onClick={(event) => { if (block !== undefined) event.stopPropagation() }}
           >
             <button
               type="button"

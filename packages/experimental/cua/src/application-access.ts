@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { z } from 'zod'
+import { applicationAccessDisplay } from './locales.ts'
 import { NativeError, type NativeClient } from './native-client.ts'
 import type { CuaAppHandle } from './types.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
@@ -124,10 +125,11 @@ export class ApplicationAccess {
    * @param handle Helper handle for a running instance or an approved pending launch.
    * @param identity Native executable/signing identity.
    * @param signal Calling tool lifetime.
+   * @param icon Native application icon for the permission card; never saved as an identity.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
    */
   async select(agent: Agent, client: NativeClient, handle: CuaAppHandle,
-    identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal): Promise<void> {
+    identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal, icon?: string): Promise<void> {
     await this.withOperation(agent, client, identity, signal, signal => this.selectInOrder(agent, identity.id, async () => {
       signal.throwIfAborted()
       const existing = this.clients.get(client)?.handles.get(handle)
@@ -145,9 +147,14 @@ export class ApplicationAccess {
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
-            question: `Allow Computer Use to launch if needed, read, capture, and control ${identity.name}?`,
-            detail: 'Session access lasts until DSH restarts or Computer Use is disabled.',
-            options }] })
+            question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
+            detail: 'Session access lasts until DSH restarts or computer use is disabled.',
+            options, intent: {
+              kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
+              ...(identity.persistable && this.options.save ? { always: 'Always allow' } : {}),
+              subject: { name: identity.name, ...(icon === undefined ? {} : { icon }) },
+              display: applicationAccessDisplay,
+            } }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {
             this.invalidate(identity.id, agent)

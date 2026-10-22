@@ -174,7 +174,7 @@ describe('GoalBar', () => {
     vi.useFakeTimers()
     try {
       render(<GoalBar goal={makeGoal()} activation="armed" {...makeActions()} t={t} />)
-      fireEvent.mouseEnter(screen.getByRole('button', { name: '暂停目标' }))
+      fireEvent.pointerEnter(screen.getByRole('button', { name: '暂停目标' }))
       act(() => { vi.advanceTimersByTime(500) })
       const tooltip = screen.getByRole('tooltip')
       expect(tooltip.textContent).toBe('暂停目标')

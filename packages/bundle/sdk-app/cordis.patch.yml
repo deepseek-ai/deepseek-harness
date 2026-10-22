@@ -41,10 +41,6 @@
         node: !!js "process.env.DSH_BUNDLED_OFFICE_NODE ?? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')"
 
 # Share native desktop tools and model context without starting a Web server.
-- id: tools
-  config:
-    mode: !!js process.env.DSH_TOOLS_MODE
-
 - insert:
     - id: connection
       name: '@deepseek-ai/dsh-client-connection'

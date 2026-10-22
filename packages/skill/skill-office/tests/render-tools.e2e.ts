@@ -15,7 +15,7 @@ const python = runtime && join(runtime, 'dependencies/python', process.platform 
 const launch = {
   binScript: join(repo, 'apps/cli/src/bin.ts'), sourceImport: 'tsx/esm' as const, tsconfigPath: join(repo, 'tsconfig.base.json'),
   configPath: 'office.patch.json', processTimeoutMs: 110_000,
-  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1', DSH_TOOLS_MODE: 'native',
+  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
     HTTP_PROXY: process.env.DSH_OFFICE_TEST_PROXY, HTTPS_PROXY: process.env.DSH_OFFICE_TEST_PROXY },
 }
 
@@ -40,8 +40,9 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
   let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office CLI rendering', tempDirPrefix: 'dsh-office-render-',
-    ...launch, env: { ...launch.env, DSH_TOOLS_MODE: mode },
+    ...launch,
     binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
+      ...mode === 'ptc' ? ['--patch', join(repo, 'apps/cli/config/examples/ptc.yml')] : [],
       // Source-content verification can require an authoring skill; this case covers image-only inspection.
       `Export page 1 of input.${format} as PNG into preview. Check only that the exported image is readable; `
       + 'do not inspect the source document content or metadata, and keep the source file unchanged. Report briefly in English.'],

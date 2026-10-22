@@ -53,10 +53,16 @@
   cursor: pointer;
 }
 
-.helpButton:hover,
 .helpButton[aria-expanded='true'] {
   background: var(--dsw-alias-bg-layer-4);
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .helpButton:hover {
+    background: var(--dsw-alias-bg-layer-4);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .helpButton:focus-visible {
@@ -96,8 +102,10 @@
   cursor: pointer;
 }
 
-.reset:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .reset:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .reset:disabled {

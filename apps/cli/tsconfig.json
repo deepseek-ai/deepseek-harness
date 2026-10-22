@@ -21,6 +21,9 @@
       "path": "../../packages/boot/app-boot"
     },
     {
+      "path": "../../packages/boot/official-bundles"
+    },
+    {
       "path": "../../packages/boot/cmdline"
     },
     {

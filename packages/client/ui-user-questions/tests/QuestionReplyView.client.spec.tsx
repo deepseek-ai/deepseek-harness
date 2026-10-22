@@ -4,11 +4,16 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
-import { zh } from '../src/client/locales.ts'
+import { ja, zh } from '../src/client/locales.ts'
 import { QuestionReplyBubble, QuestionReplyView } from '../src/client/QuestionReplyView.tsx'
 import type { QuestionReplyData } from '../src/client/question-reply.ts'
 
-afterEach(cleanup)
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+afterEach(() => {
+  cleanup()
+  if (originalClipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+  else Object.defineProperty(navigator, 'clipboard', originalClipboard)
+})
 
 /** Render the keyed Chat renderer itself; the framework props it never reads are stubbed. */
 function renderView(data: QuestionReplyData) {
@@ -34,32 +39,28 @@ const data = {
   callId: 'call-reply',
   outcome: 'answered',
   questions: [{
-    id: 'goal', question: 'What should we build?', header: 'What should we build?', detail: 'Choose the first milestone.',
-    options: [{ label: 'A dashboard', description: 'A focused web surface.' }, { label: 'A CLI' }],
+    id: 'goal', question: 'What should we build?', header: 'What should we build?',
   }],
   answers: [{ id: 'goal', selected: ['A dashboard'] }],
   text: '{"questions":[],"answers":[]}',
   time: 1,
 } satisfies QuestionReplyData
 describe('QuestionReplyView', () => {
-  it('reopens the settled question details from the history bubble', () => {
-    render(<QuestionReplyBubble data={data} t={t} />)
+  it('names answered batches in Japanese', () => {
+    render(<QuestionReplyBubble data={data} t={makeTranslate(ja)} />)
+    expect(screen.getByRole('group', { name: '質問と回答' })).toBeTruthy()
+  })
 
-    const bubble = screen.getByRole('button', { name: /展开问题详情/ })
-    expect(bubble.getAttribute('aria-expanded')).toBe('false')
+  it('shows paired questions and answers immediately without auxiliary option content', () => {
+    render(<QuestionReplyBubble data={data} t={t} />)
+    expect(screen.getAllByText('What should we build?')).toHaveLength(1)
     expect(screen.getAllByText('A dashboard')).toHaveLength(1)
+    expect(screen.queryByText('Choose the first milestone.')).toBeNull()
+    expect(screen.queryByText('A focused web surface.')).toBeNull()
+    expect(screen.queryByText('A CLI')).toBeNull()
+    expect(screen.queryByRole('button', { name: /展开问题详情/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'copy' })).toBeTruthy()
     expect(screen.getByText(/\d{2}:\d{2}/)).toBeTruthy()
-    expect(screen.queryByText('What should we build?')).toBeNull()
-
-    fireEvent.click(bubble)
-
-    expect(screen.getByRole('button', { name: /收起问题详情/ }).getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('What should we build?')).toBeTruthy()
-    expect(screen.getAllByText('What should we build?')).toHaveLength(1)
-    expect(screen.getByText('A dashboard — A focused web surface.')).toBeTruthy()
-    expect(screen.getByText('回答：')).toBeTruthy()
-    expect(screen.getAllByText('A dashboard')).toHaveLength(1)
   })
 
   it('copies the question with its answer, then confirms the write', async () => {
@@ -81,7 +82,7 @@ describe('QuestionReplyView', () => {
 
   it('renders through the conversation.chat.node slot with the same bubble', () => {
     renderView(data)
-    expect(screen.getByRole('group', { name: '回答先前等待中的问题' }).getAttribute('data-question-reply')).toBe('call-reply')
+    expect(screen.getByRole('group', { name: '问题与回答' }).getAttribute('data-question-reply')).toBe('call-reply')
   })
 
   it('shows a distinct header, marks an unanswered question skipped, and falls back to the raw text', () => {
@@ -90,20 +91,18 @@ describe('QuestionReplyView', () => {
         ...data,
         questions: [
           { id: 'goal', question: 'What should we build?', header: 'Goal' },
-          { id: 'notes', question: 'Any notes?', options: [{ label: 'None' }] },
+          { id: 'notes', question: 'Any notes?' },
         ],
         answers: [{ id: 'goal', selected: [], custom: '  ' }],
       }}
       t={t}
     />)
-    fireEvent.click(screen.getByRole('button', { name: /展开问题详情/ }))
     expect(screen.getByText('Goal')).toBeTruthy()
-    expect(screen.getByText('None')).toBeTruthy()
+    expect(screen.queryByText('None')).toBeNull()
     expect(screen.getAllByText('已跳过')).toHaveLength(2)
     cleanup()
 
     render(<QuestionReplyBubble data={{ ...data, questions: [], answers: [], text: 'raw reply text' }} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: /展开问题详情/ }))
     expect(screen.getByText('raw reply text')).toBeTruthy()
   })
 
@@ -136,12 +135,46 @@ describe('QuestionReplyView', () => {
     }
   })
 
-  it('copies the same text once the bubble is open', () => {
+  it('ignores repeated pending copies and does not schedule feedback after unmount', async () => {
+    vi.useFakeTimers()
+    try {
+      let finish!: () => void
+      const writeText = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+      const view = render(<QuestionReplyBubble data={data} t={t} />)
+      fireEvent.click(screen.getByRole('button', { name: 'copy' }))
+      fireEvent.click(screen.getByRole('button', { name: 'copy' }))
+      expect(writeText).toHaveBeenCalledTimes(1)
+      view.unmount()
+      await act(async () => { finish(); await Promise.resolve() })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears the confirmation timer when the bubble unmounts', async () => {
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      })
+      const view = render(<QuestionReplyBubble data={data} t={t} />)
+      fireEvent.click(screen.getByRole('button', { name: 'copy' }))
+      await act(async () => { await Promise.resolve(); await Promise.resolve() })
+      expect(screen.getByRole('button', { name: 'copied' })).toBeTruthy()
+      view.unmount()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('copies the complete visible question and answer', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     render(<QuestionReplyBubble data={data} t={t} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /展开问题详情/ }))
     fireEvent.click(screen.getByRole('button', { name: 'copy' }))
     expect(writeText).toHaveBeenCalledWith('What should we build?\n回答：A dashboard')
   })

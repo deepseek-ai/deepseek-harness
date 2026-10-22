@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/boot/official-bundles/README.md
+/:
+  en: bf83ae511baf1048
+  zh: f8966b8dd39c5b9a
+/deepseek-ai-dsh-official-bundles:
+  en: bb5c2cd3ee2ee02b
+  zh: cf78cfef3b92ab25
+/deepseek-ai-dsh-official-bundles/summary:
+  en: 3d64166b71a685bc
+  zh: 424e1f77fc987115
+/deepseek-ai-dsh-official-bundles/table-of-contents:
+  en: 80b31a934611cb4a
+  zh: 05f3f7f9cb2fd881
+/deepseek-ai-dsh-official-bundles/use-this-package:
+  en: 62c8aa1af42d91d7
+  zh: 39674a200b42b0d2
+/deepseek-ai-dsh-official-bundles/use-this-package/profile-templates:
+  en: 60ef21314c76c3ec
+  zh: f769091957235e12
+/deepseek-ai-dsh-official-bundles/use-this-package/optional-and-retired-bundles:
+  en: c0940eb304bbacd1
+  zh: bbc4f72b7a49c676
+/deepseek-ai-dsh-official-bundles/use-this-package/on-demand-bundles:
+  en: 10dac368736afde3
+  zh: 7684ca22ba4b5a67
+/deepseek-ai-dsh-official-bundles/understand-the-implementation:
+  en: 2986cf8f3115a483
+  zh: 3eb2dade2666bbc6
+/deepseek-ai-dsh-official-bundles/understand-the-implementation/source-map:
+  en: af30ccf226fbb7d4
+  zh: f39ae7a50b2aaa80
+/deepseek-ai-dsh-official-bundles/further-exploration:
+  en: 16a331e64c81b2a5
+  zh: abfe9b1a1294b6b3
+/deepseek-ai-dsh-official-bundles/known-limitations-and-deferred-work:
+  en: 6631976cc7404166
+  zh: edb2094b17bc4009
+/deepseek-ai-dsh-official-bundles/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

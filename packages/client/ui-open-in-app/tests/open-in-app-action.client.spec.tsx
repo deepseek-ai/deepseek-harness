@@ -134,7 +134,7 @@ describe('OpenInAppAction launching', () => {
 
   it('names the selected application in the tooltip', async () => {
     render(<OpenInAppAction {...bench({ apps: ['finder'], absolutePath: '/w' }).props} />)
-    fireEvent.mouseEnter(screen.getByRole('button', { name: t('open.title', { app: zh['app.finder'] }) }))
+    fireEvent.pointerEnter(screen.getByRole('button', { name: t('open.title', { app: zh['app.finder'] }) }))
     expect(await screen.findByText(t('open.title', { app: zh['app.finder'] }))).toBeTruthy()
   })
 })

@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
@@ -96,7 +98,7 @@ async function setupAllowedListTool() {
 let counter = 0
 
 function call(ctx: Context, args: unknown, signal = testToolSignal) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal,
     callId: ToolCallId(`list-models-${++counter}`),
     name: 'list_subagent_models',
@@ -171,6 +173,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -180,7 +183,7 @@ describe('list_subagent_models', () => {
 
     const parentContext = await setup({ provider: 'mock', withModelSelection: true, hostSelectionEnabled: false })
     const agent = modelSelectionSetupAgent(parentContext)
-    const result = await parentContext.tools.execute({
+    const result = await executeToolFixture(parentContext, {
       signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
       name: 'list_subagent_models', arguments: {}, agent,
     })
@@ -191,7 +194,7 @@ describe('list_subagent_models', () => {
   it('reads the recorded Session allowlist through the delegation plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal, callId: ToolCallId('recorded-routes'),
       name: 'list_subagent_models', arguments: {}, agent: modelSelectionSetupAgent(ctx),
     })
@@ -205,6 +208,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -344,7 +348,7 @@ describe('list_subagent_models', () => {
     const adapter = new CatalogAdapter(empty)
     const listModels = vi.spyOn(adapter, 'listModels')
     ctx.llm.registerAdapter(['alpha'], adapter)
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal, callId: ToolCallId('parent-only-discovery'),
       name: 'list_subagent_models', arguments: { provider: 'alpha' }, agent: modelSelectionSetupAgent(ctx),
     })

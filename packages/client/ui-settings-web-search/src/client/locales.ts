@@ -80,3 +80,34 @@ export const zh: Record<WebSearchSettingsLocaleKey, string> = {
 export function formLabels(t: (key: WebSearchSettingsLocaleKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'Web 検索',
+  'description': 'DeepSeek 検索プロバイダーを設定します。',
+  'useSearchApi': '新しい Web Search API を使用する',
+  'useSearchApiHint': 'デフォルトではオフです。検索は DeepSeek Messages 経由で実行されます。新しい Web Search API の機能と料金については、',
+  'searchGuide': '検索と取得のガイド',
+  'searchGuideUrl': 'https://api-docs.deepseek.com/guides/search',
+  'apiKey': 'API キー',
+  'apiKeyHint': '設定ファイルの外に保存されます。現在のキーを維持するには空欄のままにしてください。',
+  'apiKeySet': 'キーが設定されています。',
+  'apiKeyUnset': 'キーが設定されていません。DeepSeek Account のモデルを使用する会話のみ、デフォルトのエンドポイント経由で検索できます。',
+  'baseUrl': 'Messages API ベース URL',
+  'baseUrlHint': 'https://api.deepseek.com/anthropic/v1 など、API プレフィックスを含めてください。プロバイダーは /messages を追加します。デフォルトに戻すには空欄にしてください。',
+  'searchApiBaseUrl': 'Search / Fetch API ベース URL',
+  'searchApiBaseUrlHint': 'https://api.deepseek.com/v1/tools など、API プレフィックスを含めてください。プロバイダーは /search または /fetch を追加します。デフォルトに戻すには空欄にしてください。',
+  'maxUses': 'リクエストあたりの最大検索回数',
+  'maxUsesHint': '1 回の Messages リクエスト内で補助モデルが実行できる検索回数です。Messages API にのみ適用されます。',
+  'count': '検索あたりの結果数',
+  'countHint': 'クエリごとに返される結果数: 1〜50 の整数、デフォルトは 10 です。これは結果数であり、検索呼び出し数ではありません。web_search は自身の結果上限を超えるソースを保持しません。',
+  'overridden': '上書き済み',
+  'reset': 'デフォルトに戻す',
+  'readOnly': 'このデプロイでは設定は読み取り専用で保存されます。',
+  'unavailable': 'このプラグインは読み込まれていないため、現在設定できません。',
+  'save': '保存',
+  'saving': '保存中…',
+  'saveFailed': 'デプロイがこれらの値を受け入れませんでした。修正用に残されています。',
+  'invalidNumber': '数値を入力するか、デフォルトを使用するには空欄にしてください。',
+  'invalidCount': '1〜50 の整数を入力するか、デフォルトを使用するには空欄にしてください。',
+} satisfies Record<keyof typeof en, string>

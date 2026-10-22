@@ -380,17 +380,17 @@
                       "x": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "y": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       }
                     },
                     "required": [
@@ -579,17 +579,17 @@
                       "x": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "y": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "mouseButton": {
                         "type": "string",
@@ -983,17 +983,17 @@
                       "x": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "y": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "relative": {
                         "type": "boolean",
                         "const": true,
-                        "description": "Use integer thousandths of the window width and height, from 0 to 1000."
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "deltaLinesX": {
                         "type": "integer",
@@ -1142,27 +1142,28 @@
                       },
                       "relative": {
                         "type": "boolean",
-                        "const": true
+                        "const": true,
+                        "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "fromX": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "fromY": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "toX": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       },
                       "toY": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 1000
+                        "maximum": 999
                       }
                     },
                     "required": [
@@ -1261,22 +1262,6 @@
           "file_path",
           "old_string",
           "new_string"
-        ]
-      }
-    },
-    {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
         ]
       }
     },

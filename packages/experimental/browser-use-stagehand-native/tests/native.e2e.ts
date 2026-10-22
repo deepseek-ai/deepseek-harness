@@ -1,4 +1,5 @@
 /** Opt-in installed Stagehand smoke against an owned local page and optional real model. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { createServer } from 'node:http'
 import { execFile, spawn } from 'node:child_process'
@@ -49,7 +50,7 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1')('launches and attaches to insta
     ctx.llm.registerAdapter(['visual-fixture'], new ImageCapabilities())
     const harness = await mountAgentLoopTestHarness(ctx)
     const agent = await harness.create(SessionId('stagehand-live'), { provider: 'visual-fixture', model: 'vision' })
-    const execute = (suffix: string, args: unknown) => ctx.tools.execute({
+    const execute = (suffix: string, args: unknown) => executeToolFixture(ctx, {
       agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`live-${suffix}`), signal,
     })
     const launched = ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: executable })
@@ -123,7 +124,7 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1' || !process.env.DSH_STAGEHAND_MO
     await ctx.plugin(Provider, { model: stagehandModelSchema.parse({ modelName: process.env.DSH_STAGEHAND_MODEL, apiKey: process.env.DSH_STAGEHAND_MODEL_API_KEY }), mode: 'launch', ...process.env.DSH_BROWSER_EXECUTABLE === undefined ? {} : { executablePath: process.env.DSH_BROWSER_EXECUTABLE } })
     const harness = await mountAgentLoopTestHarness(ctx)
     const agent = await harness.create(SessionId('stagehand-real-model'), {})
-    const execute = (suffix: string, args: unknown) => ctx.tools.execute({ agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`api-${suffix}`), signal })
+    const execute = (suffix: string, args: unknown) => executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`api-${suffix}`), signal })
     const navigation = await execute('navigate', { url: `http://127.0.0.1:${address.port}` })
     expect(navigation.isError, JSON.stringify(navigation.content)).toBe(false)
     const result = await execute('extract', {
@@ -183,7 +184,7 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1' || process.platform === 'win32')
     await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: wrapper })
     const owner = await ctx.agents.create({ sessionId: SessionId('stagehand-stalled-init') })
-    const operation = owner.agent.runMaintenance(signal => ctx.tools.execute({
+    const operation = owner.agent.runMaintenance(signal => executeToolFixture(ctx, {
       agent: owner.agent, name: 'stagehand_tabs', arguments: { action: 'list' }, callId: ToolCallId('stalled-init'), signal,
     }))
     await connected.promise
@@ -232,7 +233,7 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1')('drains canceled navigation bef
     await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: executable })
     const owner = await ctx.agents.create({ sessionId: SessionId('stagehand-cancel-reconnect') })
-    const call = (method: string, args: unknown) => owner.agent.runMaintenance(signal => ctx.tools.execute({
+    const call = (method: string, args: unknown) => owner.agent.runMaintenance(signal => executeToolFixture(ctx, {
       agent: owner.agent, name: `stagehand_${method}`, arguments: args, callId: ToolCallId(`reconnect-${method}`), signal,
     }))
     expect((await call('navigate', { url: url.replace('/pending', '/retained') })).isError).toBe(false)

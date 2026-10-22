@@ -36,8 +36,10 @@
   cursor: pointer;
 }
 
-.nav:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .nav:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .nav:focus-visible {
@@ -82,8 +84,10 @@
   outline: none;
 }
 
-.cell:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .cell:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cell:focus-visible {

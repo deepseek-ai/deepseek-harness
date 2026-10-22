@@ -103,3 +103,9 @@ docs use public APIs from `cordis`; loader examples additionally use
 ## Volatile configuration
 
 Schemas may return `Volatile<T>` references, whose values are read through `.get()`. Cordis exports the consumer types; Loader commits volatile-only changes into the running references without restarting and notifies the owning fiber through `loader/volatile-update`. Direct `fiber.update()` retains its existing update waterfall and default restart.
+
+## Configuration access
+
+`fiber.rawConfig` reads or retains the raw input for a later activation. Assigning it does not validate, update the running instance or trigger a restart. Registry wrappers route raw writes, updates and restarts through the same canonical fiber. `fiber.resolveConfig(candidate)` evaluates the fiber's config hooks and schema without publishing the result; any services used by those hooks must already be available. `fiber.effectiveConfig` returns the lifecycle-published object without re-parsing, preserving the identity of volatile references. It is undefined before the first resolution and stays readable after unload, so consumers that require a running instance also check the fiber state.
+
+Use `fiber.update()` for an ordinary config change. Loader retains raw input separately when committing only volatile values into the running object.

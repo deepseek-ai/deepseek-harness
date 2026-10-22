@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Ralph ループ",
+    "description": "ユーザーが明示的に依頼した繰り返し作業を、新しいエージェントで実行します。",
+    "detail": "docs/DETAIL.md"
+  }
+}

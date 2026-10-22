@@ -1,4 +1,5 @@
 /** Built bridge imports and retained objects from a project outside the Harness installation. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -63,7 +64,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
         bindings: [{ global: 'tools', functions: { cua: async (args) => {
           const operation = Request.parse(args)
           calls.push({ phase, method: operation.method })
-          const result = await ctx.tools.execute({ agent: handle.agent, signal: new AbortController().signal,
+          const result = await executeToolFixture(ctx, { agent: handle.agent, signal: new AbortController().signal,
             callId: ToolCallId(`external-cua-${++count}`), name: 'cua', arguments: operation })
           images += result.content.filter(block => block.type === 'image').length
           return result.value ?? null

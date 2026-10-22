@@ -18,7 +18,7 @@ A plugin market is one JSON index file that lists installable DSH bundles with t
 <a id="turn-on"></a>
 ## Turn on Discover
 
-Open **Plugins**, select **More** beside **Experimental plugins**, find **Custom plugin markets**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
+Open **Plugins**, find **Custom plugin markets** under **Experimental plugins**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
 
 DSH ships no index source. Select **Discover**, choose **Add index source**, and enter the URL of an index file. A URL must use `http:` or `https:` and must not contain a user name, password, or `#` fragment. Anyone on the network path can change an `http:` index, including the install specs it lists, so use `https:` for a market reached over a network you do not control. Each source belongs to the current profile.
 

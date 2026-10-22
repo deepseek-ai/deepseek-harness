@@ -4,23 +4,24 @@
  * catalog injection, unavailable-model refusals, and the prompt-assembly
  * boundary for a running selection change.
  */
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
-  GenerateOptions, LlmCallConfig, LlmCallConfigAdapterDefaults, LlmModelInfo,
+  GenerateOptions, LlmCallConfigAdapterDefaults, LlmModelInfo,
   LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
-import { ApiSessionAgentController } from '../src/agent.ts'
 import { buildModelCatalog, hasProviderApiKey } from '../src/catalog.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -126,55 +127,30 @@ async function harness(logged?: {
       reason: 'initial',
     })
   }
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  const options = {
+    get provider() { return ctx.agentDefaultModel.currentSelection().provider },
+    get model() { return ctx.agentDefaultModel.currentSelection().model },
+    get reasoningEffort() { return ctx.agentDefaultModel.currentSelection().reasoningEffort },
+  }
   const agent = {
     id: session.id,
+    options,
+    model: new AgentModel(() => projection.stateOf(session), session, options),
     session,
     status: 'running',
     ctx,
-    inbox: { nextTurn: [], nextStep: [] },
-  } as unknown as Agent
+    inbox: createInboxStub(),
+    whenIdle: vi.fn(() => Promise.resolve()),
+    runMaintenance: async () => { throw new Error('unexpected maintenance') },
+    send: vi.fn(),
+    inject: vi.fn(),
+    cancel: vi.fn(),
+    followup: vi.fn(),
+    steer: vi.fn(),
+  } satisfies Agent
   await ctx.agents.register(agent)
   return { ctx, agent, sessionId: session.id }
-}
-
-/** An image store whose saved attachments are one-pixel PNGs. */
-function provideImageStore(ctx: Context): void {
-  const attachments = {
-    imageLimits: {
-      maxImageBytes: 4,
-      maxImagesPerMessage: 2,
-      maxMessageImageBytes: 4,
-      maxImagePixels: 4,
-      maxImageDimension: 2000,
-      mediaTypes: ['image/png'],
-    },
-    validateImage: () => Promise.resolve(),
-    saveImage: (input: { data: Uint8Array; mediaType: 'image/png' }) => Promise.resolve({
-      attachmentId: `att-${String(input.data[0])}`, mediaType: input.mediaType, bytes: input.data.byteLength, width: 1, height: 1,
-    }),
-  }
-  ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
-}
-
-/** A queued prompt with its text, after a one-pixel image when `withImage` is set. */
-function imagePrompt(sessionId: SessionId, text: string, withImage: boolean): SessionPromptRequest {
-  return promptRequest({
-    sessionId,
-    mode: 'queue',
-    content: [
-      ...withImage ? [{ type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==' }] : [],
-      { type: 'text' as const, text },
-    ],
-  })
-}
-
-function textOf(message: UserMessage): string {
-  return message.content.map(block => block.type === 'text' ? block.text : '').join('')
-}
-
-/** Let pending prompts run as far as they can. */
-async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => { setImmediate(resolve) })
 }
 
 function expectValue<T>(result: { ok: true; value: T } | { ok: false }): T {
@@ -353,110 +329,6 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('admits image prompts in arrival order behind an image prompt that a listener holds', async () => {
-    const { ctx, agent, sessionId } = await harness()
-    provideImageStore(ctx)
-    const followed: string[] = []
-    Object.assign(agent, { followup: (message: UserMessage) => { followed.push(textOf(message)) } })
-    const release = Promise.withResolvers<undefined>()
-    ctx.on('agent-controller/admission', async ({ message }, next) => {
-      if (textOf(message) === 'held') await release.promise
-      return await next()
-    })
-    const remote = await createSessionTestRemote(ctx, {
-      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      cwd: '/tmp',
-    })
-
-    const prompts = [
-      remote.prompt(imagePrompt(sessionId, 'held', true)),
-      remote.prompt(imagePrompt(sessionId, 'second image', true)),
-      remote.prompt(imagePrompt(sessionId, 'third text', false)),
-    ]
-    await settle()
-    expect(followed).toEqual([])
-    release.resolve(undefined)
-    expect((await Promise.all(prompts)).map(result => result.ok)).toEqual([true, true, true])
-    expect(followed).toEqual(['held', 'second image', 'third text'])
-    await ctx.fiber.dispose()
-  })
-
-  it('keeps a model selection behind the image prompt being admitted but not behind one still queued', async () => {
-    const { ctx, agent, sessionId } = await harness()
-    registerTextOnly(ctx)
-    provideImageStore(ctx)
-    const events: string[] = []
-    Object.assign(agent, { followup: (message: UserMessage) => { events.push(`admitted ${textOf(message)}`) } })
-    const releases = new Map([['held image', Promise.withResolvers<undefined>()], ['held text', Promise.withResolvers<undefined>()]])
-    ctx.on('agent-controller/admission', async ({ message }, next) => {
-      await releases.get(textOf(message))?.promise
-      return await next()
-    })
-    const remote = await createSessionTestRemote(ctx, {
-      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      cwd: '/tmp',
-    })
-    const select = () => remote.selectModel(request({ sessionId, provider: 'text-only', model: 'plain' }))
-      .then((result) => { events.push('selected'); return result })
-
-    // A held image prompt was checked against the current model, so the selection waits for its append.
-    const heldImage = remote.prompt(imagePrompt(sessionId, 'held image', true))
-    await settle()
-    const first = select()
-    await settle()
-    expect(events).toEqual([])
-    releases.get('held image')?.resolve(undefined)
-    expect((await heldImage).ok).toBe(true)
-    expect((await first).ok).toBe(true)
-    expect(events).toEqual(['admitted held image', 'selected'])
-
-    // An image prompt queued behind a held text prompt has not been checked yet, so the selection does not wait for it.
-    const heldText = remote.prompt(imagePrompt(sessionId, 'held text', false))
-    const queuedImage = remote.prompt(imagePrompt(sessionId, 'queued image', true))
-    await settle()
-    expect((await select()).ok).toBe(true)
-    expect(events).toEqual(['admitted held image', 'selected', 'selected'])
-    releases.get('held text')?.resolve(undefined)
-    expect((await heldText).ok).toBe(true)
-    expect(await queuedImage).toMatchObject({
-      ok: false, error: { code: 'session/attachment-invalid', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } },
-    })
-    expect(events).toEqual(['admitted held image', 'selected', 'selected', 'admitted held text'])
-    await ctx.fiber.dispose()
-  })
-
-  it('passes the image admission turn on when the sender of a waiting image prompt leaves', async () => {
-    const { ctx, agent, sessionId } = await harness()
-    provideImageStore(ctx)
-    const followed: string[] = []
-    Object.assign(agent, { followup: (message: UserMessage) => { followed.push(textOf(message)) } })
-    const listing = Promise.withResolvers<readonly LlmModelInfo[]>()
-    ctx.llm.registerAdapter(['gated'], new class extends CatalogAdapter {
-      override listModels(): Promise<readonly LlmModelInfo[]> {
-        return listing.promise
-      }
-    }('Gated', []))
-    const remote = await createSessionTestRemote(ctx, {
-      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      cwd: '/tmp',
-    })
-
-    // The selection holds the image admission turn while the provider lists its models.
-    const selection = remote.selectModel(request({ sessionId, provider: 'gated', model: 'slow' }))
-    await settle()
-    const sender = new AbortController()
-    const leaving = remote.prompt(imagePrompt(sessionId, 'left', true), sender.signal)
-    await settle()
-    sender.abort(new Error('client left'))
-    expect(await leaving).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
-
-    listing.resolve([{ provider: 'gated', id: 'slow', name: 'Slow' }])
-    expect((await selection).ok).toBe(true)
-    expect((await remote.prompt(imagePrompt(sessionId, 'after', true))).ok).toBe(true)
-    expect(followed).toEqual(['after'])
-    await ctx.fiber.dispose()
-  })
-
   it('authorizes attachment bytes only when the session event stream references the id', async () => {
     const { ctx, agent, sessionId } = await harness()
     const ref = {
@@ -632,11 +504,9 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects unlisted models and switches available models only after the next assembly', async () => {
+  it('rejects unlisted models and records validated selections for the next step', async () => {
     const { ctx, agent, sessionId } = await harness()
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })
-    const seed: LlmCallConfig = { provider: 'seed', model: 'seed', temperature: 0.2 }
-    const signal = new AbortController().signal
 
     expect(currentSelection(ctx, sessionId))
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
@@ -652,18 +522,9 @@ describe('Web session model selection', () => {
       model: 'deepseek-reasoner',
       reasoningEffort: 'max',
     })
-    await expect(agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
-    )).resolves.toEqual(seed)
-
-    expect((await ctx.systemPrompt.assemble()).variables)
-      .toMatchObject({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await expect(agentEvents(ctx, agent).waterfall(
-      'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve(seed),
-    )).resolves.toMatchObject({
-      provider: 'deepseek-official',
-      model: 'deepseek-reasoner',
-      reasoningEffort: 'max',
+    expect(agent.model.current()).toEqual(selected.selected)
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'model/selection', data: selected.selected,
     })
 
     const unsupported = await remote.selectModel(request({
@@ -710,23 +571,43 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('reads the Agent default live for a session whose log names no selection', async () => {
-    const { ctx, sessionId } = await harness()
+  it('follows default changes until an explicit selection through the Web create entrypoint', async () => {
+    const { ctx, agent: template } = await harness()
+    onTestFinished(() => ctx.fiber.dispose())
     let stored = { provider: 'deepseek-official', model: 'deepseek-chat' }
-    await createSessionTestRemote(ctx, {
+    const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => stored,
+      saveDefaultModelSelection: (selection) => { stored = selection },
       cwd: '/tmp',
     })
-
-    expect(currentSelection(ctx, sessionId))
-      .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
-    // The default moving after the session exists still reaches it: New
-    // Session reuses a blank session rather than minting another, so a seed
-    // captured at creation would show the superseded model there.
+    ctx.agents.setFactory({
+      async createAgent(ownerCtx, options) {
+        const session = ctx.sessions.create(options.sessionId)
+        const agentOptions = options.agentOptions ?? {}
+        const projection = await ownerCtx.sessionProjections.register(modelSelectionProjectionDefinition)
+        const model = new AgentModel(() => projection.stateOf(session), session, agentOptions)
+        const agent: Agent = { ...template, id: session.id, session, ctx: ownerCtx, options: agentOptions, model }
+        await options.setup?.(ownerCtx, agent)
+        await ctx.agents.register(agent)
+        return { agent, dispose: () => Promise.resolve() }
+      },
+      resume: () => Promise.reject(new Error('unexpected resume')),
+    })
+    const first = expectValue(await remote.create({ cwd: '/tmp' }))
+    const second = expectValue(await remote.create({ cwd: '/tmp' }))
+    const agent = ctx.agents.get(first.sessionId)!
+    expect(agent.model.current()).toEqual(stored)
     stored = { provider: 'deepseek-official', model: 'deepseek-reasoner' }
-    expect(currentSelection(ctx, sessionId))
-      .toEqual({ provider: 'deepseek-official', model: 'deepseek-reasoner' })
-    await ctx.fiber.dispose()
+    expect(agent.model.current()).toEqual(stored)
+    const selection = { ...stored, reasoningEffort: ReasoningEffortId('high') }
+    // The explicit selection is identical to the live fallback, including effort.
+    stored = selection
+    expectValue(await remote.selectModel({ sessionId: first.sessionId, ...selection }))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'model/selection'))
+      .toMatchObject([{ data: selection }])
+    expectValue(await remote.selectModel({ sessionId: second.sessionId, provider: 'deepseek-official', model: 'deepseek-chat' }))
+    expect(agent.model.current()).toEqual(selection)
+    expect(currentSelection(ctx, first.sessionId)).toEqual(selection)
   })
 
   it('keeps a session on its logged selection when the Agent default differs', async () => {
@@ -758,9 +639,7 @@ describe('Web session model selection', () => {
       cwd: '/tmp',
     })
 
-    const controller = new ApiSessionAgentController(ctx)
-    await controller.initialize()
-    expect(controller.selectionFor(agent).current)
+    expect(agent.model.current())
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     await ctx.fiber.dispose()
   })
@@ -827,9 +706,10 @@ describe('Web session model selection', () => {
     const stillAccepted = expectValue(await remote.selectModel(request({
       sessionId, provider: 'deepseek-official', model: 'deepseek-chat',
     })))
-    expect(stillAccepted.selected).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
+    expect(stillAccepted.selected).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     expect(currentSelection(ctx, sessionId))
-      .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat', reasoningEffort: 'high' })
+      .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
+    expect(saved[1]).toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
     await expect.poll(() => warn.mock.calls).toContainEqual([
       'session-controller: model selection changed for the Session but the default was not saved: Error: read-only document',
     ])
@@ -911,6 +791,33 @@ describe('Web session model selection', () => {
     expect(followup).toHaveBeenCalledOnce()
     expect(agent.session.snapshotEvents()).toEqual(events)
     expect(currentSelection(ctx, sessionId)).toMatchObject({ provider: 'deepseek-official', model: 'removed-model' })
+    await ctx.fiber.dispose()
+  })
+
+  it('admits Markdown blockquote text without source metadata', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    expectValue(await remote.prompt(promptRequest({
+      sessionId,
+      mode: 'queue',
+      content: [
+        { type: 'text', text: 'Question:\n\n' },
+        { type: 'text', text: '> quoted source' },
+      ],
+    })))
+    const message = followup.mock.calls[0]?.[0] as UserMessage
+    expect(message.content).toEqual([
+      { type: 'text', text: 'Question:\n\n' },
+      { type: 'text', text: '> quoted source' },
+    ])
+    expect(message.source.kind).toBe('user')
+    expect(message.source).not.toHaveProperty('quotes')
+
     await ctx.fiber.dispose()
   })
 

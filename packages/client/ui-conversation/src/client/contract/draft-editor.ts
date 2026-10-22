@@ -22,6 +22,14 @@ export interface ReferenceInsert {
 /** Persisted reference data without the current editor's occurrence identity. */
 export type DraftReference = Omit<Occurrence, 'occurrenceId'>
 
+/** One atomic quote in clipboard-text coordinates. */
+export interface DraftQuote {
+  readonly offset: number
+  readonly length: number
+  /** Selected text before Markdown quote prefixes are added. */
+  readonly text: string
+}
+
 /**
  * Persisted command chip opening a draft. The claim itself (its submit
  * closure) is not persisted; the input rebuilds it from the token through the
@@ -41,6 +49,7 @@ export interface DraftSnapshot {
   readonly text: string
   readonly references: readonly DraftReference[]
   readonly command?: DraftCommand
+  readonly quotes?: readonly DraftQuote[]
 }
 
 /** Plain initial text or an existing document with explicit reference identities. */

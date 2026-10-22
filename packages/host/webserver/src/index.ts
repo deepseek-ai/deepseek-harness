@@ -1,8 +1,8 @@
 /**
  * @deepseek-ai/dsh-host-webserver — node:http route registration — node:https
- * when `tls` names a certificate and key — with optional gzip, index injection,
- * and one fallback seat. It knows no harness concepts and serves no files; the
- * composing application owns dist serving. Electron uses file:// plus IPC
+ * when `tls` names a certificate and key — with optional gzip, index injection
+ * for the Peer a page speaks for, and one fallback seat. It serves no files;
+ * the composing application owns dist serving. Electron uses file:// plus IPC
  * instead, and this package never prints the URL.
  * Route handlers retain direct response ownership.
  */
@@ -16,6 +16,7 @@ import { resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import compressionMiddleware from 'compression'
 import ipaddr from 'ipaddr.js'
 import Negotiator from 'negotiator'
@@ -30,13 +31,15 @@ declare module '@deepseek-ai/cordis' {
   }
   interface Events {
     /**
-     * Collect the structured index injection table. Emitted on every index
-     * render and every worker boot-payload request; listeners push their
-     * current rows, so a row's data is read fresh at emit time.
+     * Collect the structured index injection table for the page `peer` speaks
+     * for. Emitted on every index render and every worker boot-payload
+     * request; listeners push their current rows, so a row's data is read
+     * fresh at emit time.
      * @param table - Mutable row table; listeners append in activation order.
+     * @param peer - The Peer the rendered page speaks for.
      * @mode emit
      */
-    'webserver/index-inject'(table: IndexInjection[]): void
+    'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
   }
 }
 
@@ -564,25 +567,28 @@ export class WebServer extends Service {
   }
 
   /**
-   * Gather the structured injection table: one `webserver/index-inject` emit,
-   * every subscriber pushes its current rows. Fresh per call, so subscribers
-   * read live state (module graph, theme preference) at emit time.
+   * Gather the structured injection table for one Peer: one
+   * `webserver/index-inject` emit, every subscriber pushes its current rows.
+   * Fresh per call, so subscribers read live state (module graph, theme
+   * preference, the Peer's access) at emit time.
+   * @param peer - the Peer the page speaks for.
    * @returns rows in subscriber activation order.
    */
-  collectIndexInjections(): IndexInjection[] {
+  collectIndexInjections(peer: PeerScope): IndexInjection[] {
     const table: IndexInjection[] = []
-    this.ctx.emit('webserver/index-inject', table)
+    this.ctx.emit('webserver/index-inject', table, peer)
     return table
   }
 
   /**
-   * Render one index.html body: the structured injection table first, then
-   * the raw `tapIndex` transforms over the result.
+   * Render one index.html body for one Peer: the structured injection table
+   * first, then the raw `tapIndex` transforms over the result.
    * @param html - the raw index.html body.
+   * @param peer - the Peer the page speaks for.
    * @returns the transformed body.
    */
-  renderIndex(html: string): string {
-    return this.applyIndexTaps(renderIndexInjections(html, this.collectIndexInjections()))
+  renderIndex(html: string, peer: PeerScope): string {
+    return this.applyIndexTaps(renderIndexInjections(html, this.collectIndexInjections(peer)))
   }
 }
 

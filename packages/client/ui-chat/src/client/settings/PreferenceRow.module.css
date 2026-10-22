@@ -17,6 +17,14 @@
   padding-right: 48px;
 }
 
+/* Narrow settings panel: the 48px gutter separates the label from its control
+   across a wide row and only squeezes the label here. */
+@media (max-width: 767px) {
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .rowText {
+    padding-right: 16px;
+  }
+}
+
 .title {
   font-size: 14px;
   font-weight: 400;
@@ -47,8 +55,10 @@
   cursor: pointer;
 }
 
-.selector:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .selector:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .chevron {

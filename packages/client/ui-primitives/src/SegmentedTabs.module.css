@@ -30,10 +30,16 @@
   transition: color 180ms ease;
 }
 
-.tab:hover,
 .tab[aria-selected='true'] {
   background: transparent;
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .tab[aria-selected='true'] {

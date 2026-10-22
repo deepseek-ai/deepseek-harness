@@ -1,0 +1,21 @@
+/**
+ * Installation-owned lists of official DSH bundle packages, kept apart from the boot code that applies them.
+ * @module @deepseek-ai/dsh-official-bundles
+ */
+
+import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
+
+export {
+  DEFAULT_PROFILE_BUNDLES, INSTALLATION_OWNED_PROFILE_TUPLES, ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES, PROFILE_TEMPLATES,
+  RETIRED_BUNDLES, type ProfileTemplate,
+} from './bundles.ts'
+
+/** Offline discovery metadata; installation state and the requested version belong to the running host. */
+export interface OfficialBundleCatalogEntry {
+  /** Exact npm package name accepted by the existing bundle installer. */
+  readonly packageName: string
+  /** Package-owned localized text and a self-contained icon, embedded without provider code. */
+  readonly meta: Required<Pick<PluginLocalizedMeta, 'title' | 'description' | 'icon'>>
+}
+
+export { OFFICIAL_ON_DEMAND_CATALOG } from './catalog.generated.ts'

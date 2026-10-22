@@ -2,7 +2,7 @@
  * Language row registration, snapshot projection into the row store, and
  * recovery after an HMR collapse of the declaring entry. */
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
@@ -155,7 +155,7 @@ describe('locale apply', () => {
     const { entry, instance, face } = faceOf(b.slots)
     // The inject-time re-sync sealed the init window: the mirror is current.
     expect(instance.getSnapshot().active).toBe('en')
-    expect(instance.getSnapshot().options.map(o => o.id)).toEqual(['zh', 'en'])
+    expect(instance.getSnapshot().options.map(o => o.id)).toEqual(['zh', 'en', 'ja'])
     // Copy rides the standard locale seat: the entry declares the namespace.
     expect(entry.locale).toBe(SETTINGS_NS)
     expect(locale.bind(SETTINGS_NS)('language.title')).toBe('Language')
@@ -176,7 +176,7 @@ describe('locale apply', () => {
     const languagePack = b.ctx.plugin({
       inject: ['locale'],
       apply: packCtx => packCtx.effect(
-        () => packCtx.locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' }),
+        () => packCtx.locale.addLanguage({ id: 'fr', label: 'Français', fallback: 'en' }),
         'test language pack registration',
       ),
     })
@@ -185,10 +185,35 @@ describe('locale apply', () => {
       { id: 'zh', label: '中文' },
       { id: 'en', label: 'English' },
       { id: 'ja', label: '日本語' },
+      { id: 'fr', label: 'Français' },
     ])
 
     await languagePack.dispose()
-    expect(instance.getSnapshot().options.map(option => option.id)).toEqual(['zh', 'en'])
+    expect(instance.getSnapshot().options.map(option => option.id)).toEqual(['zh', 'en', 'ja'])
+  })
+
+  it('restores Japanese from the Host and releases its language and dictionaries on unload', async () => {
+    const b = await bench('ja')
+    onTestFinished(() => b.ctx.fiber.dispose())
+    declareItems(b.slots)
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const locale = b.ctx.get('locale') as LocaleRuntime
+    const { instance, face } = faceOf(b.slots)
+    expect(instance.getSnapshot().active).toBe('ja')
+    expect(locale.bind(SETTINGS_NS)('language.title')).toBe('言語')
+    expect(locale.bind('common')('cancel')).toBe('キャンセル')
+    face.setLocale('en')
+    face.setLocale('ja')
+    await vi.waitFor(() => { expect(b.mutate).toHaveBeenCalledTimes(2) })
+    expect(b.mutate.mock.calls.at(-1)?.[1]).toEqual([{ op: 'set', path: ['preference'], value: 'ja' }])
+    await fiber.dispose()
+    expect(locale.getSnapshot().locales.map(option => option.id)).toEqual(['zh', 'en'])
+    expect(() => { locale.setLocale('ja') }).toThrow('not registered')
+    const remove = locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
+    locale.setLocale('ja')
+    expect(locale.bind('common')('cancel')).toBe('cancel')
+    remove()
   })
 
   it('loads and refreshes the explicit Host preference after nonblocking activation', async () => {

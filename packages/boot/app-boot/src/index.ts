@@ -29,7 +29,6 @@ import { ProfileRuntimeResolution, type RuntimeResolution } from './profile.ts'
 import { ResolutionRestartRequired } from './profile-resolution/resolver.ts'
 export { prepareProfileEntries, prepareProfilePatches } from './compatibility-preflight.ts'
 export { readPluginMeta, resolvePluginResource } from './package-meta.ts'
-export { ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, type OfficialBundleCatalogEntry } from './official-bundles.ts'
 export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
 export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
 export { isNativeConfigSchema } from './config-schema/native.ts'
@@ -59,8 +58,6 @@ export {
   composeEntries,
   createRuntimeResolution,
   ProfileRuntimeResolution,
-  DEFAULT_PROFILE_BUNDLES,
-  OPTIONAL_BUNDLES,
   bundlePatchFiles,
   bundlePatchPaths,
   initProfile,
@@ -68,7 +65,6 @@ export {
   loadProfile,
   loadProfileDirectory,
   PROFILE_PATCH_FILENAME,
-  PROFILE_TEMPLATES,
   PROFILES_DIR,
   readProfileManifest,
   reportSkippedBundles,
@@ -83,7 +79,6 @@ export {
   type RuntimeResolutionOptions,
   type RuntimeResolutionEntry,
   type RuntimeResolution,
-  type ProfileTemplate,
 } from './profile.ts'
 export {
   PluginPackages,
@@ -950,6 +945,8 @@ const FIBER_DISPOSED = 4 as FiberState.DISPOSED
  */
 const requiredStartupEntryIds = new Set<string>([
   'agent-loop',
+  'tool-executor-native',
+  'tool-executor-ptc',
   'webserver',
   'web-runtime',
   'modules',

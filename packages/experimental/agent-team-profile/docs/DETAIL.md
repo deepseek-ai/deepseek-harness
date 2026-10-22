@@ -3,7 +3,7 @@ Ask the agent you are talking to, the lead, to split a job. It creates subagents
 ## How to use
 
 - Ask in plain words, for example: "Use Agent Teams to split this task between two teammates, wait, and summarize."
-- Click **Agent Team** next to the conversation title to see **Shared tasks**. Each task shows its status, **Owner**, **Write scopes**, and the tasks it is **Blocked by**.
+- Click **Task board** next to the conversation title to see **Shared tasks**. Each task shows its status, **Owner**, **Write scopes**, and the tasks it is **Blocked by**.
 - Use the conversation's subagent links to open a teammate's conversation and talk to it there.
 - The panel is read-only. To change tasks or teammates, ask the lead.
 

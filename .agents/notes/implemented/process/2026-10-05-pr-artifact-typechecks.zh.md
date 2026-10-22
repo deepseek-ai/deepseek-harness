@@ -20,7 +20,7 @@ Python executable builder 在验证 runtime closure 后，通过 `--build-artifa
 
 CI 的 PR 产物构建调用 root manifest 中的 `build:artifacts`；修改 root manifest 中这些 script 的 PR 会激活独立的 native-addon 平台矩阵，[构建拆分](2026-10-11-build-artifacts-check-split.zh.md)记录这一取舍。vendor 演练与 benchmark lane 直接调用内部 build helper。
 
-job 清单、runner 选择和 benchmark sample 数量保持固定；gate 与 worker 上限不提高。两个 compatibility case 每次运行一个 job；双目标 Python runtime 矩阵在 keyless Python SDK job 成功后启动。四个 Linux lane、Python SDK、三个 Windows lane 和一个 compatibility job，初始最多占用九个 worker job。SDK job 完成后，剩余七个独立 lane、一个 compatibility job 和两个 runtime target，最多占用十个 job。runtime plan 与 wheel 阶段先于这些 target，各占一个 job。这允许 runtime 验证与 Node 24.9 构建重叠，同时保持原有十个 job 的上限。覆盖率分区在各自的平台和 runner pool 内复用精简的文件成本元数据。并行 release 打包使用 pnpm 现有的有界调度器；串行发布保持 family 顺序。
+job 清单、runner 选择和 benchmark sample 数量保持固定；gate 与 worker 上限不提高。两个 compatibility case 每次运行一个 job；两个 x64 Python runtime target 都在 CI Python 中于 keyless Python SDK job 成功后启动。四个 Linux lane、一个 compatibility job、三个 Windows lane 与 Python SDK job，初始最多占用九个 worker job。SDK job 完成后，这四个 Linux lane、一个 compatibility job 与三个 Windows lane 与两个 runtime target 并行，最多占用十个 job。每个 runtime 调用方的 plan 与 wheel 阶段先于其 target，各占一个 job。这允许 runtime 验证与 Node 24.9 构建重叠，同时保持原有十个 job 的上限。覆盖率分区在各自的平台和 runner pool 内复用精简的文件成本元数据。并行 release 打包使用 pnpm 现有的有界调度器；串行发布保持 family 顺序。
 
 每个 Node 版本在一次串行 Vitest 调用中运行相同的八个 source compatibility spec。文件并行和 CLI worker 上限均固定为一，gate 还设置 `VITEST_MAX_WORKERS=1`，因为该环境变量会覆盖 Vitest 的 CLI 上限。文件保持 fork 隔离；依赖构建的 Node 24.9 lazy-search smoke 保留独立的 build 依赖。原来七个 spec 的成对样本保持全部 253 个 assertion outcome，将启动开销比较的 median 从 11.52 秒降至 8.69 秒，且不增加所拥有 descendant process 的峰值。
 

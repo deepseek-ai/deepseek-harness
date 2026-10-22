@@ -3,13 +3,14 @@
  * metadata-only listing, Agent-free history reads, subagent ownership
  * isolation, and prompt failure mapping.
  */
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -17,7 +18,7 @@ import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createInboxStub, mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
-import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import {
@@ -726,9 +727,14 @@ describe('subagent ownership fence', () => {
       inheritedEventCount: SessionLogOffset(1),
     })
     const followup = vi.fn()
-    const agent = {
-      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
-    } as unknown as Agent
+    const agent: Agent = {
+      id: session.id, session, model: await modelFor(ctx, session),
+      options: { provider: 'p', model: 'm' },
+      inbox: inboxFor(), status: 'idle', ctx, followup,
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(), steer: vi.fn(),
+    }
     await ctx.agents.register(agent)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
@@ -748,9 +754,14 @@ describe('subagent ownership fence', () => {
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-browser-zone'), { meta: { cwd: '/proj' } })
     const followup = vi.fn()
-    const agent = {
-      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
-    } as unknown as Agent
+    const agent: Agent = {
+      id: session.id, session, model: await modelFor(ctx, session),
+      options: { provider: 'p', model: 'm' },
+      inbox: inboxFor(), status: 'idle', ctx, followup,
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(), steer: vi.fn(),
+    }
     await ctx.agents.register(agent)
     const remote = await createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
@@ -861,6 +872,11 @@ describe('degenerate composition (no persistence, no factory)', () => {
   })
 })
 
+async function modelFor(ctx: Context, session: Session): Promise<AgentModel> {
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  return new AgentModel(() => projection.stateOf(session), session, { provider: 'p', model: 'm' })
+}
+
 describe('sessions.prompt synchronous rejection', () => {
   it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
     const ctx = new Context()
@@ -868,17 +884,25 @@ describe('sessions.prompt synchronous rejection', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const session = ctx.sessions.create(sid('session-empty-prompt'))
+    const options = { provider: 'p', model: 'm' }
     const followup = vi.fn()
     const steer = vi.fn()
     await ctx.agents.register({
       id: session.id,
+      options,
+      whenIdle: vi.fn(() => Promise.resolve()),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(),
+      inject: vi.fn(),
+      cancel: vi.fn(),
       session,
+      model: await modelFor(ctx, session),
       inbox: inboxFor(),
       status: 'idle',
       ctx,
       followup,
       steer,
-    } as unknown as Agent)
+    } satisfies Agent)
     const savedImage = {
       attachmentId: 'accepted-image',
       mediaType: 'image/png' as const,
@@ -970,12 +994,17 @@ describe('sessions.prompt synchronous rejection', () => {
     await ctx.agents.register({
       id: session.id,
       session,
+      model: await modelFor(ctx, session),
       inbox: inboxFor(),
       status: 'idle',
       ctx,
+      options: { provider: 'p', model: 'm' },
+      cancel: vi.fn(), whenIdle: () => Promise.resolve(),
+      runMaintenance: async () => { throw new Error('unexpected maintenance') },
+      send: vi.fn(), inject: vi.fn(),
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
       steer: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
-    } as unknown as Agent)
+    })
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     for (const mode of ['queue', 'steer'] as const) {

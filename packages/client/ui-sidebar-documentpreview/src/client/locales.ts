@@ -60,3 +60,29 @@ export const en = {
   'error.unavailable': 'Read failed: {message}',
   retry: 'Retry',
 } satisfies Record<SidebarDocumentPreviewKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'loading': 'ドキュメントをレンダリング中…',
+  'loadMore': 'さらに読み込む',
+  'changed': 'ファイルが変更されました。以前の内容を表示しています。',
+  'reloadNow': '再読み込み',
+  'reload': 'ファイルを再度読み込む',
+  'autoRefresh': '自動更新',
+  'autoRefresh.enable': '自動更新を有効にする',
+  'autoRefresh.disable': '自動更新を無効にする',
+  'wrap.enable': '行の折り返しをオンにする',
+  'wrap.disable': '行の折り返しをオフにする',
+  'wrap.aria': '行の折り返し',
+  'openWith': 'アプリで開く',
+  'viewer.text': 'プレーンテキスト',
+  'resourceUnavailable': 'ファイルリソースサービスを利用できません。',
+  'rendererUnavailable': '{name} のプレビューを利用できません。',
+  'unsupportedFile': 'このファイル形式のプレビューはまだ利用できません。',
+  'error.notFound': 'ファイルが見つかりません。移動または削除された可能性があります。',
+  'error.tooLarge': 'このページは {limit} の上限を超えているため読み込めません。',
+  'error.notText': 'このファイル形式のプレビューはまだ利用できません。',
+  'error.notRegularFile': '通常のファイルではないため、表示する内容がありません。',
+  'error.unavailable': '読み込みに失敗しました: {message}',
+  'retry': '再試行',
+} satisfies Record<keyof typeof en, string>

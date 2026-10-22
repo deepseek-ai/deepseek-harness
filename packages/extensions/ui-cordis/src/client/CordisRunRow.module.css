@@ -89,13 +89,18 @@
   opacity: 0;
 }
 
-.card:hover .inspect,
 .inspect:focus-visible {
   opacity: 1;
 }
 
-.inspect:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .card:hover .inspect {
+    opacity: 1;
+  }
+
+  .inspect:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .message {
@@ -131,4 +136,10 @@
 .business .output {
   border: none;
   border-radius: 0;
+}
+
+@media (hover: none) {
+  .inspect {
+    opacity: 1;
+  }
 }

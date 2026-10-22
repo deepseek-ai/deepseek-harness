@@ -57,6 +57,25 @@ it('shows loading then a workbook with editing and recalculation disabled', asyn
   expect(signal.aborted).toBe(true)
 })
 
+it('opens the formula warning by touch and closes it on an outside press', async () => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+  mocked.parse.mockResolvedValue(formulaValue)
+  const view = render(<ExcelBody {...loadedProps} />)
+  const warning = await screen.findByRole('button', { name: en.formulaWarning })
+  fireEvent.pointerEnter(warning, { pointerType: 'touch' })
+  fireEvent.pointerDown(warning, { pointerType: 'touch' })
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
+  fireEvent.click(warning)
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe(en.formulaWarning)
+  expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
+  fireEvent.pointerDown(document.body, { pointerType: 'touch' })
+  expect(document.querySelector('[role="tooltip"]')).toBeNull()
+})
+
 it.each([en, zh])('lists only detected unsupported content and clears the notice on file replacement', async (dictionary) => {
   const t = makeTranslate(dictionary)
   mocked.parse.mockResolvedValueOnce({ ...formulaValue, unsupportedFeatures: ['charts', 'images', 'shapes', 'conditionalFormatting'] })

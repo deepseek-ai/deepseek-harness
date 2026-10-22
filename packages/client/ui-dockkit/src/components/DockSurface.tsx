@@ -47,9 +47,9 @@ export interface DockSurfaceProps {
    */
   readonly canAddTab?: (paneId: PaneId) => boolean
   /**
-   * Whether a tab draws its close control and its menu's close item. Called
+   * Whether a tab may close via its close control, menu item, or middle click. Called
    * per rendered chip on every render; omit to keep every tab closable.
-   * `false` removes both routes without moving the chip: the close control
+   * `false` blocks these routes without moving the chip: the close control
    * paints over the title's end rather than beside it, so the chip is the same
    * width either way. The menu still opens and carries the embedder's items.
    */

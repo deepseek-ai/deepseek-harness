@@ -23,6 +23,9 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/japanese-plugin-metadata.e2e.ts",
+    "tests/rich-text-quotes.e2e.ts",
+    "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
     "tests/notice-wake-tail.e2e.ts",
     "tests/fold-blank-matrix.e2e.ts",
@@ -59,6 +62,7 @@
     "tests/subagent-fork-schedule.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",
+    "tests/question-ptc.e2e.ts",
     "tests/approval-composer.e2e.ts",
     "tests/ptc-escalation.e2e.ts",
     "tests/standalone-string-editor.e2e.ts",
@@ -88,6 +92,7 @@
     "tests/cua-optin.e2e.ts",
     "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
+    "tests/schedule-phone.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",
@@ -149,6 +154,7 @@
     "tests/ptc-round.e2e.ts",
     "tests/present.e2e.ts",
     "tests/present-svg.e2e.ts",
+    "tests/present-after-closing-reply.e2e.ts",
     "tests/composer-draft-scroll.e2e.ts",
     "tests/composer-focus.e2e.ts",
     "tests/composer-placeholder.e2e.ts",

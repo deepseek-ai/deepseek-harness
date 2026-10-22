@@ -1103,6 +1103,58 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 90_000)
 
+    it('keeps a dragged tab when a middle click is chorded with the primary button', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-middle-drag'))
+      const column = await resetSidebar(page)
+      await proseChip(page).click()
+      await expect.poll(() => tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      const sample = column.getByRole('tab').filter({ hasText: SAMPLE_NAME })
+      const from = await pointIn(sample, 0.25, 0.5)
+      const to = await pointIn(column.getByRole('tab').filter({ hasText: 'Files' }), 0.25, 0.5)
+      await page.mouse.move(from.x, from.y)
+      await page.mouse.down()
+      try {
+        await page.mouse.move(to.x, to.y, { steps: 8 })
+        await column.locator('[data-dockkit-caret="0"]').waitFor({ state: 'visible' })
+        await page.mouse.down({ button: 'middle' })
+        await page.mouse.up({ button: 'middle' })
+      } finally {
+        await page.mouse.up()
+      }
+      await expect.poll(() => tabTitles(column)).toEqual([SAMPLE_NAME, 'Files'])
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    })
+
+    it('closes background and active tabs with the middle button and keeps the last guide', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-middle-close'))
+      const column = await resetSidebar(page)
+      await proseChip(page).click()
+      await expect.poll(() => tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      const sample = column.getByRole('tab').filter({ hasText: SAMPLE_NAME })
+      const files = column.getByRole('tab').filter({ hasText: 'Files' })
+      const selected = () => column.locator('[role="tab"][aria-selected="true"] [data-dockkit-tab-title]').allTextContents()
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+
+      await files.click({ button: 'middle' })
+      await expect.poll(() => tabTitles(column)).toEqual([SAMPLE_NAME])
+      expect(await selected()).toEqual([SAMPLE_NAME])
+      await column.locator('[data-dockkit-add-tab]').click()
+      await expect.poll(() => tabTitles(column)).toEqual([SAMPLE_NAME, 'Start'])
+      await sample.click()
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+      await sample.click({ button: 'middle' })
+      await expect.poll(() => tabTitles(column)).toEqual(['Start'])
+      expect(await selected()).toEqual(['Start'])
+
+      await column.getByRole('tab').click({ button: 'middle' })
+      expect(await tabTitles(column)).toEqual(['Start'])
+      expect(await column.locator('[data-sidebar-right-open]').count()).toBe(1)
+      expect(await column.locator('[data-dockkit-tab-quiet]').count()).toBe(1)
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    })
+
     it('preserves the open surface after a reload', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-reload'))
       const frame = page.locator('[class*="frame"]').first()

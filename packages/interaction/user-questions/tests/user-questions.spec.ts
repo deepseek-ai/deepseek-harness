@@ -312,7 +312,8 @@ describe('UserQuestionService', () => {
           ...(options === undefined ? {} : { options }),
           intent: { kind: 'plan-review', approve: 'Ship it' },
         }],
-      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+        message: 'question plan-review declares intent plan-review whose approve label "Ship it" names none of its options' })
     }
     expect(p.ask).not.toHaveBeenCalled()
   })
@@ -331,7 +332,8 @@ describe('UserQuestionService', () => {
         options: [{ label: 'Approve' }, { label: 'Keep planning' }],
         intent: { kind: 'plan-review', approve: 'Approve' },
       }],
-    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+      message: 'question plan-review declares intent plan-review without the detail it reviews' })
     expect(p.ask).not.toHaveBeenCalled()
   })
 
@@ -904,5 +906,49 @@ describe('late replies', () => {
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [{ id: 'scope', selected: [] }] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()
+  })
+})
+
+describe('fixed approval presentation', () => {
+  const question = { id: 'access', question: 'Allow access?', detail: 'Scope of access',
+    options: [{ label: 'Task' }, { label: 'Deny' }, { label: 'Always' }],
+    intent: { kind: 'approval' as const, approve: 'Task', reject: 'Deny', always: 'Always' } }
+  it.each([true, false])('preserves fixed choices with persistent action offered=%s', async (persistent) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const selected = persistent ? 'Always' : 'Task'
+    const p = provider(selected)
+    registerAnswerer(ctx, p)
+    const item = persistent ? question : { ...question, options: question.options.slice(0, 2),
+      intent: { kind: 'approval' as const, approve: 'Task', reject: 'Deny' } }
+    expect(await ctx.userQuestions.ask({ questions: [item] })).toEqual({ answers: [{ id: 'access', selected: [selected] }] })
+    expect(p.seen[0]?.questions[0]?.intent).toEqual(item.intent)
+  })
+  it.each([
+    ['unoffered', 'question access declares intent approval whose action label "Unknown" names none of its options'],
+    ['duplicate', 'approval question access requires distinct action labels; received ["Task","Deny","Task"]'],
+    ['extra', 'approval question access requires 3 options matching its actions; received 4'],
+    ['multiple', 'approval presentation requires one question; received 2'],
+    ['multiselect', 'approval question access does not support multiSelect'],
+    ['timed', 'approval question access requires a blocking request without wait'],
+    ['detail', 'question access declares intent approval without the scope detail it requires'],
+  ])('rejects %s approval actions before display', async (kind, message) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const p = provider()
+    registerAnswerer(ctx, p)
+    const item = structuredClone(question)
+    if (kind === 'unoffered') item.intent.approve = 'Unknown'
+    if (kind === 'duplicate') item.intent.always = 'Task'
+    if (kind === 'extra') item.options.push({ label: 'Something else' })
+    const { detail: _detail, ...withoutDetail } = item
+    const questions = kind === 'multiple' ? [item, { ...item, id: 'other' }]
+      : kind === 'detail' ? [withoutDetail] : [{ ...item, multiSelect: kind === 'multiselect' }]
+    await expect(ctx.userQuestions.ask({ questions,
+      ...(kind === 'timed' ? { wait: { callId: ToolCallId('call') } } : {}),
+    })).rejects.toMatchObject({ code: 'BAD_INTENT', message })
+    expect(p.seen).toEqual([])
   })
 })

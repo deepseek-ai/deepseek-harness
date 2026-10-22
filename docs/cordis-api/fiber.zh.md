@@ -82,11 +82,11 @@ public readonly ctx: Context
 ### fiber.config
 
 ```ts cordis-catalog
-/** The validated plugin config (updated by `update()`). */
+/** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
 public config: any
 ```
 
-经过校验的插件配置（由 `update()` 更新）。
+经过校验的插件配置（由 `update()` 更新）；通过 `effectiveConfig` 读取。
 
 [源码](../../vendor/cordis/src/fiber.ts#L190)
 
@@ -211,6 +211,53 @@ getEffects()
 
 [源码](../../vendor/cordis/src/fiber.ts#L568)
 
+### fiber.rawConfig
+
+```ts cordis-catalog
+/** Raw input retained for the next activation, without evaluating expressions or validating it. */
+get rawConfig(): unknown
+```
+
+保留供下次激活使用的原始输入，不执行表达式求值或验证。
+
+[源码](../../vendor/cordis/src/fiber.ts#L642)
+
+### fiber.effectiveConfig
+
+```ts cordis-catalog
+/**
+ * The config object published by the existing activation/update lifecycle, without cloning or re-parsing.
+ * It is undefined before the first resolution and remains readable after unload; callers requiring a live instance check `state`.
+ */
+get effectiveConfig(): unknown
+```
+
+既有激活／更新生命周期发布的配置对象，不克隆或重新解析。首次解析前为 undefined，卸载后仍可读取；需要运行实例的调用方应检查 `state`。
+
+[源码](../../vendor/cordis/src/fiber.ts#L655)
+
+### fiber.resolveConfig(config)
+
+```ts cordis-catalog
+/**
+ * Evaluate and validate a candidate using this fiber's `internal/config` hooks and runtime schema.
+ * Does not publish the result, replace raw input, or commit running volatile references.
+ * Required injections must be available when a hook uses them.
+ * @param config Raw candidate input.
+ * @returns The candidate's resolved config, retaining the schema's result identity.
+ * @throws {ValidationError} when the runtime schema rejects the candidate; hook errors propagate.
+ */
+resolveConfig(config: unknown): unknown
+```
+
+通过此 fiber 的 `internal/config` 钩子和运行时 schema 对候选值求值并验证。此操作不发布结果、不替换原始输入，也不提交运行中的 volatile 引用。钩子访问的注入服务必须已经可用。
+
+- `config`：原始候选输入。
+
+**返回**候选配置的解析结果，保留 schema 返回对象的身份。
+
+[源码](../../vendor/cordis/src/fiber.ts#L667)
+
 ### fiber.await()
 
 ```ts cordis-catalog
@@ -227,7 +274,7 @@ async await()
 
 **返回**：进入稳定状态后的此 fiber。
 
-[源码](../../vendor/cordis/src/fiber.ts#L704)
+[源码](../../vendor/cordis/src/fiber.ts#L731)
 
 ### fiber.restart()
 
@@ -245,7 +292,7 @@ dispose 此插件，并立即使用其当前配置重新加载。
 
 **返回**一个在重新加载完成后兑现的 promise。
 
-[源码](../../vendor/cordis/src/fiber.ts#L718)
+[源码](../../vendor/cordis/src/fiber.ts#L745)
 
 ### fiber.update(config, noSave?)
 
@@ -273,7 +320,7 @@ update(config: any, noSave = false)
 
 **返回**无返回值；重启由 `internal/update` waterfall 执行。
 
-[源码](../../vendor/cordis/src/fiber.ts#L736)
+[源码](../../vendor/cordis/src/fiber.ts#L764)
 
 ## Effect
 

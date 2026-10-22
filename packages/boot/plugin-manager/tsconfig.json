@@ -24,6 +24,9 @@
       "path": "../app-boot"
     },
     {
+      "path": "../official-bundles"
+    },
+    {
       "path": "../../util/atomic-write"
     },
     {

@@ -107,3 +107,42 @@ export const zh: Record<SubagentSettingsLocaleKey, string> = {
 export function formLabels(t: (key: SubagentSettingsLocaleKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'overridden': '上書き済み',
+  'reset': 'デフォルトに戻す',
+  'readOnly': 'このデプロイメントでは設定は読み取り専用で保存されます。',
+  'unavailable': 'このプラグインは読み込まれていないため、現在は設定できません。',
+  'save': '保存',
+  'saving': '保存中…',
+  'saveFailed': 'デプロイメントがこれらの値を受け付けませんでした。修正のため残されています。',
+  'subagentTitle': 'サブエージェント',
+  'subagentDescription': 'サブエージェントの再帰深度、数、モデルを設定します。',
+  'subagentLimitsTitle': '制限',
+  'subagentMaxDepth': '最大再帰深度',
+  'subagentDepthHelpLabel': '最大再帰深度について',
+  'subagentDepthHelp': 'エージェントが作成できるサブエージェントの階層数を制限します。',
+  'subagentDepthZero': 'サブエージェントを無効化',
+  'subagentDepthOne': 'メインエージェントのみサブエージェントを作成可能',
+  'subagentDepthOverride': 'ツールが独自の最大再帰深度を定義している場合、その設定が優先されます。',
+  'subagentMaxActive': 'サブエージェントの並列数制限',
+  'subagentCapacityHelpLabel': 'サブエージェントの並列数制限について',
+  'subagentCapacityHelp': '同じメインエージェント配下の全再帰階層にわたる、稼働中のサブエージェントの合計数です。メインエージェントは含まれません。上限に達すると新しい開始リクエストは拒否されます。',
+  'subagentDepthInvalid': '0以上の整数を入力してください。',
+  'subagentCapacityInvalid': '1以上の整数を入力してください。',
+  'subagentModelSelectionTitle': 'モデル選択',
+  'subagentModelSelectionToggle': 'エージェントによるサブエージェントのモデル選択を許可',
+  'subagentModelSelectionChoose': '有効にすると、エージェントは以下の許可されたモデルからサブエージェントごとにプロバイダー、モデル、推論強度を選択できます。新しいセッションにのみ適用されます。',
+  'subagentModelSelectionAllowed': 'エージェントが選択可能なモデル',
+  'subagentModelSelectionLoading': 'モデルを読み込み中…',
+  'subagentModelSelectionLoadFailed': 'モデルを読み込めませんでした。',
+  'subagentModelSelectionRetry': '再試行',
+  'subagentModelSelectionPartial': '一部のモデルプロバイダーを読み込めませんでした。保存済みの選択肢は引き続き削除できます。',
+  'subagentModelSelectionUnavailable': '現在利用不可',
+  'subagentModelSelectionUnavailableGroup': '保存済みだが現在利用不可',
+  'subagentModelSelectionEmpty': '現在、モデルを公開しているモデルプロバイダーはありません。',
+  'subagentModelSelectionRequired': '保存する前に少なくとも1つのモデルを選択してください。',
+  'subagentModelSelectionConflict': '設定が別の場所で変更されました。下書きを破棄して再試行してください。',
+  'subagentModelSelectionOff': 'サブエージェントは設定済みのデフォルトを使用するか、親エージェントのモデルを継承します。保存済みのモデル選択は保持されます。',
+} satisfies Record<keyof typeof en, string>

@@ -8,8 +8,8 @@ import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { expect, it } from 'vitest'
-import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
+import { expect, it, vi } from 'vitest'
+import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
 it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
@@ -54,9 +54,28 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     const toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
     expect(await card.textContent()).toContain('请切换到 PTC 模式')
+    const enabling = Promise.withResolvers<undefined>()
+    const setEnabled = scaffold.ctx.pluginManager.setBundleEnabled.bind(scaffold.ctx.pluginManager)
+    let applying: ReturnType<typeof setEnabled> | undefined
+    // Hold the Host request so the pending UI does not depend on machine speed; release into the real operation.
+    const enableCall = vi.spyOn(scaffold.ctx.pluginManager, 'setBundleEnabled').mockImplementationOnce((name, enabled) => {
+      applying = enabling.promise.then(() => setEnabled(name, enabled))
+      return applying
+    })
+    try {
+      await toggle.click()
+      await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor()
+      expect(await toggle.isEnabled()).toBe(false)
+      await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/enabling.expected.md', import.meta.url)),
+        await captureStableAria(page, '[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]', scaffold.workspaceCwd), webSnapshotMode())
+    } finally {
+      enabling.resolve(undefined)
+      enableCall.mockRestore()
+      await applying
+    }
     // Bundle transitions await native cleanup under the browser action deadline.
-    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
+    await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor({ state: 'hidden' })
     const setup = page.getByRole('dialog', { name: '使用 Computer Use 前需要设置', exact: true })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)

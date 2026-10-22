@@ -8,9 +8,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
 import { PermissionPanel, PermissionSetup, PermissionToast } from './PermissionPanel.tsx'
-import { en, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
+import { en, ja, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -31,9 +33,23 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
-    ctx.effect(() => ctx.locale.register(NS, { en, zh }))
+    ctx.effect(() => ctx.locale.register(NS, { en, zh, ja }))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
+    ctx.slots.inject('conversation.composer', () => ctx.slots.register({
+      name: 'conversation.composer', priority: -1, locale: NS,
+      select: ({ pendingInteraction }: ComposerChainProps) => selectApplicationApproval(pendingInteraction),
+      inject: () => ({ resolveText: (text: { en: string; [locale: string]: string }) => ctx.locale.resolveText(text) }),
+    }, ApplicationApproval))
+    ctx.inject(['pluginChanges'], (scope) => {
+      const changes = scope.pluginChanges.bundle('@deepseek-ai/dsh-cua-bundle')
+      const synchronize = () => { controller.setChanging(changes.getSnapshot()) }
+      synchronize()
+      scope.effect(() => {
+        const unsubscribe = changes.subscribe(synchronize)
+        return () => { unsubscribe(); controller.setChanging(false) }
+      })
+    })
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,

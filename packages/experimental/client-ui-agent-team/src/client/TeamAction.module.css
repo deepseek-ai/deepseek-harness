@@ -16,9 +16,14 @@
   cursor: pointer;
 }
 
-.trigger:hover,
 .trigger:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Second sacrifice after the preset label: past this title-row width the
@@ -183,9 +188,14 @@
   cursor: pointer;
 }
 
-.expandToggle:hover,
 .expandToggle:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .expandToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .expandToggle svg {
@@ -211,4 +221,10 @@
   gap: 6px;
   padding: 9px;
   font-size: 12px;
+}
+
+@media (hover: none) {
+  .memberModel {
+    display: inline;
+  }
 }

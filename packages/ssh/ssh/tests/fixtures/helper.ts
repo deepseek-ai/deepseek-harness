@@ -19,7 +19,7 @@ export async function createHelperHarness(handshake = true, leaseMs = 30_000, ki
   void serving.catch(() => {})
   const client = new SshRpcPeer(output, input, 64 * 1024 * 1024, 128)
   const sockets = new Set<Socket>()
-  const hello = () => client.request('hello', { protocol: 2, workspace: root, leaseMs }, helloSchema)
+  const hello = () => client.request('hello', { protocol: 3, workspace: root, leaseMs }, helloSchema)
   let closing: Promise<void> | undefined
   const close = () => {
     closing ??= (async () => {

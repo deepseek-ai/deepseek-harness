@@ -46,6 +46,7 @@ const quotaEntry = (seq: number, code: string): SessionLiveEventEntry => ({
  */
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   disposers.push(() => runtime.dispose())
   const chatSettings = stubConfigForm<ChatSettings>()
   runtime.ctx.provide('configForms', {

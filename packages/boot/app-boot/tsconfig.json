@@ -27,6 +27,9 @@
       "path": "../../util/home-paths"
     },
     {
+      "path": "../official-bundles"
+    },
+    {
       "path": "../../util/package-manifest"
     },
     {

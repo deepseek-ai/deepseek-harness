@@ -42,7 +42,7 @@
   background: var(--dsw-alias-bg-skeleton);
 }
 .buttonPlaceholder { height: 28px; }
-.appPlaceholder { width: 160px; height: 20px; }
-.appsPlaceholder { width: 240px; height: 40px; }
+.appPlaceholder { width: 160px; height: 1.6em; }
+.appsPlaceholder { display: block; color: transparent; }
 
 .iconPlaceholder { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }

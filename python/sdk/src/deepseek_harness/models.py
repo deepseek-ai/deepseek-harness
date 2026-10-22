@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field, JsonValue as PydanticJsonValue
 
@@ -31,6 +31,20 @@ class ServerInfo(BaseModel):
 class InitializeResponse(BaseModel):
     serverInfo: ServerInfo | None = None
 
+
+class ApprovalRequestParams(BaseModel):
+    """Server-to-client approval/request payload after explicit handshake opt-in."""
+
+    sessionId: str
+    toolName: str
+    callId: str | None = None
+    reason: str | None = None
+
+
+class ApprovalRequestResult(BaseModel):
+    """One-operation decision; allowed-once is the only grant."""
+
+    outcome: Literal["allowed-once", "rejected", "cancelled"]
 
 class UserQuestionRequest(BaseModel):
     """Runtime question batch; questions retain their options, detail, and presentation intent."""

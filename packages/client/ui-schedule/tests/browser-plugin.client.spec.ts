@@ -4,7 +4,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { resolveSlotLabel, type HostObservable, type StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { StaticRemoteAccess, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
@@ -86,9 +86,11 @@ class RemoteStub extends Service {
 async function baseContext(
   remote: RemoteStubInput = { $on: () => () => {} },
   sidebar: SidebarStubs = sidebarStubs(),
+  allows: (action: string) => boolean = () => true,
 ): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
+  new StaticRemoteAccess(ctx, allows)
   new UiConversation(ctx, { binding: () => undefined } as never)
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
@@ -140,8 +142,27 @@ describe('ui-schedule browser half', () => {
   it('declares only the services used by registration', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'sessions',
-      'workspaces', 'sidebarRightTabs', 'sidebarRight',
+      'workspaces', 'sidebarRightTabs', 'sidebarRight', 'remoteAccess',
     ])
+  })
+
+  it('contributes its surfaces only while the current Peer may read the task catalog', async () => {
+    for (const allowed of [false, true]) {
+      const sidebar = sidebarStubs()
+      const allows = vi.fn(() => allowed)
+      const ctx = await baseContext(undefined, sidebar, allows)
+      const header = declareHeader(ctx)
+      const fiber = ctx.plugin({ inject: [...inject], apply })
+      await fiber.await()
+      expect(allows).toHaveBeenCalledWith('schedule/catalog')
+      // The Session-header reminder catalog is this plugin's entry point into the page.
+      expect(headerEntryIds(ctx)).toEqual(allowed ? ['schedule-catalog'] : [])
+      // The task tab type is a definition, registered either way.
+      expect(sidebar.register).toHaveBeenCalledOnce()
+      await fiber.dispose()
+      header()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('waits for the header declaration, orders between static context and Jobs, and tears down', async () => {

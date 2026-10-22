@@ -60,3 +60,32 @@ export const en = {
   'fontFamily.placeholder': 'Default',
   'fontSize.more': 'More font settings',
 } satisfies Record<ThemeKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'appearance.title': '外観',
+  'appearance.light': 'ライト',
+  'appearance.dark': 'ダーク',
+  'appearance.system': 'システム',
+  'fontSize.text.title': 'フォントサイズ',
+  'fontSize.text.description': '会話コンテンツにのみ適用',
+  'fontSize.text.increase': 'フォントサイズを大きくする',
+  'fontSize.text.decrease': 'フォントサイズを小さくする',
+  'fontSize.code.title': 'コードのフォントサイズ',
+  'fontSize.code.description': 'コードブロック、インラインコード、ツール出力に使用',
+  'fontSize.code.increase': 'コードのフォントサイズを大きくする',
+  'fontSize.code.decrease': 'コードのフォントサイズを小さくする',
+  'fontSize.terminal.title': 'ターミナルのフォントサイズ',
+  'fontSize.terminal.description': 'サイドバーのターミナルに使用',
+  'fontSize.terminal.increase': 'ターミナルのフォントサイズを大きくする',
+  'fontSize.terminal.decrease': 'ターミナルのフォントサイズを小さくする',
+  'fontSize.unit': 'px',
+  'fontFamily.text.title': 'テキストフォント',
+  'fontFamily.text.description': 'インターフェースと会話テキストに使用します。フォントはカンマで区切ります。空欄の場合はデフォルトを使用',
+  'fontFamily.code.title': 'コードフォント',
+  'fontFamily.code.description': 'コードブロック、インラインコード、ツール出力に使用します。フォントはカンマで区切ります。空欄の場合はデフォルトを使用',
+  'fontFamily.terminal.title': 'ターミナルフォント',
+  'fontFamily.terminal.description': 'サイドバーのターミナルに使用します。フォントはカンマで区切ります。空欄の場合はデフォルトを使用',
+  'fontFamily.placeholder': 'デフォルト',
+  'fontSize.more': 'その他のフォント設定',
+} satisfies Record<keyof typeof en, string>

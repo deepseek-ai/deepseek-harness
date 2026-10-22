@@ -6,9 +6,11 @@
     "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
   },
   "files": [
+    "src/client/CopyToast.tsx",
     "src/client/Dialog.tsx",
     "src/client/HeaderAction.tsx",
     "src/client/controller.ts",
+    "src/client/copy-controller.ts",
     "src/client/index.ts",
     "src/client/locales.ts",
     "src/routes.ts",
@@ -20,6 +22,7 @@
     { "path": "../../client/store" },
     { "path": "../../client/ui-commands" },
     { "path": "../../client/ui-conversation/tsconfig.client.json" },
+    { "path": "../../client/ui-layout" },
     { "path": "../../client/ui-message-feedback" },
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },

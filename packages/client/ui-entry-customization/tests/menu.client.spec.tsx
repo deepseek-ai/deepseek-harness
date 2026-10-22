@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { makeTranslate, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TrackProductEvent } from '@deepseek-ai/dsh-client-product-analytics/client'
 import { EntryMenuContent } from '../src/client/EntryMenuContent.tsx'
 import { en } from '../src/client/locales.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -17,7 +18,7 @@ const SEATS = ['sidebar.panellist.actions', 'conversation.session.header.views.a
 const runtimes = new Set<SlotTestRuntime>()
 afterEach(async () => {
   try { for (const runtime of runtimes) await runtime.dispose() }
-  finally { runtimes.clear(); cleanup(); vi.useRealTimers() }
+  finally { runtimes.clear(); cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() }
 })
 
 type ContentProps = ComponentProps<typeof EntryMenuContent>
@@ -33,6 +34,7 @@ function content(overrides: Partial<ContentProps> = {}) {
   const props = {
     entries: [{ id: 'notes', label: 'Notes', pinned: true }, { id: 'tasks', label: 'Tasks', pinned: false }],
     region: 'sidebar', t: makeTranslate(en), renderFactorySlot: unused,
+    usePluginNavigation: <T,>(select: (present: boolean) => T): T => select(true),
     usePanelInfo: unused, useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
     useResource: unused, useWorkspaces: unused,
     ...callbacks,
@@ -81,15 +83,16 @@ describe('More menu rows', () => {
   })
 
   it('shows the pin hint after the shared tooltip delay outside the menu card', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
     const { view } = content()
     const unpin = view.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' })
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    fireEvent.mouseEnter(unpin)
+    fireEvent.pointerEnter(unpin, { pointerType: 'mouse' })
     act(() => { vi.advanceTimersByTime(499) })
     expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     expect(view.getByRole('tooltip', { hidden: true }).closest('[role="menu"]')).toBeNull()
-    fireEvent.mouseLeave(unpin)
+    fireEvent.pointerLeave(unpin, { pointerType: 'mouse' })
   })
 })
 
@@ -110,10 +113,13 @@ function Frame({ renderSlot }: PropsRenderSlots<Seats>) {
   </>
 }
 
-async function bench(language: 'en' | 'zh' = 'en') {
+async function bench(
+  language: 'en' | 'zh' = 'en',
+  { analytics = true, navigation = true }: { analytics?: boolean; navigation?: boolean } = {},
+) {
   const runtime = await SlotTestRuntime.create()
   runtimes.add(runtime)
-  const openList = vi.fn(), startSession = vi.fn()
+  const openList = vi.fn(), startSession = vi.fn(), track = vi.fn<TrackProductEvent>()
   await runtime.mount({
     inject: ['slots'],
     apply(ctx: Context) {
@@ -121,8 +127,9 @@ async function bench(language: 'en' | 'zh' = 'en') {
       locale.setLocale(language)
       ctx.provide('locale', locale)
       ctx.slots.installLocale(locale)
-      ctx.provide('pluginNavigation', { openList } as never)
+      if (navigation) ctx.provide('pluginNavigation', { openList } as never)
       ctx.provide('uiWorkspace', { startSession } as never)
+      if (analytics) ctx.provide('productAnalytics', { track } as never)
     },
   })
   await runtime.root.declare({
@@ -132,10 +139,33 @@ async function bench(language: 'en' | 'zh' = 'en') {
   }, Frame)
   const plugin = await runtime.mount({ inject: [...inject], apply })
   const view = runtime.renderRoot()
-  return { runtime, openList, startSession, plugin, view }
+  return { runtime, openList, startSession, track, plugin, view }
 }
 
 describe('More menu registrations', () => {
+  it('shows plugin discovery only while the Plugins page navigation is present', async () => {
+    const b = await bench('en', { navigation: false })
+    const sidebar = () => within(b.view.getByRole('menu', { name: 'sidebar.panellist.actions' }))
+    expect(sidebar().queryByRole('menuitem', { name: 'Browse other plugins' })).toBeNull()
+    expect(sidebar().getByRole('menuitem', { name: 'Create your plugin' })).toBeTruthy()
+    // The Creator row takes the separator the absent discovery row would carry.
+    expect(sidebar().getAllByRole('separator')).toHaveLength(1)
+    const injected = b.runtime.slots.entries('sidebar.panellist.actions')[0]!.inject!() as { browsePlugins: () => void }
+    expect(() => { injected.browsePlugins() }).not.toThrow()
+
+    const navigation = await b.runtime.mount({
+      inject: [],
+      apply(ctx: Context) { ctx.provide('pluginNavigation', { openList: b.openList } as never) },
+    })
+    await act(async () => { await Promise.resolve() })
+    fireEvent.click(sidebar().getByRole('menuitem', { name: 'Browse other plugins' }))
+    expect(b.openList).toHaveBeenCalledExactlyOnceWith()
+
+    await navigation.dispose()
+    await act(async () => { await Promise.resolve() })
+    expect(sidebar().queryByRole('menuitem', { name: 'Browse other plugins' })).toBeNull()
+  })
+
   it('registers one row set per region and removes all of them when the plugin unloads', async () => {
     const b = await bench()
     for (const seat of SEATS) {
@@ -172,5 +202,40 @@ describe('More menu registrations', () => {
     expect(b.startSession).toHaveBeenCalledExactlyOnceWith(undefined, {
       agentPreset: 'cordis', prompt, whenDraftExists: 'append',
     })
+  })
+
+  it.each([
+    ['sidebar.panellist.actions', 'sidebar'],
+    ['conversation.session.header.views.actions', 'conversation'],
+    ['sidebar.right.tab.guide.actions', 'rightbar'],
+  ] as const)('reports both footer actions of %s as the %s region before acting', async (seat, region) => {
+    const b = await bench()
+    const menu = within(b.view.getByRole('menu', { name: seat }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Browse other plugins' }))
+    expect(b.track).toHaveBeenCalledExactlyOnceWith('more_menu_item_click', { region, action: 'browse_plugins' })
+    expect(b.track.mock.invocationCallOrder[0]).toBeLessThan(b.openList.mock.invocationCallOrder[0]!)
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Create your plugin' }))
+    expect(b.track).toHaveBeenLastCalledWith('more_menu_item_click', { region, action: 'create_plugin' })
+    expect(b.track.mock.invocationCallOrder[1]).toBeLessThan(b.startSession.mock.invocationCallOrder[0]!)
+    expect(b.track).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports neither entry opening nor pin changes', async () => {
+    const b = await bench()
+    const menu = within(b.view.getByRole('menu', { name: 'sidebar.panellist.actions' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Notes' }))
+    expect(b.view.getByTestId('opened').textContent).toBe('sidebar.panellist.actions:notes')
+    expect(b.track).not.toHaveBeenCalled()
+  })
+
+  it('keeps both footer actions working without the analytics service', async () => {
+    const b = await bench('en', { analytics: false })
+    const menu = within(b.view.getByRole('menu', { name: 'sidebar.right.tab.guide.actions' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Browse other plugins' }))
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Create your plugin' }))
+    expect(b.openList).toHaveBeenCalledExactlyOnceWith()
+    expect(b.startSession).toHaveBeenCalledOnce()
+    expect(b.track).not.toHaveBeenCalled()
   })
 })

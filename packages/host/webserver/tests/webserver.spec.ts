@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
@@ -516,11 +517,14 @@ describe('real Loader composition', () => {
     await expect(request(port, '/probe')).rejects.toThrow()
   })
 
-  it('collects injection rows fresh per render and layers taps over the rendered rows', { timeout: 60_000 }, async () => {
+  it('collects injection rows fresh per render for the rendered Peer and layers taps over the rendered rows', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const server = loaded.webServer
     let flag = 'dark'
-    loaded.on('webserver/index-inject', (table) => {
+    const peer = { principal: { kind: 'owner' } } as PeerScope
+    const renderedFor: PeerScope[] = []
+    loaded.on('webserver/index-inject', (table, renderingFor) => {
+      renderedFor.push(renderingFor)
       table.push(
         { kind: 'script', placement: 'head', text: 'window.__Q__=1' },
         { kind: 'script-src', placement: 'head', src: '/plugins/a.js?rev="1"&x=<y>' },
@@ -532,7 +536,7 @@ describe('real Loader composition', () => {
       )
     })
 
-    const html = server.renderIndex('<html><head></head><body>shell</body></html>')
+    const html = server.renderIndex('<html><head></head><body>shell</body></html>', peer)
     // Head rows land right after the opening head tag in table order; the body
     // row lands right after the opening body tag.
     const order = [
@@ -552,12 +556,14 @@ describe('real Loader composition', () => {
 
     // Fresh collection per render: the listener reads live state at emit time.
     flag = 'light'
-    expect(server.renderIndex('<head></head><body></body>')).toContain('window.__P__="light"')
+    expect(server.renderIndex('<head></head><body></body>', peer)).toContain('window.__P__="light"')
 
     // Raw taps still run, over the already-rendered rows.
     const untap = server.tapIndex(h => h.replace('window.__Q__=1', 'window.__Q__=2'))
-    expect(server.renderIndex('<head></head><body></body>')).toContain('window.__Q__=2')
+    expect(server.renderIndex('<head></head><body></body>', peer)).toContain('window.__Q__=2')
     untap()
+    // Every collection is dispatched with the Peer the render speaks for.
+    expect(renderedFor).toEqual([peer, peer, peer])
 
     // Tag-less fragments: head rows prepend, body rows append, and the
     // boot-readiness tail lands after the last body row.

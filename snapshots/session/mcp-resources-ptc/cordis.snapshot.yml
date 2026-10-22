@@ -27,7 +27,8 @@
         reconnect:
           enabled: false
 
-- id: tools
-  name: '@deepseek-ai/dsh-tools'
-  config:
-    mode: ptc
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false

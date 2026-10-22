@@ -71,6 +71,8 @@ export interface DshEnginesManifest {
 export interface DshBundleManifest {
   /** One patch file path, or an ordered list applied in sequence, each relative to the declaring package root. */
   patch: string | string[]
+  /** Show the bundle in GUI lists before the profile enables or installs it; omission means true. */
+  listedByDefault?: boolean
 }
 
 /** The bundle composition declared by a profile directory. */

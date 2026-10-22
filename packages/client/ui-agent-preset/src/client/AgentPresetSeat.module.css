@@ -34,9 +34,14 @@
   cursor: pointer;
 }
 
-.seat:not(:disabled):hover,
 .seat[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .seat:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .seat:disabled {

@@ -199,6 +199,7 @@ export class HarnessClient {
   private closeTask: Promise<void> | undefined
   private readonly userQuestions = new Map<string, AbortController>()
   private userQuestionHandler: HarnessClientOptions['onUserQuestion']
+  private requestHandler: ((method: string, params: Record<string, unknown>) => Promise<unknown>) | undefined
 
   /** @param options - dsh profile, patch, home, process, environment, and timeout options. */
   constructor(options?: HarnessClientOptions)
@@ -268,7 +269,10 @@ export class HarnessClient {
     })
     const transport = new JsonRpcLineTransport(child.stdout, child.stdin)
     transport.onRequest(async (method, params) => {
-      if (method !== 'user-question/ask') throw new SdkProtocolError(`unknown runtime request: ${method}`)
+      if (method !== 'user-question/ask') {
+        if (this.requestHandler !== undefined) return this.requestHandler(method, params)
+        throw new SdkProtocolError(`unknown runtime request: ${method}`)
+      }
       const handler = this.userQuestionHandler
       if (handler === undefined) throw new SdkProtocolError('user-question/ask requires an onUserQuestion callback')
       if (!isUserQuestionRequest(params)) {
@@ -302,6 +306,21 @@ export class HarnessClient {
     })
     transport.start()
     this.transport = transport
+  }
+
+  /**
+   * Install the additional-request handler; native questions retain their onUserQuestion callback.
+   * @param handler - receives wire parameters and returns the JSON-RPC result; rejection sends an error.
+   * @throws when the client has not started or has already closed.
+   */
+  onRequest(handler: (method: string, params: Record<string, unknown>) => Promise<unknown>): void {
+    if (this.closeTask !== undefined) {
+      throw new TransportClosedError('DeepSeek Harness runtime client is closed; create a new client to install a request handler')
+    }
+    if (this.transport === undefined) {
+      throw new TransportClosedError('start the SDK client before installing a request handler')
+    }
+    this.requestHandler = handler
   }
 
   /**

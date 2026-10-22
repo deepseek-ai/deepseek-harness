@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "コンピュータ操作（Cua Driver MCP）",
+    "description": "モデルが別途インストールした cua-driver 実行ファイルを通じてデスクトップを操作できます。"
+  }
+}

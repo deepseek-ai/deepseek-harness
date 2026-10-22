@@ -286,7 +286,7 @@ function renderPiAiEditor(
 function authHelpText(): string | null {
   const button = screen.queryByRole('button', { name: en.authHelp })
   if (button === null) return null
-  fireEvent.mouseEnter(button)
+  fireEvent.pointerEnter(button)
   return screen.getByRole('tooltip').textContent
 }
 
