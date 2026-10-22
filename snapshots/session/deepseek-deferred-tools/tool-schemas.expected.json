@@ -1,0 +1,24 @@
+{
+  "initial": [
+    {
+      "name": "snapshot_initial",
+      "description": "Make snapshot_ping available.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ],
+  "changes": [
+    [
+      {
+        "name": "snapshot_ping",
+        "description": "Return pong once.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  ]
+}

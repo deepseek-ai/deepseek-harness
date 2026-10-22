@@ -118,7 +118,7 @@ describe('direct Messages HTTP', () => {
     await assemble(llm.stream(options({ messages: [user(), changes], tools })))
     expect(http.requests[0]).toMatchObject({
       headers: { 'anthropic-beta': 'mid-conversation-tool-changes-2026-07-01' },
-      body: { tools: [{ name: 'search', defer_loading: true }], messages: [
+      body: { tools: [{ name: 'DeferredToolPlaceholder' }, { name: 'search', defer_loading: true }], messages: [
         { role: 'user' }, { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: 'search' } }] },
       ] },
     })
@@ -276,6 +276,30 @@ describe('direct Messages HTTP', () => {
 })
 
 describe('Cordis provider composition', () => {
+  it('keeps a replacement tool deferred after the last baseline tool is removed', async () => {
+    const { ctx, http } = await boot()
+    const baseline = { name: 'old_tool', description: 'Old tool', parameters: {} }
+    const added = { name: 'new_tool', description: 'New tool', parameters: {} }
+    const update = createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [
+      { type: 'tool-removal', toolName: baseline.name }, { type: 'tool-addition', toolName: added.name },
+    ] })
+    const request = options({ model: 'deepseek-flash', messages: [user(), update], tools: [added],
+      toolHistory: { tools: [baseline], updates: [{ messageId: update.id, additions: [added] }] },
+    })
+    const saved = JSON.stringify(request)
+    const response = await assemble(ctx.llm.stream(request), 'deepseek-flash')
+    expect(response.assembler.finish.kind).toBe('stop')
+    expect(http.requests[0]?.body.tools).toEqual([
+      { name: 'DeferredToolPlaceholder', description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.', input_schema: { type: 'object', properties: {} } },
+      { name: added.name, description: added.description, input_schema: {}, defer_loading: true },
+    ])
+    expect(http.requests[0]?.body.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+      { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: added.name } }] },
+    ])
+    expect(JSON.stringify(request)).toBe(saved)
+  })
+
   it('resolves an attachment service loaded after the adapter and maps its read-only path', async () => {
     const http = await endpoint()
     const { ctx, home } = await context()

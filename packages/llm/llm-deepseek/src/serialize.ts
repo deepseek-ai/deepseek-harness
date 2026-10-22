@@ -45,6 +45,8 @@ function assistant(message: Message, model: string, onReplayDegrade?: (reason: s
  * Developer messages, already projected for this route by `LlmRuntime`, become
  * system-role updates after the preceding user turn, with tool changes as
  * `tool_addition` and `tool_removal` references to the declared tool.
+ * Nonempty all-deferred tool lists receive an immediate, non-executable
+ * placeholder without changing real tools or their activation positions.
  * @param options - provider-neutral request.
  * @param connection - validated defaults and thinking policy.
  * @param history - image-projected history with complete system snapshots; durable messages remain unchanged.
@@ -149,6 +151,23 @@ export function serialize(
     throw new LlmError(`DeepSeek Messages does not support reasoning effort ${effort}`, 'UNSUPPORTED_REASONING_EFFORT')
   }
   const system = [options.system, historySystem].filter(Boolean).join('\n\n')
+  const tools = options.tools?.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.parameters,
+    ...tool.deferLoading === true ? { defer_loading: true as const } : {},
+  }))
+  if (tools !== undefined && tools.length > 0 && tools.every(tool => tool.defer_loading === true)) {
+    // Messages requires an immediate declaration even when every real tool loads later.
+    const names = new Set(tools.map(tool => tool.name))
+    let name = 'DeferredToolPlaceholder'
+    for (let suffix = 1; names.has(name); suffix++) name = `DeferredToolPlaceholder_${suffix}`
+    tools.unshift({
+      name,
+      description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.',
+      input_schema: { type: 'object', properties: {} },
+    })
+  }
   return {
     model: options.model, stream: true, messages,
     max_tokens: options.maxTokens ?? model?.maxTokens ?? connection.maxTokens,
@@ -157,13 +176,6 @@ export function serialize(
     ...system.length === 0 ? {} : { system },
     ...options.temperature === undefined ? {} : { temperature: options.temperature },
     ...options.stop === undefined ? {} : { stop_sequences: options.stop },
-    ...options.tools === undefined ? {} : {
-      tools: options.tools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        input_schema: tool.parameters,
-        ...tool.deferLoading === true ? { defer_loading: true as const } : {},
-      })),
-    },
+    ...tools === undefined ? {} : { tools },
   }
 }

@@ -16,7 +16,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import LlmRuntime, { BlockAssembler, createAssistantMessage, createSystemMessage, createToolResultMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { BlockAssembler, createAssistantMessage, createDeveloperMessage, createSystemMessage, createToolResultMessage, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import * as PluginPackageInventoryDeepSeek from '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -50,6 +50,22 @@ async function boot(models?: Messages.Options['models']) {
 const tool = { name: 'lookup_value', description: 'Read the requested value. Always call this tool to obtain a value.', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } }
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () => {
+  it('calls a deferred tool after every baseline tool has been removed', async () => {
+    const model = 'deepseek-flash'
+    const ctx = await boot([{ id: model, toolUpdate: 'addition-only' }])
+    const update = createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [
+      { type: 'tool-removal', toolName: 'old_lookup' }, { type: 'tool-addition', toolName: tool.name },
+    ] })
+    const response = await assemble(ctx.llm.stream(options({
+      model, reasoningEffort: ReasoningEffortId('high'),
+      messages: [user('Call lookup_value with key "answer" to obtain the value. Do not guess.'), update],
+      tools: [tool],
+      toolHistory: { tools: [{ ...tool, name: 'old_lookup' }], updates: [{ messageId: update.id, additions: [tool] }] },
+    })), model)
+    expect(response.assembler.finish).toEqual({ kind: 'tool-calls' })
+    expect(response.message.content.filter(block => block.type === 'tool-call').map(call => call.name)).toEqual([tool.name])
+  })
+
   it.skipIf(!IN_HISTORY_MODEL).each([false, true])('updates system instructions during a conversation, in-history=%s', async (inHistory) => {
     const model = IN_HISTORY_MODEL as string
     // Each case owns the capability, even for a model with an in-history catalog default.
