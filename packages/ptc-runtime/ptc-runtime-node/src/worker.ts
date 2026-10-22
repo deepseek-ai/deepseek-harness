@@ -44,6 +44,7 @@ export class ProgramWorker {
   private cleanupPending = false
   private ready = false
   private stderr = ''
+  private controlFailure: string | undefined
   private stopped: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
@@ -228,8 +229,12 @@ export class ProgramWorker {
     })
   }
 
+  private withControlFailure(message: string): string {
+    return this.controlFailure === undefined ? message : `${message}; control channel failed: ${this.controlFailure}`
+  }
+
   private exitMessage(outcome: SubprocessOutcome): string {
-    return `Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`
+    return this.withControlFailure(`Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`)
   }
 
   private async start(cwd: string): Promise<void> {
@@ -304,7 +309,10 @@ export class ProgramWorker {
       },
     }, [], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)
-      else setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
+      else {
+        if (kind === 'io') this.controlFailure = error.message
+        setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
+      }
     })
     void handle.done.then(async (outcome) => {
       this.exitOutcome = outcome
@@ -315,7 +323,7 @@ export class ProgramWorker {
       })
     }, (error: unknown) => {
       this.fail(this.confined !== undefined && isRunnerSpawnFailure(error, this.confined.argv[0], cwd)
-        ? 'sandbox-unavailable' : 'worker-exit', messageOf(error))
+        ? 'sandbox-unavailable' : 'worker-exit', this.withControlFailure(messageOf(error)))
     })
   }
 

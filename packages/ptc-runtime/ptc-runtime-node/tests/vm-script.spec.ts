@@ -34,6 +34,10 @@ it.each<[string, unknown]>([
   ['let sum = 0; for await (const item of [1, 2]) sum += item; sum', 3],
   ['for (var name in {a: 1}) { await Promise.resolve() }; name', 'a'],
   ['for (var item of [11]) { await Promise.resolve() }; item', 11],
+  ['for (var{x} of [{x: 1}]) { await 0 }; x', 1],
+  ['for (var[x] of [[2]]) { await 0 }; x', 2],
+  ['for (var/* comment */x of [3]) { await 0 }; x', 3],
+  ['for (var/* comment */key in {a: 1}) { await 0 }; key', 'a'],
   ['let first, second = await Promise.resolve(12); [typeof first, second]', ['undefined', 12]],
   ['const {a = 13, ...rest} = await Promise.resolve({b: 14}); const [, x, ...tail] = [0, 15, 16]; [a, rest.b, x, tail[0]]', [13, 14, 15, 16]],
   ['{ var local = await Promise.resolve(17) }; local', 17],
@@ -76,7 +80,26 @@ it.each([
   if (!result.ok) {
     expect(String(result.error)).toContain('SyntaxError')
     expect(result.error).toHaveProperty('stack', expect.stringContaining('SyntaxError'))
-    expect(result.error).toHaveProperty('stack', expect.not.stringContaining('vm-script-await'))
+    expect(result.error).toHaveProperty('stack', expect.not.stringContaining('vm-script'))
+    expect(result.error).toHaveProperty('stack', expect.not.stringContaining('node:vm'))
+  }
+})
+
+it('keeps the native syntax location and caret without compiler stack frames', async () => {
+  const result = await evaluator().run('const =')
+  expect(result).toHaveProperty('error.stack', expect.stringMatching(/ptc-program\.js:1\nconst =\n\s*\^\n\nSyntaxError:/))
+  expect(result).toHaveProperty('error.stack', expect.not.stringContaining('vm-script'))
+  expect(result).toHaveProperty('error.stack', expect.not.stringContaining('node:vm'))
+})
+
+it('reports the syntax heading when the host stack formatter omits the stack', async () => {
+  const original = Object.getOwnPropertyDescriptor(Error, 'prepareStackTrace')
+  Object.defineProperty(Error, 'prepareStackTrace', { configurable: true, value: () => undefined })
+  try {
+    expect(await evaluator().run('const =')).toHaveProperty('error.stack', "SyntaxError: Unexpected token '='")
+  } finally {
+    if (original) Object.defineProperty(Error, 'prepareStackTrace', original)
+    else Reflect.deleteProperty(Error, 'prepareStackTrace')
   }
 })
 

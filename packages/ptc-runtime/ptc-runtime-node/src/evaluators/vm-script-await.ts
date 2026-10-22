@@ -97,7 +97,7 @@ const visitorsWithoutAncestors: walk.RecursiveVisitors<TransformState> = {
       }
       state.replace(
         node.start,
-        node.start + variableKind.length + (isIterableForDeclaration ? 1 : 0),
+        node.start + variableKind.length,
         variableKind === 'var' && isIterableForDeclaration
           ? ''
           : 'void' + (node.declarations.length === 1 ? '' : ' ('),

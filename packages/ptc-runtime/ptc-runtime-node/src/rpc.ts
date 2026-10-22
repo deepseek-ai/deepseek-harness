@@ -13,7 +13,7 @@ const messageOf = (error: unknown): string => error instanceof Error ? error.mes
  * @param maxMessageBytes - Maximum incoming JSON line and queued outgoing bytes.
  * @param functions - Only these own methods may be called by the peer.
  * @param eventNames - Remote methods sent as notifications without a response.
- * @param failure - Receives the first I/O or malformed-message failure after it closes the endpoint.
+ * @param failure - Receives the first I/O error, peer closure or malformed-message failure after the endpoint closes.
  * @returns Typed remote calls and birpc lifetime controls.
  */
 export function createProcessRpc<Remote extends object, Local extends object>(
@@ -21,9 +21,9 @@ export function createProcessRpc<Remote extends object, Local extends object>(
   maxMessageBytes: number,
   functions: Local,
   eventNames: (keyof Remote)[],
-  failure: (error: Error, kind: 'io' | 'protocol') => void,
+  failure: (error: Error, kind: 'io' | 'closed' | 'protocol') => void,
 ): BirpcReturn<Remote, Local> {
-  const fail = (error: unknown, kind: 'io' | 'protocol'): void => {
+  const fail = (error: unknown, kind: 'io' | 'closed' | 'protocol'): void => {
     if (rpc.$closed) return
     rpc.$close()
     // Streams, the JSON parser and the line checks fail only with Error objects.
@@ -79,10 +79,10 @@ export function createProcessRpc<Remote extends object, Local extends object>(
     } catch (error: unknown) { fail(error, 'protocol') }
   })
   stream.on('end', () => {
-    if (size === 0) fail(new Error('control channel ended before the program settled'), 'io')
+    if (size === 0) fail(new Error('control channel ended before the program settled'), 'closed')
     else fail(new Error('incomplete RPC message'), 'protocol')
   })
   stream.on('error', (error: Error) => { fail(error, 'io') })
-  stream.on('close', () => { fail(new Error('control channel closed'), 'io') })
+  stream.on('close', () => { fail(new Error('control channel closed'), 'closed') })
   return rpc
 }

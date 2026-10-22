@@ -64,6 +64,7 @@ it.each([false, true])('advertises Script syntax and its selected retention %s',
   expect(runtime.executionInstructions).toContain('The final expression is awaited if it is a Promise')
   expect(runtime.executionInstructions).toContain('uncaught callback exception or unhandled rejection terminates the process')
   expect(runtime.executionInstructions).toContain('instanceof Array or Error may be false')
+  expect(runtime.executionInstructions.includes('clears its variables')).toBe(scriptPersistence)
   expect(runtime.executionInstructions.includes('permanently uninitialized')).toBe(scriptPersistence)
   expect(runtime.executionInstructions.includes('Each call runs in a fresh Node process')).toBe(!scriptPersistence)
   const stateOwner = {}

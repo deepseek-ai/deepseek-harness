@@ -63,7 +63,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 ### 执行与结果
 
-`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
@@ -107,7 +107,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 ### 失败
 
-程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出或受管清理失败为 `worker-exit`。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
+程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
 -----
 
@@ -133,7 +133,7 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 
 源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn、birpc 与 import-meta-resolve 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
-包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk、birpc 和 import-meta-resolve；源码执行导入已安装的包。
+包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk、birpc 和 import-meta-resolve；源码执行导入已安装的包。
 
 <a id="runner-import-handling"></a>
 ### Runner 导入处理

@@ -62,16 +62,22 @@ async function evaluateScript(code: string, context: Context, imports: VmModuleI
 
 /** Detect top-level await before native compilation can interpret await as an identifier. */
 function compileScript(code: string, options: ScriptOptions): { script: Script; transformed: boolean } {
-  if (code.includes('await')) {
-    // Complete submissions need no REPL continuation; the newline terminates trailing comments.
-    const source = code.startsWith('#!') ? `//${code.slice(2)}` : code
-    let transformed: string | null
-    try { transformed = processTopLevelAwait(`${source}\n`) } catch (error: unknown) {
-      // Parser diagnostics describe the program; transformer stack frames do not.
-      if (error instanceof SyntaxError) error.stack = `${error.name}: ${error.message}`
-      throw error
+  try {
+    let transformed: string | null = null
+    if (code.includes('await')) {
+      // Complete submissions need no REPL continuation; the newline terminates trailing comments.
+      const source = code.startsWith('#!') ? `//${code.slice(2)}` : code
+      transformed = processTopLevelAwait(`${source}\n`)
     }
-    if (transformed !== null) return { script: new Script(transformed, options), transformed: true }
+    return { script: new Script(transformed ?? code, options), transformed: transformed !== null }
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      // V8 places the source location and caret before the error heading and its compiler frames.
+      const heading = `${error.name}: ${error.message}`
+      const stack = error.stack ?? ''
+      const headingStart = stack.indexOf(`\n${heading}`)
+      error.stack = headingStart < 0 ? heading : stack.slice(0, headingStart + heading.length + 1)
+    }
+    throw error
   }
-  return { script: new Script(code, options), transformed: false }
 }

@@ -165,13 +165,15 @@ function resolveMode(config: ResolvedConfig): ExecutionMode {
       const lifetime = config.scriptPersistence
         ? 'Variables, functions, and imported modules remain in memory for this Agent across calls.'
         : 'Each call runs in a fresh Node process.'
+      const asynchronousFailure = 'Await asynchronous work: an uncaught callback exception or unhandled rejection terminates the process'
+        + (config.scriptPersistence ? ' and clears its variables.' : '.')
       const recovery = config.scriptPersistence
         ? ' ' + RETAINED_STATE_INSTRUCTIONS + ' If a native top-level let, const, or class initializer throws, its name may remain permanently uninitialized; use a new name or restart the environment.'
         : ''
       return {
         format: 'script',
         retainsState: config.scriptPersistence,
-        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. The final expression is awaited if it is a Promise. Only printed values and that final expression become program output. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty. Await asynchronous work: an uncaught callback exception or unhandled rejection terminates the process and clears its variables. Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
+        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. The final expression is awaited if it is a Promise. Only printed values and that final expression become program output. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty. ' + asynchronousFailure + ' Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
         stripTypes: stripTypeScriptTypes,
       }
     }

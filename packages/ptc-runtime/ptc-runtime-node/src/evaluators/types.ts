@@ -1,4 +1,4 @@
-/** Evaluation syntax and operations shared by the three child evaluators. */
+/** Evaluation results and operations shared by the three child evaluators. */
 
 /** An import requested by a program or its VM-loaded ESM dependencies in the runner process. */
 export interface ProgramImportRequest {

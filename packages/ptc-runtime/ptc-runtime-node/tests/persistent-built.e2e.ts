@@ -5,7 +5,7 @@ import { execa } from 'execa'
 import { describe, expect, it } from 'vitest'
 
 const pkgDir = fileURLToPath(new URL('..', import.meta.url))
-const built = ['lib/index.js', 'lib/persistent-process.js'].every(file => existsSync(join(pkgDir, file)))
+const built = ['lib/index.js', 'lib/process.js'].every(file => existsSync(join(pkgDir, file)))
 
 describe.skipIf(!built)('persistent PTC published exports', () => {
   it.each(['repl', 'script'])('retains variables through published configuration and runtime exports with %s syntax', async (programFormat) => {

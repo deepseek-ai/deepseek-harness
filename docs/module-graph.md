@@ -763,9 +763,6 @@ flowchart TD
   pkg_deepseek_account_platform --> pkg_credentials
   pkg_deepseek_account_platform --> pkg_deepseek_account
   pkg_deepseek_account_platform --> pkg_host_webserver
-  pkg_cua --> pkg_attachment
-  pkg_cua --> pkg_scope
-  pkg_cua --> pkg_user_questions
   pkg_experimental_ptc_runtime_python --> pkg_ptc_runtime
   pkg_experimental_ptc_runtime_python --> pkg_sandbox
   pkg_experimental_ptc_runtime_python --> pkg_sandbox_policy
@@ -920,6 +917,10 @@ flowchart TD
   pkg_workspace_changes --> pkg_session
   pkg_workspace_changes --> pkg_subprocess
   pkg_workspace_changes --> pkg_tools
+  pkg_cua --> pkg_attachment
+  pkg_cua --> pkg_ptc_runtime_node
+  pkg_cua --> pkg_scope
+  pkg_cua --> pkg_user_questions
   pkg_experimental_browser_use_chrome_devtools_mcp --> pkg_agent
   pkg_experimental_browser_use_chrome_devtools_mcp --> pkg_browser_use
   pkg_experimental_browser_use_chrome_devtools_mcp --> pkg_system_prompt
@@ -1692,7 +1693,6 @@ flowchart TD
 | [`api-account-controller`](../packages/api/account-controller) | `api` | [`agent`](../packages/core/agent), [`deepseek-account`](../packages/credentials/deepseek-account), [`typert-protocol`](../packages/typert/protocol) |
 | [`compaction`](../packages/compaction/compaction) | `compaction` | [`brand`](../packages/util/brand), [`commands`](../packages/interaction/commands), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`deepseek-account-platform`](../packages/credentials/deepseek-account-platform) | `credentials` | [`authorization`](../packages/credentials/authorization), [`credentials`](../packages/credentials/credentials), [`deepseek-account`](../packages/credentials/deepseek-account), [`host-webserver`](../packages/host/webserver) |
-| [`cua`](../packages/experimental/cua) | `experimental` | [`attachment`](../packages/attachment/attachment), [`scope`](../packages/core/scope), [`user-questions`](../packages/interaction/user-questions) |
 | [`experimental-ptc-runtime-python`](../packages/experimental/ptc-runtime-python) | `experimental` | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
 | [`experimental-worktree`](../packages/experimental/worktree) | `experimental` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`subprocess`](../packages/subprocess/subprocess), [`working-directory`](../packages/session/working-directory) |
 | [`command-feedback`](../packages/feedback/command-feedback) | `feedback` | [`anonymous-user-id`](../packages/identity/anonymous-user-id), [`commands`](../packages/interaction/commands), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
@@ -1722,6 +1722,7 @@ flowchart TD
 | [`file-reference-local`](../packages/context/file-reference-local) | `context` | [`agent`](../packages/core/agent), [`file-reference`](../packages/context/file-reference), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`tool-present`](../packages/deliverables/tool-present) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`workspace-changes`](../packages/deliverables/workspace-changes) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools) |
+| [`cua`](../packages/experimental/cua) | `experimental` | [`attachment`](../packages/attachment/attachment), [`ptc-runtime-node`](../packages/ptc-runtime/ptc-runtime-node), [`scope`](../packages/core/scope), [`user-questions`](../packages/interaction/user-questions) |
 | [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |

@@ -50,3 +50,23 @@ it('cancels a temporary Script after a binding handshake and starts the next cal
     expect((await runtime.run(runtime.resolve({ program: 'typeof retained', bindings: [] }))).value).toBe('undefined')
   } finally { controller.abort(); await pending }
 })
+
+it.each([false, true])('accepts adjacent var patterns and comments in Script loops with retention %s', async (scriptPersistence) => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'vm-script', scriptPersistence })
+  const result = await runtime.run(runtime.resolve({
+    program: 'for (var{x} of [{x: 1}]) { await 0 }; for (var[y] of [[2]]) { await 0 }; for (var/* comment */z of [3]) { await 0 }; [x, y, z]',
+    bindings: [], stateOwner: {},
+  }))
+  expect(result.error).toBeUndefined()
+  expect(result.value).toEqual([1, 2, 3])
+})
+
+it.each([false, true])('reports native Script parse errors with their source position and no compiler frames with retention %s', async (scriptPersistence) => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'vm-script', scriptPersistence })
+  const result = await runtime.run(runtime.resolve({ program: 'let duplicate; let duplicate;', bindings: [], stateOwner: {} }))
+  expect(result.error?.kind).toBe('exception')
+  expect(result.error?.message).toContain('ptc-program.js:1')
+  expect(result.error?.message).toContain("SyntaxError: Identifier 'duplicate' has already been declared")
+  expect(result.error?.message).not.toContain('vm-script')
+  expect(result.error?.message).not.toContain('node:vm')
+})

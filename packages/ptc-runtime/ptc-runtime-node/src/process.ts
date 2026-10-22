@@ -1,7 +1,7 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
-import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Duplex } from 'node:stream'
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
@@ -103,7 +103,8 @@ export async function runNodeMain(
               return 'then' in result ? result.then(checkActive) : checkActive(result)
             })
             evaluator.globals.console = makeConsoleShim(logSink)
-            Object.defineProperty(evaluator.globals, 'process', { configurable: true, enumerable: true, writable: true, value: processState })
+            // Context access must not reserve a function-body parameter named process.
+            Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
           }
           for (const namespace of data.namespaces) {
             const descriptor = namespace.errorClass
