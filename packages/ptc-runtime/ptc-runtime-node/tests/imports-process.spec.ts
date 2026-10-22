@@ -58,13 +58,14 @@ it.each([
   const stateOwner = {}
   const program = `${mode.executionMode === 'per-call' ? 'return ' : 'await '}(async () => {
     const { Counter, counter, pid } = await import('runner:counter');
-    return { count: counter.next(), instance: counter instanceof Counter, child: pid !== ${process.pid} };
+    const { env } = await import('node:process');
+    return { count: counter.next(), instance: counter instanceof Counter, child: pid !== ${process.pid}, env: Object.keys(env) };
   })()`
   for (let index = 0; index < 2; index++) {
     const result = await runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ count: mode.scriptPersistence || mode.executionMode === 'persistent-in-memory' ? index + 1 : 1,
-      instance: true, child: true })
+      instance: true, child: true, env: [] })
   }
 })
 
