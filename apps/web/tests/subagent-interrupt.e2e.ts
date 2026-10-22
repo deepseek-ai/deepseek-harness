@@ -183,7 +183,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the 
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
+    expect(userTexts[1]).toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
     expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')

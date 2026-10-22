@@ -2691,6 +2691,10 @@
                   {
                     "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
                 "source": {
@@ -2940,6 +2944,10 @@
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+              },
+              {
+                "type": "text",
+                "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
               }
             ],
             "source": {

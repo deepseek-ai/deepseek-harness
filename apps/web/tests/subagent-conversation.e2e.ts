@@ -433,7 +433,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: '2 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
     const sidebarChat = page.locator('[data-sidebar-chat]')
-    await sidebarChat.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /).waitFor({ timeout: 15_000 })
+    await sidebarChat.getByText(/^Explain event sourcing in one sentence\./).waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
       SIDEBAR_CHAT_EXPECTED,
       await captureStableAria(page, '[data-sidebar-chat]', scaffold.workspaceCwd),
@@ -456,7 +456,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: '2 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
     await expect.poll(
-      () => page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /).count(),
+      () => page.getByText(/^Explain event sourcing in one sentence\./).count(),
       { timeout: 15_000 },
     ).toBe(1)
     if (scaffold.ctx.agents.get(childId) !== undefined) {
@@ -492,7 +492,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await expect.poll(() => requested, { timeout: 15_000 }).toBe(true)
       expect(await page.getByText('This subagent is read-only for now', { exact: true }).count()).toBe(0)
       expect(await page.getByRole('navigation', { name: 'Session hierarchy' }).count()).toBe(0)
-      expect(await page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /).count()).toBe(0)
+      expect(await page.getByText(/^Explain event sourcing in one sentence\./).count()).toBe(0)
       releaseCatalog()
       await page.getByRole('button', { name: `Switch subagent: ${LABEL}` }).waitFor({ timeout: 15_000 })
       const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
