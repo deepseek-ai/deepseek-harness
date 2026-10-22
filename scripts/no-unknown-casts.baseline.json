@@ -259,9 +259,6 @@
   "packages/api/session-controller/tests/session-presets.host.spec.ts": {
     "c051663ae60f381f30367e71bae4da0ea88c490453bbc1d86230b71c0fde8d6f": 1
   },
-  "packages/api/session-controller/tests/session-remote-rejection.client.spec.ts": {
-    "01c40d09d9157679ffe02d7cce2d1761ffd42d4a569a7176d5eeec838a09edc1": 1
-  },
   "packages/api/session-controller/tests/session.client.spec.ts": {
     "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 3
   },
