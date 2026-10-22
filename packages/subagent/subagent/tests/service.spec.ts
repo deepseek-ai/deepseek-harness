@@ -276,7 +276,7 @@ describe('SubagentRuntime', () => {
     expect(() => { assertSubagentMaxDepth(undefined) }).not.toThrow()
   })
 
-  it('publishes lifecycle only after async provider start and keeps parent scope', async () => {
+  it('publishes lifecycle only after async provider start and keeps root scope', async () => {
     const { ctx, subagents } = await service()
     const ready = Promise.withResolvers<SubagentRun>()
     const result = Promise.withResolvers<SubagentResult>()
@@ -288,6 +288,9 @@ describe('SubagentRuntime', () => {
     })
     const parent = (await ctx.agents.create({ sessionId: SessionId('delegator') })).agent
     const events: string[] = []
+    const scopedEvents: string[] = []
+    parent.ctx.on('subagent/start', () => { scopedEvents.push('start') })
+    parent.ctx.on('subagent/end', () => { scopedEvents.push('end') })
     const keys: unknown[] = []
     const runIds: string[] = []
     ctx.on('subagent/start', function (info) { events.push('start'); keys.push(carrierKeyOf(this)); runIds.push(info.runId) })
@@ -303,6 +306,7 @@ describe('SubagentRuntime', () => {
     await run.result
     await run.dispose()
     expect(events).toEqual(['start', 'end'])
+    expect(scopedEvents).toEqual(['start', 'end'])
     expect(keys).toEqual([parent, parent])
     expect(runIds[0]).toBe(runIds[1])
   })

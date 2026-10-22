@@ -85,7 +85,7 @@ This section explains how the service is built and where the observable behavior
 ### Design concept
 
 - **One service, many providers.** The service is a named-provider registry; each backend registers under a unique name and a request picks one by name.
-- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, runtime ownership, and disposal. Each activation retains a local AgentHandle or external SubagentRun directly; local inbox and idle state belong only to the local variant.
+- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, runtime ownership, and disposal. Each activation retains its lifecycle identity and a local AgentHandle or external SubagentRun; the manager publishes paired events through the service's scoped emitter. Local inbox and idle state belong only to the local variant.
 - **Fulfillment is publication.** `startActivation()` returns only after the child is accepted and its handle can cancel that exact execution.
 - **Trusted same-process values.** Requests, descriptors, and results are borrowed immutable; serialization and hostile-input validation belong at process and wire boundaries.
 

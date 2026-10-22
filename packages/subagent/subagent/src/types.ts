@@ -1,10 +1,8 @@
 /**
  * The seam's consumer-facing contracts: request, result, and capability types
  * for {@link SubagentProvider}, plus the `subagent/start` and `subagent/end`
- * payloads that plugins and hosts observe. Internal control interfaces belong
- * with their implementation — the lifecycle observer in `./lifecycle.ts`, the
- * manager host in `./manager.ts` — so this module stays the published
- * surface rather than a bag of everything type-shaped.
+ * payloads that plugins and hosts observe. Internal control interfaces, such
+ * as the manager host, belong with their implementation.
  *
  * @module @deepseek-ai/dsh-subagent/types
  */
@@ -15,7 +13,7 @@ import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 
-/** Identifies one accepted subagent run across its lifecycle event pair. */
+/** Identifies one subagent residency epoch across its lifecycle event pair. */
 export type SubagentRunId = Branded<'SubagentRunId'>
 
 /**
@@ -75,10 +73,10 @@ export interface SubagentSendMessageOptions {
 
 /**
  * Observe-only identifying detail for a published subagent run, carried by
- * `subagent/start`. Local and external activations share this payload.
+ * `subagent/start` and `subagent/end`. Local and external activations share it.
  */
 export interface SubagentRunInfo {
-  /** Unique identity shared with the paired terminal event. */
+  /** Unique identity shared by one residency epoch's start/end pair. */
   readonly runId: SubagentRunId
   /**
    * Provider name recorded when the child was first created, retained even
@@ -97,17 +95,7 @@ export interface SubagentRunInfo {
  * Observe-only outcome detail for a settled subagent run, carried by
  * `subagent/end` and paired with one {@link SubagentRunInfo} by `runId`.
  */
-export interface SubagentRunEndInfo {
-  /** Unique identity shared with the paired start event. */
-  readonly runId: SubagentRunId
-  /** The same provider name carried by the paired start event. */
-  readonly provider: string
-  /** Durable direct creator, independent of the live subagent tree root. */
-  readonly parentSessionId: SessionId
-  /** The child agent's id. */
-  readonly id: SessionId
-  /** Whether this activation owns a local Agent, fixed at publication. */
-  readonly local: boolean
+export interface SubagentRunEndInfo extends SubagentRunInfo {
   /** The terminal stop reason. */
   readonly stopReason: SubagentResult['stopReason']
   /**

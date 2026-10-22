@@ -3357,6 +3357,7 @@ describe('continuable lifecycle observation', () => {
     await vi.waitFor(() => { expect(ends).toHaveLength(2) })
 
     expect(starts).toHaveLength(2)
+    expect(new Set(starts.map(info => info.runId)).size).toBe(2)
     expect(starts.map(info => info.id)).toEqual([started.childId, started.childId])
     expect(starts.map(info => info.provider)).toEqual(['spawn', 'spawn'])
     // Each end pairs its own start's runId.
@@ -3478,7 +3479,15 @@ describe('continuable errors', () => {
       .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     await unmanaged.dispose()
     const drains: Promise<void>[] = []
-    const detach = ctx.on('subagent/start', ({ id }) => { drains.push(ctx.subagents.drainChildren(parent, [id])) })
+    const starts: SubagentRunInfo[] = []
+    const ends: SubagentRunEndInfo[] = []
+    const residentAtStart: boolean[] = []
+    const detach = ctx.on('subagent/start', (info) => {
+      starts.push(info)
+      residentAtStart.push(ctx.agents.get(info.id)?.id === info.id)
+      drains.push(ctx.subagents.drainChildren(parent, [info.id]))
+    })
+    ctx.on('subagent/end', (info) => { ends.push(info) })
     try {
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_CLOSING' })
@@ -3486,6 +3495,9 @@ describe('continuable errors', () => {
       detach()
       await Promise.all(drains)
     }
+    expect(residentAtStart).toEqual([true])
+    expect(ends).toHaveLength(1)
+    expect(ends[0]).toMatchObject(starts[0]!)
   })
 
   it('rejects establishing a child under a parent whose disposal already began', async () => {

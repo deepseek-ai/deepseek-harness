@@ -1,40 +1,17 @@
 /**
  * Lifecycle-edge publication for managed subagent activations.
  *
- * Public event payloads live in `./types.ts`; the package-private observer
- * retains only the identity shared by each start/end pair.
+ * The service owns scoped dispatch and listener containment; the manager
+ * supplies event payloads from each activation.
  *
  * @module @deepseek-ai/dsh-subagent/lifecycle
  */
 
-import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
-import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
-import { SubagentRunId } from './types.ts'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
-
-/**
- * Lifecycle observer for one activation's residency epoch. Package-private: the
- * continuation manager is the only consumer, and its call ordering is an
- * in-package contract rather than a published extension point.
- */
-export interface ActivationObserver {
-  /**
-   * Publish the start edge once the epoch is resident.
-   * @param child - the resident local Agent, or undefined for an external execution.
-   */
-  start(child?: Agent): void
-  /**
-   * Publish the terminal edge exactly once, pairing this epoch's {@link start},
-   * after the disposal outcome is known. Called only for a resident epoch: a
-   * failure before residency publishes no edge, because inventing one would
-   * report a lifecycle the child never had.
-   * @param result - the captured result, with teardown failures applied.
-   */
-  settle(result: SubagentResult): void
-}
 
 /**
  * Publish one lifecycle edge with per-listener exception containment. Run edges
@@ -58,7 +35,7 @@ export type LifecycleEmitter = {
  * or — for provider removal, which fires from a disposer — breaking teardown.
  * @param ctx - the service's own context, owning dispatch and the logger.
  * @param carrier - resolve the scoped dispatch carrier for one subagent tree root.
- * @returns the emitter both observers and the provider registry publish through.
+ * @returns the emitter the manager and provider registry publish through.
  */
 export function createLifecycleEmitter(
   ctx: Context,
@@ -82,38 +59,6 @@ export function createLifecycleEmitter(
         ctx.logger.warn(`subagent: ${name} listener threw: ${renderThrown(error)}`)
       }
     }
-  }
-}
-
-/**
- * Build the observer for one local or external activation's residency epoch. Creation failure before residency emits no lifecycle edge.
- * @param emit - the contained lifecycle emitter.
- * @param provider - the provider name recorded in the durable descriptor.
- * @param childId - the durable child session id.
- * @param root - the exact live subagent tree root keying scoped dispatch.
- * @param parentSessionId - durable direct creator retained through disposal.
- * @returns the observer whose edges this epoch publishes.
- */
-export function createActivationObserver(
-  emit: LifecycleEmitter,
-  provider: string,
-  childId: SessionId,
-  root: Agent,
-  parentSessionId: SessionId,
-): ActivationObserver {
-  const identity = { runId: SubagentRunId(randomUUID()), provider, id: childId, parentSessionId, local: false }
-  return {
-    start: (child?: Agent): void => {
-      identity.local = child !== undefined
-      emit('subagent/start', identity, root)
-    },
-    settle: ({ stopReason, output }: SubagentResult): void => {
-      emit('subagent/end', {
-        ...identity,
-        stopReason,
-        ...output.length === 0 ? {} : { lastAssistantMessage: output },
-      }, root)
-    },
   }
 }
 

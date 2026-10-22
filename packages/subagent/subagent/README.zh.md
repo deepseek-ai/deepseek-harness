@@ -85,7 +85,7 @@ kind: "package-reference"
 ### 设计理念
 
 - **一个服务，多个提供方。** 服务是具名提供方注册表；每个后端以唯一名称注册，请求按名称选择一个。
-- **统一受管理生命周期。** `SubagentManager` 统一管理启动、消息准入、容量、运行归属与释放。每条 activation 直接持有本地 AgentHandle 或外部 SubagentRun；本地 inbox 与空闲状态仅属于本地分支。
+- **统一受管理生命周期。** `SubagentManager` 统一管理启动、消息准入、容量、运行归属与释放。每条 activation 持有生命周期标识和本地 AgentHandle 或外部 SubagentRun；manager 通过服务的作用域事件发送器发布成对事件。本地 inbox 与空闲状态仅属于本地分支。
 - **兑现即发布。** `startActivation()` 仅在子级已接受且句柄可取消该次执行后返回。
 - **同进程值可信。** 请求、描述符与结果按不可变约定借用；序列化与不可信输入校验属于进程与协议边界。
 

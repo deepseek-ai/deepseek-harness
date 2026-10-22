@@ -7,10 +7,9 @@ import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { finalAssistantOutput } from './assistant-output.ts'
 import { epochStopReason } from './lifecycle.ts'
-import type { ActivationObserver } from './lifecycle.ts'
 import { SubagentError } from './error.ts'
 import type { StructuredAttachment } from './structured.ts'
-import type { SubagentResult, SubagentRun } from './types.ts'
+import type { SubagentResult, SubagentRun, SubagentRunId } from './types.ts'
 
 /** Process-local capacity shared by every member of a subagent tree. */
 export class ActivationPool {
@@ -44,6 +43,10 @@ interface ActivationBase {
   readonly releaseSlot: () => void
   /** The durable child this Activation is an epoch of. */
   readonly childId: SessionId
+  /** Unique identity shared by this residency epoch's start/end event pair. */
+  readonly runId: SubagentRunId
+  /** Provider recorded at creation, retained across cold resumes. */
+  readonly provider: string
   /** Exact live subagent tree root owning this instance and its shared capacity. */
   readonly root: Agent
   /** Verified creation ancestors, from subagent tree root to direct creator. */
@@ -52,14 +55,12 @@ interface ActivationBase {
   readonly result: PromiseWithResolvers<SubagentResult>
   /** Published synchronously before teardown; subsequent callers share this transaction. */
   closing: Promise<void> | undefined
-  /** The lifecycle observer that emits this epoch's start and terminal edges. */
-  readonly observer: ActivationObserver
   /**
-   * Whether any delivery to this child was ever accepted. A materialization
-   * rolled back before its first acceptance is a child the caller was told does
-   * not exist, so its teardown owes the parent no settlement account.
+   * Whether local input was accepted or external startup completed, including
+   * any required catalog publication. Until then, teardown owes the parent no
+   * settlement notice, even if this epoch's start event was already published.
    */
-  announced: boolean
+  accepted: boolean
 }
 
 /** Resources retained only for the selected execution kind. */

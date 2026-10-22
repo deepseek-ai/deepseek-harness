@@ -67,8 +67,8 @@ import type {
 } from './types.ts'
 import { SubagentError } from './error.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
-import { createActivationObserver, createLifecycleEmitter } from './lifecycle.ts'
-import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
+import { createLifecycleEmitter } from './lifecycle.ts'
+import type { LifecycleEmitter } from './lifecycle.ts'
 import SubagentManager from './manager.ts'
 import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
@@ -221,7 +221,7 @@ export class SubagentRuntime extends TypertRemoteService {
           return provider.start(request)
         },
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
-        observeActivation: (provider, childId, root, parentSessionId) => this.observeActivation(provider, childId, root, parentSessionId),
+        emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
       childCtx.effect(() => () => {
@@ -619,19 +619,6 @@ export class SubagentRuntime extends TypertRemoteService {
       )
     }
     return this.manager
-  }
-
-  /**
-   * Build the lifecycle observer for one continuable Activation's residency
-   * epoch, so the manager publishes its edges without owning event dispatch.
-   */
-  private observeActivation(
-    provider: string,
-    childId: SessionId,
-    root: Agent,
-    parentSessionId: SessionId,
-  ): ActivationObserver {
-    return createActivationObserver(this.emitLifecycle, provider, childId, root, parentSessionId)
   }
 
   /** Reject the first requested capability that the provider lacks. */

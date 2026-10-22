@@ -33,12 +33,13 @@ import type { SubagentDescriptorData } from './descriptor.ts'
 import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
 import { SubagentError } from './error.ts'
 import { isAdjacentAgentSendMessageTool } from './internal.ts'
-import type { ActivationObserver } from './lifecycle.ts'
+import type { LifecycleEmitter } from './lifecycle.ts'
 import type { SubagentIdentityProjection } from './projection-types.ts'
+import { SubagentRunId } from './types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
-  SubagentSendMessageOptions, SubagentResult, ResolvedSubagentStartRequest,
+  SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, ResolvedSubagentStartRequest,
 } from './types.ts'
 import { attachStructuredRuntime } from './structured.ts'
 import type { StructuredAttachment } from './structured.ts'
@@ -62,8 +63,8 @@ interface SubagentHost {
   startExternal(name: string, request: ResolvedSubagentStartRequest): Promise<SubagentRun>
   /** Resolve one provider's detached continuable-creation contribution. */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
-  /** Build the lifecycle observer for one Activation residency epoch. */
-  observeActivation(provider: string, childId: SessionId, root: Agent, parentSessionId: SessionId): ActivationObserver
+  /** Publish lifecycle events through the owning service's scoped dispatcher. */
+  readonly emitLifecycle: LifecycleEmitter
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
@@ -149,7 +150,7 @@ export class SubagentManager {
   /**
    * Build one manager inside the service's Agent-injected context.
    * @param ctx - context providing Agents, Sessions, and teardown ownership.
-   * @param host - provider dispatch and lifecycle observation owned by the service.
+   * @param host - provider dispatch and lifecycle publication owned by the service.
    * @param maxActiveSubagents - the current configured child capacity.
    */
   constructor(
@@ -447,7 +448,7 @@ export class SubagentManager {
         if (spec.delivery === 'parent') {
           establishExternalCatalogChild(parent.session, activation.childId, spec.label)
         }
-        this.announce(activation)
+        this.accept(activation)
         return this.receipt(activation)
       } catch (error: unknown) {
         if (activation !== undefined) {
@@ -815,19 +816,18 @@ export class SubagentManager {
 
       resource = { kind: 'local', handle, outputStart: handle.agent.session.seq, structured, failureAt: undefined, poke: Promise.withResolvers<void>() }
     }
-    const observer = this.host.observeActivation(provider, childId, root, inputs.ancestors.at(-1) as SessionId)
-
     const activation: Activation = {
       releaseSlot,
       childId,
+      runId: SubagentRunId(randomUUID()),
+      provider,
       ...resource,
       root,
       ancestors: inputs.ancestors,
       delivery: inputs.delivery ?? 'parent',
       result: Promise.withResolvers<SubagentResult>(),
       closing: undefined,
-      observer,
-      announced: false,
+      accepted: false,
     }
     void activation.result.promise.catch(() => undefined)
     this.resident.set(childId, activation)
@@ -841,7 +841,9 @@ export class SubagentManager {
         activation.handle.agent.ctx.on('agent/inbox/claimed', wakeSettlement)
         activation.handle.agent.ctx.on('agent/inbox/discarded', wakeSettlement)
       }
-      observer.start(activationAgent(activation))
+      // Listeners may read the resident Agent or drain it immediately. Publish
+      // after residency and inbox listeners, as the last rollback-protected step.
+      this.host.emitLifecycle('subagent/start', this.runInfo(activation), root)
     } catch (error: unknown) {
       /* v8 ignore next -- rollback failure must not mask the admission failure
        * that prevented this operation from returning an accepted message id. */
@@ -851,13 +853,21 @@ export class SubagentManager {
     return activation
   }
 
-  /**
-   * Begin settlement observation after initial acceptance is recorded.
-   * @param activation - accepted activation to observe.
-   */
-  private announce(activation: Activation): void {
-    if (activation.announced) return
-    activation.announced = true
+  /** Identity shared by one residency epoch's start/end pair, including cold resumes. */
+  private runInfo(activation: Activation): SubagentRunInfo {
+    return {
+      runId: activation.runId,
+      provider: activation.provider,
+      parentSessionId: activation.ancestors.at(-1) as SessionId,
+      id: activation.childId,
+      local: activation.kind === 'local',
+    }
+  }
+
+  /** Record acceptance and begin settlement observation before returning the receipt. */
+  private accept(activation: Activation): void {
+    if (activation.accepted) return
+    activation.accepted = true
     if (activation.kind === 'local') {
       this.watchLocalSettlement(activation)
     } else {
@@ -1019,7 +1029,13 @@ export class SubagentManager {
     activation.releaseSlot()
     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
     this.notifySettlement(activation, result)
-    activation.observer.settle(terminal)
+    // The sole end publication follows resource release and parent notification,
+    // before result delivery. Cleanup failure changes the event, not the captured result.
+    this.host.emitLifecycle('subagent/end', {
+      ...this.runInfo(activation),
+      stopReason: terminal.stopReason,
+      ...terminal.output.length === 0 ? {} : { lastAssistantMessage: terminal.output },
+    }, activation.root)
     if (resultFailure === undefined) activation.result.resolve(result)
     else activation.result.reject(resultFailure.error)
     if (failure !== undefined) throw failure
@@ -1027,7 +1043,7 @@ export class SubagentManager {
 
   /** Deliver the captured execution result to the durable direct parent after cleanup. */
   private notifySettlement(activation: Activation, terminal: SubagentResult): void {
-    if (!activation.announced || activation.delivery === 'caller') return
+    if (!activation.accepted || activation.delivery === 'caller') return
     try {
       const parentId = activation.ancestors.at(-1) as SessionId
       const parent = this.ctx.agents.get(parentId)
@@ -1127,7 +1143,7 @@ export class SubagentManager {
         }
         if (activation.closing !== undefined) return { closing: activation.closing }
         const messageId = this.submitAdmitted(activation, content, options, root)
-        this.announce(activation)
+        this.accept(activation)
         return { messageId }
       })
       if ('messageId' in result) return result.messageId
@@ -1213,7 +1229,7 @@ export class SubagentManager {
       }
       const messageId = this.submitAdmitted(activation, content, options, parent)
       commit?.()
-      this.announce(activation)
+      this.accept(activation)
       return messageId
     } catch (error: unknown) {
       try {

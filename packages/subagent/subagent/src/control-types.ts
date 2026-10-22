@@ -9,6 +9,7 @@ import type { PromptContentPart } from '@deepseek-ai/dsh-attachment/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { KnownSubagentCatalogFields } from './projection-types.ts'
 // Type-only: the Workspace registry's archive-admission family map this runtime merges `subagent` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
 
@@ -31,26 +32,8 @@ export type SubagentCatalogRow =
      * does not encode a durable outcome or guarantee continuation delivery.
      */
     readonly activity: 'running' | 'inactive'
-  } & (
-    | {
-      /** A terminal one-shot child. */
-      readonly mode: 'one-shot'
-      /** Optional durable creation label from the parent catalog. */
-      readonly label?: string
-    }
-    | {
-      /** An external execution without a local child Session. */
-      readonly mode: 'external'
-      /** Optional durable creation label from the parent catalog. */
-      readonly label?: string
-    }
-    | {
-      /** A resumable conversation. */
-      readonly mode: 'continuable'
-      /** Durable creation label from the parent catalog. */
-      readonly label: string
-    }
-  )
+  }
+  & KnownSubagentCatalogFields
 
 /**
  * One recursive catalog row. Traversal may also return diagnostics for
