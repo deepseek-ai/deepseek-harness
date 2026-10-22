@@ -25,14 +25,13 @@ import {
 } from './child-agent.ts'
 import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
 import {
-  createAgentMessage, createSettlementMessage, withContinuableReturnGuidance,
+  createAgentMessage, createSettlementMessage, withResultDeliveryGuidance,
 } from './continuation-messages.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
 import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
 import { SubagentError } from './error.ts'
-import { isAdjacentAgentSendMessageTool } from './internal.ts'
 import type { LifecycleEmitter } from './lifecycle.ts'
 import type { SubagentIdentityProjection } from './projection-types.ts'
 import { SubagentRunId } from './types.ts'
@@ -399,8 +398,8 @@ export class SubagentManager {
         const childHeader = child.session.header
         return await this.submitMaterialized(
           activation,
-          spec.delivery !== 'caller' && isAdjacentAgentSendMessageTool(this.ctx.get('tools')?.get('send_message', child))
-            ? withContinuableReturnGuidance(parent.id, request.prompt)
+          spec.delivery !== 'caller'
+            ? withResultDeliveryGuidance(request.prompt)
             : request.prompt,
           { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,

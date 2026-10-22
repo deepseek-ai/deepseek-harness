@@ -97,7 +97,6 @@ kind: "package-reference"
 | [`src/manager.ts`](src/manager.ts) | 统一管理启动、消息准入、冷恢复、运行归属、结算与释放 |
 | [`src/activation.ts`](src/activation.ts) | 执行期记录、容量槽、子级锁与本地输出捕获 |
 | [`src/continuation-messages.ts`](src/continuation-messages.ts) | agent 消息、返回指引与结算通知 |
-| [`src/internal.ts`](src/internal.ts) | Host 专用 Queue 适配器，以及标准 agent 消息标记 |
 | [`src/structured.ts`](src/structured.ts) | Activation 局部结构化捕获与保护 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |
@@ -178,17 +177,17 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-子级初始任务包含以下指导，其中 `<parent-id>` 替换为 JSON 编码的父级 Session id。子级在最终回答中提供结果和证据；中途消息用于报告会改变父级下一步操作的发现。
+采用 `delivery: 'parent'` 的本地子级会在初始任务中收到以下结果交付指导，与是否安装通信工具无关。工具用法和通信身份由 [tool-subagent-control](../tool-subagent-control/README.zh.md) 提供。
 
 ##### 返回指导
 
 ```markdown
-Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. Use send_message({ agent_id: <parent-id>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message.
 ```
 
 #### Token 影响
 
-每个可继续执行子级的初始任务增加一个指导块，其中两次写出父级 id。
+每个采用父级交付的本地子级初始任务增加一个固定指导块；调用方交付不增加。
 
 #### KV Cache 影响
 

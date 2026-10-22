@@ -18,7 +18,7 @@ import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { mountLocalActivations, startTestActivation } from './local-activation.ts'
-import { queueHostSubagentPrompt } from '../src/internal.ts'
+import { subagentManager } from './manager-internals.ts'
 import {
   STRUCTURED_OUTPUT_INSTRUCTION,
   STRUCTURED_OUTPUT_TOOL,
@@ -107,7 +107,7 @@ function deliverInput(
   const content: ContentBlock[] = [{ type: 'text', text: 'Correction: submit answer 42 instead.' }]
   return delivery === 'steer'
     ? ctx.subagents.sendMessage(parent, childId, content, { signal: testToolSignal })
-    : queueHostSubagentPrompt(ctx.subagents, childId, content, { kind: 'user' }, testToolSignal)
+    : subagentManager(ctx).deliverPrompt(childId, content, { delivery: 'queue', source: { kind: 'user' }, signal: testToolSignal })
 }
 
 describe('in-process structured output', () => {

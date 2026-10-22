@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.md
 /agent-note-adjacent-agents-share-one-steer-send-message-operation:
-  en: 4784b23b16ce0d58
-  zh: 7fb5755eebab37b0
+  en: 9d0af2bae38b1eec
+  zh: 8a6e8502a5195548
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/problem:
   en: 5dc4c218f648c27e
   zh: b48531fac94b25db

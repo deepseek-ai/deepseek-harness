@@ -15,12 +15,12 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
-import { markAdjacentAgentSendMessageTool } from '@deepseek-ai/dsh-subagent/internal'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { registerListAgents } from './list-agents.ts'
 import { registerWaitAgent } from './wait-agent.ts'
 
 export const name = 'tool-subagent-control'
-export const inject = ['tools', 'subagents', 'agents']
+export const inject = ['tools', 'subagents', 'agents', 'systemPrompt']
 
 /** Optional subagent control tools. */
 export interface Config {
@@ -35,18 +35,19 @@ export const Config: z<Config> = z.object({
 
 /**
  * Register the shared subagent control and discovery tools.
- * @param ctx - context carrying tools, subagents, and live Agents.
+ * @param ctx - context carrying tools, subagents, live Agents, and prompt assembly.
  * @param config - optional tool registration settings.
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const interrupt = config.interrupt !== false
   registerListAgents(ctx, interrupt)
   registerWaitAgent(ctx)
-  ctx.tools.register(markAdjacentAgentSendMessageTool(defineTool({
+  const sendMessage = defineTool({
     name: 'send_message',
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
-      + 'Returns delivery confirmation, not the agent\'s answer.',
+      + 'Returns delivery confirmation, not the agent\'s answer. Sending a message does not end your turn. '
+      + 'Send findings when they change what another agent should do next.',
     parameters: {
       agent_id: {
         type: 'string',
@@ -86,7 +87,21 @@ export function apply(ctx: Context, config: Config = {}): void {
       )
       return { messageId }
     },
-  })))
+  })
+  ctx.tools.register(sendMessage)
+  ctx.systemPrompt.context({
+    name: 'subagent:communication',
+    order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
+    required: true,
+    interpolate: false,
+    text: ({ agent, scope, toolSet }) => {
+      if (agent === undefined || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
+      const parentId = agent.session.header.origin === 'subagent' ? agent.session.header.parentSession : undefined
+      return `Your agent id is ${JSON.stringify(agent.id)}.`
+        + (parentId === undefined ? '' : ` Your parent agent id is ${JSON.stringify(parentId)}.`)
+        + ' Use send_message to communicate with another member of your subagent tree; list_agents shows their ids.'
+    },
+  })
 
   if (!interrupt) return
   ctx.tools.register(defineTool({

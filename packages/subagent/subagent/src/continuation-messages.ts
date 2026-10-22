@@ -72,26 +72,21 @@ export function createAgentMessage(
 }
 
 /**
- * Append parent communication guidance to a continuable child's initial task.
- * @param parentId - durable parent session id named in the guidance.
+ * Append automatic result-delivery guidance to a parent-delivered child's initial task.
  * @param prompt - initial model-visible task blocks.
- * @returns task blocks followed by the continuable return guidance.
+ * @returns task blocks followed by the result-delivery guidance.
  */
-export function withContinuableReturnGuidance(
-  parentId: SessionId,
+export function withResultDeliveryGuidance(
   prompt: ContentBlock[],
 ): ContentBlock[] {
-  const encodedParentId = JSON.stringify(parentId)
   return [
     ...prompt,
     {
       type: 'text',
-      text: `Your parent agent id is ${encodedParentId}. Your final answer is delivered automatically if your `
+      text: 'Your final answer is delivered automatically if your '
         + 'parent is still online. Include the result and relevant evidence in that answer; the parent does not '
         + 'receive your full transcript, tool output, or reasoning. If your last action is a message to your '
-        + 'parent, the completion notice omits your final answer; include the result and relevant evidence in that message. Use '
-        + `send_message({ agent_id: ${encodedParentId}, message: "<finding>" }) when a finding changes what the `
-        + 'parent should do next; sending a message does not end your turn.',
+        + 'parent, the completion notice omits your final answer; include the result and relevant evidence in that message.',
     },
   ]
 }

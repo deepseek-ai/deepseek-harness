@@ -36,7 +36,7 @@ import type {} from '@deepseek-ai/dsh-attachment'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -46,7 +46,6 @@ import {
   rejectPrompt, validateControlRequest,
 } from './control.ts'
 import type {
-  SubagentDelivery,
   SubagentInterruptReceipt,
   SubagentPromptReceipt,
   SubagentPromptRequest,
@@ -77,7 +76,6 @@ import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import type { IdentityState } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
-import { deliverSubagentPrompt } from './internal.ts'
 
 export type {} from './catalog.ts'
 export type {} from './projection.ts'
@@ -330,27 +328,6 @@ export class SubagentRuntime extends TypertRemoteService {
     options: SubagentSendMessageOptions,
   ): Promise<MessageId> {
     return this.requireManager().sendMessage(sender, targetId, content, options)
-  }
-
-  /**
-   * Deliver one trusted host-protocol message to a continuable subagent.
-   * Symbol-keyed so host adapters can preserve their own source descriptors without
-   * widening the public Service Definition or impersonating an Agent sender.
-   * @param childId - durable continuable subagent session id.
-   * @param content - host-authored content to deliver.
-   * @param source - durable host-protocol source descriptor.
-   * @param signal - caller cancellation before inbox acceptance.
-   * @param delivery - Queue as a distinct turn or Steer at the nearest step.
-   * @returns the accepted message's inbox id.
-   */
-  protected [deliverSubagentPrompt](
-    childId: SessionId,
-    content: ContentBlock[],
-    source: MessageSource,
-    signal: AbortSignal,
-    delivery: SubagentDelivery,
-  ): Promise<MessageId> {
-    return this.requireManager().deliverPrompt(childId, content, { delivery, source, signal })
   }
 
   /**

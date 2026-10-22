@@ -50,12 +50,12 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
 }
 
 describe('wait_agent', () => {
-  it('adds no collaboration policy or identity without Team mode', async () => {
+  it('adds communication identity without Team policy', async () => {
     const { ctx, agent } = await setup()
     const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
     expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
     expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
-    expect(renderContextSnapshot(assembled)).not.toContain('Your agent id')
+    expect(renderContextSnapshot(assembled)).toContain(`Your agent id is ${JSON.stringify(agent.id)}`)
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
     expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
   })

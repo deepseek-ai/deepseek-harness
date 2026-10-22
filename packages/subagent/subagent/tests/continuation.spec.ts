@@ -146,7 +146,7 @@ function hasAssistantText(events: readonly SessionEvent[], text: string): boolea
 function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
     ? event.data.content.flatMap(block => block.type === 'text'
-      && !block.text.startsWith('Your parent agent id is ')
+      && !block.text.startsWith('Your final answer is delivered automatically ')
       ? [block.text]
       : [])
     : [])

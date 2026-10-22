@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, and `agents`.
+Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`.
 
 ### Minimal configuration
 
@@ -120,6 +120,20 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 #### KV Cache effect
 
 Prefix-stable; the schemas do not change at runtime, and a parent and its continuable children, including fork children, receive identical definitions.
+
+### Communication context
+
+#### What the model sees
+
+The logged `subagent:communication` runtime context names the current Agent and, for delegated children, its direct creator using JSON-encoded ids. It points to `send_message` and `list_agents`. The context is absent when the standard messaging definition is hidden, replaced, or excluded from the step. Tool descriptions explain when to send findings and that sending does not end the turn; automatic result delivery remains owned by the subagent service.
+
+#### Token effect
+
+One short context entry, independent of tree size, containing at most two ids.
+
+#### KV Cache effect
+
+Identity is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the ids again from the target Session.
 
 ### Interrupt result
 

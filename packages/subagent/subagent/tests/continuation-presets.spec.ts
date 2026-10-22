@@ -16,8 +16,7 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { managerState } from './manager-internals.ts'
-import { queueHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
+import { managerState, subagentManager } from './manager-internals.ts'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -98,10 +97,9 @@ async function settled(ctx: Context, childId: SessionId) {
 }
 
 function continueChild(ctx: Context, childId: SessionId) {
-  return queueHostSubagentPrompt(
-    ctx.subagents, childId,
-    [{ type: 'text', text: 'continue' }], { kind: 'user' }, new AbortController().signal,
-  )
+  return subagentManager(ctx).deliverPrompt(childId, [{ type: 'text', text: 'continue' }], {
+    delivery: 'queue', source: { kind: 'user' }, signal: new AbortController().signal,
+  })
 }
 
 describe('child preset start validation', () => {

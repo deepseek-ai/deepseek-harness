@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-浏览器提示词和 `interruptByUser` 仅按目标子 Session 寻址。每个 Remote 方法显式声明该 Session 为访问资源；Gateway 在附件接纳、恢复或取消之前检查调用的 principal。global 或父 Session 授权不意味着子 Session 授权。策略决定授予两个操作、其中一个操作，或继承访问权。同进程宿主适配器属于可信调用方，不接受从线上传入的 principal。
+浏览器提示词和 `interruptByUser` 仅按目标子 Session 寻址。每个 Remote 方法显式声明该 Session 为访问资源；Gateway 在附件接纳、恢复或取消之前检查调用的 principal。global 或父 Session 授权不意味着子 Session 授权。策略决定授予两个操作、其中一个操作，或继承访问权。同进程用户中断信任其调用方，不接受从线上传入的 principal。
 
 提示词投递从驻留 Activation 或经过验证的持久化创建关系中解析在线根。仅恢复冷目标，创建者可以保持离线。共享投递保留精确在线根检查、关闭准入、取消、容量和最终 inbox 接纳。根 Session 不是浏览器子代理提示词端点的目标。用户中断直接寻址驻留 Activation，不读取持久化数据，也不恢复目标；目标缺席仍为无操作，中断保留停放的输入。
 

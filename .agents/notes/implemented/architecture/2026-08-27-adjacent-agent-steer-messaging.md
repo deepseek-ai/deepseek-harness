@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-08-27-adjacent-agent-steer-messaging.zh.md)
 
-The adjacency, discovery, and parent-lifetime restrictions below are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md); the remaining decisions stay active.
+The adjacency, discovery, and parent-lifetime restrictions below are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md); the remaining decisions stay active. The tool identity marker and initial-task communication guidance below are superseded by [tool-owned communication](2026-10-22-subagent-tool-owned-communication.md).
 
 ## Problem
 

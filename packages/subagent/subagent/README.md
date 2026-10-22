@@ -97,7 +97,6 @@ This section explains how the service is built and where the observable behavior
 | [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, runtime ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
 | [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, return guidance, and settlement notices |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue adapter plus standard agent messaging markers |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
@@ -178,17 +177,17 @@ Append-only in the parent: the notice follows its reusable request prefix. Reach
 
 #### What the model sees
 
-The child's initial task includes the guidance below, with `<parent-id>` replaced by its JSON-encoded parent Session id. The child places its result and evidence in its final answer; an intermediate message serves findings that change the parent's next action.
+Local children using `delivery: 'parent'` receive the result-delivery guidance below in their initial task, whether or not messaging tools are installed. Tool usage and communication identity belong to [tool-subagent-control](../tool-subagent-control/README.md).
 
 ##### Return guidance
 
 ```markdown
-Your parent agent id is <parent-id>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. Use send_message({ agent_id: <parent-id>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message.
 ```
 
 #### Token effect
 
-One guidance block in each continuable child's initial task, naming its parent twice.
+One fixed guidance block per local parent-delivered child's initial task; caller delivery adds none.
 
 #### KV Cache effect
 

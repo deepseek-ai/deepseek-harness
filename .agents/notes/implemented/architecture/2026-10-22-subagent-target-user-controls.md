@@ -10,7 +10,7 @@ A browser knows the subagent it is displaying, but requiring its direct creator 
 
 ## Decision
 
-Browser prompts and `interruptByUser` address only the target child Session. Each Remote method explicitly declares that Session as its access resource; the Gateway checks the invocation's principal before attachment admission, restoration, or cancellation. A global or parent Session grant does not imply a child Session grant. Policies decide whether to grant both actions, either action, or inherited access. Same-process host adapters are trusted callers and do not accept a wire-supplied principal.
+Browser prompts and `interruptByUser` address only the target child Session. Each Remote method explicitly declares that Session as its access resource; the Gateway checks the invocation's principal before attachment admission, restoration, or cancellation. A global or parent Session grant does not imply a child Session grant. Policies decide whether to grant both actions, either action, or inherited access. Same-process user interruption trusts its caller and does not accept a wire-supplied principal.
 
 Prompt delivery derives the live root from the resident Activation or verified persisted creation edges. Only the cold target resumes; its creator can remain offline. Shared delivery retains exact live root checks, shutdown admission, cancellation, capacity, and final inbox acceptance. A root Session is not a target of the browser subagent prompt endpoint. User interruption addresses a resident Activation without persistence reads or restoration; an absent target remains a no-op, and interruption preserves parked input.
 

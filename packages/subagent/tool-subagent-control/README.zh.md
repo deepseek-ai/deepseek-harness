@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个工具作用域挂载一次此包。它需要 `tools`、`subagents` 和 `agents`。
+每个工具作用域挂载一次此包。它需要 `tools`、`subagents`、`agents` 和 `systemPrompt`。
 
 ### 最小配置
 
@@ -120,6 +120,20 @@ kind: "package-reference"
 #### KV Cache 影响
 
 前缀保持稳定；schema 不会在运行时改变，父级与其可继续子级（包括 fork 子级）收到相同的定义。
+
+### 通信上下文
+
+#### 模型看到什么
+
+持久记录的 `subagent:communication` 运行时上下文使用 JSON 编码的 id 标明当前 Agent，以及委派子级的直接创建者，并指向 `send_message` 和 `list_agents`。标准通信定义被隐藏、替换或排除于当前 step 时，不提供这段上下文。工具描述说明何时发送发现，以及发送不会结束轮次；自动结果交付仍由 subagent 服务负责。
+
+#### Token 影响
+
+一条简短上下文，最多包含两个 id，长度与树规模无关。
+
+#### KV Cache 影响
+
+身份作为运行时上下文保留在继承历史之后，父子级共享的系统提示词和工具定义不变。冷恢复会再次从目标 Session 推导 id。
 
 ### 中断结果
 
