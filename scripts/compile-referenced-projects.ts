@@ -109,7 +109,7 @@ export function aggregateBuildArgs(face: 'host' | 'client'): string[] {
 }
 
 function hostHeapArgs(face: 'host' | 'client'): string[] {
-  return face === 'host' ? ['--max-old-space-size=4096'] : []
+  return face === 'host' ? ['--max-old-space-size=6144'] : []
 }
 
 /**
