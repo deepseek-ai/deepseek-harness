@@ -12,17 +12,17 @@
   en: 6f87231d18d82916
   zh: 9f064b23058f8766
 /subagents/messages-and-interruption:
-  en: 6ff748d66293c367
-  zh: b9f8a7183a27e7a1
+  en: 9befacb931520842
+  zh: c214b4fffa779b06
 /subagents/durable-enumeration:
-  en: 30c3607a969696ce
-  zh: e6359cdf22b1e235
+  en: e02e1703b183594c
+  zh: 130d475a4304f453
 /subagents/results-and-backend-handles:
   en: 69ea5bed7d9fb64a
   zh: b187a822b813e80a
 /subagents/the-provider-contract-subagentprovider:
   en: 226ba8094a8cf96c
   zh: 719678662905d1eb
-/subagents/durable-enumeration-listchildren-listdescendants-and-their-entries:
-  en: d8ce7969b65ad86e
-  zh: d39dac6592681bf2
+/subagents/durable-enumeration-listdescendants-and-catalog-entries:
+  en: 8000138f84fd15fa
+  zh: 32fa91d3aebd3d01

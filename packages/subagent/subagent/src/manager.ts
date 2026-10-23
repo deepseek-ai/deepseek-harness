@@ -283,35 +283,6 @@ export class SubagentManager {
   }
 
   /**
-   * Release selected resident direct children of one exact live parent.
-   * @param parent - exact live direct parent authorizing the selected release.
-   * @param childIds - durable direct-child ids to release when resident.
-   */
-  async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void> {
-    if (this.ctx.agents.get(parent.id) !== parent) {
-      throw new SubagentError('selected child teardown requires the exact live parent agent', 'UNAUTHORIZED')
-    }
-    const targets: Activation[] = []
-    for (const childId of new Set(childIds)) {
-      const activation = this.resident.get(childId)
-      if (activation === undefined) continue
-      if (activation.ancestors.at(-1) !== parent.id || activation.root !== this.rootOf(parent)) {
-        throw new SubagentError(
-          `subagent "${childId}" is not a direct child of agent "${parent.id}"`,
-          'UNAUTHORIZED',
-        )
-      }
-      targets.push(activation)
-    }
-
-    for (const activation of targets) {
-      const disposal = this.dispose(activation)
-      void disposal.catch(() => undefined)
-    }
-    await this.disposeRoots(targets, 'selected activation(s)')
-  }
-
-  /**
    * Start one continuable background child and resolve at initial inbox acceptance.
    * Every earlier failure disposes any created handle and rolls back Activation
    * and its capacity slot without returning either id.

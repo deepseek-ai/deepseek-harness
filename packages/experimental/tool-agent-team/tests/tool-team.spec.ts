@@ -12,7 +12,7 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
-import SubagentService, { SubagentError } from '@deepseek-ai/dsh-subagent'
+import SubagentService, { SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { renderPrompt, renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
@@ -125,7 +125,7 @@ async function startWait(ctx: Context, agent: Agent) {
 }
 
 /** Start a continuable child of the Lead with a task description. */
-async function spawn(ctx: Context, lead: Agent, description: string | undefined, prompt: string, provider = 'spawn'): Promise<SessionId> {
+async function spawn(ctx: Context, lead: Agent, description: string | undefined, prompt: string, provider = 'spawn'): Promise<SubagentActivation> {
   const started = await ctx.subagents.startActivation({
     provider,
     label: `${description ?? 'shared'} task`,
@@ -133,7 +133,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
     signal: SIGNAL,
     delivery: 'parent',
   })
-  return started.childId
+  return started
 }
 
 async function assembly(ctx: Context, agent: Agent) {
@@ -167,14 +167,11 @@ async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
   await vi.waitFor(() => { expect(ctx.agents.get(id)).toBeUndefined() }, { timeout: 5_000 })
 }
 
-async function interrupt(ctx: Context, lead: Agent, target: SessionId): Promise<void> {
-  await ctx.subagents.drainChildren(lead, [target])
-}
-
 describe('dsh-tool-team', () => {
   it.each([true, false])('cancels reassignment without appending when discovery observes cancellation: %s', async (observesCancellation) => {
     const { ctx, lead } = await setup(['hang'])
-    const childId = await spawn(ctx, lead, 'worker', 'stay running')
+    const childActivation = await spawn(ctx, lead, 'worker', 'stay running')
+    const childId = childActivation.childId
     await waitRunning(ctx, childId)
     const task = await ctx.agentTeams.createTask(lead, { subject: 'work', description: 'assign work' })
     const entered = Promise.withResolvers<undefined>()
@@ -218,8 +215,10 @@ describe('dsh-tool-team', () => {
       expect(ctx.tools.get(name, scopeOf(lead.ctx))).toBe(ctx.tools.get(name))
     }
 
-    const namedId = await spawn(ctx, lead, 'reviewer', 'stay available')
-    const unnamedId = await spawn(ctx, lead, undefined, 'stay available too')
+    const namedActivation = await spawn(ctx, lead, 'reviewer', 'stay available')
+    const namedId = namedActivation.childId
+    const unnamedActivation = await spawn(ctx, lead, undefined, 'stay available too')
+    const unnamedId = unnamedActivation.childId
     for (const id of [namedId, unnamedId]) {
       const child = await waitRunning(ctx, id)
       const childAssembly = await assembly(ctx, child)
@@ -228,8 +227,8 @@ describe('dsh-tool-team', () => {
       expect(renderContextSnapshot(childAssembly)).toContain(teammateIdentity(lead))
       expect(ctx.tools.get('send_message', scopeOf(child.ctx))).toBe(ctx.tools.get('send_message'))
     }
-    await interrupt(ctx, lead, namedId)
-    await interrupt(ctx, lead, unnamedId)
+    await namedActivation.dispose()
+    await unnamedActivation.dispose()
     await Promise.all([waitNoAgent(ctx, namedId), waitNoAgent(ctx, unnamedId)])
   })
 
@@ -241,7 +240,8 @@ describe('dsh-tool-team', () => {
     await runTurn(lead, 'Parent task')
     const parentRequest = serializeRequest(adapter.requests[0]!)
     const parentHistory = structuredClone(lead.session.deriveMessages())
-    const childId = await spawn(ctx, lead, 'reviewer', 'Review the work', provider)
+    const childActivation = await spawn(ctx, lead, 'reviewer', 'Review the work', provider)
+    const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     const childRequest = serializeRequest(adapter.requests[1]!)
     expect(childRequest.tools).toEqual(parentRequest.tools)
@@ -297,7 +297,8 @@ describe('dsh-tool-team', () => {
   it.each([undefined, 'in-history'] as const)('appends current Lead identity to a teammate fork with update mode %s', async (systemPromptUpdate) => {
     const { ctx, lead, adapter } = await setup([textResponse('review done'), textResponse('lead notified'), textResponse('fork answer')])
     if (systemPromptUpdate !== undefined) adapter.systemPromptUpdate = systemPromptUpdate
-    const teammateId = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const teammateActivation = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const teammateId = teammateActivation.childId
     await waitNoAgent(ctx, teammateId)
     await using persisted = await ctx.sessionPersistence.open(teammateId, 'read')
     const { events: seed } = await persisted.read()
@@ -346,7 +347,8 @@ describe('dsh-tool-team', () => {
       }
       return next()
     })
-    const childId = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const childActivation = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     for (const request of adapter.requests.filter(request => request.sessionId === childId)) {
       const snapshots = request.messages.filter(message => message.source?.kind === 'runtime-context')
@@ -362,7 +364,8 @@ describe('dsh-tool-team', () => {
   it('keeps required Team identities when optional runtime context is suppressed', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('worker done')])
     ctx.systemPrompt.suppressRuntimeContext()
-    const childId = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const childActivation = await spawn(ctx, lead, 'reviewer', 'Review the work')
+    const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     expect(renderContextSnapshot(await assembly(ctx, lead))).toContain(leadIdentity(lead))
     expect(runtimeContextText(adapter.requests[0]!)).toContain(teammateIdentity(lead))
@@ -380,7 +383,8 @@ describe('dsh-tool-team', () => {
 
   it('adapts task CAS operations and waits to canonical JSON', async () => {
     const { ctx, lead } = await setup(['hang'])
-    const childId = await spawn(ctx, lead, 'json-worker', 'wait')
+    const childActivation = await spawn(ctx, lead, 'json-worker', 'wait')
+    const childId = childActivation.childId
     const child = await waitRunning(ctx, childId)
 
     const created = await execute(ctx, lead, 'team_task_create', {
@@ -419,13 +423,14 @@ describe('dsh-tool-team', () => {
     expect(completed.isError).toBe(false)
     expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
-    await interrupt(ctx, lead, childId)
+    await childActivation.dispose()
     await waitNoAgent(ctx, childId)
   })
 
   it('adapts optional task filters, mutations, pagination, and default waiting', async () => {
     const { ctx, lead } = await setup(['hang'])
-    const childId = await spawn(ctx, lead, 'fork-worker', 'stay active', 'fork')
+    const childActivation = await spawn(ctx, lead, 'fork-worker', 'stay active', 'fork')
+    const childId = childActivation.childId
     await waitRunning(ctx, childId)
 
     const firstResult = await execute(ctx, lead, 'team_task_create', {
@@ -487,13 +492,14 @@ describe('dsh-tool-team', () => {
     expect(wake.isError).toBe(false)
     expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
-    await interrupt(ctx, lead, childId)
+    await childActivation.dispose()
     await waitNoAgent(ctx, childId)
   })
 
   it('removes and reinstalls every scoped registration across plugin HMR without stopping the child', async () => {
     const { ctx, lead, fiber } = await setup(['hang'])
-    const childId = await spawn(ctx, lead, 'hmr-worker', 'wait')
+    const childActivation = await spawn(ctx, lead, 'hmr-worker', 'wait')
+    const childId = childActivation.childId
     const child = await waitRunning(ctx, childId)
 
     await fiber.dispose()
@@ -512,7 +518,7 @@ describe('dsh-tool-team', () => {
       expect(renderContextSnapshot(assembled)).toContain(agent === lead ? leadIdentity(lead) : teammateIdentity(lead))
     }
     expect(child.status).toBe('running')
-    await interrupt(ctx, lead, childId)
+    await childActivation.dispose()
     await waitNoAgent(ctx, childId)
     await replacement.dispose()
   })
@@ -636,7 +642,8 @@ describe('dsh-tool-team', () => {
 
   it('installs Team scope before a cold-resumed teammate request', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
-    const childId = await spawn(ctx, lead, 'cold-worker', 'finish once')
+    const childActivation = await spawn(ctx, lead, 'cold-worker', 'finish once')
+    const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     await vi.waitFor(() => {
       expect(adapter.requests.filter(request => request.sessionId === lead.id)).toHaveLength(1)
@@ -651,7 +658,7 @@ describe('dsh-tool-team', () => {
     await vi.waitFor(() => { expect(childRequests()).toHaveLength(2) })
     const firstMessages = childRequests()[0]!.messages
     expect(childRequests()[1]!.messages.slice(0, firstMessages.length)).toEqual(firstMessages)
-    await interrupt(ctx, lead, childId)
+    await ctx.subagents.drainDescendants([lead])
     await waitNoAgent(ctx, childId)
   })
 
@@ -663,7 +670,8 @@ describe('dsh-tool-team', () => {
       sessionId: SessionId('temporary-parent'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
-    const childId = await spawn(ctx, parent.agent, 'orphan', 'finish')
+    const childActivation = await spawn(ctx, parent.agent, 'orphan', 'finish')
+    const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     await vi.waitFor(() => { expect(adapter.requests.filter(request => request.sessionId === parent.agent.id)).toHaveLength(1) })
     await parent.agent.whenIdle()

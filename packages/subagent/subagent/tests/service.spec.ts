@@ -128,7 +128,7 @@ describe('SubagentRuntime', () => {
     expect(ctx.sessionProjections.snapshot(parent).values.subagentCatalog).toBeUndefined()
   })
 
-  it('registers, lists, looks up, starts, and removes providers', async () => {
+  it('registers, looks up, starts, and removes providers', async () => {
     const { ctx, subagents } = await service()
     const added: string[] = []
     const removed: string[] = []
@@ -137,7 +137,6 @@ describe('SubagentRuntime', () => {
     const provider = new StubProvider('alpha')
 
     const dispose = subagents.registerProvider(provider)
-    expect(subagents.list()).toEqual(['alpha'])
     expect(subagents.getProvider('alpha')).toBe(provider)
     const run = await start(subagents, 'alpha', baseRequest())
     await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
@@ -190,7 +189,6 @@ describe('SubagentRuntime', () => {
     // Without `ctx.agents` no manager exists, so nothing was ever materialized.
     expect('drainContinuable' in subagents).toBe(false)
     await expect(subagents.drainDescendants([])).resolves.toBeUndefined()
-    await expect(subagents.drainChildren(fakeParent(), [SessionId('child')])).resolves.toBeUndefined()
   })
 
   it('treats interrupt as an accepted no-op when no manager was bound', async () => {

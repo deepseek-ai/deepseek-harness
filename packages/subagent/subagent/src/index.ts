@@ -69,10 +69,9 @@ import { assertSubagentMaxDepth } from './depth.ts'
 import { createLifecycleEmitter } from './lifecycle.ts'
 import type { LifecycleEmitter } from './lifecycle.ts'
 import SubagentManager from './manager.ts'
-import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from './list-children.ts'
+import { listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
 import { installSubagentArchiveAdmission } from './archive-admission.ts'
-import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import type { IdentityState } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
@@ -365,35 +364,6 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Release selected resident direct children of one exact live
-   * parent. Every unselected member, including their descendants, stays resident.
-   * Absent targets and a manager-less composition are accepted no-ops.
-   * @param parent - exact live direct parent authorizing the selected release.
-   * @param childIds - durable direct-child ids to release when resident.
-   * @returns once every selected activation released its execution handle.
-   * @throws {SubagentError} `UNAUTHORIZED` when a resident target belongs to a
-   *   different parent or the supplied parent identity is stale.
-   */
-  async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void> {
-    const manager = this.manager
-    if (manager === undefined) return
-    await manager.drainChildren(parent, childIds)
-  }
-
-  /**
-   * Read the parent's durable direct-child catalog without loading or resuming an Agent.
-   * The service owns and releases the live-preferred Session observation.
-   * @param parentSessionId - parent whose direct children are requested.
-   * @param signal - cancellation forwarded to the Session query.
-   * @returns catalog children in parent event order.
-   * @throws {@link SubagentError} when query or catalog projection is unavailable.
-   * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
-   */
-  listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]> {
-    return listSubagentChildren(this.ctx, parentSessionId, signal)
-  }
-
-  /**
    * Recursively list reachable parent catalogs in stable pre-order, preserving
    * each catalog's event order. Each row carries its catalog parent and depth;
    * external children are leaves; one-shot and unknown-mode children remain
@@ -532,14 +502,6 @@ export class SubagentRuntime extends TypertRemoteService {
    */
   getProvider(name: string): SubagentProvider | undefined {
     return this.providers.get(name)
-  }
-
-  /**
-   * List registered provider names in insertion order.
-   * @returns the registered names.
-   */
-  list(): string[] {
-    return [...this.providers.keys()]
   }
 
   /**

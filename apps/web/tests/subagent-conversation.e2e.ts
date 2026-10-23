@@ -307,24 +307,22 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(oneShotId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
-    expect(await scaffold.ctx.subagents.listChildren(parent.id)).toMatchObject([
-      {
-        id: childId, mode: 'continuable', label: LABEL,
-      },
-      {
-        id: oneShotId, mode: 'one-shot', label: ONE_SHOT_LABEL,
-      },
-    ])
+    {
+      using observed = await scaffold.ctx.sessionQuery.observeSession(parent.id)
+      expect(observed.projections?.values.subagentCatalog).toMatchObject([
+        {
+          id: childId, mode: 'continuable', label: LABEL,
+        },
+        {
+          id: oneShotId, mode: 'one-shot', label: ONE_SHOT_LABEL,
+        },
+      ])
+    }
     {
       using observed = await scaffold.ctx.sessionQuery.observeSession(childId)
       expect(observed.source).toBe('prepared')
       expect(observed.projections?.values.subagentCatalog).toEqual([
         { id: grandchildId, createdAt: authoredAt, mode: 'continuable', label: NESTED_LABEL },
-      ])
-      expect(await scaffold.ctx.subagents.listChildren(childId)).toMatchObject([
-        {
-          id: grandchildId, mode: 'continuable', label: NESTED_LABEL,
-        },
       ])
     }
     await waitForCacheRow(scaffold, childHeader)

@@ -170,7 +170,7 @@ interface ContinuableCreateSpec {
 
 ## 消息与中断
 
-`sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 和 `drainChildren` 等待所属资源释放。
+`sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 等待整棵树释放；activation 回执的 `dispose()` 仅释放那一次执行。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -223,7 +223,7 @@ type SubagentInterruptAuthority =
 
 ## 持久枚举
 
-`listChildren` 读取父级拥有的目录，其中包含所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示可继续的直接子级，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
+父级拥有的 `subagentCatalog` 投影列出所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根和可达的可继续后代，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
 
 ## 结果与后端句柄
 
@@ -369,11 +369,11 @@ interface SubagentProvider {
 }
 ```
 
-## 持久化枚举：`listChildren()`、`listDescendants()` 与其条目
+## 持久化枚举：`listDescendants()` 与目录条目
 
 模型侧的 `list_agents` 适配器将当前活动表示为 `running` 或 `inactive`。这些值不描述任务完成情况，也不保证 `send_message` 会成功。
 
-`SubagentRuntime.listChildren(parentSessionId, signal?)` 通过优先使用在线 Session 的观察读取父会话的 `subagentCatalog` 视图，并在成功或失败时释放观察。它按父会话事件顺序返回直接子级条目，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影时显式失败。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
+通过 `ctx.sessionQuery.observeSession(parentSessionId, { signal })`，可从 `observation.projections?.values.subagentCatalog` 获取直接子级条目；调用方使用 `using` 释放观察对象。条目遵循父会话事件顺序，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影意味着发现功能不可用。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
 
 `SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。外部条目是没有本地 Session 的叶节点。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。每个可达目录只观察一次，并在下一次读取前释放；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
 
@@ -494,29 +494,6 @@ interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): vo
 async drainDescendants(parents: readonly Agent[]): Promise<void>
 
 /**
- * Release selected resident direct children of one exact live
- * parent. Every unselected member, including their descendants, stays resident.
- * Absent targets and a manager-less composition are accepted no-ops.
- * @param parent - exact live direct parent authorizing the selected release.
- * @param childIds - durable direct-child ids to release when resident.
- * @returns once every selected activation released its execution handle.
- * @throws {SubagentError} `UNAUTHORIZED` when a resident target belongs to a
- *   different parent or the supplied parent identity is stale.
- */
-async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>
-
-/**
- * Read the parent's durable direct-child catalog without loading or resuming an Agent.
- * The service owns and releases the live-preferred Session observation.
- * @param parentSessionId - parent whose direct children are requested.
- * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
- * @throws {@link SubagentError} when query or catalog projection is unavailable.
- * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
- */
-listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>
-
-/**
  * Recursively list reachable parent catalogs in stable pre-order, preserving
  * each catalog's event order. Each row carries its catalog parent and depth;
  * external children are leaves; one-shot and unknown-mode children remain
@@ -582,12 +559,6 @@ registerProvider(provider: SubagentProvider): () => void
  * @returns the provider, or undefined when absent.
  */
 getProvider(name: string): SubagentProvider | undefined
-
-/**
- * List registered provider names in insertion order.
- * @returns the registered names.
- */
-list(): string[]
 ```
 
 Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [SessionId](core.zh.md)

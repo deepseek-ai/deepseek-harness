@@ -170,7 +170,7 @@ interface ContinuableCreateSpec {
 
 ## Messages and interruption
 
-`sendMessage` requires the exact live sender and a target Session id in the same root tree. Root and continuable members can message across branches; admission revalidates the sender and root. Running targets receive Steer; only an absent target cold-resumes, while its creation ancestors may remain offline. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status to their direct creator only while it is online; caller delivery suppresses those notices. `drainDescendants` and `drainChildren` await owned teardown.
+`sendMessage` requires the exact live sender and a target Session id in the same root tree. Root and continuable members can message across branches; admission revalidates the sender and root. Running targets receive Steer; only an absent target cold-resumes, while its creation ancestors may remain offline. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status to their direct creator only while it is online; caller delivery suppresses those notices. `drainDescendants` awaits whole-tree teardown; an activation receipt’s `dispose()` releases only that execution.
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -223,7 +223,7 @@ type SubagentInterruptAuthority =
 
 ## Durable enumeration
 
-`listChildren` reads the parent-owned catalog of all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes direct continuable children with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
+The parent-owned `subagentCatalog` projection lists all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes the root and reachable continuable descendants with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
 
 ## Results and backend handles
 
@@ -369,11 +369,11 @@ interface SubagentProvider {
 }
 ```
 
-## Durable enumeration: `listChildren()`, `listDescendants()`, and their entries
+## Durable enumeration: `listDescendants()` and catalog entries
 
 The model-facing `list_agents` adapter reports current activity as `running` or `inactive`. These values do not describe task completion or guarantee that `send_message` will succeed.
 
-`SubagentRuntime.listChildren(parentSessionId, signal?)` reads the parent's `subagentCatalog` view through a live-preferred Session observation and releases that observation on success or failure. It returns direct-child entries in parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection fails explicitly. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
+Direct-child entries are available as `observation.projections?.values.subagentCatalog` through `ctx.sessionQuery.observeSession(parentSessionId, { signal })`; callers release the observation with `using`. Entries follow parent event order without reading child logs or enumerating the Session corpus. Query failures propagate; a missing catalog projection means discovery is unavailable. Browser rows derive membership from the shared projection store and add activity from Session status; the control stream pushes complete catalog updates. `listDescendants()` recursively reads those catalogs and derives `hasChildren` from each child catalog. [The parent-catalog Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.md) owns creation, fork isolation, ordering, and persistence costs.
 
 `SubagentRuntime.listDescendants(rootSessionId)` recursively calls the same catalog reader in stable pre-order, preserving each parent's event order. External entries are leaves without local Sessions. One-shot and unknown-mode entries remain traversal nodes; unknown modes produce `unsupported` diagnostics. An unreadable child catalog produces `corrupt` or `unavailable` and stops only that branch. Root read failures, missing services or projections, and cancellation reject the listing. Each reachable catalog is observed once and released before the next read; repeated ids and cycles are skipped. Sessions absent from reachable catalogs are not discovered, including ordinary Session forks and any subagents below those forks. Each row carries its catalog parent and root-relative depth:
 
@@ -492,29 +492,6 @@ interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): vo
 async drainDescendants(parents: readonly Agent[]): Promise<void>
 
 /**
- * Release selected resident direct children of one exact live
- * parent. Every unselected member, including their descendants, stays resident.
- * Absent targets and a manager-less composition are accepted no-ops.
- * @param parent - exact live direct parent authorizing the selected release.
- * @param childIds - durable direct-child ids to release when resident.
- * @returns once every selected activation released its execution handle.
- * @throws {SubagentError} `UNAUTHORIZED` when a resident target belongs to a
- *   different parent or the supplied parent identity is stale.
- */
-async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>
-
-/**
- * Read the parent's durable direct-child catalog without loading or resuming an Agent.
- * The service owns and releases the live-preferred Session observation.
- * @param parentSessionId - parent whose direct children are requested.
- * @param signal - cancellation forwarded to the Session query.
- * @returns catalog children in parent event order.
- * @throws {@link SubagentError} when query or catalog projection is unavailable.
- * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
- */
-listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>
-
-/**
  * Recursively list reachable parent catalogs in stable pre-order, preserving
  * each catalog's event order. Each row carries its catalog parent and depth;
  * external children are leaves; one-shot and unknown-mode children remain
@@ -580,12 +557,6 @@ registerProvider(provider: SubagentProvider): () => void
  * @returns the provider, or undefined when absent.
  */
 getProvider(name: string): SubagentProvider | undefined
-
-/**
- * List registered provider names in insertion order.
- * @returns the registered names.
- */
-list(): string[]
 ```
 
 Types: [Agent](core.md) · [ContentBlock](llm-streaming.md) · [MessageId](llm-streaming.md) · [SessionId](core.md)

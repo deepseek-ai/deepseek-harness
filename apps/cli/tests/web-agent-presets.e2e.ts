@@ -712,7 +712,7 @@ describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surfac
       const productCtx = await bootSelected(installed)
       const spawn = vi.spyOn(productCtx.subprocess, 'spawn')
       try {
-        expect(productCtx.subagents.list().filter(name => (products as readonly string[]).includes(name)).sort())
+        expect(products.filter(name => productCtx.subagents.getProvider(name) !== undefined).sort())
           .toEqual([...installed].sort())
         const expected = installed.map(toolName).sort()
         for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {

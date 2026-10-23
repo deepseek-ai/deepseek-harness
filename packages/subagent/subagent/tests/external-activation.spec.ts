@@ -1,3 +1,4 @@
+import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External execution ownership, result delivery, and process cleanup. */
 
@@ -347,14 +348,14 @@ it('records external membership at creation without publishing settlement update
   try {
     const activation = await fixture.start('parent')
     const expected = { id: activation.childId, mode: 'external', label: 'External work' }
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(fixture.ctx.sessions.get(activation.childId)).toBeUndefined()
     const result: SubagentResult = { output: [{ type: 'text', text: 'x'.repeat(100_000) }], stopReason: 'completed' }
     backend.result.resolve(result)
     backend.cleanup.resolve(undefined)
     await expect(activation.result).resolves.toEqual(result)
     await activation.dispose()
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(snapshots).toHaveLength(1)
     expect(JSON.stringify(snapshots).length).toBeLessThan(1_000)
   } finally {

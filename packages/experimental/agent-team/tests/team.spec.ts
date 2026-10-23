@@ -9,7 +9,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentService from '@deepseek-ai/dsh-subagent'
+import SubagentService, { type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -73,7 +73,7 @@ function content(text: string) {
 }
 
 /** Start one teammate: a continuable child of the Lead. */
-async function spawn(ctx: Context, lead: Agent, description: string | undefined, provider = 'spawn'): Promise<SessionId> {
+async function spawn(ctx: Context, lead: Agent, description: string | undefined, provider = 'spawn'): Promise<SubagentActivation> {
   const started = await ctx.subagents.startActivation({
     provider,
     label: `${description ?? 'shared'} responsibility`,
@@ -81,7 +81,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
     signal: SIGNAL,
     delivery: 'parent',
   })
-  return started.childId
+  return started
 }
 
 async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
@@ -147,8 +147,9 @@ describe('Tree-owned task boards', () => {
 
   it('makes every root a Lead and every live subagent below it a teammate', async () => {
     const { ctx, lead } = await setup(['hang', 'hang', 'hang'])
-    const named = await waitRunning(ctx, await spawn(ctx, lead, 'alpha'))
-    const unnamed = await waitRunning(ctx, await spawn(ctx, lead, undefined))
+    const namedActivation = await spawn(ctx, lead, 'alpha')
+    const named = await waitRunning(ctx, namedActivation.childId)
+    const unnamed = await waitRunning(ctx, (await spawn(ctx, lead, undefined)).childId)
     const grandchildId = (await ctx.subagents.startActivation({
       provider: 'spawn', label: 'nested', delivery: 'caller', signal: SIGNAL,
       prompt: content('nested'), parent: named,
@@ -160,7 +161,7 @@ describe('Tree-owned task boards', () => {
       expect(ctx.agentTeams.getTask(agent, shared.id).id).toBe(shared.id)
     }
 
-    await ctx.subagents.drainChildren(lead, [named.id])
+    await namedActivation.dispose()
     await waitNoAgent(ctx, named.id)
     const task = await ctx.agentTeams.createTask(grandchild, { subject: 'still active', description: 'creator offline' })
     expect(ctx.agentTeams.listTasks(lead).map(row => row.id)).toContain(task.id)
@@ -174,7 +175,7 @@ describe('Tree-owned task boards', () => {
 
   it('treats an ordinary fork as a new Root Team and filters inherited Team state', async () => {
     const { ctx, lead } = await setup([textResponse('alpha done')])
-    const alpha = await spawn(ctx, lead, 'alpha')
+    const alpha = (await spawn(ctx, lead, 'alpha')).childId
     await waitNoAgent(ctx, alpha)
     await ctx.agentTeams.createTask(lead, { subject: 'parent task', description: 'belongs to parent' })
     const handle = await ctx.agents.create({
@@ -195,8 +196,8 @@ describe('Tree-owned task boards', () => {
 
   it('assigns deep descendants by id and rejects historical roster authority', async () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
-    const child = await waitRunning(ctx, await spawn(ctx, lead, 'parent'))
-    const grandchild = await waitRunning(ctx, await spawn(ctx, child, 'nested'))
+    const child = await waitRunning(ctx, (await spawn(ctx, lead, 'parent')).childId)
+    const grandchild = await waitRunning(ctx, (await spawn(ctx, child, 'nested')).childId)
     const task = await ctx.agentTeams.createTask(lead, { subject: 'nested work', description: 'deep assignment' })
     const assigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: grandchild.id,
@@ -280,7 +281,7 @@ describe('Tree-owned task boards', () => {
       sessionId: SessionId('temporary-parent'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
-    const child = await spawn(ctx, parent.agent, 'orphan')
+    const child = (await spawn(ctx, parent.agent, 'orphan')).childId
     await waitNoAgent(ctx, child)
     await parent.dispose()
     const orphan = await ctx.agents.resume({
@@ -348,9 +349,9 @@ describe('Team shared task DAG', () => {
   it('enforces CAS, ownership, dependencies, transitions, and write-scope warnings', async () => {
     const { ctx, lead } = await setup(['hang', 'hang', textResponse('beta integrated update')])
     const firstMember = await spawn(ctx, lead, 'alpha')
-    const alpha = await waitRunning(ctx, firstMember)
+    const alpha = await waitRunning(ctx, firstMember.childId)
     const secondMember = await spawn(ctx, lead, 'beta')
-    const beta = await waitRunning(ctx, secondMember)
+    const beta = await waitRunning(ctx, secondMember.childId)
 
     const first = await ctx.agentTeams.createTask(alpha, {
       subject: 'first',
@@ -416,7 +417,7 @@ describe('Team shared task DAG', () => {
     expect(released).toMatchObject({ status: 'pending', ready: true })
     expect('ownerId' in released).toBe(false)
 
-    await ctx.subagents.drainChildren(lead, [alpha.id, beta.id])
+    await Promise.all([firstMember.dispose(), secondMember.dispose()])
     await Promise.all([waitNoAgent(ctx, alpha.id), waitNoAgent(ctx, beta.id)])
   })
 
@@ -495,7 +496,7 @@ describe('Team shared task DAG', () => {
   it('supports Lead reassignment, completion, reopen, and deletion permissions', async () => {
     const { ctx, lead } = await setup(['hang'])
     const started = await spawn(ctx, lead, 'owner')
-    const owner = await waitRunning(ctx, started)
+    const owner = await waitRunning(ctx, started.childId)
     const task = await ctx.agentTeams.createTask(owner, { subject: 'lifecycle', description: 'lifecycle' })
     const assigned = await ctx.agentTeams.updateTask(lead, {
       taskId: task.id,
@@ -543,14 +544,14 @@ describe('Team shared task DAG', () => {
       action: 'edit',
       subject: 'late',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_DELETED' })
-    await ctx.subagents.drainChildren(lead, [owner.id])
+    await started.dispose()
     await waitNoAgent(ctx, owner.id)
   })
 
   it('covers partial edits, Lead ownership, unassignment, and blocked reassignment', async () => {
     const { ctx, lead } = await setup(['hang'])
     const started = await spawn(ctx, lead, 'editor')
-    const editor = await waitRunning(ctx, started)
+    const editor = await waitRunning(ctx, started.childId)
     const blocker = await ctx.agentTeams.createTask(lead, { subject: 'blocker', description: 'blocker' })
     const task = await ctx.agentTeams.createTask(lead, {
       subject: 'draft',
@@ -627,7 +628,7 @@ describe('Team shared task DAG', () => {
     })
     expect(rootAssigned).toMatchObject({ status: 'in_progress', ownerId: lead.id })
 
-    await ctx.subagents.drainChildren(lead, [editor.id])
+    await started.dispose()
     await waitNoAgent(ctx, editor.id)
   })
 })

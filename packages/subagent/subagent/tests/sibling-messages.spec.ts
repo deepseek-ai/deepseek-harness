@@ -1,3 +1,4 @@
+import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -16,7 +17,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { TestSessionQuery } from './test-session-query.ts'
-import { managerState } from './manager-internals.ts'
+import { managerState, subagentManager } from './manager-internals.ts'
 import { requireLocalActivation } from '../src/activation.ts'
 
 /** A model reply, or a turn that stays open until its Agent is cancelled. */
@@ -122,7 +123,7 @@ describe('subagent sibling messages', () => {
     const b = await start(ctx, parent, 'b')
     await settled(ctx, b)
     expect(a).not.toBe(b)
-    expect(await ctx.subagents.listChildren(parent.id)).toEqual([
+    expect(await listChildren(ctx, parent.id)).toEqual([
       expect.objectContaining({ id: a, mode: 'continuable', label: 'shared responsibility' }),
       expect.objectContaining({ id: b, mode: 'continuable', label: 'shared responsibility' }),
     ])
@@ -345,7 +346,7 @@ describe('tree-wide messages', () => {
       await dispose()
       if (failCleanup) throw new Error('cleanup report failed')
     }
-    const drained = ctx.subagents.drainChildren(parent, [branchId]).catch((error: unknown) => error)
+    const drained = subagentManager(ctx)['dispose'](activation).catch((error: unknown) => error)
     let delivery: Promise<unknown> | undefined
     try {
       await entered.promise

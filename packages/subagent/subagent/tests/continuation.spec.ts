@@ -1,3 +1,4 @@
+import { listChildren } from '../src/list-children.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -488,7 +489,7 @@ describe('continuable activation capacity', () => {
         await dispose()
         if (failDisposal) throw new Error('cleanup report failed')
       }
-      const drained = ctx.subagents.drainChildren(parent, [started.childId])
+      const drained = started.dispose()
       const outcome = drained.catch((error: unknown) => error)
       releaseRun.resolve(undefined)
       await entered.promise
@@ -1710,7 +1711,7 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(leaf.childId)).toBeUndefined()
   })
 
-  it('releases only selected direct children', async () => {
+  it('disposes one activation without releasing siblings or descendants', async () => {
     const releaseTarget = Promise.withResolvers<undefined>()
     const releaseSibling = Promise.withResolvers<undefined>()
     const releaseGrandchild = Promise.withResolvers<undefined>()
@@ -1729,13 +1730,9 @@ describe('continuable durability and teardown', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(3) })
     const cancel = vi.spyOn(targetAgent, 'cancel')
 
-    // A repeated id folds to one teardown and an absent target is an accepted no-op.
-    const drained = ctx.subagents.drainChildren(
-      parent,
-      [target.childId, target.childId, SessionId('never-materialized')],
-    )
+    const drained = Promise.all([target.dispose(), target.dispose()])
 
-    expect(cancel).toHaveBeenCalledWith({ kind: 'parent' })
+    expect(cancel).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' })
     expect(ctx.agents.get(sibling.childId)).toBe(siblingAgent)
     releaseTarget.resolve(undefined)
     await drained
@@ -1748,14 +1745,7 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, sibling.childId)
   })
 
-  it('ignores a selected direct child that is not resident', async () => {
-    const { ctx, parent } = await setup([])
-
-    await expect(ctx.subagents.drainChildren(parent, [SessionId('settled-child')]))
-      .resolves.toBeUndefined()
-  })
-
-  it('reports selected-child disposal failures after releasing the child', async () => {
+  it('reports activation disposal failures after releasing the child', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('target'), gate: hold.promise }])
     const { ctx, parent } = await setupWith(adapter)
@@ -1769,35 +1759,11 @@ describe('continuable durability and teardown', () => {
       throw new Error('selected cleanup failed')
     }
 
-    const drained = ctx.subagents.drainChildren(parent, [target.childId])
+    const drained = target.dispose()
     hold.resolve(undefined)
 
     await expect(drained).rejects.toMatchObject({ code: 'ACTIVATION_TEARDOWN_FAILED' })
     expect(ctx.agents.get(target.childId)).toBeUndefined()
-  })
-
-  it('rejects selected-child teardown through another live parent', async () => {
-    const release = Promise.withResolvers<undefined>()
-    const adapter = new GatedAdapter([{ chunks: textResponse('target'), gate: release.promise }])
-    const { ctx, parent } = await setupWith(adapter)
-    const other = await ctx.agentLoop.create(SessionId('other-parent'), { provider: 'mock', model: 'mock' })
-    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
-    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
-
-    await expect(ctx.subagents.drainChildren(other, [target.childId]))
-      .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-    expect(ctx.agents.get(target.childId)).toBeDefined()
-
-    release.resolve(undefined)
-    await waitNoActivation(ctx, target.childId)
-  })
-
-  it('rejects selected-child teardown through a stale parent identity', async () => {
-    const { ctx, parent } = await setup([])
-    const stale = { ...parent, id: parent.id } as Agent
-
-    await expect(ctx.subagents.drainChildren(stale, []))
-      .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
   it('drains the subagent tree after an intermediate creator leaves the registry', async () => {
@@ -3534,7 +3500,7 @@ describe('continuable public API', () => {
     await run.dispose()
     await waitNoActivation(ctx, run.childId)
     expect(settlementNotices(parent)).toEqual([])
-    expect(await ctx.subagents.listChildren(parent.id)).toMatchObject([
+    expect(await listChildren(ctx, parent.id)).toMatchObject([
       { id: run.childId, mode: 'continuable' },
     ])
     expect(userTexts((await loadStoredSession(ctx.sessionPersistence, run.childId)).events))
@@ -3621,7 +3587,8 @@ describe('continuable errors', () => {
     const detach = ctx.on('subagent/start', (info) => {
       starts.push(info)
       residentAtStart.push(ctx.agents.get(info.id)?.id === info.id)
-      drains.push(ctx.subagents.drainChildren(parent, [info.id]))
+      // The start event precedes the public activation receipt.
+      drains.push(subagentManager(ctx)['dispose'](managerState(ctx).resident.get(info.id)!))
     })
     ctx.on('subagent/end', (info) => { ends.push(info) })
     try {
