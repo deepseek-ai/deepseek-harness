@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Enmascaramiento de credenciales",
+    "description": "Enmascara claves, tokens y contraseñas reconocidas en los mensajes enviados."
+  }
+}

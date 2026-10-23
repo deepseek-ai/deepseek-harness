@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dynamischer Plug-in-Server-Runner",
+    "description": "Verwalten Sie temporäre dynamische Plug-in-Definitionen und führen Sie deren serverseitige Teile aus."
+  }
+}

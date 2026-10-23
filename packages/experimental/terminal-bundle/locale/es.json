@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Terminales persistentes",
+    "description": "Mantenga vivos los procesos de shell en todas las llamadas a herramientas.",
+    "detail": "docs/DETAIL.md"
+  }
+}

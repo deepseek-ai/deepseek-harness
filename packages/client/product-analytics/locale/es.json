@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Estadísticas de uso de escritorio",
+    "description": "Recopile eventos de interacción específicos en el escritorio y envíelos al servicio de estadísticas del producto."
+  }
+}

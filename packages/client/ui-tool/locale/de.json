@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Anzeige des Werkzeugaufrufs",
+    "description": "Zeigt den Werkzeugaufrufprozess, verschachtelte Beziehungen und die Ergebnisschnittstelle jedes Werkzeugs an."
+  }
+}

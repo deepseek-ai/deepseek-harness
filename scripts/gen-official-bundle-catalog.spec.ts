@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ON_DEMAND_BUNDLES } from '../packages/boot/official-bundles/src/index.ts'
 import { generateOfficialBundleCatalog, renderOfficialBundleCatalog, syncOfficialBundleCatalog } from './gen-official-bundle-catalog.ts'
 
+import { SHIPPED_LOCALE_IDS } from './shipped-locales.ts'
+
 const roots: string[] = []
 const output = 'packages/boot/official-bundles/src/catalog.generated.ts'
 
@@ -32,6 +34,7 @@ function fixture(): string {
     write(root, `${dir}/locale/en.json`, { meta: { title: 'Native agent', description: 'Delegate a task.' } })
     write(root, `${dir}/locale/zh.json`, { meta: { title: '原生智能体', description: '委派任务。' } })
     write(root, `${dir}/locale/ja.json`, { meta: { title: 'ネイティブエージェント', description: 'タスクを委派します。' } })
+    for (const language of ['es', 'fr', 'de', 'ru', 'pt']) write(root, `${dir}/locale/${language}.json`, { meta: { title: 'Native agent', description: 'Delegate a task.' } })
   }
   write(root, output, '')
   return root
@@ -50,8 +53,8 @@ describe('Official bundle catalog generation', () => {
     const entries = generateOfficialBundleCatalog(fixture())
     expect(entries.map(entry => entry.packageName)).toEqual(ON_DEMAND_BUNDLES)
     expect(entries[0]?.meta).toEqual({
-      title: { en: 'Native agent', zh: '原生智能体', ja: 'ネイティブエージェント' },
-      description: { en: 'Delegate a task.', zh: '委派任务。', ja: 'タスクを委派します。' },
+      title: { en: 'Native agent', zh: '原生智能体', ja: 'ネイティブエージェント', ...Object.fromEntries(['es', 'fr', 'de', 'ru', 'pt'].map(id => [id, 'Native agent'])) },
+      description: { en: 'Delegate a task.', zh: '委派任务。', ja: 'タスクを委派します。', ...Object.fromEntries(['es', 'fr', 'de', 'ru', 'pt'].map(id => [id, 'Delegate a task.'])) },
       icon: `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64')}`,
     })
     expect(renderOfficialBundleCatalog(entries)).not.toContain('1.2.3')
@@ -81,14 +84,14 @@ describe('Official bundle catalog generation', () => {
     expect(() => generateOfficialBundleCatalog(root, [ON_DEMAND_BUNDLES[0]!, ON_DEMAND_BUNDLES[0]!])).toThrow('distinct package names')
   })
 
-  it.each(['icon', 'en', 'zh', 'ja'])('rejects missing %s metadata', (resource) => {
+  it.each(['icon', ...SHIPPED_LOCALE_IDS])('rejects missing %s metadata', (resource) => {
     const root = fixture()
     const dir = directory(ON_DEMAND_BUNDLES[0]!)
     rmSync(join(root, dir, resource === 'icon' ? 'icon.svg' : `locale/${resource}.json`))
     expect(() => generateOfficialBundleCatalog(root)).toThrow()
   })
 
-  it.each(['en', 'zh', 'ja'])('requires explicit %s fields instead of metadata fallback text', (language) => {
+  it.each(SHIPPED_LOCALE_IDS)('requires explicit %s fields instead of metadata fallback text', (language) => {
     const root = fixture()
     write(root, `${directory(ON_DEMAND_BUNDLES[0]!)}/locale/${language}.json`, { meta: { description: 'Only a description.' } })
     expect(() => generateOfficialBundleCatalog(root)).toThrow(`explicit ${language} title and description`)

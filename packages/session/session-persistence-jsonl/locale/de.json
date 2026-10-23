@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistenz des Sitzungsprotokolls",
+    "description": "Speichern Sie das Sitzungsprotokoll als lokale JSONL-Datei zur späteren Wiederherstellung und zum Lesen."
+  }
+}

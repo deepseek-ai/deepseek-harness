@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Importation du journal de session",
+    "description": "Lorsqu'ils sont activés, les journaux de session sont téléchargés sur DeepSeek avec les requêtes officielles du modèle API."
+  }
+}

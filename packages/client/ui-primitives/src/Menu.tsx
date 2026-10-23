@@ -259,6 +259,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       }
       if (r === null) return
       const MARGIN = 12
+      const GAP = 4
       const vw = window.innerWidth
       const vh = window.innerHeight
       const listEl = listRef.current
@@ -272,18 +273,18 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       let x: number
       let y: number
       if (side === 'right') {
-        x = r.right + 4
+        x = r.right + GAP
         y = r.top
       } else if (align === 'start') {
         x = r.left
-        y = side === 'bottom' ? r.bottom + 4 : r.top - lh - 4
+        y = side === 'bottom' ? r.bottom + GAP : r.top - lh - GAP
       } else {
         x = r.right - lw
-        y = side === 'bottom' ? r.bottom + 4 : r.top - lh - 4
+        y = side === 'bottom' ? r.bottom + GAP : r.top - lh - GAP
       }
 
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
-      if (lh > 0) y = Math.min(Math.max(y, overlayTopMargin(MARGIN)), vh - lh - MARGIN)
+      if (lh > 0) y = Math.min(Math.max(y, overlayTopMargin(MARGIN, r, GAP)), vh - lh - MARGIN)
 
       setFixedPos(current => current?.left === x && current.top === y ? current : { left: x, top: y })
     }

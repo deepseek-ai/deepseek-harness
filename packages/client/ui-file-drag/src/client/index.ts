@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { FileDragFeedback, type FileDragFailure, type FileDragFeedbackInjected } from './feedback.tsx'
 import { FileTransfers } from './transfers.ts'
-import { en, ja, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** Application-local file preparation and drop resolution. */
 export interface FileDragService {
@@ -33,7 +33,7 @@ export function apply(ctx: Context): void {
   const desktop = bridge?.protocolVersion === 1 ? bridge.fileDrag : undefined
   const failure = createSnapshotStore<FileDragFailure | null>(null)
   const t = ctx.locale.bind('fileDrag')
-  ctx.effect(() => ctx.locale.register('fileDrag', { zh, en, ja }))
+  ctx.effect(() => ctx.locale.register('fileDrag', { zh, en, ja, es, fr, de, ru, pt }))
   let sequence = 0
   const reportFailure = (): void => { failure.set({ text: t('failed'), sequence: ++sequence }) }
   const transfers = new FileTransfers(desktop, reportFailure)

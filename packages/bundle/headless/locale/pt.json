@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Perfil sem cabeça",
+    "description": "Execute uma única tarefa diretamente com o executor principal de agente/sessão em dsh-base, sem um host, HTTP ou camada de navegador."
+  }
+}

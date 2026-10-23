@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configurações de execução de comando",
+    "description": "Configure o tempo limite de execução do comando e o limite de comprimento de saída."
+  }
+}

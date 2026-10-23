@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/built-in-japanese/guide.md
 /:
-  en: 383326881143f69b
-  zh: cd7ff0e2b97f9c2f
-/japanese-is-a-built-in-language:
-  en: f97bae63a42a3627
-  zh: cec418f8bf6ac168
-/japanese-is-a-built-in-language/change:
-  en: feb1f2d1cafdcfe0
-  zh: 94d527865ec108bb
-/japanese-is-a-built-in-language/migration:
-  en: ced2c2baad9124b4
-  zh: 7b0b5b0e345994b8
+  en: cfd1ffd2cd268220
+  zh: 2ed03b1063f3319d
+/built-in-languages-replace-duplicate-language-packs:
+  en: 5855b69ac12a5f50
+  zh: a81de3239837f1c4
+/built-in-languages-replace-duplicate-language-packs/change:
+  en: 665e68d784661f15
+  zh: 2fff6fcfceea7994
+/built-in-languages-replace-duplicate-language-packs/migration:
+  en: 6f77e0b507e09ca7
+  zh: 59e0c71780f06e9e

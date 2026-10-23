@@ -29,3 +29,43 @@ export const ja = {
   'press.failed': 'ボタンが失敗しました: {message}',
   'press.stale': 'そのボタンは以前の描画のものです。バンドは更新されました',
 } satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  band: 'Modificaciones Claude Code',
+  pressing: 'Trabajando…',
+  'press.failed': 'El botón falló: {message}',
+  'press.stale': 'Ese botón pertenecía a un dibujo anterior; la banda se ha renovado',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  band: 'Mods Claude Code',
+  pressing: 'Travailler…',
+  'press.failed': 'Le bouton a échoué : {message}',
+  'press.stale': "Ce bouton appartenait à un dessin antérieur ; le groupe s'est rafraîchi",
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  band: 'Claude Code-Mods',
+  pressing: 'Arbeiten…',
+  'press.failed': 'Die Schaltfläche ist fehlgeschlagen: {message}',
+  'press.stale': 'Dieser Knopf gehörte zu einer früheren Zeichnung; Die Band hat sich erfrischt',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  band: 'Claude Code моды',
+  pressing: 'Работаю…',
+  'press.failed': 'Кнопка не удалась: {message}',
+  'press.stale': 'Эта кнопка принадлежала более раннему рисунку; группа обновилась',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  band: 'Claude Code modificações',
+  pressing: 'Trabalhando…',
+  'press.failed': 'O botão falhou: {message}',
+  'press.stale': 'Esse botão pertencia a um desenho anterior; a banda se atualizou',
+} satisfies Record<keyof typeof en, string>

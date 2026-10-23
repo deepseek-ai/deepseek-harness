@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "interface de controle de terminal",
+    "description": "Fornece aos clientes a capacidade de criar, inserir, ler e restaurar terminais de sessão."
+  }
+}

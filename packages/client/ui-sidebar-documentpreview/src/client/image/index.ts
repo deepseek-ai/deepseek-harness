@@ -8,7 +8,7 @@ import type { DocumentPreviewDefinition } from '../document/registry.ts'
 import { retainDocumentTabs } from '../document/tab-lifetime.ts'
 import { createZoomStore, type ZoomStore } from '../zoom/store.ts'
 import { ImageBody, type ImageBodyInjected } from './ImageBody.tsx'
-import { en, ja, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** Image implementation identity, shared by metadata and the keyed slot. */
 export const IMAGE_BODY_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/image'
@@ -42,7 +42,7 @@ export function imageBodyDefinition(title: () => string): DocumentPreviewDefinit
  */
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind('sidebarImage')
-  ctx.effect(() => ctx.locale.register('sidebarImage', { zh, en, ja }), 'document-image: dictionaries')
+  ctx.effect(() => ctx.locale.register('sidebarImage', { zh, en, ja, es, fr, de, ru, pt }), 'document-image: dictionaries')
   ctx.effect(() => ctx.documentPreviews.register(imageBodyDefinition(() => t('title'))), 'document-image: metadata')
   const store = createZoomStore()
   const retainTab = retainDocumentTabs(ctx)

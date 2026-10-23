@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Adaptación del método de selección de directorio.",
+    "description": "Seleccione el cuadro de diálogo del directorio del sistema o la exploración del directorio en la aplicación según el entorno de ejecución."
+  }
+}

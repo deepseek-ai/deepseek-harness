@@ -1,0 +1,5 @@
+- listitem:
+  - button "Ver Revisión de autorización automática": Revisión de autorización automática
+  - text: Experimental Agregue un modo de permiso Auto review que utilice el modelo para evaluar la autorización antes de cada llamada a la herramienta.
+  - status
+  - switch "Habilitar Revisión de autorización automática"

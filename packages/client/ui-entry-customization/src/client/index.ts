@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { EntryMenuContent, type EntryMenuInjected, type EntryRegion } from './EntryMenuContent.tsx'
-import { en, ja, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -27,7 +27,7 @@ export const inject = ['slots', 'locale', 'uiWorkspace']
  * @param ctx - Browser context with slot, locale, and Workspace services, and the optional plugin navigation.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh, ja }))
+  ctx.effect(() => ctx.locale.register('entryCustomization', { en, zh, ja, es, fr, de, ru, pt }))
   const t = ctx.locale.bind('entryCustomization')
   // The Plugins page provides its navigation only while the current Peer may use it.
   const pluginNavigation = createSnapshotStore(false)

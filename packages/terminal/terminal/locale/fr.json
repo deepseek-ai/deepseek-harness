@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "borne",
+    "description": "Gérez les sessions de terminal interactif persistant ainsi que leurs entrées, sorties et nettoyage."
+  }
+}

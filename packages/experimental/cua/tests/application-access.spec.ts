@@ -85,7 +85,9 @@ it.each([
         detail: { en: 'Session access lasts until DSH restarts or computer use is disabled.',
           zh: '会话授权在 DSH 重启或关闭 Computer Use 后失效。',
           ja: 'セッションの許可は DSH の再起動または Computer Use の無効化まで有効です。' },
-        approve: { en: 'Allow for this session', zh: '本会话允许', ja: 'このセッションで許可' },
+        approve: { en: 'Allow for this session', zh: '本会话允许', ja: 'このセッションで許可',
+          es: 'Permitir durante esta sesión', fr: 'Autoriser pour cette session', de: 'Für diese Sitzung zulassen',
+          ru: 'Разрешить для этого сеанса', pt: 'Permitir nesta sessão' },
       },
     },
   })

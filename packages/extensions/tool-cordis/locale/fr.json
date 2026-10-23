@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Outil de requête du plug-in API",
+    "description": "Laissez AI interroger le serveur et le navigateur pour connaître les API disponibles avant de développer le plug-in."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Befehl zur Kontextkomprimierung",
+    "description": "Lassen Sie den Benutzer den aktuellen Sitzungskontext durch einen Befehl aktiv komprimieren."
+  }
+}

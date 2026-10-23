@@ -4,13 +4,14 @@
  * from memory; every write queues on the chain, awaits backend durability
  * FIRST, then mutates memory, then emits `domain/changed` — a rejected
  * backend write leaves memory untouched (no divergence between reads and the
- * medium), and events carry values that equal the in-memory state at
- * emission, in write order.
+ * medium) unless the backend reports `unknown-state`, which quarantines the
+ * domain: reads and later writes reject until close. Events carry values that
+ * equal the in-memory state at emission, in write order.
  * @module @deepseek-ai/dsh-storage-domain/src/domain
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { KvUnit } from '@deepseek-ai/dsh-storage'
+import { StorageError, type KvUnit } from '@deepseek-ai/dsh-storage'
 import { DomainError } from './error.ts'
 import type { DomainSpec, DomainGlobalSpec, TableKeyOf, TableValueOf } from './spec.ts'
 import type { DomainChanged } from './events.ts'
@@ -80,6 +81,23 @@ export interface KvTable<K extends string, V> {
   delete(key: K): Promise<boolean>
 
   /**
+   * Delete several records durably in one write slot.
+   *
+   * The batch is one job on the domain's write chain: it runs at its slot, not
+   * at call time, so an earlier queued write of the same domain is visible to
+   * it and no other write interleaves. Missing keys are ignored. The in-memory
+   * records reach the committed state before any `domain/changed` listener
+   * runs. A backend failure normally rejects with the batch unapplied, leaving
+   * every record in place. A backend that cannot establish or restore the
+   * batch's state rejects with `unknown-state` and quarantines the domain:
+   * synchronous reads and every later write reject with that error, while
+   * `close()` still works.
+   * @param keys - Record keys; duplicates are harmless.
+   * @returns the number of keys that existed and were removed.
+   */
+  deleteMany(keys: readonly K[]): Promise<number>
+
+  /**
    * Atomic read-modify-write on the domain's write chain: `fn` sees the
    * value current at its queue slot, so concurrent updates never interleave.
    * @param key - Record key; a missing key rejects with `missing-key`.
@@ -124,7 +142,7 @@ interface TableHost {
   readonly unit: KvUnit
   /** Queue one job on the domain's single write chain. */
   enqueue<T>(job: () => Promise<T>): Promise<T>
-  /** Throw `closed` once the domain has fully closed (reads stay valid while draining). */
+  /** Throw `closed` after teardown, or the recorded `unknown-state` while quarantined. */
   assertReadable(): void
   /** Emit `domain/changed` for one durably landed write. */
   emitChanged(change: DomainChanged): void
@@ -149,6 +167,8 @@ export class DomainImpl {
   private chain: Promise<void> = Promise.resolve()
   /** Set when close begins: new writes reject while already-queued writes drain. */
   private disposing = false
+  /** Set when the unit reports `unknown-state`: reads and writes reject with it. */
+  private failure?: StorageError
   /** Set when close finishes (chain drained, unit closed): reads reject from here on. */
   private closed = false
   private disposal?: Promise<void>
@@ -264,15 +284,28 @@ export class DomainImpl {
     if (this.disposing) {
       return Promise.reject(new DomainError('closed', `domain '${this.name}' is closed`))
     }
-    const result = this.chain.then(job)
+    const run = async (): Promise<T> => {
+      // A poisoned unit makes in-memory state unverifiable: reject before the
+      // job runs, including jobs queued before the failure surfaced.
+      if (this.failure !== undefined) throw this.failure
+      try {
+        return await job()
+      } catch (error: unknown) {
+        if (error instanceof StorageError && error.code === 'unknown-state') this.failure = error
+        throw error
+      }
+    }
+    const result = this.chain.then(run)
     this.chain = result.then(noop, noop)
     return result
   }
 
   private assertReadable(): void {
+    // Close wins: the KvUnit contract reports `closed` for calls after teardown.
     if (this.closed) {
       throw new DomainError('closed', `domain '${this.name}' is closed`)
     }
+    if (this.failure !== undefined) throw this.failure
   }
 }
 
@@ -326,6 +359,28 @@ class KvTableImpl<K extends string, V> implements KvTable<K, V> {
         operation: 'deleted',
       })
       return true
+    })
+  }
+
+  deleteMany(keys: readonly K[]): Promise<number> {
+    return this.host.enqueue(async () => {
+      // Existence and the backend write happen at this job's chain slot, so an
+      // earlier queued put of a key is observed and the batch is one unit call.
+      const present = [...new Set(keys)].filter(key => this.records.has(key))
+      if (present.length === 0) return 0
+      await this.host.unit.deleteRecords(this.tableName, present)
+      // Memory reaches the committed batch state before the first listener runs,
+      // so every `domain/changed` observes the same removed set as the medium.
+      for (const key of present) this.records.delete(key)
+      for (const key of present) {
+        this.host.emitChanged({
+          domain: this.host.domainName,
+          table: this.tableName,
+          key,
+          operation: 'deleted',
+        })
+      }
+      return present.length
     })
   }
 

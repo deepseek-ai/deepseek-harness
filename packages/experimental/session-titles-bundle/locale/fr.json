@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Titres de suivi de conversation",
+    "description": "Actualisez les titres des sessions à mesure que de nouvelles invites humaines arrivent.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -44,6 +44,7 @@ import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScheduleCatalogEntry, ScheduleDeliveryHistoryRequest, ScheduleId, ScheduleUpdateRequest } from '@deepseek-ai/dsh-schedule/client'
 import { createCatalogSource, type CatalogDeleteOutcome, type CatalogInjected } from './catalog-source.ts'
+import { createClearEnded } from './clear-ended.ts'
 import { createDeleteToastSource, ScheduleDeleteToast } from './DeleteToast.tsx'
 import { SCHEDULE_TASK_ID, SCHEDULE_TASK_KIND, scheduleTaskDefinition } from './definition.ts'
 import { ScheduleCatalogAction } from './ScheduleCatalogAction.tsx'
@@ -59,8 +60,8 @@ import { TaskManagerPage, type TaskManagerInjected } from './TaskManagerPage.tsx
 import type { TaskDetailInjected } from './TaskDetail.tsx'
 import { TaskManagerIcon } from './TaskManagerIcon.tsx'
 import { sessionLinkState } from './session-link.ts'
-import { en, ja, NS, zh, type ScheduleCatalogKey } from './locales.ts'
-import { en as managerEn, ja as managerJa, zh as managerZh, type TaskManagerKey } from './task-manager-locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type ScheduleCatalogKey } from './locales.ts'
+import { en as managerEn, ja as managerJa, es as managerEs, fr as managerFr, de as managerDe, ru as managerRu, pt as managerPt, zh as managerZh, type TaskManagerKey } from './task-manager-locales.ts'
 
 const MANAGER_NS = 'schedule.manager'
 const PANEL_ID = 'schedules' as MainPanelId
@@ -87,8 +88,17 @@ export const inject = [
  * @param ctx - browser services used by these contributions.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'ui-schedule: dictionaries')
-  const managerDictionaries = { zh: managerZh, en: managerEn, ja: managerJa }
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-schedule: dictionaries')
+  const managerDictionaries = {
+    zh: managerZh,
+    en: managerEn,
+    ja: managerJa,
+    es: managerEs,
+    fr: managerFr,
+    de: managerDe,
+    ru: managerRu,
+    pt: managerPt,
+  }
   ctx.effect(() => ctx.locale.register(MANAGER_NS, managerDictionaries), 'ui-schedule: manager dictionaries')
   const t = ctx.locale.bind(MANAGER_NS)
   ctx.effect(() => ctx.sidebarRightTabs.register(scheduleTaskDefinition(t)), 'ui-schedule: task tab type')
@@ -145,6 +155,17 @@ export function apply(ctx: ClientContext): void {
         ctx.uiWorkspace.openSession(id)
       }
     }
+    /**
+     * Remove every ended Host task and read the catalog back.
+     *
+     * The readback names every request seen so far, so it supersedes a read sent
+     * before the removal instead of joining it.
+     * @returns the settled bulk-removal outcome.
+     */
+    const clearEnded = createClearEnded({
+      removeInactive: () => ctx.remote.schedule.deleteInactive(),
+      refresh: () => manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest),
+    })
     const detail: TaskDetailInjected & ScheduleTaskCatalogInjected = {
       hooks: manager.hooks,
       onDelete: reportedDelete(manager.onDelete),
@@ -180,6 +201,10 @@ export function apply(ctx: ClientContext): void {
         ...detail,
         // The page has no creation form: a new reminder starts in a Session.
         onNewTask: () => { ctx.uiWorkspace.startSession() },
+        onClearEnded: async () => {
+          const outcome = await clearEnded()
+          deleteToast.reportClear(outcome)
+        },
       }),
     }, TaskManagerPage))
     yield ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({

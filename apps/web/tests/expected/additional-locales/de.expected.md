@@ -1,0 +1,5 @@
+- listitem:
+  - button "Siehe Automatische Autorisierungsüberprüfung": Automatische Autorisierungsüberprüfung
+  - text: Experimentell Fügen Sie einen Auto review-Berechtigungsmodus hinzu, der das Modell verwendet, um die Autorisierung vor jedem Toolaufruf zu bewerten.
+  - status
+  - switch "Aktivieren Sie Automatische Autorisierungsüberprüfung"

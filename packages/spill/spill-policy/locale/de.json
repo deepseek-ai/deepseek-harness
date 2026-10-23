@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kontrolle der Werkzeugergebnislänge",
+    "description": "Begrenzen Sie die Länge der Tool-Ergebnisse, die direkt im Kontext platziert werden, und behalten Sie den Lesepfad für die vollständigen Ergebnisse bei."
+  }
+}

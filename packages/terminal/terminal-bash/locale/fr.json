@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Backend Shell persistant",
+    "description": "Fournit un terminal shell qui préserve l’état lors de plusieurs appels."
+  }
+}

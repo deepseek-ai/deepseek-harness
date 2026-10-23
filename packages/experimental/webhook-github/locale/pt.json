@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub webhooks",
+    "description": "Verifique webhooks GitHub HTTP assinados e encaminhe-os para o serviço Webhook."
+  }
+}
