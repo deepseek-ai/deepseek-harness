@@ -95,15 +95,17 @@ describe('retry policy fields', () => {
     fireEvent.click(apply())
 
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-    expect(writeSettings).toHaveBeenCalledWith('llm-deepseek', [{
-      op: 'set',
-      path: ['retryPolicy'],
-      value: { mode: 'normal', maxRetries: 3, retryableCodes: ['RATE_LIMIT', 'SERVER'], backoff: { jitterRatio: 0.25 } },
-    }], 3)
+    expect(writeSettings).toHaveBeenCalledWith('llm-deepseek', [
+      { op: 'set', path: ['retryPolicy', 'mode'], value: 'normal' },
+      { op: 'set', path: ['retryPolicy', 'maxRetries'], value: 3 },
+      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['RATE_LIMIT', 'SERVER'] },
+      { op: 'set', path: ['retryPolicy', 'backoff', 'jitterRatio'], value: 0.25 },
+    ], 3)
   })
 
   const delayInvalid = en.retryDelayInvalid.replace('{max}', '2147483647')
   it.each([
+    [en.retryMaxRetries, '-1', en.retryMaxRetriesInvalid],
     [en.retryMaxRetries, '1.5', en.retryMaxRetriesInvalid],
     [en.retryMaxRetries, 'many', en.retryMaxRetriesInvalid],
     [en.retryCodes, 'SERVER, SERVER', en.retryCodesDuplicate],
@@ -136,12 +138,68 @@ describe('retry policy fields', () => {
     await waitFor(() => { expect(document.getElementById('route-retry-failure')?.closest('details')).not.toBeNull() })
   })
 
-  it('edits a stored policy without a mode under the inherited mode', () => {
-    setup(deepSeekNamespace({ base: { retryPolicy: { mode: 'normal' } }, user: { retryPolicy: { backoff: { maxDelayMs: 2_000 } } } }))
-    expect(mode().value).toBe('')
+  it.each([
+    ['the inherited mode', { mode: 'always' }, 'always'],
+    ['normal mode when nothing is inherited', undefined, 'normal'],
+  ])('names %s for a stored policy without a mode', async (_name, inherited, expected) => {
+    const { writeSettings } = setup(deepSeekNamespace({
+      ...inherited === undefined ? {} : { base: { retryPolicy: inherited } },
+      user: { retryPolicy: { backoff: { maxDelayMs: 2_000 } } },
+    }))
+    expect(mode().value).toBe(expected)
     expect(input(en.retryMaxDelay).value).toBe('2000')
-    expect(input(en.retryMaxRetries).placeholder).toBe('5')
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy', 'mode'], value: expected }])
+  })
+
+  it('removes a stored policy without a mode when Default is chosen', async () => {
+    const { writeSettings } = setup(deepSeekNamespace({ user: { retryPolicy: { backoff: { maxDelayMs: 2_000 } } } }))
+    fireEvent.change(mode(), { target: { value: '' } })
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'unset', path: ['retryPolicy'] }])
+  })
+
+  it('unsets a cleared field so the inherited value applies again', async () => {
+    const { writeSettings } = setup(deepSeekNamespace({
+      base: { retryPolicy: { mode: 'normal', maxRetries: 7 } },
+      user: { retryPolicy: { mode: 'normal', maxRetries: 1 } },
+    }))
+    fireEvent.change(input(en.retryMaxRetries), { target: { value: '' } })
+    expect(input(en.retryMaxRetries).placeholder).toBe('7')
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'unset', path: ['retryPolicy', 'maxRetries'] }])
+  })
+
+  it.each([
+    ['an empty code list', []],
+    ['a blank code', ['']],
+    ['a numeric code', [500]],
+  ])('refuses a stored policy with %s', (_name, codes) => {
+    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'normal', retryableCodes: codes } } }))
+    expect(screen.getByText(en.retryCodesInvalid)).toBeTruthy()
+    expect(apply().disabled).toBe(true)
+  })
+
+  it('refuses a stored policy that is not an object', () => {
+    setup(deepSeekNamespace({ user: { retryPolicy: 'sometimes' } }))
+    expect(mode().value).toBe('')
+    expect(apply().disabled).toBe(true)
+  })
+
+  it('treats a stored null policy as inheriting', () => {
+    setup(deepSeekNamespace({ user: { retryPolicy: null } }))
+    expect(mode().value).toBe('')
     expect(apply().disabled).toBe(false)
+  })
+
+  it('offers no retry fields on a namespace without a curated editor', () => {
+    const namespace = deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } })
+    setup({ ...namespace, ns: 'llm-plain' })
+    expect(screen.queryByRole('group', { name: en.retryPolicy })).toBeNull()
+    expect(document.getElementById('route-retry-failure')).toBeNull()
   })
 
   it('drops an uncorrectable retry count when switching to always', async () => {
@@ -154,7 +212,7 @@ describe('retry policy fields', () => {
     expect(apply().disabled).toBe(false)
     fireEvent.click(apply())
     await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
-    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy'], value: { mode: 'always' } }])
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy', 'mode'], value: 'always' }])
   })
 
   it('shows inherited values and removes the user policy when Default is chosen', async () => {
@@ -186,7 +244,7 @@ describe('retry policy fields', () => {
     fireEvent.click(apply())
     await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
     expect(writeSettings.mock.calls[0]?.[1]).toEqual([
-      { op: 'set', path: ['providers', 'openai', 'retryPolicy'], value: { mode: 'always' } },
+      { op: 'set', path: ['providers', 'openai', 'retryPolicy', 'mode'], value: 'always' },
     ])
   })
 

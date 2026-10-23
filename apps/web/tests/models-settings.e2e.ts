@@ -6,8 +6,8 @@
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
 // provider status. The customized-settings fold writes its curated fields —
-// the endpoint, a declared route's own name and protocol, and the reasoning
-// levels of its models — as merge patches against the stored profile. Zero
+// the endpoint, the retry policy, a declared route's own name and protocol, and
+// the reasoning levels of its models — as merge patches against the stored profile. Zero
 // model calls: configuration is pure settings/credentials/llm-domain traffic,
 // so there is no fixture and a stray stream would fail loud because the
 // adapter registry is empty. The provider under test is
@@ -228,6 +228,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const url = dialog.getByLabel('API 地址')
     await url.waitFor({ timeout: 10_000 })
     await url.fill('https://gateway.minimax.example/v1')
+    await dialog.getByLabel('重试模式', { exact: true }).selectOption('normal')
+    await dialog.getByLabel('最大重试次数', { exact: true }).fill('3')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     // The editor closes back to the row; the fold's write merged into the
     // stored profile beside the reference.
@@ -236,6 +238,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('baseURL: https://gateway.minimax.example/v1')
     expect(document).toContain('apiKeyEnv: MINIMAX_CN_API_KEY')
+    expect(document).toMatch(/retryPolicy:\n\s+mode: normal\n\s+maxRetries: 3\n/u)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(CONFIGURED_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])

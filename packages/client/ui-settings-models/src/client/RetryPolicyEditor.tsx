@@ -81,7 +81,7 @@ export interface RetryPolicyFailure {
 
 /**
  * The first refused field of a drafted policy, checked as `resolveRetryPolicy`
- * checks the merged policy: fields the draft leaves empty, including `mode`, inherit.
+ * checks the merged policy: fields the draft leaves empty inherit.
  * @param schema - settings schema operations.
  * @param node - the `retryPolicy` schema union, which bounds every field.
  * @param policy - the drafted user-layer policy; undefined inherits.
@@ -97,17 +97,25 @@ export function retryPolicyFailure(
   t: (key: ModelsKey) => string,
 ): RetryPolicyFailure | undefined {
   if (policy === undefined) return undefined
+  if (typeof policy !== 'object' || policy === null || Array.isArray(policy)) {
+    const message = schema.validate(node, policy)
+    return message === undefined ? undefined : { message }
+  }
   const fail = (key: ModelsKey, path: readonly string[]): RetryPolicyFailure => ({ message: t(key), path })
   const number = (path: readonly string[]): number => {
     const value = schema.getPath(policy, path) ?? defaults.value(path)
     return typeof value === 'number' ? value : NaN
   }
-  const mode = schema.getPath(policy, ['mode']) ?? defaults.mode
-  if (mode === 'normal') {
+  if (schema.getPath(policy, ['mode']) === 'normal') {
     const retries = number(MAX_RETRIES)
     if (!Number.isSafeInteger(retries) || retries < 0) return fail('retryMaxRetriesInvalid', MAX_RETRIES)
     const codes = schema.getPath(policy, CODES)
-    if (Array.isArray(codes) && new Set(codes).size !== codes.length) return fail('retryCodesDuplicate', CODES)
+    if (Array.isArray(codes)) {
+      if (codes.length === 0 || codes.some(code => typeof code !== 'string' || code.length === 0)) {
+        return fail('retryCodesInvalid', CODES)
+      }
+      if (new Set(codes).size !== codes.length) return fail('retryCodesDuplicate', CODES)
+    }
   }
   for (const path of [INITIAL_DELAY, MAX_DELAY]) {
     const delay = number(path)
@@ -117,7 +125,7 @@ export function retryPolicyFailure(
   if (number(INITIAL_DELAY) > number(MAX_DELAY)) return fail('retryDelayOrder', INITIAL_DELAY)
   const jitter = number(JITTER)
   if (!(jitter >= 0 && jitter <= 1)) return fail('retryJitterInvalid', JITTER)
-  const message = schema.validate(node, { ...policy as Record<string, unknown>, mode })
+  const message = schema.validate(node, policy)
   return message === undefined ? undefined : { message }
 }
 
@@ -146,19 +154,23 @@ function textOf(value: unknown): string {
   return typeof value === 'number' || typeof value === 'string' ? String(value) : ''
 }
 
-/** Set or remove one nested field of a plain policy object, dropping emptied parents. */
-function withField(policy: Record<string, unknown>, path: readonly string[], value: unknown): Record<string, unknown> {
-  const [key, ...rest] = path as [string, ...string[]]
-  const next = { ...policy }
-  const child = rest.length === 0
-    ? value
-    : withField(typeof next[key] === 'object' && next[key] !== null ? next[key] as Record<string, unknown> : {}, rest, value)
-  if (child === undefined || (typeof child === 'object' && child !== null && Object.keys(child).length === 0)) {
-    Reflect.deleteProperty(next, key)
-  } else {
-    next[key] = child
+/** Set or remove one field of a plain policy object, dropping an emptied `backoff`. */
+function withField(policy: Record<string, unknown>, path: FieldPath, value: unknown): Record<string, unknown> {
+  const assign = (target: Record<string, unknown>, key: string, next: unknown): void => {
+    if (next === undefined) Reflect.deleteProperty(target, key)
+    else target[key] = next
   }
-  return next
+  const result = { ...policy }
+  if (path.length === 1) {
+    assign(result, path[0], value)
+    return result
+  }
+  const [parent, key] = path
+  const prior = result[parent]
+  const child = typeof prior === 'object' && prior !== null ? { ...prior as Record<string, unknown> } : {}
+  assign(child, key, value)
+  assign(result, parent, Object.keys(child).length === 0 ? undefined : child)
+  return result
 }
 
 /**
@@ -173,8 +185,6 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
     : undefined
   const current = policy ?? {}
   const mode = current['mode']
-  // A stored policy without a mode inherits the mode beneath it.
-  const shownMode = mode ?? (policy === undefined ? undefined : defaults.mode)
   // Raw text keeps partial input such as `0.` visible while it is typed.
   const [texts, setTexts] = useState<Record<string, string>>({})
   const textAt = (path: FieldPath): string => texts[path.join('.')] ?? textOf(path.reduce<unknown>(
@@ -237,12 +247,12 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
         <option value="normal">{modeLabel('normal')}</option>
         <option value="always">{modeLabel('always')}</option>
       </select>
-      {shownMode === 'always' ? <span className={styles['advancedHint']}>{t('retryAlwaysHint')}</span> : null}
-      {shownMode === 'normal' || shownMode === 'always'
+      {mode === 'always' ? <span className={styles['advancedHint']}>{t('retryAlwaysHint')}</span> : null}
+      {mode === 'normal' || mode === 'always'
         ? (
           <div className={styles['retryFields']}>
-            {shownMode === 'normal' ? field(CODES, 'retryCodes') : null}
-            {NUMBER_FIELDS.filter(([path]) => shownMode === 'normal' || path !== MAX_RETRIES).map(([path, label]) => field(path, label))}
+            {mode === 'normal' ? field(CODES, 'retryCodes') : null}
+            {NUMBER_FIELDS.filter(([path]) => mode === 'normal' || path !== MAX_RETRIES).map(([path, label]) => field(path, label))}
           </div>
         )
         : null}

@@ -8,9 +8,9 @@
  * provider-native authentication);
  * the collapsed 自定义设置 area carries the per-family extras (`baseURL` and
  * `retryPolicy` for both families, DeepSeek's id/name/context-window model
- * catalog, and the display name and wire protocol of a pi-ai route the adapter does not ship —
- * the two fields the create card asked that route for, editable here for the
- * same reason).
+ * catalog, and the display name and wire protocol of a pi-ai route the
+ * adapter does not ship — the two fields the create card asked that route
+ * for, editable here for the same reason).
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
  * the models under one provider disagree about it, so a provider-scoped
  * control can only be set to a value some of them reject. The composer's
@@ -122,11 +122,17 @@ function draftAt(
   return structuredClone(subtree) as Record<string, unknown>
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * The minimal path ops carrying `after` over `before`, both as the card sees
  * them. Only keys the card observed are named; fields absent from both sides
  * produce no op, which is why edits are path-addressed rather than a rebuilt
- * section.
+ * section. Objects are diffed field by field, so an omitted field keeps the
+ * value an unset restores from the inherited layer instead of a whole-object
+ * set discarding it.
  * @param base - path of the edited subtree inside the user section.
  * @param before - the subtree as loaded, or undefined when it is new.
  * @param after - the subtree as edited.
@@ -137,13 +143,13 @@ export function pathOps(
   before: unknown,
   after: Record<string, unknown>,
 ): SettingsPathOpView[] {
-  const previous = typeof before === 'object' && before !== null && !Array.isArray(before)
-    ? before as Record<string, unknown>
-    : {}
+  const previous = isRecord(before) ? before : {}
   const ops: SettingsPathOpView[] = []
   for (const [key, value] of Object.entries(after)) {
-    if (JSON.stringify(previous[key]) === JSON.stringify(value)) continue
-    ops.push({ op: 'set', path: [...base, key], value: value as JsonValue })
+    const prior = previous[key]
+    if (JSON.stringify(prior) === JSON.stringify(value)) continue
+    if (isRecord(value) && (prior === undefined || isRecord(prior))) ops.push(...pathOps([...base, key], prior, value))
+    else ops.push({ op: 'set', path: [...base, key], value: value as JsonValue })
   }
   for (const key of Object.keys(previous)) {
     if (!(key in after)) ops.push({ op: 'unset', path: [...base, key] })
@@ -179,7 +185,15 @@ function refFor(
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, schema, settingsPath, operations, t } = props
-  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
+  const [draft, setDraft] = useState<Record<string, unknown>>(() => {
+    const loaded = draftAt(schema, namespace, settingsPath)
+    const policy = loaded['retryPolicy']
+    // A stored retry policy without a mode edits under the mode it inherits;
+    // the draft names it so a saved policy always carries one.
+    if (!isRecord(policy) || policy['mode'] !== undefined) return loaded
+    const mode = schema.getPath(namespace.base, [...settingsPath, 'retryPolicy', 'mode']) ?? 'normal'
+    return { ...loaded, retryPolicy: { ...policy, mode } }
+  })
   const [keyDraft, setKeyDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [listBusy, setListBusy] = useState(false)
@@ -237,7 +251,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
     validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
   const modelFailure = validateModels(schema.getPath(draft, ['models']))
-  const retryNode = useMemo(() => schema.nodeAtPath(root, [...settingsPath, 'retryPolicy']), [root, schema, settingsPath])
+  const retryNode = useMemo(
+    () => layout === 'unknown' ? undefined : schema.nodeAtPath(root, [...settingsPath, 'retryPolicy']),
+    [layout, root, schema, settingsPath],
+  )
   const retryDefaults = retryNode === undefined
     ? undefined
     : retryPolicyDefaults(schema, retryNode, schema.getPath(namespace.base, [...settingsPath, 'retryPolicy']))
