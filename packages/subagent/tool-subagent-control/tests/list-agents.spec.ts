@@ -146,7 +146,6 @@ describe('list_agents', () => {
     expect(Object.keys(parameters.properties ?? {})).toEqual([])
     expect(parameters.required ?? []).toEqual([])
     expect(schemas[0]?.description).toContain('You can message any other agent in the subagent tree')
-    expect(schemas[0]?.description).toContain('You can interrupt only your own descendants')
   })
 
   it('renders the Lead when the tree has no children', async () => {

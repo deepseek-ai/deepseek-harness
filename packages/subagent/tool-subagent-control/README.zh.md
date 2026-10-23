@@ -40,7 +40,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-设置 `config.interrupt: false` 可省略 `interrupt_agent` 及其在 `list_agents` 中的指引。默认值为 `true`。其余三个工具和 `ctx.subagents.interrupt()` 仍然可用。参见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent-control)。
+设置 `config.interrupt: false` 可省略 `interrupt_agent`。默认值为 `true`。其余三个工具和 `ctx.subagents.interrupt()` 仍然可用。参见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-subagent-control)。
 
 ### send_message
 

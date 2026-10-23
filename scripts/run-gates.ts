@@ -873,6 +873,7 @@ function docSyncLeafGates(options: {
       'website/tests/mermaid-viewer.spec.ts',
       'website/tests/image-viewer.spec.ts',
       'website/tests/code-groups.spec.ts',
+      'website/tests/table-filter.spec.ts',
       'website/tests/page-markdown-actions.spec.ts', 'website/tests/raw-markdown.spec.ts',
     ], {
       label: 'documentation site checks',

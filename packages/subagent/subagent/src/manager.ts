@@ -162,7 +162,7 @@ export class SubagentManager {
     installSubagentArchiveAdmission(ctx, (agent) => {
       const activation = this.resident.get(agent.id)
       return activation !== undefined && activationAgent(activation) === agent ? activation.ancestors : undefined
-    })
+    }, session => host.identityOf(session))
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
     })

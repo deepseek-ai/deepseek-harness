@@ -408,9 +408,9 @@ describe('dsh-tool-subagent-control', () => {
     const names = ['send_message', 'list_agents', 'wait_agent']
     if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
     if (config.interrupt === false) {
       expect(ctx.tools.get('interrupt_agent')).toBeUndefined()
-      expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
       expect(typeof ctx.subagents.interrupt).toBe('function')
     }
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()

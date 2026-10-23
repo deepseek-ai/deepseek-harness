@@ -39,7 +39,6 @@ import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { Remote, RemoteError, TypertRemoteService, principalOf, type Principal } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -70,7 +69,6 @@ import SubagentManager from './manager.ts'
 import { listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
-import type { IdentityState } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
 
 export type {} from './catalog.ts'
@@ -196,7 +194,6 @@ export class SubagentRuntime extends TypertRemoteService {
   static inject = ['workingDirectory', 'sessionProjections']
   private providers = new Map<string, SubagentProvider>()
   private manager: SubagentManager | undefined
-  private identityProjectionHandle!: ProjectionHandle<IdentityState>
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
    * keys its carrier by this exact service instance, whose own context filter
@@ -207,9 +204,17 @@ export class SubagentRuntime extends TypertRemoteService {
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'subagents')
     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
+    await ctx.sessionProjections.register(subagentTimingProjectionDefinition)
+    const identityProjection = await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
+    if (ctx.fiber.uid === null) return
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentManager(childCtx, {
-        identityOf: session => this.identityProjectionHandle.stateOf(session).identity,
+        identityOf: session => identityProjection.stateOf(session).identity,
         emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
@@ -218,13 +223,6 @@ export class SubagentRuntime extends TypertRemoteService {
         if (this.manager === manager) this.manager = undefined
       }, 'subagents.managerBinding()')
     })
-  }
-
-  protected async [Service.init](): Promise<void> {
-    const { sessionProjections } = this.ctx
-    await sessionProjections.register(subagentCatalogProjectionDefinition)
-    await sessionProjections.register(subagentTimingProjectionDefinition)
-    this.identityProjectionHandle = await sessionProjections.register(subagentIdentityProjectionDefinition)
   }
 
   /**

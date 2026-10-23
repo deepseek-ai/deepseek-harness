@@ -40,7 +40,7 @@ With the required services available, load the subagent service, a backend, the 
 - name: '@deepseek-ai/dsh-tool-subagent-control'
 ```
 
-Set `config.interrupt: false` to omit `interrupt_agent` and its guidance in `list_agents`. The default is `true`. The other three tools and `ctx.subagents.interrupt()` remain available. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-subagent-control).
+Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. The other three tools and `ctx.subagents.interrupt()` remain available. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-subagent-control).
 
 ### send_message
 

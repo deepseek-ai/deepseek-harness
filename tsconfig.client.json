@@ -89,6 +89,7 @@
     { "path": "./packages/client/ui-primitives" },
     { "path": "./packages/client/modules" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
+    { "path": "./packages/experimental/liveshare-protocol/tsconfig.client.json" },
     { "path": "./packages/experimental/session-inspector" },
     { "path": "./packages/client/hmr" },
     { "path": "./packages/client/connection/tsconfig.client.json" },

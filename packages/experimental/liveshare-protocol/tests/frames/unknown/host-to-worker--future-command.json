@@ -1,0 +1,5 @@
+{
+  "dir": "host->worker",
+  "note": "a command this worker does not know: it must be refused rather than acted on",
+  "frame": { "type": "set-share-mode", "shareId": "share-one", "mode": "view" }
+}
