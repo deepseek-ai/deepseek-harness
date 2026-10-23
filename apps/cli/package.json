@@ -108,8 +108,7 @@
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
     "@deepseek-ai/dsh-cua-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*",
-    "@deepseek-ai/dsh-creation-recommendations": "workspace:*",
-    "@deepseek-ai/dsh-plugin-recommendations": "workspace:*"
+    "@deepseek-ai/dsh-personalized-recommendations": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-skill-badge": "workspace:*",

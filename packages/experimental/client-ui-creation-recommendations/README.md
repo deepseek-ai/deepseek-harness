@@ -25,7 +25,7 @@ Users see one creation proposal below the completed answer. Short plans appear i
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the [Personalized pages bundle](../creation-recommendations/README.md). This browser contribution has no configuration fields; it fills the shared [action card frame](../client-ui-action-cards/README.md) for `create_personalized_page` cards.
+Enable the [Personalized recommendations bundle](../personalized-recommendations/README.md). This browser contribution has no configuration fields; it fills the shared [action card frame](../client-ui-action-cards/README.md) for `create_personalized_page` cards.
 
 ### Outcomes and recovery
 

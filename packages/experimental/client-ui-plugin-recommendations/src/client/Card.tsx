@@ -60,7 +60,7 @@ function statusKey(phase: string, data: CardData): RecommendationKey | undefined
 }
 
 /**
- * Display one plugin card: its current catalog text, the model's reason, the user's choice and its outcome.
+ * Display one plugin card: its current catalog title and description, the user's choice and its outcome.
  * Until the plugin's first catalog lookup returns, a placeholder line and the disabled actions hold the final layout.
  * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable.
  * @param props - card, state, actions and plugin-lifetime services.
@@ -81,7 +81,6 @@ export function PluginCardBody({
   const [attempt, setAttempt] = useState(0)
   const [pending, setPending] = useState<CardVerb>()
   const [error, setError] = useState<RecommendationKey>()
-  const reasonId = useId()
   const descriptionId = useId()
   const phase = decision?.phase
   useEffect(() => {
@@ -130,9 +129,8 @@ export function PluginCardBody({
     <header className={css.header}><span>{t('heading')}</span><span className={css.badge}>{t('official')}</span></header>
     <div className={css.body} aria-busy={loading || undefined}>
       <button type="button" className={css.details} onClick={() => { openDetails(name) }}
-        aria-label={t('detailsFor', { title })} aria-describedby={available === undefined ? reasonId : `${reasonId} ${descriptionId}`}>
+        aria-label={t('detailsFor', { title })} aria-describedby={available === undefined ? undefined : descriptionId}>
         <strong className={css.title}>{title}</strong>
-        <span id={reasonId} className={css.reason}>{proposal.brief}</span>
         {(loading || available !== undefined) && <span id={descriptionId} className={css.description}>
           {available === undefined ? <span className={css.placeholder} /> : resolveText(available.description)}
         </span>}

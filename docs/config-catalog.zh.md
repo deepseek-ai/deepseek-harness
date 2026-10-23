@@ -4892,6 +4892,7 @@ export interface Config {
 | `@deepseek-ai/dsh-official-bundles` | — | [`packages/util/official-bundles/src/index.ts`](../packages/util/official-bundles/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
+| `@deepseek-ai/dsh-personalized-recommendations` | — | [`packages/experimental/personalized-recommendations/src/index.ts`](../packages/experimental/personalized-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-market-index` | — | [`packages/util/plugin-market-index/src/index.ts`](../packages/util/plugin-market-index/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |

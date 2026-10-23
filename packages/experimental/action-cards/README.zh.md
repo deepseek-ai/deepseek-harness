@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-[个性化页面](../creation-recommendations/README.zh.md)和[插件推荐](../plugin-recommendations/README.zh.md)两个 Bundle 都会插入本服务及其[浏览器端](../client-ui-action-cards/README.zh.md)；启用其中任一个即同时启用两者。本服务只有一个配置字段：
+[个性化推荐](../personalized-recommendations/README.zh.md) Bundle 会插入本服务及其[浏览器端](../client-ui-action-cards/README.zh.md)。本服务只有一个配置字段：
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -125,7 +125,6 @@ Latest status of action cards from user actions and background work. These are s
 - 所有种类合计每轮只展示一张卡片。任何种类的新卡片都会替换此前所有尚未开始的卡片，因此第二个种类的卡片会替换第一个种类尚未开始的卡片。
 - 用户操作的拒绝原因有意设计为普通字符串：服务定义 `closing`、`not-live-root`、`unknown`、`unavailable`、`access-denied` 和 `read-only`，各种类可以添加自己的原因，浏览器端正文为已知原因显示文案，其余按 unavailable 处理。
 - 每个种类在两端各自校验 `details`：Host 端的 schema 在模型提议时和每次操作前校验，浏览器端正文用自己的 schema 校验，因此两个 schema 要一起修改。
-- 个性化页面和插件推荐两个 Bundle 都会插入本服务及其浏览器端的行，两个都启用时 Loader 对每个行 id 只保留一个条目。平台目前不支持两个可选 Bundle 以可定位的方式共享同一依赖行：两个都启用时，插件页无法定位这两条共享行（`action-cards`、`client-ui-action-cards`），不能单独开关或配置它们。请使用 Bundle 开关；此时 `queuedMessageLimit` 只能在 profile 的 `cordis.patch.yml` 中修改。
 
 <a id="dev-note"></a>
 ### 开发备注

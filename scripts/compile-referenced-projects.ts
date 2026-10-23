@@ -48,7 +48,7 @@ export function runPnpmCommand(root: string, args: readonly string[]): void {
  * @param root - Repository root containing the aggregate tsconfig.
  * @param face - Independent compiler face whose package projects are emitted.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns Arguments for `process.execPath`, including the heap limit the Host face needs.
+ * @returns Arguments for `process.execPath`, including an 8 GiB old-space heap limit for the Host face.
  * @throws If the aggregate configuration is invalid, has no references, or can emit files.
  */
 export function referencedProjectsCompilerArgs(
@@ -109,7 +109,7 @@ export function aggregateBuildArgs(face: 'host' | 'client'): string[] {
 }
 
 function hostHeapArgs(face: 'host' | 'client'): string[] {
-  return face === 'host' ? ['--max-old-space-size=6144'] : []
+  return face === 'host' ? ['--max-old-space-size=8192'] : []
 }
 
 /**

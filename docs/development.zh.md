@@ -91,7 +91,7 @@ tsdown --env.DSH_BUILD_FACE client
 pnpm run build:web
 ```
 
-`pnpm run build:check` 只并发运行 `tsc -p tsconfig.host.json` 与 `tsc -p tsconfig.client.json`。project mode 依据磁盘上已有的包声明检查各 aggregate 的仓库级测试和脚本 program，从不编译 reference，因此 `build:check` 既不检测也不重建缺失或过期的 `build:artifacts` 产物；产物缺失时表现为编译器错误。`pnpm run build` 把两组步骤作为一张[调度](../scripts/run-gates.ts)依赖图运行：每个 aggregate 检查在本 face 的包编译完成后立即开始，与其余产物步骤重叠执行。三个命令中，`DSH_GATE_CONCURRENCY` 限制并发步骤数（`1` 按依赖顺序执行），`DSH_GATE_FAIL_FAST=1` 在第一个失败时停止其余步骤；否则失败只跳过其依赖方，因此会报告所有相互独立的错误。失败步骤打印自身输出，任一失败都以非零状态退出且不写 client build record。 Host TypeScript 编译进程的 V8 old-space 上限为 6 GiB，用于包依赖图和无缓存的 aggregate 检查。
+`pnpm run build:check` 只并发运行 `tsc -p tsconfig.host.json` 与 `tsc -p tsconfig.client.json`。project mode 依据磁盘上已有的包声明检查各 aggregate 的仓库级测试和脚本 program，从不编译 reference，因此 `build:check` 既不检测也不重建缺失或过期的 `build:artifacts` 产物；产物缺失时表现为编译器错误。`pnpm run build` 把两组步骤作为一张[调度](../scripts/run-gates.ts)依赖图运行：每个 aggregate 检查在本 face 的包编译完成后立即开始，与其余产物步骤重叠执行。三个命令中，`DSH_GATE_CONCURRENCY` 限制并发步骤数（`1` 按依赖顺序执行），`DSH_GATE_FAIL_FAST=1` 在第一个失败时停止其余步骤；否则失败只跳过其依赖方，因此会报告所有相互独立的错误。失败步骤打印自身输出，任一失败都以非零状态退出且不写 client build record。 Host TypeScript 编译进程的 V8 old-space 上限为 8 GiB，用于包依赖图和无缓存的 aggregate 检查。
 
 按改动需要选择命令：
 

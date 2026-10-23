@@ -304,6 +304,7 @@ flowchart TD
     pkg_hook_protocol["hook-protocol"]
     pkg_hooks_claude_code["hooks-claude-code"]
     pkg_hooks_codex["hooks-codex"]
+    pkg_personalized_recommendations["personalized-recommendations"]
     pkg_plugin_recommendations["plugin-recommendations"]
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
     pkg_skill_badge["skill-badge"]
@@ -1601,6 +1602,7 @@ flowchart TD
 | [`experimental-terminal-bundle`](../packages/experimental/terminal-bundle) | `experimental` | — |
 | [`experimental-voice-input-bundle`](../packages/experimental/voice-input-bundle) | `experimental` | — |
 | [`experimental-webworker-packer`](../packages/experimental/webworker-packer) | `experimental` | — |
+| [`personalized-recommendations`](../packages/experimental/personalized-recommendations) | `experimental` | — |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | — |
 | [`cordis-client-runner`](../packages/extensions/cordis-client-runner) | `extensions` | — |
 | [`host-directory-picker`](../packages/host/directory-picker) | `host` | — |
