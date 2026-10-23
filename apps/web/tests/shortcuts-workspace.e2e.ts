@@ -93,14 +93,17 @@ describe.skipIf(mode === 'record')('web e2e: workspace shortcuts', () => {
     await bind('Fork session')
     const original = await readPersistedEvents(scaffold, sourceId)
     const lastEnd = original.findLastIndex(event => event.type === 'turn/end')
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await page.keyboard.press('Meta+Shift+Comma')
-    await expect.poll(() => scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === sourceId)).toBeDefined()
-    const child = scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === sourceId)!
+    await expect.poll(() => scaffold.ctx.agents.list().find(agent => !existing.has(agent.id))).toBeDefined()
+    const child = scaffold.ctx.agents.list().find(agent => !existing.has(agent.id))!
+    expect(child.session.header.parentSession).toBeUndefined()
     const childId = child.session.header.id
     await expect.poll(async () => (await readPersistedEvents(scaffold, childId)).some(event => event.type === 'session/title' && event.data.title === 'T4 source (1)')).toBe(true)
     const copied = await readPersistedEvents(scaffold, childId)
     expect(copied.slice(0, lastEnd + 1)).toEqual(original.slice(0, lastEnd + 1))
     const sourceRow = page.getByRole('treeitem').filter({ has: page.getByText('T4 source', { exact: true }) })
+    expect(child.session.header.parentSession).toBeUndefined()
     const childRow = page.getByRole('treeitem').filter({ has: page.getByText('T4 source (1)', { exact: true }) })
     await childRow.waitFor()
     expect(await sourceRow.getAttribute('aria-selected')).toBe('true')
@@ -218,6 +221,7 @@ it.skipIf(mode === 'record')('explains a first-turn fork refusal and retries fro
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     const source = scaffold.ctx.agents.list().find(agent => !before.has(agent.id))
     if (source === undefined) throw new Error('The workspace did not create a Session')
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     source.session.append('turn/start', { turn: 1 })
     const user = source.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'The first turn has not ended.' }], source: { kind: 'user' },
@@ -240,7 +244,7 @@ it.skipIf(mode === 'record')('explains a first-turn fork refusal and retries fro
     await compareOrRefreshGolden(join(root, 'fork-unavailable.expected.md'),
       await unavailable.ariaSnapshot(), mode)
     expect(await selected.textContent()).toContain('First turn')
-    expect(scaffold.ctx.agents.list().filter(agent => agent.session.header.parentSession === source.id)).toHaveLength(0)
+    expect(scaffold.ctx.agents.list().filter(agent => !existing.has(agent.id))).toHaveLength(0)
     expect(forkWarnings).toEqual([])
 
     source.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
@@ -252,8 +256,9 @@ it.skipIf(mode === 'record')('explains a first-turn fork refusal and retries fro
     await scaffold.ctx.sessions.flush(source.session)
     await page.getByText('The second turn has not ended.', { exact: true }).waitFor()
     await page.keyboard.press('Meta+Shift+Comma')
-    await expect.poll(() => scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === source.id)).toBeDefined()
-    const child = scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === source.id)!
+    await expect.poll(() => scaffold.ctx.agents.list().find(agent => !existing.has(agent.id))).toBeDefined()
+    const child = scaffold.ctx.agents.list().find(agent => !existing.has(agent.id))!
+    expect(child.session.header.parentSession).toBeUndefined()
     const childRow = page.getByRole('treeitem').filter({ has: page.getByText('First turn (1)', { exact: true }) })
     await childRow.waitFor()
     expect(await childRow.getAttribute('aria-selected')).toBe('false')

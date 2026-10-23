@@ -78,7 +78,7 @@ This section explains the design behind the serving plugin; the observable behav
 
 ### Design concept
 
-The plugin is a thin presentation adapter: [`HarnessSdkJsonRpcServer`](src/server.ts) owns the protocol methods and notifications, while the transport and the named wire types come from `dsh-sdk-protocol`, shared with the client SDKs. It subscribes to session, agent, and subagent lifecycle events and forwards them as wire notifications; subagent completions are forwarded only when the service-snapshotted lifecycle `local` flag is true — provider names, child ids, and durable lineage never establish locality. Both `subagent.started` and `subagent.finished` identify the durable direct creator in `parentSessionId`, including after that creator exits; the Team root only scopes runtime dispatch.
+The plugin is a thin presentation adapter: [`HarnessSdkJsonRpcServer`](src/server.ts) owns the protocol methods and notifications, while the transport and the named wire types come from `dsh-sdk-protocol`, shared with the client SDKs. It subscribes to session, agent, and subagent lifecycle events and forwards them as wire notifications; subagent completions are forwarded only when the service-snapshotted lifecycle `local` flag is true — provider names, child ids, and durable lineage never establish locality. Both `subagent.started` and `subagent.finished` identify the durable direct creator in `parentSessionId`, including after that creator exits; the Team root only scopes runtime dispatch. Started notifications require `origin: subagent` and a direct creator id; ordinary forks, including historical ones with a parent id, produce none.
 
 ### Source map
 

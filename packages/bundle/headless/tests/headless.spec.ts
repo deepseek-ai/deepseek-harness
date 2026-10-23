@@ -14,7 +14,7 @@ import type {
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { LlmAttemptId, ReasoningEffortId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import ApprovalService, { setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
@@ -987,7 +987,7 @@ describe('headless runner', () => {
     })
     const result = await test.run()
     expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
+    expect(result.err).toContain('is a subagent session')
     await test.ctx.fiber.dispose()
   })
 
@@ -1055,7 +1055,7 @@ describe('headless runner', () => {
     })
     const result = await test.run()
     expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
+    expect(result.err).toContain('is a subagent session')
     await test.ctx.fiber.dispose()
   })
 
@@ -1161,19 +1161,23 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
-  it('rejects a persisted Session linked to a parent', async () => {
-    const test = await bench({ afterPrompt: () => {} }, {
+  it.each([false, true])('resumes an ordinary fork with historical parent metadata: %s', async (legacy) => {
+    const header = { cwd: process.cwd(), ...(legacy ? { parentSession: brandString<SessionId>('parent-1') } : {}) }
+    const test = await bench({
+      afterPrompt(session, message) { appendTurn(session, 1, message, 'fork resumed', true) },
+    }, {
       sessionId: 'session-exact',
-      observe: () => Promise.resolve({
-        header: { cwd: process.cwd(), origin: 'user', parentSession: 'parent-1' },
-        events: [],
-        [Symbol.dispose]() {},
-      }),
+      observe: () => Promise.resolve({ header, events: [], [Symbol.dispose]() {} }),
     })
-    const result = await test.run()
-    expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
-    await test.ctx.fiber.dispose()
+    try {
+      const session = test.ctx.sessions.create(brandString<SessionId>('session-exact'), {
+        seed: [], inheritedEventCount: SessionLogOffset(0), meta: { ...header, isSeeded: true },
+      })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'fork resumed\n', err: '' })
+      expect(session.header.parentSession).toBe(header.parentSession)
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
   })
 
   it('propagates a Session query failure that is not a missing log', async () => {

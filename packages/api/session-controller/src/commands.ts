@@ -273,7 +273,6 @@ export class SessionCommandController {
         inheritedEventCount: SessionLogOffset(boundary + 1),
         meta: {
           ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),
-          parentSession: source.header.id,
           isSeeded: true,
           ...(composition.agentPreset === undefined
             ? {}

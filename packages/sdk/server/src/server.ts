@@ -163,7 +163,7 @@ export class HarnessSdkJsonRpcServer {
     }))
     this.disposers.push(ctx.on('session/created', (session) => {
       const parentSession = session.header.parentSession
-      if (parentSession === undefined) return
+      if (session.header.origin !== 'subagent' || parentSession === undefined) return
       const payload: SubagentStartedNotification = {
         parentSessionId: String(parentSession),
         childSessionId: String(session.id),

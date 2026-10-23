@@ -104,7 +104,11 @@ export interface SessionHeader {
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
   readonly cwd?: string
-  /** The session this one was forked from (seed lineage), if any. */
+  /**
+   * Direct creator of a subagent Session. Ordinary forks omit this field;
+   * historical ordinary forks may retain their source id here. Presence alone
+   * does not classify a Session as a subagent; use `origin` for that distinction.
+   */
   readonly parentSession?: SessionId
   /**
    * Whether this Session contains a fork-inherited event prefix. The exact prefix
