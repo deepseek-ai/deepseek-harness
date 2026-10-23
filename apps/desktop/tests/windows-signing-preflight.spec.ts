@@ -63,14 +63,31 @@ async function fixture() {
     sequence.push('compile'); await writeFile(output, 'inert unsigned probe')
   })
   const sign = vi.fn(async () => { sequence.push('sign') })
+  const inspectIdentity = vi.fn(async () => 'matched' as const)
   const inspect = vi.fn(async (_path: string) => {
     sequence.push('inspect')
     return sign.mock.calls.length === 0
       ? { status: 'NotSigned', timestamped: false, thumbprint: null }
       : { status: 'Valid', timestamped: true, thumbprint: 'A'.repeat(40) }
   })
-  return { root, compiler, sequence, runDirectory: run.directory, environment, stateDirectory: join(root, 'state'), compile, sign, inspect }
+  return { root, compiler, sequence, runDirectory: run.directory, environment, stateDirectory: join(root, 'state'), compile, sign, inspect, inspectIdentity }
 }
+
+it.each(['provider-unavailable', 'container-unavailable', 'certificate-mismatch', 'unknown'] as const)
+('stops before compilation and signing on public identity result %s', async (result) => {
+  const options = await fixture()
+  const inspectIdentity = vi.fn(async (_input: { environment: NodeJS.ProcessEnv }) => result)
+  await expect(preflightWindowsSigning({ ...options, inspectIdentity })).rejects.toThrow('No PIN was supplied')
+  expect(options.compile).not.toHaveBeenCalled()
+  expect(options.sign).not.toHaveBeenCalled()
+  expect(inspectIdentity).toHaveBeenCalledOnce()
+  expect(inspectIdentity.mock.calls[0]![0].environment).not.toHaveProperty('DSH_DESKTOP_WINDOWS_TOKEN_PIN')
+  expect(inspectIdentity.mock.calls[0]![0].environment).not.toHaveProperty('DSH_DESKTOP_WINDOWS_SIGNTOOL')
+  const events = await readFile(join(options.runDirectory, 'events.jsonl'), 'utf8')
+  expect(events).toContain(`"result":"${result}"`)
+  expect(events).not.toContain('fixture-pin')
+  expect(events).not.toContain('fixture-container')
+})
 
 it('compiles one new probe and verifies one production-format signature before success', async () => {
   const options = await fixture()

@@ -166,10 +166,12 @@ function pnpmStep(id: LibraryStepId, label: string, args: readonly string[], nee
 /**
  * List the package-library build steps in Host, Desktop, then Client dependency order.
  * Source-only Typert generation supplies declarations before any package compilation.
+ * Client compilation waits for Host and Desktop bundling because split compiler faces
+ * rewrite shared lib/types files consumed by those bundles.
  * @param root - Repository root containing the compiler and bundle configurations.
  * @param faces - `host` lists Typert generation, Host compilation, and bundling; `all` adds Desktop and Client.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns The ordered steps; each step needs its predecessor.
+ * @returns Steps with explicit compiler and bundle dependencies.
  * @throws If an aggregate configuration is invalid.
  */
 export function libraryBuildSteps(root: string, faces: 'host' | 'all', mode: CompilationMode = 'checked'): LibraryStep[] {

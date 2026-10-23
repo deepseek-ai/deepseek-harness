@@ -26,7 +26,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import { IconCloseFillRegular, IconPlusOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DockZone, LayoutState, PaneNode, TabId } from '../contract/types.ts'
+import type { DockZone, LayoutState, PaneId, PaneNode, TabId } from '../contract/types.ts'
 import { getTab } from '../engine/tree.ts'
 import type { PaneCallbacks, SplitBlock } from './render.ts'
 import { TabMenu } from './TabMenu.tsx'
@@ -174,29 +174,66 @@ function useStripScrollFades(box: RefObject<HTMLDivElement | null>, tabs: readon
 }
 
 /**
+ * Move the chip box to `left` at once, overriding the stylesheet's smooth
+ * `scroll-behavior` for this one assignment.
+ */
+function jumpTo(element: HTMLElement, left: number): void {
+  element.style.scrollBehavior = 'auto'
+  element.scrollLeft = left
+  element.style.removeProperty('scroll-behavior')
+}
+
+/**
  * Bring the active chip into the chip box's view whenever the active tab or
  * the row of chips changes: a tab opened or selected past the box's edge, or
  * moved there by a close or a reorder, scrolls the box to it, with the fade
  * band (24px) cleared so the chip is not under it. A chip already in view
  * moves nothing. Direct DOM, like the fades above: the box's scroll position
  * renders nothing.
+ *
+ * A box newly mounted, or newly showing another pane, first jumps to that
+ * pane's offset in `offsets`, so a strip that replaces another for the same
+ * pane continues from where that one stood and glides only the remaining
+ * distance. With no recorded offset the first placement jumps rather than
+ * glides from the row's start. The box records its offset in `offsets` when
+ * it unmounts or leaves its pane.
  */
 function useActiveChipInView(
   box: RefObject<HTMLDivElement | null>,
   chips: ReadonlyMap<TabId, HTMLElement>,
   tabs: readonly TabId[],
   activeTabId: TabId | undefined,
+  paneId: PaneId,
+  offsets: Map<PaneId, number> | undefined,
 ): void {
+  // The pane the box was last placed for: a strip moved to another pane places afresh.
+  const placed = useRef<PaneId | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (offsets === undefined) return undefined
+    const element = box.current
+    /* v8 ignore next -- the box is rendered unconditionally with the strip. */
+    if (element === null) return undefined
+    // Layout cleanup runs before React detaches the box, so it still reads the live offset.
+    return () => { offsets.set(paneId, element.scrollLeft) }
+  }, [box, paneId, offsets])
   useLayoutEffect(() => {
     const element = box.current
     const chip = activeTabId === undefined ? undefined : chips.get(activeTabId)
     /* v8 ignore next -- the box and the active tab's chip are rendered with the strip. */
     if (element === null || chip === undefined) return
+    const first = placed.current !== paneId
+    placed.current = paneId
+    const recorded = first ? offsets?.get(paneId) : undefined
+    if (recorded !== undefined) jumpTo(element, recorded)
     const bounds = element.getBoundingClientRect()
     const rect = chip.getBoundingClientRect()
-    if (rect.left < bounds.left) element.scrollLeft += rect.left - bounds.left - STRIP_FADE
-    else if (rect.right > bounds.right) element.scrollLeft += rect.right - bounds.right + STRIP_FADE
-  }, [box, chips, tabs, activeTabId])
+    let delta = 0
+    if (rect.left < bounds.left) delta = rect.left - bounds.left - STRIP_FADE
+    else if (rect.right > bounds.right) delta = rect.right - bounds.right + STRIP_FADE
+    if (delta === 0) return
+    if (first && recorded === undefined) jumpTo(element, element.scrollLeft + delta)
+    else element.scrollLeft += delta
+  }, [box, chips, tabs, activeTabId, paneId, offsets])
 }
 
 /** Width of the chip box's fade at a hidden side; mirrors the stylesheet's 24px. */
@@ -210,8 +247,19 @@ function splitBlockedTitle(labels: PaneCallbacks['labels'], block: SplitBlock): 
   }
 }
 
-/** @param props - pane state and gestures. @returns its tab strip without a content container. */
-export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
+/** A tab strip and where it reads and records its pane's chip-box offset. */
+interface TabStripProps extends TabPanelProps {
+  /**
+   * Chip-box offsets by pane, shared by the strips that replace one another
+   * as a pane's selected tab changes. Keys are valid within one layout only,
+   * and entries outlive their panes. Omitted where no strip continues from
+   * another's position.
+   */
+  readonly offsets?: Map<PaneId, number>
+}
+
+/** @param props - pane state, gestures and shared offsets. @returns its tab strip without a content container. */
+export function TabStrip({ state, pane, callbacks, offsets }: TabStripProps): ReactNode {
   // The open context menu and the chip that opened it; the menu positions
   // itself against that chip from its portal.
   const [menu, setMenu] = useState<{ readonly tabId: TabId; readonly anchor: HTMLElement } | undefined>(undefined)
@@ -219,7 +267,7 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
   const [chips] = useState(() => new Map<TabId, HTMLElement>())
   const stripTabs = useRef<HTMLDivElement | null>(null)
   useStripScrollFades(stripTabs, pane.tabs)
-  useActiveChipInView(stripTabs, chips, pane.tabs, pane.activeTabId)
+  useActiveChipInView(stripTabs, chips, pane.tabs, pane.activeTabId, pane.id, offsets)
   const block = callbacks.splitBlock(pane.id)
   const target = callbacks.dropTarget
   const stripIndex = target !== undefined && target.kind === 'strip' && target.paneId === pane.id

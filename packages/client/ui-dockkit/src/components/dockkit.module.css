@@ -263,7 +263,8 @@
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  /* The scroll to a newly active chip glides rather than jumps. */
+  /* The scroll to a newly active chip glides; `jumpTo` in TabPanel.tsx
+     overrides this for the placements that must not animate. */
   scroll-behavior: smooth;
   scrollbar-width: none;
   touch-action: none;

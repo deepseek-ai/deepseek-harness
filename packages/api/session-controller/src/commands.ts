@@ -31,7 +31,6 @@ import {
   ApiSessionSubagentOwnership,
   apiSessionSubagentOwnershipError,
   hasApiSessionSubagentOwner,
-  inspectApiSession,
   type ApiSessionCreated,
 } from './agent.ts'
 import type {
@@ -53,12 +52,6 @@ import type {
   SessionUpdateQueueValue,
   SessionRequestId,
 } from './types.ts'
-
-interface SessionReadState {
-  readonly id: SessionId
-  readonly header: SessionHeader
-  readonly events: readonly SessionEvent[]
-}
 
 type PromptContentCandidate =
   | SessionPromptRequest['content'][number]
@@ -371,11 +364,16 @@ export class SessionCommandController {
    * @returns the durable attachment reference and base64-encoded bytes.
    */
   async attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue> {
-    let source: SessionReadState
+    let ref: ImageAttachmentRef | undefined
     try {
-      source = await this.readSessionState(request.sessionId)
+      using observation = await this.ctx.sessionQuery.observeSession(request.sessionId, { projectionMode: 'none' })
+      if (observation.source === 'prepared' && observation.header.cwd === undefined) {
+        throw new ApiSessionNotFound(`session "${request.sessionId}" not found`)
+      }
+      ref = referencedImage(observation.events, String(request.attachmentId))
     } catch (error) {
-      if (error instanceof ApiSessionNotFound) {
+      if (error instanceof ApiSessionNotFound
+        || (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND')) {
         throw new RemoteError('session/not-found', error.message, { sessionId: request.sessionId })
       }
       throw new RemoteError(
@@ -384,7 +382,6 @@ export class SessionCommandController {
         {},
       )
     }
-    const ref = referencedImage(source.events, String(request.attachmentId))
     if (ref === undefined) {
       throw new RemoteError(
         'session/attachment-invalid',
@@ -531,16 +528,6 @@ export class SessionCommandController {
       throw apiSessionSubagentOwnershipError(error.sessionId)
     }
     throw new RemoteError('gateway/internal', `failed to create session: ${String(error)}`, {})
-  }
-
-  private async readSessionState(sessionId: SessionId): Promise<SessionReadState> {
-    const attached = this.ctx.sessions.get(sessionId)
-    if (attached !== undefined) {
-      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-      return { id: attached.id, header: attached.header, events: attached.snapshotEvents() }
-    }
-    const inspected = await inspectApiSession(this.ctx, sessionId)
-    return { id: inspected.meta.id, header: inspected.meta, events: inspected.events }
   }
 
   private async forkWorkspace(source: SessionHeader): Promise<Workspace | undefined> {

@@ -70,7 +70,7 @@ describe('repository build steps', () => {
     }
   })
 
-  it('keeps artifact steps in serial dependency order', () => {
+  it('finishes Host and Desktop readers before Client compilation rewrites shared outputs', () => {
     expect(graph(buildGates(root, 'artifacts'))).toEqual(artifactGraph)
   })
 

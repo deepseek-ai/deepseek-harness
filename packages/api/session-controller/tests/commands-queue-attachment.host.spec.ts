@@ -342,6 +342,7 @@ function event(type: string, seq: SessionSeq, data: unknown): SessionEvent {
 async function persistedController(
   events: SessionEvent[],
   readImage: (ref: ImageAttachmentRef) => Promise<{ ref: ImageAttachmentRef; data: Uint8Array }>,
+  workspace: Pick<SessionHeader, 'cwd'> = { cwd: '/workspace' },
 ): Promise<{ ctx: Context; controller: SessionCommandController; sessionId: SessionId }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
@@ -350,7 +351,7 @@ async function persistedController(
     version: SESSION_FORMAT_VERSION,
     id: sessionId,
     createdAt: 1,
-    cwd: '/workspace',
+    ...workspace,
     isSeeded: false,
   }
   ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
@@ -559,6 +560,23 @@ describe('Session attachment authorization', () => {
         sessionId: fixture.sessionId,
         attachmentId: ref.attachmentId,
       }), thrown instanceof AttachmentError ? 'session/attachment-invalid' : 'gateway/internal')
+      await fixture.ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects a cold Session without cwd before reading its referenced image', async () => {
+    const ref = imageRef('missing-cwd')
+    const readImage = vi.fn(async () => ({ ref, data: new Uint8Array([1]) }))
+    const fixture = await persistedController(
+      [event('user/message', SessionSeq(0), { id: 'image', role: 'user', source: { kind: 'user' }, content: [{ type: 'image', attachment: ref }] })],
+      readImage,
+      {},
+    )
+    try {
+      await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
+        .rejects.toMatchObject({ code: 'session/not-found', details: { sessionId: fixture.sessionId } })
+      expect(readImage).not.toHaveBeenCalled()
+    } finally {
       await fixture.ctx.fiber.dispose()
     }
   })

@@ -22,10 +22,10 @@ type ResourceIds = readonly unknown[] | 'invalid'
  * `resources` reader of the method wins; otherwise every lookup parameter
  * whose provider declares the kind contributes its wire resource id, and so
  * does the Context identity of a Context method whose Host adapter declares
- * the kind; otherwise the kind's default field registered in
- * `typert.resources` is read from a top-level argument or, failing that,
- * from the first object argument.
- * @param typert - registry holding default fields, lookup providers, and Host Context adapters.
+ * the kind; otherwise the kind's registered default resolver receives named
+ * wire values and ordered parameter descriptions. A default field instead
+ * reads a top-level argument or, failing that, the first object argument.
+ * @param typert - registry holding default fields or resolvers, lookup providers, and Host Context adapters.
  * @param readers - the method's `resources` readers, or `undefined` when it declares none.
  * @param descriptor - receiver, parameter order, lookups, and cancellation slot of the method.
  * @param args - named arguments matched to the descriptor's field set: JSON
@@ -33,9 +33,9 @@ type ResourceIds = readonly unknown[] | 'invalid'
  *   identities as wire values.
  * @param signal - value placed in the cancellation slot of the positional arguments.
  * @returns the touched resources, the global resource alone when none;
- *   `undefined` when the resources are invalid: a reader throws or returns
- *   an empty list, a default field holds an array, or a resource id is not a
- *   non-empty string.
+ *   `undefined` when the resources are invalid: a reader or resolver throws,
+ *   a reader returns an empty list, a default field or resolver holds an
+ *   array, or a resource id is not a non-empty string.
  */
 export function callResources(
   typert: Pick<TypertRegistryContract, 'contexts' | 'lookups' | 'resources'>,
@@ -46,25 +46,32 @@ export function callResources(
 ): readonly RemoteAccessResource[] | undefined {
   // Each later source replaces an earlier one for its kind and keeps the kind's position.
   const sources = new Map<string, () => ResourceIds>()
-  for (const { kind, field } of typert.resources.entries()) {
-    sources.set(kind, () => {
-      // A default field names exactly one resource id; only a reader may return several.
-      const id = defaultFieldId(descriptor, args, field)
+  const positionalArgs: readonly unknown[] = [
+    ...descriptor.parameters.map(parameter => args[parameter.wire]),
+    ...descriptor.cancellation === undefined ? [] : [signal],
+  ]
+  for (const declaration of typert.resources.entries()) {
+    sources.set(declaration.kind, () => {
+      let id: unknown
+      if (declaration.resolve !== undefined) {
+        const resolve = declaration.resolve
+        try {
+          id = resolve({ args, parameters: descriptor.parameters })
+        } catch {
+          // A resolver failure cannot identify an authorized resource.
+          return 'invalid'
+        }
+      } else {
+        id = defaultFieldId(descriptor, args, declaration.field)
+      }
       return Array.isArray(id) ? 'invalid' : id === undefined ? [] : [id]
     })
   }
   for (const [kind, ids] of lookupResources(typert, descriptor, args)) {
     sources.set(kind, () => ids)
   }
-  let positional: readonly unknown[] | undefined
   for (const [kind, reader] of Object.entries(readers ?? {})) {
-    sources.set(kind, () => {
-      positional ??= [
-        ...descriptor.parameters.map(parameter => args[parameter.wire]),
-        ...descriptor.cancellation === undefined ? [] : [signal],
-      ]
-      return read(reader, positional, [])
-    })
+    sources.set(kind, () => read(() => reader(...positionalArgs), []))
   }
   const resources: RemoteAccessResource[] = []
   for (const [kind, ids] of sources) {
@@ -91,7 +98,7 @@ export function eventResources(
   if (declared.length === 0) return GLOBAL
   const resources: RemoteAccessResource[] = []
   for (const [kind, reader] of declared) {
-    if (!collect(resources, kind, read(reader, args, 'invalid'))) return undefined
+    if (!collect(resources, kind, read(() => reader(...args), 'invalid'))) return undefined
   }
   return resources
 }
@@ -129,11 +136,11 @@ function lookupResources(
   return ids
 }
 
-/** Run one reader with spread positional arguments: `undefined` yields `absent`, a list names several and must not be empty. */
-function read(reader: TypertResourceReader, args: readonly unknown[], absent: ResourceIds): ResourceIds {
+/** Read resource identities: `undefined` yields `absent`, a list names several and must not be empty. */
+function read(reader: () => unknown, absent: ResourceIds): ResourceIds {
   let value: unknown
   try {
-    value = reader(...args)
+    value = reader()
   } catch {
     // Any reader error means it cannot name its resources, so they are invalid.
     return 'invalid'

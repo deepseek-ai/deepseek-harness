@@ -63,13 +63,6 @@ describe('SessionController facade', () => {
     ctx.on('api-session/error', failure)
     ctx.on('api-session/activity', activity)
 
-    await expect(controller.inspect(sessionId)).resolves.toEqual({
-      meta: header,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    })
-    expect(inspect).toHaveBeenCalledOnce()
-
     const session = ctx.sessions.create(sessionId, { meta: header })
     const agent = {
       id: sessionId,
@@ -91,12 +84,6 @@ describe('SessionController facade', () => {
     await expect(resolveUploadAgent(sessionId)).rejects.toBe(activationError)
 
     await expect(controller.resolveAgent(sessionId)).resolves.toEqual({ agent })
-    await expect(controller.inspect(sessionId)).resolves.toEqual({
-      meta: header,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    })
-    expect(inspect).toHaveBeenCalledOnce()
     ctx.emit('agent/status', { agent, status: 'running' })
     ctx.emit('agent/error', { agent, turn: 1, step: 0, error: new Error('fixture failure') })
     session.append('user/message', createUserMessage({
