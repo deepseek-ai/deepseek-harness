@@ -139,11 +139,11 @@ describe('HarnessSdkJsonRpcServer', () => {
     try {
       const root = await ctx.agents.create({ sessionId: SessionId('root'), meta: { cwd: storageDir } })
       const creator = await ctx.agents.create({
-        sessionId: SessionId('creator'), ownerAgent: root.agent,
+        sessionId: SessionId('creator'),
         meta: { cwd: storageDir, parentSession: root.agent.id, origin: 'subagent' },
       })
       const child = await ctx.agents.create({
-        sessionId: SessionId('leaf'), ownerAgent: root.agent,
+        sessionId: SessionId('leaf'),
         meta: { cwd: storageDir, parentSession: creator.agent.id, origin: 'subagent' },
       })
       await creator.dispose()
@@ -584,19 +584,15 @@ describe('HarnessSdkJsonRpcServer', () => {
         meta: { cwd: storageDir },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
       })
-      // A custom in-process provider may own its child at the provider/root
-      // scope while preserving durable parent lineage.
       const handle = await ctx.agents.create({
         sessionId: SessionId('child-session'),
         meta: { cwd: storageDir, parentSession: SessionId('main') },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
       })
-      expect(ctx.agents.roots()).toContain(handle.agent)
       const parentlessHandle = await parentHandle.agent.ctx.agents.create({
         sessionId: SessionId('parentless-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: parentHandle.agent,
       })
       await settleSubagent(ctx, parentHandle.agent, {
         provider: 'spawn',
@@ -659,7 +655,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('remote-run-id'),
         meta: { cwd: storageDir, parentSession: SessionId('collision-parent') },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -698,7 +693,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('continuation-child'),
         meta: { cwd: storageDir, parentSession: SessionId('continuation-parent') },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -744,7 +738,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('old-parent') },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: oldParent.agent,
       })
       const first = Promise.withResolvers<SubagentResult>()
       const sameLifetime = Promise.withResolvers<SubagentResult>()
@@ -788,7 +781,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('new-parent') },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: newParent.agent,
       })
       const secondRun = await startLifecycleFixture(ctx, 'reused', {
         parent: newParent.agent,
@@ -846,7 +838,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('provider-reuse-child'),
         meta: { cwd: storageDir, parentSession: SessionId('provider-reuse-parent') },
         agentOptions: { model: 'deepseek-official' },
-        ownerAgent: parent.agent,
       })
       const localResult = Promise.withResolvers<SubagentResult>()
       const remoteResult = Promise.withResolvers<SubagentResult>()
@@ -944,14 +935,12 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('fallback-child-session'),
         meta: { cwd: storageDir, parentSession: SessionId('fallback-parent') },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        ownerAgent: parentHandle.agent,
       })
       const fallbackChild = handle.agent
       failedHandle = await parentHandle.agent.ctx.agents.create({
         sessionId: SessionId('failed-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        ownerAgent: parentHandle.agent,
       })
       const missedStartResult = Promise.withResolvers<SubagentResult>()
       const disposeMissedStartProvider = ctx.subagents.registerProvider({

@@ -93,21 +93,11 @@ export type ApiSessionAgentResult =
 
 /**
  * Test whether generic Session routing must leave an identity to subagent routing.
- * @param ctx - Host context carrying the Agent ownership registry.
- * @param session - attached or live Session whose ownership is tested.
- * @param agent - live Agent when one exists for the Session.
+ * @param session - Attached or live Session whose origin is tested.
  * @returns whether subagent routing owns the Session identity.
  */
-export function hasApiSessionSubagentOwner(
-  ctx: Context,
-  session: Pick<Session, 'header'>,
-  agent: Agent | undefined,
-): boolean {
-  if (session.header.origin === 'subagent') return true
-  const parentId = session.header.parentSession
-  if (parentId === undefined || agent === undefined) return false
-  const parent = ctx.agents.get(parentId)
-  return parent !== undefined && ctx.agents.isOwnedBy(agent.id, parent)
+export function hasApiSessionSubagentOwner(session: Pick<Session, 'header'>): boolean {
+  return session.header.origin === 'subagent'
 }
 
 /**
@@ -213,7 +203,7 @@ export class ApiSessionAgentController {
     const live = this.liveAgent(sessionId)
     if (live !== undefined) return live
     const attached = this.ctx.sessions.get(sessionId)
-    if (attached !== undefined && hasApiSessionSubagentOwner(this.ctx, attached, undefined)) {
+    if (attached !== undefined && hasApiSessionSubagentOwner(attached)) {
       return { error: apiSessionSubagentOwnershipError(sessionId) }
     }
 
@@ -238,7 +228,7 @@ export class ApiSessionAgentController {
       const raced = this.liveAgent(sessionId)
       if (raced !== undefined) return raced
       const racedSession = this.ctx.sessions.get(sessionId)
-      if (racedSession !== undefined && hasApiSessionSubagentOwner(this.ctx, racedSession, undefined)) {
+      if (racedSession !== undefined && hasApiSessionSubagentOwner(racedSession)) {
         return { error: apiSessionSubagentOwnershipError(sessionId) }
       }
       if (error instanceof Error && error.name === 'SessionAlreadyOwnedError') {
@@ -321,7 +311,7 @@ export class ApiSessionAgentController {
   private liveAgent(sessionId: SessionId): ApiSessionAgentResult | undefined {
     const agent = this.ctx.agents.get(sessionId)
     if (agent === undefined) return undefined
-    return hasApiSessionSubagentOwner(this.ctx, agent.session, agent)
+    return hasApiSessionSubagentOwner(agent.session)
       ? { error: apiSessionSubagentOwnershipError(sessionId) }
       : { agent }
   }
@@ -347,13 +337,12 @@ export class ApiSessionAgentController {
     if (observation.header.id !== sessionId || observation.header.cwd === undefined) {
       throw new ApiSessionNotFound(`session "${sessionId}" not found`)
     }
-    if (hasApiSessionSubagentOwner(this.ctx, { header: observation.header }, undefined)) {
+    if (hasApiSessionSubagentOwner({ header: observation.header })) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     const composition = await this.composeAgent(this.presetForObservation(observation))
     const published = this.ctx.sessions.get(sessionId)
-    const live = this.ctx.agents.get(sessionId)
-    if (published !== undefined && hasApiSessionSubagentOwner(this.ctx, published, live)) {
+    if (published !== undefined && hasApiSessionSubagentOwner(published)) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     return (await this.ctx.agents.resume({
@@ -378,7 +367,7 @@ export class ApiSessionAgentController {
   private async claim(sessionId: SessionId, request: ApiSessionCreateRequest): Promise<Agent> {
     const attached = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
-    if (attached !== undefined && hasApiSessionSubagentOwner(this.ctx, attached, live)) {
+    if (attached !== undefined && hasApiSessionSubagentOwner(attached)) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
     if (live !== undefined) {
@@ -398,7 +387,7 @@ export class ApiSessionAgentController {
     let reusable: boolean
     {
       using observed = observation
-      if (hasApiSessionSubagentOwner(this.ctx, { header: observed.header }, undefined)) {
+      if (hasApiSessionSubagentOwner({ header: observed.header })) {
         throw new ApiSessionSubagentOwnership(sessionId)
       }
       if (observed.header.cwd !== request.cwd) {

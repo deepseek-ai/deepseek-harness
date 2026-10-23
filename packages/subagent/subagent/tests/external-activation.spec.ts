@@ -89,7 +89,7 @@ describe('external subagent activations', () => {
       })
       const session = fixture.ctx.sessions.create(SessionId('publication-parent'))
       const parent = { ...fixture.parent, id: session.id, session }
-      const detachParent = fixture.ctx.agents.enter(parent, undefined)
+      const detachParent = fixture.ctx.agents.enter(parent)
       let detachReplacement: (() => void) | undefined
       let drain = Promise.resolve()
       fixture.ctx.on('subagent/start', () => {
@@ -98,7 +98,7 @@ describe('external subagent activations', () => {
         } else {
           detachParent()
           if (change === 'parent-replace') {
-            detachReplacement = fixture.ctx.agents.enter({ ...parent }, undefined)
+            detachReplacement = fixture.ctx.agents.enter({ ...parent })
           }
         }
       })

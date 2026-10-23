@@ -60,6 +60,8 @@ At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (br
 
 `startActivation({ provider, label, prompt, parent, signal, delivery })` returns `{ childId, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
 
+`rootOf(agent)` resolves a managed local Agent through its existing Activation and checks the exact live child and root instances. Intermediate creators can leave without changing that root; same-id replacements cannot inherit membership. Ordinary live Agents resolve to themselves, while unmanaged delegated Agents are rejected. The query does not activate Sessions.
+
 ### Child presets
 
 In-process spawn accepts an independent `agentPreset`; fork and external backends reject this option. Without a selection, a local child joins the parent's current preset revision. An explicit id mounts the currently available revision, even when that id matches the parent's. Configure model choices through [`dsh-tool-subagent`](../tool-subagent/README.md#selecting-a-child-preset) and persona and tools in the [preset composition](../../preset/agent-preset-registry/README.md). Cold resume preserves persona and tool restrictions recorded in historical child descriptors.

@@ -165,7 +165,7 @@ describe('tree-wide messages', () => {
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const fork = ctx.sessions.fork(source, undefined, SessionId('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }
-    onTestFinished(ctx.agents.enter(caller, undefined))
+    onTestFinished(ctx.agents.enter(caller))
     expect(ctx.subagents.rootOf(caller)).toBe(caller)
     for (const [id, parentSession] of [
       ['orphan', undefined], ['offline-parent', SessionId('absent')], ['cycle', SessionId('cycle')],
@@ -174,7 +174,7 @@ describe('tree-wide messages', () => {
         meta: { origin: 'subagent', ...parentSession === undefined ? {} : { parentSession } },
       })
       const child = { ...parent, id: session.id, session }
-      onTestFinished(ctx.agents.enter(child, undefined))
+      onTestFinished(ctx.agents.enter(child))
       expect(() => ctx.subagents.rootOf(child)).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     }
   })

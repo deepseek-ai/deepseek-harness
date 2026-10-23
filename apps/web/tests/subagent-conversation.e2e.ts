@@ -139,7 +139,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
 
-    const parent = scaffold.ctx.agents.roots()[0]
+    const parent = scaffold.ctx.agents.list().filter(agent => agent.session.header.origin !== 'subagent')[0]
     if (parent === undefined) throw new Error('fresh workspace did not publish its parent Agent')
     const parentSettled = scaffold.whenTurnSettled()
     const parentInput = page.locator('[data-composer-input][contenteditable="true"]').first()

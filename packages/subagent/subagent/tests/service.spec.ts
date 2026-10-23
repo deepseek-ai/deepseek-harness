@@ -1,3 +1,4 @@
+import { bindSubagentActivation } from './manager-internals.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -103,6 +104,27 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
 }
 
 describe('SubagentRuntime', () => {
+  it('resolves Activation roots only for exact live child and root instances', async () => {
+    const { ctx, subagents } = await service()
+    const root = await ctx.agents.create({ sessionId: SessionId('lineage-root') })
+    const child = await ctx.agents.create({ sessionId: SessionId('lineage-child'), meta: { origin: 'subagent' } })
+    const fork = await ctx.agents.create({ sessionId: SessionId('ordinary-fork'), meta: { parentSession: root.agent.id } })
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    expect(subagents.rootOf(fork.agent)).toBe(fork.agent)
+    bindSubagentActivation(ctx, child.agent, root.agent)
+    expect(subagents.rootOf(child.agent)).toBe(root.agent)
+    expect(() => subagents.rootOf({ ...child.agent })).toThrow('exact live caller')
+    await root.dispose()
+    const replacementRoot = await ctx.agents.create({ sessionId: root.agent.id })
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    await child.dispose()
+    const replacementChild = await ctx.agents.create({ sessionId: child.agent.id, meta: { origin: 'subagent' } })
+    expect(() => subagents.rootOf(child.agent)).toThrow('exact live caller')
+    expect(() => subagents.rootOf(replacementChild.agent)).toThrow('agent has no active runtime owner')
+    bindSubagentActivation(ctx, replacementChild.agent, replacementRoot.agent)
+    expect(subagents.rootOf(replacementChild.agent)).toBe(replacementRoot.agent)
+  })
+
   it.each([
     ['external', 'removed'], ['external', 'external'], ['external', 'local'],
     ['local', 'removed'], ['local', 'external'], ['local', 'local'],

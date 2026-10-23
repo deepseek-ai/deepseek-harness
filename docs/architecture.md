@@ -66,13 +66,13 @@ Electron starts the private Desktop Host in Electron Node mode. The Host invokes
 
 ## Events
 
-Events are the extension points, and picking the right domain is the first decision in most changes.
+Events provide extension points in three domains.
 
 - **Session events** are durable facts appended to the log and broadcast through `session/event`. Use one when the fact must survive a reload.
 - **Agent events** (`agent/*`) carry a live `Agent`: inbox, step, status, request, validation, continuation. Use one to observe or intercept work in flight.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
-`ownerAgent` selects runtime ownership.
+Subagent Activations own runtime tree membership.
 
 AgentLoop rolls back failed initialization and awaits serial `agent/created` before queued work; unload retains resources through teardown ([ordering](../packages/core/agent-loop/README.md#understand-the-implementation)).
 

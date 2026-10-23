@@ -81,7 +81,7 @@ it('removes ended tasks across Sessions with their saved deliveries and keeps ac
     .toEqual({ id: endedSecond.record.id, code: 'schedule_not_found' })
   expect(changed).toHaveBeenCalledTimes(1)
   expect(resolve).not.toHaveBeenCalled()
-  expect(ctx.agents.roots()).toEqual([])
+  expect(ctx.agents.list()).toEqual([])
 })
 
 it('reports zero and announces nothing when the Host holds no ended task', async () => {

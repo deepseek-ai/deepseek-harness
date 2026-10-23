@@ -131,7 +131,7 @@ class PersonalizedPages {
         || z.object({ action: z.enum(['list_plugins', 'list_bundles', 'list_version_exemptions']) }).safeParse(exec.arguments).success) return undefined
       return this.underCreator(exec.agent) ? 'Generate the new bundle files only. The caller installs them after validation.' : undefined
     })
-    for (const agent of ctx.agents.roots()) await this.recoverOnOpen(agent)
+    for (const agent of ctx.agents.list()) if (agent.session.header.origin !== 'subagent') await this.recoverOnOpen(agent)
   }
 
   /** Track an operation until it settles, so unloading waits for it. */
@@ -181,17 +181,27 @@ class PersonalizedPages {
     }
   }
 
-  /** A running Creator child, or an agent created under one at any depth, by runtime ownership. */
+  /** Recognize the Creator through subagent headers while intermediate Agents remain live. */
   private underCreator(agent: Agent): boolean {
-    const creators = new Set([...this.jobs.values()].map(job => job.childId))
-    const live = this.ctx.agents.list()
-    const lineage = [agent]
-    for (const current of lineage) {
-      if (creators.has(current.id)) return true
-      const owner = live.find(candidate => this.ctx.agents.isOwnedBy(current.id, candidate))
-      if (owner !== undefined) lineage.push(owner)
+    const agents = this.ctx.agents
+    if (agents.get(agent.id) !== agent) return false
+    const creators = new Set([...this.jobs.values()]
+      .filter(job => agents.get(job.parent.id) === job.parent)
+      .map(job => job.childId))
+    let current: Agent | undefined = agent
+    const seen = new Set<SessionId>()
+    while (current?.session.header.origin === 'subagent' && !seen.has(current.id)) {
+      seen.add(current.id)
+      const parentId: SessionId | undefined = current.session.header.parentSession
+      if (creators.has(current.id) || parentId !== undefined && creators.has(parentId)) return true
+      current = parentId === undefined ? undefined : agents.get(parentId)
     }
     return false
+  }
+
+  private currentRoot(sessionId: SessionId): Agent | undefined {
+    const agent = this.ctx.agents.get(sessionId)
+    return agent?.session.header.origin === 'subagent' ? undefined : agent
   }
 
   private isStopping(): boolean {
@@ -313,7 +323,7 @@ class PersonalizedPages {
       await this.installProfileCopy(agent, card, directory)
     } catch (error) {
       this.ctx.logger.warn('Interface creation failed: %s', String(error))
-      const current = this.ctx.agents.roots().find(root => root.id === agent.id)
+      const current = this.currentRoot(agent.id)
       const phase = signal.aborted ? signal.reason === 'cancelled' ? 'cancelled' : 'interrupted' : 'failed'
       if (current !== undefined) this.record(current, { ...card, phase })
     }
@@ -342,7 +352,7 @@ class PersonalizedPages {
     catch (error) {
       this.ctx.logger.warn('Restoring %s failed: %s', previous.bundleName, String(error))
       // While unloading, Plugin Manager still owns the installation; reopening reconciles its outcome.
-      const current = this.isStopping() ? undefined : this.ctx.agents.roots().find(root => root.id === agent.id)
+      const current = this.isStopping() ? undefined : this.currentRoot(agent.id)
       if (current === undefined) return { status: 'unconfirmed', reason: 'closing' }
       outcome = { ...receipt, phase: 'failed' }
       this.record(current, outcome)
@@ -360,7 +370,7 @@ class PersonalizedPages {
     const result = await Promise.race([this.ctx.pluginManager.installBundle(directory), this.stopped.promise])
     if (result === undefined || this.isStopping()) return undefined
     const installed = (await this.ctx.pluginManager.listBundles()).some(bundle => bundle.name === card.bundleName && bundle.installed)
-    const current = this.ctx.agents.roots().find(root => root.id === agent.id)
+    const current = this.currentRoot(agent.id)
     if (current === undefined) return undefined
     const outcome: PageCard = { ...card, phase: installed ? 'installed' : 'failed', application: result.application }
     this.record(current, outcome)
