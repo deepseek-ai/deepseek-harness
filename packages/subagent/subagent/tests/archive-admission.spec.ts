@@ -1,5 +1,5 @@
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentCancelCause, AgentStatus, CancelOptions } from '@deepseek-ai/dsh-agent'
@@ -18,6 +18,7 @@ type LiveAgent = Agent & { cancels: CancelCall[]; setStatus(status: AgentStatus)
 
 async function harness(options: { sessionQuery?: boolean } = {}): Promise<Context> {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
@@ -67,6 +68,13 @@ function ask(ctx: Context, sessionId: SessionId): Promise<readonly SessionActivi
 
 function stop(ctx: Context, sessionId: SessionId): Promise<void> {
   return ctx.parallel('workspace/session-stop', { sessionId })
+}
+
+function proposed(ctx: Context, agent: Agent) {
+  return ctx.waterfall('agent/pre-step', {
+    agent, modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1,
+    signal: new AbortController().signal,
+  }, () => Promise.resolve({ kind: 'enter' as const, messages: [] }))
 }
 
 describe('Subagent archive admission: reporting', () => {
@@ -160,6 +168,19 @@ describe('Subagent archive admission: stopping', () => {
 })
 
 describe('Subagent archive admission: lifetime', () => {
+  it('checks header ancestry for unmanaged Agents and permits independent forks', async () => {
+    const ctx = await harness()
+    const parentId = SessionId('offline-parent')
+    const archived: SessionId[] = [parentId]
+    ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
+    const child = await liveAgent(ctx, childOf(ctx, 'orphan', parentId), 'idle')
+    const fork = await liveAgent(ctx, ctx.sessions.create(SessionId('fork'), { meta: { parentSession: parentId } }), 'idle')
+    expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
+    expect(await proposed(ctx, fork)).toEqual({ kind: 'enter', messages: [] })
+    archived.length = 0
+    expect(await proposed(ctx, child)).toEqual({ kind: 'enter', messages: [] })
+  })
+
   it('stops answering once the runtime fiber is disposed', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
@@ -170,11 +191,14 @@ describe('Subagent archive admission: lifetime', () => {
     const parent = ctx.sessions.create(SessionId('watched'))
     await liveAgent(ctx, parent, 'idle')
     const child = await liveAgent(ctx, childOf(ctx, 'watched-child', parent.id), 'running')
+    ctx.provide('workspaceRegistry', { archivedSessionIds: [parent.id] } as never)
+    expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
     expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'watched-child' }] }])
     await fiber.dispose()
     expect(await ask(ctx, parent.id)).toEqual([])
     await stop(ctx, parent.id)
     expect(child.cancels).toEqual([])
+    expect(await proposed(ctx, child)).toEqual({ kind: 'enter', messages: [] })
   })
 })
 

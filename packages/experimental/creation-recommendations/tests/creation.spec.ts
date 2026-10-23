@@ -55,16 +55,16 @@ describe('interface creation', () => {
     expect(await f.act('create')).toEqual({ status: 'accepted' })
     expect(await f.act('create')).toEqual({ status: 'accepted' })
     const spec = await f.complete()
-    expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', request: { agentPreset: 'cordis' } })
-    expect(spec.request.parent).toBe(f.agent)
+    expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', agentPreset: 'cordis' })
+    expect(spec.parent).toBe(f.agent)
     const guide = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/session-tab.md'))
-    expect(spec.request.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
+    expect(spec.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
     expect(await readFile(guide, 'utf8')).toContain('conversation.view')
-    expect(spec.request.cwd!.startsWith(join(f.agent.session.header.cwd!, '.dsh-created-plugins'))).toBe(true)
+    expect(spec.cwd!.startsWith(join(f.agent.session.header.cwd!, '.dsh-created-plugins'))).toBe(true)
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
     const installedDirectory = f.manager.installBundle.mock.calls[0]![0]
-    expect(spec.request.cwd).not.toBe(installedDirectory)
-    await rm(spec.request.cwd!, { recursive: true })
+    expect(spec.cwd).not.toBe(installedDirectory)
+    await rm(spec.cwd!, { recursive: true })
     expect(JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'))).toMatchObject({ name: f.current()?.bundleName })
     expect(JSON.stringify(f.current())).not.toContain(f.directory)
     expect(f.current()).toMatchObject({ phase: 'installed', slot: 'page', application: 'applied' })
@@ -89,15 +89,15 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create', 'sidebar-left')
     const spec = await f.complete()
-    const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const instructions: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     expect(instructions).toMatchObject({ location: 'sidebar-left', uiReference: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/sidebar-entry.md')),
       locationPolicy: 'location and uiReference are the user’s final choice in the card. They override any earlier location described in brief; preserve the requested behavior and data scope while adapting the interface to this chosen location.',
     })
     expect(f.current()).toMatchObject({ phase: 'installed', slot: 'sidebar-left' })
-    const source = await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')
+    const source = await readFile(join(spec.cwd!, 'package.json'), 'utf8')
     await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
-    expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toBe(source)
+    expect(await readFile(join(spec.cwd!, 'package.json'), 'utf8')).toBe(source)
   })
 
   it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
@@ -109,7 +109,7 @@ describe('interface creation', () => {
     await f.ctx.plugin(CreationRecommendations)
     await f.act('create', 'sidebar-left')
     const spec = await f.complete()
-    const prompt: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const prompt: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     expect(prompt).toMatchObject({ brief: proposal.brief, initialContent, location: 'sidebar-left' })
     const stringMatcher: unknown = expect.any(String)
     expect(prompt).toMatchSnapshot({
@@ -126,7 +126,7 @@ describe('interface creation', () => {
     await f.propose('call-creation-1', proposal, handle.agent)
     await f.act('create', 'sidebar-right', undefined, handle.agent)
     const spec = await f.entered.promise
-    expect(spec.request.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
+    expect(spec.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
     await f.act('cancel', 'sidebar-right', undefined, handle.agent)
     expect(f.manager.installBundle).not.toHaveBeenCalled()
   })
@@ -141,7 +141,7 @@ describe('interface creation', () => {
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.act('create', 'page', '  左侧入口打开全屏日历  ')
     const spec = await f.complete()
-    const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const instructions: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     const references = ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file =>
       fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/' + file)))
     expect(instructions).toMatchObject({ location: { request: '左侧入口打开全屏日历' }, uiReferences: references })
@@ -173,7 +173,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const firstName = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, firstName)
+    await writeBundle(spec.cwd!, firstName)
     const cleanup = Promise.withResolvers<undefined>()
     onTestFinished(() => { cleanup.resolve(undefined) })
     f.dispose.mockImplementation(async () => { f.result.resolve({ output: [], stopReason: 'aborted' }); await cleanup.promise })
@@ -187,10 +187,10 @@ describe('interface creation', () => {
     cleanup.resolve(undefined)
     expect(await cancelling).toEqual({ status: 'accepted' })
     expect(f.current()?.phase).toBe('cancelled')
-    expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toContain(firstName)
+    expect(await readFile(join(spec.cwd!, 'package.json'), 'utf8')).toContain(firstName)
     expect((await f.act('cancel')).status).toBe('settled')
     f.startActivation.mockImplementationOnce(async (retry) => {
-      await writeBundle(retry.request.cwd!, f.current()!.bundleName!)
+      await writeBundle(retry.cwd!, f.current()!.bundleName!)
       return { childId: retry.childId!, result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }),
         dispose: vi.fn(async () => {}) }
     })
@@ -211,7 +211,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     expect(f.current()?.phase).toBe('installing')
@@ -321,7 +321,7 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed' })
     await vi.waitFor(() => { expect(f.current()?.phase).toBe('failed') })
     expect(f.manager.installBundle).not.toHaveBeenCalled()
@@ -392,9 +392,9 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
-    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), parentAgent: child,
+    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), ownerAgent: child,
       meta: { parentSession: child.id, origin: 'subagent' } })
-    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), parentAgent: helper.agent,
+    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), ownerAgent: helper.agent,
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
     for (const owned of [helper.agent, nested.agent]) {
       expect((await run('install', owned)).isError).toBe(true)
@@ -428,7 +428,7 @@ describe('interface creation', () => {
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.fiber.dispose()
@@ -496,7 +496,7 @@ describe('interface creation', () => {
       await f.act('create')
       const spec = await f.entered.promise
       const name = f.current()!.bundleName!
-      await writeBundle(spec.request.cwd!, name)
+      await writeBundle(spec.cwd!, name)
       if (collision) f.bundles.push(installedBundle(name))
       else f.manager.installBundle.mockResolvedValueOnce({ application: 'failed', changed: false, stage: 'install', target: name })
       f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
@@ -514,7 +514,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.agentHandle.dispose()
@@ -537,7 +537,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     const seed = [...f.events]
@@ -697,7 +697,7 @@ describe('interface creation', () => {
     })
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await disposed.promise
     expect(f.current()?.phase).toBe('installing')

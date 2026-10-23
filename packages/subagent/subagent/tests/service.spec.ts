@@ -103,6 +103,53 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
 }
 
 describe('SubagentRuntime', () => {
+  it.each([
+    ['external', 'removed'], ['external', 'external'], ['external', 'local'],
+    ['local', 'removed'], ['local', 'external'], ['local', 'local'],
+  ] as const)('rejects a %s provider changed to %s during directory resolution', async (kind, replacementKind) => {
+    const { ctx, subagents } = await service()
+    const external = new StubProvider('changing')
+    const prepare = vi.fn(async () => ({}))
+    const provider: SubagentProvider = kind === 'external' ? external : {
+      name: 'changing', inheritsParentContext: false, capabilities: ALL_CAPS, prepareContinuable: prepare,
+    }
+    const unregister = subagents.registerProvider(provider)
+    const parent = await ctx.agents.create({ sessionId: SessionId('provider-owner') })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const ensure = ctx.workingDirectory.ensure.bind(ctx.workingDirectory)
+    const directory = vi.spyOn(ctx.workingDirectory, 'ensure').mockImplementation(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return ensure(...args)
+    })
+    const replacement = new StubProvider('changing')
+    const replacementPrepare = vi.fn(async () => ({}))
+    const pending = subagents.startActivation({
+      ...baseRequest(), provider: 'changing', parent: parent.agent, label: 'changing', delivery: 'caller',
+    })
+    const rejection = expect(pending).rejects.toMatchObject({ code: 'PROVIDER_CHANGED' })
+    try {
+      await entered.promise
+      unregister()
+      if (replacementKind !== 'removed') subagents.registerProvider(replacementKind === 'external' ? replacement : {
+        name: 'changing', inheritsParentContext: false, capabilities: ALL_CAPS, prepareContinuable: replacementPrepare,
+      })
+      release.resolve(undefined)
+      await rejection
+      expect(external.startCount).toBe(0)
+      expect(prepare).not.toHaveBeenCalled()
+      expect(replacement.startCount).toBe(0)
+      expect(replacementPrepare).not.toHaveBeenCalled()
+      expect(ctx.agents.list()).toEqual([parent.agent])
+      await expect(subagents.waitForTreeWork(parent.agent)).resolves.toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([pending])
+      directory.mockRestore()
+    }
+  })
+
   it('has no owned child work before the Agent service is mounted', async () => {
     const { subagents } = await service(false)
     await expect(subagents.waitForTreeWork(fakeParent())).resolves.toBe(false)

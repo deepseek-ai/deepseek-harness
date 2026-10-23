@@ -52,8 +52,6 @@ import type {
   SubagentPromptRequestId,
 } from './control-types.ts'
 import type {
-  ContinuableCreateRequest,
-  ContinuableCreateSpec,
   SubagentCapabilities,
   SubagentActivation,
   SubagentActivationSpec,
@@ -71,7 +69,6 @@ import type { LifecycleEmitter } from './lifecycle.ts'
 import SubagentManager from './manager.ts'
 import { listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
-import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import type { IdentityState } from './projection.ts'
 import { subagentCatalogProjectionDefinition } from './catalog.ts'
@@ -213,11 +210,6 @@ export class SubagentRuntime extends TypertRemoteService {
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentManager(childCtx, {
         identityOf: session => this.identityProjectionHandle.stateOf(session).identity,
-        startExternal: (name, request) => {
-          const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'start'>>
-          return provider.start(request)
-        },
-        prepareContinuable: (name, request) => this.prepareContinuable(name, request),
         emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
@@ -226,9 +218,6 @@ export class SubagentRuntime extends TypertRemoteService {
         if (this.manager === manager) this.manager = undefined
       }, 'subagents.managerBinding()')
     })
-    // Archive admission: this runtime is the owner that knows which live
-    // children descend from a Session and how a parent stops them.
-    ctx.inject(['agents'], (agentsCtx: Context) => { installSubagentArchiveAdmission(agentsCtx) })
   }
 
   protected async [Service.init](): Promise<void> {
@@ -269,6 +258,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * @param spec - task, backend, and result recipient.
    * @returns identities, execution result, and exact-activation disposal. A reserved
    * childId requires a local backend and guarantees an accepted messageId.
+   * @throws PROVIDER_CHANGED if the selected provider is removed or replaced before dispatch.
    */
   async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation> {
     const provider = this.expectProvider(spec.provider)
@@ -282,9 +272,19 @@ export class SubagentRuntime extends TypertRemoteService {
       throw new SubagentError('subagent creation requires the exact live parent agent', 'UNAUTHORIZED')
     }
     if (spec.outputSchema !== undefined) assertObjectJsonSchema(spec.outputSchema)
-    return provider.prepareContinuable === undefined
-      ? manager.startExternal(spec)
-      : manager.startLocal(spec)
+    const prepare = provider.prepareContinuable?.bind(provider)
+    if (prepare !== undefined) {
+      return manager.startLocal(spec, (request) => {
+        this.assertProviderCurrent(provider)
+        return prepare(request)
+      })
+    }
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- registerProvider requires start when prepareContinuable is absent.
+    const start = provider.start!.bind(provider)
+    return manager.startExternal(spec, (request) => {
+      this.assertProviderCurrent(provider)
+      return start(request)
+    })
   }
 
   /**
@@ -504,17 +504,11 @@ export class SubagentRuntime extends TypertRemoteService {
     return this.providers.get(name)
   }
 
-  /**
-   * Resolve one provider's detached continuable-creation contribution. Method
-   * presence on the provider IS the capability, so a provider without it is
-   * rejected before the manager reserves any child resources.
-   */
-  private async prepareContinuable(
-    name: string,
-    request: ContinuableCreateRequest,
-  ): Promise<ContinuableCreateSpec> {
-    const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'prepareContinuable'>>
-    return provider.prepareContinuable(request)
+  /** A pending start must use the exact provider whose capabilities were checked. */
+  private assertProviderCurrent(provider: SubagentProvider): void {
+    if (this.providers.get(provider.name) !== provider) {
+      throw new SubagentError(`subagent provider "${provider.name}" changed during startup; retry the delegation`, 'PROVIDER_CHANGED')
+    }
   }
 
   /** Look up a provider for dispatch or fail loud. */

@@ -133,7 +133,7 @@ it('activates nothing for a skill load dispatched from code, so a PTC preset nev
 
 it('offers cards in the main conversation only: subagent skill loads activate nothing and non-root calls are refused', async () => {
   const f = await fixture()
-  const child = (await f.ctx.agents.create({ sessionId: SessionId('cards-child'), parentAgent: f.agent,
+  const child = (await f.ctx.agents.create({ sessionId: SessionId('cards-child'), ownerAgent: f.agent,
     meta: { parentSession: f.agent.id, origin: 'subagent' } })).agent
   child.session.append('turn/start', { turn: 1 })
   expect((await call(f, 'skill', { name: SKILL }, 'child-load', child)).isError).toBe(false)

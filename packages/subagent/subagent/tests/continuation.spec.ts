@@ -1350,6 +1350,54 @@ describe('continuable child ownership', () => {
     }
   })
 
+  it.each([false, true])('archives a descendant through an offline creator (cold resume=%s)', async (coldResume) => {
+    const releaseCreator = Promise.withResolvers<undefined>()
+    const releaseLeaf = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('creator done'), gate: releaseCreator.promise },
+      { chunks: textResponse('leaf'), ...coldResume ? {} : { gate: releaseLeaf.promise } },
+      ...coldResume ? [{ chunks: textResponse('resumed leaf'), gate: releaseLeaf.promise }] : [],
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    parkParent(ctx, parent)
+    const archived: SessionId[] = []
+    ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
+    const creator = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const leaf = await ctx.subagents.startActivation({ ...startSpec(ctx.agents.get(creator.childId)!), delivery: 'caller' })
+    try {
+      releaseCreator.resolve(undefined)
+      await waitNoActivation(ctx, creator.childId)
+      expect(ctx.sessions.get(creator.childId)).toBeUndefined()
+      if (coldResume) {
+        await waitNoActivation(ctx, leaf.childId)
+        await queuePrompt(ctx, leaf.childId, message('continue'))
+      }
+      await vi.waitFor(() => { expect(adapter.requests).toHaveLength(coldResume ? 3 : 2) })
+      const agent = ctx.agents.get(leaf.childId)!
+      const activity = await ctx.waterfall('workspace/session-activity', { sessionId: parent.id }, () => Promise.resolve([]))
+      expect(activity.find(item => item.kind === 'subagent')).toEqual({
+        kind: 'subagent', items: [expect.objectContaining({ id: leaf.childId })],
+      })
+      const proposed = () => ctx.waterfall('agent/pre-step', {
+        agent, modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 2, step: 1, signal: testSignal,
+      }, () => Promise.resolve({ kind: 'enter' as const, messages: [] }))
+      for (const ancestor of [parent.id, creator.childId]) {
+        archived.push(ancestor)
+        expect(await proposed()).toEqual({ kind: 'reject' })
+        archived.length = 0
+        expect(await proposed()).toEqual({ kind: 'enter', messages: [] })
+      }
+      const cancel = vi.spyOn(agent, 'cancel')
+      await ctx.parallel('workspace/session-stop', { sessionId: parent.id })
+      expect(cancel).toHaveBeenCalledExactlyOnceWith({ kind: 'parent' })
+    } finally {
+      releaseCreator.resolve(undefined)
+      releaseLeaf.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('does not add a top-level parent to the waiting graph', async () => {
     const { ctx, parent } = await setup([textResponse('done')])
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })

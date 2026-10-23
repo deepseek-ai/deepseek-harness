@@ -27,7 +27,7 @@ import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.t
 import {
   createAgentMessage, createSettlementMessage, withResultDeliveryGuidance,
 } from './continuation-messages.ts'
-import { assertSubagentMaxDepth } from './depth.ts'
+import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
 import { establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
@@ -61,16 +61,12 @@ type ChildDeliveryOptions = {
 interface SubagentHost {
   /** Read the current descriptor identity through the service-owned projection. */
   identityOf(session: Session): SubagentIdentityProjection | undefined
-  startExternal(name: string, request: ResolvedSubagentStartRequest): Promise<SubagentRun>
-  /** Resolve one provider's detached continuable-creation contribution. */
-  prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /** Publish lifecycle events through the owning service's scoped dispatcher. */
   readonly emitLifecycle: LifecycleEmitter
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
 interface MaterializeBase {
-  childId: SessionId
   provider: string
   root: Agent
   ancestors: readonly SessionId[]
@@ -82,6 +78,7 @@ interface MaterializeBase {
 type MaterializeInputs = MaterializeBase & (
   | {
     kind: 'local'
+    childId: SessionId
     /**
      * Creation inputs; absent for a cold resume, which loads the persisted
      * session — including the delegation policy events a fresh creation seeded,
@@ -151,7 +148,7 @@ export class SubagentManager {
   /**
    * Build one manager inside the service's Agent-injected context.
    * @param ctx - context providing Agents, Sessions, and teardown ownership.
-   * @param host - provider dispatch and lifecycle publication owned by the service.
+   * @param host - descriptor reads and lifecycle publication owned by the service.
    * @param maxActiveSubagents - the current configured child capacity.
    */
   constructor(
@@ -162,6 +159,10 @@ export class SubagentManager {
     // Drain managed instances before Cordis releases their owning scope.
     const scope = ctx.plugin(function activationOwner() {})
     this.ownerCtx = scope.ctx
+    installSubagentArchiveAdmission(ctx, (agent) => {
+      const activation = this.resident.get(agent.id)
+      return activation !== undefined && activationAgent(activation) === agent ? activation.ancestors : undefined
+    })
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
     })
@@ -287,15 +288,18 @@ export class SubagentManager {
    * Every earlier failure disposes any created handle and rolls back Activation
    * and its capacity slot without returning either id.
    * @param spec - provider, delegation request, and caller cancellation.
+   * @param prepare - creation contribution bound to the checked provider.
    * @returns the durable child id and accepted initial prompt message id.
    */
-  async startLocal(spec: SubagentActivationSpec): Promise<SubagentActivation & { messageId: MessageId }> {
+  async startLocal(
+    spec: SubagentActivationSpec,
+    prepare: (request: ContinuableCreateRequest) => Promise<ContinuableCreateSpec>,
+  ): Promise<SubagentActivation & { messageId: MessageId }> {
     const parent = spec.parent
     this.assertAdmitting(parent)
     const ancestry = this.ancestryForChild(parent)
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       const persistence = spec.delivery === 'caller' ? this.ctx.get('sessionPersistence') : this.requirePersistence()
-      assertSubagentMaxDepth(spec.maxDepth)
       const childId = spec.childId ?? brandString<SessionId>(randomUUID())
       this.assertChildIdAvailable(childId)
       const childDepth = resolveChildDepth(parent, spec.maxDepth)
@@ -318,7 +322,7 @@ export class SubagentManager {
       const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
 
       const cwd = await this.resolveDirectory(spec, signal)
-      const prepared = await this.host.prepareContinuable(spec.provider, {
+      const prepared = await prepare({
         sessionId: childId,
         cwd,
         parent,
@@ -386,13 +390,16 @@ export class SubagentManager {
   /**
    * Start an external backend under activation ownership.
    * @param spec - task, provider, cancellation, and delivery policy.
+   * @param start - execution bound to the checked provider.
    * @returns the accepted activation and its result/disposal capabilities.
    */
-  async startExternal(spec: SubagentActivationSpec): Promise<SubagentActivation> {
+  async startExternal(
+    spec: SubagentActivationSpec,
+    start: (request: ResolvedSubagentStartRequest) => Promise<SubagentRun>,
+  ): Promise<SubagentActivation> {
     const { provider, delivery, childId: _childId, ...request } = spec
     const parent = request.parent
     this.assertAdmitting(parent)
-    const pendingId = brandString<SessionId>(randomUUID())
     const ancestry = this.ancestryForChild(parent)
     return this.trackStartup(ancestry.root, spec.signal, async (signal) => {
       let activation: Activation | undefined
@@ -400,12 +407,11 @@ export class SubagentManager {
         const cwd = await this.resolveDirectory(spec, signal)
         activation = await this.materialize({
           kind: 'external',
-          childId: pendingId,
           provider,
           ...ancestry,
           signal,
           delivery,
-          start: signal => this.host.startExternal(provider, {
+          start: signal => start({
             ...request, cwd, signal,
           }),
         })
@@ -662,7 +668,7 @@ export class SubagentManager {
   /** Dispose independent roots and report every branch failure after all settle. */
   private async disposeRoots(
     roots: readonly Activation[],
-    failureSubject: 'activation(s)' | 'scoped activation(s)' | 'selected activation(s)',
+    failureSubject: 'activation(s)' | 'scoped activation(s)',
   ): Promise<void> {
     const failures = await Promise.all(roots.map(async (activation) => {
       try {
@@ -705,7 +711,6 @@ export class SubagentManager {
     releaseSlot: () => void,
   ): Promise<Activation> {
     const { provider, root } = inputs
-    let childId = inputs.childId
     inputs.signal.throwIfAborted()
     let resource: ActivationResource
     if (inputs.kind === 'external') {
@@ -716,8 +721,7 @@ export class SubagentManager {
         const run = await inputs.start(controller.signal)
         resource = { kind: 'external', run, controller }
         void run.result.catch(() => undefined)
-        childId = run.id
-        try { this.assertChildIdAvailable(childId) } catch (error: unknown) {
+        try { this.assertChildIdAvailable(run.id) } catch (error: unknown) {
           await run.dispose()
           throw error
         }
@@ -725,7 +729,7 @@ export class SubagentManager {
         inputs.signal.removeEventListener('abort', cancelStartup)
       }
     } else {
-      const { create } = inputs
+      const { create, childId } = inputs
       let structured: StructuredAttachment | undefined
       const setup = async (childCtx: Context, child: Agent): Promise<void> => {
         // Only fresh creation appends the descriptor and delegated policy after
@@ -780,6 +784,7 @@ export class SubagentManager {
         omitClosingText: false,
       }
     }
+    const childId = resource.kind === 'local' ? resource.handle.agent.id : resource.run.id
     const activation: Activation = {
       releaseSlot,
       childId,
@@ -841,7 +846,6 @@ export class SubagentManager {
 
   /** Record acceptance and begin settlement observation before returning the receipt. */
   private accept(activation: Activation): void {
-    if (activation.accepted) return
     activation.accepted = true
     if (activation.kind === 'local') {
       this.watchLocalSettlement(activation)
@@ -1090,7 +1094,6 @@ export class SubagentManager {
         }
         if (activation.closing !== undefined) return { closing: activation.closing }
         const messageId = this.submitAdmitted(activation, content, options, root)
-        this.accept(activation)
         return { messageId }
       })
       if ('messageId' in result) return result.messageId

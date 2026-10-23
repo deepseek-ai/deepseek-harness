@@ -1,7 +1,8 @@
 /**
  * The `subagent` family of the Workspace registry's archive admission: which
  * subagent descendants of a Session are still inside a turn, and how they
- * stop when the Session is archived with its work.
+ * stop when the Session is archived with its work. Archived ancestors also
+ * block later model steps, including when their Sessions have been released.
  *
  * @module @deepseek-ai/dsh-subagent
  */
@@ -16,19 +17,27 @@ import { foldSubagentDescriptor } from './descriptor.ts'
 /**
  * Answer `workspace/session-activity` with the running subagent descendants of
  * the asked Session, and `workspace/session-stop` by cancelling each of them
- * as their parent would. Both listeners live as long as `ctx`'s fiber.
+ * as their parent would. Reject subsequent steps beneath archived ancestors.
+ * All listeners live as long as `ctx`'s fiber.
  * @param ctx - context carrying the Agent registry; the Session query service is optional and only supplies labels.
+ * @param residentAncestors - verified creation ancestors for an exact managed Agent, absent before publication or for unmanaged Agents.
  */
-export function installSubagentArchiveAdmission(ctx: Context): void {
+export function installSubagentArchiveAdmission(
+  ctx: Context,
+  residentAncestors: (agent: Agent) => readonly SessionId[] | undefined,
+): void {
+  const ancestorsOf = (agent: Agent): readonly SessionId[] => residentAncestors(agent) ?? headerAncestors(ctx, agent)
+  const runningDescendants = (sessionId: SessionId): Agent[] => ctx.agents.list()
+    .filter(agent => agent.status === 'running' && ancestorsOf(agent).includes(sessionId))
   ctx.on('workspace/session-activity', async ({ sessionId }, next) => {
-    const running = runningDescendants(ctx, sessionId)
+    const running = runningDescendants(sessionId)
     const rest = await next()
     if (running.length === 0) return rest
     const own: SessionActivity = { kind: 'subagent', items: await Promise.all(running.map(child => describe(ctx, child))) }
     return [own, ...rest]
   })
   ctx.on('workspace/session-stop', ({ sessionId }) => {
-    for (const child of runningDescendants(ctx, sessionId)) {
+    for (const child of runningDescendants(sessionId)) {
       try {
         child.cancel({ kind: 'parent' })
       } catch (error: unknown) {
@@ -37,37 +46,31 @@ export function installSubagentArchiveAdmission(ctx: Context): void {
       }
     }
   })
+  ctx.on('agent/pre-step', ({ agent }, next) => {
+    const archived = ctx.get('workspaceRegistry')?.archivedSessionIds
+    return archived !== undefined && ancestorsOf(agent).some(id => archived.includes(id))
+      ? Promise.resolve({ kind: 'reject' as const })
+      : next()
+  })
 }
 
 /**
- * Live subagent descendants inside a turn, by durable lineage: a child whose
- * header names its parent and carries the subagent origin this package
- * records, at any depth. A fork shares the lineage field without the origin
- * and is an independent conversation, so it never holds its source. Lineage
- * is read as data, so a damaged header chain that loops is visited once.
+ * Header-only ancestry for Agents without a published Activation. Include an
+ * offline direct creator; ordinary forks stop the chain and cycles terminate.
  */
-function runningDescendants(ctx: Context, rootId: SessionId): Agent[] {
-  const childrenOf = new Map<SessionId, Agent[]>()
-  for (const agent of ctx.agents.list()) {
-    const { parentSession, origin } = agent.session.header
-    if (parentSession === undefined || origin !== 'subagent') continue
-    const siblings = childrenOf.get(parentSession) ?? []
-    siblings.push(agent)
-    childrenOf.set(parentSession, siblings)
-  }
-  const running: Agent[] = []
-  const pending = [rootId]
-  const visited = new Set<SessionId>()
-  while (pending.length > 0) {
-    const parentId = pending.shift() as SessionId
-    if (visited.has(parentId)) continue
+function headerAncestors(ctx: Context, agent: Agent): readonly SessionId[] {
+  const ancestors: SessionId[] = []
+  const visited = new Set<SessionId>([agent.id])
+  let header = agent.session.header
+  while (header.origin === 'subagent' && header.parentSession !== undefined && !visited.has(header.parentSession)) {
+    const parentId = header.parentSession
+    ancestors.push(parentId)
     visited.add(parentId)
-    for (const child of childrenOf.get(parentId) ?? []) {
-      if (child.status === 'running') running.push(child)
-      pending.push(child.id)
-    }
+    const parent = ctx.agents.get(parentId)?.session
+    if (parent === undefined) break
+    header = parent.header
   }
-  return running
+  return ancestors
 }
 
 /**
