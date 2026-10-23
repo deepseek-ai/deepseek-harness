@@ -20,7 +20,7 @@ describe('creation recommendation after an explicit wish', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true,
-      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/creation-recommendations', import.meta.url)), enabled: true }] },
+      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/personalized-recommendations', import.meta.url)), enabled: true }] },
     })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)

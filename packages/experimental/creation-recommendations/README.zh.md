@@ -1,6 +1,6 @@
 ---
 description: "经用户明确选择后创建可持久保留、可移除的界面插件。"
-kind: "package-bundle"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-creation-recommendations
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开插件 → 更多 → 实验性插件，启用个性化页面。内置配置档案默认不启用此插件。启用后在插件一级页显示，关闭后仅保留在二级页。该 Bundle 同时启用共享的[操作卡片服务](../action-cards/README.zh.md)及其浏览器端；该服务的 `queuedMessageLimit` 规定为下一轮排队的消息达到多少条时，卡片工具拒绝本轮的卡片。用户明确指定的位置优先；否则 Agent 根据作用范围和交互方式推荐：
+打开插件 → 更多 → 实验性插件，启用[个性化推荐](../personalized-recommendations/README.zh.md)，其中的个性化页面行就是本包。内置配置档案默认不启用此插件。启用后在插件一级页显示，关闭后仅保留在二级页。个性化推荐 Bundle 同时启用共享的[操作卡片服务](../action-cards/README.zh.md)及其浏览器端；该服务的 `queuedMessageLimit` 规定为下一轮排队的消息达到多少条时，卡片工具拒绝本轮的卡片。用户明确指定的位置优先；否则 Agent 根据作用范围和交互方式推荐：
 
 | 位置 | 用途 |
 |:--|:--|

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Páginas personalizadas",
-    "description": "Planeje uma página personalizada na conversa quando os recursos existentes não atendem a uma necessidade específica. Clique em Criar para gerar um plug-in independente que você pode continuar usando ou remover."
+    "description": "Propõe, abaixo da resposta, uma página ou uma pequena ferramenta para manter; depois que você clica em Criar, ela é gerada em segundo plano como uma página de plug-in que você pode cancelar, desfazer e restaurar. A geração leva alguns minutos e consome muitos tokens."
   }
 }

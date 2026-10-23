@@ -1,6 +1,6 @@
 ---
 description: "Create persistent removable interface plugins after an explicit user choice."
-kind: "package-bundle"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-creation-recommendations
@@ -25,7 +25,7 @@ For an explicit interface request, a clear implied viewing or editing need, or a
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins → More → Experimental plugins and enable Personalized pages. Shipped profiles leave it disabled. Enabling pins it to the main Plugins list; disabling returns it to the secondary page only. The bundle also enables the shared [action card service](../action-cards/README.md) and its browser half; that service's `queuedMessageLimit` sets how many queued next-turn messages make the card tool refuse the current turn's card. An explicit user location takes precedence; otherwise the Agent recommends a location by scope and interaction:
+Open Plugins → More → Experimental plugins and enable [Personalized recommendations](../personalized-recommendations/README.md); its Personalized pages row is this package. Shipped profiles leave it disabled. Enabling pins it to the main Plugins list; disabling returns it to the secondary page only. The Personalized recommendations bundle also enables the shared [action card service](../action-cards/README.md) and its browser half; that service's `queuedMessageLimit` sets how many queued next-turn messages make the card tool refuse the current turn's card. An explicit user location takes precedence; otherwise the Agent recommends a location by scope and interaction:
 
 | Location | Use |
 |:--|:--|
@@ -47,7 +47,7 @@ For multiple independent needs, guidance selects one page proposal for the answe
 
 The card appears after the Turn of its accepted call ends. An unstarted proposal stays available across later human messages, including follow-ups about its plan. The next proposal in the same conversation replaces it: the old card shows Replaced without creation controls, and the Host refuses its stale clicks, so one unstarted card exists per conversation. Refreshing, switching views and background notices do not change a card. Already-started work keeps its progress and retry controls. Replacement is derived from the later proposal, not a new persisted decision record. While the user has queued `queuedMessageLimit` or more messages for later turns, the card tool refuses the proposal, so no card is offered.
 
-Creation requires a live root conversation, permission to modify the profile, and a Session sandbox mode other than read-only: the Creator inherits that mode, so a read-only Session refuses Create and leaves the card unstarted. Cancel is available during generation; retry waits for the child’s cleanup. Once installation starts, the card shows Installing and lets the accepted operation finish. Closing or leaving the conversation does not uninstall a completed plugin. Receipts survive reconnects; interrupted or uncertain runs are reconciled with the installed bundle before any card action, including Not now, so an uncertain run whose page was installed shows Installed with Undo instead of being dismissed. Failed removal preserves the existing receipt and its application outcome for retry. Unloading this recommendation bundle stops its Creator work and local follow-up. Plugin Manager owns accepted profile changes and may finish after reload; reopening checks the installed profile before retrying. Installed plugins remain. Recovery confirms installation only; it does not infer runtime activation from the profile’s enabled flag.
+Creation requires a live root conversation, permission to modify the profile, and a Session sandbox mode other than read-only: the Creator inherits that mode, so a read-only Session refuses Create and leaves the card unstarted. Cancel is available during generation; retry waits for the child’s cleanup. Once installation starts, the card shows Installing and lets the accepted operation finish. Closing or leaving the conversation does not uninstall a completed plugin. Receipts survive reconnects; interrupted or uncertain runs are reconciled with the installed bundle before any card action, including Not now, so an uncertain run whose page was installed shows Installed with Undo instead of being dismissed. Failed removal preserves the existing receipt and its application outcome for retry. Unloading this plugin stops its Creator work and local follow-up. Plugin Manager owns accepted profile changes and may finish after reload; reopening checks the installed profile before retrying. Installed plugins remain. Recovery confirms installation only; it does not infer runtime activation from the profile’s enabled flag.
 
 Undo uninstalls the plugin and keeps its files. On the removed card, Restore validates the retained profile copy again and reinstalls it without running the Creator; it needs the same live root conversation and profile permission as Create. If that copy is missing or fails validation, Restore is refused and a new proposal is needed.
 

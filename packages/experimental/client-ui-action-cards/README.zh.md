@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-启用[个性化页面](../creation-recommendations/README.zh.md)或[插件推荐](../plugin-recommendations/README.zh.md) Bundle，它们都会在本包旁插入对应的 [Host 服务](../action-cards/README.zh.md)。本浏览器组件没有配置字段。
+启用[个性化推荐](../personalized-recommendations/README.zh.md) Bundle，它会在本包旁插入对应的 [Host 服务](../action-cards/README.zh.md)。本浏览器组件没有配置字段。
 
 ### 注册卡片正文
 

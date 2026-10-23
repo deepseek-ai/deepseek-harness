@@ -22,7 +22,7 @@ describe('official plugin recommendation in a conversation', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ replayFixture: fixture, compareReplaySession: true,
-      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/plugin-recommendations', import.meta.url)), enabled: true }] },
+      profile: { packages: [{ dir: fileURLToPath(new URL('../../../packages/experimental/personalized-recommendations', import.meta.url)), enabled: true }] },
     })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)

@@ -25,7 +25,7 @@ Users see an optional action card below a completed answer: its title, a brief t
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the [Personalized pages](../creation-recommendations/README.md) or [Plugin recommendations](../plugin-recommendations/README.md) bundle; each inserts this package beside its [Host service](../action-cards/README.md). This browser contribution has no configuration fields.
+Enable the [Personalized recommendations](../personalized-recommendations/README.md) bundle, which inserts this package beside its [Host service](../action-cards/README.md). This browser contribution has no configuration fields.
 
 ### Register a card body
 
