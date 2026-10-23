@@ -9,12 +9,12 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentService, { type SubagentActivation } from '@deepseek-ai/dsh-subagent'
+import SubagentService, { SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
-import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
+import { bindSubagentActivation } from '../../../subagent/subagent/tests/manager-internals.ts'
 import TeamService, { TeamId, TeamTaskId } from '../src/index.ts'
 import { teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamProjectionState } from '../src/projection.ts'
@@ -29,7 +29,7 @@ async function resident(ctx: Context, root: Agent, id: string): Promise<Agent> {
   return (await ctx.agents.create({
     sessionId: SessionId(id), agentOptions: { provider: 'mock', model: 'mock' },
     meta: { origin: 'subagent', parentSession: root.id },
-    setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, root) },
+    setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, root) },
   })).agent
 }
 
@@ -241,7 +241,7 @@ describe('Tree-owned task boards', () => {
     const child = await ctx.agents.create({
       sessionId: SessionId('queued-caller'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
-      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const task = await ctx.agentTeams.createTask(lead, { subject: 'existing', description: 'remains unclaimed' })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
@@ -645,7 +645,7 @@ describe('Task-board wait notifications', () => {
     const beta = (await ctx.agents.create({
       sessionId: SessionId('notify-beta'), meta: { origin: 'subagent', parentSession: alpha.id },
       agentOptions: { provider: 'mock', model: 'mock' },
-      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead, [lead.id, alpha.id]) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, alpha.id]) },
     })).agent
     const unrelated = await ctx.agentLoop.create(SessionId('unrelated'), { provider: 'mock', model: 'mock' })
     const unbound = (await ctx.agents.create({
@@ -673,6 +673,29 @@ describe('Task-board wait notifications', () => {
       expect(agent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(0)
     }
     expect(adapter.requests).toHaveLength(0)
+  })
+
+  it.each([
+    new Error('unexpected root lookup failure'),
+    new SubagentError('runtime unavailable', 'RUNTIME_UNAVAILABLE'),
+  ])('propagates unexpected root lookup failures after committing the task: %s', async (failure) => {
+    const { ctx, lead } = await setup([])
+    const child = await resident(ctx, lead, 'failed-root-lookup')
+    const rootOf = ctx.subagents.rootOf.bind(ctx.subagents)
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation((agent) => {
+      if (agent === child) throw failure
+      return rootOf(agent)
+    })
+    const notified: Agent[] = []
+    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
+
+    await expect(ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'notification interrupted' }))
+      .rejects.toBe(failure)
+
+    expect(notified).toEqual([lead])
+    expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-1'))).toMatchObject({ subject: 'committed', revision: 1 })
+    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
+    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
   })
 
   it('publishes notifications only after persistence succeeds', async () => {

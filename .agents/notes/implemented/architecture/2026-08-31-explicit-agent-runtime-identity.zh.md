@@ -14,17 +14,17 @@ Agent 的 Cordis Context 拥有注册及其清理。Agent 身份则为某项操�
 
 ## 决策
 
-运行时接口在拥有身份的位置携带 Agent 身份。`AgentSetup` 接收 `(agentCtx, agent)`；subagent 管理器在 setup 期间把每个托管本地 Agent 绑定到其确切运行时树根；作用域事件在 payload 中携带 Agent；Remote 转发校验 `request.agent` 就是 carrier key；Host Typert Context 解析则把协议身份映射到存活 Agent Context，不执行反向扫描。`agent.ctx` 继续拥有注册和生命周期，不暴露反向 Agent 属性。
+运行时接口在拥有身份的位置携带 Agent 身份。`AgentSetup` 接收 `(agentCtx, agent)`；每个 subagent Activation 保留其确切运行时树根；作用域事件在 payload 中携带 Agent；Remote 转发校验 `request.agent` 就是 carrier key；Host Typert Context 解析则把协议身份映射到存活 Agent Context，不执行反向扫描。`agent.ctx` 继续拥有注册和生命周期，不暴露反向 Agent 属性。
 
 感知作用域的注册表继续仅使用不透明作用域键判断注册成员关系。tool-subagent 不会分类该键，也不会从 Context 解析 Agent。直接 `AgentSetup` 显式接收 Agent，并在 Agent 发布前通过所给 Context 完成安装。对于由设置控制的常驻 preset，事件 payload 提供 Agent，其 Session 提供策略目标，其 Context 拥有注册项。
 
-`SubagentManager` 独立于核心注册表拥有运行时成员关系。`lineageOf(agent)` 为托管本地实例返回确切的存活树根和已验证的创建祖先，包括 `agent/created` 期间；子级和树根都必须匹配注册表中的存活对象。普通 Session 和非托管的 subagent header 不授予成员身份。持久化 `parentSession` 不能代替该关系，同 id 替代实例也不能继承它。仅限根级的消费方依据显式 subagent 来源分类，而非普通 fork 谱系。
+`SubagentManager.rootOf(agent)` 从已有 Activation 读取运行时成员关系；子级和树根都必须匹配注册表中的存活对象。普通 Session 返回自身，非托管的 subagent header 不授予成员身份。持久化 `parentSession` 描述创建关系；中间创建者离线时，Activation 保留确切树根，同 id 替代实例不能继承它。仅限根级的消费方依据显式 subagent 来源分类。
 
 [作用域参考](../../../../packages/core/scope/README.zh.md)与 [Agent loop 参考](../../../../packages/core/agent-loop/README.zh.md)说明注册和生命周期行为。[发起方作用域决策](2026-07-15-agent-initiator-scope.zh.md)负责私有调用链理由；显式运行时归属不改变因果发起关系或注册生命周期。
 
 ## 验证
 
-托管子级测试验证发布期间的谱系、中间创建者释放，以及子级或树根替换后的确切实例检查。SDK 审批测试在 `agent/created` 期间和直接创建者退出后验证同一关系。Schedule 与用户问题测试拒绝委派 Session，历史普通 fork 则保持独立。
+托管子级测试验证中间创建者释放，以及子级或树根替换后的确切实例检查。SDK 审批测试验证直接创建者退出后的轮次内路由。Schedule 与用户问题测试拒绝委派 Session，历史普通 fork 则保持独立。
 
 Remote 事件测试会在转发作用域 waterfall 前拒绝缺失或不匹配的 Agent。tool-subagent 测试验证 direct setup 会在 Agent 发布前完成安装；常驻 preset 测试验证逐 Session 的策略读取与继承。
 
@@ -32,7 +32,7 @@ Remote 事件测试会在转发作用域 waterfall 前拒绝缺失或不匹配�
 
 **保留 `Context.agent`。** 反向 accessor 会让注册所有权看起来等同于操作身份，还要求每个 Context 派生、适配器和测试替身保留一项与 Cordis 服务选择或 effect 清理无关的关联。
 
-**从调用方 Context 推断运行时归属。** 私有管理器 Context、Agent Context 和常驻 preset Context 都能调用同一个工厂。因此，Context 祖先关系无法说明由哪个存活 Agent 拥有结果；subagent 管理器通过 setup 绑定它已知的确切树根。
+**从调用方 Context 推断运行时归属。** 私有管理器 Context、Agent Context 和常驻 preset Context 都能调用同一个工厂。因此，Context 祖先关系无法说明由哪个存活 Agent 拥有结果；subagent Activation 保留准入时传入的确切树根。
 
 **分类 Agent 作用域键。** 不透明作用域键表达路由成员关系，而不是领域身份。分类该键会让 Agent 成为组合中心，也仍会把插件的 effect 所有者与策略所需的 Session 耦合起来。
 

@@ -9,7 +9,6 @@ import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as CreationRecommendations from '../src/index.ts'
 import { ACTION, fixture, callId, proposal, installedBundle, recordCard, writeBundle } from './fixture.ts'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
 
 /** The Remote result for a recorded page decision. */
 function settled(phase: string, data: object) {
@@ -400,7 +399,6 @@ describe('interface creation', () => {
     const childHandle = await f.ctx.agents.create({ sessionId: spec.childId!,
       meta: { parentSession: f.agent.id, origin: 'subagent' } })
     const child = childHandle.agent
-    bindSubagentLineage(f.ctx, child, f.agent)
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
     const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
@@ -414,16 +412,24 @@ describe('interface creation', () => {
       meta: { parentSession: child.id, origin: 'subagent' } })
     const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'),
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
-    bindSubagentLineage(f.ctx, helper.agent, f.agent, [f.agent.id, child.id])
-    bindSubagentLineage(f.ctx, nested.agent, f.agent, [f.agent.id, child.id, helper.agent.id])
     await childHandle.dispose()
+    expect((await run('install', child)).isError).toBe(false)
     for (const owned of [helper.agent, nested.agent]) {
       expect((await run('install', owned)).isError).toBe(true)
       expect((await run('list_bundles', owned)).isError).toBe(false)
     }
-    // Session lineage alone is not runtime ownership.
+    // Historical ordinary forks do not acquire subagent restrictions.
     const lineage = await f.ctx.agents.create({ sessionId: SessionId('creator-lineage'), meta: { parentSession: child.id } })
     expect((await run('install', lineage.agent)).isError).toBe(false)
+    const unlinked = await f.ctx.agents.create({ sessionId: SessionId('unlinked-subagent'), meta: { origin: 'subagent' } })
+    expect((await run('install', unlinked.agent)).isError).toBe(false)
+    const cycle = await f.ctx.agents.create({ sessionId: SessionId('cycle-first'),
+      meta: { origin: 'subagent', parentSession: SessionId('cycle-second') } })
+    await f.ctx.agents.create({ sessionId: SessionId('cycle-second'),
+      meta: { origin: 'subagent', parentSession: cycle.agent.id } })
+    expect((await run('install', cycle.agent)).isError).toBe(false)
+    await helper.dispose()
+    expect((await run('install', nested.agent)).isError).toBe(false)
   })
 
   it('refuses to start a Creator while the Session is read-only and keeps dismissal available', async () => {

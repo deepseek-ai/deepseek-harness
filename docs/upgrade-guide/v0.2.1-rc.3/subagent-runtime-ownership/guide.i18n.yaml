@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.3/subagent-runtime-ownership/guide.md
 /:
-  en: a686761ab9041b0f
-  zh: ed0e4cafc952c61a
+  en: 10f7c9b47f2b39f2
+  zh: 2c93aa4e6bef0f33
 /subagent-runtime-ownership:
   en: 20c105e3d68b46ee
   zh: 685c1ad4eef7eefb
 /subagent-runtime-ownership/change:
-  en: 9f666708748bcb06
-  zh: 6723cc6cc21bb15e
+  en: bacb015157610964
+  zh: 635055eab24394ac
 /subagent-runtime-ownership/migration:
-  en: c3b358b7d2b782cc
-  zh: a71d91e6c3e32f65
+  en: 3fb0ce93ad94074f
+  zh: 49e2f520191d6c53

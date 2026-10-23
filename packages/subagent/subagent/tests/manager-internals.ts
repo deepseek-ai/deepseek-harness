@@ -3,6 +3,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SubagentRunId, type SubagentResult } from '../src/types.ts'
+import type { LocalActivation } from '../src/activation.ts'
 import type SubagentManager from '../src/manager.ts'
 
 /** Return the service's bound subagent manager. */
@@ -27,9 +29,34 @@ export function dropActivation(ctx: Context, childId: SessionId): void {
   managerState(ctx).resident.delete(childId)
 }
 
-/** Bind a focused fixture to the real manager without starting a model turn. */
-export function bindSubagentLineage(
+/** Register an idle fixture Activation without starting a model turn. */
+export function bindSubagentActivation(
   ctx: Context, child: Agent, root: Agent, ancestors: readonly SessionId[] = [root.id],
 ): void {
-  subagentManager(ctx)['localLineage'].set(child, { root, ancestors })
+  const resident = managerState(ctx).resident
+  const result = Promise.withResolvers<SubagentResult>()
+  void result.promise.catch(() => undefined)
+  const activation: LocalActivation = {
+    kind: 'local',
+    childId: child.id,
+    runId: SubagentRunId(`fixture:${child.id}`),
+    provider: 'fixture',
+    root,
+    ancestors,
+    releaseSlot() {},
+    handle: { agent: child, async dispose() {} },
+    outputStart: child.session.seq,
+    structured: undefined,
+    failureAt: undefined,
+    poke: Promise.withResolvers(),
+    omitClosingText: false,
+    delivery: 'caller',
+    result,
+    closing: undefined,
+    accepted: false,
+  }
+  resident.set(child.id, activation)
+  child.ctx.effect(() => () => {
+    if (resident.get(child.id) === activation) resident.delete(child.id)
+  }, 'fixture: managed Activation')
 }

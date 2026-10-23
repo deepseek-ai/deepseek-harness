@@ -23,7 +23,7 @@ import { serialize } from '@deepseek-ai/dsh-llm-deepseek/src/serialize.ts'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
-import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
+import { bindSubagentActivation } from '../../../subagent/subagent/tests/manager-internals.ts'
 import TeamService from '../../agent-team/src/index.ts'
 import * as toolTeam from '../src/index.ts'
 
@@ -286,12 +286,12 @@ describe('dsh-tool-team', () => {
     const child = await ctx.agents.create({
       sessionId: SessionId('identity-child'),
       meta: { parentSession: lead.id, origin: 'subagent' },
-      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const nested = await ctx.agents.create({
       sessionId: SessionId('identity-nested'),
       meta: { parentSession: child.agent.id, origin: 'subagent' },
-      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead, [lead.id, child.agent.id]) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, child.agent.id]) },
     })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(teammateIdentity(child.agent))
@@ -537,7 +537,7 @@ describe('dsh-tool-team', () => {
       const child = await ctx.agents.create({
         sessionId: id, agentOptions: { provider: 'mock', model: 'mock' },
         meta: { origin: 'subagent', parentSession: lead.id },
-        setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead) },
+        setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
       })
       expect(teamTools(await assembly(ctx, child.agent))).toEqual(TEAM_TOOLS)
       const created = await execute(ctx, child.agent, 'team_task_create', {
@@ -556,7 +556,7 @@ describe('dsh-tool-team', () => {
     const child = await ctx.agents.create({
       sessionId: SessionId('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
-      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const unrelated = await ctx.agents.create({
       sessionId: SessionId('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },

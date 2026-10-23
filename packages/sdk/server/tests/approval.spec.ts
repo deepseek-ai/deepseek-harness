@@ -4,14 +4,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { NO_START_CAPABILITIES, SubagentError } from '@deepseek-ai/dsh-subagent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
+import { bindSubagentActivation } from '../../../subagent/subagent/tests/manager-internals.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
 
@@ -128,8 +128,11 @@ describe('SDK approval bridge', () => {
       .toEqual([action === 'cancel' ? 'cancelled' : 'unavailable'])
   })
 
-  it.each([false, true])('does not claim an unrelated live Agent with SDK session lineage: %s', async (hasLineage) => {
-    const h = await setup(true, true)
+  it.each([
+    { subagents: false, hasLineage: false }, { subagents: false, hasLineage: true },
+    { subagents: true, hasLineage: false }, { subagents: true, hasLineage: true },
+  ])('does not claim an unrelated live Agent (subagents=$subagents, SDK lineage=$hasLineage)', async ({ subagents, hasLineage }) => {
+    const h = await setup(true, subagents)
     const foreign = await h.ctx.agents.create({
       sessionId: SessionId('foreign'),
       meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id, origin: 'subagent' as const } : {}) },
@@ -150,12 +153,12 @@ describe('SDK approval bridge', () => {
       meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id } : {}) },
     })
     onTestFinished(() => child.dispose())
-    bindSubagentLineage(h.ctx, child.agent, h.agent)
+    bindSubagentActivation(h.ctx, child.agent, h.agent)
     const grandchild = await h.ctx.agents.create({
       sessionId: SessionId('grandchild'), meta: { cwd: process.cwd() },
     })
     onTestFinished(() => grandchild.dispose())
-    bindSubagentLineage(h.ctx, grandchild.agent, h.agent, [h.agent.id, child.agent.id])
+    bindSubagentActivation(h.ctx, grandchild.agent, h.agent, [h.agent.id, child.agent.id])
     child.agent.session.append('turn/start', { turn: 1 })
     grandchild.agent.session.append('turn/start', { turn: 1 })
     const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
@@ -169,7 +172,7 @@ describe('SDK approval bridge', () => {
     expect(clientDecision).toHaveBeenCalledTimes(2)
   })
 
-  it('routes approval during managed child publication and after its creator leaves', async () => {
+  it('routes approval from a managed descendant after its creator leaves', async () => {
     const h = await setup(true, true)
     h.ctx.subagents.registerProvider({
       name: 'local-test', capabilities: NO_START_CAPABILITIES, inheritsParentContext: false,
@@ -179,11 +182,8 @@ describe('SDK approval bridge', () => {
     h.client.onRequest(clientDecision)
     type Gate = ReturnType<typeof Promise.withResolvers<undefined>>
     const gates = new Map<Agent, { entered: Gate; release: Gate }>()
-    h.ctx.on('agent/created', async ({ agent }) => {
+    h.ctx.on('agent/created', ({ agent }) => {
       gates.set(agent, { entered: Promise.withResolvers<undefined>(), release: Promise.withResolvers<undefined>() })
-      // Publication precedes the first turn, so exercise routing without an audit request.
-      await expect(h.ctx.waterfall('approval/request', { agent, toolName: 'setup' },
-        () => Promise.resolve('rejected' as const))).resolves.toBe('allowed-once')
     })
     h.ctx.on('agent/pre-step', async ({ agent }, next) => {
       const gate = gates.get(agent)!
@@ -211,8 +211,6 @@ describe('SDK approval bridge', () => {
       h.ctx.approval.setPolicy(grandchildAgent, 'ask')
       await expect(h.ctx.approval.request({ agent: grandchildAgent, toolName: 'bash' })).resolves.toBe('allowed-once')
       expect(clientDecision.mock.calls.map(call => call[1])).toEqual([
-        { sessionId: child.childId, toolName: 'setup' },
-        { sessionId: grandchild.childId, toolName: 'setup' },
         { sessionId: grandchild.childId, toolName: 'bash' },
       ])
     } finally {
@@ -230,7 +228,7 @@ describe('SDK approval bridge', () => {
       meta: { parentSession: h.agent.session.id },
     })
     onTestFinished(() => child.dispose())
-    bindSubagentLineage(h.ctx, child.agent, owner.agent)
+    bindSubagentActivation(h.ctx, child.agent, owner.agent)
     child.agent.session.append('turn/start', { turn: 1 })
     const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
     h.client.onRequest(clientDecision)
@@ -239,14 +237,28 @@ describe('SDK approval bridge', () => {
     expect(clientDecision).not.toHaveBeenCalled()
   })
 
+  it.each([
+    new Error('root lookup failed'), new SubagentError('root lookup failed', 'NOT_RESUMABLE'),
+  ])('does not pass a failed ownership lookup to another approval answerer: %s', async (error) => {
+    const h = await setup(true, true)
+    const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign') })
+    onTestFinished(() => foreign.dispose())
+    foreign.agent.session.append('turn/start', { turn: 1 })
+    vi.spyOn(h.ctx.subagents, 'rootOf').mockImplementationOnce(() => { throw error })
+    const fallback = vi.fn(() => Promise.resolve('rejected' as const))
+    h.ctx.on('approval/request', fallback)
+    await expect(h.ctx.approval.request({ agent: foreign.agent, toolName: 'bash' })).resolves.toBe('unavailable')
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
   it('does not claim a disposed Agent when an owned replacement reuses its id', async () => {
     const h = await setup(true, true)
     const old = await h.ctx.agents.create({ sessionId: SessionId('reused') })
-    bindSubagentLineage(h.ctx, old.agent, h.agent)
+    bindSubagentActivation(h.ctx, old.agent, h.agent)
     await old.dispose()
     const replacement = await h.ctx.agents.create({ sessionId: old.agent.id })
     onTestFinished(() => replacement.dispose())
-    bindSubagentLineage(h.ctx, replacement.agent, h.agent)
+    bindSubagentActivation(h.ctx, replacement.agent, h.agent)
     const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
     h.client.onRequest(clientDecision)
     // Dispatch at the answerer seam: disposal has already closed the old Agent's turn.

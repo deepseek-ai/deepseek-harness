@@ -1336,8 +1336,7 @@ describe('continuable child ownership', () => {
       await waitNoActivation(ctx, creator.childId)
       const leafAgent = ctx.agents.get(leaf.childId)!
       expect(leafAgent.session.header.parentSession).toBe(creator.childId)
-      expect(ctx.subagents.lineageOf(leafAgent)?.root).toBe(parent)
-      expect(ctx.subagents.lineageOf(leafAgent)?.ancestors).toEqual([parent.id, child.id])
+      expect(ctx.subagents.rootOf(leafAgent)).toBe(parent)
       await expect(ctx.subagents.waitForTreeWork(leafAgent)).resolves.toBe(false)
       await expect(ctx.subagents.sendMessage(leafAgent, parent.id, message('still here'), { signal: testSignal }))
         .resolves.toBeTypeOf('string')
@@ -3599,16 +3598,15 @@ describe('continuable public API', () => {
 })
 
 describe('continuable errors', () => {
-  it('publishes lineage before admitting nested creation from the child', async () => {
+  it('rejects nested creation until the child has a managed Activation', async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
     parkParent(ctx, parent)
     let observed = false
     ctx.on('agent/created', async ({ agent }) => {
       if (agent.session.header.origin !== 'subagent') return
       observed = true
-      expect(ctx.subagents.lineageOf(agent)).toEqual({ root: parent, ancestors: [parent.id] })
       await expect(ctx.subagents.startActivation({ ...startSpec(agent), delivery: 'caller' }))
-        .rejects.toMatchObject({ code: 'UNAUTHORIZED', message: 'creator has no managed subagent instance' })
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED', message: 'agent has no active runtime owner' })
     })
     const child = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
     await child.result

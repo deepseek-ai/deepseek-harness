@@ -60,7 +60,7 @@ At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (br
 
 `startActivation({ provider, label, prompt, parent, signal, delivery })` returns `{ childId, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
 
-`lineageOf(agent)` returns a managed local Agent's exact live root and verified creation ancestors, from root to direct creator. The binding exists before `agent/created`; ordinary Agents, unmanaged subagent headers, disposed instances, and instances whose root is no longer live return `undefined`. Same-id replacements do not inherit a binding. `rootOf(agent)` also accepts an ordinary live root and rejects an unbound delegated Agent. These queries do not activate Sessions.
+`rootOf(agent)` resolves a managed local Agent through its existing Activation and checks the exact live child and root instances. Intermediate creators can leave without changing that root; same-id replacements cannot inherit membership. Ordinary live Agents resolve to themselves, while unmanaged delegated Agents are rejected. The query does not activate Sessions.
 
 ### Child presets
 

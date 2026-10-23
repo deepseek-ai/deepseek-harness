@@ -38,7 +38,7 @@ import { SubagentRunId } from './types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentStartRequest, SubagentRun,
-  SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, SubagentLineage, ResolvedSubagentStartRequest,
+  SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, ResolvedSubagentStartRequest,
 } from './types.ts'
 import { attachStructuredRuntime } from './structured.ts'
 import type { StructuredAttachment } from './structured.ts'
@@ -133,8 +133,6 @@ function failureMessage(error: unknown): string {
 export class SubagentManager {
   /** Child session id → its live Activation. Process-local, never durable. */
   private readonly resident = new Map<SessionId, Activation>()
-  /** Bound during setup, before Agent publication; keys distinguish same-id instances. */
-  private readonly localLineage = new WeakMap<Agent, SubagentLineage>()
   /** Root identities retain their pool across child settlement without retaining dead roots. */
   private readonly rootPools = new WeakMap<Agent, ActivationPool>()
   /** Materializations admitted before drain, tracked through publication or rollback. */
@@ -167,7 +165,6 @@ export class SubagentManager {
     })
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
-      this.localLineage.delete(agent)
     })
     ctx.effect(function* (this: SubagentManager) {
       yield scope.dispose
@@ -459,32 +456,20 @@ export class SubagentManager {
     }
     const identity = this.host.identityOf(caller.session)
     const delegated = caller.session.header.origin === 'subagent' || identity != null && caller.session.isOwnSeq(identity.seq)
-    const root = this.lineageOf(caller)?.root
-    if (root !== undefined) return root
-    if (delegated || this.localLineage.has(caller)) {
+    const activation = this.resident.get(caller.id)
+    if (activation !== undefined && activationAgent(activation) === caller
+      && this.ctx.agents.get(activation.root.id) === activation.root) return activation.root
+    if (delegated || activation !== undefined) {
       throw new SubagentError('agent has no active runtime owner', 'UNAUTHORIZED')
     }
     return caller
   }
 
-  /**
-   * Read the binding established before a managed Agent is published.
-   * @param agent - exact Agent whose live binding is requested.
-   * @returns its lineage while both it and its root remain live, otherwise undefined.
-   */
-  lineageOf(agent: Agent): SubagentLineage | undefined {
-    const lineage = this.localLineage.get(agent)
-    return lineage !== undefined && this.ctx.agents.get(agent.id) === agent
-      && this.ctx.agents.get(lineage.root.id) === lineage.root ? lineage : undefined
-  }
-
   /** Capture creation ancestry separately from the root that owns the new instance. */
   private ancestryForChild(creator: Agent): Pick<MaterializeBase, 'root' | 'ancestors'> {
     const root = this.rootOf(creator)
-    if (creator === root) return { root, ancestors: [root.id] }
-    const activation = this.resident.get(creator.id)
-    if (activation === undefined) throw new SubagentError('creator has no managed subagent instance', 'UNAUTHORIZED')
-    return { root, ancestors: [...activation.ancestors, creator.id] }
+    const ancestors = this.resident.get(creator.id)?.ancestors ?? []
+    return { root, ancestors: [...ancestors, creator.id] }
   }
 
   /**
@@ -749,7 +734,6 @@ export class SubagentManager {
       const { create, childId } = inputs
       let structured: StructuredAttachment | undefined
       const setup = async (childCtx: Context, child: Agent): Promise<void> => {
-        this.localLineage.set(child, { root, ancestors: inputs.ancestors })
         // Only fresh creation appends the descriptor and delegated policy after
         // the inherited marker; a cold resume replays those persisted events.
         if (inputs.composition.agentPreset !== undefined) {

@@ -181,11 +181,22 @@ class PersonalizedPages {
     }
   }
 
-  /** A managed Creator or descendant remains restricted while its root's creation job runs. */
+  /** Recognize the Creator through subagent headers while intermediate Agents remain live. */
   private underCreator(agent: Agent): boolean {
-    const lineage = this.ctx.subagents.lineageOf(agent)
-    return lineage !== undefined && [...this.jobs.values()].some(job => lineage.root === job.parent
-      && (agent.id === job.childId || lineage.ancestors.includes(job.childId)))
+    const agents = this.ctx.agents
+    if (agents.get(agent.id) !== agent) return false
+    const creators = new Set([...this.jobs.values()]
+      .filter(job => agents.get(job.parent.id) === job.parent)
+      .map(job => job.childId))
+    let current: Agent | undefined = agent
+    const seen = new Set<SessionId>()
+    while (current?.session.header.origin === 'subagent' && !seen.has(current.id)) {
+      seen.add(current.id)
+      const parentId: SessionId | undefined = current.session.header.parentSession
+      if (creators.has(current.id) || parentId !== undefined && creators.has(parentId)) return true
+      current = parentId === undefined ? undefined : agents.get(parentId)
+    }
+    return false
   }
 
   private currentRoot(sessionId: SessionId): Agent | undefined {

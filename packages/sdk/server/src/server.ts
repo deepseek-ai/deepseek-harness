@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
 
 import type {} from '@deepseek-ai/dsh-schedule'
-import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
+import { SubagentError, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
   ApprovalRequestParams,
@@ -315,7 +315,16 @@ export class HarnessSdkJsonRpcServer {
   private ownsAgent(agent: Agent): boolean {
     const agents = this.ctx.agents
     if (agents.get(agent.id) !== agent) return false
-    const root = this.ctx.get('subagents')?.lineageOf(agent)?.root ?? agent
+    if (this.sessions.get(agent.session.id)?.handle.agent === agent) return true
+    const subagents = this.ctx.get('subagents')
+    if (subagents === undefined) return false
+    let root: Agent
+    try {
+      root = subagents.rootOf(agent)
+    } catch (error: unknown) {
+      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') return false
+      throw error
+    }
     return this.sessions.get(root.session.id)?.handle.agent === root
   }
 

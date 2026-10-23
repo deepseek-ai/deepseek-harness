@@ -67,7 +67,7 @@ Host 入口是注入 `actionCards` 的普通函数插件；它不提供自己的
 
 卡片工具承载类型化提案，定义点击后执行的语义；各种类提供自己的字段和 Skill 入口。`personalized-pages` 负责适用条件、查重、最小范围、选位和内容准备。它允许补齐实现已确认行为所需的细节，例如输入校验和空状态；新增独立操作、数据源、自动任务或访问范围，需要用户请求或已确认上下文的依据。
 
-Host 预留新包名，通过 `subagents` 启动已有的 `cordis` 预设，传入完整需求和选定位置。子 Agent 在父会话原工作区的 `.dsh-created-plugins/<id>` 下生成文件，保留委派时的文件权限。创建任务运行期间，受管理的 Creator 及由 `subagents.lineageOf()` 识别的后代只能通过 `plugin_manager` 列出插件、Bundle 和版本豁免，即使中间创建者已退出；安装由 Host 执行。Host 校验包身份和仅允许新增的普通 YAML 或 JSON 补丁，将结果复制到配置档案的 `created-plugins` 目录并再次校验，再调用 `pluginManager.installBundle`；安装后的插件不依赖原工作区。补丁只能添加该新包自身且名称唯一的非分组条目；不接受自定义 YAML 标签、别名或 include。每个条目必须能解析到已构建的 JavaScript 文件；声明了 `dsh.client` 的包还必须导出已构建的 `./client` JavaScript 入口。相对符号链接必须留在包内，复制时保留原目标。共享的 Session 投影保存建议和操作记录。恢复失败时仍可打开会话，卡片显示结果不明；重试必须先检查配置档案。后台完成结果写入重新打开的当前 Session 实例。并发点击共用一次操作；投影每轮只接纳一个提案。
+Host 预留新包名，通过 `subagents` 启动已有的 `cordis` 预设，传入完整需求和选定位置。子 Agent 在父会话原工作区的 `.dsh-created-plugins/<id>` 下生成文件，保留委派时的文件权限。创建任务在原根 Agent 仍在线时运行，其 Creator 及通过在线中间 Agent 相连的 subagent 后代只能通过 `plugin_manager` 列出插件、Bundle 和版本豁免；安装由 Host 执行。Host 校验包身份和仅允许新增的普通 YAML 或 JSON 补丁，将结果复制到配置档案的 `created-plugins` 目录并再次校验，再调用 `pluginManager.installBundle`；安装后的插件不依赖原工作区。补丁只能添加该新包自身且名称唯一的非分组条目；不接受自定义 YAML 标签、别名或 include。每个条目必须能解析到已构建的 JavaScript 文件；声明了 `dsh.client` 的包还必须导出已构建的 `./client` JavaScript 入口。相对符号链接必须留在包内，复制时保留原目标。共享的 Session 投影保存建议和操作记录。恢复失败时仍可打开会话，卡片显示结果不明；重试必须先检查配置档案。后台完成结果写入重新打开的当前 Session 实例。并发点击共用一次操作；投影每轮只接纳一个提案。
 
 Creator 收到已接受的完整方案、优先于早先位置描述的用户最终选位，以及本插件随包提供的位置指南。执行请求允许调研实现细节，但不得扩大已接受的行为和数据范围；业务含义不明导致无法忠实实现时，应返回 `ready:false`。位置指南补充 `cordis-plugin-development`，在 API 调研前提供注册、状态和卸载指引。卸载时应移除自己的界面和页签，保留其他内容；这些是模型执行要求，不是静态包校验。
 
@@ -110,6 +110,8 @@ Skill 内容和建议元数据追加到对话；加载 Skill 不改写公共 sys
 ## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>
+
+- Creator 限制沿在线 subagent Agent 的 `parentSession` 查询。Creator 本身可以退出，但其他中间 Agent 退出会中断这项同步查询；查询不会读取已保存的祖先 Session。
 
 - 只支持新增插件；修改已有插件留待后续。恢复只重新安装卡片记录对应的配置档案副本，不提供版本历史。
 - 意图识别依赖模型语义。指引不强制工具选择或事实依据：Agent 仍可能多余地查看文件，或推断目录没有说明的能力。生成代码使用现有 Creator 权限执行，包校验不构成代码沙箱。

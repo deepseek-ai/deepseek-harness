@@ -72,7 +72,7 @@ Events provide extension points in three domains.
 - **Agent events** (`agent/*`) carry a live `Agent`: inbox, step, status, request, validation, continuation. Use one to observe or intercept work in flight.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
-Subagent setup binds runtime tree membership.
+Subagent Activations own runtime tree membership.
 
 AgentLoop rolls back failed initialization and awaits serial `agent/created` before queued work; unload retains resources through teardown ([ordering](../packages/core/agent-loop/README.md#understand-the-implementation)).
 
