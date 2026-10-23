@@ -845,7 +845,6 @@ describe('late replies', () => {
     const agent = liveAgent('late-no-projections')
     ctx.provide('agents', {
       get: (id: SessionId) => id === agent.id ? agent : undefined,
-      roots: () => [agent],
     } as never)
     await ctx.plugin(UserQuestionService)
     askInLog(agent, timedCallId)

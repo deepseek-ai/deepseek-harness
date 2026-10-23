@@ -85,6 +85,20 @@ describe('interface creation', () => {
     expect(f.manager.removeBundle).toHaveBeenCalledOnce()
   })
 
+  it('leaves existing subagent receipts unchanged when the recommendation plugin loads', async () => {
+    const f = await fixture()
+    await f.fiber.dispose()
+    const child = await f.ctx.agents.create({ sessionId: SessionId('existing-creator-child'),
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    await f.propose('call-creation-1', proposal, child.agent)
+    const receipt = { callId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
+    recordCard(child.agent.session, receipt)
+    f.bundles.push(installedBundle(receipt.bundleName))
+    await f.ctx.plugin(CreationRecommendations)
+    expect(f.cardOf(callId, child.agent)).toEqual(receipt)
+    expect(f.manager.listBundles).not.toHaveBeenCalled()
+  })
+
   it('passes the user-selected left entry to Creator with only its location reference', async () => {
     const f = await fixture()
     await f.propose()
@@ -512,7 +526,7 @@ describe('interface creation', () => {
     }
   })
 
-  it('retains a late installed plugin after the parent disappears during installation', async () => {
+  it.each(['closed', 'replaced by a subagent'] as const)('retains a late installed plugin when the parent is %s during installation', async (state) => {
     const f = await fixture()
     await f.propose()
     const installing = Promise.withResolvers<undefined>()
@@ -525,11 +539,15 @@ describe('interface creation', () => {
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.agentHandle.dispose()
+    const replacement = state === 'closed' ? undefined : await f.ctx.agents.create({
+      sessionId: f.agent.id, meta: { origin: 'subagent' },
+    })
     f.bundles.push(installedBundle(name))
     gate.resolve({ application: 'applied', changed: true, stage: 'install', target: name })
     await vi.waitFor(() => { expect(f.manager.listBundles).toHaveBeenCalledTimes(2) })
     await f.fiber.dispose()
     expect(f.current()?.phase).toBe('installing')
+    if (replacement !== undefined) expect(f.cardOf(callId, replacement.agent)).toBeUndefined()
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
     expect(f.bundles.map(bundle => bundle.name)).toContain(name)
   })

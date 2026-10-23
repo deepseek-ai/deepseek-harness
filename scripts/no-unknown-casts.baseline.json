@@ -1920,11 +1920,6 @@
     "da6ccb5610150a9169b5c3949017d7f5e0d60eadd999615e231db00470aa00e7": 1,
     "f772961d38eac5032c547a0485c4b941da2faa044c428f788934798230fc389a": 1
   },
-  "packages/test-support/loader-smoke/tests/agent-turn.spec.ts": {
-    "432811d8f7105d0bf1934d2b52456aeb8f202b334486810dc1b6c3d87349b5b1": 1,
-    "efbd107cd9aad870467dc06957b0d0298798245cf063c9f8e2a8b46c10cb3189": 1,
-    "effb170ab353dc903b037ff2e208a85ba87ff1da08f40306f2e292f78609c6c9": 1
-  },
   "packages/test-support/session-snapshot/src/harness.ts": {
     "04bc8a44533574365dfedf563e2356458bcf95f990a00906938c977c1d683356": 1
   },
