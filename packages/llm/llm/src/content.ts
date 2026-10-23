@@ -425,7 +425,8 @@ function rebaseAdditionOnlyHistory(
 /**
  * Construct provider declarations from session-folded history without changing logged active tools.
  * Unsupported routes and incomplete history use current declarations without developer updates.
- * Explicitly deferred baseline tools become available only after their first retained addition.
+ * Explicitly deferred declarations require an addition to activate them.
+ * A rebuild makes previously activated declarations immediate; unactivated declarations stay deferred.
  * Addition-only routes rebuild their baseline whenever a tool is removed;
  * later additions remain deferred and superseded tool blocks are omitted without dropping other content.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.

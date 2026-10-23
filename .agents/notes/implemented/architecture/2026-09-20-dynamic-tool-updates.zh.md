@@ -16,7 +16,7 @@ Status: implemented
 
 循环和压缩请求通过 `GenerateOptions.toolHistory` 携带此快照。适配器分发时，`projectToolUpdates` 使用已准备路由的 `toolUpdate`。不支持的路由接收有效定义，不携带 `deferLoading` 或 developer 消息。支持的路由延迟历史添加；`in-history` 保留已移除定义和移除块，`addition-only` 则省略两者。在 addition-only 路由移除任何工具时，使用该次更新后的状态重建路由基线：即使被移除工具是后来激活的，请求声明也已发生变化，保留已被取代的激活块无法保留完整对话前缀。此前已激活工具变为立即加载；没有激活记录的显式延迟声明仍保持延迟。后续添加在记录的激活位置前保持延迟加载。已被取代的工具块会被省略，但不会丢弃这些消息中的其他内容。Session 归约和持久事件仍不依赖模型能力。缺少历史或请求前缀遗漏已记录更新时，使用当前声明且不发送 developer 更新。
 
-DeepSeek 把投影后的更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块以及 `defer_loading` 声明，在存在更新块时发送工具变更 beta 请求头。默认 `deepseek-flash` 条目声明 `addition-only`；pi-ai 不声明模式。Chat 和 Trajectory 将 developer 消息显示为上下文节点，工具变更使用本地化通知：单项变更显示工具名，多项变更显示数量及可展开的名称列表。
+DeepSeek 把投影后的更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块以及 `defer_loading` 声明，在存在更新块时发送工具变更 beta 请求头。默认 `deepseek-flash` 条目声明 `addition-only`；pi-ai 为兼容的 Anthropic 路由选择 `in-history`，为兼容的 Chat Completions 和 Responses 路由选择 `addition-only`。Chat 和 Trajectory 将 developer 消息显示为上下文节点，工具变更使用本地化通知：单项变更显示工具名，多项变更显示数量及可展开的名称列表。
 
 ## Alternatives considered
 
