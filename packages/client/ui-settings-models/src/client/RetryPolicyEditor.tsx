@@ -1,0 +1,254 @@
+/**
+ * The provider retry-policy fields of an editor card. Both adapter families
+ * embed the same `retryPolicy` schema in a provider profile, so the card reads
+ * its modes, defaults, and bounds from that schema instead of copying them.
+ * An absent `retryPolicy` keeps the inherited policy; choosing a mode writes a
+ * user-layer policy whose empty fields keep the inherited values.
+ */
+
+import { useState } from 'react'
+import type { ReactNode } from 'react'
+import type { SettingsSchemaOperations } from './schema-operations.ts'
+import type { ModelsKey } from './locales.ts'
+import styles from './ModelsSection.module.css'
+
+/** One schema node of the provider's settings form. */
+type SchemaNode = NonNullable<ReturnType<SettingsSchemaOperations['nodeAtPath']>>
+
+const CODES = ['retryableCodes'] as const
+const MAX_RETRIES = ['maxRetries'] as const
+const INITIAL_DELAY = ['backoff', 'initialDelayMs'] as const
+const MAX_DELAY = ['backoff', 'maxDelayMs'] as const
+const JITTER = ['backoff', 'jitterRatio'] as const
+
+type FieldPath = typeof CODES | typeof MAX_RETRIES | typeof INITIAL_DELAY | typeof MAX_DELAY | typeof JITTER
+
+/** Numeric fields after the codes, as `[policy path, label]`; `maxRetries` applies only to normal mode. */
+const NUMBER_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
+  [MAX_RETRIES, 'retryMaxRetries'],
+  [INITIAL_DELAY, 'retryInitialDelay'],
+  [MAX_DELAY, 'retryMaxDelay'],
+  [JITTER, 'retryJitter'],
+]
+
+/** Plain decimal text; prefixed forms such as `0x10` stay invalid text. */
+const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/iu
+
+/** The inherited policy beneath the user layer, plus the schema bounds of its fields. */
+export interface RetryPolicyDefaults {
+  /** Mode in effect when the user layer names none. */
+  mode: 'normal' | 'always'
+  /** Read the inherited value of one policy field: the composition layer, then the schema default. */
+  value: (path: readonly string[]) => unknown
+  /** Read the schema maximum of one numeric policy field. */
+  max: (path: readonly string[]) => number | undefined
+}
+
+/**
+ * Resolve the inherited policy beneath the user layer.
+ * @param schema - settings schema operations.
+ * @param node - the `retryPolicy` schema union.
+ * @param inherited - the policy the composition layer sets, if any.
+ * @returns the inherited mode, field values, and field bounds.
+ */
+export function retryPolicyDefaults(
+  schema: SettingsSchemaOperations,
+  node: SchemaNode,
+  inherited: unknown,
+): RetryPolicyDefaults {
+  const normal = node.list?.find(branch => branch.dict?.['mode']?.value === 'normal')
+  const field = (path: readonly string[]) => normal === undefined ? undefined : schema.nodeAtPath(normal, path)
+  return {
+    mode: schema.getPath(inherited, ['mode']) === 'always' ? 'always' : 'normal',
+    value: (path) => {
+      const value = schema.getPath(inherited, path)
+      if (value !== undefined) return value
+      const fallback: unknown = field(path)?.meta.default
+      return fallback
+    },
+    max: (path) => {
+      const max: unknown = field(path)?.meta.max
+      return typeof max === 'number' ? max : undefined
+    },
+  }
+}
+
+/** A refused drafted policy: the message and, when one field causes it, that field. */
+export interface RetryPolicyFailure {
+  message: string
+  path?: readonly string[]
+}
+
+/**
+ * The first refused field of a drafted policy, checked as `resolveRetryPolicy`
+ * checks the merged policy: fields the draft leaves empty, including `mode`, inherit.
+ * @param schema - settings schema operations.
+ * @param node - the `retryPolicy` schema union, which bounds every field.
+ * @param policy - the drafted user-layer policy; undefined inherits.
+ * @param defaults - the inherited policy beneath the draft.
+ * @param t - section copy.
+ * @returns the failure, or undefined when the policy is valid.
+ */
+export function retryPolicyFailure(
+  schema: SettingsSchemaOperations,
+  node: SchemaNode,
+  policy: unknown,
+  defaults: RetryPolicyDefaults,
+  t: (key: ModelsKey) => string,
+): RetryPolicyFailure | undefined {
+  if (policy === undefined) return undefined
+  const fail = (key: ModelsKey, path: readonly string[]): RetryPolicyFailure => ({ message: t(key), path })
+  const number = (path: readonly string[]): number => {
+    const value = schema.getPath(policy, path) ?? defaults.value(path)
+    return typeof value === 'number' ? value : NaN
+  }
+  const mode = schema.getPath(policy, ['mode']) ?? defaults.mode
+  if (mode === 'normal') {
+    const retries = number(MAX_RETRIES)
+    if (!Number.isSafeInteger(retries) || retries < 0) return fail('retryMaxRetriesInvalid', MAX_RETRIES)
+    const codes = schema.getPath(policy, CODES)
+    if (Array.isArray(codes) && new Set(codes).size !== codes.length) return fail('retryCodesDuplicate', CODES)
+  }
+  for (const path of [INITIAL_DELAY, MAX_DELAY]) {
+    const delay = number(path)
+    const max = defaults.max(path) ?? Infinity
+    if (!(delay > 0 && delay <= max)) return { message: t('retryDelayInvalid').replace('{max}', () => String(max)), path }
+  }
+  if (number(INITIAL_DELAY) > number(MAX_DELAY)) return fail('retryDelayOrder', INITIAL_DELAY)
+  const jitter = number(JITTER)
+  if (!(jitter >= 0 && jitter <= 1)) return fail('retryJitterInvalid', JITTER)
+  const message = schema.validate(node, { ...policy as Record<string, unknown>, mode })
+  return message === undefined ? undefined : { message }
+}
+
+/** Props of {@link RetryPolicyEditor}. */
+export interface RetryPolicyEditorProps {
+  /** Drafted user-layer policy; undefined inherits. */
+  policy: unknown
+  /** Inherited policy beneath the draft. */
+  defaults: RetryPolicyDefaults
+  /** Failure from {@link retryPolicyFailure}. */
+  failure: RetryPolicyFailure | undefined
+  /** Id of the element showing the failure message. */
+  failureId: string
+  /** Show the failure message below the fields; otherwise the owner shows it. */
+  showFailure: boolean
+  /** Section copy. */
+  t: (key: ModelsKey) => string
+  /** Disable edits. */
+  disabled: boolean
+  /** Replace the drafted policy; undefined removes the user-layer policy. */
+  onChange: (next: Record<string, unknown> | undefined) => void
+}
+
+function textOf(value: unknown): string {
+  if (Array.isArray(value)) return value.join(', ')
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : ''
+}
+
+/** Set or remove one nested field of a plain policy object, dropping emptied parents. */
+function withField(policy: Record<string, unknown>, path: readonly string[], value: unknown): Record<string, unknown> {
+  const [key, ...rest] = path as [string, ...string[]]
+  const next = { ...policy }
+  const child = rest.length === 0
+    ? value
+    : withField(typeof next[key] === 'object' && next[key] !== null ? next[key] as Record<string, unknown> : {}, rest, value)
+  if (child === undefined || (typeof child === 'object' && child !== null && Object.keys(child).length === 0)) {
+    Reflect.deleteProperty(next, key)
+  } else {
+    next[key] = child
+  }
+  return next
+}
+
+/**
+ * Render the retry mode and its policy fields.
+ * @param props - drafted policy, inherited values, and the draft writer.
+ * @returns the retry-policy field group.
+ */
+export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
+  const { t, disabled, defaults, failure } = props
+  const policy = typeof props.policy === 'object' && props.policy !== null
+    ? props.policy as Record<string, unknown>
+    : undefined
+  const current = policy ?? {}
+  const mode = current['mode']
+  // A stored policy without a mode inherits the mode beneath it.
+  const shownMode = mode ?? (policy === undefined ? undefined : defaults.mode)
+  // Raw text keeps partial input such as `0.` visible while it is typed.
+  const [texts, setTexts] = useState<Record<string, string>>({})
+  const textAt = (path: FieldPath): string => texts[path.join('.')] ?? textOf(path.reduce<unknown>(
+    (value, key) => typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined, current,
+  ))
+  const edit = (path: FieldPath, text: string): void => {
+    const trimmed = text.trim()
+    setTexts(previous => ({ ...previous, [path.join('.')]: trimmed.length === 0 ? '' : text }))
+    const value = path === CODES
+      ? trimmed.split(',').map(code => code.trim()).filter(code => code.length > 0)
+      : DECIMAL.test(trimmed) ? Number(trimmed) : trimmed
+    const empty = Array.isArray(value) ? value.length === 0 : value === ''
+    props.onChange(withField(current, path, empty ? undefined : value))
+  }
+  const field = (path: FieldPath, label: ModelsKey): ReactNode => {
+    const invalid = failure?.path?.join('.') === path.join('.')
+    return (
+      <label key={path.join('.')} className={path === CODES ? `${styles['modelField']} ${styles['retryWide']}` : styles['modelField']}>
+        <span className={styles['modelFieldLabel']}>{t(label)}</span>
+        <input
+          className={styles['input']}
+          type="text"
+          inputMode={path === CODES ? 'text' : path === MAX_RETRIES ? 'numeric' : 'decimal'}
+          value={textAt(path)}
+          placeholder={textOf(defaults.value(path))}
+          aria-invalid={invalid}
+          aria-describedby={invalid ? props.failureId : undefined}
+          disabled={disabled}
+          onChange={(event) => { edit(path, event.target.value) }}
+        />
+      </label>
+    )
+  }
+  const modeLabel = (value: 'normal' | 'always'): string => t(value === 'normal' ? 'retryModeNormal' : 'retryModeAlways')
+  return (
+    <div className={styles['field']} role="group" aria-label={t('retryPolicy')}>
+      <span className={styles['fieldLabel']}>{t('retryPolicy')}</span>
+      <select
+        className={`${styles['input']} ${styles['selectInput']}`}
+        value={typeof mode === 'string' ? mode : ''}
+        aria-label={t('retryMode')}
+        aria-describedby={failure !== undefined && failure.path === undefined ? props.failureId : undefined}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = event.target.value
+          setTexts({})
+          if (next === '') {
+            props.onChange(undefined)
+            return
+          }
+          // Fields of the other mode stay, as the adapter accepts them; a hidden
+          // retry count that is not a number could no longer be corrected.
+          const kept = next === 'always' && typeof current['maxRetries'] !== 'number'
+            ? withField(current, MAX_RETRIES, undefined)
+            : current
+          props.onChange({ ...kept, mode: next })
+        }}
+      >
+        <option value="">{t('retryModeDefault').replace('{mode}', () => modeLabel(defaults.mode))}</option>
+        <option value="normal">{modeLabel('normal')}</option>
+        <option value="always">{modeLabel('always')}</option>
+      </select>
+      {shownMode === 'always' ? <span className={styles['advancedHint']}>{t('retryAlwaysHint')}</span> : null}
+      {shownMode === 'normal' || shownMode === 'always'
+        ? (
+          <div className={styles['retryFields']}>
+            {shownMode === 'normal' ? field(CODES, 'retryCodes') : null}
+            {NUMBER_FIELDS.filter(([path]) => shownMode === 'normal' || path !== MAX_RETRIES).map(([path, label]) => field(path, label))}
+          </div>
+        )
+        : null}
+      {failure === undefined || !props.showFailure
+        ? null
+        : <p id={props.failureId} className={styles['error']}>{failure.message}</p>}
+    </div>
+  )
+}

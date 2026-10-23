@@ -6,9 +6,9 @@
  * has none. The pi-ai profile records that derivation as `apiKeyEnv` only when
  * a key is entered; a blank key materializes a reference-free profile for
  * provider-native authentication);
- * the collapsed 自定义设置 area carries the per-family extras (`baseURL` for
- * both families, DeepSeek's id/name/context-window model catalog, and the
- * display name and wire protocol of a pi-ai route the adapter does not ship —
+ * the collapsed 自定义设置 area carries the per-family extras (`baseURL` and
+ * `retryPolicy` for both families, DeepSeek's id/name/context-window model
+ * catalog, and the display name and wire protocol of a pi-ai route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
  * same reason).
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
@@ -41,6 +41,7 @@ import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
 import { ApiKeyInput } from './ApiKeyInput.tsx'
+import { RetryPolicyEditor, retryPolicyDefaults, retryPolicyFailure } from './RetryPolicyEditor.tsx'
 import styles from './ModelsSection.module.css'
 
 /** Per-adapter-family curated field sets (unknown namespaces get the hint alone). */
@@ -185,6 +186,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { onBusyChange } = props
   useEffect(() => { onBusyChange?.(busy || listBusy) }, [busy, listBusy, onBusyChange])
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [customizedOpen, setCustomizedOpen] = useState(false)
   // A settings success advances both retry baselines immediately. Keeping the
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
@@ -235,6 +237,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
     validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
   const modelFailure = validateModels(schema.getPath(draft, ['models']))
+  const retryNode = useMemo(() => schema.nodeAtPath(root, [...settingsPath, 'retryPolicy']), [root, schema, settingsPath])
+  const retryDefaults = retryNode === undefined
+    ? undefined
+    : retryPolicyDefaults(schema, retryNode, schema.getPath(namespace.base, [...settingsPath, 'retryPolicy']))
+  const retryFailure = retryNode === undefined || retryDefaults === undefined || props.credentialOnly === true
+    ? undefined
+    : retryPolicyFailure(schema, retryNode, schema.getPath(draft, ['retryPolicy']), retryDefaults, t)
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -437,7 +446,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
           </div>}
-        {props.credentialOnly === true ? null : <details className={styles['customized']}>
+        {props.credentialOnly === true ? null : <details
+          className={styles['customized']}
+          onToggle={(event) => { setCustomizedOpen(event.currentTarget.open) }}
+        >
           <summary className={styles['customizedSummary']}>{t('customized')}</summary>
           <div className={styles['customizedBody']}>
             {/* The name and the protocol are the create card's two remaining
@@ -511,6 +523,24 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 </div>
               )
               : null}
+            {retryDefaults === undefined
+              ? null
+              : (
+                <RetryPolicyEditor
+                  policy={schema.getPath(draft, ['retryPolicy'])}
+                  defaults={retryDefaults}
+                  failure={retryFailure}
+                  failureId={`${props.provider}-retry-failure`}
+                  showFailure={customizedOpen}
+                  t={t}
+                  disabled={disabled}
+                  onChange={(next) => {
+                    setDraft(current => next === undefined
+                      ? schema.deletePath(current, ['retryPolicy'])
+                      : schema.setPath(current, ['retryPolicy'], next))
+                  }}
+                />
+              )}
             {/* Both families edit the same rows through the same contract; only
                 the extras differ — DeepSeek's inherited capacities, pi-ai's
                 endpoint interrogation. */}
@@ -565,11 +595,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             {`${t('model')} ${String(modelFailure.index + 1)}: ${t(modelFailure.key)}`}
           </p>
         )}
+      {/* A closed fold hides the fields, so a refused stored policy still explains a disabled Apply. */}
+      {retryFailure === undefined || customizedOpen
+        ? null
+        : <p id={`${props.provider}-retry-failure`} className={styles['error']}>{retryFailure.message}</p>}
       <EditorFooter
         t={t}
         busy={busy}
         submitDisabled={disabled || layout === 'unknown'
           || (props.credentialOnly !== true && modelFailure !== undefined)
+          || retryFailure !== undefined
           || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}
         submitLabelKey={props.submitLabelKey ?? 'apply'}

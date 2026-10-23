@@ -623,6 +623,17 @@
   padding: 8px 4px 2px;
 }
 
+/* Retry-policy fields: the full-width codes, then the numeric fields in as many columns as fit. */
+.retryFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.retryWide {
+  grid-column: 1 / -1;
+}
+
 .modelField {
   display: flex;
   flex-direction: column;
