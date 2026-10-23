@@ -1,15 +1,16 @@
 {
-  "initial": [
-    {
-      "name": "snapshot_initial",
-      "description": "Make snapshot_ping available.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      }
-    }
-  ],
+  "initial": [],
   "changes": [
+    [
+      {
+        "name": "snapshot_initial",
+        "description": "Make snapshot_ping available.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ],
     [
       {
         "name": "snapshot_ping",

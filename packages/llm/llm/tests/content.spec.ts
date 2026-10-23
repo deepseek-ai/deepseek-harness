@@ -445,10 +445,46 @@ describe('projectToolUpdates', () => {
 
     const projected = projectToolUpdates([prompt, added, duplicate, removed, restored], [deferred], mode, history)
 
-    expect(projected.tools).toEqual([deferred])
+    expect(projected.tools).toEqual(mode === 'in-history' ? [deferred] : [search])
     expect(projected.messages).toEqual(mode === 'in-history'
       ? [prompt, added, removed, restored]
-      : [prompt, restored])
+      : [prompt])
+  })
+
+  it.each([false, true])('rebuilds when adding the first tools to an empty set (removed=%s)', (removed) => {
+    const removal = developer([{ type: 'tool-removal', toolName: 'search' }])
+    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }, { type: 'text', text: 'Keep this guidance.' }])
+    const later = developer([{ type: 'tool-addition', toolName: 'search' }])
+    const history: ToolHistory = {
+      tools: removed ? [search] : [],
+      updates: [
+        ...removed ? [{ messageId: removal.id, additions: [] }] : [],
+        { messageId: added.id, additions: [fetch] },
+        { messageId: later.id, additions: [search] },
+      ],
+    }
+    const messages = [prompt, ...removed ? [removal] : [], added, prompt, later]
+    const saved = JSON.stringify({ messages, history })
+    const projected = projectToolUpdates(messages, [fetch, search], 'addition-only', history)
+    expect(projected.tools).toEqual([fetch, { ...search, deferLoading: true }])
+    expect(roles(projected.messages)).toEqual([
+      [{ type: 'text', text: 'Keep this guidance.' }],
+      [{ type: 'tool-addition', toolName: 'search' }],
+    ])
+    expect(JSON.stringify({ messages, history })).toBe(saved)
+    const inHistory = projectToolUpdates(messages, [fetch, search], 'in-history', history)
+    expect(roles(inHistory.messages)).toContainEqual(added.content)
+  })
+
+  it('keeps additions deferred when an unactivated deferred declaration already exists', () => {
+    const deferred = { ...search, deferLoading: true as const }
+    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }])
+    const messages = [prompt, added]
+    const projected = projectToolUpdates(messages, [deferred, fetch], 'addition-only', {
+      tools: [deferred], updates: [{ messageId: added.id, additions: [fetch] }],
+    })
+    expect(projected.tools).toEqual([deferred, { ...fetch, deferLoading: true }])
+    expect(projected.messages).toBe(messages)
   })
 
   it('uses current declarations without updates when history is missing or the prefix omits an update', () => {

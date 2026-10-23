@@ -393,7 +393,7 @@ function toolDeclarations(history: ToolHistory): Map<string, ToolSchema> {
   return declarations
 }
 
-/** Rebuild declarations after removals that addition-only routes cannot represent in history. */
+/** Rebuild declarations on removals or additions to an empty set, where the request prefix changes. */
 function rebaseAdditionOnlyHistory(
   history: ToolHistory,
   messages: ReadonlyMap<MessageId, readonly ContentBlock[]>,
@@ -403,7 +403,7 @@ function rebaseAdditionOnlyHistory(
   let retainedFrom = 0
   for (const [index, update] of history.updates.entries()) {
     const additions = new Map(update.additions.map(tool => [tool.name, tool]))
-    let reset = false
+    let reset = available.size === 0 && additions.size > 0
     // Completeness was checked before projection; Session resolves every addition's definition.
     for (const block of messages.get(update.messageId) as readonly ContentBlock[]) {
       if (block.type === 'tool-addition') {
@@ -427,8 +427,9 @@ function rebaseAdditionOnlyHistory(
  * Unsupported routes and incomplete history use current declarations without developer updates.
  * Explicitly deferred declarations require an addition to activate them.
  * A rebuild makes previously activated declarations immediate; unactivated declarations stay deferred.
- * Addition-only routes rebuild their baseline whenever a tool is removed;
- * later additions remain deferred and superseded tool blocks are omitted without dropping other content.
+ * Addition-only routes rebuild when a tool is removed or tools are added to an empty set;
+ * deferred declarations count as existing tools.
+ * Later additions remain deferred and superseded tool blocks are omitted without dropping other content.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.
  * @param tools - currently active tool schemas.
  * @param toolUpdate - the resolved route's update mode.

@@ -14,7 +14,7 @@ Status: implemented
 
 `Session.toolHistory()` 缓存对已提交请求头和 developer 消息的归约，不依赖模型能力。首次访问恢复继承事件；后续读取仅处理新增事件。不可变快照携带初始声明和有序更新标识，添加定义通过历史请求头解析。显式新序列和保留定义变化会重建声明。以未变化的定义恢复保留名称时序列继续：投影保持声明不变，由记录的添加在先前移除之后重新提供该工具，因此移除不会禁用已声明的工具，加载模式也不会改写先前声明。
 
-循环和压缩请求通过 `GenerateOptions.toolHistory` 携带此快照。适配器分发时，`projectToolUpdates` 使用已准备路由的 `toolUpdate`。不支持的路由接收有效定义，不携带 `deferLoading` 或 developer 消息。支持的路由延迟历史添加；`in-history` 保留已移除定义和移除块，`addition-only` 则省略两者。在 addition-only 路由移除任何工具时，使用该次更新后的状态重建路由基线：即使被移除工具是后来激活的，请求声明也已发生变化，保留已被取代的激活块无法保留完整对话前缀。此前已激活工具变为立即加载；没有激活记录的显式延迟声明仍保持延迟。后续添加在记录的激活位置前保持延迟加载。已被取代的工具块会被省略，但不会丢弃这些消息中的其他内容。Session 归约和持久事件仍不依赖模型能力。缺少历史或请求前缀遗漏已记录更新时，使用当前声明且不发送 developer 更新。
+循环和压缩请求通过 `GenerateOptions.toolHistory` 携带此快照。适配器分发时，`projectToolUpdates` 使用已准备路由的 `toolUpdate`。不支持的路由接收有效定义，不携带 `deferLoading` 或 developer 消息。支持的路由延迟历史添加；`in-history` 保留已移除定义和移除块，`addition-only` 则省略两者。在 addition-only 路由移除任何工具时，使用该次更新后的状态重建路由基线：即使被移除工具是后来激活的，请求声明也已发生变化，保留已被取代的激活块无法保留完整对话前缀。不存在任何声明时添加工具，也会重建基线。延迟声明也计入已有工具。否则首批工具会使 DeepSeek 需要非延迟占位工具，同样改变前缀；直接声明这些工具可避免不必要的激活消息和占位工具。此前已激活工具变为立即加载；没有激活记录的显式延迟声明仍保持延迟。后续添加在记录的激活位置前保持延迟加载。已被取代的工具块会被省略，但不会丢弃这些消息中的其他内容。Session 归约和持久事件仍不依赖模型能力。缺少历史或请求前缀遗漏已记录更新时，使用当前声明且不发送 developer 更新。
 
 DeepSeek 把投影后的更新转换为 system 角色的 `tool_addition` 和 `tool_removal` 块以及 `defer_loading` 声明，在存在更新块时发送工具变更 beta 请求头。默认 `deepseek-flash` 条目声明 `addition-only`；pi-ai 为兼容的 Anthropic 路由选择 `in-history`，为兼容的 Chat Completions 和 Responses 路由选择 `addition-only`。Chat 和 Trajectory 将 developer 消息显示为上下文节点，工具变更使用本地化通知：单项变更显示工具名，多项变更显示数量及可展开的名称列表。
 
@@ -36,6 +36,6 @@ DeepSeek 把投影后的更新转换为 system 角色的 `tool_addition` 和 `to
 
 手写的[无界面提示词／工具场景](../../../../snapshots/session/dynamic-tool-prompt-updates/snapshot.yml)钉住追加提示词与延迟工具添加同时发生的行为，并验证首次请求的消息保持不变。它复用稳定提示词场景的工具生命周期和 schema 期望值。
 
-[DeepSeek 替换场景](../../../../snapshots/session/deepseek-deferred-tools/snapshot.yml)通过 Messages 序列化验证重建后的基线、后续延迟添加，以及移除该后来激活的工具。适配器内的占位工具覆盖仍然存在的非空全延迟请求，包括显式延迟声明和直接调用，不会激活真实工具。这些检查验证请求构造，不代表已经测量重建带来的缓存收益。
+[DeepSeek 替换场景](../../../../snapshots/session/deepseek-deferred-tools/snapshot.yml)通过 Messages 序列化验证向空工具集首次添加工具、重建后的基线、后续延迟添加，以及移除该后来激活的工具。适配器内的占位工具覆盖仍然存在的非空全延迟请求，包括显式延迟声明和直接调用，不会激活真实工具。这些检查验证请求构造，不代表已经测量重建带来的缓存收益。
 
 [真实 DeepSeek SDK 测试](../../../../apps/cli/tests/profiles/sdk/dynamic-tool-cache.e2e.ts) 分别在指令不变和指令同时更新时测量原生工具新增后的首次请求。独有的用户历史确保仅命中共享系统提示词缓存无法满足前序输入断言。移除场景检查工具可用性，不要求保留缓存；每个用例均禁用重试。
