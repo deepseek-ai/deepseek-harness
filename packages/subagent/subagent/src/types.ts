@@ -25,6 +25,14 @@ export function SubagentRunId(id: string): SubagentRunId {
   return id as SubagentRunId
 }
 
+/** Runtime root and verified creation ancestors of one managed local Agent. */
+export interface SubagentLineage {
+  /** Exact live root owning this instance, independent of creator residency. */
+  readonly root: Agent
+  /** Session ids from the tree root through the direct creator. */
+  readonly ancestors: readonly SessionId[]
+}
+
 /** One managed child execution and its result delivery policy. */
 export interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 'signal'> {
   /** Registered backend to use. */

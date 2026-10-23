@@ -27,6 +27,16 @@ interface SubagentCapabilities {
 ```
 
 ```ts type-equiv
+/** Runtime root and verified creation ancestors of one managed local Agent. */
+interface SubagentLineage {
+  /** Exact live root owning this instance, independent of creator residency. */
+  readonly root: Agent
+  /** Session ids from the tree root through the direct creator. */
+  readonly ancestors: readonly SessionId[]
+}
+```
+
+```ts type-equiv
 /** One managed child execution and its result delivery policy. */
 interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 'signal'> {
   /** Registered backend to use. */
@@ -434,6 +444,14 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
  * @returns activation with a message id only for local children.
  */
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
+
+/**
+ * Read a managed local Agent's runtime root and creation ancestors.
+ * @param agent - exact live Agent to inspect.
+ * @returns borrowed readonly lineage, available at `agent/created`; undefined
+ * for ordinary, unmanaged, or disposed Agents and when the root is no longer live.
+ */
+lineageOf(agent: Agent): SubagentLineage | undefined
 
 /**
  * Resolve the root shared by an Agent and its other agents in its subagent tree.

@@ -1303,7 +1303,8 @@ describe('continuable child ownership', () => {
       expect(ends.filter(info => info.id === leaf.childId).map(info => info.parentSessionId)).toEqual([creator.childId, creator.childId])
       expect(hasUserText(loaded.events, 'resident follow-up')).toBe(true)
       expect(hasUserText(loaded.events, 'cold follow-up')).toBe(true)
-      const roots = vi.spyOn(ctx.agents, 'roots').mockReturnValueOnce([])
+      const get = ctx.agents.get.bind(ctx.agents)
+      const roots = vi.spyOn(ctx.agents, 'get').mockImplementation(id => id === parent.id ? undefined : get(id))
       try {
         await expect(humanPrompt(ctx, leaf.childId, 'root offline', delivery))
           .rejects.toMatchObject({ code: 'subagent/delivery-unavailable' })
@@ -1335,8 +1336,8 @@ describe('continuable child ownership', () => {
       await waitNoActivation(ctx, creator.childId)
       const leafAgent = ctx.agents.get(leaf.childId)!
       expect(leafAgent.session.header.parentSession).toBe(creator.childId)
-      expect(ctx.agents.isOwnedBy(leaf.childId, parent)).toBe(true)
-      expect(ctx.agents.isOwnedBy(leaf.childId, child)).toBe(false)
+      expect(ctx.subagents.lineageOf(leafAgent)?.root).toBe(parent)
+      expect(ctx.subagents.lineageOf(leafAgent)?.ancestors).toEqual([parent.id, child.id])
       await expect(ctx.subagents.waitForTreeWork(leafAgent)).resolves.toBe(false)
       await expect(ctx.subagents.sendMessage(leafAgent, parent.id, message('still here'), { signal: testSignal }))
         .resolves.toBeTypeOf('string')
@@ -3598,6 +3599,22 @@ describe('continuable public API', () => {
 })
 
 describe('continuable errors', () => {
+  it('publishes lineage before admitting nested creation from the child', async () => {
+    const { ctx, parent } = await setup([textResponse('child done')])
+    parkParent(ctx, parent)
+    let observed = false
+    ctx.on('agent/created', async ({ agent }) => {
+      if (agent.session.header.origin !== 'subagent') return
+      observed = true
+      expect(ctx.subagents.lineageOf(agent)).toEqual({ root: parent, ancestors: [parent.id] })
+      await expect(ctx.subagents.startActivation({ ...startSpec(agent), delivery: 'caller' }))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED', message: 'creator has no managed subagent instance' })
+    })
+    const child = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await child.result
+    expect(observed).toBe(true)
+  })
+
   it('rejects a duplicate Activation at the agent registry collision boundary', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('working'), gate: hold.promise }])
@@ -3621,7 +3638,7 @@ describe('continuable errors', () => {
   it('rejects delegation from an unregistered instance and input to a closing startup', async () => {
     const { ctx, parent } = await setup(['hang'])
     const unmanaged = await ctx.agents.create({
-      ownerAgent: parent, sessionId: SessionId('unmanaged'),
+      sessionId: SessionId('unmanaged'),
       meta: { parentSession: parent.id, origin: 'subagent' },
       agentOptions: { provider: 'mock', model: 'mock' },
     })

@@ -43,7 +43,7 @@ A kind package injects `actionCards` and calls `ctx.actionCards.register(kind)` 
 - A newer card of any kind replaces every unstarted earlier card. Replacement is derived from the log and never recorded.
 - Events a forked Session inherits create no cards.
 - Before every action, including Not now, the kind's `reconcile` updates the card from state outside the Session. Not now is then recorded for an unstarted card and for the phases the kind lists; dismissed and replaced cards accept no further action. Without its registered kind, Not now still dismisses an unstarted card, and every other action is refused as unavailable.
-- Concurrent actions on one card share one operation. Actions require the card's live root Agent.
+- Concurrent actions on one card share one operation. Actions require the exact live Agent for the card's Session, whose `origin` must not be `subagent`.
 
 -----
 

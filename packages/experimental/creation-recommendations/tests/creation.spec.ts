@@ -9,6 +9,7 @@ import type { ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as CreationRecommendations from '../src/index.ts'
 import { ACTION, fixture, callId, proposal, installedBundle, recordCard, writeBundle } from './fixture.ts'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
 
 /** The Remote result for a recorded page decision. */
 function settled(phase: string, data: object) {
@@ -237,9 +238,9 @@ describe('interface creation', () => {
   it('refuses clicks from non-root or unauthorized connections', async () => {
     const f = await fixture()
     await f.propose()
-    const roots = vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+    const liveAgent = vi.spyOn(f.ctx.agents, 'get').mockReturnValue(undefined)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'not-live-root' })
-    roots.mockRestore()
+    liveAgent.mockRestore()
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'access-denied' })
     expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'access-denied' })
@@ -382,7 +383,10 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create')
     const spec = await f.entered.promise
-    const child = await f.harness.create(spec.childId!)
+    const childHandle = await f.ctx.agents.create({ sessionId: spec.childId!,
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    const child = childHandle.agent
+    bindSubagentLineage(f.ctx, child, f.agent)
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
     const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
@@ -392,10 +396,13 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
-    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), ownerAgent: child,
+    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'),
       meta: { parentSession: child.id, origin: 'subagent' } })
-    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), ownerAgent: helper.agent,
+    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'),
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
+    bindSubagentLineage(f.ctx, helper.agent, f.agent, [f.agent.id, child.id])
+    bindSubagentLineage(f.ctx, nested.agent, f.agent, [f.agent.id, child.id, helper.agent.id])
+    await childHandle.dispose()
     for (const owned of [helper.agent, nested.agent]) {
       expect((await run('install', owned)).isError).toBe(true)
       expect((await run('list_bundles', owned)).isError).toBe(false)

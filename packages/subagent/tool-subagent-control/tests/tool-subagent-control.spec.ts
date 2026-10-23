@@ -23,6 +23,7 @@ import * as tool from '../src/index.ts'
 import { parkParent } from './park-parent.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
+import { bindSubagentLineage } from '../../subagent/tests/manager-internals.ts'
 
 /** One scripted response that may wait on a caller-released gate before streaming. */
 interface GatedEntry {
@@ -199,8 +200,9 @@ describe('dsh-tool-subagent-control', () => {
   it('limits communication context to delegated children with the admitted standard tool', async () => {
     const { ctx, parent } = await setup([])
     const { agent: child } = await ctx.agents.create({
-      sessionId: SessionId('communication-child'), ownerAgent: parent,
+      sessionId: SessionId('communication-child'),
       meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, parent) },
     })
     const { agent: fork } = await ctx.agents.create({
       sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
@@ -397,8 +399,9 @@ describe('dsh-tool-subagent-control', () => {
     const fiber = await ctx.plugin(tool, config)
     const parent = await ctx.agentLoop.create(SessionId('hmr-parent'), { provider: 'mock', model: 'mock' })
     const { agent: child } = await ctx.agents.create({
-      sessionId: SessionId('hmr-child'), ownerAgent: parent,
+      sessionId: SessionId('hmr-child'),
       meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, parent) },
     })
     const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
     expect(await communication()).toContain('Your parent agent id')

@@ -37,6 +37,7 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
+import type { SubagentLineage } from './types.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -122,7 +123,7 @@ export type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.t
 export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
 export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
-export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
+export type { SubagentLineage, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentCatalogEntry, SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -285,6 +286,16 @@ export class SubagentRuntime extends TypertRemoteService {
       this.assertProviderCurrent(provider)
       return start(request)
     })
+  }
+
+  /**
+   * Read a managed local Agent's runtime root and creation ancestors.
+   * @param agent - exact live Agent to inspect.
+   * @returns borrowed readonly lineage, available at `agent/created`; undefined
+   * for ordinary, unmanaged, or disposed Agents and when the root is no longer live.
+   */
+  lineageOf(agent: Agent): SubagentLineage | undefined {
+    return this.manager?.lineageOf(agent)
   }
 
   /**

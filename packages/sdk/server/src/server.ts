@@ -315,15 +315,8 @@ export class HarnessSdkJsonRpcServer {
   private ownsAgent(agent: Agent): boolean {
     const agents = this.ctx.agents
     if (agents.get(agent.id) !== agent) return false
-    const liveAgents = agents.list()
-    const ancestors = new Set([agent])
-    for (const current of ancestors) {
-      if (this.sessions.get(current.session.id)?.handle.agent === current) return true
-      for (const parent of liveAgents) {
-        if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent)
-      }
-    }
-    return false
+    const root = this.ctx.get('subagents')?.lineageOf(agent)?.root ?? agent
+    return this.sessions.get(root.session.id)?.handle.agent === root
   }
 
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {

@@ -13,7 +13,7 @@ import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import ActionCards from '@deepseek-ai/dsh-action-cards'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
-import type { SubagentActivationSpec, SubagentResult } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { type SubagentActivationSpec, type SubagentResult } from '@deepseek-ai/dsh-subagent'
 import * as CreationRecommendations from '../src/index.ts'
 import type { PageData } from '../src/types.ts'
 
@@ -71,12 +71,12 @@ export async function fixture(initial?: PageCardState) {
   const result = Promise.withResolvers<SubagentResult>()
   const entered = Promise.withResolvers<SubagentActivationSpec>()
   const dispose = vi.fn(async () => { result.resolve({ output: [], stopReason: 'aborted' }) })
-  const startActivation = vi.fn(async (spec: SubagentActivationSpec) => {
+  await ctx.plugin(SubagentRuntime)
+  const startActivation = vi.spyOn(ctx.subagents, 'startActivation').mockImplementation(async (spec: SubagentActivationSpec) => {
     entered.resolve(spec)
     return { childId: spec.childId!, result: result.promise, dispose }
   })
   ctx.provide('pluginManager', manager)
-  ctx.provide('subagents', { startActivation })
   const workspace = join(directory, 'workspace')
   await mkdir(workspace)
   ctx.provide('profileContext', { dir: directory, cwd: workspace })

@@ -86,7 +86,7 @@ Skill 内容和提案调用追加到对话记录；公共 system prompt 不变�
 人工运行的真实模型输入集见 `evaluation/intent-cases.json`；单元测试不衡量语义意图准确率。匹配、多需求之间的取舍以及尊重不推荐的要求都属于 skill 指引，通过真实模型测试评估，不是关键词判断。
 
 - 只推荐已随安装提供、可选的官方插件；缺失的包和第三方注册源不在范围内。
-- 推荐需要在线的根会话；不会主动寻找推荐机会。
+- 推荐需要会话的精确在线 Agent 实例，且 `origin` 不是 `subagent`；不会主动寻找推荐机会。
 - 历史决定不会持续跟踪之后在插件页做的修改。
 - 平台目前不支持两个可选 bundle 以可定位的方式共享同一依赖行。同时启用「个性化页面」时，插件页不能单独开关或配置共享的 `action-cards` 和 `client-ui-action-cards` 两行；请使用 bundle 开关，`queuedMessageLimit` 需在 profile 的 `cordis.patch.yml` 中修改。
 

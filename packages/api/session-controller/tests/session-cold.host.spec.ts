@@ -676,10 +676,10 @@ describe('subagent ownership fence', () => {
     await ctx.agents.register(originChild)
 
     const startingSession = ctx.sessions.create(sid('session-starting-child'), {
-      meta: { cwd: '/proj', parentSession: parent.id },
+      meta: { cwd: '/proj', parentSession: parent.id, origin: 'subagent' },
     })
     const startingChild = { id: startingSession.id, session: startingSession, status: 'idle', ctx } as Agent
-    ctx.agents.enter(startingChild, parent)
+    ctx.agents.enter(startingChild)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const stopped = await remote.cancel(request({ sessionId: originChild.id }))

@@ -86,7 +86,7 @@ Skill contents and the proposal call append to the transcript; the common system
 The manual real-model input set is in `evaluation/intent-cases.json`; unit tests do not measure semantic intent accuracy. Matching, priority between needs and respect for a request not to recommend are skill guidance evaluated with real model runs, not keyword guards.
 
 - Only shipped, optional, official plugins are eligible; missing packages and third-party registries are excluded.
-- Recommendations require a live root conversation; there is no unsolicited opportunity discovery.
+- Recommendations require the exact live conversation Agent with an `origin` other than `subagent`; there is no unsolicited opportunity discovery.
 - A historical decision does not continuously track changes later made on the Plugins page.
 - Two optional bundles cannot yet share a dependency row addressably. With Personalized pages also enabled, the Plugins page cannot switch or configure the shared `action-cards` and `client-ui-action-cards` rows individually; use the bundle switches, and change `queuedMessageLimit` in the profile's `cordis.patch.yml`.
 

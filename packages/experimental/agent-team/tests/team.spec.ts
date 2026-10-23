@@ -14,6 +14,7 @@ import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
+import { bindSubagentLineage } from '../../../subagent/subagent/tests/manager-internals.ts'
 import TeamService, { TeamId, TeamTaskId } from '../src/index.ts'
 import { teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamProjectionState } from '../src/projection.ts'
@@ -26,7 +27,9 @@ const contexts: Context[] = []
 /** Resident idle recipients exercise delivery without scheduling model work. */
 async function resident(ctx: Context, root: Agent, id: string): Promise<Agent> {
   return (await ctx.agents.create({
-    sessionId: SessionId(id), ownerAgent: root, agentOptions: { provider: 'mock', model: 'mock' },
+    sessionId: SessionId(id), agentOptions: { provider: 'mock', model: 'mock' },
+    meta: { origin: 'subagent', parentSession: root.id },
+    setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, root) },
   })).agent
 }
 
@@ -236,7 +239,9 @@ describe('Tree-owned task boards', () => {
   ] as const)('rejects a queued %s after its caller is %s', async (action, stopped) => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('queued-caller'), ownerAgent: lead, agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: SessionId('queued-caller'), agentOptions: { provider: 'mock', model: 'mock' },
+      meta: { origin: 'subagent', parentSession: lead.id },
+      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead) },
     })
     const task = await ctx.agentTeams.createTask(lead, { subject: 'existing', description: 'remains unclaimed' })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
@@ -638,10 +643,16 @@ describe('Task-board wait notifications', () => {
     const { ctx, lead, adapter } = await setup([])
     const alpha = await resident(ctx, lead, 'notify-alpha')
     const beta = (await ctx.agents.create({
-      sessionId: SessionId('notify-beta'), ownerAgent: lead, meta: { parentSession: alpha.id },
+      sessionId: SessionId('notify-beta'), meta: { origin: 'subagent', parentSession: alpha.id },
       agentOptions: { provider: 'mock', model: 'mock' },
+      setup: (_ctx, agent) => { bindSubagentLineage(ctx, agent, lead, [lead.id, alpha.id]) },
     })).agent
     const unrelated = await ctx.agentLoop.create(SessionId('unrelated'), { provider: 'mock', model: 'mock' })
+    const unbound = (await ctx.agents.create({
+      sessionId: SessionId('unbound-subagent'),
+      meta: { origin: 'subagent', parentSession: lead.id },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })).agent
     const notified: Agent[] = []
     const rootNotifications: Agent[] = []
     const betaNotifications: Agent[] = []
@@ -655,7 +666,7 @@ describe('Task-board wait notifications', () => {
     expect(notified).toEqual([lead, alpha, beta, lead, alpha, beta])
     expect(rootNotifications).toEqual([lead, lead])
     expect(betaNotifications).toEqual([beta, beta])
-    for (const agent of [lead, alpha, beta, unrelated]) {
+    for (const agent of [lead, alpha, beta, unrelated, unbound]) {
       expect(agent.inbox.nextStep).toHaveLength(0)
       expect(agent.inbox.nextTurn).toHaveLength(0)
       expect(agent.status).toBe('idle')

@@ -70,7 +70,7 @@ export class TeamService extends Service {
     const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
     this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => {
       for (const agent of ctx.agents.list()) {
-        if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) {
+        if (agent === root || ctx.subagents.lineageOf(agent)?.root === root) {
           emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
         }
       }

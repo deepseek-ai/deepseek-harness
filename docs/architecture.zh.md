@@ -68,13 +68,13 @@ Electron 使用 Electron Node 模式启动私有 Desktop Host。Host 调用共�
 
 ## 事件
 
-事件就是扩展点，而选对事件域是大多数改动的第一个决定。
+事件在三个域内提供扩展点。
 
 - **会话事件**是追加到日志并通过 `session/event` 广播的持久事实。当某个事实必须在重新加载后仍然存在时，使用它。
 - **Agent 事件**（`agent/*`）携带活跃 `Agent`：inbox、步骤、状态、请求、验证、续跑。要观察或拦截进行中的工作时，使用它。
 - **能力事件**无需导入循环即可向某个 seam（`fs/*`、`tools/*`、`telemetry/*`）附加策略和适配器。
 
-`ownerAgent` 指定运行归属。
+Subagent setup 绑定运行时树成员关系。
 
 AgentLoop 回滚失败的初始化，并在启动已排队工作前等待串行 `agent/created`；卸载在 teardown 期间保留所需资源（[顺序](../packages/core/agent-loop/README.zh.md#understand-the-implementation)）。
 

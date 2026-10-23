@@ -1,3 +1,4 @@
+import { bindSubagentLineage } from './manager-internals.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -103,6 +104,35 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
 }
 
 describe('SubagentRuntime', () => {
+  it('keeps managed lineage bound to exact child and root instances', async () => {
+    const { ctx, subagents } = await service()
+    const root = await ctx.agents.create({ sessionId: SessionId('lineage-root') })
+    const child = await ctx.agents.create({ sessionId: SessionId('lineage-child'), meta: { origin: 'subagent' } })
+    const fork = await ctx.agents.create({ sessionId: SessionId('ordinary-fork'), meta: { parentSession: root.agent.id } })
+    expect(subagents.lineageOf(child.agent)).toBeUndefined()
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    expect(subagents.lineageOf(fork.agent)).toBeUndefined()
+    expect(subagents.rootOf(fork.agent)).toBe(fork.agent)
+    bindSubagentLineage(ctx, child.agent, root.agent)
+    expect(subagents.lineageOf(child.agent)).toEqual({ root: root.agent, ancestors: [root.agent.id] })
+    expect(subagents.lineageOf({ ...child.agent })).toBeUndefined()
+    await root.dispose()
+    const replacementRoot = await ctx.agents.create({ sessionId: root.agent.id })
+    expect(subagents.lineageOf(child.agent)).toBeUndefined()
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    await child.dispose()
+    const replacementChild = await ctx.agents.create({ sessionId: child.agent.id, meta: { origin: 'subagent' } })
+    expect(subagents.lineageOf(child.agent)).toBeUndefined()
+    expect(subagents.lineageOf(replacementChild.agent)).toBeUndefined()
+    bindSubagentLineage(ctx, replacementChild.agent, replacementRoot.agent)
+    expect(subagents.rootOf(replacementChild.agent)).toBe(replacementRoot.agent)
+  })
+
+  it('has no local lineage without the Agent service', async () => {
+    const { subagents } = await service(false)
+    expect(subagents.lineageOf(fakeParent())).toBeUndefined()
+  })
+
   it.each([
     ['external', 'removed'], ['external', 'external'], ['external', 'local'],
     ['local', 'removed'], ['local', 'external'], ['local', 'local'],

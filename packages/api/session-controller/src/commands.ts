@@ -438,7 +438,7 @@ export class SessionCommandController {
       }
       agent = found.agent
     }
-    if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+    if (hasApiSessionSubagentOwner(agent.session)) {
       const identity = this.ctx.sessionProjections
         .snapshot(agent.session, ['subagent'])
         .values.subagent
@@ -499,7 +499,7 @@ export class SessionCommandController {
         { sessionId: request.sessionId },
       )
     }
-    if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+    if (hasApiSessionSubagentOwner(agent.session)) {
       throw apiSessionSubagentOwnershipError(request.sessionId)
     }
     agent.cancel({ kind: 'user' }, { keepInbox: true })

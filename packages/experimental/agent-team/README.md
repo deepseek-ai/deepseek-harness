@@ -128,7 +128,7 @@ Tasks are complete versioned snapshots. Mutations require `expectedRevision`; st
 
 ### Task-board wait signals
 
-After a successful append and flush, Team emits an Agent-scoped in-memory signal for all resident Agents in the same tree, including the caller and root. The signal ends only an active wait. It adds no inbox entry or unread state, never starts an idle turn, and never restores a cold member. Changes between waits are not replayed to the next wait.
+After a successful append and flush, Team emits an Agent-scoped in-memory signal for the root and resident descendants whose `subagents.lineageOf()` names that exact root instance. The signal ends only an active wait. It adds no inbox entry or unread state, never starts an idle turn, and never restores a cold member. Changes between waits are not replayed to the next wait.
 
 ### Durability model
 
