@@ -71,6 +71,15 @@ function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
 
 const mode = () => screen.getByRole<HTMLSelectElement>('combobox', { name: en.retryPolicy })
 const input = (label: string) => screen.getByLabelText<HTMLInputElement>(label)
+const CODE_LABELS: Record<string, string> = {
+  EMPTY_RESPONSE: en.retryCodeEmptyResponse,
+  RATE_LIMIT: en.retryCodeRateLimit,
+  SERVER: en.retryCodeServer,
+  TIMEOUT: en.retryCodeTimeout,
+  TRANSPORT: en.retryCodeTransport,
+  STREAM_CLOSED: en.retryCodeStreamClosed,
+}
+const code_ = (code: string) => screen.getByRole<HTMLInputElement>('checkbox', { name: CODE_LABELS[code] ?? code })
 const apply = () => screen.getByText<HTMLButtonElement>(en.apply)
 
 describe('retry policy fields', () => {
@@ -82,13 +91,14 @@ describe('retry policy fields', () => {
 
     fireEvent.change(mode(), { target: { value: 'normal' } })
     expect(input(en.retryMaxRetries).placeholder).toBe('5')
-    expect(input(en.retryCodes).placeholder).toBe('EMPTY_RESPONSE, RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT')
+    expect(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'].every(code => code_(code).checked)).toBe(true)
+    expect(code_('STREAM_CLOSED').checked).toBe(false)
     expect(input(en.retryInitialDelay).placeholder).toBe('500')
     expect(input(en.retryMaxDelay).placeholder).toBe('10000')
     expect(input(en.retryJitter).placeholder).toBe('0.1')
 
     fireEvent.change(input(en.retryMaxRetries), { target: { value: '3' } })
-    fireEvent.change(input(en.retryCodes), { target: { value: ' RATE_LIMIT, ,SERVER ' } })
+    for (const code of ['EMPTY_RESPONSE', 'TIMEOUT', 'TRANSPORT']) fireEvent.click(code_(code))
     fireEvent.change(input(en.retryJitter), { target: { value: '0.' } })
     expect(input(en.retryJitter).value).toBe('0.')
     fireEvent.change(input(en.retryJitter), { target: { value: '0.25' } })
@@ -108,7 +118,6 @@ describe('retry policy fields', () => {
     [en.retryMaxRetries, '-1', en.retryMaxRetriesInvalid],
     [en.retryMaxRetries, '1.5', en.retryMaxRetriesInvalid],
     [en.retryMaxRetries, 'many', en.retryMaxRetriesInvalid],
-    [en.retryCodes, 'SERVER, SERVER', en.retryCodesDuplicate],
     [en.retryInitialDelay, '0', delayInvalid],
     [en.retryInitialDelay, '0x10', delayInvalid],
     [en.retryMaxDelay, '3000000000', delayInvalid],
@@ -174,13 +183,36 @@ describe('retry policy fields', () => {
   })
 
   it.each([
-    ['an empty code list', []],
-    ['a blank code', ['']],
-    ['a numeric code', [500]],
-  ])('refuses a stored policy with %s', (_name, codes) => {
+    ['an empty code list', [], en.retryCodesInvalid],
+    ['a blank code', [''], en.retryCodesInvalid],
+    ['a numeric code', [500], en.retryCodesInvalid],
+    ['a repeated code', ['SERVER', 'SERVER'], en.retryCodesDuplicate],
+  ])('refuses a stored policy with %s', (_name, codes, message) => {
     setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'normal', retryableCodes: codes } } }))
-    expect(screen.getByText(en.retryCodesInvalid)).toBeTruthy()
+    expect(screen.getByText(message)).toBeTruthy()
+    expect(screen.getByRole('group', { name: en.retryCodes }).getAttribute('aria-invalid')).toBe('true')
     expect(apply().disabled).toBe(true)
+  })
+
+  it('picks codes from a list, keeps stored custom codes, and inherits an unchanged selection', async () => {
+    const { writeSettings } = setup(deepSeekNamespace({
+      base: { retryPolicy: { mode: 'normal', retryableCodes: ['SERVER', 'CUSTOM'] } },
+      user: { retryPolicy: { mode: 'normal' } },
+    }))
+    expect(code_('CUSTOM').checked).toBe(true)
+    expect(code_('RATE_LIMIT').checked).toBe(false)
+    fireEvent.click(code_('CUSTOM'))
+    expect(code_('SERVER').disabled).toBe(true)
+    fireEvent.click(code_('STREAM_CLOSED'))
+    fireEvent.click(code_('STREAM_CLOSED'))
+    fireEvent.click(code_('CUSTOM'))
+    expect(apply().disabled).toBe(false)
+    fireEvent.click(code_('RATE_LIMIT'))
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([
+      { op: 'set', path: ['retryPolicy', 'retryableCodes'], value: ['RATE_LIMIT', 'SERVER', 'CUSTOM'] },
+    ])
   })
 
   it('refuses a stored policy that is not an object', () => {
@@ -254,6 +286,8 @@ describe('retry policy fields', () => {
     setup({ ...namespace, schema: json(Schema.object({ retryPolicy: always })) })
     fireEvent.change(mode(), { target: { value: 'always' } })
     expect(input(en.retryMaxDelay).placeholder).toBe('')
+    fireEvent.change(mode(), { target: { value: 'normal' } })
+    expect(code_('SERVER').checked).toBe(false)
   })
 
   it('renders no retry fields when the namespace schema has no retry policy', () => {

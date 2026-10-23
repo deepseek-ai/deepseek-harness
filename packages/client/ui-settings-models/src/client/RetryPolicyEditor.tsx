@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { Checkbox } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { ModelsKey } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -21,7 +22,7 @@ const INITIAL_DELAY = ['backoff', 'initialDelayMs'] as const
 const MAX_DELAY = ['backoff', 'maxDelayMs'] as const
 const JITTER = ['backoff', 'jitterRatio'] as const
 
-type FieldPath = typeof CODES | typeof MAX_RETRIES | typeof INITIAL_DELAY | typeof MAX_DELAY | typeof JITTER
+type FieldPath = typeof MAX_RETRIES | typeof INITIAL_DELAY | typeof MAX_DELAY | typeof JITTER
 
 /** Backoff fields of both modes, as `[policy path, label]`. */
 const BACKOFF_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
@@ -29,6 +30,22 @@ const BACKOFF_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
   [MAX_DELAY, 'retryMaxDelay'],
   [JITTER, 'retryJitter'],
 ]
+
+/**
+ * Stable `LlmFailure` codes offered as retryable choices, with their labels: the
+ * transient defaults of `dsh-llm`, then the other request failures a retry can
+ * plausibly recover. A stored code outside this list stays listed after them.
+ */
+const CODE_CHOICES: ReadonlyMap<string, ModelsKey> = new Map([
+  ['EMPTY_RESPONSE', 'retryCodeEmptyResponse'],
+  ['RATE_LIMIT', 'retryCodeRateLimit'],
+  ['SERVER', 'retryCodeServer'],
+  ['TIMEOUT', 'retryCodeTimeout'],
+  ['TRANSPORT', 'retryCodeTransport'],
+  ['STREAM_CLOSED', 'retryCodeStreamClosed'],
+  ['MALFORMED_RESPONSE', 'retryCodeMalformedResponse'],
+  ['QUOTA', 'retryCodeQuota'],
+])
 
 /** Plain decimal text; prefixed forms such as `0x10` stay invalid text. */
 const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/iu
@@ -149,12 +166,11 @@ export interface RetryPolicyEditorProps {
 }
 
 function textOf(value: unknown): string {
-  if (Array.isArray(value)) return value.join(', ')
   return typeof value === 'number' || typeof value === 'string' ? String(value) : ''
 }
 
 /** Set or remove one field of a plain policy object, dropping an emptied `backoff`. */
-function withField(policy: Record<string, unknown>, path: FieldPath, value: unknown): Record<string, unknown> {
+function withField(policy: Record<string, unknown>, path: FieldPath | typeof CODES, value: unknown): Record<string, unknown> {
   const assign = (target: Record<string, unknown>, key: string, next: unknown): void => {
     if (next === undefined) Reflect.deleteProperty(target, key)
     else target[key] = next
@@ -194,11 +210,8 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
   const edit = (path: FieldPath, text: string): void => {
     const trimmed = text.trim()
     setTexts(previous => ({ ...previous, [path.join('.')]: trimmed.length === 0 ? '' : text }))
-    const value = path === CODES
-      ? trimmed.split(',').map(code => code.trim()).filter(code => code.length > 0)
-      : DECIMAL.test(trimmed) ? Number(trimmed) : trimmed
-    const empty = Array.isArray(value) ? value.length === 0 : value === ''
-    props.onChange(withField(current, path, empty ? undefined : value))
+    const value = DECIMAL.test(trimmed) ? Number(trimmed) : trimmed
+    props.onChange(withField(current, path, value === '' ? undefined : value))
   }
   const field = (path: FieldPath, label: ModelsKey, className = styles['modelField']): ReactNode => {
     const invalid = failure?.path?.join('.') === path.join('.')
@@ -208,7 +221,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
         <input
           className={styles['input']}
           type="text"
-          inputMode={path === CODES ? 'text' : path === MAX_RETRIES ? 'numeric' : 'decimal'}
+          inputMode={path === MAX_RETRIES ? 'numeric' : 'decimal'}
           value={textAt(path)}
           placeholder={textOf(defaults.value(path))}
           aria-invalid={invalid}
@@ -217,6 +230,43 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
           onChange={(event) => { edit(path, event.target.value) }}
         />
       </label>
+    )
+  }
+  const codesField = (): ReactNode => {
+    const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(code => typeof code === 'string') : []
+    const inherited = strings(defaults.value(CODES))
+    const stored = current['retryableCodes']
+    const selected = Array.isArray(stored) ? strings(stored) : inherited
+    const choices = [...new Set([...CODE_CHOICES.keys(), ...inherited, ...selected])]
+    const invalid = failure?.path?.join('.') === CODES.join('.')
+    return (
+      <fieldset
+        className={styles['modelInputTypes']}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? props.failureId : undefined}
+      >
+        <legend className={styles['modelFieldLabel']}>{t('retryCodes')}</legend>
+        <div className={styles['retryCodeChoices']}>
+          {choices.map((code) => {
+            const labelKey = CODE_CHOICES.get(code)
+            return (
+              <Checkbox
+                key={code}
+                // A stored code the list does not name shows verbatim.
+                label={labelKey === undefined ? code : t(labelKey)}
+                checked={selected.includes(code)}
+                disabled={disabled || (selected.length === 1 && selected.includes(code))}
+                onChange={(checked) => {
+                  const next = choices.filter(value => value === code ? checked : selected.includes(value))
+                  // Selecting exactly the inherited codes keeps the field inherited.
+                  const inherits = next.length === inherited.length && next.every(value => inherited.includes(value))
+                  props.onChange(withField(current, CODES, inherits ? undefined : next))
+                }}
+              />
+            )
+          })}
+        </div>
+      </fieldset>
     )
   }
   const labelId = `${props.failureId}-label`
@@ -256,7 +306,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
             {mode === 'normal'
               ? <>
                 {field(MAX_RETRIES, 'retryMaxRetries', `${styles['modelField']} ${styles['retryCount']}`)}
-                {field(CODES, 'retryCodes')}
+                {codesField()}
               </>
               : null}
             <details className={styles['retryFold']} open={backoffOpen}>

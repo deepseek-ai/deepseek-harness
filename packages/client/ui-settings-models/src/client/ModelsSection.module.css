@@ -638,6 +638,13 @@
   margin-top: 4px;
 }
 
+/* Code checkboxes in as many even columns as fit. */
+.retryCodeChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 16px;
+}
+
 /* One backoff column wide, so the count lines up with the delay fields below. */
 .retryCount {
   width: max(112px, calc((100% - 16px) / 3));
