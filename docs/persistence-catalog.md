@@ -160,7 +160,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-Sources: [`packages/core/session/src/types.ts:433`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:441`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:464`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:495`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:435`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:443`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:466`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:497`](../packages/core/session/src/types.ts)
 
 ## Events
 
@@ -289,7 +289,7 @@ Source: [`packages/interaction/user-approval/src/index.ts:41`](../packages/inter
 'assistant/attempt': { turn: number; step: number; stream: AssistantStreamRecord[] }
 ```
 
-Source: [`packages/core/session/src/types.ts:357`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:359`](../packages/core/session/src/types.ts)
 
 <a id="assistantmessage--surface"></a>
 
@@ -319,7 +319,7 @@ Source: [`packages/core/session/src/types.ts:357`](../packages/core/session/src/
 
 Types: [TokenUsage](subsystems/llm-streaming.md)
 
-Source: [`packages/core/session/src/types.ts:343`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:345`](../packages/core/session/src/types.ts)
 
 ### `command/*`
 
@@ -752,7 +752,7 @@ Source: [`packages/plan/plan-mode/src/index.ts:53`](../packages/plan/plan-mode/s
 'request/context': RequestContext
 ```
 
-Source: [`packages/core/session/src/types.ts:404`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:406`](../packages/core/session/src/types.ts)
 
 <a id="requestheader--log-only"></a>
 
@@ -771,7 +771,7 @@ Source: [`packages/core/session/src/types.ts:404`](../packages/core/session/src/
 }
 ```
 
-Source: [`packages/core/session/src/types.ts:392`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:394`](../packages/core/session/src/types.ts)
 
 ### `sandbox/*`
 
@@ -848,7 +848,7 @@ Source: [`packages/schedule/schedule/src/types.ts:371`](../packages/schedule/sch
 'session/end-seed': { inherited?: true }
 ```
 
-Source: [`packages/core/session/src/types.ts:429`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:431`](../packages/core/session/src/types.ts)
 
 <a id="sessiontitle--log-only"></a>
 
@@ -986,8 +986,10 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../p
  * The rendered system prompt on the model-visible surface. The loop appends
  * the first one as surface node 0 before the step's first `user/message`.
  * A prepared in-history route can append nonempty changes in a continuing
- * series. An incapable route or new series normalizes text to the first system
- * node. Normalization empties nonempty later nodes, then rewrites the head if
+ * series. An incapable route, or a new series whose effective text differs,
+ * normalizes text to the first system node; a series start whose latest
+ * surviving node already holds the rendering leaves it in place.
+ * Normalization empties nonempty later nodes, then rewrites the head if
  * needed, through logged per-node replacements. An empty rendering always
  * clears all active system nodes, leaving no older instructions model-visible.
  * Empty later nodes are dormant and project to no message; an empty head with
@@ -997,7 +999,7 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../p
 'system/message': { turn: number; step: number; message: SystemMessage }
 ```
 
-Source: [`packages/core/session/src/types.ts:332`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:334`](../packages/core/session/src/types.ts)
 
 ### `team/*`
 
@@ -1090,7 +1092,7 @@ Source: [`packages/todo/tool-todo/src/types.ts:33`](../packages/todo/tool-todo/s
 
 Types: [ToolCallId](subsystems/core.md)
 
-Source: [`packages/core/session/src/types.ts:363`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:365`](../packages/core/session/src/types.ts)
 
 <a id="toolptc-dispatch--log-only"></a>
 
@@ -1171,7 +1173,7 @@ Source: [`packages/core/tool-executor-ptc/src/types.ts:45`](../packages/core/too
 }
 ```
 
-Source: [`packages/core/session/src/types.ts:377`](../packages/core/session/src/types.ts)
+Source: [`packages/core/session/src/types.ts:379`](../packages/core/session/src/types.ts)
 
 ### `tool-workflow/*`
 
@@ -4899,7 +4901,7 @@ Sources: [`packages/subagent/subagent/src/continuation-messages.ts:29`](../packa
 
 SHA-256: `335e242de1fcc17b6ca920fc420d71bec2d76e53e37955c00948b65ab77f05c5`
 
-Sources: [`packages/core/session/src/types.ts:464`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:466`](../packages/core/session/src/types.ts)
 
 One of:
 
@@ -5834,7 +5836,7 @@ Sources: [`packages/interaction/commands/src/types.ts:105`](../packages/interact
 
 SHA-256: `e4c18e294232c3ba6c9f1999f168263cc55956147cfe4121720899be8e52edd1`
 
-Sources: [`packages/core/session/src/types.ts:363`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:365`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5993,7 +5995,7 @@ SHA-256: `cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09`
 
 SHA-256: `a81059ca06999da1e712414520c2c65e491d052fcf9640fae20aa38f0a5dc735`
 
-Sources: [`packages/core/session/src/types.ts:385`](../packages/core/session/src/types.ts) · [`packages/core/tool-executor-ptc/src/types.ts:27`](../packages/core/tool-executor-ptc/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:387`](../packages/core/session/src/types.ts) · [`packages/core/tool-executor-ptc/src/types.ts:27`](../packages/core/tool-executor-ptc/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6213,7 +6215,7 @@ Sources: [`packages/compaction/compaction/src/types.ts:38`](../packages/compacti
 
 SHA-256: `bcf0caf62d964b2fcf5404bd5c909cfa9a21c3f3c96e6b7e36d9e33565223825`
 
-Sources: [`packages/core/session/src/types.ts:466`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:468`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6240,7 +6242,7 @@ Sources: [`packages/core/session/src/types.ts:214`](../packages/core/session/src
 
 SHA-256: `5302e763151277614b97e77f00e3b326694c6c1247b916a20503c344dc970777`
 
-Sources: [`packages/core/session/src/types.ts:377`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:379`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6282,7 +6284,7 @@ Sources: [`packages/llm/llm/src/types.ts:161`](../packages/llm/llm/src/types.ts)
 
 SHA-256: `ad0c38a0adb82a94c925456df41586d9b5f9202fca18593eae2213d4445b4585`
 
-Sources: [`packages/core/session/src/types.ts:392`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:394`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6379,7 +6381,7 @@ SHA-256: `e3e77b26f0148755a505f5b8ea843a3be117827d4703bb5754d9dc8ddbef521f`
 
 SHA-256: `17d1afb770d9941936130996da00dc86782cfef731d8d6526162c301256a4ac3`
 
-Sources: [`packages/core/session/src/types.ts:429`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:431`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6407,7 +6409,7 @@ Sources: [`packages/core/agent/src/types.ts:110`](../packages/core/agent/src/typ
 
 SHA-256: `1ccb56061942f5ccb0d30c9e4f2883b9d115ff906560029de637b61d3cde896d`
 
-Sources: [`packages/core/session/src/types.ts:343`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:345`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7820,7 +7822,7 @@ Sources: [`packages/experimental/agent-team/src/types.ts:170`](../packages/exper
 
 SHA-256: `6bc8e51124d0874bc89e1d0ceff381a9c3cd0fc240667d69f841ce4f60f65fe5`
 
-Sources: [`packages/core/session/src/types.ts:332`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:334`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7955,7 +7957,7 @@ Sources: [`packages/compaction/compaction/src/types.ts:82`](../packages/compacti
 
 SHA-256: `54f9276a1617d7c12594722c89cfe864bcbe4517e9a6f9c98bab14f199a135e0`
 
-Sources: [`packages/core/session/src/types.ts:357`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:359`](../packages/core/session/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|

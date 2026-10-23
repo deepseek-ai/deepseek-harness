@@ -321,8 +321,10 @@ export interface SessionEventMap {
    * The rendered system prompt on the model-visible surface. The loop appends
    * the first one as surface node 0 before the step's first `user/message`.
    * A prepared in-history route can append nonempty changes in a continuing
-   * series. An incapable route or new series normalizes text to the first system
-   * node. Normalization empties nonempty later nodes, then rewrites the head if
+   * series. An incapable route, or a new series whose effective text differs,
+   * normalizes text to the first system node; a series start whose latest
+   * surviving node already holds the rendering leaves it in place.
+   * Normalization empties nonempty later nodes, then rewrites the head if
    * needed, through logged per-node replacements. An empty rendering always
    * clears all active system nodes, leaving no older instructions model-visible.
    * Empty later nodes are dormant and project to no message; an empty head with
