@@ -228,7 +228,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const url = dialog.getByLabel('API 地址')
     await url.waitFor({ timeout: 10_000 })
     await url.fill('https://gateway.minimax.example/v1')
-    await dialog.getByLabel('重试模式', { exact: true }).selectOption('normal')
+    await dialog.getByRole('combobox', { name: '重试策略', exact: true }).selectOption('normal')
     await dialog.getByLabel('最大重试次数', { exact: true }).fill('3')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     // The editor closes back to the row; the fold's write merged into the

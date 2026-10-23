@@ -23,9 +23,8 @@ const JITTER = ['backoff', 'jitterRatio'] as const
 
 type FieldPath = typeof CODES | typeof MAX_RETRIES | typeof INITIAL_DELAY | typeof MAX_DELAY | typeof JITTER
 
-/** Numeric fields after the codes, as `[policy path, label]`; `maxRetries` applies only to normal mode. */
-const NUMBER_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
-  [MAX_RETRIES, 'retryMaxRetries'],
+/** Backoff fields of both modes, as `[policy path, label]`. */
+const BACKOFF_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
   [INITIAL_DELAY, 'retryInitialDelay'],
   [MAX_DELAY, 'retryMaxDelay'],
   [JITTER, 'retryJitter'],
@@ -187,6 +186,8 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
   const mode = current['mode']
   // Raw text keeps partial input such as `0.` visible while it is typed.
   const [texts, setTexts] = useState<Record<string, string>>({})
+  // Backoff starts folded unless the draft already customizes it.
+  const [backoffOpen] = useState(() => current['backoff'] !== undefined)
   const textAt = (path: FieldPath): string => texts[path.join('.')] ?? textOf(path.reduce<unknown>(
     (value, key) => typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined, current,
   ))
@@ -199,10 +200,10 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
     const empty = Array.isArray(value) ? value.length === 0 : value === ''
     props.onChange(withField(current, path, empty ? undefined : value))
   }
-  const field = (path: FieldPath, label: ModelsKey): ReactNode => {
+  const field = (path: FieldPath, label: ModelsKey, className = styles['modelField']): ReactNode => {
     const invalid = failure?.path?.join('.') === path.join('.')
     return (
-      <label key={path.join('.')} className={path === CODES ? `${styles['modelField']} ${styles['retryWide']}` : styles['modelField']}>
+      <label key={path.join('.')} className={className}>
         <span className={styles['modelFieldLabel']}>{t(label)}</span>
         <input
           className={styles['input']}
@@ -218,14 +219,15 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
       </label>
     )
   }
+  const labelId = `${props.failureId}-label`
   const modeLabel = (value: 'normal' | 'always'): string => t(value === 'normal' ? 'retryModeNormal' : 'retryModeAlways')
   return (
-    <div className={styles['field']} role="group" aria-label={t('retryPolicy')}>
-      <span className={styles['fieldLabel']}>{t('retryPolicy')}</span>
+    <div className={styles['field']} role="group" aria-labelledby={labelId}>
+      <span id={labelId} className={styles['fieldLabel']}>{t('retryPolicy')}</span>
       <select
         className={`${styles['input']} ${styles['selectInput']}`}
         value={typeof mode === 'string' ? mode : ''}
-        aria-label={t('retryMode')}
+        aria-labelledby={labelId}
         aria-describedby={failure !== undefined && failure.path === undefined ? props.failureId : undefined}
         disabled={disabled}
         onChange={(event) => {
@@ -250,9 +252,17 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
       {mode === 'always' ? <span className={styles['advancedHint']}>{t('retryAlwaysHint')}</span> : null}
       {mode === 'normal' || mode === 'always'
         ? (
-          <div className={styles['retryFields']}>
-            {mode === 'normal' ? field(CODES, 'retryCodes') : null}
-            {NUMBER_FIELDS.filter(([path]) => mode === 'normal' || path !== MAX_RETRIES).map(([path, label]) => field(path, label))}
+          <div className={styles['retryBody']}>
+            {mode === 'normal'
+              ? <>
+                {field(MAX_RETRIES, 'retryMaxRetries', `${styles['modelField']} ${styles['retryCount']}`)}
+                {field(CODES, 'retryCodes')}
+              </>
+              : null}
+            <details className={styles['retryFold']} open={backoffOpen}>
+              <summary className={styles['customizedSummary']}>{t('retryBackoff')}</summary>
+              <div className={styles['retryBackoff']}>{BACKOFF_FIELDS.map(([path, label]) => field(path, label))}</div>
+            </details>
           </div>
         )
         : null}

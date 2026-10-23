@@ -38,10 +38,10 @@
           - option "Anthropic Messages" [selected]
         - group "重试策略":
           - text: 重试策略
-          - combobox "重试模式":
-            - option "默认（仅重试临时错误）" [selected]
-            - option "仅重试临时错误"
-            - option "重试所有错误"
+          - combobox "重试策略":
+            - option "默认（仅临时错误）" [selected]
+            - option "仅临时错误"
+            - option "所有错误"
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"

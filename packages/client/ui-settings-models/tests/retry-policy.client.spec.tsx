@@ -69,7 +69,7 @@ function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   return { writeSettings, onClose }
 }
 
-const mode = () => screen.getByLabelText<HTMLSelectElement>(en.retryMode)
+const mode = () => screen.getByRole<HTMLSelectElement>('combobox', { name: en.retryPolicy })
 const input = (label: string) => screen.getByLabelText<HTMLInputElement>(label)
 const apply = () => screen.getByText<HTMLButtonElement>(en.apply)
 
