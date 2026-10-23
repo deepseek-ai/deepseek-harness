@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/official-bundles/README.md
 /:
-  en: 1dfa0833c0b8092b
-  zh: 4f3d474695e1d2b7
+  en: 6ef5705aaf6fee34
+  zh: e587b9572fc644bf
 /deepseek-ai-dsh-official-bundles:
   en: 9095133679593012
   zh: ac6b05dc3eff68b6
@@ -24,14 +24,14 @@
   en: 8d94e2b44efb9c1d
   zh: c049a19e471d188b
 /deepseek-ai-dsh-official-bundles/use-this-package/plugin-manager-lists:
-  en: f2d44e8a4dd084dc
-  zh: 5db94cd83b30c677
+  en: 27c22abdfff69a41
+  zh: e60d828cdb75c263
 /deepseek-ai-dsh-official-bundles/use-this-package/on-demand-bundles:
   en: 10dac368736afde3
   zh: 7684ca22ba4b5a67
 /deepseek-ai-dsh-official-bundles/understand-the-implementation:
-  en: 2986cf8f3115a483
-  zh: 3eb2dade2666bbc6
+  en: 3fb2b58db529d8be
+  zh: 46064459a23d458d
 /deepseek-ai-dsh-official-bundles/understand-the-implementation/source-map:
   en: bbd3b4f82e6349d9
   zh: f1e056d14620519d

@@ -8,6 +8,8 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/creation-recommendations.e2e.ts",
+    "apps/web/tests/plugin-recommendations.e2e.ts",
     "apps/web/tests/japanese-plugin-metadata.e2e.ts",
     "apps/web/tests/additional-locales.e2e.ts",
     "apps/web/tests/rich-text-quotes.e2e.ts",
@@ -163,6 +165,7 @@
     "apps/web/tests/fork-mid-turn.e2e.ts",
     "apps/web/tests/message-feedback.e2e.ts",
     "apps/web/tests/markdown-images.e2e.ts",
+    "apps/web/tests/markdown-image-refresh.e2e.ts",
     "apps/web/tests/markdown-file-links.e2e.ts",
     "apps/web/tests/user-text-secret-mask.e2e.ts",
     "apps/web/tests/reference-composer.e2e.ts",
@@ -253,6 +256,9 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/experimental/action-cards" },
+    { "path": "./packages/experimental/creation-recommendations" },
+    { "path": "./packages/experimental/plugin-recommendations" },
 
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
     { "path": "./packages/experimental/cot-translation-bundle" },

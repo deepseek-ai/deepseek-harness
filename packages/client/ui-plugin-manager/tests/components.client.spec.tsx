@@ -1237,8 +1237,11 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeTruthy()
     })
 
-    it('returns from package details to the secondary page and retains it across React remounts', () => {
-      const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
+    it.each([
+      '@deepseek-ai/dsh-experimental-session-titles-bundle',
+      '@deepseek-ai/dsh-creation-recommendations',
+      '@deepseek-ai/dsh-plugin-recommendations',
+    ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
@@ -1253,9 +1256,12 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
     })
 
-    it('pins a bundle the profile picks onto the main list, in its full-list place', () => {
+    it.each([
+      '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-creation-recommendations',
+      '@deepseek-ai/dsh-plugin-recommendations',
+    ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
-      const first = '@deepseek-ai/dsh-experimental-tool-worktree'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
       const entry = (name: string, enabled: boolean): PackageView => pkg({ name, official: true, enabled })
       const b = renderTab({ packages: [entry(second, true), entry(team, true), entry(first, false)] })

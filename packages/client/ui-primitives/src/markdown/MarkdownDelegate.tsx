@@ -11,7 +11,10 @@ export type MarkdownExternalLinkHandler = (href: string) => void
 
 /** Navigation capabilities supplied by the nearest Markdown owner. */
 export interface MarkdownDelegate {
-  /** Image previews for decoded local paths in this owner's workspace. */
+  /**
+   * Image previews for decoded local paths in this owner's workspace. The renderer
+   * appends a per-mount `load` query parameter to `api/file` route URLs.
+   */
   readonly fileImages?: {
     fileDrag: import('../file-drag-actions.ts').FileDragActions
     resolve: (path: string) => string | undefined

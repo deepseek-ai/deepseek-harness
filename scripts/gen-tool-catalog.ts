@@ -43,6 +43,8 @@ import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
+import ActionCards from '@deepseek-ai/dsh-action-cards'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
@@ -238,6 +240,19 @@ const TOOL_PACKAGES: ToolPackage[] = [
         mode: 'launch', model: { modelName: 'openai/gpt-5.4-mini', apiKey: 'catalog-placeholder' },
       })
     },
+  },
+  {
+    pkg: '@deepseek-ai/dsh-action-cards',
+    dir: 'action-cards',
+    source: 'packages/experimental/action-cards/src/index.ts',
+    requires: ['ctx.tools', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
+    writes: ['tool/call', 'tool/result', 'plugin:action-cards/decision', 'user/message'],
+    async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(RemoteAccess)
+      await ctx.plugin(ActionCards)
+    },
+    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized pages and Plugin recommendations bundles supply the shipped kinds.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',

@@ -1,0 +1,8 @@
+version: 1
+scenario: plugin-recommendations
+profile: web
+composition: web-plugin-recommendations
+recording: authored
+header:
+  class: web-plugin-recommendations
+  pin: true

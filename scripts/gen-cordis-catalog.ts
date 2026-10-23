@@ -60,6 +60,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   productAnalytics: 'product-telemetry.md',
   connection: 'web-server.md',
   pluginManager: 'boot.md',
+  actionCards: 'boot.md',
+  pluginRecommendations: 'boot.md',
   pluginMarket: 'boot.md',
   pluginRegistryProbe: 'boot.md',
   configEditor: 'boot.md',
@@ -905,6 +907,11 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  ActionCardDecision: 'packages/experimental/action-cards/README.md',
+  ActionCardKind: 'packages/experimental/action-cards/README.md',
+  ActionCardResult: 'packages/experimental/action-cards/README.md',
+  ActionCardView: 'packages/experimental/action-cards/README.md',
+  RecommendationDetails: 'packages/experimental/plugin-recommendations/README.md',
   ProductEvent: 'Desktop event fields are owned by packages/client/product-analytics/README.md and src/events.ts',
   ConnectionFetchHandler: 'shared Fetch dispatch is owned by packages/client/connection/src/rpc.ts',
   ConnectionRequestRejection: 'transport rejection status is owned by packages/client/connection/src/rpc.ts',

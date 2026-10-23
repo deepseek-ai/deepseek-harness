@@ -1,5 +1,5 @@
 /**
- * Installation-owned lists of official DSH bundle and plugin packages, kept apart from the code that applies them.
+ * Installation-owned bundle lists and the plugin manager's protected and presented packages, kept apart from the code that applies them.
  * @module @deepseek-ai/dsh-official-bundles
  */
 
