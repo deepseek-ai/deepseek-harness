@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "files": [
+    "src/index.ts",
+    "src/tunnel-protocol.ts",
+    "src/viewer-carrier.ts",
+    "src/viewer-states.ts",
+    "src/identity/index.ts",
+    "src/identity/keys.ts",
+    "src/identity/mock.ts",
+    "src/identity/types.ts"
+  ],
+  "references": [
+    {
+      "path": "../../util/brand"
+    }
+  ]
+}

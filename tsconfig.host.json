@@ -528,6 +528,7 @@
     { "path": "./packages/experimental/agent-team" },
     { "path": "./packages/experimental/agent-team-profile" },
     { "path": "./packages/experimental/inspector-profile" },
+    { "path": "./packages/experimental/liveshare-protocol/tsconfig.host.json" },
     { "path": "./packages/experimental/tool-agent-team" },
     { "path": "./packages/workflow/workflow" },
     { "path": "./packages/workflow/workflow-ptc" },

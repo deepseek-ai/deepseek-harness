@@ -1,0 +1,17 @@
+{
+  "dir": "relay->gateway",
+  "note": "a frame type this build does not know: an old gateway must refuse it instead of throwing",
+  "frame": {
+    "type": "share-stream-delta",
+    "id": 11,
+    "body": {
+      "op": "stream-next"
+    }
+  },
+  "refusal": {
+    "status": 501,
+    "body": {
+      "error": "unsupported-frame"
+    }
+  }
+}
