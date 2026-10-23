@@ -134,7 +134,7 @@ kind: "package-reference"
 - **注册受 effect 作用域约束**——移除提供方会阻止新启动，但绝不撤销已接受的运行。
 - **Agent 消息权限由树决定**——确切在线发送者和目标必须属于同一个根。冷投递验证目标描述符和创建目录后仅恢复目标。最终收件箱准入重新检查发送者与 subagent 树根；恢复失败释放新建实例。
 - **描述符仅进日志**——它是会话事件，不进入模型历史，并跨压缩（compaction）保留；写入器记录解析后的子级提供方、模型与推理强度，用于冷恢复。历史 one-shot 描述符仍可读取。
-- **本 runtime 为子代理回答归档准入**（[接缝](../../workspace/workspace/README.zh.md)）——活动查询、以父级原因取消和步骤执行前的拒绝都使用托管实例的创建祖先，即使中间创建者已离线。尚无已发布 Activation 的 Agent 使用在线 header 血缘；普通 fork 保持独立。组合了 Session query 时通过在线 Session observation 读取名称，否则只报告 id。每次取消的失败都单独收敛。Agent 注册表拥有父级回合，job 提供方拥有任务，API Session Controller 检查已归档 Session 和可用的 header 血缘。
+- **本 runtime 为子代理回答归档准入**（[接缝](../../workspace/workspace/README.zh.md)）——活动查询、以父级原因取消和步骤执行前的拒绝都使用托管实例的创建祖先，即使中间创建者已离线。尚无已发布 Activation 的 Agent 使用在线 header 血缘；普通 fork 保持独立。名称取自当前身份投影中的最新 descriptor，且该 descriptor 必须属于孩子自身的日志；身份缺失、无效、来自继承或没有名称时只报告 id。报告不依赖 Session query 服务，并在身份投影注册完成后启用。每次取消的失败都单独收敛。Agent 注册表拥有父级回合，job 提供方拥有任务，API Session Controller 检查已归档 Session 和可用的 header 血缘。
 
 </details>
 

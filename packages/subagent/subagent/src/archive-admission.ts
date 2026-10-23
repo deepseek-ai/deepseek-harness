@@ -9,22 +9,23 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-session-query'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionActivity, SessionActivityItem } from '@deepseek-ai/dsh-workspace'
-import { foldSubagentDescriptor } from './descriptor.ts'
+import type { SubagentIdentityProjection } from './projection-types.ts'
 
 /**
  * Answer `workspace/session-activity` with the running subagent descendants of
  * the asked Session, and `workspace/session-stop` by cancelling each of them
  * as their parent would. Reject subsequent steps beneath archived ancestors.
  * All listeners live as long as `ctx`'s fiber.
- * @param ctx - context carrying the Agent registry; the Session query service is optional and only supplies labels.
+ * @param ctx - context carrying the Agent registry.
  * @param residentAncestors - verified creation ancestors for an exact managed Agent, absent before publication or for unmanaged Agents.
+ * @param identityOf - ready service-owned descriptor identity reader; absent or invalid descriptors yield no identity.
  */
 export function installSubagentArchiveAdmission(
   ctx: Context,
   residentAncestors: (agent: Agent) => readonly SessionId[] | undefined,
+  identityOf: (session: Session) => SubagentIdentityProjection | undefined,
 ): void {
   const ancestorsOf = (agent: Agent): readonly SessionId[] => residentAncestors(agent) ?? headerAncestors(ctx, agent)
   const runningDescendants = (sessionId: SessionId): Agent[] => ctx.agents.list()
@@ -33,7 +34,7 @@ export function installSubagentArchiveAdmission(
     const running = runningDescendants(sessionId)
     const rest = await next()
     if (running.length === 0) return rest
-    const own: SessionActivity = { kind: 'subagent', items: await Promise.all(running.map(child => describe(ctx, child))) }
+    const own: SessionActivity = { kind: 'subagent', items: running.map(child => describe(child, identityOf(child.session))) }
     return [own, ...rest]
   })
   ctx.on('workspace/session-stop', ({ sessionId }) => {
@@ -74,20 +75,10 @@ function headerAncestors(ctx: Context, agent: Agent): readonly SessionId[] {
 }
 
 /**
- * The child's activity item: its id, plus the durable creation label its
- * descriptor carries, read through a live Session observation. Without the
- * Session query service, or with a descriptor that is absent or unreadable,
- * the item names the child by id alone.
+ * Report the child's current projected label only when its descriptor belongs
+ * to the child's own log; inherited, absent, or invalid identities yield the id alone.
  */
-async function describe(ctx: Context, child: Agent): Promise<SessionActivityItem> {
-  const query = ctx.get('sessionQuery')
-  if (query === undefined) return { id: child.id }
-  try {
-    using observation = await query.observeSession(child.id, { projectionMode: 'none' })
-    const label = foldSubagentDescriptor(observation.events.slice(observation.inheritedEventCount))?.label
-    return label === undefined ? { id: child.id } : { id: child.id, label }
-  } catch {
-    // A damaged descriptor is data damage in the child; the report still names the child.
-    return { id: child.id }
-  }
+function describe(child: Agent, identity: SubagentIdentityProjection | undefined): SessionActivityItem {
+  const label = identity !== undefined && child.session.isOwnSeq(identity.seq) ? identity.label : undefined
+  return label === undefined ? { id: child.id } : { id: child.id, label }
 }
