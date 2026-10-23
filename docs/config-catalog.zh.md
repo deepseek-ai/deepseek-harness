@@ -4230,7 +4230,7 @@ export interface PresetSelectionConfig {
 ```ts config-catalog
 /** Optional subagent control tools. */
 export interface Config {
-  /** Register `interrupt_agent` and its discovery guidance. Defaults to true; false leaves the service API available. */
+  /** Register `interrupt_agent`. Defaults to true; false leaves the service API available. */
   interrupt?: boolean
 }
 ```
