@@ -396,7 +396,7 @@ importers:
         version: link:../../packages/mcp/mcp-resources
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
-        version: link:../../packages/boot/official-bundles
+        version: link:../../packages/util/official-bundles
       '@deepseek-ai/dsh-persona':
         specifier: workspace:*
         version: link:../../packages/preset/persona
@@ -743,7 +743,7 @@ importers:
         version: link:../../packages/util/home-paths
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
-        version: link:../../packages/boot/official-bundles
+        version: link:../../packages/util/official-bundles
       '@deepseek-ai/dsh-util-file-drag':
         specifier: workspace:*
         version: link:../../packages/util/file-drag
@@ -1963,7 +1963,7 @@ importers:
         version: link:../../util/atomic-write
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
-        version: link:../official-bundles
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:*
         version: link:../../util/package-manifest
@@ -2115,16 +2115,6 @@ importers:
         specifier: ^0.28.2
         version: 0.28.2
 
-  packages/boot/official-bundles:
-    dependencies:
-      '@deepseek-ai/dsh-package-manifest':
-        specifier: workspace:*
-        version: link:../../util/package-manifest
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
   packages/boot/plugin-manager:
     dependencies:
       '@deepseek-ai/dsh-app-boot':
@@ -2135,7 +2125,7 @@ importers:
         version: link:../../util/atomic-write
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
-        version: link:../official-bundles
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-plugin-detail':
         specifier: workspace:*
         version: link:../../util/plugin-detail
@@ -5004,6 +4994,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../ui-slots
+      '@deepseek-ai/dsh-official-bundles':
+        specifier: workspace:*
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:*
         version: link:../../util/package-manifest
@@ -10405,7 +10398,7 @@ importers:
         version: link:../webworker-runtime
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
-        version: link:../../boot/official-bundles
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-session-format':
         specifier: workspace:*
         version: link:../../session/session-format
@@ -16162,6 +16155,16 @@ importers:
         version: link:../../../vendor/cordis
 
   packages/util/native-command:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
+  packages/util/official-bundles:
+    dependencies:
+      '@deepseek-ai/dsh-package-manifest':
+        specifier: workspace:*
+        version: link:../package-manifest
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

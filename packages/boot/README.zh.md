@@ -23,7 +23,6 @@ boot 组负责启动 profile 应用并管理其已安装组合。`app-boot` 解�
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`app-boot`](app-boot/README.zh.md) | 从 `cordis.yml` 启动 dsh 应用：加载 `.env`、应用 profile 与 patch 层，并清晰报告启动失败 | （供各 bin 使用的库） |
-| [`official-bundles`](official-bundles/README.zh.md) | 列出安装随附于 profile 模板、默认关闭提供、按需安装或已退役的组合包 | （库） |
 | [`cmdline`](cmdline/README.zh.md) | 让应用持有自己的 flag、`--help` 与退出码；启动器自身 flag 之后的一切原样传入 | `cmdlineArgs`、`appExit` |
 | [`hmr`](hmr/README.zh.md) | 协调模块与配置重载，并与包修改互斥执行 | `hmr` |
 | [`config-editor`](config-editor/README.zh.md) | 通过 Loader 应用并持久化当前 profile 配置 | `configEditor` |

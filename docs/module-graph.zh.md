@@ -19,6 +19,7 @@ flowchart TD
     pkg_launch_environment["launch-environment"]
     pkg_lazy_require["lazy-require"]
     pkg_native_command["native-command"]
+    pkg_official_bundles["official-bundles"]
     pkg_output_retention["output-retention"]
     pkg_package_manifest["package-manifest"]
     pkg_plugin_detail["plugin-detail"]
@@ -136,7 +137,6 @@ flowchart TD
     pkg_cmdline["cmdline"]
     pkg_config_editor["config-editor"]
     pkg_hmr["hmr"]
-    pkg_official_bundles["official-bundles"]
     pkg_plugin_manager["plugin-manager"]
     pkg_plugin_market["plugin-market"]
   end
@@ -1469,6 +1469,7 @@ flowchart TD
 | [`launch-environment`](../packages/util/launch-environment) | `util` | — |
 | [`lazy-require`](../packages/util/lazy-require) | `util` | — |
 | [`native-command`](../packages/util/native-command) | `util` | — |
+| [`official-bundles`](../packages/util/official-bundles) | `util` | — |
 | [`output-retention`](../packages/util/output-retention) | `util` | — |
 | [`package-manifest`](../packages/util/package-manifest) | `util` | — |
 | [`plugin-detail`](../packages/util/plugin-detail) | `util` | — |
@@ -1488,7 +1489,6 @@ flowchart TD
 | [`api-remote-access`](../packages/api/remote-access) | `api` | — |
 | [`api-workspace-files`](../packages/api/workspace-files) | `api` | — |
 | [`cmdline`](../packages/boot/cmdline) | `boot` | — |
-| [`official-bundles`](../packages/boot/official-bundles) | `boot` | — |
 | [`acp-app`](../packages/bundle/acp-app) | `bundle` | — |
 | [`base`](../packages/bundle/base) | `bundle` | — |
 | [`sdk-app`](../packages/bundle/sdk-app) | `bundle` | — |

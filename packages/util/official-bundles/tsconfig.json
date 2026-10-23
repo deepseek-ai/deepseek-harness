@@ -9,7 +9,7 @@
   ],
   "references": [
     {
-      "path": "../../util/package-manifest"
+      "path": "../package-manifest"
     }
   ]
 }

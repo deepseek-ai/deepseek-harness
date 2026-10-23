@@ -1304,7 +1304,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
       // is confirmed.
       await more.click()
       await page.getByRole('menuitem', { name: 'Clear all inactive tasks', exact: true }).click()
-      const confirmation = page.getByRole('dialog', { name: 'Clear 2 inactive tasks?' })
+      const confirmation = page.getByRole('dialog', { name: 'Clear inactive tasks (2)?' })
       await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
       expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
 

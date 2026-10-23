@@ -21,7 +21,7 @@ import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publica
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { detailPath } from '../packages/util/plugin-detail/src/document.ts'
 import { bundlePatchFiles } from '../packages/boot/app-boot/src/profile.ts'
-import { OPTIONAL_BUNDLES } from '../packages/boot/official-bundles/src/bundles.ts'
+import { OPTIONAL_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
 import {
   PACKAGE_ASSET_EXPORT,
   PACKAGE_ASSET_EXPORT_TARGET,

@@ -27,13 +27,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'pin.sidebar': 'Fijar a la barra lateral izquierda',
-  'unpin.sidebar': 'Desanclar de la barra lateral izquierda',
-  'pin.conversation': 'Anclar a pestañas de conversación',
-  'unpin.conversation': 'Desanclar de las pestañas de conversación',
-  'pin.rightbar': 'Fijar a la barra lateral derecha',
-  'unpin.rightbar': 'Desanclar de la barra lateral derecha',
-  pinLabel: '{action}: {name}',
   install: 'Explorar otros complementos',
   create: 'Crea tu complemento',
   'createPrompt.sidebar': 'Cree un complemento DSH con una entrada en la barra lateral izquierda.',
@@ -43,13 +36,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'pin.sidebar': 'Épingler sur la barre latérale gauche',
-  'unpin.sidebar': "Retirer l'épingle de la barre latérale gauche",
-  'pin.conversation': 'Épingler aux onglets de conversation',
-  'unpin.conversation': "Retirer l'épingle des onglets de conversation",
-  'pin.rightbar': 'Épingler sur la barre latérale droite',
-  'unpin.rightbar': "Retirer l'épingle de la barre latérale droite",
-  pinLabel: '{action} : {name}',
   install: "Parcourir d'autres plugins",
   create: 'Créez votre plugin',
   'createPrompt.sidebar': 'Créez un plugin DSH avec une entrée dans la barre latérale gauche.',
@@ -59,13 +45,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'pin.sidebar': 'An die linke Seitenleiste anpinnen',
-  'unpin.sidebar': 'Von der linken Seitenleiste lösen',
-  'pin.conversation': 'An Konversationsregisterkarten anpinnen',
-  'unpin.conversation': 'Von Konversations-Tabs lösen',
-  'pin.rightbar': 'An rechte Seitenleiste anheften',
-  'unpin.rightbar': 'Von der rechten Seitenleiste lösen',
-  pinLabel: '{action}: {name}',
   install: 'Durchsuchen Sie andere Plugins',
   create: 'Erstellen Sie Ihr Plugin',
   'createPrompt.sidebar': 'Erstellen Sie ein DSH-Plugin mit einem Eintrag in der linken Seitenleiste.',
@@ -75,13 +54,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'pin.sidebar': 'Закрепить на левой боковой панели',
-  'unpin.sidebar': 'Открепить от левой боковой панели',
-  'pin.conversation': 'Закрепить на вкладках беседы',
-  'unpin.conversation': 'Открепить от вкладок беседы',
-  'pin.rightbar': 'Закрепить на правой боковой панели',
-  'unpin.rightbar': 'Открепить от правой боковой панели',
-  pinLabel: '{action}: {name}',
   install: 'Просмотрите другие плагины',
   create: 'Создайте свой плагин',
   'createPrompt.sidebar': 'Создайте плагин DSH с записью на левой боковой панели.',
@@ -91,13 +63,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'pin.sidebar': 'Fixar na barra lateral esquerda',
-  'unpin.sidebar': 'Soltar da barra lateral esquerda',
-  'pin.conversation': 'Fixar nas guias de conversa',
-  'unpin.conversation': 'Liberar das guias de conversa',
-  'pin.rightbar': 'Fixar na barra lateral direita',
-  'unpin.rightbar': 'Soltar da barra lateral direita',
-  pinLabel: '{action}: {name}',
   install: 'Procure outros plug-ins',
   create: 'Crie seu plug-in',
   'createPrompt.sidebar': 'Crie um plug-in DSH com uma entrada na barra lateral esquerda.',

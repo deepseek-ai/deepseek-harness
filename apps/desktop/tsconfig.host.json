@@ -12,7 +12,7 @@
       "path": "../../packages/boot/app-boot"
     },
     {
-      "path": "../../packages/boot/official-bundles"
+      "path": "../../packages/util/official-bundles"
     },
     {
       "path": "../../packages/util/home-paths"
