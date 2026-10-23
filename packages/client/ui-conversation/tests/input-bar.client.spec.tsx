@@ -105,6 +105,8 @@ interface BenchOptions {
   attachments?: readonly ComposerAttachment[]
   /** Upload states served for file-kind drafts (absent = every file is ready). */
   fileUploads?: DraftFileUploads
+  /** Endpoints the Session's access snapshot excludes (absent = every endpoint is allowed). */
+  deniedEndpoints?: readonly string[]
   addFiles?: (files: readonly File[], directories?: ReadonlySet<File>) => string | null
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
@@ -192,6 +194,7 @@ function bench(over?: BenchOptions) {
       items: [], archivedSessionIds: [], pinnedSessionIds: [], state: 'idle', phase: 'ready', error: null,
     })),
     ...allowAllAccess,
+    useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
     useProjection: ((key: string, selector?: (v: unknown) => unknown) =>
       (selector ?? (v => v))(key === 'plan'
         ? over?.plan
@@ -705,6 +708,23 @@ describe('image draft rail', () => {
     }
   })
 
+  it('keeps text editable but refuses attachment-slot, picker and paste intake without permission', () => {
+    const added = vi.fn(() => null)
+    const result = bench({ deniedEndpoints: ['fileUploads/upload'], addFiles: added, draft: 'text stays editable' })
+    const attachment = attachmentOwner(result.slotCalls)
+    expect(attachment.canAcceptDrop).toBe(false)
+    const file = new File(['note'], 'note.txt')
+    attachment.onAddFiles([file])
+    const picker = result.view.container.querySelector<HTMLInputElement>('input[type=file]')!
+    expect(picker.disabled).toBe(true)
+    fireEvent.change(picker, { target: { files: [file] } })
+    fireEvent.paste(result.textarea, { clipboardData: {
+      items: [{ kind: 'file', type: 'text/plain', getAsFile: () => file }], getData: () => '',
+    } })
+    expect(added).not.toHaveBeenCalled()
+    expect(result.textarea.getAttribute('contenteditable')).toBe('true')
+  })
+
   it('announces a rejected attachment-slot intake through the same toast', () => {
     const addFiles = vi.fn(() => '图片读取服务不可用')
     const result = bench({ addFiles })
@@ -1190,6 +1210,41 @@ describe('running and lock semantics', () => {
     const { textarea, sink } = bench({ running: true, busyEnter: 'steer', draft: '直接插话' })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(sink).toHaveBeenCalledWith('直接插话', [], 'steer', expect.any(AbortSignal))
+  })
+
+  it('a running composer whose access excludes prompting and stopping offers neither Stop nor Send', () => {
+    const { view, stop } = bench({
+      running: true,
+      // The bar is handed a live Stop handler all the same, so what withholds the action is the access
+      // answer and not a missing face.
+      deniedEndpoints: ['session/prompt', 'session/cancel'],
+      blocked: { reason: '只读查看：本页由 owner 分享，无法发送消息' },
+      placeholder: '只读查看：本页由 owner 分享，无法发送消息',
+    })
+    expect(view.container.querySelector('button[aria-label="停止生成"]')).toBeNull()
+    expect(view.container.querySelector('button[aria-label="发送消息"]')).toBeNull()
+    expect(stop).not.toHaveBeenCalled()
+  })
+
+  it('a running composer whose access excludes only prompting keeps Stop but offers no busy Send', () => {
+    const empty = bench({ running: true, deniedEndpoints: ['session/prompt'] })
+    expect(empty.view.getByLabelText('停止生成')).toBeTruthy()
+    cleanup()
+    // A draft would make the primary action the busy Send, which the snapshot excludes.
+    const drafted = bench({ running: true, deniedEndpoints: ['session/prompt'], draft: '排到下一轮' })
+    expect(drafted.view.container.querySelector('button[aria-label="排队发送"]')).toBeNull()
+  })
+
+  it('an idle composer whose access excludes prompting offers no Send', () => {
+    const { view } = bench({ deniedEndpoints: ['session/prompt'], draft: 'hello' })
+    expect(view.container.querySelector('button[aria-label="发送消息"]')).toBeNull()
+  })
+
+  it('a composer whose access has no answer yet keeps its ordinary Send', () => {
+    const { view, props } = bench({ draft: 'hello' })
+    // Without a bound Session the Session-scope Hook answers undefined, which denies nothing.
+    view.rerender(<InputBar {...props} useAccess={() => undefined} />)
+    expect(view.getByLabelText('发送消息')).toBeTruthy()
   })
 
   it('running Cmd/Ctrl+Enter uses the opposite of the busy-state Enter preference', () => {
@@ -1938,6 +1993,21 @@ describe('command launcher chrome and control seats', () => {
     expect(toggleCommandMenu).toHaveBeenCalledExactlyOnceWith({ start: 2, end: 7 })
     act(() => { menuLauncher.set('command') })
     expect(launcher.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('follows the access answers over a running Session, and restores the actions when they return', () => {
+    const { view, props } = bench({ running: true })
+    // While the page may stop the running Session, the primary action is its Stop.
+    expect(view.getByLabelText('停止生成')).toBeTruthy()
+
+    // The access snapshot now excludes the Session's writes: the bar offers neither Stop nor Send.
+    view.rerender(<InputBar {...props} useAccess={() => false} />)
+    expect(view.queryByLabelText('停止生成')).toBeNull()
+    expect(view.queryByLabelText('发送消息')).toBeNull()
+
+    // The answers return: the bar offers the action the page holds again.
+    view.rerender(<InputBar {...props} />)
+    expect(view.getByLabelText('停止生成')).toBeTruthy()
   })
 
   it('opening the command menu from the button puts the keyboard in the editor first', () => {

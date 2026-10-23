@@ -19,8 +19,7 @@
  * open.
  */
 import { useState } from 'react'
-import clsx from 'clsx'
-import { IconAppsAddOutlineRegular, Menu, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -30,6 +29,7 @@ import type {
 import type { SidebarRightGuideActionsOwnerProps } from '../../contract/slots.ts'
 import type { SidebarRightGuideBox } from '../../tab-registry.ts'
 import { CompassGlyph, CubeGlyph } from './GuideTitle.tsx'
+import { GuideMoreIcon } from './GuideMoreIcon.tsx'
 import { FIXED_GUIDE_KIND, guideEntryId } from './guide-pins.ts'
 import css from './GuideBody.module.css'
 
@@ -39,7 +39,7 @@ export interface GuideInjected {
   readonly hooks: {
     readonly shortcuts: ObservableSnapshot<readonly ShortcutCatalogEntry[]>
     readonly guideEntries: ObservableSnapshot<readonly SidebarRightGuideBox[]>
-    /** Unpinned `kind:id` card ids, persisted across reloads. */
+    /** Unpinned `kind:id` card ids held in memory until plugin reload. */
     readonly entryPins: ObservableSnapshot<readonly string[]>
     /** Whether `sidebar.right.tab.guide.actions` has registrations. */
     readonly entryActions: ObservableSnapshot<boolean>
@@ -106,7 +106,7 @@ function GuideMoreMenu({ label, entries, onOpen, onPinnedChange, renderSlot }: G
       anchor={(
         <button type="button" className={css.entry} aria-label={label} aria-haspopup="menu" aria-expanded={open}
           onClick={() => { setOpen(value => !value) }}>
-          <span className={clsx(css.entryIcon, css.placeholderInk)}><IconAppsAddOutlineRegular size={22} compact /></span>
+          <span className={css.entryIcon}><GuideMoreIcon /></span>
           <span className={css.entryText}><span className={css.entryTitle}>{label}</span></span>
         </button>
       )}>

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Entwicklertools",
+    "description": "Untersuchen und debuggen Sie rohe Sitzungsdaten, gruppierte Chat-Nachrichten und das NodeJS-Backend.",
+    "detail": "docs/DETAIL.md"
+  }
+}

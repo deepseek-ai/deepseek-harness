@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Datei-Sandbox-Zugriff",
+    "description": "Beschränken Sie den Umfang des Schreibens und Bearbeitens von Dateien entsprechend dem aktuellen Berechtigungsmodus."
+  }
+}

@@ -13,7 +13,7 @@ const base = '@deepseek-ai/dsh-base'
 const core = '@deepseek-ai/dsh-core'
 const candidate = '@deepseek-ai/dsh-candidate'
 const candidateDir = 'packages/core/candidate'
-const profile = 'packages/boot/official-bundles/src/bundles.ts'
+const profile = 'packages/util/official-bundles/src/bundles.ts'
 const patch = 'packages/bundle/base/cordis.patch.yml'
 
 function pkg(root: string, directory: string, name: string, fields: Record<string, unknown> = {}): void {
@@ -141,7 +141,7 @@ describe('product package use', () => {
     const root = fixture()
     pkg(root, candidateDir, candidate)
     const children = [{ name: candidate }]
-    if (!initial) write(root, 'packages/boot/official-bundles/src/included.yml', children)
+    if (!initial) write(root, 'packages/util/official-bundles/src/included.yml', children)
     write(root, patch, [{ insert: [{ name: core }, {
       name: 'cordis:include', disabled: true, config: { path: './included.yml', ...(initial ? { initial: children } : {}) },
     }] }])
@@ -161,12 +161,12 @@ describe('product package use', () => {
   it('applies Include patches before collecting runtime mounts and uses files ahead of initial entries', () => {
     const root = fixture()
     pkg(root, candidateDir, candidate)
-    write(root, 'packages/boot/official-bundles/src/included.yml', [{ id: 'child', name: candidate }])
+    write(root, 'packages/util/official-bundles/src/included.yml', [{ id: 'child', name: candidate }])
     write(root, patch, [{ insert: [{ name: core }, { name: 'cordis:include', config: {
       path: './included.yml', initial: [{ name: candidate }], patches: [{ id: 'child', disabled: true }],
     } }] }])
     expect(failures(root)).toContain('no product runtime use')
-    write(root, 'packages/boot/official-bundles/src/included.yml', [])
+    write(root, 'packages/util/official-bundles/src/included.yml', [])
     expect(failures(root)).toContain('no product runtime use')
   })
 

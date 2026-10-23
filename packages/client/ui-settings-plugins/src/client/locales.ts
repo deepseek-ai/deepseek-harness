@@ -29,3 +29,48 @@ export const ja = {
   'tabs': 'プラグインビュー',
   'empty': 'このデプロイメントにはプラグインビューがありません。',
 } satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  nav: 'Complementos integrados',
+  title: 'Complementos integrados',
+  intro: 'Inspeccione los complementos que incluye esta implementación.',
+  tabs: 'Vistas de complementos',
+  empty: 'Esta implementación no expone vistas de complementos.',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  nav: 'Plugins intégrés',
+  title: 'Plugins intégrés',
+  intro: 'Inspectez les plugins fournis par ce déploiement.',
+  tabs: 'Vues des plugins',
+  empty: "Ce déploiement n'expose aucune vue de plugin.",
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  nav: 'Integrierte Plugins',
+  title: 'Integrierte Plugins',
+  intro: 'Überprüfen Sie die Plugins, die mit dieser Bereitstellung geliefert werden.',
+  tabs: 'Plugin-Ansichten',
+  empty: 'Diese Bereitstellung stellt keine Plugin-Ansichten bereit.',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  nav: 'Встроенные плагины',
+  title: 'Встроенные плагины',
+  intro: 'Проверьте плагины, поставляемые в этом развертывании.',
+  tabs: 'Просмотры плагинов',
+  empty: 'Это развертывание не предоставляет никаких представлений плагинов.',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  nav: 'Plug-ins integrados',
+  title: 'Plug-ins integrados',
+  intro: 'Inspecione os plug-ins fornecidos por esta implantação.',
+  tabs: 'Visualizações de plug-in',
+  empty: 'Esta implantação não expõe visualizações de plug-ins.',
+} satisfies Record<keyof typeof en, string>

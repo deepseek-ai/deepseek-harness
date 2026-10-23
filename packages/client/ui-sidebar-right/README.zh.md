@@ -114,7 +114,7 @@ Tab 域按（Session，Tab id）保留品牌化 occurrence id、导航、中止�
 
 每个 `guide` 入口具有 provider 内唯一的 `id`。开始页按当前生效的定义 id 渲染 `sidebar.right.tab.guide.entry`，传入入口 id、解析后的标题、可选描述，以及框架提供的 `useTabInfo` hook。provider 可按自己的定义 id 注册自定义卡片；未注册时使用默认图标与标题按钮。侧栏负责宽度和排列，自定义组件负责内部结构和交互。引导卡片统一使用 R20，包含悬停底色与提供方自有的分体按钮。排序或其他注册变化不会改变入口身份。无背景的快捷键文字右对齐。终端 Shell 菜单位于入口标题旁。
 
-root 作用域的 `sidebar.right.tab.guide.actions` list 有注册项时，引导卡片之后显示**更多工具**卡片。它的菜单与卡片末端对齐，不窄于卡片，并随菜单行增宽，最大为 480px 与视口宽度减 24px 中的较小值。菜单行为该 list 的注册项。每个注册项接收 `entries`（按注册表顺序的卡片，含 `id`、`label` 与 `pinned`；不含 kind 为 `files` 的卡片）、在引导页位置打开卡片标签类型的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。引导页在浏览器 `localStorage` 的 `dsh.slot.manual-order.sidebar.right.tab.guide.list.v1` 下保存一份 root 级的已收起卡片 id 列表，每个 id 为 `kind:入口 id`，格式为 `{ "unpinned": string[] }`；该键名为以后的引导入口 list slot 预留。卡片由 kind 而不是提供方 id 标识，因此扩展接管某个 kind 且保持入口 id 时，Pin 选择仍然有效。kind 为 `files` 的卡片始终显示。收起只隐藏卡片，不关闭标签，也不改变标签类型注册或默认页。描述的显示密度按可见卡片数计算。未注册卡片的 id 保留在列表中；保存内容不是字符串数组时，所有卡片都显示。
+root 作用域的 `sidebar.right.tab.guide.actions` list 有注册项时，引导卡片之后显示**更多工具**卡片。它的菜单与卡片末端对齐，不窄于卡片，并随菜单行增宽，最大为 480px 与视口宽度减 24px 中的较小值。菜单行为该 list 的注册项。每个注册项接收 `entries`（按注册表顺序的卡片，含 `id`、`label` 与 `pinned`；不含 kind 为 `files` 的卡片）、在引导页位置打开卡片标签类型的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。引导页在内存中保存已收起卡片 id 列表，每个 id 为 `kind:入口 id`。插件重新加载时 Pin 选择重置，不读取旧 localStorage 值。默认更多菜单只提供插件浏览和创建；其他注册项仍可使用 Pin 回调。卡片由 kind 而不是提供方 id 标识，因此扩展接管某个 kind 且保持入口 id 时，Pin 选择仍然有效。kind 为 `files` 的卡片始终显示。收起只隐藏卡片，不关闭标签，也不改变标签类型注册或默认页。描述的显示密度按可见卡片数计算。未注册卡片的 id 保留在内存中，直到插件重新加载。
 
 终端等需要独立实例的 tab 类型可声明 `multiple: true`。每次打开都会获得独立内容地址，因此移动和停靠会保留这些实例；普通页面仍在每个格内去重。
 

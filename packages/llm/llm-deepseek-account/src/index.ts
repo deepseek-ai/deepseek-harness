@@ -4,16 +4,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ACCOUNT_QUOTA_EXCEEDED_CODE, APP_IDENTITY, LlmError, QUOTA_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { catalogModelInfo, registerDeepSeekProvider, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import type { DeepSeekRequestAuth, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import { AccountModelCatalog } from './catalog.ts'
-import type { CatalogView } from './catalog.ts'
+import {
+  catalogModelInfo, ModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveAdapterOptions,
+  resolveListedCatalog,
+} from '@deepseek-ai/dsh-llm-deepseek'
+import type { DeepSeekRequestAuth, ListedCatalog, ListingView, ModelListing, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainAccountOptions, resolveAccountOptions } from './config.ts'
-import { requestModelListing } from './listing.ts'
-import type { ModelListing } from './listing.ts'
-import { resolveAccountCatalog } from './resolve-catalog.ts'
-import type { AccountCatalog, CatalogRefusal } from './resolve-catalog.ts'
 
 export { Config } from './config.ts'
 export const name = 'llm-deepseek-account'
@@ -27,23 +23,7 @@ const LOG_TAG = '[llm-deepseek-account]'
 
 /** Connection facts of one account operation: protocol settings plus the catalog resolved with them. */
 interface AccountConnection extends ResolvedDeepSeekOptions {
-  readonly catalog: AccountCatalog
-}
-
-function refuse(model: string, refusal: CatalogRefusal | undefined): void {
-  if (refusal === undefined) return
-  switch (refusal.kind) {
-    case 'upgrade-required':
-      throw new LlmError(
-        `DeepSeek model "${model}" requires DeepSeek Harness ${refusal.requiredVersion} or later; current version is ${APP_IDENTITY.version}`,
-        'CLIENT_UPGRADE_REQUIRED',
-      )
-    case 'unsupported':
-      throw new LlmError(`DeepSeek model "${model}" is not supported by DeepSeek Harness; current version is ${APP_IDENTITY.version}`, 'MODEL_UNSUPPORTED')
-    /* v8 ignore next 2 -- catalog resolution produces only the closed refusal union */
-    default:
-      assertNever(refusal, 'account catalog refusal')
-  }
+  readonly catalog: ListedCatalog
 }
 
 export function apply(ctx: Context, config: Config): void {
@@ -70,9 +50,8 @@ export function apply(ctx: Context, config: Config): void {
       },
     }
   }
-  const catalog = new AccountModelCatalog({
-    settings: () => settings().catalog,
-    token: async url => account()?.resolveToken(url),
+  const catalog = new ModelListingCache({
+    credential: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
     now: () => Date.now(),
     // ACP reserves stdout for protocol messages, including during successful catalog loads.
@@ -81,9 +60,9 @@ export function apply(ctx: Context, config: Config): void {
   })
   let loggedListing: ModelListing | undefined
   /** Resolve the catalog for one view, logging the listing's hidden entries once per listing. */
-  const connectionOf = (view: CatalogView): AccountConnection => {
+  const connectionOf = (view: ListingView): AccountConnection => {
     const resolved = settings()
-    const result = resolveAccountCatalog({
+    const result = resolveListedCatalog({
       listing: view.listing?.entries,
       supported,
       overrides: resolved.modelOverrides,
@@ -100,7 +79,7 @@ export function apply(ctx: Context, config: Config): void {
   const directory = ctx.llm.registerConfigurableProviders([entry])
   let reportedError: string | undefined
   /** Publish override diagnostics on the provider directory. */
-  const discovered = (view: CatalogView): AccountConnection => {
+  const discovered = (view: ListingView): AccountConnection => {
     const connection = connectionOf(view)
     const error = connection.catalog.overrideErrors.length === 0 ? undefined : connection.catalog.overrideErrors.join('; ')
     if (error !== reportedError) {
@@ -112,12 +91,12 @@ export function apply(ctx: Context, config: Config): void {
   registerDeepSeekProvider<AccountConnection>(ctx, PROVIDER, {
     providerName: 'DeepSeek Account',
     options: () => connectionOf(catalog.current()),
-    connect: async signal => connectionOf(await catalog.view(signal)),
+    connect: async signal => connectionOf(await catalog.view(settings().catalog, signal)),
     resolveAuth,
-    admit: (connection, model) => { refuse(model, connection.catalog.refusals.get(model)) },
+    admit: (connection, model) => { refuseListedModel(model, connection.catalog.refusals.get(model)) },
     discoverModels: async (provider) => {
-      const view = await catalog.view()
-      return view.signedIn ? discovered(view).catalog.offered.map(model => catalogModelInfo(provider, model)) : []
+      const view = await catalog.view(settings().catalog)
+      return view.authenticated ? discovered(view).catalog.offered.map(model => catalogModelInfo(provider, model)) : []
     },
   })
   ctx.effect(() => () => { catalog.dispose() }, 'llm-deepseek-account: model catalog')

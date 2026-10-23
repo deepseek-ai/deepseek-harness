@@ -157,6 +157,21 @@ describe('Input', () => {
   })
 })
 
+describe('MenuItemButton', () => {
+  it('exposes the current page without preventing activation and clears it when selection moves', () => {
+    const onSelect = vi.fn()
+    const { rerender } = render(<MenuItemButton current onSelect={onSelect}>Notes</MenuItemButton>)
+    const row = screen.getByRole('menuitem', { name: 'Notes' })
+    expect(row.getAttribute('aria-current')).toBe('page')
+    fireEvent.click(row)
+    expect(onSelect).toHaveBeenCalledOnce()
+    rerender(<MenuItemButton current={false} onSelect={onSelect}>Notes</MenuItemButton>)
+    expect(row.hasAttribute('aria-current')).toBe(false)
+    rerender(<MenuItemButton onSelect={onSelect}>Notes</MenuItemButton>)
+    expect(row.hasAttribute('aria-current')).toBe(false)
+  })
+})
+
 describe('Menu', () => {
   const items = [
     { id: 'a', label: 'Alpha' },

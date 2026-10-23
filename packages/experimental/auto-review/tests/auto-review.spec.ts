@@ -966,9 +966,16 @@ describe('native review request', () => {
         ? 'Auto review denied tool "probe"'
         : `Auto review denied tool "probe": ${item.expectedReason}`)
       expect(displayReasons.at(-1)).toEqual(item.expectedReason === undefined
-        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。', ja: '自動認可レビューがこの呼び出しを拒否しました。' }
+        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。', ja: '自動認可レビューがこの呼び出しを拒否しました。',
+          es: 'Auto review ha denegado esta llamada.', fr: 'Auto review a refusé cet appel.',
+          de: 'Auto review hat diesen Aufruf abgelehnt.', ru: 'Auto review отклонила этот вызов.', pt: 'Auto review negou esta chamada.' }
         : { en: `Auto review denied this call: ${item.expectedReason}`, zh: `Auto review 拒绝了此调用：${item.expectedReason}`,
-          ja: `自動認可レビューがこの呼び出しを拒否しました：${item.expectedReason}` })
+          ja: `自動認可レビューがこの呼び出しを拒否しました：${item.expectedReason}`,
+          es: `Auto review ha denegado esta llamada: ${item.expectedReason}`,
+          fr: `Auto review a refusé cet appel : ${item.expectedReason}`,
+          de: `Auto review hat diesen Aufruf abgelehnt: ${item.expectedReason}`,
+          ru: `Auto review отклонила этот вызов: ${item.expectedReason}`,
+          pt: `Auto review negou esta chamada: ${item.expectedReason}` })
     }
 
     expect(probe.runs()).toBe(2)

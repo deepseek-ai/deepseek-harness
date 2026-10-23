@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Hériter le backend de l'agent enfant du contexte",
+    "description": "Créez un agent enfant à l'aide d'un morceau d'historique de la session parent."
+  }
+}

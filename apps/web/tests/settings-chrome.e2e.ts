@@ -977,18 +977,18 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('opens a browser asking for no shipped language in English', async () => {
     // The product default for "no usable signal": a French browser ships
-    // neither zh nor en, so resolution falls to FALLBACK_LOCALE (en) rather
+    // names no shipped language, so resolution falls to FALLBACK_LOCALE (en) rather
     // than to Chinese.
     const fresh = await launchWebScaffold({ developerTools: false })
-    const frPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'fr-FR' })
-    const frTripwire = watchConsole(frPage)
-    onTestFailed(() => saveSettingsFailureShot(frPage, 'settings-unshipped-language'))
+    const unsupportedPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'it-IT' })
+    const unsupportedTripwire = watchConsole(unsupportedPage)
+    onTestFailed(() => saveSettingsFailureShot(unsupportedPage, 'settings-unshipped-language'))
     try {
-      await frPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
-      await frPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      expect(await frPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
-      await openSettings(frPage, 'en')
-      const dialog = frPage.getByRole('dialog', { name: 'Settings' })
+      await unsupportedPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
+      await unsupportedPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      expect(await unsupportedPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
+      await openSettings(unsupportedPage, 'en')
+      const dialog = unsupportedPage.getByRole('dialog', { name: 'Settings' })
       await dialog.waitFor({ timeout: 10_000 })
       await dialog.getByRole('button', { name: 'English' }).waitFor({ timeout: 10_000 })
       // A locale-owned nav label proves the dictionaries resolved to en.
@@ -996,17 +996,17 @@ describe('web e2e: settings modal and General preferences', () => {
       // The markup already ships `en`, so this alone cannot prove the sync ran
       // — the zh scenario above is the discriminating half. Asserted here too
       // so a future change that resolves en but writes the wrong tag is caught.
-      expect(await frPage.evaluate(() => document.documentElement.lang)).toBe('en')
+      expect(await unsupportedPage.evaluate(() => document.documentElement.lang)).toBe('en')
       // Golden of the English fallback dialog — the visible output this change
       // produces. The zh golden above covers the detected-locale surface, so
       // the pair pins both directions of the resolution.
       await dialog.getByText(`Current version: ${version}`, { exact: true }).waitFor()
-      const snapshot = await captureStableAria(frPage, '[role="dialog"]', fresh.workspaceCwd, versionCapture)
+      const snapshot = await captureStableAria(unsupportedPage, '[role="dialog"]', fresh.workspaceCwd, versionCapture)
       await compareOrRefreshGolden(DIALOG_EN_EXPECTED, snapshot, MODE)
-      expect(frTripwire.pageErrors).toEqual([])
-      expect(frTripwire.warnings).toEqual([])
+      expect(unsupportedTripwire.pageErrors).toEqual([])
+      expect(unsupportedTripwire.warnings).toEqual([])
     } finally {
-      await frPage.close()
+      await unsupportedPage.close()
       await fresh.close()
     }
   }, 90_000)

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Benutzerdefinierte Plugin-Indizes",
+    "description": "Fügt Plugins die Registerkarte „Entdecken“ hinzu, um Bundles aus hinzugefügten Plugin-Indizes zu durchsuchen und zu installieren.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -44,7 +44,8 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "eventsource-parser": "^3.1.0"
+    "eventsource-parser": "^3.1.0",
+    "semver": "^7.8.5"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-llm-deepseek-api-key": "workspace:*",
@@ -76,7 +77,8 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-credentials-local": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-account": "workspace:*"
+    "@deepseek-ai/dsh-deepseek-account": "workspace:*",
+    "@types/semver": "^7.8.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis-plugin-loader": {

@@ -285,14 +285,19 @@
   grid-row: 2;
 }
 
-.sidebarButton {
-  display: inline-flex;
+.sidebarButton,
+.sidebarSpace {
+  box-sizing: border-box;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: 28px;
   height: 28px;
   margin: 4px 0;
+}
+
+.sidebarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px;
   border: 0;
   border-radius: var(--dsw-radius-sm);

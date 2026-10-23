@@ -125,13 +125,23 @@ describe('ui-sidebar apply', () => {
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(b.slots.entries('sidebar')).toHaveLength(0)
-    const disposeRoot = b.slots.register({
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    const declareSidebar = () => b.slots.register({
       name: 'root',
       children: { sidebar: { kind: 'single', scope: 'root' } },
     }, SidebarFrame)
+    const disposeRoot = declareSidebar()
     expect(b.slots.entries('sidebar')).toHaveLength(1)
+    expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
     disposeRoot()
+    expect(b.slots.entries('sidebar')).toEqual([])
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    const disposeReplacement = declareSidebar()
+    expect(b.slots.entries('sidebar')).toHaveLength(1)
+    expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
     await fiber.dispose()
+    expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
+    disposeReplacement()
   })
 
   it('projects plugin-owned panel entries and removes them with their owner', async () => {

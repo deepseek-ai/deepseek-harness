@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH-Unterprozesse",
+    "description": "Stellen Sie Unterprozesse und Terminals über den gemeinsamen POSIX-SSH-Helfer bereit."
+  }
+}

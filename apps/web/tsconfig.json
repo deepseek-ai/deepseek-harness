@@ -24,6 +24,7 @@
   // cannot see both sides of the cordis Context merges).
   "exclude": [
     "tests/japanese-plugin-metadata.e2e.ts",
+    "tests/additional-locales.e2e.ts",
     "tests/rich-text-quotes.e2e.ts",
     "tests/hover-input.e2e.ts",
     "tests/collapse-timing.e2e.ts",
@@ -149,6 +150,7 @@
     "tests/preview-boot.e2e.ts",
     "tests/seeded-history.e2e.ts",
     "tests/stats-paged-history.e2e.ts",
+    "tests/stats-truncated-tooltip.e2e.ts",
     "tests/sidebar-scrollbar.e2e.ts",
     "tests/sidebar-title-hover-scroll.e2e.ts",
     "tests/rail-search-expand.e2e.ts",
@@ -222,6 +224,7 @@
     "tests/chat-long-interactions.e2e.ts",
     "tests/chat-continuous-conversation.e2e.ts",
     "tests/composer-tab-geometry.e2e.ts",
+    "tests/conversation-view-tabs.e2e.ts",
     "tests/window-drag-coverage.e2e.ts",
     "tests/complex-history.perf.ts",
     "tests/pwsh-terminal.e2e.ts",

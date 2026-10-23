@@ -448,13 +448,15 @@ export interface ConversationViewActionEntry {
   readonly id: string
   /** Resolved View label. */
   readonly label: string
-  /** False while the tab is unpinned from the header. */
+  /** False while the View is manually unpinned. A pinned View still enters More when the header's width budget cannot hold it. */
   readonly pinned: boolean
+  /** Whether this View is selected in this Session, independently of its pin state. */
+  readonly active?: boolean
 }
 
 /** Owner share of the View tab row's More menu rows. */
 export interface ConversationViewActionsOwnerProps {
-  /** Available Views in registration order; Chat is never listed. */
+  /** Views outside the header in registration order. */
   readonly entries: readonly ConversationViewActionEntry[]
   /**
    * Select a View in this Session without changing its pin state.
@@ -462,9 +464,9 @@ export interface ConversationViewActionsOwnerProps {
    */
   readonly onOpen: (id: string) => void
   /**
-   * Show (true) or unpin (false) a View tab in every Session.
+   * Pin or unpin a View in every Session.
    * @param id - Listed View id.
-   * @param pinned - Whether the tab shows in the header.
+   * @param pinned - Whether the View is manually pinned; the width budget can still fold it into More.
    */
   readonly onPinnedChange: (id: string, pinned: boolean) => void
   /** Close the More menu. */
@@ -476,15 +478,15 @@ export interface ConversationSessionHeaderInjected {
   /** Package-owned View roster source bound only for the Conversation header. */
   readonly hooks: {
     readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>
-    /** Ids of unpinned View tabs, persisted across reloads and shared by every Session. */
+    /** Ids of unpinned View tabs held in memory and shared by every Session until plugin reload. */
     readonly entryPins: ObservableSnapshot<readonly string[]>
     /** Whether `conversation.session.header.views.actions` has registrations. */
     readonly entryActions: ObservableSnapshot<boolean>
   }
   /**
-   * Show or unpin one View tab in every Session; Chat is ignored.
+   * Pin or unpin one View tab in every Session; Chat is ignored.
    * @param id - View id.
-   * @param pinned - Whether the tab shows in the header.
+   * @param pinned - Whether the View is manually pinned; the width budget can still fold it into More.
    */
   setPinned: (id: string, pinned: boolean) => void
   /** Select a Session through the Session Controller. */

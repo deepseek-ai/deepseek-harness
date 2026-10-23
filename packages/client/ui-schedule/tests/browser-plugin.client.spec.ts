@@ -11,7 +11,9 @@ import { apply as applyNode } from '../src/index.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { ScheduleId, ScheduleCatalogEntry, ScheduleUpdateRequest, ScheduleUpdateResult } from '@deepseek-ai/dsh-schedule/client'
+import type {
+  ScheduleId, ScheduleCatalogEntry, ScheduleDeleteInactiveResult, ScheduleUpdateRequest, ScheduleUpdateResult,
+} from '@deepseek-ai/dsh-schedule/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { CatalogInjected } from '../src/client/catalog-source.ts'
@@ -492,6 +494,83 @@ describe('ui-schedule browser half', () => {
       expect(ctx.slots.entries('main')).toEqual([])
       expect(ctx.slots.entries('sidebar.panellist')).toEqual([])
       owner()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('clears every ended task from the global page, reads the catalog back, and reports the count', async () => {
+    const record: ScheduleCatalogEntry = {
+      id: 'host-ended' as ScheduleId, sessionId: 'cold-original' as SessionId, status: 'inactive',
+      kind: 'after', title: 'Ended review', prompt: 'Ended review', afterSeconds: 60,
+      scheduledAt: '2099-01-01T00:00:00.000Z',
+    }
+    const catalog = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: [record] })
+      .mockResolvedValue({ ok: true, value: [] })
+    const deleteInactive = vi.fn().mockResolvedValue({ ok: true, value: { deleted: 1 } })
+    const ctx = await baseContext({ schedule: { catalog, deleteInactive }, $on: () => () => {} })
+    const owner = ctx.slots.register({
+      name: 'root',
+      children: {
+        main: { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+      },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    try {
+      const face = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+      const toast = injectedFace(ctx.slots.entries('shell.overlay')[0]!) as Omit<DeleteToastSource, 'report' | 'reportClear'>
+      const dispose = face.hooks.catalog.subscribe(vi.fn())
+      try {
+        await vi.waitFor(() => { expect(face.hooks.catalog.getSnapshot().records).toEqual([record]) })
+        const reads = catalog.mock.calls.length
+        await face.onClearEnded()
+        expect(deleteInactive).toHaveBeenCalledOnce()
+        // The acknowledged removal reads the catalog back instead of joining a
+        // read issued before it, so the page's rows follow the removal.
+        expect(catalog.mock.calls.length).toBe(reads + 1)
+        await vi.waitFor(() => { expect(face.hooks.catalog.getSnapshot().records).toEqual([]) })
+        expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 1, seq: 1 })
+      } finally {
+        dispose()
+      }
+    } finally {
+      await fiber.dispose()
+      owner()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports a settled bulk removal after the page registration is gone', async () => {
+    const catalog = vi.fn().mockResolvedValue({ ok: true, value: [] })
+    const removal = Promise.withResolvers<{ ok: true; value: ScheduleDeleteInactiveResult }>()
+    const deleteInactive = vi.fn(() => removal.promise)
+    const ctx = await baseContext({ schedule: { catalog, deleteInactive }, $on: () => () => {} })
+    const owner = ctx.slots.register({
+      name: 'root',
+      children: {
+        main: { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+      },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    let claimed = false
+    try {
+      const face = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+      const toast = injectedFace(ctx.slots.entries('shell.overlay')[0]!) as Omit<DeleteToastSource, 'report' | 'reportClear'>
+      const clearing = face.onClearEnded()
+      // The page panel can unmount while the Host removal is still in flight;
+      // the notice store belongs to the plugin, so the outcome still publishes.
+      owner()
+      claimed = true
+      removal.resolve({ ok: true, value: { deleted: 2 } })
+      await clearing
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 2, seq: 1 })
+    } finally {
+      if (!claimed) owner()
+      await fiber.dispose()
       await ctx.fiber.dispose()
     }
   })

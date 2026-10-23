@@ -353,24 +353,26 @@ function CatalogRows({
                     )}
                   </span>
                 )}
-                {!isCurrent && !external && (
-                  <Tooltip label={t('open.sidebar')} side="bottom" align="end">
-                    <button
-                      type="button"
-                      className={css.sidebarButton}
-                      aria-label={t('open.sidebar.aria', { label })}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
-                        closeCatalog()
-                      }}
-                      onKeyDown={(event) => { event.stopPropagation() }}
-                    >
-                      <IconChevronRightOutlineRegular />
-                    </button>
-                  </Tooltip>
-                )}
+                {isCurrent || external
+                  ? <span className={css.sidebarSpace} />
+                  : (
+                    <Tooltip label={t('open.sidebar')} side="bottom" align="end">
+                      <button
+                        type="button"
+                        className={css.sidebarButton}
+                        aria-label={t('open.sidebar.aria', { label })}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
+                          closeCatalog()
+                        }}
+                        onKeyDown={(event) => { event.stopPropagation() }}
+                      >
+                        <IconChevronRightOutlineRegular />
+                      </button>
+                    </Tooltip>
+                  )}
               </div>
             </div>
             {isExpanded && (

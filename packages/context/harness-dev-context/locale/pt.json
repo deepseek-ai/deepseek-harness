@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aproveite o contexto de desenvolvimento",
+    "description": "Forneça ao modelo o diretório de origem do Harness e o URL da Web sem alterar o prompt do sistema."
+  }
+}

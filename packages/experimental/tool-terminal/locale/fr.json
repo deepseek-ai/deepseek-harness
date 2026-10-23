@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Outils de terminal persistants",
+    "description": "Fournissez six outils PTY persistants avec propriété de session isolée et intégration de tâches en arrière-plan."
+  }
+}

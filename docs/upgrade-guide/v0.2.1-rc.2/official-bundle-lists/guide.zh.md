@@ -15,4 +15,4 @@ description: "组合包列表和 profile 模板从 @deepseek-ai/dsh-app-boot 移
 
 1. 在每个导入这些名称的包的 `dependencies` 中加入 `@deepseek-ai/dsh-official-bundles`。
 2. 把这些导入从 `@deepseek-ai/dsh-app-boot` 改为 `@deepseek-ai/dsh-official-bundles`，例如 `import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'`。其他名称（如 `initProfile` 或 `loadProfile`）仍从 `@deepseek-ai/dsh-app-boot` 导入。
-3. 运行类型检查或构建；不再有从 `@deepseek-ai/dsh-app-boot` 导入已移动名称的代码时即通过。各列表的说明见[包 README](../../../../packages/boot/official-bundles/README.zh.md)。
+3. 运行类型检查或构建；不再有从 `@deepseek-ai/dsh-app-boot` 导入已移动名称的代码时即通过。各列表的说明见[包 README](../../../../packages/util/official-bundles/README.zh.md)。

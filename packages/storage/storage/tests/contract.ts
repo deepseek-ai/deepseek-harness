@@ -71,6 +71,24 @@ export function runKvBackendContract(label: string, create: () => Promise<KvBack
       await backend.close()
     })
 
+    it('deleteRecords removes the whole batch durably and is idempotent', async () => {
+      const harness = await create()
+      const unit = await harness.backend.kv!.open(DESCRIPTOR)
+      await unit.putRecord('alpha', 'k1', { n: 1 })
+      await unit.putRecord('alpha', 'k2', { n: 2 })
+      await unit.putRecord('alpha', 'k3', { n: 3 })
+      await unit.putRecord('beta', 'b1', { n: 4 })
+      await unit.deleteRecords('alpha', ['k1', 'k3', 'missing', 'k1'])
+      await unit.deleteRecords('alpha', [])
+      expect((await unit.loadAll()).tables).toEqual({ alpha: { k2: { n: 2 } }, beta: { b1: { n: 4 } } })
+      await harness.backend.close()
+
+      const reopened = await harness.reopen()
+      const unit2 = await reopened.kv!.open(DESCRIPTOR)
+      expect((await unit2.loadAll()).tables).toEqual({ alpha: { k2: { n: 2 } }, beta: { b1: { n: 4 } } })
+      await reopened.close()
+    })
+
     it('rejects a version mismatch on reopen without touching the data', async () => {
       const harness = await create()
       const unit = await harness.backend.kv!.open(DESCRIPTOR)
@@ -95,6 +113,7 @@ export function runKvBackendContract(label: string, create: () => Promise<KvBack
       await unit.close()
       await expect(unit.putRecord('alpha', 'k', {})).rejects.toMatchObject({ code: 'closed' })
       await expect(unit.loadAll()).rejects.toMatchObject({ code: 'closed' })
+      await expect(unit.deleteRecords('alpha', ['k'])).rejects.toMatchObject({ code: 'closed' })
       await backend.close()
       await backend.close()
     })

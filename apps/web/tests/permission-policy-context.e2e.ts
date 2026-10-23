@@ -183,13 +183,13 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     expect(contexts).toHaveLength(4)
     expect(contexts[0]).toContain('Current DSH file policy: read-only. Any available operation enforced by the DSH file sandbox cannot modify files in the standing mode.')
     expect(contexts[0]).toContain('Do not refuse a required modification from this policy alone')
-    expect(contexts[0]).toContain('Approval policy: ask.')
+    expect(contexts[0]).toContain('Approval prompts are enabled in this session')
     expect(contexts[1]).toContain('Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.')
     expect(contexts[1]).toContain('Approval prompts are disabled in this session')
 
     if (sessionWorkspace === undefined) throw new Error('permission-policy scenario observed no session workspace')
     expect(contexts[2]).toContain(`Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(canonicalPath(sessionWorkspace))}. Some platform temporary areas may also be writable.`)
-    expect(contexts[2]).toContain('Approval policy: ask.')
+    expect(contexts[2]).toContain('Approval prompts are enabled in this session')
     expect(contexts[2]).not.toContain('Approval prompts are disabled in this session')
     expect(contexts[3]).toContain('Current DSH file policy: read-only.')
 

@@ -33,7 +33,7 @@ The first access of a credential waits for the listing up to `modelsTimeoutMs`. 
 
 A listed model is offered only when the current DeepSeek Harness version can serve it. A model that declares `client_requirements["deepseek-harness"].min_version` is offered when the current version is at least that version in semantic-version order, including prerelease tags such as `0.2.0-alpha.1` and `0.2.0-rc.1`. A prerelease orders below its release: `min_version: 0.2.1` refuses `0.2.1-alpha.2`, so a listing that admits prereleases declares the earliest one it admits, such as `0.2.1-alpha.0`. A model without that declaration is offered only when the built-in catalog knows its id; other listed models stay hidden. A request for a listed model the current version cannot serve fails before network I/O with `CLIENT_UPGRADE_REQUIRED`, which names the required and current versions, or with `MODEL_UNSUPPORTED`. Model ids the listing does not name pass through unchanged.
 
-Offered models take the listing's name, `context_window`, input modalities, and Messages system prompt mode over the bundled entry for the same id, which keeps its tool-update mode, image budgets, and description. `max_output_tokens` bounds the request default: a request that names no cap sends the smaller of `maxTokens` and that capability. The listing's effort levels are not read; every model offers `off`, `low`, `high`, and `max`.
+Offered models take the listing's name, `context_window`, input modalities, and Messages system prompt and tool update modes (`api_capabilities.anthropic_messages.system_prompt_update` and `tool_update`) over the bundled entry for the same id, which keeps its image budgets and description. A mode the listing omits or sets to `null` keeps the bundled one; any value other than the modes this build reads (`in-history` for system prompts; `in-history` or `addition-only` for tools) reads as `leading-only`, which removes the bundled mode. `max_output_tokens` bounds the request default: a request that names no cap sends the smaller of `maxTokens` and that capability. The listing's effort levels are not read; every model offers `off`, `low`, `high`, and `max`.
 
 `modelOverrides` adjusts single models without replacing the catalog. Keys are model ids; values take the fields of a [Messages `models` entry](../llm-deepseek/README.md#minimal-configuration), and unset fields inherit. Overrides apply over the listing and the bundled catalog; they cannot add models or make a refused model available. Listed capabilities do not bound an override: an override `maxTokens` above the listed `max_output_tokens` is sent as written, and the service rejects requests beyond its limits. An override that names a model neither the listing nor the built-in catalog describes, or that the listed model rejects, becomes the provider diagnostic on the Models page, which has no editor for this route. An override for a refused model that the built-in catalog does not describe is checked only once the current version can serve that model. The route has no `models` field; a configuration that still sets it fails at load and names `modelOverrides`. Edit `$DSH_HOME/profiles/<profile>/cordis.patch.yml`; the next request uses the change.
 
@@ -61,7 +61,7 @@ The settings namespace is the Cordis entry id, or the plugin name without an ent
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing cache lives in memory and is keyed by endpoint and a SHA-256 of the token.
+Registrations and listeners dispose with the plugin, and disposal aborts an in-flight listing request. Shared Host wiring supplies attachments, request extensions, anonymous identity, and atomic retry-policy updates; this plugin registers only its own route and uses the transport's `connect` and `admit` hooks for the catalog and the gate. The listing request, its cache, and catalog resolution come from the shared transport, which the API-key route also uses; the cache lives in memory and is keyed by endpoint and a SHA-256 of the token.
 
 A failed request the shared transport classifies as `QUOTA` is rewritten to `ACCOUNT_QUOTA` before it leaves this provider, covering an HTTP 402 response and an in-band SSE error alike. The shared transport and the `deepseek-official` route keep `QUOTA`, so the account route's top-up action never appears for an API-key or third-party failure.
 
@@ -85,7 +85,7 @@ Authentication and the listing add no input tokens. The resolved catalog sets ea
 
 #### KV Cache effect
 
-Credentials and catalog availability do not enter model input; the protocol transport owns request-prefix serialization. A catalog change to a model's system prompt mode changes how later system prompt updates are serialized.
+Credentials and catalog availability do not enter model input; the protocol transport owns request-prefix serialization. A catalog change to a model's system prompt or tool update mode changes how later system prompt or tool updates are serialized.
 
 ## Known Limitations and Deferred Work
 

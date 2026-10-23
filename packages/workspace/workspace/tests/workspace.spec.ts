@@ -123,6 +123,7 @@ function selectiveFailureBackend(
             if (deletes === failure.deleteAt) throw new Error('selected rollback delete failure')
             await unit.deleteRecord(table, key)
           },
+          deleteRecords: (table, keys) => unit.deleteRecords(table, keys),
           setGlobal: async (value) => {
             globals += 1
             const failAt = Array.isArray(failure.globalAt) ? failure.globalAt : [failure.globalAt]

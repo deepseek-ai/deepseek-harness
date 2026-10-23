@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Guide card pins persist per `kind:id` and ignore every Files card. */
+/** Guide card pins stay in memory per `kind:id` and ignore every Files card. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGuidePins, guideEntryId } from '../src/client/tabs/guide/guide-pins.ts'
 
@@ -11,15 +11,15 @@ describe('guide card pins', () => {
     expect(guideEntryId({ kind: 'terminal', id: 'shell' })).toBe('terminal:shell')
   })
 
-  it('persists unpinned card ids and restores them in a new instance', () => {
+  it('keeps unpinned card ids in memory without restoring them in a new instance', () => {
     const pins = createGuidePins()
     const initial = pins.unpinned.getSnapshot()
     expect(initial).toEqual([])
     expect(pins.unpinned.getSnapshot()).toBe(initial)
     pins.setPinned('terminal:shell', false)
     pins.setPinned('browser:page', false)
-    expect(JSON.parse(localStorage.getItem(KEY) ?? 'null')).toEqual({ unpinned: ['terminal:shell', 'browser:page'] })
-    expect(createGuidePins().unpinned.getSnapshot()).toEqual(['terminal:shell', 'browser:page'])
+    expect(localStorage.getItem(KEY)).toBeNull()
+    expect(createGuidePins().unpinned.getSnapshot()).toEqual([])
     pins.setPinned('terminal:shell', true)
     expect(pins.unpinned.getSnapshot()).toEqual(['browser:page'])
   })
@@ -38,20 +38,14 @@ describe('guide card pins', () => {
   })
 
   it('keeps ids of cards that are not registered', () => {
-    localStorage.setItem(KEY, JSON.stringify({ unpinned: ['removed:card'] }))
     const pins = createGuidePins()
+    pins.setPinned('removed:card', false)
     pins.setPinned('terminal:shell', false)
     expect(pins.unpinned.getSnapshot()).toEqual(['removed:card', 'terminal:shell'])
   })
 
-  it.each([
-    ['a non-array list', { unpinned: 'terminal:shell' }],
-    ['non-string ids', { unpinned: [false] }],
-    ['a missing list', {}],
-    ['null', null],
-    ['a number', 7],
-  ])('reads %s as no unpinned cards with a stable snapshot', (_name, stored) => {
-    localStorage.setItem(KEY, JSON.stringify(stored))
+  it('ignores a legacy stored list instead of restoring it', () => {
+    localStorage.setItem(KEY, JSON.stringify({ unpinned: ['terminal:shell'] }))
     const pins = createGuidePins()
     const snapshot = pins.unpinned.getSnapshot()
     expect(snapshot).toEqual([])

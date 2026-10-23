@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Service d'approbation des utilisateurs",
+    "description": "Demander l'autorisation d'opération à l'utilisateur et renvoyer le résultat de l'approbation."
+  }
+}

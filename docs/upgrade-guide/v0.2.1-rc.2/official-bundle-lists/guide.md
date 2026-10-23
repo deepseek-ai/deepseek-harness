@@ -15,4 +15,4 @@ English | [中文](guide.zh.md)
 
 1. Add `@deepseek-ai/dsh-official-bundles` to the `dependencies` of each package that imports one of these names.
 2. Change those imports from `@deepseek-ai/dsh-app-boot` to `@deepseek-ai/dsh-official-bundles`, for example `import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'`. Keep importing every other name, such as `initProfile` or `loadProfile`, from `@deepseek-ai/dsh-app-boot`.
-3. Run your type check or build; it succeeds when no import of a moved name from `@deepseek-ai/dsh-app-boot` remains. See the [package README](../../../../packages/boot/official-bundles/README.md) for each list.
+3. Run your type check or build; it succeeds when no import of a moved name from `@deepseek-ai/dsh-app-boot` remains. See the [package README](../../../../packages/util/official-bundles/README.md) for each list.

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de exploración de directorios en la aplicación",
+    "description": "Proporciona la capacidad de enumerar y crear directorios locales para seleccionar directorios dentro de la aplicación."
+  }
+}

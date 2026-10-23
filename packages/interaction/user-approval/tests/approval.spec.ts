@@ -353,7 +353,7 @@ describe('ApprovalService.request', () => {
 
 describe('approval policy (the approval/policy fold)', () => {
   const NEVER_SENTENCE = 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).'
-  const ASK_SENTENCE = 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.'
+  const ASK_SENTENCE = 'Approval prompts are enabled in this session: operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.'
 
   /**
    * An agent stand-in over a REAL Session — gate and context fold real events;
@@ -466,9 +466,18 @@ describe('approval policy (the approval/policy fold)', () => {
     expect(inject.mock.calls[0]?.[0]).toMatchObject({
       content: [{
         type: 'text',
-        text: 'The approval policy changed from "ask" to "never" (changed by the user).',
+        text: 'The user changed the approval policy from "ask the user for approval" to "never ask the user for approval".',
       }],
       source: { kind: 'user-approval' },
+    })
+
+    ctx.approval.setPolicy(liveAgent, 'ask')
+
+    expect(inject.mock.calls[1]?.[0]).toMatchObject({
+      content: [{
+        type: 'text',
+        text: 'The user changed the approval policy from "never ask the user for approval" to "ask the user for approval".',
+      }],
     })
   })
 

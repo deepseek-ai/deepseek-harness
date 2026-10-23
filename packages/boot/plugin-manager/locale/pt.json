@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serviço de gerenciamento de plug-ins",
+    "description": "Gerencie plug-ins e pacotes de plug-ins na configuração atual em execução, oferecendo suporte à instalação, remoção, início e parada."
+  }
+}

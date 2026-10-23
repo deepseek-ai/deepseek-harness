@@ -309,6 +309,11 @@
     },
     {
       "doc": "docs/subsystems/schedule.md",
+      "symbol": "ScheduleDeleteInactiveResult",
+      "source": "packages/schedule/schedule/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/schedule.md",
       "symbol": "LocalAtInput",
       "source": "packages/schedule/schedule/src/types.ts"
     },

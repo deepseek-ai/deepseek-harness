@@ -30,6 +30,7 @@ kind: "package-group"
 | [`package-manifest/`](package-manifest/README.zh.md) | 包 manifest（元数据清单）的共享 TypeScript 声明 |
 | [`plugin-detail/`](plugin-detail/README.zh.md) | 选择插件详细介绍文档，并从本地包和 npm 文件 CDN 读取它们 |
 | [`plugin-market-index/`](plugin-market-index/README.zh.md) | 校验插件市场索引格式 1，并生成锁定版本的安装参数 |
+| [`official-bundles/`](official-bundles/README.zh.md) | 列出安装随附、提供、按需安装或已退役的官方组合包和插件包，以及插件管理器保护或展示的包 |
 | [`crypto/`](crypto/README.zh.md) | 基于跨运行时 `crypto.getRandomValues` 原语生成 RFC 9562 v4 UUID |
 | [`deque/`](deque/README.zh.md) | 提供摊销常数时间的队列操作和有界空闲存储 |
 | [`chunked-list/`](chunked-list/README.zh.md) | 通过有界追加复制和检查点校验保留不可变列表版本 |

@@ -374,7 +374,9 @@ describe('web e2e: macOS window drag coverage', () => {
         {
           row: 'conversation header',
           what: 'the blank run right of the view tabs, on the tab strip row',
-          at: () => [tabs.x + tabs.width + 8, tabs.y + tabs.height / 2],
+          // The last tab's press target overhangs the tablist by 10px and the
+          // More launcher starts 20px past it; probe the run between them.
+          at: () => [tabs.x + tabs.width + 15, tabs.y + tabs.height / 2],
           drag: true,
         },
         {

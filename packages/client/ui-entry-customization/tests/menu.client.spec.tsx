@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The plugin fills each region's More menu with entry rows and the discovery and Creator actions. */
+/** The plugin fills each region's More menu with the discovery and Creator actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -30,10 +30,9 @@ function content(overrides: Partial<ContentProps> = {}) {
     onDismiss: vi.fn<ContentProps['onDismiss']>(), browsePlugins: vi.fn<ContentProps['browsePlugins']>(),
     createPlugin: vi.fn<ContentProps['createPlugin']>(),
   }
-  // Framework hooks stay unused stubs; this isolated row set reads only its owner, inject, and locale shares.
   const props = {
     entries: [{ id: 'notes', label: 'Notes', pinned: true }, { id: 'tasks', label: 'Tasks', pinned: false }],
-    region: 'sidebar', t: makeTranslate(en), renderFactorySlot: unused,
+    region: 'sidebar', t: makeTranslate(en),
     usePluginNavigation: <T,>(select: (present: boolean) => T): T => select(true),
     usePanelInfo: unused, useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
     useResource: unused, useWorkspaces: unused,
@@ -45,54 +44,59 @@ function content(overrides: Partial<ContentProps> = {}) {
 }
 
 describe('More menu rows', () => {
-  it('separates opening from pinning and reports the inverted pin state', () => {
-    const b = content()
-    expect(b.view.getAllByRole('menuitem').map(row => row.getAttribute('aria-label') ?? row.textContent)).toEqual([
-      'Notes', 'Unpin from left sidebar: Notes', 'Tasks', 'Pin to left sidebar: Tasks', 'Browse other plugins', 'Create your plugin',
-    ])
-    expect(b.view.getAllByRole('separator')).toHaveLength(1)
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' }))
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Pin to left sidebar: Tasks' }))
-    expect(b.onPinnedChange).toHaveBeenNthCalledWith(1, 'notes', false)
-    expect(b.onPinnedChange).toHaveBeenNthCalledWith(2, 'tasks', true)
-    expect(b.onDismiss).not.toHaveBeenCalled()
-    expect(b.onOpen).not.toHaveBeenCalled()
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Tasks' }))
-    expect(b.onDismiss).toHaveBeenCalledOnce()
-    expect(b.onOpen).toHaveBeenCalledExactlyOnceWith('tasks')
-    expect(b.onDismiss.mock.invocationCallOrder[0]).toBeLessThan(b.onOpen.mock.invocationCallOrder[0]!)
-  })
-
-  it.each([
-    ['conversation', 'Pin to conversation tabs: Tasks'],
-    ['rightbar', 'Pin to right sidebar: Tasks'],
-  ] as const)('names the %s pin destination', (region, name) => {
-    const { view } = content({ region })
-    expect(view.getByRole('menuitem', { name })).toBeTruthy()
-  })
-
-  it('keeps only the discovery and Creator actions, without a separator, for an empty roster', () => {
-    const b = content({ entries: [], region: 'rightbar' })
+  it.each(['sidebar', 'rightbar'] as const)('shows only discovery and creation in %s regardless of entries', (region) => {
+    const b = content({ region, entries: [
+      { id: 'notes', label: 'Notes', pinned: true, active: true },
+      { id: 'tasks', label: 'Tasks', pinned: false },
+    ] })
     expect(b.view.getAllByRole('menuitem').map(row => row.textContent)).toEqual(['Browse other plugins', 'Create your plugin'])
     expect(b.view.queryByRole('separator')).toBeNull()
     fireEvent.click(b.view.getByRole('menuitem', { name: 'Browse other plugins' }))
     expect(b.browsePlugins).toHaveBeenCalledExactlyOnceWith()
+    expect(b.onDismiss.mock.invocationCallOrder[0]).toBeLessThan(b.browsePlugins.mock.invocationCallOrder[0]!)
     fireEvent.click(b.view.getByRole('menuitem', { name: 'Create your plugin' }))
     expect(b.createPlugin).toHaveBeenCalledExactlyOnceWith()
-    expect(b.onDismiss).toHaveBeenCalledTimes(2)
+    expect(b.onDismiss.mock.invocationCallOrder[1]).toBeLessThan(b.createPlugin.mock.invocationCallOrder[0]!)
+    expect(b.onOpen).not.toHaveBeenCalled()
+    expect(b.onPinnedChange).not.toHaveBeenCalled()
   })
 
-  it('shows the pin hint after the shared tooltip delay outside the menu card', () => {
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
-    const { view } = content()
-    const unpin = view.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' })
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    fireEvent.pointerEnter(unpin, { pointerType: 'mouse' })
-    act(() => { vi.advanceTimersByTime(499) })
-    expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
-    act(() => { vi.advanceTimersByTime(1) })
-    expect(view.getByRole('tooltip', { hidden: true }).closest('[role="menu"]')).toBeNull()
-    fireEvent.pointerLeave(unpin, { pointerType: 'mouse' })
+  it.each([true, false])('opens folded Views and marks the active View with plugin navigation present=%s', (browsable) => {
+    const b = content({ region: 'conversation',
+      usePluginNavigation: select => select(browsable),
+      entries: [
+        { id: 'notes', label: 'Notes', pinned: true, active: true },
+        { id: 'tasks', label: 'Tasks', pinned: true, active: false },
+      ],
+    })
+    expect(b.view.getAllByRole('menuitem').map(row => row.textContent))
+      .toEqual(['Notes', 'Tasks', ...(browsable ? ['Browse other plugins'] : []), 'Create your plugin'])
+    const currentRow = b.view.getByRole('menuitem', { name: 'Notes' })
+    expect(currentRow.getAttribute('aria-current')).toBe('page')
+    expect(currentRow.querySelector('svg')?.previousElementSibling?.textContent).toBe('Notes')
+    expect(b.view.getByRole('menuitem', { name: 'Tasks' }).hasAttribute('aria-current')).toBe(false)
+    expect(b.view.getAllByRole('separator')).toHaveLength(1)
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Tasks' }))
+    expect(b.onOpen).toHaveBeenCalledExactlyOnceWith('tasks')
+    expect(b.onDismiss.mock.invocationCallOrder[0]).toBeLessThan(b.onOpen.mock.invocationCallOrder[0]!)
+    expect(b.onPinnedChange).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('keeps actions unseparated for an empty roster with plugin navigation present=%s', (browsable) => {
+    const b = content({ region: 'conversation', entries: [], usePluginNavigation: select => select(browsable) })
+    expect(b.view.getAllByRole('menuitem').map(row => row.textContent))
+      .toEqual([...(browsable ? ['Browse other plugins'] : []), 'Create your plugin'])
+    expect(b.view.queryByRole('separator')).toBeNull()
+  })
+
+  it.each(['sidebar', 'rightbar'] as const)('keeps only creation in %s without plugin navigation', (region) => {
+    const b = content({ region, usePluginNavigation: select => select(false) })
+    expect(b.view.getAllByRole('menuitem').map(row => row.textContent)).toEqual(['Create your plugin'])
+    expect(b.view.queryByRole('separator')).toBeNull()
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Create your plugin' }))
+    expect(b.createPlugin).toHaveBeenCalledExactlyOnceWith()
+    expect(b.onOpen).not.toHaveBeenCalled()
+    expect(b.onPinnedChange).not.toHaveBeenCalled()
   })
 })
 
@@ -103,7 +107,7 @@ function Frame({ renderSlot }: PropsRenderSlots<Seats>) {
   return <>
     {SEATS.map(seat => <div key={seat} role="menu" aria-label={seat}>
       {renderSlot(seat, {
-        entries,
+        entries: seat === 'conversation.session.header.views.actions' ? [] : entries,
         onOpen: (id) => { setOpened(`${seat}:${id}`) },
         onPinnedChange: (_id, next) => { setPinned(next) },
         onDismiss: () => {},
@@ -148,8 +152,7 @@ describe('More menu registrations', () => {
     const sidebar = () => within(b.view.getByRole('menu', { name: 'sidebar.panellist.actions' }))
     expect(sidebar().queryByRole('menuitem', { name: 'Browse other plugins' })).toBeNull()
     expect(sidebar().getByRole('menuitem', { name: 'Create your plugin' })).toBeTruthy()
-    // The Creator row takes the separator the absent discovery row would carry.
-    expect(sidebar().getAllByRole('separator')).toHaveLength(1)
+    expect(sidebar().queryByRole('separator')).toBeNull()
     const injected = b.runtime.slots.entries('sidebar.panellist.actions')[0]!.inject!() as { browsePlugins: () => void }
     expect(() => { injected.browsePlugins() }).not.toThrow()
 
@@ -170,15 +173,10 @@ describe('More menu registrations', () => {
     const b = await bench()
     for (const seat of SEATS) {
       expect(b.runtime.slots.entries(seat).map(entry => entry.options.id)).toEqual(['entry-customization'])
-      expect(within(b.view.getByRole('menu', { name: seat })).getByRole('menuitem', { name: 'Notes' })).toBeTruthy()
+      expect(within(b.view.getByRole('menu', { name: seat })).getAllByRole('menuitem').map(row => row.textContent))
+        .toEqual(['Browse other plugins', 'Create your plugin'])
     }
     const sidebar = within(b.view.getByRole('menu', { name: 'sidebar.panellist.actions' }))
-    fireEvent.click(sidebar.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' }))
-    expect(within(b.view.getByRole('menu', { name: 'sidebar.right.tab.guide.actions' }))
-      .getByRole('menuitem', { name: 'Pin to right sidebar: Notes' })).toBeTruthy()
-    fireEvent.click(within(b.view.getByRole('menu', { name: 'conversation.session.header.views.actions' }))
-      .getByRole('menuitem', { name: 'Notes' }))
-    expect(b.view.getByTestId('opened').textContent).toBe('conversation.session.header.views.actions:notes')
     fireEvent.click(sidebar.getByRole('menuitem', { name: 'Browse other plugins' }))
     expect(b.openList).toHaveBeenCalledExactlyOnceWith()
     await b.plugin.dispose()
@@ -218,15 +216,6 @@ describe('More menu registrations', () => {
     expect(b.track).toHaveBeenLastCalledWith('more_menu_item_click', { region, action: 'create_plugin' })
     expect(b.track.mock.invocationCallOrder[1]).toBeLessThan(b.startSession.mock.invocationCallOrder[0]!)
     expect(b.track).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports neither entry opening nor pin changes', async () => {
-    const b = await bench()
-    const menu = within(b.view.getByRole('menu', { name: 'sidebar.panellist.actions' }))
-    fireEvent.click(menu.getByRole('menuitem', { name: 'Unpin from left sidebar: Notes' }))
-    fireEvent.click(menu.getByRole('menuitem', { name: 'Notes' }))
-    expect(b.view.getByTestId('opened').textContent).toBe('sidebar.panellist.actions:notes')
-    expect(b.track).not.toHaveBeenCalled()
   })
 
   it('keeps both footer actions working without the analytics service', async () => {

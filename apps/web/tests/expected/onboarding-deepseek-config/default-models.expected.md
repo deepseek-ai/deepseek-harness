@@ -37,7 +37,7 @@
           - text: 上下文窗口
           - textbox "上下文窗口 1":
             - /placeholder: 1M
-            - text: 1M
+            - text: "1048576"
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
             - /placeholder: 256K

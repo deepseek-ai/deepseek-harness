@@ -14,7 +14,7 @@ import { isAgentPresetEntry, isCordisGroupEntry, loadCordisYaml } from './cordis
 import { PRODUCT_PACKAGE_POLICY, type ProductPackagePolicy } from './product-package-policy.ts'
 import { collectRuntimeLocalSourceSpecifiers, collectRuntimeSourceSpecifiers } from './verify-client-packages.ts'
 
-const PROFILE_SOURCE = 'packages/boot/official-bundles/src/bundles.ts'
+const PROFILE_SOURCE = 'packages/util/official-bundles/src/bundles.ts'
 const PROFILES = ['acp', 'web', 'headless', 'sdk', 'sdk-minimal']
 const PICKER_SOURCE = 'packages/host/directory-picker-auto/src/index.ts'
 const DYNAMIC_MOUNTS: Readonly<Record<string, readonly string[]>> = {

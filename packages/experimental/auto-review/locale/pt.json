@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Revisão de autorização automática",
+    "description": "Adicione um modo de permissão Auto review que usa o modelo para avaliar a autorização antes de cada chamada de ferramenta.",
+    "detail": "docs/DETAIL.md"
+  }
+}

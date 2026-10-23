@@ -4,7 +4,7 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-l
 import type { ComponentProps } from 'react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { HoverCardGroup, MenuItemButton, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
@@ -12,7 +12,7 @@ import type { MenuOpenState, SessionRowOwnerProps } from '../src/client/contract
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import {
-  ProjectRowItem, SearchResultItem, SessionNodeItem as SessionNodeItemComponent,
+  ProjectRowItem as ProjectRowItemComponent, SearchResultItem, SessionNodeItem as SessionNodeItemComponent,
 } from '../src/client/rows/Rows.tsx'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { en, zh } from '../src/client/locales.ts'
@@ -34,6 +34,7 @@ type RowSlotName =
   | 'sidebar.session.row.hover'
 type RowRenderSlot = PropsRenderSlots<RowSlotName>['renderSlot']
 type SessionNodeItemProps = ComponentProps<typeof SessionNodeItemComponent>
+type ProjectRowItemProps = ComponentProps<typeof ProjectRowItemComponent>
 
 const renderNoRowEntries: RowRenderSlot = () => null
 
@@ -48,10 +49,24 @@ function realDoubleClick(el: Element): void {
   fireEvent.doubleClick(el)
 }
 
-function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, ...props }: Omit<
-  SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'
-> & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'>>) {
-  return <SessionNodeItemComponent {...props} renderSlot={renderSlot} onRenameRequest={onRenameRequest} />
+function SessionNodeItem({
+  renderSlot = renderNoRowEntries, onRenameRequest = () => {}, useSessionAccess = allowAllAccess.useSessionAccess, ...props
+}: Omit<
+  SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'useSessionAccess'
+> & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'useSessionAccess'>>) {
+  return (
+    <SessionNodeItemComponent
+      {...props} renderSlot={renderSlot} onRenameRequest={onRenameRequest} useSessionAccess={useSessionAccess}
+    />
+  )
+}
+
+// Direct header specs hold every access answer unless the case refuses one.
+function ProjectRowItem({
+  useRemoteAccess = allowAllAccess.useRemoteAccess, useWorkspaceAccess = allowAllAccess.useWorkspaceAccess, ...props
+}: Omit<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess'>
+  & Partial<Pick<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess'>>) {
+  return <ProjectRowItemComponent {...props} useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess} />
 }
 
 /** Half detection reads the row rect; jsdom rects are all-zero by default. */
@@ -273,7 +288,8 @@ describe('workspace browser rows', () => {
       archived: false,
       snippet: 'matching message excerpt',
     }
-    render(<SearchResultItem result={result} currentId={result.id} onOpen={onOpen} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={result.id} onOpen={onOpen}
+      onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('Workspace context')).toBeTruthy()
@@ -285,6 +301,24 @@ describe('workspace browser rows', () => {
     expect(onOpen).toHaveBeenCalledWith(result.id)
   })
 
+  it('withholds the search-result restore control while the Session access excludes unarchiving', () => {
+    const result: SearchResultNode = {
+      id: sid('archived-result'), title: 'Archived', workspace: 'Project',
+      running: false, runningSubagentCount: 0, completed: false, archived: true,
+    }
+    const denied = vi.fn(() => false)
+    const view = render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={denied} t={t} />)
+    expect(denied).toHaveBeenCalledWith(result.id, 'workspace/unarchiveSession')
+    expect(view.queryByRole('button', { name: zh['menu.unarchiveSession'] })).toBeNull()
+    cleanup()
+    // The allowed answer renders the same verb.
+    const allowed = vi.fn(() => true)
+    const restored = render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowed} t={t} />)
+    expect(restored.getByRole('button', { name: zh['menu.unarchiveSession'] })).toBeTruthy()
+  })
+
   it.each([
     ['approval', '等待审批'],
     ['plan-review', '计划待审'],
@@ -294,7 +328,8 @@ describe('workspace browser rows', () => {
       id: sid(pendingInteraction), title: 'Needs input', workspace: 'Project',
       pendingInteraction, running: true, runningSubagentCount: 0, completed: false, archived: false,
     }
-    render(<SearchResultItem result={result} currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.querySelector('[data-state="warning"]')).toBeTruthy()
     expect(row.querySelector('[data-state="ongoing"]')).toBeNull()
@@ -582,7 +617,8 @@ describe('workspace browser rows', () => {
         id: sid('result'), title: 'Done', workspace: 'Workspace', running: false,
         runningSubagentCount: 0, completed: true, archived: false,
       }}
-      currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t}
+      currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()}
+      useSessionAccess={allowAllAccess.useSessionAccess} t={t}
     />)
     expect(screen.getByRole('treeitem').querySelector('[data-state="done"]')).not.toBeNull()
   })
@@ -615,6 +651,82 @@ describe('workspace browser rows', () => {
     fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('workspace row offers only the actions its Workspace access snapshot allows', () => {
+    const group: GroupNode = {
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const allowed = new Set<string>(['workspace/rename'])
+    const useWorkspaceAccess = vi.fn((_workspaceId: WorkspaceId, endpoint: string) => allowed.has(endpoint))
+    const drag = { start: vi.fn(), end: vi.fn() }
+    const props = {
+      group, onToggle: vi.fn(), onCreate: vi.fn(), actions: { rename: vi.fn(), delete: vi.fn() }, drag, t,
+    }
+    const view = render(<ProjectRowItem {...props} useWorkspaceAccess={useWorkspaceAccess} />)
+    expect(useWorkspaceAccess).toHaveBeenCalledWith(wid('project'), 'session/create')
+    // No New Session button, no drag handle, and a menu holding only the allowed rename row.
+    expect(screen.queryByRole('button', { name: '在“Project”中新建会话' })).toBeNull()
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
+    expect(screen.getByRole('menuitem', { name: '重命名' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: '删除工作区' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    // Without rename either, the header carries no menu at all.
+    allowed.clear()
+    view.rerender(<ProjectRowItem {...props} useWorkspaceAccess={useWorkspaceAccess} />)
+    expect(screen.queryByRole('button', { name: '工作区“Project”的操作' })).toBeNull()
+
+    // Every answer allowed restores the button, the full menu, and the drag handle.
+    for (const endpoint of ['session/create', 'workspace/rename', 'workspace/delete', 'workspace/insertBefore']) {
+      allowed.add(endpoint)
+    }
+    view.rerender(<ProjectRowItem {...props} useWorkspaceAccess={useWorkspaceAccess} />)
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '在“Project”中新建会话' }))
+    expect(props.onCreate).toHaveBeenCalledOnce()
+  })
+
+  it('ungrouped bucket asks the global resource whether it may start a Session', () => {
+    const group: GroupNode = {
+      key: 'ungrouped', workspaceId: undefined, cwd: undefined, createdAt: undefined, label: '',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
+    const useWorkspaceAccess = vi.fn(() => true)
+    render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t}
+      useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess} />)
+    expect(useRemoteAccess).toHaveBeenCalledWith('session/create')
+    expect(useWorkspaceAccess).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /新建会话/ })).toBeNull()
+  })
+
+  it('session row drags and renames from its title only while its access snapshot allows each', () => {
+    const node: SessionNode = {
+      id: sid('s1'), title: 'One', blank: false, running: false,
+      runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
+    }
+    const drag: RowDragProps = {
+      active: false, marker: null, start: vi.fn(), end: vi.fn(), hover: vi.fn(), drop: vi.fn(),
+    }
+    const onRenameRequest = vi.fn()
+    const useSessionAccess = vi.fn((_sessionId: SessionId, _endpoint: string) => false)
+    const view = render(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag}
+      onRenameRequest={onRenameRequest} useSessionAccess={useSessionAccess} t={t} />)
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('s1'), 'session/rename')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('s1'), 'workspace/insertSessionBefore')
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('false')
+    fireEvent.doubleClick(screen.getByText('One'))
+    expect(onRenameRequest).not.toHaveBeenCalled()
+
+    view.rerender(<SessionNodeItem node={node} currentId={undefined} now={0} onOpen={vi.fn()} drag={drag}
+      onRenameRequest={onRenameRequest} useSessionAccess={() => true} t={t} />)
+    expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
+    // A browser rename arms on the first press and fires on the double-click; the helper states both.
+    realDoubleClick(screen.getByText('One'))
+    expect(onRenameRequest).toHaveBeenCalledWith(sid('s1'), 'One')
   })
 
   it('workspace hover card shows its details and copies the full directory path', async () => {
@@ -1288,7 +1400,8 @@ describe('workspace browser rows', () => {
       id: sid('result'), title: 'Old result', workspace: 'Workspace context',
       running: false, runningSubagentCount: 0, completed: false, archived: true,
     }
-    render(<SearchResultItem result={result} currentId={undefined} onOpen={vi.fn()} onUnarchive={vi.fn()} t={t} />)
+    render(<SearchResultItem result={result} currentId={undefined}
+      onOpen={vi.fn()} onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={t} />)
     const row = screen.getByRole('treeitem')
     expect(row.className).toMatch(/archived/)
     // No leading marker: the grayed row alone carries the archived look.
@@ -1459,7 +1572,7 @@ it.each([['未命名', t], ['Untitled', tEn]])('labels unnamed search results as
     running: false, runningSubagentCount: 0, completed: false, archived: false }
   const onOpen = vi.fn()
   render(<SearchResultItem result={result} currentId={undefined} onOpen={onOpen}
-    onUnarchive={vi.fn()} t={translate} />)
+    onUnarchive={vi.fn()} useSessionAccess={allowAllAccess.useSessionAccess} t={translate} />)
   fireEvent.click(screen.getByText(label))
   expect(onOpen).toHaveBeenCalledWith(result.id)
 })

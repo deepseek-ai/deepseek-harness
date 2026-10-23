@@ -59,7 +59,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/experimental/browser-use-runtime': 'Provider-owned browser resource management and MCP integration helpers; no plugin entry.',
   'packages/boot/app-boot': 'Boot library the app bins import; plain helper exports.',
   'packages/boot/cmdline': 'Command-line library the app bins import; plain module exports.',
-  'packages/boot/official-bundles': 'Bundle-list data library the launcher and plugin manager import; plain constant exports.',
+  'packages/util/official-bundles': 'Bundle-list data library the launcher and plugin manager import; plain constant exports.',
   'packages/client/store': 'Browser-side state primitives; plain function/type exports.',
   'packages/client/ui-primitives': 'Browser-side UI component library; plain component exports.',
   'packages/client/ui-slots': 'Browser-side slot-map declarations; plain type exports.',

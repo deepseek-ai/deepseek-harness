@@ -1,5 +1,6 @@
 /** Display labels and toast sentences for global plugin management. */
 
+import { EXPERIMENTAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginManagerLocaleKey } from './locales.ts'
@@ -108,22 +109,6 @@ export function shortName(name: string): string {
   return unscoped.replace(/^dsh-(?:host-|client-)?/, '')
 }
 
-/** Official bundles that display the Experimental badge. */
-const EXPERIMENTAL_BUNDLES: readonly string[] = [
-  '@deepseek-ai/dsh-cua-bundle',
-  '@deepseek-ai/dsh-experimental-agent-team-profile',
-  '@deepseek-ai/dsh-experimental-voice-input-bundle',
-  '@deepseek-ai/dsh-experimental-auto-review',
-  '@deepseek-ai/dsh-experimental-inspector-profile',
-  '@deepseek-ai/dsh-experimental-tool-worktree',
-  '@deepseek-ai/dsh-experimental-cot-translation-bundle',
-  '@deepseek-ai/dsh-experimental-session-search',
-  '@deepseek-ai/dsh-experimental-session-titles-bundle',
-  '@deepseek-ai/dsh-experimental-badge-skill-bundle',
-  '@deepseek-ai/dsh-experimental-ralph-bundle',
-  '@deepseek-ai/dsh-experimental-plugin-market-bundle',
-]
-
 /**
  * Resolve installed package metadata without changing its technical identity.
  * @param pkg - package identity and local metadata.
@@ -136,7 +121,7 @@ export function packageText(
   return {
     title: pkg.meta?.title === undefined ? pkg.name : resolveText(pkg.meta.title),
     description: pkg.meta?.description === undefined ? undefined : resolveText(pkg.meta.description) || undefined,
-    beta: EXPERIMENTAL_BUNDLES.includes(pkg.name),
+    beta: EXPERIMENTAL_BUNDLES.has(pkg.name),
   }
 }
 

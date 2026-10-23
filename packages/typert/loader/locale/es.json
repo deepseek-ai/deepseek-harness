@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Carga tipo Typert",
+    "description": "Cargue la información de tipo generada por el complemento para consultarla y llamarla en tiempo de ejecución."
+  }
+}

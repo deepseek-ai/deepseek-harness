@@ -86,7 +86,7 @@ The projector preserves native omission behavior by checking literal defaults ag
 
 Use `readPluginMeta(specifier, parentURL)` or `ctx.pluginPackages.metaOf(specifier, parentURL)` to read installed package display text without importing or activating the plugin. Lookup uses the complete package specifier and the caller's resolution base, respecting Node exports. File paths and file URLs return no metadata without resolving resources. For a package-root specifier, missing locale fields fall back to the accessible `package.json`; a subpath specifier never reads a `package.json`. Malformed metadata returns an `error` diagnostic. Results retain translations for Client-side language selection. The reader also loads an image data URL, even when locale text is complete: a package root uses its manifest `icon`, or `<package>/icon` when that field is omitted; a subpath uses `<specifier>/icon`. An icon error preserves valid text alongside the diagnostic. See [Plugin display metadata](../../../docs/cookbook/adding-a-package.md#plugin-display-metadata) for the author format.
 
-The profile templates, installation-owned profile tuples, and retired bundle list that app-boot applies live in [`@deepseek-ai/dsh-official-bundles`](../official-bundles/README.md), together with the installation's default, optional, and on-demand bundle lists.
+The profile templates, installation-owned profile tuples, and retired bundle list that app-boot applies live in [`@deepseek-ai/dsh-official-bundles`](../../util/official-bundles/README.md), together with the installation's default, optional, and on-demand bundle lists.
 
 <a id="startup-and-reload-failures"></a>
 ### Startup and reload failures

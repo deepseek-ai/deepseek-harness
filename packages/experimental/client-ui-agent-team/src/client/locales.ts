@@ -71,3 +71,113 @@ export const ja = {
   'status.in_progress': '進行中',
   'status.completed': '完了',
 } satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  trigger: 'Tablero de tareas',
+  loading: 'Cargando tablero de tareas…',
+  unavailable: 'El tablero de tareas no está disponible',
+  failure: 'Registro de tarea persistente no válido: {message}',
+  empty: 'Aún no hay tareas compartidas. Créelos a través de la conversación.',
+  tasks: 'Tareas compartidas',
+  owner: 'propietario',
+  lead: 'Agente principal',
+  unowned: 'Sin dueño',
+  blockedBy: 'Bloqueado por',
+  writeScopes: 'Escribir alcances',
+  ready: 'Listo',
+  blocked: 'Bloqueado por dependencias',
+  'task.expand': 'Mostrar más',
+  'task.collapse': 'Mostrar menos',
+  'status.pending': 'Pendiente',
+  'status.in_progress': 'En progreso',
+  'status.completed': 'Completado',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  trigger: 'Tableau des tâches',
+  loading: 'Chargement du tableau des tâches…',
+  unavailable: 'Le tableau des tâches n’est pas disponible',
+  failure: 'Enregistrement de tâche persistant non valide : {message}',
+  empty: "Aucune tâche partagée pour l'instant. Créez-les à travers la conversation.",
+  tasks: 'Tâches partagées',
+  owner: 'Propriétaire',
+  lead: 'Agent principal',
+  unowned: 'Sans propriétaire',
+  blockedBy: 'Bloqué par',
+  writeScopes: 'Écrire des étendues',
+  ready: 'Prêt',
+  blocked: 'Bloqué par les dépendances',
+  'task.expand': 'Afficher plus',
+  'task.collapse': 'Afficher moins',
+  'status.pending': 'En attente',
+  'status.in_progress': 'En cours',
+  'status.completed': 'Terminé',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  trigger: 'Aufgabenübersicht',
+  loading: 'Aufgabenübersicht wird geladen…',
+  unavailable: 'Aufgabenübersicht ist nicht verfügbar',
+  failure: 'Ungültiger gespeicherter Aufgabeneintrag: {message}',
+  empty: 'Noch keine geteilten Aufgaben. Erstellen Sie sie durch das Gespräch.',
+  tasks: 'Geteilte Aufgaben',
+  owner: 'Besitzer',
+  lead: 'Hauptagent',
+  unowned: 'Unbesessen',
+  blockedBy: 'Blockiert von',
+  writeScopes: 'Bereiche schreiben',
+  ready: 'Bereit',
+  blocked: 'Blockiert durch Abhängigkeiten',
+  'task.expand': 'Mehr anzeigen',
+  'task.collapse': 'Weniger anzeigen',
+  'status.pending': 'Ausstehend',
+  'status.in_progress': 'In Bearbeitung',
+  'status.completed': 'Abgeschlossen',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  trigger: 'Доска задач',
+  loading: 'Загрузка доски задач…',
+  unavailable: 'Доска задач недоступна',
+  failure: 'Недопустимая сохранённая запись задачи: {message}',
+  empty: 'Общие задачи пока отсутствуют. Создайте их посредством разговора.',
+  tasks: 'Общие задачи',
+  owner: 'Владелец',
+  lead: 'Главный агент',
+  unowned: 'Невладеющий',
+  blockedBy: 'Заблокировано',
+  writeScopes: 'Запись областей',
+  ready: 'Готово',
+  blocked: 'Заблокировано зависимостями',
+  'task.expand': 'Показать больше',
+  'task.collapse': 'Показать меньше',
+  'status.pending': 'Ожидается',
+  'status.in_progress': 'В процессе',
+  'status.completed': 'Завершено',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  trigger: 'Quadro de tarefas',
+  loading: 'Carregando quadro de tarefas…',
+  unavailable: 'O quadro de tarefas não está disponível',
+  failure: 'Registro de tarefa persistente inválido: {message}',
+  empty: 'Ainda não há tarefas compartilhadas. Crie-os através da conversa.',
+  tasks: 'Tarefas compartilhadas',
+  owner: 'Proprietário',
+  lead: 'Agente principal',
+  unowned: 'Sem dono',
+  blockedBy: 'Bloqueado por',
+  writeScopes: 'Escrever escopos',
+  ready: 'Pronto',
+  blocked: 'Bloqueado por dependências',
+  'task.expand': 'Mostrar mais',
+  'task.collapse': 'Mostrar menos',
+  'status.pending': 'Pendente',
+  'status.in_progress': 'Em andamento',
+  'status.completed': 'Concluído',
+} satisfies Record<keyof typeof en, string>
