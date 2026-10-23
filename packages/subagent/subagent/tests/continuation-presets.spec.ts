@@ -243,7 +243,6 @@ describe('continuable child presets', () => {
     const childId = SessionId('historical-child')
     const historical = await ctx.agents.create({
       sessionId: childId,
-      ownerAgent: parent,
       meta: {
         parentSession: parent.id,
         origin: 'subagent',

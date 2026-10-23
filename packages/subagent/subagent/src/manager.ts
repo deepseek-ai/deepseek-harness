@@ -456,20 +456,20 @@ export class SubagentManager {
     }
     const identity = this.host.identityOf(caller.session)
     const delegated = caller.session.header.origin === 'subagent' || identity != null && caller.session.isOwnSeq(identity.seq)
-    const root = this.ctx.agents.roots().find(root =>
-      root === caller && !delegated || this.ctx.agents.isOwnedBy(caller.id, root),
-    )
-    if (root === undefined) throw new SubagentError('agent has no active runtime owner', 'UNAUTHORIZED')
-    return root
+    const activation = this.resident.get(caller.id)
+    if (activation !== undefined && activationAgent(activation) === caller
+      && this.ctx.agents.get(activation.root.id) === activation.root) return activation.root
+    if (delegated || activation !== undefined) {
+      throw new SubagentError('agent has no active runtime owner', 'UNAUTHORIZED')
+    }
+    return caller
   }
 
   /** Capture creation ancestry separately from the root that owns the new instance. */
   private ancestryForChild(creator: Agent): Pick<MaterializeBase, 'root' | 'ancestors'> {
     const root = this.rootOf(creator)
-    if (creator === root) return { root, ancestors: [root.id] }
-    const activation = this.resident.get(creator.id)
-    if (activation === undefined) throw new SubagentError('creator has no managed subagent instance', 'UNAUTHORIZED')
-    return { root, ancestors: [...activation.ancestors, creator.id] }
+    const ancestors = this.resident.get(creator.id)?.ancestors ?? []
+    return { root, ancestors: [...ancestors, creator.id] }
   }
 
   /**
@@ -519,8 +519,10 @@ export class SubagentManager {
       ;({ header, projections, inheritedEventCount } = parent)
     }
     if (root === undefined && ancestors.length > 0 && header.origin !== 'subagent') {
-      const owner = this.ctx.agents.roots().find(agent => agent.id === header.id)
-      if (owner === undefined) throw new SubagentError('subagent tree root is not live', 'CONTINUATION_UNAVAILABLE')
+      const owner = this.ctx.agents.get(header.id)
+      if (owner === undefined || this.rootOf(owner) !== owner) {
+        throw new SubagentError('subagent tree root is not live', 'CONTINUATION_UNAVAILABLE')
+      }
       return { root: owner, ancestors }
     }
     throw new SubagentError(`agent "${source.header.id}" is not a member of this subagent tree`, 'UNAUTHORIZED')
@@ -758,14 +760,12 @@ export class SubagentManager {
       const handle = create === undefined
         ? await this.ownerCtx.agents.resume({
           resumeSessionId: childId,
-          ownerAgent: root,
           agentOptions: inputs.agentOptions,
           signal: inputs.signal,
           setup,
         })
         : await this.ownerCtx.agents.create({
           sessionId: childId,
-          ownerAgent: root,
           meta: create.meta,
           ...(create.seed === undefined ? {} : { seed: create.seed }),
           inheritedEventCount: create.inheritedEventCount,

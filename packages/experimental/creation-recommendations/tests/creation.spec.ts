@@ -84,6 +84,20 @@ describe('interface creation', () => {
     expect(f.manager.removeBundle).toHaveBeenCalledOnce()
   })
 
+  it('leaves existing subagent receipts unchanged when the recommendation plugin loads', async () => {
+    const f = await fixture()
+    await f.fiber.dispose()
+    const child = await f.ctx.agents.create({ sessionId: SessionId('existing-creator-child'),
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    await f.propose('call-creation-1', proposal, child.agent)
+    const receipt = { callId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
+    recordCard(child.agent.session, receipt)
+    f.bundles.push(installedBundle(receipt.bundleName))
+    await f.ctx.plugin(CreationRecommendations)
+    expect(f.cardOf(callId, child.agent)).toEqual(receipt)
+    expect(f.manager.listBundles).not.toHaveBeenCalled()
+  })
+
   it('passes the user-selected left entry to Creator with only its location reference', async () => {
     const f = await fixture()
     await f.propose()
@@ -237,9 +251,9 @@ describe('interface creation', () => {
   it('refuses clicks from non-root or unauthorized connections', async () => {
     const f = await fixture()
     await f.propose()
-    const roots = vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+    const liveAgent = vi.spyOn(f.ctx.agents, 'get').mockReturnValue(undefined)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'not-live-root' })
-    roots.mockRestore()
+    liveAgent.mockRestore()
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'access-denied' })
     expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'access-denied' })
@@ -382,7 +396,9 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create')
     const spec = await f.entered.promise
-    const child = await f.harness.create(spec.childId!)
+    const childHandle = await f.ctx.agents.create({ sessionId: spec.childId!,
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    const child = childHandle.agent
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
     const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
@@ -392,17 +408,28 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
-    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), ownerAgent: child,
+    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'),
       meta: { parentSession: child.id, origin: 'subagent' } })
-    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), ownerAgent: helper.agent,
+    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'),
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
+    await childHandle.dispose()
+    expect((await run('install', child)).isError).toBe(false)
     for (const owned of [helper.agent, nested.agent]) {
       expect((await run('install', owned)).isError).toBe(true)
       expect((await run('list_bundles', owned)).isError).toBe(false)
     }
-    // Session lineage alone is not runtime ownership.
+    // Historical ordinary forks do not acquire subagent restrictions.
     const lineage = await f.ctx.agents.create({ sessionId: SessionId('creator-lineage'), meta: { parentSession: child.id } })
     expect((await run('install', lineage.agent)).isError).toBe(false)
+    const unlinked = await f.ctx.agents.create({ sessionId: SessionId('unlinked-subagent'), meta: { origin: 'subagent' } })
+    expect((await run('install', unlinked.agent)).isError).toBe(false)
+    const cycle = await f.ctx.agents.create({ sessionId: SessionId('cycle-first'),
+      meta: { origin: 'subagent', parentSession: SessionId('cycle-second') } })
+    await f.ctx.agents.create({ sessionId: SessionId('cycle-second'),
+      meta: { origin: 'subagent', parentSession: cycle.agent.id } })
+    expect((await run('install', cycle.agent)).isError).toBe(false)
+    await helper.dispose()
+    expect((await run('install', nested.agent)).isError).toBe(false)
   })
 
   it('refuses to start a Creator while the Session is read-only and keeps dismissal available', async () => {
@@ -505,7 +532,7 @@ describe('interface creation', () => {
     }
   })
 
-  it('retains a late installed plugin after the parent disappears during installation', async () => {
+  it.each(['closed', 'replaced by a subagent'] as const)('retains a late installed plugin when the parent is %s during installation', async (state) => {
     const f = await fixture()
     await f.propose()
     const installing = Promise.withResolvers<undefined>()
@@ -518,11 +545,15 @@ describe('interface creation', () => {
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.agentHandle.dispose()
+    const replacement = state === 'closed' ? undefined : await f.ctx.agents.create({
+      sessionId: f.agent.id, meta: { origin: 'subagent' },
+    })
     f.bundles.push(installedBundle(name))
     gate.resolve({ application: 'applied', changed: true, stage: 'install', target: name })
     await vi.waitFor(() => { expect(f.manager.listBundles).toHaveBeenCalledTimes(2) })
     await f.fiber.dispose()
     expect(f.current()?.phase).toBe('installing')
+    if (replacement !== undefined) expect(f.cardOf(callId, replacement.agent)).toBeUndefined()
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
     expect(f.bundles.map(bundle => bundle.name)).toContain(name)
   })
