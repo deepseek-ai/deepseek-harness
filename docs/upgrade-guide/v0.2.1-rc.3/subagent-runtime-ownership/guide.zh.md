@@ -9,7 +9,7 @@ description: Agent 工厂归属参数和注册表树查询已删除，改为查�
 
 ## 变更
 
-`@deepseek-ai/dsh-agent` 删除 create/resume 的 `ownerAgent` 参数、`AgentRegistry.isOwnedBy()`、`AgentRegistry.roots()` 以及 `enter()` 的 owner 参数。直接通过工厂创建 Agent 不再将其加入托管 subagent 树。自定义工厂不再实现运行时树归属。
+`@deepseek-ai/dsh-agent` 删除 create/resume 的运行时归属参数（`parentAgent` 或 `ownerAgent`）、`AgentRegistry.isOwnedBy()`、`AgentRegistry.roots()` 以及 `enter()` 的 owner 参数。直接通过工厂创建 Agent 不再将其加入托管 subagent 树。自定义工厂不再实现运行时树归属。
 
 subagent 服务在 setup 期间、`agent/created` 之前绑定本地实例。`lineageOf(agent)` 为托管本地实例返回确切的存活根实例和已验证的创建祖先 id；对普通、非托管或失效实例返回 `undefined`。Session 格式和 Cordis 上下文对句柄的所有权不变。
 

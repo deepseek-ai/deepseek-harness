@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-`@deepseek-ai/dsh-agent` removes the create/resume `ownerAgent` parameter, `AgentRegistry.isOwnedBy()`, `AgentRegistry.roots()`, and the owner argument of `enter()`. Direct factory creation no longer enrolls an Agent in a managed subagent tree. Custom factories no longer implement runtime tree ownership.
+`@deepseek-ai/dsh-agent` removes the create/resume runtime-owner parameter (`parentAgent` or `ownerAgent`), `AgentRegistry.isOwnedBy()`, `AgentRegistry.roots()`, and the owner argument of `enter()`. Direct factory creation no longer enrolls an Agent in a managed subagent tree. Custom factories no longer implement runtime tree ownership.
 
 The subagent service binds local instances during setup, before `agent/created`. `lineageOf(agent)` returns the exact live root and verified creation ancestor ids for a managed local instance, or `undefined` for ordinary, unmanaged, or stale instances. The Session format and Cordis context ownership of handles are unchanged.
 
