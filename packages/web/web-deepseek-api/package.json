@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-deepseek-api",
   "description": "DeepSeek Search and Fetch API providers for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

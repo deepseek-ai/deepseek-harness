@@ -100,7 +100,7 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 const HIGHLIGHT_MS = 2_400
 
 /**
- * Whether the main list shows an official optional bundle: the always-held ones, and any held-back one the profile enabled.
+ * Whether the main list shows an official optional bundle: any bundle outside `MORE_BUNDLES`, and any held-back one the profile enabled.
  * @param pkg - the official bundle as the Host reports it.
  * @returns whether the main list shows it.
  */
@@ -109,14 +109,14 @@ function pinnedToMainList(pkg: PackageView): boolean {
 }
 
 /**
- * Where an optional bundle sits on both lists: the always-held ones in their order, then the bundles neither list
+ * Where an optional bundle sits on both lists: the `EXTENSION_BUNDLES` in their order, then the bundles neither list
  * ranks, then the held-back ones in theirs, so Codex and Claude Code stay last on the More list.
  * @param name - the bundle's package name.
  * @returns the rank; bundles of equal rank keep the order the Host reported.
  */
 function optionalBundleRank(name: string): number {
-  const alwaysHeld = EXTENSION_BUNDLES.indexOf(name)
-  if (alwaysHeld >= 0) return alwaysHeld
+  const ranked = EXTENSION_BUNDLES.indexOf(name)
+  if (ranked >= 0) return ranked
   const heldBack = MORE_BUNDLES.indexOf(name)
   return heldBack < 0 ? EXTENSION_BUNDLES.length : EXTENSION_BUNDLES.length + 1 + heldBack
 }

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-market",
   "description": "Configured plugin market indexes for the Web Discover page and the plugin_market agent tool",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

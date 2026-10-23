@@ -31,18 +31,19 @@ it('loads Desktop inline and hover previews through the file route after streami
   const view = render(content(true))
   expect(view.container.querySelector('img')).toBeNull()
   view.rerender(content(false))
-  expect(screen.getByRole('img').getAttribute('src')).toBe(src)
+  const inline = screen.getByRole('img').getAttribute('src')
+  expect(inline?.replace(/&load=\d+$/u, '')).toBe(src)
   const trigger = screen.getByRole('button', { name: 'View full image: 图片' })
   trigger.focus()
   fireEvent.click(trigger)
-  expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe(src)
+  expect(screen.getByRole('dialog').querySelector('img')?.getAttribute('src')).toBe(inline)
   fireEvent.keyDown(window, { key: 'Escape' })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
   const link = screen.getByRole('button', { name: '打开图片' })
   fireEvent.pointerEnter(link.parentElement!)
   act(() => { vi.advanceTimersByTime(500) })
-  expect(screen.getByAltText(path).getAttribute('src')).toBe(src)
+  expect(screen.getByAltText(path).getAttribute('src')?.replace(/&load=\d+$/u, '')).toBe(src)
   fireEvent.error(screen.getByAltText(path))
   expect(screen.getByText(labels.failed)).toBeTruthy()
   fireEvent.click(link)
@@ -142,6 +143,13 @@ it('keeps an unavailable image link navigable without showing a hover preview', 
   expect(screen.queryByRole('img')).toBeNull()
   fireEvent.click(link)
   expect(openFile).toHaveBeenCalledWith('relative.png', undefined)
+})
+
+it('emits an unparsable file image URL unchanged', () => {
+  render(<MarkdownDelegateProvider openFile={vi.fn()} fileImages={{ ...fileImages, resolve: () => 'relative.png' }}>
+    <MarkdownText text="![Compare](image.png)" />
+  </MarkdownDelegateProvider>)
+  expect(screen.getByRole('img').getAttribute('src')).toBe('relative.png')
 })
 
 it('labels empty-alt image activation and retains a localized failure description', () => {

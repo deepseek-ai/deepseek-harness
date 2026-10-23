@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-market-index",
   "description": "Plugin market index format 1: JSON validation, relative icon resolution, and pinned install arguments",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

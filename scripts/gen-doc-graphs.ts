@@ -108,6 +108,22 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'actionCards',
+    pkg: 'action-cards',
+    title: 'Optional action cards',
+    mode: 'service',
+    consumers: ['creation-recommendations', 'client-ui-action-cards'],
+    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+  },
+  {
+    key: 'pluginRecommendations',
+    pkg: 'plugin-recommendations',
+    title: 'Explicit-need plugin recommendations',
+    mode: 'service',
+    consumers: ['client-ui-plugin-recommendations'],
+    note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',

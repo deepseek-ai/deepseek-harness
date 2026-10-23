@@ -13,5 +13,6 @@ Shared Session event declarations and resolved schemas appear in the [Session pe
 
 | Record | Owner | Purpose | Payload and source |
 |---|---|---|---|
+| `plugin:action-cards/decision` | `@deepseek-ai/dsh-action-cards` | Dismissals and kind-defined progress of action cards. | <code>ActionCardDecision</code> · [`packages/experimental/action-cards/src/types.ts`](../packages/experimental/action-cards/src/types.ts) |
 | `plugin:translator/request` | `@deepseek-ai/dsh-experimental-translator` | Provider-independent translation input, retained before dispatch. | <code>TranslationRequestRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |
 | `plugin:translator/result` | `@deepseek-ai/dsh-experimental-translator` | Successful translation, retained before it is returned to the consumer. | <code>TranslationResultRecord</code> · [`packages/experimental/translator/src/types.ts`](../packages/experimental/translator/src/types.ts) |
