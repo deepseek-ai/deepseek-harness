@@ -199,7 +199,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
         await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
         await toggle.click()
         await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
-        const setup = page.getByRole('dialog', { name: 'Set up Computer Use before use', exact: true })
+        const setup = page.getByRole('dialog', { name: 'Set up computer use before use', exact: true })
         await setup.getByRole('button', { name: 'Later', exact: true }).click()
         await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
         expect(await trace.evaluate(value => value.errors)).toEqual([])
