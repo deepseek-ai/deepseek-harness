@@ -356,7 +356,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Search the web for current information. Returns an optional summary answer and a list of source URLs. */
   web_search: {
-    /** 1–4 search queries; their results are merged. */
+    /** 1–10 search queries; their results are merged. */
     queries: string[];
   } & Record<string, JsonValue>;
   /** Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories. */

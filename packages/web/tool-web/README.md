@@ -46,7 +46,7 @@ Load the web service, at least one backend, and this package; both tools registe
 | `search` | `true` | Register `web_search` |
 | `fetch` | `true` | Register `web_fetch` |
 | `searchMaxResults` | `8` | Upper bound on sources returned by one `web_search` call |
-| `searchMaxQueries` | `4` | Upper bound on queries accepted by one `web_search` call; the value appears in prompt guidance and schema descriptions |
+| `searchMaxQueries` | `10` | Upper bound on queries accepted by one `web_search` call; the value appears in prompt guidance and schema descriptions |
 | `searchSummaryMaxChars` | `800` | Cap on each source summary in `web_search` output, in characters, including the `…` that marks a cut |
 | `fetchTimeoutMs` | `30000` | Cooperative tool-call timeout budget (ms) for `web_fetch` |
 | `searchTimeoutMs` | `30000` | Cooperative tool-call timeout budget (ms) for `web_search` |

@@ -20,7 +20,7 @@ import { EXTERNAL_WEB_CONTENT_NOTICE } from './trust.ts'
 export const WEB_SEARCH_MAX_RESULTS = 8
 
 /** Default upper bound on concurrent searches in one tool call. */
-export const WEB_SEARCH_MAX_QUERIES = 4
+export const WEB_SEARCH_MAX_QUERIES = 10
 
 /**
  * Default cap on one source summary, in characters: the upper end of the

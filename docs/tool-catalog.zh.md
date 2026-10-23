@@ -2861,7 +2861,7 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
   "properties": {
     "queries": {
       "type": "array",
-      "description": "1–4 search queries; their results are merged.",
+      "description": "1–10 search queries; their results are merged.",
       "items": {
         "type": "string"
       }
