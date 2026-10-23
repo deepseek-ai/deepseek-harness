@@ -28,6 +28,8 @@ kind: "package-reference"
 <a id="what-it-registers"></a>
 ## 注册了什么
 
+图片拖放回调通过图片入口的注入接口从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。
+
 - **类型** —— `ctx.sidebarRightTabs.register(...)`，id 为 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview`（这个实现在 tab 系统中的身份，也是其正文注册所用的键），kind `text`，匹配完整文件资源地址的 pattern，档位 `fallback`。`canOpen` 只接受 Session 地址，其中路径可为相对或绝对路径；不认领裸 `absolute` 地址。在 `extension` 或 `builtin` 档以更窄 pattern（比如 `*.png`）注册的类型接走那些地址；其他受支持文件落到这里。整个地址就是内容身份，所以不同目录下同名的两个文件、或同一路径在两个会话之下，是两个 tab；解码后的 basename 是 tab 标题，keyed slot `sidebar.right.pane.tab.title` 会在标题前放置按扩展名选择的 `FileTypeIcon`。
 - **正文** —— keyed slot `sidebar.right.pane.tab`，键为类型的 id。固定头部在可用时显示 Host 的绝对路径，否则显示请求路径；共享的 [`PathLabel`](../ui-primitives/README.zh.md#component-catalog) 弱化目录颜色，以左侧渐隐保留被裁剪路径的尾部字符，并在悬停时展示完整值。有多个受支持的渲染器时才显示下拉菜单。仅文本兼容的源文件提供纯文本选项；只有一个渲染器时不显示查看器控件。已知的二进制容器后缀没有注册渲染器时，在路径头部下方显示文件类型图标和不支持预览的说明，并且不会发起读取。两个 Session 作用域的 list 子 slot 在文件元数据报出 Host 路径后把当前文件交给其他插件，owner prop 为 `absolutePath`：`sidebar.right.tab.document.actions` 在每个显示头部的状态里渲染在头部自有控件之后；`sidebar.right.tab.document.unpreviewable` 渲染在不支持预览的空态里，以及可读但本预览无法渲染的文件（`not-text`、`too-large`）的空态里，占据原本放重试的位置；载体或未分类的读取失败仍保留重试，不存在或非普通文件的路径只给说明。两者已发布的占位者都是 [`ui-open-in-app`](../ui-open-in-app/README.zh.md)。仅当所选渲染器声明 `wrap: true` 时显示换行开关；图标表示点击后切换到的模式，该偏好按 tab 保存，初始开启。重新载入仍在此头部，不放入 Sidebar 的 tab 条。自动刷新默认开启；独立开关暂时隐藏，状态、文案、样式与切换逻辑保留。正文贴合格的每条边，各渲染器自行提供内容留白，并可拥有内部滚动区。这与 Files tab 右侧预留 2px 滚动条间距的布局有意不同：Preview 使用格的完整宽度，使贴边 HTML 与代码滚动区终止于格的边缘。
 - **共享加载与视图状态**，会话作用域、按 tab id 分桶。store 持有累计页或完整字节、读取与观察版本、待处理 Resource 变化、自动刷新状态、加载/失败状态、渲染器选择、滚动位置、换行和已响应的导航 revision。普通 inject face 调用 Remote 读取，并经声明的 store action 写入。重新载入和加载模式变化会淘汰旧请求；tab 的中止信号清理其状态。
@@ -59,7 +61,7 @@ Web 和桌面端均通过代码工作工具选择 HTML 预览策略。渲染器�
 
 开启代码工作工具时，HTML 以贴合正文四边的 Blob iframe 运行，沙箱属性严格为 `sandbox="allow-scripts"`，不含 `allow-same-origin`；脚本无法访问父应用的源或文件读取接口。渲染器通过注入的 Remote 回调，加载直接声明的相对 `.js` 经典脚本和 `.css` 样式表；固定安全上限为单个资源 4 MiB、总计 32 MiB、64 个不同资源。Host 代码解析关联路径，带 `baseFile` 的 `readBytes` 返回原生字节。依赖 Resource 在读取返回后加入，使用返回的 `absolutePath`，失败时则使用字符串类型的 `error.details.path`；没有 Host 路径时，Client 不自行猜测。在渲染器内部，base64 仅用于把 iframe 引导载荷嵌入脚本文本。`<base href>` 将依赖解析交给浏览器，HTTPS 资源也由浏览器处理。本地模块 import、CSS `url()`/`@import` 和动态 `fetch` 不使用 Host 文件访问。读取失败、无效 UTF-8 或超出上限都使预览失败，不发布部分资源包。替换或卸载文档会释放其 Blob URL。
 
-PNG、JPEG、GIF、WebP、BMP、ICO 和 SVG 通过 Blob URL 在 `<img>` 静态图片上下文中渲染，带 12px 内边距和圆角。图片默认适应宽度，但不会放大小于面板的内容；100% 使用图片的固有 CSS 像素宽度。共享缩放控件可产生横向和纵向滚动，但不提供拖拽平移。缩放不会替换 `<img>` 或 Blob URL，因此动画图片会继续播放。位图超过固有尺寸后可能变虚，SVG 则继续使用浏览器的矢量渲染路径。SVG 标记绝不进入应用 DOM 或 iframe，因此其中的脚本无法执行，也无法访问父页面。替换或卸载图片会撤销其 Blob URL。
+PNG、JPEG、GIF、WebP、BMP、ICO 和 SVG 通过 Blob URL 在 `<img>` 静态图片上下文中渲染，带 12px 内边距和圆角。图片默认适应宽度，但不会放大小于面板的内容；100% 使用图片的固有 CSS 像素宽度。图片在任一方向超出视口时，按住鼠标左键拖动可平移，指针显示为抓手或抓取状态。图片完全位于视口内时，拖动会将原文件交给输入框或外部应用；一次手势的模式保持到松开为止。Ctrl+滚轮和触控板捏合沿用共享缩放行为。缩放不会替换 `<img>` 或 Blob URL，因此动画图片会继续播放。位图超过固有尺寸后可能变虚，SVG 则继续使用浏览器的矢量渲染路径。SVG 标记绝不进入应用 DOM 或 iframe，因此其中的脚本无法执行，也无法访问父页面。替换或卸载图片会撤销其 Blob URL。
 
 共享文案来自 `sidebarDocumentPreview`；各内置渲染器拥有自己的本地化标签。PDF 与转换后的 Office 预览在浅色模式下使用冷调浅灰底色，在深色模式下使用哑黑底色，页面带有轻微阴影并保留文档原色。PDF 与图片预览共用浮动控件，提供**适应宽度**、25%、50%、100%、150% 和 200% 选项，并在 25%–400% 固定范围内按 25% 逐级缩放。适应宽度是默认模式并跟随面板尺寸；100% 表示 PDF 的 96 DPI 页面尺寸或图片的固有 CSS 像素尺寸。在精细指针设备上，控件初始隐藏；指针进入底部 72 个 CSS 像素时向上滑入，离开 420 ms 后向下退出；控件悬停、键盘焦点、菜单展开和手势进行期间保持显示，无 hover 的设备则始终显示。Chromium 将 macOS 触控板捏合映射到与 Ctrl+滚轮相同的实时指针锚定路径；控件同步显示手势比例，静止后的值在正文重新挂载后继续保留，直至 tab 关闭。HTML 预览不显示缩放控件。缩放稳定或适应宽度发生变化后，视口附近的 PDF 页面按最终缩放比例乘以设备像素比重绘。新位图完成前保留原有画面和可选文字层；屏幕外的页面在接近视口时更新。
 

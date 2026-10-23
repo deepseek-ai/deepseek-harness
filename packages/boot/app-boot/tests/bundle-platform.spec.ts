@@ -23,6 +23,6 @@ it.each(['win32', 'linux'])('rejects macOS-only bundles on %s Hosts', (platform)
   expect(() => { assertBundlePlatform(['darwin'], platform) }).toThrow(`the DSH Host is running ${platform}`)
 })
 
-it.each([null, true, 'darwin', [], [1], [''], ['Darwin'], [' darwin'], ['darwin', false]].map(platforms => ({ platforms })))('rejects malformed platform metadata $platforms', ({ platforms }) => {
+it.each([null, true, 'darwin', [], [1], [''], ['Darwin'], [' darwin'], ['macos'], ['darwin', 'linxu'], ['darwin', false]].map(platforms => ({ platforms })))('rejects malformed platform metadata $platforms', ({ platforms }) => {
   expect(() => { assertBundlePlatform(platforms, 'darwin') }).toThrow('dsh.bundle.platforms must be a nonempty list')
 })

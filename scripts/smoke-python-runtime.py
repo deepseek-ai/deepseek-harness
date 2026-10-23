@@ -258,7 +258,8 @@ def write_advanced_profile_patch(
 ) -> Path:
     """Write the shared custom, snapshot, and restart profile patch."""
     return write_profile_patch(root, name, sessions, [
-        {"id": "tools", "config": {"mode": mode}},
+        {"id": "tool-executor-native", "disabled": mode != "native"},
+        {"id": "tool-executor-ptc", "disabled": mode != "ptc"},
         {
             "id": "system-prompt",
             "config": {

@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@eslint-community/regexpp": "^4.12.2",
     "ajv": "^8.20.0",

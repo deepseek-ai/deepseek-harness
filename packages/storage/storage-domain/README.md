@@ -85,8 +85,8 @@ The domain layer is a single implementation, not an abstracted seam: consumers d
 ### Design concept
 
 - **The spec object is the single source of truth.** `defineDomain` pins the spec's literal types and validates its fields at the owning package's module load, before any medium is touched. Record schemas are zod, so `z.infer` avoids duplicating consumer types; plugin `Config` stays schemastery.
-- **Memory is authoritative; the medium is the durable projection.** Reads are synchronous from validated in-memory state. Every write queues on one per-domain write chain: backend durability first, then memory mutation, then `domain/changed` — a rejected backend write leaves memory untouched, so reads never diverge from the medium.
-- **One write chain per domain.** `put`, `delete`, `update`, and `global.set` all queue on it; `update`'s transform runs at its chain slot, so concurrent updates never interleave. Records are plain immutable data — returned values are the stored objects themselves and must not be mutated in place.
+- **Memory is authoritative; the medium is the durable projection.** Reads are synchronous from validated in-memory state. Every write queues on one per-domain write chain: backend durability first, then memory mutation, then `domain/changed` — a rejected backend write leaves memory untouched, so reads never diverge from the medium; a backend that reports `unknown-state` quarantines the domain, whose reads and later writes then reject until it is closed.
+- **One write chain per domain.** `put`, `delete`, `deleteMany`, `update`, and `global.set` all queue on it; `update`'s transform runs at its chain slot, so concurrent updates never interleave. Records are plain immutable data — returned values are the stored objects themselves and must not be mutated in place.
 - **Writes emit after the commit point.** `domain/changed` is a notification, not a transaction participant: a throwing listener is contained with a logged warning rather than rejecting the already-durable write.
 
 ### Open sequence

@@ -75,7 +75,7 @@ Every package lives in exactly one group; new packages join existing groups, and
 | [`sdk/`](sdk/README.md) | Out-of-process SDK: JSON-RPC protocol and TypeScript client/server |
 | [`acp/`](acp/README.md) | Automation-only Agent Client Protocol server |
 | [`interaction/`](interaction/README.md) | Human-collaboration plane: approval/interaction seams, permission preset, commands, ask-user tool |
-| [`boot/`](boot/README.md) | Shared app-bin boot glue |
+| [`boot/`](boot/README.md) | Shared app-bin boot glue and installation bundle lists |
 | [`host/`](host/README.md) | Web GUI host services, directory picking, application launch, plugin inventory, and product telemetry |
 | [`client/`](client/README.md) | Web-GUI browser half: shell, wire, object services, slots, `ui-*` plugins |
 | [`test-support/`](test-support/README.md) | Test infrastructure (testkits, replay, Loader smokes) |

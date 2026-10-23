@@ -35,6 +35,21 @@ export interface AcpConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-acp -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-action-cards -->
+<a id="deepseek-aidsh-action-cards"></a>
+
+## `@deepseek-ai/dsh-action-cards`
+
+- `inject`: `tools` · `agents` · `sessionProjections` · `remoteAccess`
+- `refs`: `z` (`zod`)
+- `source`: [`packages/experimental/action-cards/src/index.ts:23`](../packages/experimental/action-cards/src/index.ts)
+
+```ts config-catalog
+/** Validated card limits after schema defaults. */
+export type Config = z.infer<typeof Config>
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-action-cards -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-agent-default-model -->
 <a id="deepseek-aidsh-agent-default-model"></a>
 
@@ -164,11 +179,13 @@ export interface Config {
 ## `@deepseek-ai/dsh-agent-tool-presentation`
 
 - `inject`: `tools`
-- `refs`: [`ToolPresentationMode`](subsystems/tools.zh.md)
-- `source`: [`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
+- `source`: [`packages/core/agent-tool-presentation/src/index.ts:25`](../packages/core/agent-tool-presentation/src/index.ts)
 
 ```ts config-catalog
-/** Plugin config. */
+/**
+ * Plugin config.
+ * @deprecated Select the native or PTC executor plugin directly instead of configuring a mode.
+ */
 export interface Config {
   /**
    * The form this agent's model sees. `native` sends every visible schema,
@@ -177,7 +194,7 @@ export interface Config {
    * without this row already gets, so an omitted value would mean the row was
    * composed for nothing.
    */
-  mode: ToolPresentationMode
+  mode: 'native' | 'ptc'
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-tool-presentation -->
@@ -356,14 +373,14 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-attachment-local`
 
-- `source`: [`packages/attachment/attachment-local/src/index.ts:61`](../packages/attachment/attachment-local/src/index.ts)
+- `source`: [`packages/attachment/attachment-local/src/index.ts:65`](../packages/attachment/attachment-local/src/index.ts)
 
 ```ts config-catalog
 /** Local attachment backend configuration. */
 export interface Config {
   /** Explicit harness home; omitted follows `DSH_HOME`, then `~/.dsh`. */
   dshHome?: string
-  /** Maximum encoded bytes accepted for one submitted image. Default: 20 MiB. */
+  /** Maximum encoded bytes accepted for one submitted image. Default: 50 MiB. */
   maxImageBytes?: number
   /** Maximum image count accepted in one submitted message. Default: 20. */
   maxImagesPerMessage?: number
@@ -371,7 +388,7 @@ export interface Config {
   maxMessageImageBytes?: number
   /** Maximum intrinsic width multiplied by height accepted for one submitted image. Default: 64,000,000. */
   maxImagePixels?: number
-  /** Maximum intrinsic width and maximum intrinsic height accepted for one submitted image. Default: 8192px. */
+  /** Maximum intrinsic width and maximum intrinsic height accepted for one submitted image. Default: 65,535px. */
   maxImageDimension?: number
   /** Total-pixel budget of the stored provider-independent normalized image. */
   normalizedImageMaxPixels?: number
@@ -1623,7 +1640,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-frontend-static`
 
 - `inject`: `webServer` · `connection`
-- `source`: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+- `source`: [`packages/host/frontend-static/src/index.ts:34`](../packages/host/frontend-static/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the dist anchor. */
@@ -1708,7 +1725,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-host-webserver`
 
-- `source`: [`packages/host/webserver/src/index.ts:76`](../packages/host/webserver/src/index.ts)
+- `source`: [`packages/host/webserver/src/index.ts:97`](../packages/host/webserver/src/index.ts)
 
 ```ts config-catalog
 /** Web server listen, TLS, and response-compression config. */
@@ -1791,25 +1808,15 @@ export interface Config {
 ## `@deepseek-ai/dsh-llm-deepseek-account`
 
 - `inject`: `llm`
-- `refs`: [`DeepSeekCatalogModel`](../packages/llm/llm-deepseek/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-deepseek-account/src/config.ts:19`](../packages/llm/llm-deepseek-account/src/config.ts)
+- `refs`: [`ModelListingConfig`](../packages/llm/llm-deepseek/src/index.ts) · [`ModelOverride`](../packages/llm/llm-deepseek/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-deepseek-account/src/config.ts:15`](../packages/llm/llm-deepseek-account/src/config.ts)
 
 ```ts config-catalog
 /** Account route configuration; authentication comes exclusively from the account service. */
-export interface Config extends Omit<ProtocolConfig, 'models'> {
-  /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
-  modelsTimeoutMs: Volatile<number>
-  /**
-   * Listing age after which the next access refreshes it in the background;
-   * a failed load retries after the same age (default ten minutes).
-   */
-  modelsMaxAgeMs: Volatile<number>
+export interface Config extends Omit<ProtocolConfig, 'models'>, ModelListingConfig {
   /** Field overrides by model id, layered over the account listing and the built-in catalog. */
   modelOverrides: Volatile<Record<string, ModelOverride>>
 }
-
-/** Field overrides for one model; unset fields and empty lists inherit the underlying entry. */
-export type ModelOverride = Omit<DeepSeekCatalogModel, 'id'>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-account -->
 
@@ -1819,12 +1826,12 @@ export type ModelOverride = Omit<DeepSeekCatalogModel, 'id'>
 ## `@deepseek-ai/dsh-llm-deepseek-api-key`
 
 - `inject`: `llm`
-- `refs`: [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-deepseek-api-key/src/config.ts:10`](../packages/llm/llm-deepseek-api-key/src/config.ts)
+- `refs`: [`ModelListingConfig`](../packages/llm/llm-deepseek/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-deepseek-api-key/src/config.ts:18`](../packages/llm/llm-deepseek-api-key/src/config.ts)
 
 ```ts config-catalog
 /** Messages configuration with a per-request API-key reference. */
-export interface Config extends ProtocolConfig {
+export interface Config extends ProtocolConfig, ModelListingConfig {
   /** Credential reference resolved per request; defaults to DEEPSEEK_API_KEY. */
   apiKeyEnv: Volatile<string>
 }
@@ -2396,9 +2403,9 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-permission-presets`
 
-- `inject`: `shell` · `approval` · `sessions` · `sessionProjections`
+- `inject`: `shell` · `approval` · `sessions` · `agents` · `sessionProjections`
 - `refs`: [`ApprovalPolicy`](subsystems/approval.zh.md) · [`SandboxMode`](subsystems/sandbox.zh.md) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/interaction/permission-presets/src/index.ts:152`](../packages/interaction/permission-presets/src/index.ts)
+- `source`: [`packages/interaction/permission-presets/src/index.ts:153`](../packages/interaction/permission-presets/src/index.ts)
 
 ```ts config-catalog
 /** The {@link PermissionPresetService} config: preset table and composition default. */
@@ -2467,7 +2474,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-plan-mode`
 
 - `inject`: `tools` · `systemPrompt` · `sessionProjections` · `agents`
-- `source`: [`packages/plan/plan-mode/src/index.ts:69`](../packages/plan/plan-mode/src/index.ts)
+- `source`: [`packages/plan/plan-mode/src/index.ts:67`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -2485,7 +2492,7 @@ export interface PlanModeConfig {
 
 - `inject`: `loader` · `profileContext`
 - `refs`: [`NpmFileSource`](subsystems/boot.zh.md)
-- `source`: [`packages/boot/plugin-manager/src/index.ts:51`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:53`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -2500,6 +2507,8 @@ export interface Config {
   inspectTimeoutMs?: number
   /** Maximum duration of the GitHub repository connection check before installation, in milliseconds. */
   githubConnectionTimeoutMs?: number
+  /** Maximum duration of each HTTP(S) and SSH access probe of a self-hosted Git repository before installation, in milliseconds. */
+  gitTransportTimeoutMs?: number
   /** Maximum time one captured package run may print nothing before the manager terminates it, in milliseconds. */
   idleTimeoutMs?: number
   /** The registry lookups and installations ask first, as an http(s) URL; absent, the one pnpm's own configuration names. */
@@ -2892,7 +2901,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-session-log-export`
 
 - `inject`: `commands` · `connection`
-- `source`: [`packages/session-query/session-log-export/src/index.ts:46`](../packages/session-query/session-log-export/src/index.ts)
+- `source`: [`packages/session-query/session-log-export/src/index.ts:48`](../packages/session-query/session-log-export/src/index.ts)
 
 ```ts config-catalog
 /** Session-log archive policy. */
@@ -3272,7 +3281,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-spill-policy`
 
 - `inject`: `tools`
-- `source`: [`packages/spill/spill-policy/src/index.ts:25`](../packages/spill/spill-policy/src/index.ts)
+- `source`: [`packages/spill/spill-policy/src/index.ts:26`](../packages/spill/spill-policy/src/index.ts)
 
 ```ts config-catalog
 /** Optional result-retention budget. */
@@ -3640,7 +3649,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:258`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:263`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -3851,6 +3860,23 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
+<a id="deepseek-aidsh-tool-executor-ptc"></a>
+
+## `@deepseek-ai/dsh-tool-executor-ptc`
+
+- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
+- `source`: [`packages/core/tool-executor-ptc/src/config.ts:5`](../packages/core/tool-executor-ptc/src/config.ts)
+
+```ts config-catalog
+/** Program execution limits. */
+export interface Config {
+  /** Maximum overlapping concurrency-safe program subcalls. */
+  maxParallelSubCalls: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->
 <a id="deepseek-aidsh-tool-fs"></a>
 
@@ -3941,7 +3967,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-jobs`
 
 - `inject`: `tools` · `jobs` · `systemPrompt`
-- `source`: [`packages/jobs/tool-jobs/src/index.ts:41`](../packages/jobs/tool-jobs/src/index.ts)
+- `source`: [`packages/jobs/tool-jobs/src/index.ts:43`](../packages/jobs/tool-jobs/src/index.ts)
 
 ```ts config-catalog
 /** Configures bounded `job_output` waits and completion-notice delivery. */
@@ -3961,6 +3987,13 @@ export interface Config {
    * the next user input.
    */
   maxConsecutiveWakes?: number
+  /**
+   * Largest complete completion notice, in UTF-8 bytes, that carries the
+   * job's output and final result inline (default 2048); a larger one, or one
+   * over the producer's `outputLimitBytes`, leaves them for `job_output`. 0
+   * never inlines.
+   */
+  inlineOutputBytes?: number
 }
 
 /**
@@ -4247,7 +4280,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-web`
 
 - `inject`: `tools` · `web` · `systemPrompt`
-- `source`: [`packages/web/tool-web/src/index.ts:37`](../packages/web/tool-web/src/index.ts)
+- `source`: [`packages/web/tool-web/src/index.ts:39`](../packages/web/tool-web/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
@@ -4322,43 +4355,6 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-workspace-dependencies -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tools -->
-<a id="deepseek-aidsh-tools"></a>
-
-## `@deepseek-ai/dsh-tools`
-
-- `inject`: `systemPrompt`
-- `source`: [`packages/core/tools/src/index.ts:675`](../packages/core/tools/src/index.ts)
-
-```ts config-catalog
-/** Plugin config: how the registered tools are presented to the model. */
-export interface Config {
-  /**
-   * Model presentation. `native` (default) sends every visible schema; `ptc`
-   * sends only `run_code` plus a generated SDK prompt and collapses the
-   * executor to the same surface (a model-direct call may only name
-   * `run_code`; `run_code` SDK sub-dispatches keep every visible tool).
-   * PTC mode requires a `ctx.ptcRuntime` whose `language`
-   * has a registered SDK renderer (TypeScript or Python) and fails prompt
-   * assembly when it is absent or has no renderer. Under `ptc`, native names
-   * in `toolOrder` are invalid.
-   */
-  mode?: ToolPresentationMode
-  /**
-   * Concurrency cap for a `run_code` program's overlapping sub-calls
-   * (default 10, the loop scheduler's own default). Sub-calls follow the
-   * native scheduling contract — only calls whose tools classify
-   * concurrency-safe overlap; exclusive calls form barriers — so `1`
-   * restores strictly serial dispatch. Must be a positive integer.
-   */
-  maxParallelSubCalls?: number
-}
-
-/** How the registry presents its tools to the model (see {@link Config.mode}). */
-export type ToolPresentationMode = 'native' | 'ptc'
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tools -->
-
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-typert-loader -->
 <a id="deepseek-aidsh-typert-loader"></a>
 
@@ -4381,7 +4377,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-user-approval`
 
-- `source`: [`packages/interaction/user-approval/src/index.ts:135`](../packages/interaction/user-approval/src/index.ts)
+- `inject`: `sessionProjections`
+- `source`: [`packages/interaction/user-approval/src/index.ts:152`](../packages/interaction/user-approval/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config. All optional — `static Config` supplies the defaults. */
@@ -4474,7 +4471,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:34`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:36`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /** Settings read by the next search or fetch without re-registering either provider. */
@@ -4525,7 +4522,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-search-deepseek/src/index.ts:49`](../packages/web/web-search-deepseek/src/index.ts)
+- `source`: [`packages/web/web-search-deepseek/src/index.ts:51`](../packages/web/web-search-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `apply` fills env-var and constant defaults). */
@@ -4709,6 +4706,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-locale` | — | [`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts) |
 | `@deepseek-ai/dsh-client-modules` | `loader` | [`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts) |
 | `@deepseek-ai/dsh-client-resources` | — | [`packages/client/resources/src/index.ts`](../packages/client/resources/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-action-cards` | — | [`packages/experimental/client-ui-action-cards/src/index.ts`](../packages/experimental/client-ui-action-cards/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-agent-preset` | — | [`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-approval` | — | [`packages/client/ui-approval/src/index.ts`](../packages/client/ui-approval/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-attachment` | — | [`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts) |
@@ -4717,11 +4715,13 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/experimental/client-ui-creation-recommendations/src/index.ts`](../packages/experimental/client-ui-creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deepseek-model-label-1017` | — | [`packages/client/ui-deepseek-model-label-1017/src/index.ts`](../packages/client/ui-deepseek-model-label-1017/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deliverables` | `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-native` | — | [`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-entry-customization` | — | [`packages/client/ui-entry-customization/src/index.ts`](../packages/client/ui-entry-customization/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-file-drag` | — | [`packages/client/ui-file-drag/src/index.ts`](../packages/client/ui-file-drag/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-goal` | — | [`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-input-trigger` | — | [`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-jobs` | — | [`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts) |
@@ -4732,6 +4732,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-plugin-recommendations` | — | [`packages/experimental/client-ui-plugin-recommendations/src/index.ts`](../packages/experimental/client-ui-plugin-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
@@ -4767,6 +4768,7 @@ export interface Config {
 | `@deepseek-ai/dsh-computer-use` | — | [`packages/computer-use/computer-use/src/index.ts`](../packages/computer-use/computer-use/src/index.ts) |
 | `@deepseek-ai/dsh-config-editor` | `loader` · `profileContext` | [`packages/boot/config-editor/src/index.ts`](../packages/boot/config-editor/src/index.ts) |
 | `@deepseek-ai/dsh-cordis-client-runner` | — | [`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts) |
+| `@deepseek-ai/dsh-creation-recommendations` | `tools` · `pluginManager` · `agents` · `subagents` · `profileContext` · `skills` · `actionCards` | [`packages/experimental/creation-recommendations/src/index.ts`](../packages/experimental/creation-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-cua` | — | [`packages/experimental/cua/src/index.ts`](../packages/experimental/cua/src/index.ts) |
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | — | [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) |
 | `@deepseek-ai/dsh-deliverable-file-references` | `systemPrompt` | [`packages/deliverables/deliverable-file-references/src/index.ts`](../packages/deliverables/deliverable-file-references/src/index.ts) |
@@ -4789,6 +4791,7 @@ export interface Config {
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
 | `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
+| `@deepseek-ai/dsh-plugin-recommendations` | `pluginManager` · `agents` · `skills` · `actionCards` | [`packages/experimental/plugin-recommendations/src/index.ts`](../packages/experimental/plugin-recommendations/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `llm` · `sessionPersistence` · `sessions` · `tools` | [`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts) |
@@ -4803,9 +4806,11 @@ export interface Config {
 | `@deepseek-ai/dsh-terminal` | — | [`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts) |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
+| `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-subagent-control` | `tools` · `subagents` · `agents` | [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-working-directory` | `tools` · `workingDirectory` | [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts) |
+| `@deepseek-ai/dsh-tools` | `systemPrompt` | [`packages/core/tools/src/index.ts`](../packages/core/tools/src/index.ts) |
 | `@deepseek-ai/dsh-user-questions` | — | [`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-webhook` | `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` | [`packages/experimental/webhook/src/index.ts`](../packages/experimental/webhook/src/index.ts) |
 | `@deepseek-ai/dsh-workspace` | `storageDomain` · `sessionPersistence` | [`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts) |
@@ -4881,6 +4886,7 @@ export interface Config {
 | `@deepseek-ai/dsh-llm-mock-server` | — | [`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts) |
 | `@deepseek-ai/dsh-loader-smoke` | — | [`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts) |
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
+| `@deepseek-ai/dsh-official-bundles` | — | [`packages/util/official-bundles/src/index.ts`](../packages/util/official-bundles/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
@@ -4902,11 +4908,13 @@ export interface Config {
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
+| `@deepseek-ai/dsh-tool-testkit` | — | [`packages/test-support/tool-testkit/src/index.ts`](../packages/test-support/tool-testkit/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |
 | `@deepseek-ai/dsh-typert-protocol` | — | [`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts) |
 | `@deepseek-ai/dsh-typert-registry` | — | [`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts) |
 | `@deepseek-ai/dsh-util-code-language` | — | [`packages/util/code-language/src/index.ts`](../packages/util/code-language/src/index.ts) |
 | `@deepseek-ai/dsh-util-crypto` | — | [`packages/util/crypto/src/index.ts`](../packages/util/crypto/src/index.ts) |
+| `@deepseek-ai/dsh-util-file-drag` | — | [`packages/util/file-drag/src/index.ts`](../packages/util/file-drag/src/index.ts) |
 | `@deepseek-ai/dsh-util-time` | — | [`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts) |
 | `@deepseek-ai/dsh-util-values` | — | [`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts) |
 | `@deepseek-ai/dsh-util-workspace-path` | — | [`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts) |

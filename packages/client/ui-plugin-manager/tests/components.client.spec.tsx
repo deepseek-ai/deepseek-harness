@@ -162,6 +162,7 @@ function renderTab(
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
+    createHeaderRef: vi.fn(() => vi.fn()),
     useStore: bindSnapshotSelector(navigation), actions: navigation.actions,
     ...standard,
     t,
@@ -228,7 +229,7 @@ describe('PluginManagerPage', () => {
   it('starts each page at the top and keeps scroll position during a refresh', () => {
     const { set } = renderTab({ packages: [pkg()] })
     const open = screen.getByRole('button', { name: 'View dsh-better-sidebar' })
-    const panel = open.closest<HTMLElement>('[data-plugin-panel]')!
+    const panel = open.closest<HTMLElement>('[data-plugin-body]')!
     panel.scrollTop = 350
     fireEvent.click(open)
     expect(panel.scrollTop).toBe(0)
@@ -257,10 +258,13 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
     setTabs([{ id: 'discover', label: 'Discover' }])
     expect(screen.getByRole('tab', { name: en.installedTab }).getAttribute('aria-selected')).toBe('true')
+    // The tabs stay in the pinned page head with the title; the tab panel scrolls in the page body.
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(navigation.getSnapshot().tab).toBe('discover')
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(screen.getByRole('tab', { name: 'Discover' }).id)
+    expect(screen.getByRole('tabpanel').closest('[data-plugin-body]')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
@@ -292,6 +296,22 @@ describe('PluginManagerPage', () => {
     set({ highlight: 'dsh-better-sidebar' })
     expect(navigation.getSnapshot().tab).toBe('discover')
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+  })
+
+  it('keeps the header controls in the scrolling page without remounting them', () => {
+    const { setTabs, props, hidePage } = renderTab({ packages: [pkg()] })
+    const bar = document.querySelector('[data-plugin-bar]')
+    const body = document.querySelector('[data-plugin-body]')!
+    const refresh = screen.getByRole('button', { name: en.refresh })
+    expect(bar?.parentElement).toBe(body)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
+    setTabs([{ id: 'discover', label: 'Discover' }])
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).toBe(bar)
+    act(() => { body.scrollTop = 160; fireEvent.scroll(body) })
+    expect(screen.getByRole('button', { name: en.refresh })).toBe(refresh)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
+    hidePage()
+    expect(document.querySelector('[data-plugin-bar]')).toBeNull()
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
@@ -1255,8 +1275,11 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeTruthy()
     })
 
-    it('returns from package details to the secondary page and retains it across React remounts', () => {
-      const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
+    it.each([
+      '@deepseek-ai/dsh-experimental-session-titles-bundle',
+      '@deepseek-ai/dsh-creation-recommendations',
+      '@deepseek-ai/dsh-plugin-recommendations',
+    ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
@@ -1271,9 +1294,12 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
     })
 
-    it('pins a bundle the profile picks onto the main list, in its full-list place', () => {
+    it.each([
+      '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-creation-recommendations',
+      '@deepseek-ai/dsh-plugin-recommendations',
+    ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
-      const first = '@deepseek-ai/dsh-experimental-tool-worktree'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
       const entry = (name: string, enabled: boolean): PackageView => pkg({ name, official: true, enabled })
       const b = renderTab({ packages: [entry(second, true), entry(team, true), entry(first, false)] })

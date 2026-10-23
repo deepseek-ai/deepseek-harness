@@ -107,8 +107,11 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     try {
       const source = ctx.sessions.prepare(sid('current-cold'), { meta: { cwd: '/proj' } })
+      const detach = ctx.effect(() => ctx.sessions.enter(source))
+      ctx.sessions.announce(source)
       source.append('turn/start', { turn: 1 })
       source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      await detach()
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
         revision: SessionPersistenceRevision('test:cold-source'),

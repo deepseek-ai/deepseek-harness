@@ -244,12 +244,13 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       await settings.getByRole('button', { name: /删除模型/ }).first().click()
     }
     await settings.getByRole('button', { name: '添加模型', exact: true }).click()
-    const customModelId = settings.getByLabel('模型 ID 1')
+    const model = settings.locator('[data-row-key]')
+    const customModelId = model.getByLabel('模型 ID 1')
     await customModelId.fill('private-preview')
-    await settings.getByLabel('显示名称 1').fill('Private Preview')
+    await model.getByLabel('显示名称 1').fill('Private Preview')
     await settings.getByRole('button', { name: '模型选项 1' }).click()
-    await settings.getByLabel('上下文窗口 1').fill('131072')
-    await settings.getByLabel('最大输出 token 数 1').fill('64K')
+    await model.getByLabel('上下文窗口 1').fill('131072')
+    await model.getByLabel('最大输出 token 数 1').fill('64K')
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
 

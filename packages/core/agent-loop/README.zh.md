@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-agent-loop` 创建全新 agent 或恢复持久化会话，随后通过模型请求、流式响应、工具执行和持久会话历史驱动每个轮次。标准 agent 组合应挂载本包；声明式条目会在启动时启动 agent，公开的 `ctx.agents` API 则支持以编程方式创建和恢复 agent。`maxParallelToolCalls` 限制同时运行的并行安全调用数量，独占调用保留顺序。取消会保留已经流式交付给用户的文本。只有标准的「调用模型、运行工具、重复」生命周期无法满足需求时，才应选择自定义 `Agent` 实现。
+`dsh-agent-loop` 创建全新 agent 或恢复持久化会话，随后通过模型请求、流式响应、工具执行和持久会话历史驱动每个轮次。标准 agent 组合应挂载本包；声明式条目会在启动时启动 agent，公开的 `ctx.agents` API 则支持以编程方式创建和恢复 agent。所选工具执行器负责分发、并发、取消和工具日志。取消会保留已经流式交付给用户的文本。只有标准的「调用模型、运行工具、重复」生命周期无法满足需求时，才应选择自定义 `Agent` 实现。
 
 ## 目录
 
@@ -34,7 +34,6 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
   config:
-    maxParallelToolCalls: 10
     agents:
       - id: 'main'
         provider: deepseek
@@ -45,7 +44,6 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `maxParallelToolCalls` | `10` | 每个步骤同时在途的并行安全工具调用数；`1` 为串行 |
 | `agents[].id` | 必填 | 稳定标签；未设置 `sessionId` 时，全新会话会生成 `${id}-session-<uuid>` |
 | `agents[].provider` / `agents[].model` | — | 模型路由；步骤准备前两者都必须存在 |
 | `agents[].reasoningEffort` | — | 非空的初始推理强度；后续选择记录在 Session 中 |
@@ -54,7 +52,7 @@ kind: "package-reference"
 | `agents[].sessionId` | — | 确切身份：首次使用创建，重新挂载时恢复已实体化的历史 |
 | `agents[].resumeSessionId` | — | 加载这个持久化会话而不是创建新会话；与 `sessionId` 互斥 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-loop) 列出所有接受的字段。`maxParallelToolCalls` 是在下一个工具组开始时读取的 volatile Config 字段；`agents` 仍是启动配置。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-loop) 列出所有接受的字段。`maxParallelToolCalls` 仍是 volatile 正整数 Config 字段，默认值为 `10`；`1` 表示串行执行。循环在每个批次调用 `execute()` 时传入当前值，其优先级高于执行器配置。实时修改从下一个批次生效；`agents` 仍是启动配置。
 
 配置式恢复会在发布前将声明的路由记录为 Session 选择。程序化恢复保留 Session 选择，除非其 setup 显式记录另一条路由；仅传入初始 `agentOptions` 不会覆盖已有历史。
 
@@ -74,7 +72,7 @@ const handle = await ctx.agents.create({
 
 ### 一个步骤做什么
 
-每个步骤都会发送会话的派生历史——最新的非空 `system/message` 节点是有效提示词，渲染提示词为空时则没有系统消息——及其可见工具 schema；模型的工具调用经过受守卫的工具流水线，每个被接纳的事实都会在下一步据此派生之前追加到会话日志。并行安全调用最多可重叠 `maxParallelToolCalls` 个；独占调用单独运行并构成排序屏障。取消是协作式的：`agent.cancel()` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；被取消的流会终结已送达用户的文本。
+每个步骤都会发送会话的派生历史——最新的非空 `system/message` 节点是有效提示词，渲染提示词为空时则没有系统消息——及其可见工具 schema；模型的工具调用经过受守卫的工具流水线，每个被接纳的事实都会在下一步据此派生之前追加到会话日志。循环把完整的原始调用批次传给 `ctx.tools.execute()`；内置执行器保留模型顺序的结果和独占屏障。取消是协作式的：`agent.cancel()` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；被取消的流会终结已送达用户的文本。
 
 -----
 
@@ -105,19 +103,17 @@ const handle = await ctx.agents.create({
 | [`src/index.ts`](src/index.ts) | 插件入口：`AgentLoop` 服务、配置 schema、声明式 agent 启动、工厂注册 |
 | [`src/agent.ts`](src/agent.ts) | 具体 `ReactLoopAgent` 驱动器：收件箱、轮次／步骤状态机、取消 |
 | [`src/inbox.ts`](src/inbox.ts) | 包内部的 `ReactLoopInbox`：持久投影、结构化命令与仅供循环使用的领取状态 |
-| [`src/tool-calls.ts`](src/tool-calls.ts) | 工具调度：独占屏障与有界并行池 |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | 逐步骤运行时上下文快照处理 |
-| [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
 
 ### 创建与拆除
 
-创建是同一个受回滚保护的事务：构造私有会话、具象 agent 与带作用域上下文；等待可选 setup；进入两个注册表；宣告 `session/created`；等待串行 `agent/created` 监听器；随后释放已排队输入。创建运行时子 Agent 的调用方设置 `options.parentAgent`；调用方 Context 则单独拥有事务和存活句柄。Setup、commit、监听器失败或所有者 dispose 都会回滚已准备的资源。已送达的宣告仍可被观察，并有配对的销毁通知。Teardown 停止并排空驱动器、撤销作用域、关闭会话写路径、detach agent，再 detach 会话。每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
+新建和恢复共用一个受回滚保护的初始化流程：围绕已取得的 Session 构造具象 agent 与带作用域上下文；存储构造历史、进入 SessionStore 并完成 `session/created`；等待可选 setup 及其 commit；进入 AgentRegistry；等待串行 `agent/created` 监听器；随后释放已排队输入。创建运行时子 Agent 的调用方设置 `options.parentAgent`；调用方 Context 则单独拥有事务和存活句柄。Setup、commit、监听器失败或所有者 dispose 都会回滚已准备的资源。setup 期间 Session 可写；每次移除都会发出 `session/disposed`，包括 Agent 创建宣告前的 setup 失败。初始化失败保留恢复出的收件箱输入及已存储事件，并在释放自身作用域及已取得的写句柄后才拒绝。持久化层仍在创建写句柄时发生取消，可以更早拒绝；该句柄在创建完成后关闭。已送达的宣告仍可被观察，并有配对的销毁通知。Teardown 停止并排空驱动器、撤销作用域、关闭会话写路径、detach agent，再 detach 会话。每次 detach 都绑定到确切进入的对象，因此陈旧 disposer 无法移除之后出现的同 id 替代项。
 
 loop 在发布工厂前等待 inbox 与轮次边界注册完成，并将句柄传入 Agent 的同步构造过程。工厂卸载时，全局注册可以先于 teardown 完成而消失；保留句柄在整个作用域清理期间仍可读取，包括作用域内 abort 监听器发起取消的时刻。调用方卸载、工厂卸载和句柄释放等待同一次 teardown。
 
 ### 持久化集成
 
-循环是会话写句柄在生产环境中的获取点。挂载 `ctx.sessionPersistence` 后，`create`/`createAgent` 调用 `persistence.create(header)`——在发布之前存储持久身份并取得写所有权——并通过句柄追加构造 seed；`resume` 先调用 `persistence.open(id, 'write')`（排除同 id 的并发恢复），通过句柄读取物理上有效的日志，并为在轮次中途崩溃的日志把 `interruptedTurnClosers` 作为普通批次追加——语义崩溃修复是 agent 层的职责，而非存储入口。发布前的最后一刻，`appendUnstoredSuffix` 存储 setup 窗口期间追加的事件（seed 标记、委派策略记录），它们绝不会经由 `session/event` 重新发出。发布之后，挂载的后端按会话 id 把该会话的 `session/event` 批次、`session/flush` 屏障与 `session/disposed` 退役路由进活跃写句柄；循环只通过它拥有的句柄触碰存储。在后端仍保持挂载时，teardown 会在驱动器提交收尾事件后关闭句柄；close 排空已路由的缓冲并释放写所有权。没有后端时，会话只存在于内存中，其余一切不变。
+循环是会话写句柄在生产环境中的获取点。挂载 `ctx.sessionPersistence` 后，`create`/`createAgent` 调用 `persistence.create(header)`——在发布之前存储持久身份并取得写所有权——并通过句柄追加构造 seed；`resume` 先调用 `persistence.open(id, 'write')`（排除同 id 的并发恢复），通过句柄读取物理上有效的日志，并为在轮次中途崩溃的日志把 `interruptedTurnClosers` 作为普通批次追加——语义崩溃修复是 agent 层的职责，而非存储入口。入库前，`appendUnstoredSuffix` 存储包含 seed 标记的构造历史。随后 setup 通过实时事件流追加。从入库起，挂载的后端按会话 id 把该会话的 `session/event` 批次、`session/flush` 屏障与 `session/disposed` 退役路由进活跃写句柄；循环只通过它拥有的句柄触碰存储。在后端仍保持挂载时，teardown 会在驱动器提交收尾事件后关闭句柄；close 排空已路由的缓冲并释放写所有权。没有后端时，会话只存在于内存中，其余一切不变。
 
 ### 轮次与步骤流程
 

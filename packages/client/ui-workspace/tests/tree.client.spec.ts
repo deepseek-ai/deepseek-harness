@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type {
+  SessionListState, SessionProjectionMap, SessionSummary,
+} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionPendingInteraction, SessionStatus, SessionStatusSnapshot,
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SessionProjectionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   type ArchivedFilter,
@@ -39,6 +42,38 @@ const withMain = (state: SessionListState, id: SessionId): SessionListState => (
     [id]: { ...state.byId[id]!, retainedBy: { ...state.byId[id]!.retainedBy, mainView: 1 } },
   },
 })
+/**
+ * Projection values one shipped Host publishes for a Session. The `forkLineage` key belongs to the
+ * Liveshare package, which this program does not name, so the values are built through the open key
+ * space the wire allows.
+ */
+const projectionValues = (values: Record<string, JsonValue>): Readonly<Partial<SessionProjectionMap>> => values
+/**
+ * One list where the named Session carries the branch facts the Host publishes for this reader.
+ * @param items - list rows.
+ * @param branchId - Session the facts belong to.
+ * @param lineage - the branch fields that case exercises; `origin` is always a fork.
+ * @returns the list with that Session's `forkLineage` projection value.
+ */
+const branchedList = (
+  items: readonly SessionSummary[],
+  branchId: SessionId,
+  lineage: { readonly sourceSessionId: SessionId; readonly workspaceReadOnly?: boolean },
+): SessionListState => {
+  const base = list(...items)
+  return {
+    ...base,
+    byId: {
+      ...base.byId,
+      [branchId]: {
+        ...base.byId[branchId]!,
+        projectionValues: projectionValues({
+          forkLineage: { origin: 'fork', authoredByViewer: true, workspaceReadOnly: true, ...lineage },
+        }),
+      },
+    },
+  }
+}
 const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView => ({
   workspaceId: wid(id), path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
@@ -544,6 +579,17 @@ describe('deriveFlat', () => {
     expect(visibleSessionIds(partial, noArchive, 'default')).toEqual([sid('present')])
   })
 
+  it('leaves plugin-owned lineage interpretation to row slots in both list modes', () => {
+    const source = summary('shared', 1)
+    const child = summary('my-branch', 2)
+    const branched = branchedList([source, child], child.id, { sourceSessionId: source.id })
+    const rows = deriveFlat(branched, [source.id, child.id], noRows, noAttention)
+    expect(rows.every(row => !('fork' in row))).toBe(true)
+    const groups = deriveGroups(branched, [workspace('first', ['shared', 'my-branch'])],
+      noRows, noAttention, view(['first']))
+    expect(groups[0]!.sessions.every(row => !('fork' in row))).toBe(true)
+  })
+
   it('shows only the current blank session and excludes blanks from search', () => {
     const currentBlank = { ...summary('current-blank', 9), blank: true, retainedBy: { mainView: 1 } }
     const staleBlank = { ...summary('stale-blank', 8), blank: true }
@@ -620,6 +666,26 @@ describe('deriveSearchResults archive filtering', () => {
       list(hit, gone), [], 'needle', archived('gone'), 'only', noAttention, { items: [], hasMore: false }, 10,
     )
     expect(result.items.map(item => [item.id, item.archived])).toEqual([[gone.id, true]])
+  })
+})
+
+describe('deriveSearchResults branch marks', () => {
+  it('carries the same branch facts a matching row shows in the list', () => {
+    const source = summary('shared', 1)
+    source.title = source.displayTitle = 'Needle source'
+    const branch = summary('my-branch', 2)
+    branch.title = branch.displayTitle = 'Needle branch'
+    const result = deriveSearchResults(
+      branchedList([source, branch], branch.id, { sourceSessionId: source.id }),
+      [workspace('first', ['shared', 'my-branch'])],
+      'needle',
+      noArchive,
+      'default',
+      noAttention,
+      { items: [], hasMore: false },
+      10,
+    )
+    expect(result.items.every(item => !('fork' in item))).toBe(true)
   })
 })
 

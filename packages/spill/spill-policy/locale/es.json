@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Control de longitud del resultado de la herramienta",
+    "description": "Limite la longitud de los resultados de la herramienta colocados directamente en el contexto y conserve la ruta de lectura para los resultados completos."
+  }
+}

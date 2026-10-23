@@ -1099,6 +1099,8 @@ describe('SubagentHeaderLineage', () => {
     const current = screen.getByRole('treeitem', { name: /worker/ })
     expect(current.getAttribute('aria-current')).toBe('true')
     expect(within(current).getByText('worker').className).toContain('currentLabel')
+    expect(within(current).queryByRole('button', { name: '在侧边栏打开 worker' })).toBeNull()
+    expect(within(screen.getByRole('treeitem', { name: /reviewer/ })).getByRole('button', { name: '在侧边栏打开 reviewer' })).toBeTruthy()
     fireEvent.click(screen.getByRole('treeitem', { name: /reviewer/ }))
     expect(input.openChild).toHaveBeenCalledWith({
       parentSessionId: PARENT,

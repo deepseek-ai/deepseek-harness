@@ -224,6 +224,8 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
   let hostClock: MockInstance<typeof Date.now> | undefined
   const sessionEvents: SessionEvent[] = []
   const requestInputs: string[][] = []
+  let firstRequestSignal: AbortSignal | undefined
+  const questionStarted = Promise.withResolvers<undefined>()
   const releaseQuestion = Promise.withResolvers<undefined>()
   const FOLLOWUP = 'Also acknowledge this second message.'
   const RESPONSE = "Great, let's move forward. BANANA!"
@@ -239,9 +241,13 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
         message.role === 'user'
           ? message.content.flatMap(block => block.type === 'text' ? [block.text] : [])
           : []))
+      if (requestInputs.length === 1) firstRequestSignal = options.signal
       for await (const chunk of next()) {
         yield chunk
-        if (requestInputs.length === 1 && chunk.type === 'block-start') await releaseQuestion.promise
+        if (requestInputs.length === 1 && chunk.type === 'block-start') {
+          questionStarted.resolve(undefined)
+          await releaseQuestion.promise
+        }
       }
     }, { prepend: true })
     browser = await chromium.launch()
@@ -271,11 +277,13 @@ describe.skipIf(MODE === 'record')('web e2e: retained steering and a post-stop m
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     await input.fill(PROMPT)
     await input.press('Enter')
+    await questionStarted.promise
     await expect.poll(() => requestInputs.length, { timeout: 10_000 }).toBe(1)
     await input.fill(STEER)
     await input.press('Meta+Enter')
     await page.locator('[data-pending-steering]').filter({ hasText: STEER }).waitFor({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Stop generating', exact: true }).click()
+    await expect.poll(() => firstRequestSignal?.aborted).toBe(true)
     releaseQuestion.resolve(undefined)
     await expect.poll(() => sessionEvents.filter(event => event.type === 'turn/end').length, { timeout: 10_000 }).toBe(1)
     expect(claimedMessages(sessionEvents, STEER)).toHaveLength(0)

@@ -5,11 +5,13 @@ import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import type { LocalizedText } from '../packages/util/package-manifest/src/types.ts'
-import { ON_DEMAND_BUNDLES } from '../packages/boot/app-boot/src/official-bundle-packages.ts'
-import type { OfficialBundleCatalogEntry } from '../packages/boot/app-boot/src/official-bundles.ts'
+import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
+import type { OfficialBundleCatalogEntry } from '../packages/util/official-bundles/src/index.ts'
 import { readPluginMeta, resolvePluginResource } from '../packages/boot/app-boot/src/package-meta.ts'
 
-const OUTPUT = 'packages/boot/app-boot/src/official-bundles.generated.ts'
+import { SHIPPED_LOCALE_IDS } from './shipped-locales.ts'
+
+const OUTPUT = 'packages/util/official-bundles/src/catalog.generated.ts'
 
 /**
  * Read complete metadata without importing or activating any provider code.
@@ -49,7 +51,7 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
       throw new Error(`${packageName}: Official catalog entries must be public DSH bundle packages`)
     }
     const parentURL = pathToFileURL(resolve(root, entry.path)).href
-    for (const language of ['en', 'zh']) {
+    for (const language of SHIPPED_LOCALE_IDS) {
       const file = resolvePluginResource(`${packageName}/locale/${language}.json`, parentURL)
       const dictionary = JSON.parse(readFileSync(file, 'utf8')) as { meta?: { title?: unknown; description?: unknown } }
       if (typeof dictionary.meta?.title !== 'string' || dictionary.meta.title.trim() === ''
@@ -63,7 +65,7 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
       throw new Error(`${packageName}: Official catalog entries require an icon and localized title and description`)
     }
     for (const value of [meta.title, meta.description]) {
-      for (const language of ['en', 'zh']) {
+      for (const language of SHIPPED_LOCALE_IDS) {
         if (typeof value[language] !== 'string' || value[language].trim() === '') {
           throw new Error(`${packageName}: Official metadata requires ${language} text`)
         }
@@ -76,11 +78,11 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
 /**
  * Render a source-plane catalog with no package imports or pinned runtime version.
  * @param entries - Validated metadata in catalog order.
- * @returns Deterministic TypeScript source for app-boot's generated module.
+ * @returns Deterministic TypeScript source for the official-bundles generated module.
  */
 export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCatalogEntry[]): string {
   return '/** Generated offline Official bundle metadata. Run pnpm gen-official-bundle-catalog; do not edit. */\n\n'
-    + "import type { OfficialBundleCatalogEntry } from './official-bundles.ts'\n\n"
+    + "import type { OfficialBundleCatalogEntry } from './index.ts'\n\n"
     + '/** Official on-demand entries, independent of installed packages and registry availability. */\n'
     + 'export const OFFICIAL_ON_DEMAND_CATALOG: readonly OfficialBundleCatalogEntry[] = [\n'
     + entries.map(entry => '  {\n'

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ferramentas persistentes do PowerShell",
+    "description": "Deixe a IA executar comandos continuamente em uma sessão do PowerShell que preserva o estado."
+  }
+}

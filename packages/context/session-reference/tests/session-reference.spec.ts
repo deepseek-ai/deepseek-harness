@@ -386,6 +386,7 @@ describe('session reference spill outcomes', () => {
       const target = ctx.sessions.create(SessionId('target'))
       const sources = ['one', 'two', 'three'].map(id => ctx.sessions.prepare(SessionId(id)))
       const detachSources = sources.map(source => ctx.sessions.enter(source))
+      sources.forEach((source) => { ctx.sessions.announce(source) })
       sources.forEach((source, index) => { appendText(source, index === 1 ? 'intact' : 'large'.repeat(300)) })
       const save = vi.spyOn(ctx.spillStore, 'saveText').mockImplementation(async input => ({
         locator: SpillLocator(`memory:${input.suggestedName}`), bytes: Buffer.byteLength(input.content), retrievalHint: 'Read the captured transcript.',

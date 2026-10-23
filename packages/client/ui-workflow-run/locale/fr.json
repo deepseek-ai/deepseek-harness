@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Affichage de l'exécution du workflow",
+    "description": "Affichez les enregistrements d'exécution de flux de travail et les détails de leurs membres dans la session."
+  }
+}

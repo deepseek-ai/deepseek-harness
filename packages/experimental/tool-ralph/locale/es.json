@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Herramienta de iteración Ralph",
+    "description": "Ejecute nuevos subagentes ronda por ronda alrededor del mismo objetivo, transmitiéndoles un breve informe de la ronda anterior."
+  }
+}

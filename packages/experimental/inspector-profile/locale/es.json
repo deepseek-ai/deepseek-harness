@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Herramientas de desarrollador",
+    "description": "Inspeccione y depure datos de sesión sin procesar, mensajes de chat agrupados y el backend NodeJS.",
+    "detail": "docs/DETAIL.md"
+  }
+}

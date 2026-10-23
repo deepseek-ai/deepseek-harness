@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ponto de verificação de sessão",
+    "description": "Salve registros de sessão antes de solicitações de modelo e operações de ferramentas que possam ter efeitos externos."
+  }
+}

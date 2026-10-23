@@ -51,7 +51,7 @@ Explicit activation runs a read-only permission check, which may start a helper 
 <details>
 <summary>Maintainer details</summary>
 
-The bundle patch mounts the shared native provider and permission UI with `agentPreset: ptc`. The provider registers tools through existing Agent scopes, so other presets receive no CUA tool or guidance. Preset documents remain unchanged. The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked, preserving the deployment `default`. The provider defaults to PTC scope even when a saved grants override omits that field. [CUA](../cua/README.md) owns registration and disposal.
+The bundle patch mounts the shared native provider and permission UI with `agentPreset: ptc`. Using the exported `cordis.patch.yml` directly as an overlay bypasses bundle admission; its row-level condition skips the optional macOS provider on other Hosts. Shared entries alone do not provide computer control. The provider registers tools through existing Agent scopes, so other presets receive no CUA tool or guidance. Preset documents remain unchanged. The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked, preserving the deployment `default`. The provider defaults to PTC scope even when a saved grants override omits that field. [CUA](../cua/README.md) owns registration and disposal.
 
 </details>
 

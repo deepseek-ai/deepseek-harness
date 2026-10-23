@@ -48,7 +48,8 @@
     "mdast-util-math": "^3.0.0",
     "micromark-extension-gfm": "^3.0.0",
     "micromark-util-sanitize-uri": "^2.0.1",
-    "simple-icons": "16.31.0"
+    "simple-icons": "16.31.0",
+    "@deepseek-ai/dsh-util-file-drag": "workspace:*"
   },
   "files": [
     "lib/index.js",

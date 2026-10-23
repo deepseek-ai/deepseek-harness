@@ -1,3 +1,4 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
@@ -8,7 +9,8 @@ import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -30,6 +32,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   capable.systemPromptUpdate = 'in-history'

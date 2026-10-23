@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. `maxParallelToolCalls` limits concurrent parallel-safe calls, and exclusive calls retain ordering. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
+`dsh-agent-loop` creates fresh agents or resumes persisted sessions, then drives each turn through model requests, streamed responses, tool execution, and durable session history. Mount it for standard agent compositions; declarative entries start agents at boot, while the public `ctx.agents` API supports programmatic creation and resume. The selected tool executor owns dispatch, concurrency, cancellation, and tool logging. Cancellation preserves streamed text already delivered to the user. Choose a custom `Agent` implementation only when the standard "call model, run tools, repeat" lifecycle is insufficient.
 
 ## Table of Contents
 
@@ -34,7 +34,6 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 ```yaml
 - name: '@deepseek-ai/dsh-agent-loop'
   config:
-    maxParallelToolCalls: 10
     agents:
       - id: 'main'
         provider: deepseek
@@ -45,7 +44,6 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxParallelToolCalls` | `10` | Parallel-safe tool calls in flight per step; `1` is serial |
 | `agents[].id` | required | Stable label; a fresh session mints `${id}-session-<uuid>` unless `sessionId` is set |
 | `agents[].provider` / `agents[].model` | — | Model route; both required before step preparation |
 | `agents[].reasoningEffort` | — | Non-empty initial reasoning effort; later choices are recorded in the Session |
@@ -54,7 +52,7 @@ Agents declared in config start automatically when the plugin loads. Each entry 
 | `agents[].sessionId` | — | Exact identity: first use creates, a remount resumes materialized history |
 | `agents[].resumeSessionId` | — | Load this persisted session instead of creating one; mutually exclusive with `sessionId` |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` is a volatile Config field sampled for the next tool group; `agents` remains startup configuration.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-loop) lists every accepted field. `maxParallelToolCalls` remains a volatile positive-integer Config field with default `10`; `1` selects serial execution. The loop passes its current value to each batch's `execute()` call, taking precedence over executor configuration. Live edits apply to the next batch; `agents` remains startup configuration.
 
 A configured resume records the declared route as the Session selection before publication. Programmatic resume preserves the Session choice unless its setup explicitly records another route; initial `agentOptions` alone do not override saved history.
 
@@ -74,7 +72,7 @@ Every inbox mutation commits one normalized `agent/inbox/spliced` event. The pro
 
 ### What a step does
 
-Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. Parallel-safe calls may overlap up to `maxParallelToolCalls`; exclusive calls run alone as ordering barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
+Each step sends the session's derived history — with the latest non-empty `system/message` node as the effective prompt, or no system messages when the rendered prompt is empty — and its visible tool schemas; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. The loop passes the complete raw call batch to `ctx.tools.execute()`; built-in executors preserve model-order results and exclusive barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
 
 -----
 
@@ -105,19 +103,17 @@ The loop deep-freezes each derived message identity on its first request and reu
 | [`src/index.ts`](src/index.ts) | Plugin entry: `AgentLoop` service, config schema, declarative agent startup, factory registration |
 | [`src/agent.ts`](src/agent.ts) | The concrete `ReactLoopAgent` driver: inbox, turn/step machine, cancellation |
 | [`src/inbox.ts`](src/inbox.ts) | Package-internal `ReactLoopInbox`: durable projection, structural commands, and loop-only claim state |
-| [`src/tool-calls.ts`](src/tool-calls.ts) | Tool scheduling: exclusive barriers and the bounded parallel pool |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
-| [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
 
 ### Creation and teardown
 
-Creation is one rollback-covered transaction: construct a private session, concrete agent, and scoped context; await optional setup; enter both registries; announce `session/created`; await serial `agent/created` listeners; then release queued input. A caller creating a runtime child sets `options.parentAgent`; the caller Context separately owns the transaction and live handle. Setup, commit, or listener failure and owner disposal roll back the prepared resources. Announcements already delivered remain observable and receive matching disposal notifications. Teardown stops and drains the driver, unwinds the scope, closes the session's write path, detaches the agent, then detaches the session. Every detach binds the exact entered object, so a stale disposer cannot remove a later same-id replacement.
+Fresh creation and resume share one rollback-covered initialization: construct the concrete agent and scoped context around the acquired Session; store constructor history, enter the SessionStore, and complete `session/created`; await optional setup and its commit; enter the AgentRegistry; await serial `agent/created` listeners; then release queued input. A caller creating a runtime child sets `options.parentAgent`; the caller Context separately owns the transaction and live handle. Setup, commit, or listener failure and owner disposal roll back the prepared resources. The Session is writable during setup, and every removal emits `session/disposed`, including setup failure before Agent creation is announced. Failed initialization preserves restored inbox input and any events already stored; it rejects only after releasing its scope and acquired write handle. Cancellation while persistence is still creating a write handle can reject earlier; that handle closes when creation settles. Announcements already delivered remain observable and receive matching disposal notifications. Teardown stops and drains the driver, unwinds the scope, closes the session's write path, detaches the agent, then detaches the session. Every detach binds the exact entered object, so a stale disposer cannot remove a later same-id replacement.
 
 The loop awaits inbox and turn-boundary registration before publishing its factory and passes those handles into synchronous Agent construction. During factory unload, global registrations may disappear before teardown finishes; retained handles remain readable through scope cleanup, including cancellation from scoped abort listeners. Caller unload, factory unload, and handle disposal await the same teardown.
 
 ### Persistence integration
 
-The loop is the production acquisition point for session write handles. When `ctx.sessionPersistence` is mounted, `create`/`createAgent` call `persistence.create(header)` — storing the durable identity and taking write ownership before publication — and append the constructor seed through the handle; `resume` calls `persistence.open(id, 'write')` first (excluding a concurrent resume of the same id), reads the physically valid log through the handle, and appends `interruptedTurnClosers` for a log crashed mid-turn as an ordinary batch — semantic crash repair is the agent layer's job, not a storage entry point. Immediately before publication, `appendUnstoredSuffix` stores any events appended during the setup window (seed markers, delegation policy records), which never re-emit through `session/event`. Once published, the mounted backend routes the session's `session/event` batches, `session/flush` barriers, and `session/disposed` retirement into the active write handle by session id; the loop touches storage only through the handle it owns. With the backend still mounted, teardown closes the handle after the driver commits its closing events; close drains the routed buffer and releases write ownership. Without a backend, sessions are memory-only and nothing else changes.
+The loop is the production acquisition point for session write handles. When `ctx.sessionPersistence` is mounted, `create`/`createAgent` call `persistence.create(header)` — storing the durable identity and taking write ownership before publication — and append the constructor seed through the handle; `resume` calls `persistence.open(id, 'write')` first (excluding a concurrent resume of the same id), reads the physically valid log through the handle, and appends `interruptedTurnClosers` for a log crashed mid-turn as an ordinary batch — semantic crash repair is the agent layer's job, not a storage entry point. Before store entry, `appendUnstoredSuffix` stores constructor history, including seed markers. Setup then appends through the live event feed. From store entry onward, the mounted backend routes the session's `session/event` batches, `session/flush` barriers, and `session/disposed` retirement into the active write handle by session id; the loop touches storage only through the handle it owns. With the backend still mounted, teardown closes the handle after the driver commits its closing events; close drains the routed buffer and releases write ownership. Without a backend, sessions are memory-only and nothing else changes.
 
 ### Turn and step flow
 

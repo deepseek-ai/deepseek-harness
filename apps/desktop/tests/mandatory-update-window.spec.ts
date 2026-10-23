@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { BrowserWindow, WebContents, WebFrameMain } from 'electron'
+import type { BrowserWindow, MessageBoxOptions, WebContents, WebFrameMain } from 'electron'
 import { DesktopMandatoryUpdateWindow, type MandatoryUpdateView } from '../src/mandatory-update-window.ts'
 import { MANDATORY_IPC } from '../src/mandatory-update-ipc.ts'
 import { resolveDesktopLocale } from '../src/locale.ts'
@@ -8,14 +8,16 @@ import type { DesktopPolicyState } from '../src/mandatory-update-policy.ts'
 import type { DesktopUpdateState } from '../src/ipc.ts'
 
 const native = vi.hoisted(() => ({ handlers: new Map<string, (...args: unknown[]) => unknown>(),
-  open: vi.fn<(...args: unknown[]) => Promise<void>>(), write: vi.fn(), read: vi.fn(), quit: vi.fn() }))
+  open: vi.fn<(...args: unknown[]) => Promise<void>>(), write: vi.fn(), read: vi.fn(), quit: vi.fn(),
+  messageBox: vi.fn<(parent: BrowserWindow, options: MessageBoxOptions) => Promise<{ response: number }>>() }))
 vi.mock('electron', () => ({ ipcMain: {
   handle: (channel: string, handler: (...args: unknown[]) => unknown) => native.handlers.set(channel, handler),
   removeHandler: (channel: string) => native.handlers.delete(channel),
-}, app: { quit: native.quit }, shell: { openExternal: native.open }, clipboard: { writeText: native.write, readText: native.read } }))
+}, dialog: { showMessageBox: native.messageBox }, app: { quit: native.quit }, shell: { openExternal: native.open },
+clipboard: { writeText: native.write, readText: native.read } }))
 
 type WindowFixture = EventEmitter & Pick<BrowserWindow, 'setMenu' | 'setTitle' | 'loadURL' | 'destroy' | 'isDestroyed'
-  | 'isFocused' | 'isMinimized' | 'focus' | 'show' | 'restore'> & {
+  | 'isVisible' | 'isFocused' | 'isMinimized' | 'focus' | 'show' | 'restore'> & {
     webContents: EventEmitter & Pick<WebContents, 'send' | 'setWindowOpenHandler'> & { mainFrame: Pick<WebFrameMain, 'url'> }
   }
 
@@ -26,27 +28,33 @@ function fakeWindow() {
     send: vi.fn(), setWindowOpenHandler: vi.fn() })
   return Object.assign(new EventEmitter(), { webContents: contents, setMenu: vi.fn(), setTitle: vi.fn(),
     loadURL: vi.fn(async () => {}), destroy: vi.fn(), isDestroyed: (): boolean => false,
-    isFocused: () => true, isMinimized: () => false, focus: vi.fn(), show: vi.fn(), restore: vi.fn() })
+    isVisible: (): boolean => true, isFocused: (): boolean => true,
+    isMinimized: () => false, focus: vi.fn(), show: vi.fn(), restore: vi.fn() })
 }
 afterEach(() => { ui?.dispose(); vi.restoreAllMocks(); vi.clearAllMocks(); native.handlers.clear(); vi.useRealTimers() })
-function setup(platform: NodeJS.Platform = 'darwin') {
+function setup(platform: NodeJS.Platform = 'darwin', beforeSync?: (surface: ReturnType<typeof fakeWindow>) => void) {
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+  native.messageBox.mockImplementation(() => new Promise(() => {}))
   window = fakeWindow()
-  if (platform === 'win32') window.webContents.mainFrame.url = 'dsh-app://app/'
+  const owner = platform === 'win32' ? window : fakeWindow()
+  owner.webContents.mainFrame.url = 'dsh-app://app/'
   let policy: DesktopPolicyState = { blocking: true, checking: false, page: 'https://downloads.example.com/desktop' }
   let update: DesktopUpdateState = { phase: 'ready', version: '1.0.1-nightly.1' }
   const install = vi.fn(async () => update)
   const createOverlay = (): WindowFixture => window
-  const parent = createOverlay as () => BrowserWindow
-  ui = new DesktopMandatoryUpdateWindow({ overlays: { create: parent }, preload: 'owned', locale: resolveDesktopLocale('zh'),
+  const create = createOverlay as () => BrowserWindow
+  const currentParent = (): WindowFixture => platform === 'win32' ? window : owner
+  const parent = currentParent as () => BrowserWindow
+  ui = new DesktopMandatoryUpdateWindow({ overlays: { create }, preload: 'owned', locale: resolveDesktopLocale('zh'),
     allowedPageOrigins: ['https://downloads.example.com'], parent,
     policy: () => policy, update: () => update, refresh: async () => {}, download: async () => update, install })
+  beforeSync?.(window)
   ui.sync()
   const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
   const view = () => native.handlers.get(MANDATORY_IPC.status)!(event) as MandatoryUpdateView
   const action = (name: string, version: string = '1.0.1-nightly.1', revision = view().confirmation?.revision) =>
     native.handlers.get(MANDATORY_IPC.action)!(event, name, version, revision)
-  return { view, action, install, policy(next: DesktopPolicyState) { policy = next; ui!.sync() },
+  return { view, action, install, owner, policy(next: DesktopPolicyState) { policy = next; ui!.sync() },
     update(next: DesktopUpdateState) { update = next; ui!.sync() } }
 }
 
@@ -140,15 +148,6 @@ it('rejects same-URL child frames and removes quit from renderer privileges', ()
   expect(() => f.action('quit')).toThrow(/invalid action/)
 })
 
-it('exits the application when the mandatory window is closed without clearing the policy', () => {
-  const f = setup()
-  const event = { preventDefault: vi.fn() }
-  window.emit('close', event)
-  expect(event.preventDefault).toHaveBeenCalledOnce()
-  expect(native.quit).toHaveBeenCalledOnce()
-  expect(f.view().policy.blocking).toBe(true)
-})
-
 it('fades on clearance, reuses a reblocked window, and cancels teardown on disposal', () => {
   vi.useFakeTimers()
   const f = setup()
@@ -211,4 +210,220 @@ it.each(['darwin', 'win32'] as const)('includes the installation wait notice onl
   expect(f.view().locale.messages.mandatoryReadyDetail).toBe(platform === 'win32'
     ? '更新期间应用将暂时关闭，完成后会自动打开。\n\n更新可能需要一些时间，请耐心等待，期间请勿重复启动应用。'
     : '更新期间应用将暂时关闭，完成后会自动打开。')
+})
+
+it('updates the same macOS view in the background without showing or focusing the owner', () => {
+  const f = setup()
+  f.update({ phase: 'downloading', version: '1.0.1-nightly.1', percent: 35 })
+  f.update({ phase: 'error', version: '1.0.1-nightly.1', failedOperation: 'download' })
+  expect(f.owner).not.toBe(window)
+  expect(f.owner.show).not.toHaveBeenCalled()
+  expect(f.owner.focus).not.toHaveBeenCalled()
+  expect(window.loadURL).toHaveBeenCalledOnce()
+  expect(ui!.confirmationWindow).toBe(f.owner)
+  expect(f.view().policy.blocking).toBe(true)
+})
+
+it('cancels outstanding approval when the mandatory view is destroyed without clearing policy', async () => {
+  const f = setup()
+  const approval = ui!.confirm('1.0.1-nightly.1', true)
+  window.webContents.emit('destroyed')
+  expect(await approval).toBe(false)
+  expect(f.view().policy.blocking).toBe(true)
+})
+
+it.each(['initial', 'recovery'] as const)('keeps the native owner title unchanged after %s view loading fails', async (stage) => {
+  const failure = new Error('view load failed')
+  const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup('darwin', (surface) => {
+    if (stage === 'initial') surface.loadURL.mockRejectedValueOnce(failure)
+  })
+  expect(f.owner).not.toBe(window)
+  if (stage === 'recovery') {
+    window.loadURL.mockRejectedValueOnce(failure)
+    window.webContents.emit('render-process-gone')
+  }
+  await expect(window.loadURL.mock.results.at(-1)!.value).rejects.toBe(failure)
+  expect(f.owner.setTitle).not.toHaveBeenCalled()
+  expect(f.owner.show).not.toHaveBeenCalled()
+  expect(f.owner.focus).not.toHaveBeenCalled()
+  expect(native.quit).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
+  expect(report).toHaveBeenCalledWith(expect.stringContaining('mandatory update view'), failure)
+  f.policy({ blocking: false, checking: false })
+  ui!.dispose()
+  expect(f.owner.setTitle).not.toHaveBeenCalled()
+})
+
+it('defers native recovery until foreground and opens the policy download page without installing', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup('darwin')
+  await Promise.resolve()
+  vi.spyOn(f.owner, 'isFocused').mockReturnValue(false)
+  window.loadURL.mockRejectedValueOnce(new Error('local load failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  expect(native.messageBox).not.toHaveBeenCalled()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  vi.spyOn(f.owner, 'isFocused').mockReturnValue(true)
+  f.owner.emit('focus')
+  f.owner.emit('focus')
+  expect(native.messageBox).toHaveBeenCalledOnce()
+  expect(native.messageBox).toHaveBeenCalledWith(f.owner, expect.objectContaining({
+    message: '请更新后继续使用', cancelId: -1,
+    buttons: ['打开下载页面', '退出'],
+  }))
+  expect(native.messageBox.mock.calls[0]![1].detail).toContain('1.0.1-nightly.1')
+  answer.resolve({ response: 0 })
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(window.loadURL).toHaveBeenCalledTimes(2)
+  expect(native.open).toHaveBeenCalledWith('https://downloads.example.com/desktop')
+  expect(f.install).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
+  expect(native.quit).not.toHaveBeenCalled()
+})
+
+it.each(['clearance', 'dispose', 'hide'] as const)('ignores native recovery responses after %s', async (reason) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup('darwin', (surface) => { surface.loadURL.mockRejectedValueOnce(new Error('local load failed')) })
+  await Promise.resolve()
+  const options = native.messageBox.mock.calls[0]![1]
+  expect(options.signal!.aborted).toBe(false)
+  if (reason === 'clearance') f.policy({ blocking: false, checking: false })
+  else if (reason === 'dispose') ui!.dispose()
+  else f.owner.emit('hide')
+  expect(options.signal!.aborted).toBe(true)
+  expect(f.owner.setTitle).not.toHaveBeenCalled()
+})
+
+it('uses the normal quit entry only for an explicit native recovery exit', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const answer = Promise.withResolvers<{ response: number }>()
+  const f = setup('darwin')
+  await Promise.resolve()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  answer.resolve({ response: 1 })
+  await Promise.resolve()
+  expect(native.quit).toHaveBeenCalledOnce()
+  expect(f.view().policy.blocking).toBe(true)
+  expect(f.install).not.toHaveBeenCalled()
+})
+
+it('retains blocking and reopens native recovery after a non-action dismissal', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const answer = Promise.withResolvers<{ response: number }>()
+  const f = setup()
+  await Promise.resolve()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  answer.resolve({ response: -1 })
+  await Promise.resolve()
+  expect(native.quit).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
+  expect(window.loadURL).toHaveBeenCalledTimes(2)
+  expect(native.messageBox).toHaveBeenCalledTimes(2)
+})
+
+it('ignores a late quit response after policy clearance', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  f.policy({ blocking: false, checking: false })
+  answer.resolve({ response: 1 })
+  await Promise.resolve()
+  expect(native.quit).not.toHaveBeenCalled()
+})
+
+
+it.each([undefined, 'https://unapproved.example.com/download'])('omits native download action for unavailable destination %s', async (page) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, ...(page === undefined ? {} : { page }) })
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  expect(native.messageBox.mock.calls[0]![1].buttons).toEqual(['退出'])
+  expect(native.messageBox.mock.calls[0]![1].cancelId).toBe(-1)
+  expect(native.open).not.toHaveBeenCalled()
+})
+
+it('does not open a changed policy URL using approval for the previous destination', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, page: 'https://downloads.example.com/new' })
+  answer.resolve({ response: 0 })
+  await Promise.resolve()
+  expect(native.open).not.toHaveBeenCalled()
+  expect(native.messageBox).toHaveBeenCalledTimes(2)
+})
+
+
+it('reports a browser-opening failure in the native fallback without claiming download success', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  native.open.mockRejectedValueOnce(new Error('browser unavailable'))
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  answer.resolve({ response: 0 })
+  await vi.waitFor(() => { expect(native.messageBox).toHaveBeenCalledTimes(2) })
+  expect(native.messageBox.mock.calls[1]![1].detail).toContain('无法打开下载页面，请重试')
+  expect(f.view().policy.blocking).toBe(true)
+  expect(f.install).not.toHaveBeenCalled()
+})
+
+
+it('uses the configured policy title as the native headline without repeating it in detail', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  f.policy({ blocking: true, checking: false, title: 'Configured title', detail: 'Configured detail' })
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  const options = native.messageBox.mock.calls[0]![1]
+  expect(options.message).toBe('Configured title')
+  expect(options.detail).toBe('Configured detail\n\n新版本：1.0.1-nightly.1')
+})
+
+
+it('rechecks recovery after an aborted native prompt finishes following a foreground return', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const f = setup()
+  await Promise.resolve()
+  const answer = Promise.withResolvers<{ response: number }>()
+  native.messageBox.mockReturnValueOnce(answer.promise)
+  window.loadURL.mockRejectedValueOnce(new Error('local recovery failed'))
+  window.webContents.emit('render-process-gone')
+  await Promise.resolve()
+  f.owner.emit('hide')
+  f.owner.emit('focus')
+  expect(native.messageBox).toHaveBeenCalledOnce()
+  answer.resolve({ response: 1 })
+  await Promise.resolve()
+  expect(native.messageBox).toHaveBeenCalledTimes(2)
+  expect(native.quit).not.toHaveBeenCalled()
+  expect(f.view().policy.blocking).toBe(true)
 })

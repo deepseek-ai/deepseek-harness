@@ -1,7 +1,7 @@
 /**
  * Gate for the invariant `FALLBACK_LOCALE` rests on: every shipped dictionary
- * declares the same keys in `zh`, `en`, and `ja`; Japanese dictionaries also
- * preserve the English literal-template placeholders.
+ * declares the same keys in every shipped language; translations also
+ * preserve the English placeholders, command examples, and API field names.
  *
  * The locale runtime resolves a key through the active locale, then through
  * the single fallback locale (`en`), then surfaces the key itself. With
@@ -26,6 +26,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+
+import { SHIPPED_LOCALE_IDS, localeTokens, hasInvisibleLocaleCharacters, type ShippedLocaleId } from './shipped-locales.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
@@ -101,7 +103,7 @@ function dictionariesIn(file: string): Dictionary[] {
   // before parsing — the silent narrowing this gate exists to prevent. A bare
   // `\b(zh|en)\b` misses `zhSettings`/`accessZh`, because `\b` does not hold
   // between `h` and an uppercase letter.
-  if (!/\b(zh|en|ja)\b|\b(zh|en|ja)[A-Z]|(Zh|En|Ja)\b/.test(text)) return []
+  if (!/\b(zh|en|ja|es|fr|de|ru|pt)\b|\b(zh|en|ja|es|fr|de|ru|pt)[A-Z]|(Zh|En|Ja|Es|Fr|De|Ru|Pt)\b/.test(text)) return []
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true)
   const found: Dictionary[] = []
   const rel = relative(file)
@@ -153,7 +155,7 @@ function dictionariesIn(file: string): Dictionary[] {
       if (name === 'register' && node.arguments.length >= 3) {
         const [ns, tag, dict] = node.arguments
         if (ns === undefined || tag === undefined || !ts.isStringLiteral(tag)) return
-        if (tag.text !== 'zh' && tag.text !== 'en' && tag.text !== 'ja') return
+        if (!SHIPPED_LOCALE_IDS.some(id => id === tag.text)) return
         const raw = unwrap(dict)
         const literal = raw !== undefined && ts.isIdentifier(raw)
           ? (() => {
@@ -185,7 +187,7 @@ function dictionariesIn(file: string): Dictionary[] {
         const literal = unwrap(dict)
         if (tag === undefined || !ts.isStringLiteral(tag)) continue
         if (literal === undefined || !ts.isObjectLiteralExpression(literal)) continue
-        if (tag.text !== 'zh' && tag.text !== 'en' && tag.text !== 'ja') continue
+        if (!SHIPPED_LOCALE_IDS.some(id => id === tag.text)) continue
         found.push({ file: rel, name: `${tag.text}@inline:${site}`, keys: keysOf(literal), templates: templatesOf(literal) })
       }
     }
@@ -239,8 +241,8 @@ function unwrap(node: ts.Expression | undefined): ts.Expression | undefined {
  * @param name - export name or synthetic inline name.
  * @returns locale plus pair key, or undefined when the name names no locale.
  */
-function localeOf(name: string): { locale: 'zh' | 'en' | 'ja'; pair: string } | undefined {
-  for (const locale of ['zh', 'en', 'ja'] as const) {
+function localeOf(name: string): { locale: ShippedLocaleId; pair: string } | undefined {
+  for (const locale of SHIPPED_LOCALE_IDS) {
     const other = locale[0]!.toUpperCase() + locale.slice(1)
     if (name === locale) return { locale, pair: '' }
     // Synthetic names for inline shapes carry their own pair key after the
@@ -255,9 +257,9 @@ function localeOf(name: string): { locale: 'zh' | 'en' | 'ja'; pair: string } | 
 }
 
 /**
- * Check that each object-form registration supplies its Japanese dictionary.
+ * Check that each object-form registration supplies every shipped-language dictionary.
  * @param file - absolute source path.
- * @returns registration sites missing Japanese, or using an unresolved local identifier.
+ * @returns registration sites missing a shipped language, or using an unresolved local identifier.
  */
 function registrationProblems(file: string): string[] {
   const text = readFileSync(file, 'utf8')
@@ -289,11 +291,13 @@ function registrationProblems(file: string): string[] {
           }
         }
         if (entries.has('zh') && entries.has('en')) {
-          const ja = entries.get('ja')
           const site = `${relative(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`
-          if (ja === undefined) problems.push(`${site}: registration has no Japanese dictionary`)
-          else if (ts.isIdentifier(ja) && !imported.has(ja.text) && !locals.has(ja.text)) {
-            problems.push(`${site}: Japanese dictionary ${ja.text} is not imported or declared`)
+          for (const language of SHIPPED_LOCALE_IDS) {
+            const dictionary = entries.get(language)
+            if (dictionary === undefined) problems.push(`${site}: registration has no ${language} dictionary`)
+            else if (ts.isIdentifier(dictionary) && !imported.has(dictionary.text) && !locals.has(dictionary.text)) {
+              problems.push(`${site}: ${language} dictionary ${dictionary.text} is not imported or declared`)
+            }
           }
         }
       }
@@ -305,11 +309,11 @@ function registrationProblems(file: string): string[] {
 }
 
 describe('shipped locale dictionaries', () => {
-  it('registers Japanese alongside every object-form bilingual dictionary', () => {
+  it('registers every shipped language alongside every object-form bilingual dictionary', () => {
     expect(sourceFiles().flatMap(registrationProblems)).toEqual([])
   })
 
-  it('keeps bilingual keys aligned and Japanese keys and placeholders complete', () => {
+  it('keeps bilingual keys aligned and shipped-language keys and placeholders complete', () => {
     const files = sourceFiles()
     // Guard the discovery itself: an empty or narrowed sweep would pass every
     // assertion below while checking nothing.
@@ -322,12 +326,18 @@ describe('shipped locale dictionaries', () => {
     const perFile = new Map<string, Dictionary[]>()
     for (const file of files) {
       const dicts = dictionariesIn(file)
-      if (dicts.length > 0) perFile.set(relative(file), dicts)
+      if (dicts.length > 0) {
+        expect(hasInvisibleLocaleCharacters(readFileSync(file, 'utf8')), relative(file)).toBe(false)
+        for (const dictionary of dicts) {
+          for (const text of Object.values(dictionary.templates)) expect(hasInvisibleLocaleCharacters(text), relative(file)).toBe(false)
+        }
+        perFile.set(relative(file), dicts)
+      }
     }
 
-    const groups = new Map<string, Map<'zh' | 'en' | 'ja', Dictionary>>()
-    const place = (key: string, locale: 'zh' | 'en' | 'ja', dict: Dictionary): void => {
-      const slot = groups.get(key) ?? new Map<'zh' | 'en' | 'ja', Dictionary>()
+    const groups = new Map<string, Map<ShippedLocaleId, Dictionary>>()
+    const place = (key: string, locale: ShippedLocaleId, dict: Dictionary): void => {
+      const slot = groups.get(key) ?? new Map<ShippedLocaleId, Dictionary>()
       if (slot.has(locale)) {
         throw new Error(`two ${locale} dictionaries claim pair ${key}: ${slot.get(locale)?.file} and ${dict.file}`)
       }
@@ -367,21 +377,23 @@ describe('shipped locale dictionaries', () => {
       const enOnly = en.keys.filter(k => !zh.keys.includes(k))
       if (zhOnly.length > 0) problems.push(`${zh.file} ${zh.name} has keys absent from ${en.name}: ${zhOnly.join(', ')}`)
       if (enOnly.length > 0) problems.push(`${en.file} ${en.name} has keys absent from ${zh.name}: ${enOnly.join(', ')}`)
-      const ja = slot.get('ja')
-      if (ja === undefined) {
-        problems.push(`${key} has no Japanese dictionary`)
-      } else {
-        const missing = en.keys.filter(k => !ja.keys.includes(k))
-        const extra = ja.keys.filter(k => !en.keys.includes(k))
-        if (missing.length > 0 || extra.length > 0) {
-          problems.push(`${ja.file} ${ja.name}: missing [${missing.join(', ')}], extra [${extra.join(', ')}]`)
-        }
-        for (const [name, text] of Object.entries(en.templates)) {
-          const translated = ja.templates[name]
-          if (translated === undefined) continue
-          const placeholders = (value: string): string => (value.match(/\{\w+\}/gu) ?? []).sort().join(', ')
-          if (placeholders(text) !== placeholders(translated)) {
-            problems.push(`${ja.file} ${ja.name}.${name} changes placeholders from ${en.name}`)
+      for (const language of SHIPPED_LOCALE_IDS.filter(id => id !== 'en' && id !== 'zh')) {
+        const translatedDictionary = slot.get(language)
+        if (translatedDictionary === undefined) {
+          problems.push(`${key} has no ${language} dictionary`)
+        } else {
+          const missing = en.keys.filter(k => !translatedDictionary.keys.includes(k))
+          const extra = translatedDictionary.keys.filter(k => !en.keys.includes(k))
+          if (missing.length > 0 || extra.length > 0) {
+            problems.push(`${translatedDictionary.file} ${translatedDictionary.name}: missing [${missing.join(', ')}], extra [${extra.join(', ')}]`)
+          }
+          for (const [name, text] of Object.entries(en.templates)) {
+            const translated = translatedDictionary.templates[name]
+            if (translated === undefined) continue
+            const placeholders = (value: string): string => localeTokens(value).join(', ')
+            if (placeholders(text) !== placeholders(translated)) {
+              problems.push(`${translatedDictionary.file} ${translatedDictionary.name}.${name} changes placeholders or literal tokens from ${en.name}`)
+            }
           }
         }
       }

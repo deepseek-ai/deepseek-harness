@@ -5,7 +5,9 @@ import LlmRuntime, { createUserMessage, ToolCallId, type StreamChunk } from '@de
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -44,6 +46,7 @@ async function setup(build?: (id: JobId) => ScriptedCall[]) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalJobRegistry)
@@ -118,9 +121,10 @@ describe('next-step input during a background result wait', () => {
       })
       await settled.promise
       unsubscribe()
-      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBe('final output')
-      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBeUndefined()
+      // The settlement's notice carries the result inline, so the registry has nothing left to hand out.
       expect(h.agent.inbox.nextStep).toHaveLength(1)
+      expect(JSON.stringify(h.agent.inbox.nextStep[0]!.content)).toContain('Output:\\nfinal output')
+      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBeUndefined()
     } finally { await h.dispose() }
   })
 
@@ -151,7 +155,7 @@ describe('next-step input during a background result wait', () => {
     const h = await setup()
     try {
       h.agent.inbox.append('next-step', message('ALREADY_PENDING'))
-      const result = await h.ctx.tools.execute({ name: 'job_output', callId: ToolCallId('pending'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
+      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: ToolCallId('pending'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
       expect(result.isError).not.toBe(true)
       expect(JSON.stringify(result.content)).toContain('[status: running, user steered]')
       expect(h.agent.inbox.nextStep).toHaveLength(1)
@@ -168,7 +172,7 @@ describe('next-step input during a background result wait', () => {
         h.agent.inbox.append('next-step', message('REGISTRATION_RACE'))
         return originalWait(...args)
       })
-      const result = await h.ctx.tools.execute({ name: 'job_output', callId: ToolCallId('race'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
+      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: ToolCallId('race'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
       expect(result.isError).not.toBe(true)
       expect(JSON.stringify(result.content)).toContain('[status: running, user steered]')
       expect(h.cancel).not.toHaveBeenCalled()

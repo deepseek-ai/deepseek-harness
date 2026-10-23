@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "sistema de archivos SSH",
+    "description": "Acceda a archivos remotos a través del asistente POSIX SSH compartido."
+  }
+}

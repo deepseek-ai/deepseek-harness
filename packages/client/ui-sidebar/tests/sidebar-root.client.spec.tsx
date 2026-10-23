@@ -157,6 +157,37 @@ describe('SidebarRoot shell', () => {
     expect(b.trackEntryClick).toHaveBeenCalledExactlyOnceWith({ menu_name: 'new_session', position: 'sidebar' })
   })
 
+  it('offers no New Session control while the access snapshot excludes session/create', () => {
+    const toggleSidebar = vi.fn()
+    const startSession = vi.fn()
+    const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
+    render(<SidebarRoot
+      collapsed={false} width={300}
+      useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
+      usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
+      useEntryActions={selector => selector(false)} setPinned={vi.fn()}
+      useShortcuts={selector => selector([])}
+      useResource={useResource} useWorkspaces={neverHook}
+      {...allowAllAccess}
+      useRemoteAccess={useRemoteAccess}
+      startSession={startSession} toggleSidebar={toggleSidebar} trackEntryClick={vi.fn()} t={t}
+      renderSlot={((key: string) => {
+        if (key === 'sidebar.brand.mark') return <span data-testid="brand-mark">M</span>
+        if (key === 'sidebar.brand.name') return <span data-testid="brand-name">Brand</span>
+        return null
+      }) as SidebarRootComponentProps['renderSlot']}
+    />)
+
+    // Neither the brand row nor the dedicated button starts a Session; the brand still renders.
+    expect(useRemoteAccess).toHaveBeenCalledWith('session/create')
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(screen.getByTestId('brand-mark')).toBeTruthy()
+    expect(screen.getByTestId('brand-name')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+    expect(toggleSidebar).toHaveBeenCalledOnce()
+    expect(startSession).not.toHaveBeenCalled()
+  })
+
   it('renders generic brand fallbacks when no package fills the slots', () => {
     vi.stubEnv('DSH_CLIENT_COMMIT_HASH', '0123456')
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
@@ -359,8 +390,8 @@ it('wires the shell.leading controls to the shared sidebar actions', () => {
   const toggleSidebar = vi.fn()
   const startSession = vi.fn()
   const trackEntryClick = vi.fn<HeaderLeadingControlsProps['trackEntryClick']>()
-  // This occupant only consumes its actions and locale, not Session hooks.
-  const props = { toggleSidebar, startSession, trackEntryClick, t, useShortcuts: select => select([{ id: 'sidebar.left.toggle' as ShortcutCommandId, label: 'Toggle sidebar', aliases: [], binding: null, modified: false, conflicts: [], issue: null, keys: ['⌘', 'B'], aria: 'Meta+B' }]) } as HeaderLeadingControlsProps
+  // This occupant only consumes its actions, the global access Hook, and locale, not Session hooks.
+  const props = { toggleSidebar, startSession, trackEntryClick, t, useRemoteAccess: allowAllAccess.useRemoteAccess, useShortcuts: select => select([{ id: 'sidebar.left.toggle' as ShortcutCommandId, label: 'Toggle sidebar', aliases: [], binding: null, modified: false, conflicts: [], issue: null, keys: ['⌘', 'B'], aria: 'Meta+B' }]) } as HeaderLeadingControlsProps
   render(<HeaderLeadingControls {...props} />)
   fireEvent.click(screen.getByRole('button', { name: en['toggle.open'] }))
   expect(toggleSidebar).toHaveBeenCalledOnce()
@@ -370,6 +401,12 @@ it('wires the shell.leading controls to the shared sidebar actions', () => {
   // The window-chrome New Session control reports a titlebar click before starting the Session.
   expect(trackEntryClick).toHaveBeenCalledExactlyOnceWith({ menu_name: 'new_session', position: 'titlebar' })
   expect(trackEntryClick.mock.invocationCallOrder[0]).toBeLessThan(startSession.mock.invocationCallOrder[0]!)
+  cleanup()
+
+  // A page whose access snapshot excludes starting a Session keeps only the sidebar toggle.
+  render(<HeaderLeadingControls {...props} useRemoteAccess={action => action !== 'session/create'} />)
+  expect(screen.getByRole('button', { name: en['toggle.open'] })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: en['session.new.label'] })).toBeNull()
 })
 
 describe('Windows caption New Session analytics', () => {

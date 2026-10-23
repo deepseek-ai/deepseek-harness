@@ -33,7 +33,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   await card.getByText(reason, { exact: true }).waitFor()
   expect(await card.getByRole('switch').isEnabled()).toBe(false)
   expect(await card.getByRole('switch').getAttribute('aria-checked')).toBe('false')
-  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/unsupported-platform.expected.md', import.meta.url)),
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/bundle-platform/unsupported-platform.expected.md', import.meta.url)),
     await captureStableAria(page, `[data-plugin-package="${name}"] p[role="status"]`, scaffold.workspaceCwd), webSnapshotMode())
   const manifest = join(scaffold.harnessHome, 'profiles/scaffold/package.json')
   const before = await readFile(manifest, 'utf8')

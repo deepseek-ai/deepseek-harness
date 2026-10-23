@@ -91,7 +91,8 @@ function ProbeActions({ entries, onOpen, onPinnedChange, onDismiss }: PropsRunti
     <>
       {entries.map(entry => (
         <span key={entry.id}>
-          <button type="button" role="menuitem" onClick={() => { onOpen(entry.id) }}>Open {entry.label}</button>
+          <button type="button" role="menuitem" aria-current={entry.active ? 'page' : undefined}
+            onClick={() => { onOpen(entry.id) }}>Open {entry.label}</button>
           <button type="button" role="menuitem" onClick={() => { onPinnedChange(entry.id, !entry.pinned) }}>
             {entry.pinned ? 'Unpin' : 'Pin'} {entry.label}
           </button>
@@ -323,21 +324,28 @@ describe('sidebar global panels', () => {
     expect(view.getByRole('heading', { name: 'Alpha content' })).toBeTruthy()
     act(() => { locale.setLocale('zh') })
     expect(view.queryByRole('navigation')).toBeNull()
+    await runtime.mount({ inject: [...inject], apply })
+    const restored = await view.findByRole('button', { name: '甲面板' })
+    expect(restored.getAttribute('aria-current')).toBe('page')
+    const icon = within(restored).getByTestId(`${ALPHA}-icon`)
+    expect(icon.getAttribute('data-active')).toBe('true')
+    expect(icon.querySelector('svg')?.getAttribute('width')).toBe('16')
+    expect(runtime.slots.entries('sidebar.panellist').map(entry => entry.options.id)).toEqual([BETA, ALPHA])
   })
 })
 
 describe('sidebar launcher pins', () => {
   const PINS_KEY = 'dsh.slot.manual-order.sidebar.panellist.v1'
 
-  it('hides stored unpinned panels, keeps Plugins, and keeps the list while panels are registered', async () => {
+  it('ignores stored unpinned panels and shows all registered launchers', async () => {
     localStorage.setItem(PINS_KEY, JSON.stringify({ unpinned: [ALPHA, BETA, PLUGINS, 'removed-plugin'] }))
     const { runtime, locale, view } = await bench()
     await mountPanels(runtime, locale)
     const navigation = await view.findByRole('navigation', { name: 'Global panels' })
-    expect(within(navigation).queryAllByRole('button')).toEqual([])
+    expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Beta panel', 'Alpha panel'])
     await mountPanel(runtime, { id: PLUGINS, heading: 'Plugins content', label: 'Plugins', order: 0 })
     await waitFor(() => {
-      expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Plugins'])
+      expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Plugins', 'Beta panel', 'Alpha panel'])
     })
     expect(runtime.slots.entries('main').map(entry => entry.options.key)).toEqual(['conversation', ALPHA, BETA, PLUGINS])
   })
@@ -377,16 +385,25 @@ describe('sidebar launcher pins', () => {
       .toEqual(['Open Beta panel', 'Unpin Beta panel', 'Open Alpha panel', 'Unpin Alpha panel', 'Dismiss'])
 
     fireEvent.click(menu.getByRole('menuitem', { name: 'Unpin Alpha panel' }))
-    expect(JSON.parse(localStorage.getItem(PINS_KEY) ?? 'null')).toEqual({ unpinned: [ALPHA] })
+    expect(localStorage.getItem(PINS_KEY)).toBeNull()
     await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
     expect(menu.getByRole('menuitem', { name: 'Pin Alpha panel' })).toBeTruthy()
     fireEvent.click(menu.getByRole('menuitem', { name: 'Open Alpha panel' }))
     expect(layout.selectPanel).toHaveBeenLastCalledWith(ALPHA)
     expect(view.getByRole('heading', { name: 'Alpha content' })).toBeTruthy()
-    // The open panel keeps its unpinned row as the current page until another panel is selected.
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Pin Alpha panel' }))
     const alphaRow = await within(navigation).findByRole('button', { name: 'Alpha panel' })
     expect(alphaRow.getAttribute('aria-current')).toBe('page')
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Unpin Alpha panel' }))
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
+    expect(view.getByRole('heading', { name: 'Alpha content' })).toBeTruthy()
+    expect(menu.getByRole('menuitem', { name: 'Open Alpha panel' }).getAttribute('aria-current')).toBe('page')
     act(() => { layout.selectPanel(BETA) })
+    await waitFor(() => {
+      expect(menu.getByRole('menuitem', { name: 'Open Alpha panel' }).hasAttribute('aria-current')).toBe(false)
+      expect(menu.getByRole('menuitem', { name: 'Open Beta panel' }).getAttribute('aria-current')).toBe('page')
+    })
     await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
 
     fireEvent.click(menu.getByRole('menuitem', { name: 'Pin Alpha panel' }))

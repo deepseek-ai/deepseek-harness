@@ -199,6 +199,99 @@ describe('web e2e: the composer model switch is the default for later sessions',
     }
   })
 
+  it.each([
+    { device: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', automatic: false },
+    { device: 'Android Chrome', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Mobile Safari/537.36', automatic: false },
+    { device: 'iPhone Chrome', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 CriOS/139.0.0.0 Mobile/15E148 Safari/604.1', automatic: false },
+    { device: 'narrow desktop', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', automatic: true },
+  ])('respects $device composer sizing and search focus when opening /model', async ({ userAgent, automatic }) => {
+    const context = await browser.newContext({
+      userAgent, viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, hasTouch: !automatic,
+    })
+    try {
+      const devicePage = await context.newPage()
+      const consoleWatch = watchConsole(devicePage)
+      await devicePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await devicePage.getByRole('textbox', { name: '选择工作区' }).click()
+      const composer = devicePage.locator('[data-composer-input][contenteditable="true"]').first()
+      await composer.waitFor()
+      expect(await composer.evaluate(element => getComputedStyle(element).fontSize)).toBe(automatic ? '14px' : '16px')
+      await composer.fill('/model')
+      await devicePage.getByRole('option', { name: /^模型/ }).click()
+      const search = devicePage.getByRole('textbox', { name: '筛选选项', exact: true })
+      await search.waitFor()
+      await devicePage.getByRole('option', { name: /Origin Large/ }).waitFor()
+      expect(await search.evaluate(input => document.activeElement === input)).toBe(automatic)
+      await search.click()
+      expect(await search.evaluate(input => document.activeElement === input)).toBe(true)
+      await search.fill('Origin')
+      await devicePage.getByRole('option', { name: /Origin Large/ }).waitFor()
+      expect(await devicePage.getByRole('option', { name: /Acme/ }).count()).toBe(0)
+      await search.press('Escape')
+      await composer.fill('')
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+
+  it.each([
+    { device: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone' },
+    { device: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel' },
+  ])('retains model menu keyboard focus on $device', async ({ userAgent, platform }) => {
+    const context = await browser.newContext({
+      userAgent, viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, hasTouch: true,
+    })
+    try {
+      await context.addInitScript(({ platform }) => {
+        Object.defineProperty(navigator, 'platform', { configurable: true, value: platform })
+        Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 })
+      }, { platform })
+      const devicePage = await context.newPage()
+      const consoleWatch = watchConsole(devicePage)
+      await devicePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await devicePage.getByRole('textbox', { name: '选择工作区' }).click()
+      const trigger = devicePage.getByRole('button', { name: /^选择模型/ })
+      const observations: string[] = []
+      const observeFocus = async (action: string): Promise<void> => {
+        const focused = await devicePage.evaluate(() => {
+          const element = document.activeElement!
+          const role = element.getAttribute('role') ?? element.tagName.toLowerCase()
+          const label = element.getAttribute('aria-label') ?? element.textContent?.replace(/\s+/g, ' ').trim()
+          return `${role}: ${label}`
+        })
+        observations.push(`${action}: ${focused}`)
+      }
+      await trigger.click()
+      await expect.poll(() => trigger.evaluate(element => document.activeElement === element)).toBe(true)
+      await observeFocus('Open')
+      await devicePage.keyboard.press('ArrowDown')
+      await devicePage.keyboard.press('Enter')
+      const model = devicePage.getByRole('menuitemradio', { name: 'Origin Large', exact: true })
+      await expect.poll(() => model.evaluate(element => document.activeElement === element)).toBe(true)
+      await observeFocus('Enter model pane')
+      await devicePage.keyboard.press('ArrowDown')
+      const search = devicePage.getByRole('searchbox', { name: '搜索模型…' })
+      await expect.poll(() => search.evaluate(element => document.activeElement === element)).toBe(true)
+      await observeFocus('Navigate models')
+      await devicePage.keyboard.press('Escape')
+      const modelCell = devicePage.getByRole('menuitem', { name: /^模型/ })
+      await expect.poll(() => modelCell.evaluate(element => document.activeElement === element)).toBe(true)
+      await observeFocus('Return to root')
+      await devicePage.keyboard.press('Escape')
+      await expect.poll(() => trigger.evaluate(element => document.activeElement === element)).toBe(true)
+      await observeFocus('Close')
+      expect(await trigger.getAttribute('aria-expanded')).toBe('false')
+      expect(consoleWatch.pageErrors).toEqual([])
+      await compareOrRefreshGolden(
+        fileURLToPath(new URL('./expected/default-model/mobile-keyboard.expected.md', import.meta.url)),
+        observations.join('\n'), webSnapshotMode(),
+      )
+    } finally {
+      await context.close()
+    }
+  })
+
   it('shares provider order, fuzzy result order and sticky header material between both model pickers', async () => {
     const readGroups = (surface: Locator, role: 'option' | 'menuitemradio') => surface.locator('[data-menu-group]')
       .evaluateAll((groups, rowRole) => groups.map(group => ({

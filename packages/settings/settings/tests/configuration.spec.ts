@@ -70,9 +70,9 @@ it('preserves configuration expressions while editing a different live field', a
   await ctx.fiber.dispose()
   const restored = await start()
   const entry = [...restored.loader.entries()].find(row => row.options.id === 'first')!
-  expect((entry.fiber!.config as { ordinary: string }).ordinary).toBe('expression-value')
+  expect((entry.fiber!.effectiveConfig as { ordinary: string }).ordinary).toBe('expression-value')
   const second = [...restored.loader.entries()].find(entry => entry.options.id === 'second')!
-  expect((second.fiber!.config as { ordinary: string }).ordinary).toBe('untouched-expression')
+  expect((second.fiber!.effectiveConfig as { ordinary: string }).ordinary).toBe('untouched-expression')
   expect(restored.settings.describe().find(row => row.ns === 'first')!.value).toEqual({ count: 4, list: [] })
 })
 

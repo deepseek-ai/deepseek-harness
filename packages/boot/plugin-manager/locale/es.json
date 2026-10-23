@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de gestión de complementos",
+    "description": "Administre complementos y paquetes de complementos en la configuración en ejecución actual, admitiendo la instalación, eliminación, inicio y detención."
+  }
+}

@@ -1,6 +1,10 @@
 /** Host operating-system admission for optional bundle layers. */
 import { isWsl, type HostEnvironmentFacts } from '@deepseek-ai/dsh-native-command'
 
+const NODE_PLATFORMS: readonly string[] = Object.freeze([
+  'aix', 'android', 'darwin', 'freebsd', 'haiku', 'linux', 'openbsd', 'sunos', 'win32', 'cygwin', 'netbsd',
+] satisfies NodeJS.Platform[])
+
 /** A valid bundle declaration excludes the operating system running DSH. */
 export class UnsupportedBundlePlatformError extends Error {
   /**
@@ -23,7 +27,7 @@ export class UnsupportedBundlePlatformError extends Error {
 export function assertBundlePlatform(platforms: unknown, platform: string, facts: Omit<HostEnvironmentFacts, 'platform'> = {}): void {
   if (platforms === undefined) return
   if (!Array.isArray(platforms) || platforms.length === 0
-    || !platforms.every((value): value is string => typeof value === 'string' && /^[a-z][a-z0-9]*$/.test(value))) {
+    || !platforms.every((value): value is string => typeof value === 'string' && (value === 'wsl' || NODE_PLATFORMS.includes(value)))) {
     throw new Error('dsh.bundle.platforms must be a nonempty list of Node platform names or wsl')
   }
   if (!platforms.includes(platform) && !(platforms.includes('wsl') && isWsl({ ...facts, platform })))

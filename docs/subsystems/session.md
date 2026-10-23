@@ -578,6 +578,9 @@ declare class Session {
    * the log, the append is committed: observer failures are logged and
    * contained per listener, so they do not change the return value or prevent
    * later listeners from observing the same accepted event.
+   * Independent Sessions append without notifying store observers. Once a store
+   * prepares or enters the instance, writes require a completed creation
+   * announcement and remain disabled after removal.
    *
    * @param type - The event type (key of {@link SessionEventMap}).
    * @param data - The event payload; must be JSON-serializable.
@@ -593,7 +596,9 @@ declare class Session {
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
    *   value, never the caller's still-mutable input.
-   * @throws if `data` or surface metadata is not losslessly JSON-serializable
+   * @throws if a store-owned Session is unentered or its creation announcement
+   *   has not completed, or if `data` or surface
+   *   metadata is not losslessly JSON-serializable
    *   (BigInt, function, symbol, undefined, negative zero, non-finite number,
    *   circular reference, sparse array, or an exotic object such as
    *   Map/Set/Date/class instance), or when the candidate violates the
@@ -703,8 +708,9 @@ interface TurnEndReasonMap {
   blocked: { kind: 'blocked' }
   /**
    * The turn failed. `error` is always a structured failure: the `LlmError`
-   * facts verbatim, or `{ message: errorChain(error), code: 'UNKNOWN' }`
-   * flattened from any other error.
+   * facts verbatim, or `{ message: errorChain(error), code }` flattened from
+   * any other error, where `code` is `TOOL_ACTIVATION_FAILED` for a failed
+   * tool condition and `UNKNOWN` otherwise.
    */
   error: { kind: 'error'; error: LlmFailure }
   /** At least one step reached its output-token ceiling, even if a plugin continued the turn. */
@@ -1050,7 +1056,7 @@ create(id?: SessionId, options?: CreateSessionOptions): Session
  *   `eventState`, every seed event is either independently owned or any
  *   shared value is deeply frozen; {@link Session.fromRestore} validates and
  *   adopts those values without copying or freezing them.
- * @returns the constructed session, NOT yet in the store.
+ * @returns the store-owned session, not yet entered and read-only until announced.
  * @throws if a session with `id` already exists, metadata is not a plain
  *   lossless-JSON record with valid scalar fields, or `meta.cwd` is a
  *   non-absolute path.
@@ -1058,8 +1064,9 @@ create(id?: SessionId, options?: CreateSessionOptions): Session
 prepare(id?: SessionId, options?: PrepareSessionOptions): Session
 
 /**
- * Enter a {@link prepare}d session into the store: install the module-private
- * append publication hooks and add it to the store. Returns the DETACH
+ * Enter a session into the store: install the module-private
+ * append publication hooks and add it to the store. Writes remain disabled
+ * until {@link announce} completes successfully. Returns the DETACH
  * disposer (hooks + store removal). Does NOT emit `session/created` —
  * the caller yields this disposer inside its effect and THEN calls
  * {@link announce}, so a throwing `session/created` listener rolls the attach
@@ -1073,7 +1080,7 @@ prepare(id?: SessionId, options?: PrepareSessionOptions): Session
  * the two back-to-back so they never trip this, but the public API cannot
  * assume that.
  *
- * @param session - a {@link prepare}d session not yet in the store.
+ * @param session - an unentered session; independent instances become store-owned.
  * @returns the detach disposer (publication hooks + store removal). When called from
  *   a synchronous `session/created` listener, removal and disposal wait until
  *   that creation dispatch unwinds.
@@ -1084,7 +1091,9 @@ enter(session: Session): () => void
 /** Emit `session/created` exactly once for an {@link enter}ed session (with
  * the carrier {@link enter} captured). Separate from {@link enter} so the
  * caller can yield the detach disposer first (rollback safety — see
- * {@link enter}).
+ * {@link enter}). The Session remains read-only throughout synchronous
+ * dispatch; successful completion enables appends. A failed announcement
+ * leaves it read-only and cannot be retried.
  * @param session - the entered session to announce to listeners.
  * @throws if the session is not live or its announcement already began,
  *   including a reentrant call from a creation listener. */
@@ -1250,12 +1259,14 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `session/created` — emit
 
-Creation announcement during session publication. A synchronous throw vetoes and rolls back with a paired disposal; detach requested during dispatch is deferred. A returned-promise rejection is logged but cannot retroactively veto this synchronous boundary. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only sessions entered through that agent's context.
+Read-only creation announcement after store entry. New events reject until every synchronous listener has returned successfully. A synchronous throw vetoes creation and rolls back with a paired disposal; detach requested during dispatch is deferred. A returned-promise rejection is logged but cannot retroactively veto this synchronous boundary. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only sessions entered through that agent's context.
 
 ```ts cordis-catalog
 /**
- * Creation announcement during session publication. A synchronous throw vetoes and rolls
- * back with a paired disposal; detach requested during dispatch is deferred.
+ * Read-only creation announcement after store entry.
+ * New events reject until every synchronous listener has returned successfully.
+ * A synchronous throw vetoes creation and rolls back with a paired disposal;
+ * detach requested during dispatch is deferred.
  * A returned-promise rejection is logged but cannot retroactively veto this
  * synchronous boundary.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners

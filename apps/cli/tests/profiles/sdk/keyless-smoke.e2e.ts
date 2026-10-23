@@ -3,9 +3,9 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
-import { zstdDecompress } from 'node:zlib'
+import { zstdDecompressSync } from 'node:zlib'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
+import { scanZstdFrames } from '@deepseek-ai/dsh-session-persistence-jsonl/src/zstd.js'
 import { execa } from 'execa'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { workspaceDependencyPaths, type PrimaryRuntimeManifest } from '@deepseek-ai/dsh-tool-workspace-dependencies'
@@ -17,7 +17,6 @@ const launch = resolveExampleLaunch({
   srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)),
   mode: 'lib',
 })
-const decompress = promisify(zstdDecompress)
 
 
 function waitForLine(
@@ -58,7 +57,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
     { label: 'reports max-token turns with mapping enabled through env', envValue: 'true', editorEnabled: false },
     { label: 'reports max-token turns with mapping disabled through env', envValue: 'false', editorEnabled: false },
     { label: 'allows an explicit patch to enable str_replace_editor', envValue: undefined, editorEnabled: true },
-    { label: 'uses desktop tools through the PTC environment switch', envValue: undefined, editorEnabled: false, ptc: true },
+    { label: 'uses the PTC executor overlay despite the retired environment selector', envValue: undefined, editorEnabled: false, ptc: true },
   ])('$label', async (scenario) => {
     const { envValue, editorEnabled } = scenario
     const ptc = 'ptc' in scenario && scenario.ptc
@@ -92,6 +91,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       '--profile',
       'sdk',
       ...(editorEnabled ? ['--patch', editorPatch] : []),
+      ...(ptc ? ['--patch', join(repoRoot, 'apps/cli/config/examples/ptc.yml')] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -99,7 +99,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
         DSH_HOME: join(root, '.dsh'),
         DSH_PERMISSION_MODE: 'danger-full-access',
         DSH_TELEMETRY_DISABLED: '1',
-        DSH_TOOLS_MODE: ptc ? 'ptc' : 'native',
+        DSH_TOOLS_MODE: ptc ? 'native' : 'ptc',
         DEEPSEEK_API_KEY: 'keyless-smoke-no-call',
         DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
         ...(envValue === undefined ? {} : { DSH_MAX_TOKENS_AS_SUCCESS: envValue }),
@@ -198,11 +198,30 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(exit.exitCode, `signal=${String(exit.signal)}; stderr=${stderr}`).toBe(0)
       const sessionsRoot = join(root, '.dsh', 'sessions')
       const files = await readdir(sessionsRoot, { recursive: true })
-      const log = files.find(file => file.endsWith('.jsonl.zstd'))
+      // Session logs are JSONL across one zstd frame per batch, header frame
+      // first. Decompress frames explicitly: a single call over concatenated
+      // frames returned only the first frame on Node 24.19 and returns every
+      // frame on 24.22, so neither behavior may back the assertion.
+      const logs: { compressed: Buffer; header: Record<string, unknown> }[] = []
+      for (const file of files.filter(file => file.endsWith('.jsonl.zstd'))) {
+        const compressed = await readFile(join(sessionsRoot, file))
+        expect(compressed.subarray(0, 4).toString('hex')).toBe('28b52ffd')
+        const first = scanZstdFrames(compressed).frames[0]
+        if (first === undefined) continue
+        const headerLine = zstdDecompressSync(compressed.subarray(first.start, first.end)).toString().trim().split('\n')[0]
+        if (headerLine === undefined) continue
+        logs.push({ compressed, header: JSON.parse(headerLine) as Record<string, unknown> })
+      }
+      const log = logs.find(entry => entry.header.type === 'session' && entry.header.id === 'main')
       expect(log).toBeDefined()
-      const compressed = await readFile(join(sessionsRoot, log!))
-      expect(compressed.subarray(0, 4).toString('hex')).toBe('28b52ffd')
-      expect(JSON.parse((await decompress(compressed)).toString())).toMatchObject({ type: 'session', id: 'main' })
+      const { frames, tornStart } = scanZstdFrames(log!.compressed)
+      expect(tornStart).toBeUndefined()
+      const records = frames
+        .flatMap(({ start, end }) => zstdDecompressSync(log!.compressed.subarray(start, end)).toString().trim().split('\n'))
+        .map(line => JSON.parse(line) as Record<string, unknown>)
+      expect(records[0]).toMatchObject({ type: 'session', id: 'main' })
+      expect(records.length).toBeGreaterThan(1)
+      expect(records.some(record => record.type === 'turn/end')).toBe(true)
     } finally {
       // No-op after exit; reject: false settles on every outcome, so cleanup never races teardown.
       child.kill('SIGKILL')

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Títulos que acompanham conversas",
+    "description": "Atualize os títulos das sessões à medida que novos prompts humanos chegam.",
+    "detail": "docs/DETAIL.md"
+  }
+}

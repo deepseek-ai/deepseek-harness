@@ -188,6 +188,10 @@ flowchart LR
   cfg --> plugin_dsh_base_mcp_resources
   plugin_dsh_base_tools["tools<br/>@deepseek-ai/dsh-tools"]
   cfg --> plugin_dsh_base_tools
+  plugin_dsh_base_tool_executor_native["tool-executor-native<br/>@deepseek-ai/dsh-tool-executor-native"]
+  cfg --> plugin_dsh_base_tool_executor_native
+  plugin_dsh_base_tool_executor_ptc["tool-executor-ptc<br/>@deepseek-ai/dsh-tool-executor-ptc"]
+  cfg --> plugin_dsh_base_tool_executor_ptc
   plugin_dsh_base_system_prompt["system-prompt<br/>@deepseek-ai/dsh-system-prompt"]
   cfg --> plugin_dsh_base_system_prompt
   plugin_dsh_base_agent_loop["agent-loop<br/>@deepseek-ai/dsh-agent-loop"]
@@ -292,6 +296,8 @@ flowchart LR
 | `tool-web` | `@deepseek-ai/dsh-tool-web` |
 | `mcp-resources` | `@deepseek-ai/dsh-mcp-resources` |
 | `tools` | `@deepseek-ai/dsh-tools` |
+| `tool-executor-native` | `@deepseek-ai/dsh-tool-executor-native` |
+| `tool-executor-ptc` | `@deepseek-ai/dsh-tool-executor-ptc` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` |
 | `fs-sandbox` | `@deepseek-ai/dsh-fs-sandbox` |

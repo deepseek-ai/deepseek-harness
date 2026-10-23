@@ -67,6 +67,8 @@ ctx.systemPrompt.section({
 
 `refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
+agent loop 在 `agent/pre-step` 之前为每个拟议步骤调用一次 `assemble(context)`，并传入该步骤捕获的模型选择（`context.modelSelection`）与准入工具集合（`context.toolSet`）。展示监听器接收段落、上下文与变量；工具声明仍由提供方持有。依赖工具的段落回调通过 `context.toolSet` 读取与执行相同的步骤集合。
+
 ### 贡献提示词变量
 
 变量从段或上下文文本中以 `{{name}}` 引用，每次组装时解析；带作用域的变量会为该 agent 遮蔽同名全局变量。循环提供 `provider` 和 `model`；插件可注册自己拥有的事实。工作目录服务通过不执行插值的用户上下文提供目录文本。
@@ -107,7 +109,7 @@ ctx.systemPrompt.variable('response_language', () => 'English')
 
 ### 组装与渲染
 
-组装分两阶段完成求值与渲染：`assemble()` 返回文本已求值但尚未插值的段、有序工具 schema，以及每个已注册变量按当前上下文求得的值；`renderPrompt()` 对未设置 `interpolate: false` 的段插值 `{{variable}}` 引用、删除空段并用空行连接——严格规则：未知引用、已注册但无值的引用或格式错误的完整组都会抛出，因为格式错误的提示词比明确失败更糟。`toolOrder` 在 waterfall 分发前规范化收集到的工具（注册顺序只是插件加载产物）；修改列表的 waterfall 监听器对其输出的确定性负责。
+组装分两阶段完成求值与渲染：`assemble()` 返回文本已求值但尚未插值的段、有序工具 schema，以及每个已注册变量按当前上下文求得的值；`renderPrompt()` 对未设置 `interpolate: false` 的段插值 `{{variable}}` 引用、删除空段并用空行连接——严格规则：未知引用、已注册但无值的引用或格式错误的完整组都会抛出，因为格式错误的提示词比明确失败更糟。`toolOrder` 在 waterfall 分发前规范化收集到的工具（注册顺序只是插件加载产物）；展示 waterfall 不接收工具数组，也不能替换提供方持有的声明。
 
 ### 作用域
 
@@ -137,7 +139,7 @@ ctx.systemPrompt.variable('response_language', () => 'English')
 
 #### 模型看到什么
 
-第一方段落依次渲染 harness 身份、部署 persona 前缀（含模型名称介绍）、可复用指令（包括生成的工具 SDK 和结构化输出指导），最后是携带环境信息的后缀：harness 源码（`10000`）、Web 表层（`10100`）和部署 persona 后缀（`10200`）。外部段落的顺序与组装监听器仍决定其最终结果。`includeHarnessIdentity: false` 仅省略这个固定开场白。空段会消失；带作用域的段与变量可以为一个 agent 遮蔽全局项。`system-prompt/assemble` waterfall 决定交付的提示词与工具 schema，除非一个有效段声明自身为 complete——此时该确切段会成为完整的系统提示词，而 waterfall 得到的上下文、工具与变量保持不变。渲染后的提示词作为派生历史中的 system 角色消息——surface 第 0 号节点，或历史内更新之后最新的系统节点——到达模型；循环请求与 `request/header` 均不含单独的 `system` 字段。完整渲染结果为空时，循环通过有日志记录的空内容替换清除所有生效的系统节点，模型历史不再保留任何旧提示词。有序动态上下文与段分离，只在存在时才会成为带来源的 user 角色快照；`includeRuntimeContext: false` 或带作用域的抑制器会移除可选贡献；必需的操作上下文仍然保留。
+第一方段落依次渲染 harness 身份、部署 persona 前缀（含模型名称介绍）、可复用指令（包括生成的工具 SDK 和结构化输出指导），最后是携带环境信息的后缀：harness 源码（`10000`）、Web 表层（`10100`）和部署 persona 后缀（`10200`）。外部段落的顺序与组装监听器仍决定其最终结果。`includeHarnessIdentity: false` 仅省略这个固定开场白。空段会消失；带作用域的段与变量可以为一个 agent 遮蔽全局项。`system-prompt/assemble` waterfall 决定交付的提示词，除非一个有效段声明自身为 complete——此时该确切段会成为完整的系统提示词，而 waterfall 得到的上下文与变量保持不变。工具声明仍由提供方持有。渲染后的提示词作为派生历史中的 system 角色消息——surface 第 0 号节点，或历史内更新之后最新的系统节点——到达模型；循环请求与 `request/header` 均不含单独的 `system` 字段。完整渲染结果为空时，循环通过有日志记录的空内容替换清除所有生效的系统节点，模型历史不再保留任何旧提示词。有序动态上下文与段分离，只在存在时才会成为带来源的 user 角色快照；`includeRuntimeContext: false` 或带作用域的抑制器会移除可选贡献；必需的操作上下文仍然保留。
 
 ##### harness 身份
 
@@ -157,7 +159,7 @@ You are an AI agent powered by DeepSeek Harness.
 
 #### 模型看到什么
 
-对于已交付工具，模型会收到[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tools)中对每个 agent 可见的子集；限制与组装拦截完成后，按配置或字典序排列。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。限制不会移除段落注册：工具指导插件通过 `text({ scope })` 与 `ctx.tools.get(name, scope)` 返回空文本或选择适用片段。任意静态段落不会被自动改写。
+对于已交付工具，模型会收到[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-executor-ptc)中对每个 agent 可见的子集；限制与步骤时激活完成后，按配置或字典序排列。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。限制不会移除段落注册：工具指导插件通过 `text({ scope, toolSet })` 与 `ctx.tools.get(name, scope, toolSet)` 返回空文本或选择适用片段。任意静态段落不会被自动改写。
 
 #### Token 影响
 

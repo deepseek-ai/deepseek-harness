@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -12,6 +14,7 @@ describe('MCP result callback adaptation', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       let execution: ToolExecution | undefined
       ctx.on('tools/execute', (exec, next) => {
         execution = exec
@@ -28,7 +31,7 @@ describe('MCP result callback adaptation', () => {
         call,
       }))
       const signal = new AbortController().signal
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         name: 'native_window', callId: ToolCallId('window-call'), arguments: { window: 7 }, signal,
       })
       expect(call).toHaveBeenCalledWith({ window: 7 }, execution)
@@ -48,11 +51,12 @@ describe('MCP result callback adaptation', () => {
       try {
         await ctx.plugin(SystemPrompt)
         await ctx.plugin(ToolRuntime)
+        await ctx.plugin(NativeToolExecutor)
         ctx.tools.register(createMcpToolDefinition(ctx, {
           name: 'invalid_result', rawName: 'invalid', description: 'External result fixture.',
           inputSchema: { type: 'object' }, call: async () => invalid,
         }))
-        const result = await ctx.tools.execute({
+        const result = await executeToolFixture(ctx, {
           name: 'invalid_result', callId: ToolCallId('invalid-call'), arguments: {},
           signal: new AbortController().signal,
         })

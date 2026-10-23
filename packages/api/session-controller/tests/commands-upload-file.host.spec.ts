@@ -6,7 +6,8 @@ import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
-  FileAttachmentRef, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
+  FileAttachmentRef, ImageAttachmentLimits, ImageAttachmentRef, SaveFileAttachment, SaveFileStreamAttachment,
+  SaveImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource, UserMessage } from '@deepseek-ai/dsh-llm'
@@ -21,8 +22,28 @@ import { SessionCommandController } from '../src/commands.ts'
 import type { SessionRequestId } from '../src/types.ts'
 
 const SESSION = SessionId('upload-session')
+const IMAGE_LIMITS: ImageAttachmentLimits = {
+  maxImageBytes: 4,
+  maxImagesPerMessage: 2,
+  maxMessageImageBytes: 8,
+  maxImagePixels: 64,
+  maxImageDimension: 8,
+  mediaTypes: ['image/png'],
+}
+const STAGED_IMAGE: ImageAttachmentRef = {
+  attachmentId: AttachmentId(`sha256:${'12'.repeat(32)}`),
+  mediaType: 'image/png',
+  bytes: 3,
+  width: 1,
+  height: 1,
+  name: 'shot.png',
+}
 
-async function uploadHarness(origin?: 'subagent'): Promise<{
+async function* chunks(...parts: readonly number[][]): AsyncIterable<Uint8Array> {
+  for (const part of parts) yield Uint8Array.from(part)
+}
+
+async function uploadHarness(origin?: 'subagent', imageLimits: ImageAttachmentLimits = IMAGE_LIMITS): Promise<{
   ctx: Context
   controller: SessionCommandController
   uploads: FileUploads
@@ -31,6 +52,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   saveFile: ReturnType<typeof vi.fn>
   saveFileStream: ReturnType<typeof vi.fn>
   saveImages: ReturnType<typeof vi.fn>
+  resolveModelInfo: ReturnType<typeof vi.fn>
   disposeAgent: () => Promise<void>
   uploadRoute: (request: Request) => Promise<Response>
 }> {
@@ -79,10 +101,10 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
       bytes,
     }
   })
-  const saveImages = vi.fn((): Promise<readonly ImageAttachmentRef[]> =>
+  const saveImages = vi.fn((_inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]> =>
     Promise.reject(new Error('fixture did not expect image persistence')))
   ctx.provide('attachments', Object.setPrototypeOf(
-    { saveFile, saveFileStream, saveImages },
+    { saveFile, saveFileStream, saveImages, imageLimits },
     AttachmentStore.prototype,
   ) as never)
   let uploadRoute: ((request: Request) => Promise<Response>) | undefined
@@ -94,10 +116,16 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
       },
     },
   } as never)
+  const resolveModelInfo = vi.fn((): Promise<{
+    readonly provider: string
+    readonly id: string
+    readonly name: string
+    readonly inputModalities?: readonly string[]
+  }> => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }))
   ctx.provide('llm', {
     listModels: async () => [{ id: 'fixture-model', name: 'Model' }],
     listProviders: () => [{ id: 'fixture', name: 'Fixture' }],
-    resolveModelInfo: () => Promise.resolve({ provider: 'fixture', id: 'fixture-model', name: 'Fixture' }),
+    resolveModelInfo,
   } as never)
   const agents = new ApiSessionAgentController(ctx)
   vi.spyOn(agents, 'resolveAgent').mockResolvedValue({ agent })
@@ -112,6 +140,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     saveFile,
     saveFileStream,
     saveImages,
+    resolveModelInfo,
     disposeAgent,
     uploadRoute,
   }
@@ -142,7 +171,7 @@ describe('Session file uploads', () => {
     expect(saveFile).toHaveBeenCalledTimes(1)
     expect(receipt.file.name).toBe('notes.pdf')
     expect(receipt.file.bytes).toBe(3)
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     expect(uploads.resolve(agent, 'missing' as FileUploadReceiptId)).toBeUndefined()
     const commandHandler = vi.fn((_invocation: unknown) => ({ kind: 'success' as const }))
     ctx.commands.register({
@@ -201,6 +230,116 @@ describe('Session file uploads', () => {
     expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
       { type: 'file', attachment: receipt.file },
     ])
+  })
+
+  it('stages an uploaded image and admits its receipt as that image, which commands do not accept', async () => {
+    const { ctx, controller, uploads, agent, followup, saveImages } = await uploadHarness()
+    saveImages.mockResolvedValueOnce([STAGED_IMAGE])
+    const receipt = await uploads.uploadImageStream({
+      sessionId: SESSION, data: chunks([1, 2], [3, 4]), mediaType: 'image/png', name: 'shot.png',
+    })
+    expect(saveImages).toHaveBeenCalledWith([{ data: Uint8Array.of(1, 2, 3, 4), mediaType: 'image/png', name: 'shot.png' }])
+    expect(receipt.image).toEqual(STAGED_IMAGE)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'image', attachment: STAGED_IMAGE, encodedBytes: 4 })
+    const commandHandler = vi.fn((_invocation: unknown) => ({ kind: 'success' as const }))
+    ctx.commands.register({
+      name: 'files', description: 'Use staged files', input: { hint: '<task>', attachments: true },
+      handler: commandHandler,
+    })
+    await ctx.commands.execute(
+      agent,
+      '/files inspect',
+      [{ type: 'file', receiptId: receipt.receiptId }],
+      new AbortController().signal,
+    )
+    expect(commandHandler).not.toHaveBeenCalled()
+    await controller.prompt(promptRequest([
+      { type: 'file', receiptId: receipt.receiptId },
+      { type: 'text', text: 'look' },
+    ]), USER_SOURCE)
+    expect((followup.mock.calls[0]?.[0] as UserMessage).content).toEqual([
+      { type: 'image', attachment: STAGED_IMAGE },
+      { type: 'text', text: 'look' },
+    ])
+    expect(saveImages).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses an uploaded image for a model without image input', async () => {
+    const { controller, uploads, followup, saveImages, resolveModelInfo } = await uploadHarness()
+    saveImages.mockResolvedValueOnce([STAGED_IMAGE])
+    const receipt = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/png' })
+    resolveModelInfo.mockResolvedValue({ provider: 'fixture', id: 'fixture-model', name: 'Fixture', inputModalities: ['text'] })
+    await expect(controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' } })
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('refuses image receipts whose uploads together exceed the message image-byte limit', async () => {
+    const { controller, uploads, followup, saveImages } = await uploadHarness(undefined, {
+      ...IMAGE_LIMITS, maxMessageImageBytes: 5,
+    })
+    saveImages.mockResolvedValue([STAGED_IMAGE])
+    const first = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1, 2, 3]), mediaType: 'image/png' })
+    const second = await uploads.uploadImageStream({ sessionId: SESSION, data: chunks([4, 5, 6]), mediaType: 'image/png' })
+    await expect(controller.prompt(promptRequest([
+      { type: 'file', receiptId: first.receiptId },
+      { type: 'file', receiptId: second.receiptId },
+    ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGES_TOO_LARGE' } })
+    expect(followup).not.toHaveBeenCalled()
+  })
+
+  it('issues no receipt for an image upload cancelled after its last chunk or during storage', async () => {
+    const { uploads, saveImages } = await uploadHarness()
+    const afterBody = new AbortController()
+    await expect(uploads.uploadImageStream({
+      sessionId: SESSION,
+      data: (async function* (): AsyncIterable<Uint8Array> {
+        yield Uint8Array.of(1, 2, 3)
+        afterBody.abort()
+      })(),
+      mediaType: 'image/png',
+      signal: afterBody.signal,
+    })).rejects.toThrow('failed to store file upload: AbortError')
+    expect(saveImages).not.toHaveBeenCalled()
+    const duringStorage = new AbortController()
+    const stored = Promise.withResolvers<readonly ImageAttachmentRef[]>()
+    saveImages.mockReturnValueOnce(stored.promise)
+    const uploading = uploads.uploadImageStream({
+      sessionId: SESSION, data: chunks([1, 2, 3]), mediaType: 'image/png', signal: duringStorage.signal,
+    })
+    await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
+    duringStorage.abort()
+    stored.resolve([STAGED_IMAGE])
+    // The image whose storage began stays stored; only its receipt is withheld.
+    await expect(uploading).rejects.toThrow('failed to store file upload: AbortError')
+  })
+
+  it('refuses an image past the per-image byte limit without reading further, and an unaccepted type', async () => {
+    const { uploads, saveImages } = await uploadHarness()
+    const overLimit = (async function* (): AsyncIterable<Uint8Array> {
+      yield Uint8Array.of(1, 2, 3)
+      yield Uint8Array.of(4, 5)
+      throw new Error('read past the limit')
+    })()
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: overLimit, mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGE_TOO_LARGE' } })
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/bmp' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'UNSUPPORTED_IMAGE_TYPE' } })
+    expect(saveImages).not.toHaveBeenCalled()
+  })
+
+  it('stops reading an image at the message byte limit when it is below the per-image limit', async () => {
+    const { uploads, saveImages } = await uploadHarness(undefined, {
+      ...IMAGE_LIMITS, maxImageBytes: 8, maxMessageImageBytes: 3,
+    })
+    const overLimit = (async function* (): AsyncIterable<Uint8Array> {
+      yield Uint8Array.of(1, 2)
+      yield Uint8Array.of(3, 4)
+      throw new Error('read past the limit')
+    })()
+    await expect(uploads.uploadImageStream({ sessionId: SESSION, data: overLimit, mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'IMAGE_TOO_LARGE' } })
+    expect(saveImages).not.toHaveBeenCalled()
   })
 
   it('keeps the stream name optional and maps storage failures through the same error vocabulary', async () => {
@@ -320,6 +459,9 @@ describe('Session file uploads', () => {
       details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
     })
     expect(child.saveFile).not.toHaveBeenCalled()
+    await expect(child.uploads.uploadImageStream({ sessionId: SESSION, data: chunks([1]), mediaType: 'image/png' }))
+      .rejects.toMatchObject({ code: 'subagent/attachment-invalid', details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' } })
+    expect(child.saveImages).not.toHaveBeenCalled()
   })
 
   it('isolates receipts by Session object even when Session ids match', async () => {
@@ -335,7 +477,7 @@ describe('Session file uploads', () => {
     expect(() => owner.uploads.bindPrompt(other.agent, [receipt.receiptId], 'other-prompt'))
       .toThrow(expect.objectContaining({ code: 'session/attachment-invalid', details: { reason: 'FILE_NOT_STAGED' } }))
     owner.uploads.retirePrompt(other.agent, 'owner-prompt')
-    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     owner.uploads.retirePrompt(owner.agent, 'owner-prompt')
     expect(owner.uploads.resolve(owner.agent, receipt.receiptId)).toBeUndefined()
   })
@@ -345,9 +487,9 @@ describe('Session file uploads', () => {
     uploads.retirePrompt(agent, 'not-staged')
     const receipt = await uploads.upload(agent, { data: 'AAAA' }, new AbortController().signal)
     await controller.prompt(promptRequest([{ type: 'file', receiptId: receipt.receiptId }]), USER_SOURCE)
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     uploads.retirePrompt(agent, 'other-request')
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
     uploads.retirePrompt(agent, 'req-1')
     expect(uploads.resolve(agent, receipt.receiptId)).toBeUndefined()
   })
@@ -364,7 +506,7 @@ describe('Session file uploads', () => {
       content: [{ type: 'text', text: 'extension event' }],
       source: { kind: 'user', rpcId: 1 } as never,
     }), { surfaceOp: 'append' })
-    expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual(observed.file)
+    expect(first.uploads.resolve(first.agent, observed.receiptId)).toEqual({ type: 'file', attachment: observed.file })
     first.agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'observed' }],
       source: { kind: 'user', rpcId: 'req-1' as SessionRequestId },
@@ -466,7 +608,7 @@ describe('Session file uploads', () => {
       { type: 'file', receiptId: receipt.receiptId },
     ]), USER_SOURCE)).rejects.toMatchObject({ code: 'session/agent-busy' })
     uploads.retirePrompt(agent, 'req-1')
-    expect(uploads.resolve(agent, receipt.receiptId)).toEqual(receipt.file)
+    expect(uploads.resolve(agent, receipt.receiptId)).toEqual({ type: 'file', attachment: receipt.file })
   })
 
   it('retires a prompt-bound receipt when its queued occurrence is removed', async () => {

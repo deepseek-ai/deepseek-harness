@@ -62,6 +62,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "execa": "^10.0.1",
     "semver": "^7.8.5",
@@ -69,7 +70,8 @@
     "zod": "4.4.3",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-plugin-detail": "workspace:*",
-    "@deepseek-ai/dsh-timeout": "workspace:*"
+    "@deepseek-ai/dsh-timeout": "workspace:*",
+    "hosted-git-info": "^9.0.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -101,6 +103,8 @@
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
@@ -112,6 +116,7 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
-    "@deepseek-ai/dsh-client-connection": "workspace:*"
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@types/hosted-git-info": "^3.0.5"
   }
 }

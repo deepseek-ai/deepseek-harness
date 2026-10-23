@@ -814,11 +814,11 @@ describe('SQLite reconciliation and source lifecycle', () => {
     await expect(ctx.sessionQuery.searchSessions({ query: 'durable' }))
       .resolves.toMatchObject({ items: [{ header: durable, live: false, persisted: true }] })
     const live = ctx.sessions.prepare(shared.id, { meta: { createdAt: 10, cwd: '/work' } })
+    const detach = ctx.sessions.enter(live)
+    ctx.sessions.announce(live)
     live.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'live needle' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    const detach = ctx.sessions.enter(live)
-    ctx.sessions.announce(live)
 
     await expect(ctx.sessionQuery.searchSessions({ query: 'persisted' })).resolves.toEqual({ items: [] })
     await expect(ctx.sessionQuery.searchSessions({ query: 'live' }))

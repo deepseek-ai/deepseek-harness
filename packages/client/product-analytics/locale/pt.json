@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Estatísticas de uso da área de trabalho",
+    "description": "Colete eventos de interação especificados na área de trabalho e envie-os ao serviço de estatísticas do produto."
+  }
+}

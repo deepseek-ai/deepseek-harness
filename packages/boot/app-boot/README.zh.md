@@ -40,7 +40,7 @@ installFailLoud('dsh')
 const ctx = await boot('dsh', resolveConfigPath(argv[2], process.env.DSH_SNAPSHOT))
 ```
 
-`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`webserver`、`web-runtime`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
+`installFailLoud` 会为未处理 rejection 或未捕获异常向 stderr 写一条带标签的 `util.inspect` 诊断，在固定超时内等待界面的 release 钩子，然后以 1 退出；控制流不会回到失败的操作，因为只有抛出点知道哪些状态仍然完整，事件循环只运行到 release 结束或超时。有了这个入口，启动会保留所有能够激活的插件。启用但失败的插件会产生带标签的警告。required entry 失败时，启动会拆卸整个应用并以非零码退出；profile 中不存在的 required id 和已禁用的 required entry 不影响启动。全局 required list 覆盖共享 Agent 执行、应用 endpoint，以及 Web 启动与传输：`agent-loop`、`tool-executor-native`、`tool-executor-ptc`、`webserver`、`web-runtime`、`modules`、`connection`、`headless-runner`、`acp` 和 `sdk-jsonrpc-server`。
 
 <a id="profiles"></a>
 ### Profile
@@ -55,7 +55,7 @@ profile 导入插件前，DSH 会将其声明的 DSH 版本要求与 `getDshRunt
 
 精确版本豁免保存在 profile 自己的 `compatibility.json` 中，而不是 `package.json`，因此写豁免不会触及依赖清单、组合包列表或 Cordis patch 文件。它把精确的 `package-name@version` 键映射到精确 DSH 运行时版本列表；插件升级和 DSH 升级都不继承授权。文件缺失表示没有豁免。文件损坏绝不会阻止 profile 启动：读取器接受的记录仍然生效，每条被拒绝的记录会与插件拒绝信息一起输出到 stderr，此后该文件被视为只读，因此授予或撤销会拒绝执行并要求用户手工修复，而不是覆盖用户的内容。[插件管理器](../plugin-manager/README.zh.md#version-compatibility-and-exemptions)负责每次变更所需的授权、撤销与风险确认。
 
-组合包可以用 `dsh.bundle.platforms` 声明非空的 Node Host 平台名称列表，例如 `["darwin"]`。 额外的 `wsl` 值允许带有 WSL 进程或内核标记的 Linux Host；`linux` 仍允许所有 Linux Host。平台准入不代表 Windows 互操作或桌面已可用。启动器在读取组合包 patch 前验证此声明。Host 不受支持时会跳过整个配置层，保留已保存的选择，并通过 `skippedBundles` 报告原因；其他配置层继续生效。省略此字段时允许所有平台。浏览器所在机器的平台不决定 Host 是否受支持。
+组合包可以用 `dsh.bundle.platforms` 声明非空的 Node Host 平台名称列表，例如 `["darwin"]`。 额外的 `wsl` 值允许带有 WSL 进程或内核标记的 Linux Host；`linux` 仍允许所有 Linux Host。平台准入不代表 Windows 互操作或桌面已可用。启动器在读取组合包 patch 前验证此声明。Host 不受支持时会跳过整个配置层，保留已保存的选择，并通过 `skippedBundles` 报告原因；其他配置层继续生效。省略此字段时允许所有平台。值必须是 Node 平台名或 `wsl`，`macos` 等别名无效。浏览器所在机器的平台不决定 Host 是否受支持。
 
 你的机器本地偏好同样位于 harness home 中：
 
@@ -88,7 +88,7 @@ profile 导入插件前，DSH 会将其声明的 DSH 版本要求与 `getDshRunt
 
 使用 `readPluginMeta(specifier, parentURL)` 或 `ctx.pluginPackages.metaOf(specifier, parentURL)` 读取已安装包的展示文本，无需导入或激活插件。查询使用完整包标识与调用方的解析基准，并遵循 Node exports。文件路径与文件 URL 不解析资源，直接返回无元信息。包根标识缺失的 locale 字段回退到可访问的 `package.json`；子路径标识从不读取 `package.json`。格式错误的元信息返回 `error` 诊断。结果保留翻译，由 Client 选择语言。即使 locale 文本完整，读取器也会加载图片 data URL：包根使用清单 `icon`，省略该字段时使用 `<包名>/icon`；子路径使用 `<标识>/icon`。图标出错时，保留有效文本并附上诊断。作者格式见[插件展示元信息](../../../docs/cookbook/adding-a-package.zh.md#plugin-display-metadata)。
 
-`ON_DEMAND_BUNDLES` 列出仅按需安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包拥有的本地化元信息和图标，支持离线发现；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与新鲜度；构建只读取已提交的目录，不导入提供者代码。目录不保存安装目标；[插件管理器](../plugin-manager/README.zh.md#use-this-package)根据当前版本和安装位置确定目标，并使用普通组合包安装器。[产品用途检查](../../../scripts/verify-product-use.ts)将随附和按需选择与 Web 组合，但不执行提供者。
+app-boot 应用的 profile 模板、安装方拥有的 profile 组合包元组和已退役组合包列表位于 [`@deepseek-ai/dsh-official-bundles`](../../util/official-bundles/README.zh.md)，安装方的默认、可选和按需组合包列表也在该包中。
 
 <a id="startup-and-reload-failures"></a>
 ### 启动与重载失败

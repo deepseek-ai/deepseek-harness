@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-21-replaceable-icon-sprite.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-21-replaceable-icon-sprite.md
+/agent-note-replaceable-product-icons-through-an-svg-sprite:
+  en: 2b527e550e071451
+  zh: 7de256912270cae0
+/agent-note-replaceable-product-icons-through-an-svg-sprite/problem:
+  en: d55557fe41ab87c8
+  zh: eea3f7d0c82561bf
+/agent-note-replaceable-product-icons-through-an-svg-sprite/decision:
+  en: 6ddd80eae56693dd
+  zh: 4d654a76eb64c50a
+/agent-note-replaceable-product-icons-through-an-svg-sprite/alternatives-considered:
+  en: 2e25ece88bccdb22
+  zh: bb24a28bef7ea7ce
+/agent-note-replaceable-product-icons-through-an-svg-sprite/consequences:
+  en: 0ad6db37bbb76ddb
+  zh: 0ca09d55a2167970

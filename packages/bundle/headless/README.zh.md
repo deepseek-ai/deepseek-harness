@@ -127,7 +127,7 @@ runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组
 
 ### 基于 base 的 patch 内容
 
-patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，在基础 `system-prompt` 行上设置编码 persona 前缀与独立的 cwd 后缀，保留与 Web 表层相同的临时进程级 PTC mode 开关（`DSH_TOOLS_MODE`），禁用共享的 HMR（热模块替换）行，并挂载启动提供方与 runner。缓存为每个已持久化的一次性会话写入检查点，供后续消费方使用；其持久性屏障会在发布缓存行前 flush 所覆盖的日志前缀，因此可能拆分原本会合并的 JSONL 连续段。启动提供方（[`src/startup.ts`](src/startup.ts)）注入 `ctx.cmdlineArgs`（[`dsh-cmdline`](../../boot/cmdline/README.zh.md)），读取任务和调用选项、打印应用自己的 `--help`，并提供 `headlessStartup`；runner 从延迟配置读取任务、Session 标识与输出模式。它直接从 `headlessStartup` 读取显式 CLI 权限预设与审批策略，以 runner 配置作为默认值。sandbox-policy 行也等待此服务，在保留基础模式和工作区默认值的同时接收显式目录授权。
+patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，在基础 `system-prompt` 行上设置编码 persona 前缀与独立的 cwd 后缀，继承原生工具执行，并支持 [PTC overlay](../../../apps/cli/config/examples/ptc.yml)，禁用共享的 HMR（热模块替换）行，并挂载启动提供方与 runner。缓存为每个已持久化的一次性会话写入检查点，供后续消费方使用；其持久性屏障会在发布缓存行前 flush 所覆盖的日志前缀，因此可能拆分原本会合并的 JSONL 连续段。启动提供方（[`src/startup.ts`](src/startup.ts)）注入 `ctx.cmdlineArgs`（[`dsh-cmdline`](../../boot/cmdline/README.zh.md)），读取任务和调用选项、打印应用自己的 `--help`，并提供 `headlessStartup`；runner 从延迟配置读取任务、Session 标识与输出模式。它直接从 `headlessStartup` 读取显式 CLI 权限预设与审批策略，以 runner 配置作为默认值。sandbox-policy 行也等待此服务，在保留基础模式和工作区默认值的同时接收显式目录授权。
 
 ### 退出映射
 

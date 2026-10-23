@@ -29,7 +29,7 @@ create_goal may infer goal intent from a direct human request in any language. A
 
 Use the workflow tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.
 
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.
 
 ## MCP resource servers
 
@@ -96,11 +96,6 @@ interface ToolArgsMap {
     sandbox_permissions?: "workspace-write" | "danger-full-access";
     /** Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request. */
     justification?: string;
-  } & Record<string, JsonValue>;
-  /** Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again. */
-  exit_plan_mode: {
-    /** The complete plan, as markdown, starting with a # heading that names it. */
-    plan: string;
   } & Record<string, JsonValue>;
   /** Read the current session goal, including the id and revision that update_goal requires. */
   get_goal: Record<string, JsonValue>;
@@ -354,9 +349,6 @@ interface ToolOutputMap {
     path: string;
     before: string;
     after: string;
-  };
-  exit_plan_mode: {
-    approved: boolean;
   };
   get_goal: {
     goal: null;

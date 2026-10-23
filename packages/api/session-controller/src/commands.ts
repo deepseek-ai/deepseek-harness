@@ -7,9 +7,9 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {
-  AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef,
+  AttachmentAdmissionPart, ImageAttachmentRef,
 } from '@deepseek-ai/dsh-attachment'
-import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
+import type { FileUploadReceiptId, StagedAttachment } from '@deepseek-ai/dsh-client-file-upload/types'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
   ReasoningEffortId, assistantStreamChunks, createUserMessage, freezeMessage,
@@ -313,7 +313,12 @@ export class SessionCommandController {
   async prompt(request: SessionPromptRequest, source: MessageSource): Promise<SessionPromptValue> {
     const agent = await this.resolveAgent(request.sessionId)
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
-    const hasImage = request.content.some(part => part.type === 'image')
+    const admission = resolvePromptFileReceipts(
+      request.content,
+      receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+    )
+    // Encoded images and image upload receipts both make an image prompt.
+    const hasImage = admission.content.some(part => part.type === 'image')
     const admit = async (): Promise<SessionPromptValue> => {
       try {
         if (hasImage) {
@@ -329,10 +334,6 @@ export class SessionCommandController {
             }
           }
         }
-        const admission = resolvePromptFileReceipts(
-          request.content,
-          receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
-        )
         const content = await this.ctx.attachments.admitPromptContent(admission.content)
         const message: UserMessage = createUserMessage({ content, source })
         if (this.ctx.agents.get(agent.id) !== agent) {
@@ -556,14 +557,15 @@ export class SessionCommandController {
   }
 }
 
+/** Replace each file part with the file or image its staged receipt names. */
 function resolvePromptFileReceipts(
   content: SessionPromptRequest['content'],
-  stagedFile: (receiptId: FileUploadReceiptId) => FileAttachmentRef | undefined,
+  staged: (receiptId: FileUploadReceiptId) => StagedAttachment | undefined,
 ): { readonly content: AttachmentAdmissionPart[]; readonly receiptIds: readonly FileUploadReceiptId[] } {
   const receiptIds = new Set<FileUploadReceiptId>()
   const resolved = content.map((part): AttachmentAdmissionPart => {
     if (part.type !== 'file') return part
-    const attachment = stagedFile(part.receiptId)
+    const attachment = staged(part.receiptId)
     if (attachment === undefined) {
       throw new RemoteError(
         'session/attachment-invalid',
@@ -572,7 +574,7 @@ function resolvePromptFileReceipts(
       )
     }
     receiptIds.add(part.receiptId)
-    return { type: 'file', attachment }
+    return attachment
   })
   return { content: resolved, receiptIds: [...receiptIds] }
 }

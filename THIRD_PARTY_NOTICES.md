@@ -114,6 +114,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`micromark-util-classify-character`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-classify-character) | MIT |
 | [`micromark-util-sanitize-uri`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri) | MIT |
 | [`micromark-util-symbol`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-symbol) | MIT |
+| [`mime`](https://github.com/broofa/mime) | MIT |
 | [`mime-types`](https://github.com/jshttp/mime-types) | MIT |
 | [`minisearch`](https://github.com/lucaong/minisearch) | MIT |
 | [`negotiator`](https://github.com/jshttp/negotiator) | MIT |
@@ -159,6 +160,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `app-builder-lib@26.17.0` — [`patches/app-builder-lib@26.17.0.patch`](patches/app-builder-lib@26.17.0.patch)
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
+- `lexical@0.49.0` — [`patches/lexical@0.49.0.patch`](patches/lexical@0.49.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
 
 ## Chrome DevTools frontend

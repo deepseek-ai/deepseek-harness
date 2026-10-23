@@ -106,6 +106,14 @@ export interface WebSearchProvider {
   readonly id: string
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
+  /**
+   * Whether a search made for a model request on the `llmProvider` chat route has a
+   * credential to send. Checks configuration only and must not make network calls.
+   * Omitted = ready.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false when that request's searches could not authenticate.
+   */
+  ready?(llmProvider: string | undefined): Promise<boolean>
   /** Run one search; honor `signal` for cancellation. */
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
 }
@@ -118,6 +126,14 @@ export interface WebFetchProvider {
   readonly id: string
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
+  /**
+   * Whether a fetch made for a model request on the `llmProvider` chat route has a
+   * credential to send. Checks configuration only and must not make network calls.
+   * Omitted = ready.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false when that request's fetches could not authenticate.
+   */
+  ready?(llmProvider: string | undefined): Promise<boolean>
   /** Retrieve one URL; honor `signal` for cancellation. */
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
 }

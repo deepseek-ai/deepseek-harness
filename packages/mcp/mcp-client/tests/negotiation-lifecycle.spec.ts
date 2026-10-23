@@ -1,4 +1,5 @@
 /** Real SDK probe ownership, failed negotiation recovery, and subprocess quiescence. */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -28,6 +29,7 @@ async function connection(factory: () => Transport, retry: boolean) {
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   const errors: string[] = []
   const warns: string[] = []
   ctx.logger.error = (message: unknown) => { errors.push(String(message)) }

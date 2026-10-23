@@ -19,6 +19,7 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json",
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -26,6 +27,7 @@
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"

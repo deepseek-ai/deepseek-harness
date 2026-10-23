@@ -1,3 +1,5 @@
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { es, pt } from '../src/client/locales.ts'
 // @vitest-environment jsdom
 /** Trajectory ledger selection, details, status, and fold behavior. */
 
@@ -1349,4 +1351,9 @@ describe('TrajectoryTable', () => {
     expect(screen.getByRole('row', { name: /TOOL/ }).getAttribute('aria-selected')).toBe('false')
     expect(onInspectApplied).not.toHaveBeenCalled()
   })
+})
+
+it('preserves seconds and token units in translated metric labels', () => {
+  expect(makeTranslate(es)('unit.seconds', { value: '1.25' })).toBe('1.25 s')
+  expect(makeTranslate(pt)('unit.tokens', { value: 42 })).toBe('42 tok')
 })

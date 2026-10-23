@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Examen des autorisations automatiques",
+    "description": "Ajoutez un mode d'autorisation Auto review qui utilise le modèle pour évaluer l'autorisation avant chaque appel d'outil.",
+    "detail": "docs/DETAIL.md"
+  }
+}

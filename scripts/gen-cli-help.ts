@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import {
   computeTranslationPairingRecord,
   renderTranslationPairingRecord,

@@ -490,10 +490,16 @@
 
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
-    # The tool registry. Presentation mode is a deployment choice; omitting it here
-    # keeps the schema default (native).
+    # Shared tool definitions and the deployment’s native executor.
     - id: tools
       name: '@deepseek-ai/dsh-tools'
+
+    - id: tool-executor-native
+      name: '@deepseek-ai/dsh-tool-executor-native'
+
+    - id: tool-executor-ptc
+      name: '@deepseek-ai/dsh-tool-executor-ptc'
+      disabled: true
 
     # The deployment persona is a deployment choice; plan-mode and tool plugins own
     # their own prompt sections.

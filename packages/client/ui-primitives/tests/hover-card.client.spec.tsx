@@ -243,7 +243,7 @@ describe('HoverCard', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps previews below the desktop frame clearance', () => {
+  it('keeps previews clear of the frame top strip except below an anchor inside it', () => {
     const prior = document.documentElement.style.getPropertyValue('--dsh-frame-top-clearance')
     const priority = document.documentElement.style.getPropertyPriority('--dsh-frame-top-clearance')
     document.documentElement.style.setProperty('--dsh-frame-top-clearance', '100px')
@@ -258,6 +258,10 @@ describe('HoverCard', () => {
       fireEvent(window, new Event('resize'))
       expect(card.style.top).toBe('120px')
       expect(card.style.maxHeight).toBe('322px')
+      // An anchor inside the top strip keeps its preview directly below it.
+      wrapper.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 10, width: 600, height: 32 })
+      fireEvent(window, new Event('resize'))
+      expect(card.style.top).toBe('50px')
     } finally {
       if (prior === '') document.documentElement.style.removeProperty('--dsh-frame-top-clearance')
       else document.documentElement.style.setProperty('--dsh-frame-top-clearance', prior, priority)

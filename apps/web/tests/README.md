@@ -14,6 +14,8 @@ On Linux, `--with-deps` installs dependencies through the system package manager
 
 Ordinary scenarios begin with no registered Workspace or Session and a durable marker recording a removed default Workspace, so explicit folder-selection scenarios retain control of their cwd. `launchWebScaffold({ firstUse: true })` leaves initialization eligible for startup scenarios.
 
+Same-day message goldens use the shared `WEB_FIXTURE_TIME`: seeded transcripts pass it as `createdAt` and pin the browser calendar with `pinBrowserClock`; scenarios that submit live messages also use `pinHostClock` and restore it after teardown. These clocks advance with real elapsed time while keeping native timers intact, so midnight does not change a scenario's date labels.
+
 ## Completion observations
 
 State-sensitive cases use Workspace, admission, attachment, and model-stream barriers to separate visible intermediate states from completed operations. Model-picker persistence assertions wait for the saved default, independently of menu closure. Details close waits for frame transitions; archive verification assigns an explicit title to the seeded Session and follows that identity across reload. The [CI test reliability workflow](../../../.agents/skills/dsh-ci-test-reliability/SKILL.md#synchronize-on-state) owns these synchronization rules.
@@ -23,6 +25,8 @@ State-sensitive cases use Workspace, admission, attachment, and model-stream bar
 Plugin-manager and HMR lifecycle switches wait up to `PLUGIN_TOGGLE_SETTLE_MS` (10 seconds) for the Host's profile write and the store's follow-up inventory read, the two steps that republish `aria-checked`; that constant's JSDoc records the measured chain.
 
 Explicit scrolling uses `scrollIntoView` from `support.ts`: it resolves the locator again when its old element detaches and checks connection in the same browser task as native scrolling. Scenarios retain their visibility and geometry assertions after scrolling.
+
+Question-composer resize assertions wait for overflow, the clipping mask, and toggle visibility to agree after CSS scroll timelines update.
 
 [The snapshot after closing a sidebar pane](shortcuts-panels.e2e.ts) moves the pointer outside the controls and waits for hover tooltips to close before capture. Keyboard focus remains on the pane.
 

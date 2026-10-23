@@ -18,7 +18,7 @@ beforeEach(() => { vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1)); vi.st
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
 const id = 'sensevoice-local' as SpeechProviderId
 const transcript: Transcript = { text: '检查 TypeScript 类型', audioSeconds: 2, inferenceSeconds: 0.4 }
-function fixture(recording?: Recording) {
+function fixture(recording?: Recording, navigable = true) {
   const capture = Object.assign(new Recording(() => {}), { start: vi.fn<Recording['start']>(async () => {}), stop: vi.fn(async () => new Uint8Array(48)),
     amplitude: () => 0, dispose: vi.fn(async () => {}) })
   const inputActions = { notify: vi.fn(), insertQuote: () => false,
@@ -35,6 +35,7 @@ function fixture(recording?: Recording) {
     openSettings: vi.fn(), prepare: vi.fn(async () => {}), cancelPreparation: vi.fn(async () => {}), configure: vi.fn(async () => {}),
     selectMicrophone: vi.fn(), useMicrophoneDevice: bindSnapshotSelector(createSnapshotStore({ id: '', label: '' })),
     useSpeechReadiness: bindSnapshotSelector(readiness), createRecording: () => recording ?? capture,
+    usePluginNavigation: bindSnapshotSelector(createSnapshotStore(navigable)),
     t: makeTranslate(zh, commonZh) }
   const view = render(<VoiceInput {...props} />)
   return { props, capture, inputActions, readiness, transcribe, view }
@@ -333,6 +334,18 @@ it.each<SpeechPreparationState>([
   expect(b.props.prepare).not.toHaveBeenCalled()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: zh['setupPrompt.details'] }))
   expect(b.props.openSettings).toHaveBeenCalledOnce()
+})
+
+it('offers no plugin details from setup guidance while the Plugins page navigation is absent', () => {
+  const b = fixture(undefined, false), state = b.readiness.getSnapshot()
+  act(() => { b.readiness.set({ ...state, catalog: { ...state.catalog!, providers: [
+    { ...state.catalog!.providers[0]!, preparation: { phase: 'unprepared' } },
+  ] } }) })
+  fireEvent.click(screen.getByRole('button', { name: zh['setupPrompt.trigger'] }))
+  const dialog = within(screen.getByRole('dialog'))
+  expect(dialog.queryByRole('button', { name: zh['setupPrompt.open'] })).toBeNull()
+  expect(dialog.getByRole('button', { name: zh['setupPrompt.later'] })).toBeTruthy()
+  expect(b.props.openSettings).not.toHaveBeenCalled()
 })
 
 it('moves focus into setup guidance, contains Tab traversal, and restores the draft focus on dismissal', () => {

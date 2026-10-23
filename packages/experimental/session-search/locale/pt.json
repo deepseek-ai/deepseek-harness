@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Pesquisa de sessão",
+    "description": "Forneça aos agentes ferramentas para pesquisar e ler sessões anteriores do espaço de trabalho atual.",
+    "detail": "docs/DETAIL.md"
+  }
+}

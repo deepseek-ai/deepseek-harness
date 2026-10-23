@@ -739,11 +739,15 @@ describe('WorkspaceBrowser', () => {
       open,
     })
     fireEvent.click(screen.getByText('alpha'))
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 1 })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 2 })
     fireEvent.doubleClick(screen.getByText('Alpha session'))
     expect(requestSessionRename).toHaveBeenCalledWith(sid('alpha-s'), 'Alpha session')
     expect(open).not.toHaveBeenCalled()
     // The flat list threads the same request.
     act(() => { b.store.actions.setGroupBy('flat') })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 1 })
+    fireEvent.mouseDown(screen.getByText('Alpha session'), { detail: 2 })
     fireEvent.doubleClick(screen.getByText('Alpha session'))
     expect(requestSessionRename).toHaveBeenCalledTimes(2)
   })

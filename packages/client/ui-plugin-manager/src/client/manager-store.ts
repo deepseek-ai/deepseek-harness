@@ -129,7 +129,7 @@ export interface PackageView {
   readonly enabled: boolean
   /** Why the Host refuses to switch the bundle off or remove it, when it does. */
   readonly readOnlyReason?: ReadOnlyReason
-  /** Why the Host cannot read the bundle, when it cannot. */
+  /** Why the Host cannot read or enable the bundle. */
   readonly error?: ManagementError
   readonly rows: readonly PackageRow[]
 }

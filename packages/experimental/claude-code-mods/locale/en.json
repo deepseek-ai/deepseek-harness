@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code mods",
+    "description": "Load Claude Code extensions and run their hooks through Harness extension points."
+  }
+}

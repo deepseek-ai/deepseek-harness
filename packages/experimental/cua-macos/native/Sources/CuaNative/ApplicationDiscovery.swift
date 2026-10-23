@@ -69,16 +69,8 @@ struct InstalledApplication: Sendable, Equatable {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
-        let pid: Int32 = try await withCheckedThrowingContinuation { continuation in
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: app.path), configuration: configuration) { running, error in
-                if let error { continuation.resume(throwing: error) }
-                else if let running { continuation.resume(returning: running.processIdentifier) }
-                else { continuation.resume(throwing: NativeFailure(code: "APP_UNAVAILABLE", message: "Application launch returned no process")) }
-            }
-        }
-        guard let running = NSRunningApplication(processIdentifier: pid) else {
-            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
-        }
+        let running = try await NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: app.path), configuration: configuration)
         while !running.isFinishedLaunching {
             try cancellation.check()
             guard !running.isTerminated else {
@@ -87,6 +79,10 @@ struct InstalledApplication: Sendable, Equatable {
             try await Task.sleep(for: .milliseconds(25))
         }
         try cancellation.check()
+        let pid = running.processIdentifier
+        guard pid > 0, !running.isTerminated else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
+        }
         return pid
     }
 }

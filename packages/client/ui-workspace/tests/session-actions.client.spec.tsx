@@ -171,6 +171,22 @@ describe('pin action', () => {
     expect(pin.pinSession).toHaveBeenCalledOnce()
   })
 
+  it('offers neither toggle while the access snapshot excludes it for this Session', () => {
+    const { state } = openMenu()
+    const useSessionAccess = vi.fn((_id: SessionId, endpoint: string) => endpoint !== 'workspace/pinSession')
+    const menu = render(<PinSessionMenuItem {...menuRow(state)} {...pinShare()} useSessionAccess={useSessionAccess} />)
+    expect(menu.container.innerHTML).toBe('')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'workspace/pinSession')
+    menu.unmount()
+    const button = render(<PinSessionRowButton {...actionRow} {...pinShare()} useSessionAccess={useSessionAccess} />)
+    expect(button.container.innerHTML).toBe('')
+    button.unmount()
+    // A pinned row asks for its unpin endpoint instead.
+    const pinned = render(<PinSessionRowButton {...actionRow} {...pinShare(['one'])} useSessionAccess={useSessionAccess} />)
+    expect(useSessionAccess).toHaveBeenLastCalledWith(sid('one'), 'workspace/unpinSession')
+    expect(pinned.getByRole('button', { name: '取消置顶' })).toBeTruthy()
+  })
+
   it('offers nothing on an archived Session', () => {
     const { state } = openMenu()
     const pin = pinShare(['one'], ['one'])
@@ -215,6 +231,22 @@ describe('archive action', () => {
     expect(callOrder(setMenuOpen)).toBeLessThan(callOrder(archive.unarchiveSession))
   })
 
+  it('offers neither the archive row nor its button while the access snapshot excludes archiving', () => {
+    const { state } = openMenu()
+    const useSessionAccess = vi.fn((_id: SessionId, endpoint: string) => endpoint !== 'workspace/archiveSession')
+    const menu = render(<ArchiveSessionMenuItem {...menuRow(state)} {...archiveShare()} useSessionAccess={useSessionAccess} />)
+    expect(menu.container.innerHTML).toBe('')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'workspace/archiveSession')
+    menu.unmount()
+    const button = render(<ArchiveSessionRowButton {...actionRow} {...archiveShare()} useSessionAccess={useSessionAccess} />)
+    expect(button.container.innerHTML).toBe('')
+    button.unmount()
+    // An archived row asks for its restore endpoint instead.
+    const archived = render(<ArchiveSessionRowButton {...actionRow} {...archiveShare(['one'])} useSessionAccess={useSessionAccess} />)
+    expect(useSessionAccess).toHaveBeenLastCalledWith(sid('one'), 'workspace/unarchiveSession')
+    expect(archived.getByRole('button')).toBeTruthy()
+  })
+
   it('row button archives and restores', () => {
     const archive = archiveShare()
     const view = render(<ArchiveSessionRowButton {...actionRow} {...archive} />)
@@ -246,6 +278,16 @@ describe('fork and rename rows', () => {
     )
     expect(container.innerHTML).toBe('')
     expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'session/fork')
+  })
+
+  it('omits the rename row when the access snapshot excludes session/rename for this Session', () => {
+    const { state } = openMenu()
+    const useSessionAccess = vi.fn(() => false)
+    const view = render(
+      <RenameSessionMenuItem {...menuRow(state)} useSessionAccess={useSessionAccess} requestSessionRename={vi.fn()} />,
+    )
+    expect(view.container.innerHTML).toBe('')
+    expect(useSessionAccess).toHaveBeenCalledWith(sid('one'), 'session/rename')
   })
 
   it('rename closes the menu, then asks for the dialog with the row title', () => {

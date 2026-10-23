@@ -51,9 +51,6 @@ function stubAgentForSession(session: Session, suppliedCtx?: Context): StubAgent
   if (existing !== undefined) return existing
   const id = session.id
   const agentCtx = suppliedCtx ?? isolatedInboxCtx
-  if (suppliedCtx === undefined) {
-    agentCtx.sessions.enter(session)
-  }
   const inbox = createInboxStub()
   const agent: Agent = {
     id,

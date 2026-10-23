@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { fileURLToPath } from 'node:url'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -52,7 +53,7 @@ try {
       && message.source.kind === 'skill-catalog')?.content
     : undefined
   const summary = (await ctx.skills.list()).find(skill => skill.name === 'dsh-badge')
-  const result = await ctx.tools.execute({
+  const result = await executeToolFixture(ctx, {
     callId: ToolCallId('dsh-badge-snapshot'),
     name: 'skill',
     arguments: { name: 'dsh-badge' },

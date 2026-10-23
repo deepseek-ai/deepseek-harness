@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP プロファイル",
+    "description": "dsh-base 上で自動化専用の ACP 通信とプロセスのライフサイクルを提供します。"
+  }
+}

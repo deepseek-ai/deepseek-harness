@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { expect, it } from 'vitest'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import {
   packPreviewFixture, packRepositoryImage, previewFixtures, WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'

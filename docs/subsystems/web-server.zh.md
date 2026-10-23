@@ -2,7 +2,7 @@
 
 [English](web-server.md) | 中文
 
-[dsh-host-webserver](../../packages/host/webserver) 是 GUI Host 的浏览器 HTTP 载体：一个 `node:http` 服务器——配置 `tls` 时改用 `node:https`——提供 `ctx.webServer`、具名路由注册表、可选的 gzip 响应压缩、index.html 转换回调，以及一个可由插件认领的回退处理器。它不属于 agent loop（智能体循环），也不是能力 seam；它不了解任何 harness 概念。其他插件负责注册所有功能路由，包括 `/api` 桥接、插件 bundle 和 HMR（热模块替换）事件流（[分层说明](../../packages/boot/app-boot/README.zh.md)）。该服务器只服务浏览器：Electron 通过 `file://` 加载已构建文件，并经 IPC 桥接发送 fetch 请求，不使用本服务器。
+[dsh-host-webserver](../../packages/host/webserver) 是 GUI Host 的浏览器 HTTP 载体：一个 `node:http` 服务器——配置 `tls` 时改用 `node:https`——提供 `ctx.webServer`、具名路由注册表、可选的 gzip 响应压缩、index.html 转换回调，以及一个可由插件认领的回退（handler 或 resource）。它不属于 agent loop（智能体循环），也不是能力 seam；它唯一涉及的 harness 概念是 index 渲染所代表的 Peer。其他插件负责注册所有功能路由，包括 `/api` 桥接、插件 bundle 和 HMR（热模块替换）事件流（[分层说明](../../packages/boot/app-boot/README.zh.md)）。该服务器只服务浏览器：Electron 通过 `file://` 加载已构建文件，并经 IPC 桥接发送 fetch 请求，不使用本服务器。
 
 源码：[`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
 
@@ -24,7 +24,29 @@ interface WebRoute {
 }
 ```
 
+```ts type-equiv
+/**
+ * Answers one GET or HEAD request with a Fetch response. An HTTP request
+ * arrives without a Peer and carries the client's headers; an in-process
+ * {@link WebServer.readResource} read passes the Peer its caller admitted.
+ */
+type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>
+```
+
+```ts type-equiv
+/** One named route answered by a resource instead of a handler. */
+interface WebResourceRoute {
+  kind: WebRouteKind
+  /** Absolute pathname, no trailing slash. */
+  path: string
+  /** Answers HTTP GET and HEAD requests and in-process reads. */
+  resource: WebResource
+}
+```
+
 匹配顺序固定：先查 exact 表，再取最长匹配前缀，最后落到已注册的回退。注册顺序不携带任何面向请求的语义：具名路由在组合上互不相交，任何未被具名路由认领的请求都由回退席位应答；席位只有一个所有者，第二次注册会抛出异常。发布的 Web 组合用 [`dsh-host-frontend-static`](../../packages/host/frontend-static/src/index.ts) 认领席位，即遵循固定语义的 SPA dist 服务器：Connection 在读取 dist 根目录和配置 index 的 HTML 前完成认证；非 index 资产保持公开；非 GET/HEAD 返回 405，越出 dist 根目录的遍历返回 403，现有文件直接提供，缺失或不是文件的目标返回空的 404，未知扩展名按 octet-stream 发送。
+
+路由或回退可以用 resource——一个把 Fetch `Request` 映射为 `Response` 的函数——代替 handler。HTTP 的 `GET`、`HEAD` 请求不带 Peer 到达它，`readResource(request, peer)` 则在进程内按调用方准入的 Peer 读取它；读取遵循同样的匹配顺序但只到达 resource，因此返回 owner 私有数据或会执行操作的路由即使应答 `GET` 也保持为 handler。
 
 <a id="config"></a>
 
@@ -81,7 +103,7 @@ interface TlsConfig {
 
 ## 服务
 
-`WebServer`（`ctx.webServer`）在激活时立即监听；监听失败（EADDRINUSE 等）会使初始化被拒绝，启动进程会报告失败的 fiber。`tls` 证书对在监听器绑定前读取一次；文件不可读、为空或二者不匹配时同样会使初始化被拒绝，而不是回退到 HTTP。`register(route)` 添加一条具名路由并返回其 disposer；重复的 `(kind, path)` 抛出异常，因为路由模式是组合层约定，冲突即配置错误。Gzip 在服务器内部包装符合条件且基于 socket 的响应，因此 route handler 继续直接持有 `ServerResponse`，服务也不新增响应写出 API。已有内容编码、`Cache-Control: no-transform`、范围响应、SSE、ZIP 与打包后的 `.gz` Worker 镜像均保持 identity 响应。`collectIndexInjections()` 经一次 `webserver/index-inject` emit 收集结构化 `IndexInjection` 行，`renderIndex(html)` 把它们渲染进成功的根路径和配置 index 响应，随后再按注册顺序应用原始的 `tapIndex(transform)` 逃生口转换；[dsh-client-modules](../../packages/client/modules) 以启动 manifest（元数据清单）行回应该事件。`port` 读取监听端口，包括 `config.port` 为 0 时操作系统分配的端口，`protocol` 则报告监听器提供的协议（`http:` 或 `https:`）。
+`WebServer`（`ctx.webServer`）在激活时立即监听；监听失败（EADDRINUSE 等）会使初始化被拒绝，启动进程会报告失败的 fiber。`tls` 证书对在监听器绑定前读取一次；文件不可读、为空或二者不匹配时同样会使初始化被拒绝，而不是回退到 HTTP。`register(route)` 添加一条具名路由并返回其 disposer；重复的 `(kind, path)` 抛出异常，因为路由模式是组合层约定，冲突即配置错误。Gzip 在服务器内部包装符合条件且基于 socket 的响应，因此 handler 继续直接持有 `ServerResponse`，resource 则把 `Response` 交给服务写回。已有内容编码、`Cache-Control: no-transform`、范围响应、SSE、ZIP 与打包后的 `.gz` Worker 镜像均保持 identity 响应。`collectIndexInjections(peer)` 经一次传入页面所代表 Peer 的 `webserver/index-inject` emit 收集结构化 `IndexInjection` 行，`renderIndex(html, peer)` 把它们渲染进成功的根路径和配置 index 响应，随后再按注册顺序应用原始的 `tapIndex(transform)` 逃生口转换；[dsh-client-modules](../../packages/client/modules) 以启动 manifest（元数据清单）行回应该事件。`port` 读取监听端口，包括 `config.port` 为 0 时操作系统分配的端口，`protocol` 则报告监听器提供的协议（`http:` 或 `https:`）。
 
 处理过程中抛出异常的请求（畸形的 % 转义撞上 `decodeURIComponent`、客户端在请求体中途断开）会记录为警告并应答 400（响应头已发出时则销毁 socket），绝不导致进程退出。dispose（资源释放）把 `close()` 与 `closeAllConnections()` 配对使用，因为处理器可能像 SSE（Server-Sent Events）那样保持响应打开，而这类连接永远不会自行结束；没有强制关闭，拆卸就会挂起。TLS socket 只有完成握手后才计入连接，因此服务器会把原始 TLS socket 与升级后的 socket 一并跟踪，并在 dispose 时销毁两者。该包从不打印输出：URL 行归 shell 所有。逐包运维细节（含开发模式的 bundle 监视流水线）留在 [README](../../packages/host/webserver/README.zh.md) 中。
 
@@ -180,7 +202,7 @@ Source: [`packages/bundle/web-app/src/index.ts`](../../packages/bundle/web-app/s
 
 ### `ctx.webServer` — `WebServer`
 
-The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers.
+The browser HTTP carrier service. Activation loads any configured TLS material, then listens immediately; a material or listen failure rejects initialization, and the boot process reports the failed fiber. Route registration order does not affect requests because configured named routes must be distinct, and a request no named route matches is answered 404 until the fallback owner registers.
 
 ```ts cordis-catalog
 /**
@@ -194,10 +216,10 @@ getOrigin(): string
 /**
  * Register a named route. Duplicate (kind, path) throws — route patterns are
  * a composition-level contract, so a collision is a misconfiguration.
- * @param route - kind, path, and the owning handler.
+ * @param route - kind, path, and the owning handler or resource.
  * @returns the disposer removing the route.
  */
-register(route: WebRoute): () => void
+register(route: WebRoute | WebResourceRoute): () => void
 
 /**
  * Register an exact-path HTTP upgrade route. Duplicate paths throw because
@@ -208,14 +230,32 @@ register(route: WebRoute): () => void
 registerUpgrade(route: WebUpgradeRoute): () => void
 
 /**
- * Claim the fallback seat: the handler answering every request no named
- * route matches (the SPA dist server in the shipped Web composition). One
- * owner only — a second registration throws, because two fallbacks cannot
- * compose.
- * @param handler - owns the full response lifecycle of unmatched requests.
+ * Claim the fallback seat: the handler or resource answering every request
+ * no named route matches (the SPA dist server in the shipped Web
+ * composition). One owner only — a second registration throws, because two
+ * fallbacks cannot compose.
+ * @param fallback - a handler owning the full response lifecycle of
+ * unmatched requests, or `{ resource }` answering them.
  * @returns the disposer releasing the seat.
  */
-registerFallback(handler: WebRoute['handler']): () => void
+registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void
+
+/**
+ * Read the response an HTTP request for the same URL would receive, as the
+ * resource computes it for `peer`, without an HTTP exchange. The request
+ * path picks the responder by the HTTP match order — exact, longest prefix,
+ * then the fallback — and only a resource answers. This method checks no
+ * cookie, Host, or Origin: the caller admits the reader before reading.
+ * @param request - the read; its URL path selects the responder.
+ * @param peer - the Peer the read speaks for, passed to the resource.
+ * @returns the resource's response, without a body for HEAD as over HTTP;
+ * 405 with `Allow: GET, HEAD` for any other method, checked before matching,
+ * where over HTTP a handler route or an unmatched path answers such a
+ * method itself; 404 when the path matches a handler route, or reaches the
+ * fallback seat while it is unclaimed or holds a handler. A resource that
+ * throws rejects the read, where an HTTP request would receive 400.
+ */
+async readResource(request: Request, peer: PeerScope): Promise<Response>
 
 /**
  * Register a raw-HTML index transform, the escape hatch for markup no
@@ -235,20 +275,23 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 
 /**
- * Gather the structured injection table: one `webserver/index-inject` emit,
- * every subscriber pushes its current rows. Fresh per call, so subscribers
- * read live state (module graph, theme preference) at emit time.
+ * Gather the structured injection table for one Peer: one
+ * `webserver/index-inject` emit, every subscriber pushes its current rows.
+ * Fresh per call, so subscribers read live state (module graph, theme
+ * preference, the Peer's access) at emit time.
+ * @param peer - the Peer the page speaks for.
  * @returns rows in subscriber activation order.
  */
-collectIndexInjections(): IndexInjection[]
+collectIndexInjections(peer: PeerScope): IndexInjection[]
 
 /**
- * Render one index.html body: the structured injection table first, then
- * the raw `tapIndex` transforms over the result.
+ * Render one index.html body for one Peer: the structured injection table
+ * first, then the raw `tapIndex` transforms over the result.
  * @param html - the raw index.html body.
+ * @param peer - the Peer the page speaks for.
  * @returns the transformed body.
  */
-renderIndex(html: string): string
+renderIndex(html: string, peer: PeerScope): string
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)
@@ -285,17 +328,19 @@ Source: [`packages/client/connection/src/index.ts`](../../packages/client/connec
 
 #### `webserver/index-inject` — emit
 
-Collect the structured index injection table. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
+Collect the structured index injection table for the page `peer` speaks for. Emitted on every index render and every worker boot-payload request; listeners push their current rows, so a row's data is read fresh at emit time.
 
 ```ts cordis-catalog
 /**
- * Collect the structured index injection table. Emitted on every index
- * render and every worker boot-payload request; listeners push their
- * current rows, so a row's data is read fresh at emit time.
+ * Collect the structured index injection table for the page `peer` speaks
+ * for. Emitted on every index render and every worker boot-payload
+ * request; listeners push their current rows, so a row's data is read
+ * fresh at emit time.
  * @param table - Mutable row table; listeners append in activation order.
+ * @param peer - The Peer the rendered page speaks for.
  * @mode emit
  */
-'webserver/index-inject'(table: IndexInjection[]): void
+'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
 ```
 
 Source: [`packages/host/webserver/src/index.ts`](../../packages/host/webserver/src/index.ts)

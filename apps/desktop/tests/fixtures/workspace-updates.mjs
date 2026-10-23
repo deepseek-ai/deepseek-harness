@@ -6,7 +6,7 @@ import { registerHooks } from 'node:module'
 import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, webContents } from 'electron'
 import updaterModule from 'electron-updater'
 import { createUpdateServer } from './update-server.mjs'
 import { fixture } from './workspace-update-adapters.mjs'
@@ -100,6 +100,11 @@ async function windowAt(url) {
   if (process.platform === 'win32' && url === 'dsh-app://shell/mandatory-update.html') {
     return mandatoryFrameDriver(await windowAt('dsh-app://app/'))
   }
+  if (process.platform !== 'win32' && url === 'dsh-app://shell/mandatory-update.html') {
+    let contents
+    await waitFor(() => { contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === url); return contents !== undefined }, 'mandatory view document')
+    return { webContents: contents, isDestroyed: () => contents.isDestroyed() }
+  }
   const existing = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === url)
   if (existing) return existing
   return new Promise((resolve, reject) => {
@@ -161,11 +166,19 @@ async function clickText(window, label) {
   await waitFor(async () => window.isDestroyed()
     || await window.webContents.executeJavaScript("document.getElementById('title').textContent") !== title, `dialog response: ${label}`)
 }
+const dialogDrivers = new WeakMap()
 async function dialogWith(message) {
   let found
   await waitFor(async () => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (window.webContents.getURL() !== 'dsh-app://shell/update-dialog.html') continue
+    for (const contents of webContents.getAllWebContents()) {
+      if (contents.getURL() !== 'dsh-app://shell/update-dialog.html') continue
+      let window = dialogDrivers.get(contents)
+      if (!window) {
+        const owner = BrowserWindow.fromWebContents(contents)
+        window = { webContents: contents, isDestroyed: () => contents.isDestroyed(),
+          isVisible: () => owner?.isVisible() ?? false, isFocused: () => contents.isFocused(), isEnabled: () => owner?.isEnabled() ?? true }
+        dialogDrivers.set(contents, window)
+      }
       try {
         const ready = await window.webContents.executeJavaScript(`document.getElementById('title')?.textContent === ${JSON.stringify(message)} && !!document.querySelector('#actions button')`)
         if (ready) { found = window; return true }
@@ -249,7 +262,7 @@ async function qualify() {
     await press(mainWindow, `document.querySelector('button[data-error="true"]')`)
     await server.arrived()
     await documentReady(mainWindow, `document.querySelector('button[aria-disabled="true"]')`)
-    assert.equal(BrowserWindow.getAllWindows().some(window => window.webContents.getURL() === 'dsh-app://shell/update-dialog.html'), false)
+    assert.equal(webContents.getAllWebContents().some(contents => contents.getURL() === 'dsh-app://shell/update-dialog.html'), false)
     await screenshot(mainWindow, 'downloading.png')
     server.release()
     const confirmation = desktopUpdateReadyConfirmation(messages, '0.1.6-nightly.1', process.platform)
@@ -353,7 +366,7 @@ async function qualify() {
     await waitFor(() => mainWindow.isEnabled(), 'ordinary modal releases the main window for recovery')
     await press(forcedRecovery, `document.getElementById('update')`)
     await documentReady(forcedRecovery, `document.getElementById('update')?.textContent === ${JSON.stringify(messages.installAndRestart)}`)
-    assert.equal(BrowserWindow.getAllWindows().some(window => window.webContents.getURL() === 'dsh-app://shell/update-dialog.html'), false)
+    assert.equal(webContents.getAllWebContents().some(contents => contents.getURL() === 'dsh-app://shell/update-dialog.html'), false)
     const forcedHost = fixture.host
     await control('hold-shutdown')
     await press(forcedRecovery, `document.getElementById('update')`)

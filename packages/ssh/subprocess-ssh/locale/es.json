@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subprocesos SSH",
+    "description": "Proporcione subprocesos y terminales a través del asistente POSIX SSH compartido."
+  }
+}

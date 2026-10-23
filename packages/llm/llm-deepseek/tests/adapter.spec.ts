@@ -1,4 +1,5 @@
 /** HTTP lifecycle, routing and optional Cordis services under real composition. */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -315,6 +316,7 @@ describe('Cordis provider composition', () => {
       ['@deepseek-ai/dsh-agent', AgentRegistry], ['@deepseek-ai/dsh-agent-loop', AgentLoop],
       ['@deepseek-ai/dsh-session', SessionStore], ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
       ['@deepseek-ai/dsh-system-prompt', SystemPrompt], ['@deepseek-ai/dsh-tools', ToolRuntime],
+      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ])
     // The importer supplies source modules while Loader still owns configuration and effects.
     for (const name of modules.keys()) {

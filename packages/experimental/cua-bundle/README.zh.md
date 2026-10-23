@@ -51,7 +51,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载共享原生提供方和权限界面。提供方在现有 Agent 作用域中注册工具，其他 preset 不获得 CUA 工具或指引，preset 文档保持不变。详情页按钮复用现有设置表单，仅在用户点击后保存 `agent-preset-registry.selectedDefault: ptc`，保留部署级 `default`。即使旧授权配置没有声明作用域字段，提供方也默认只为 PTC 会话注册工具。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载共享原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。提供方在现有 Agent 作用域中注册工具，其他 preset 不获得 CUA 工具或指引，preset 文档保持不变。详情页按钮复用现有设置表单，仅在用户点击后保存 `agent-preset-registry.selectedDefault: ptc`，保留部署级 `default`。即使旧授权配置没有声明作用域字段，提供方也默认只为 PTC 会话注册工具。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 

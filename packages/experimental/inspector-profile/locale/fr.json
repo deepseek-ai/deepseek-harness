@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Outils de développement",
+    "description": "Inspectez et déboguez les données brutes de session, les messages de discussion groupés et le backend NodeJS.",
+    "detail": "docs/DETAIL.md"
+  }
+}

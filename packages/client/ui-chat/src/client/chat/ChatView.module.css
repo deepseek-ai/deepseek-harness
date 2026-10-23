@@ -22,6 +22,10 @@
 .scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* Never expose horizontal scrollable overflow: the absolutely positioned
+     text-interaction surface adds it transiently, and the changing scroll range
+     makes the transcript jitter while the tail is pinned. */
+  overflow-x: clip;
   overflow-y: auto;
   /* Sides = composer clearance + 16px: on narrow viewports the transcript
      stays exactly 32px narrower than the input card (the shared width rule). */
@@ -46,7 +50,10 @@
 }
 
 :global([data-conversation-scroll]) .scroll {
-  overflow: visible;
+  /* A host scrollport still owns vertical overflow; horizontal overflow is
+     clipped for the same reason as the self-scrolled case above. */
+  overflow-x: clip;
+  overflow-y: visible;
   flex: 0 0 auto;
   min-height: auto;
 }

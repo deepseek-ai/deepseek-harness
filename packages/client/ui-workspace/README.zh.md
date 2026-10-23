@@ -55,7 +55,7 @@ kind: "package-reference"
 
 Session 行“...”菜单的最后一个内置项为“复制 Session ID”。点击后关闭菜单并直接复制完整 ID，不打开对话框。复制成功或失败通过全局提示反馈；失败时可从菜单重试。复制不会 retain 会话、加载历史或调用 Host。
 
-Session 行内的 Rename 操作打开一个以该行显示标题预填的对话框；确认未修改的标题是有意允许的——这正是把当前自动标题钉住、不再被重新生成覆盖的手势。双击标题也会打开 Rename；对于未归档 Session，先发生的点击会打开其对话。Rename 使用临时 `workspaceOperation` reference，并等待首次历史打开。行内 Fork 正常读取普通冷历史。Host 报告源会话需要迁移时，应用级 Toast 提供打开该会话的操作；该操作仅导航，不重试 fork。成功的 fork 在源会话最后一个已完成轮次处创建分支，通过 Session Controller 递增继承的持久化标题，不 retain 子会话、不打开其历史，也不改变选择。Workspace 行内的 Delete 操作会打开确认框，说明保留边界；成功后该分组被移除，其 Session 则留在 Ungrouped 下。Pin、Rename、Fork、Archive 和复制 Session ID 本身就是 `sidebar.workspaces.session.menu.item` 列表的条目（pin 与 archive 同时也是 `sidebar.workspaces.session.row.action` 的条目），因此客户端插件的 action 由其 `order` 决定落在哪个位置。
+Session 行内的 Rename 操作打开一个以该行显示标题预填的对话框；确认未修改的标题是有意允许的——这正是把当前自动标题钉住、不再被重新生成覆盖的手势。双击标题也会打开 Rename；对于未归档 Session，先发生的点击会打开其对话。当激活未聚焦窗口的那次点击不会传递给页面时（如在 macOS 上），下一次点击不会打开 Rename。Rename 使用临时 `workspaceOperation` reference，并等待首次历史打开。行内 Fork 正常读取普通冷历史。Host 报告源会话需要迁移时，应用级 Toast 提供打开该会话的操作；该操作仅导航，不重试 fork。成功的 fork 在源会话最后一个已完成轮次处创建分支，通过 Session Controller 递增继承的持久化标题，不 retain 子会话、不打开其历史，也不改变选择。Workspace 行内的 Delete 操作会打开确认框，说明保留边界；成功后该分组被移除，其 Session 则留在 Ungrouped 下。Pin、Rename、Fork、Archive 和复制 Session ID 本身就是 `sidebar.workspaces.session.menu.item` 列表的条目（pin 与 archive 同时也是 `sidebar.workspaces.session.row.action` 的条目），因此客户端插件的 action 由其 `order` 决定落在哪个位置。
 
 对静止的 Session，Archive 不经确认对话框直接提交，并保留 Session 的记账位置。仍有工作在跑的 Session 是唯一会先询问的情形：Host 拒绝普通归档并列出这些工作，侧栏随即打开"停止并归档"对话框，按族列出——进行中的回合、运行中的子代理、后台任务、定时提醒，各带名称——并写明恢复路径；确认后请 Host 按停止按钮同样的方式停止这些工作，归档集合持久化后即完成归档，停止在后台收敛；取消则让 Session 继续运行并保持可见。视图选项以一组显式三选一控制显隐：隐藏已归档（默认项）隐藏已归档 Session，全部对话（显示已归档）将其纳入列表，仅显示已归档则隐藏普通 Session，并丢弃没有归档 Session 的 Workspace；树形分组下，被丢弃 Workspace 的子级挂到最近一个仍显示的祖先下。可见的归档行置灰，并提供无障碍说明，告知取消归档后才能打开；Rename、Fork 与取消归档仍然可用。归档成功后的提示提供"撤销"动作，并在归档行仍被隐藏时附带"筛选已归档会话"动作，后者直接把筛选切到全部对话（显示已归档）；停止并归档显示同样的提示但措辞不同，撤销只恢复 Session，不会让被停止的工作继续。取消归档移除归档标记，但不恢复置顶，也不改变保存的位置。列表为空时显示居中的"图标在上、文字在下"占位；仅显示已归档视图用自己的文案（暂无已归档会话），并附"查看其他会话"文字按钮，点击把筛选切回隐藏已归档。
 
@@ -73,17 +73,19 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 -----
 
-`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；新会话与重新打开工作区打开同一个空白会话，因此会回到该空白会话中未发送的草稿。`forkSession(id)` 创建子会话，不导航，也不替代尚未完成的导航。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
+`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；新会话与重新打开工作区打开同一个空白会话，因此会回到该空白会话中未发送的草稿。`forkSession(id, onCreated?, options?)` 创建子会话，不导航，也不替代尚未完成的导航；`allowMigration` 携带调用方的迁移许可。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。
+
+Session 行与 Workspace 行的可用操作来自浏览器根的访问 Hook：全局 `useRemoteAccess('session/create')` 门控所有新建会话入口，`useWorkspaceAccess` 门控 Workspace 的新建、重命名、删除与排序动作，`useSessionAccess` 门控 Session 行的重命名、分叉、拖拽、置顶、归档与取消归档动作，以及搜索结果的恢复控件。被拒绝的动作不渲染，但每个发往 Host 的请求仍以其授权为准。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
 
 导航和启动恢复通过所选 Session 的 `follow` 获取投影，不会另行刷新该 Session 或其父会话的投影；例外是恢复已保存的空白会话时先重新加载该 Session 的投影，因为列表中的值是缓存提示，Host 非正常退出后可能落后于其日志。
 
-新会话、重新打开工作区和显式准备草稿向 Host 请求 Session 时，指明列表中第一个符合条件的空白会话。指明 preset 的请求会跳过列出其他 preset 的空白会话，因此创造模式入口等 preset 流程不会接管其他 preset 的草稿；未指明 preset 的请求可以指明任何符合条件的空白会话，由 Host 切换到其默认 preset。被复用的空白会话可能沿用创建时的 preset 装配。启动恢复指明已保存的空白会话。Host 以请求的 preset 复用该空白会话，请求未指明 preset 时使用其默认 preset；若该空白会话已开始、已离开该工作区或写锁被其他写者占用，Host 改为新建 Session；导航打开 Host 返回的 Session，不再尝试其他空白会话。带草稿选项的 `startSession`、`openWorkspace` 和 `connectWorkspace` 接受 `{ agentPreset }`，供开始前已确定 preset 的流程使用，例如创造模式入口；一次连接仅在与该工作区最近一次进行中的连接请求相同 preset 时与之合并，因此最新的请求总会到达 Host。启动恢复传入已保存空白会话日志记录的 preset，使草稿保留该 preset；当 Host 报告该 preset 不存在（`agent-preset/not-found`）或无法激活（`agent-preset/invalid`）时，启动恢复改为不带 preset 再请求一次，草稿在 Host 默认 preset 下继续。其他错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择。
+新会话、重新打开工作区和显式准备草稿向 Host 请求 Session 时，指明列表中第一个符合条件的空白会话。指明 preset 的请求会跳过列出其他 preset 的空白会话，因此创造模式入口等 preset 流程不会接管其他 preset 的草稿；未指明 preset 的请求可以指明任何符合条件的空白会话，由 Host 切换到其默认 preset。被复用的空白会话可能沿用创建时的 preset 装配。启动恢复指明已保存的空白会话。Host 以请求的 preset 复用该空白会话，请求未指明 preset 时使用其默认 preset；若该空白会话已开始、已离开该工作区或写锁被其他写者占用，Host 改为新建 Session；导航打开 Host 返回的 Session，不再尝试其他空白会话。带草稿选项的 `startSession`、`openWorkspace` 和 `connectWorkspace` 接受 `{ agentPreset }`，供开始前已确定 preset 的流程使用，例如创造模式入口；一次连接仅在与该工作区最近一次进行中的连接请求相同 preset 时与之合并，因此最新的请求总会到达 Host。启动恢复传入已保存空白会话日志记录的 preset，使草稿保留该 preset；当 Host 报告该 preset 不存在（`agent-preset/not-found`）或无法激活（`agent-preset/invalid`）时，启动恢复改为不带 preset 再请求一次，草稿在 Host 默认 preset 下继续。其他错误会中止请求：显式新建会话或在 hero 中选择工作区时，失败以短暂提示展示，引用 Host 的错误码和消息（例如 preset 挂载失败），非 Host 拒绝的失败则显示其自身消息；已被后续导航或 owner 销毁取代的请求不弹提示，启动恢复仍只报告到控制台。已释放的空白会话被复用时保留 slash 命令状态。后续导航会取消尚未完成的启动选择，并阻止失败的恢复在后续列表更新时重试。
 
 Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `workspaces.initializeDefault`，创建或复用其空白 Session。选中该 Session 后输入框才可编辑，不会自动提交消息。后续导航或所属上下文销毁会阻止启动流程选中其结果。不符合首次使用条件时仍可选择文件夹，不显示错误。默认工作区创建失败时显示短暂提示，引导用户通过“选择工作区”选择文件夹，直到下次启动才重试。Session 创建失败沿用普通的恢复错误处理。登记成功的工作区在 Session 创建或后续提交失败时仍然保留。
 
 首次使用的目录名与其存储标题都是固定的，都不跟随读者语言：`workspaces.initializeDefault` 不携带任何名称，同一安装环境在切换语言后仍只有一个磁盘路径和一个存储标题。仍保留该自动标题的工作区，在本包展示它的所有位置——侧栏行及其悬浮卡片、搜索结果元信息、hero 选择器菜单、重命名与删除对话框——都通过控制器的 `workspaceDisplayTitle` 显示为本地化的默认名称。重命名对话框以屏幕上的标签作为初值，而判断确认是否需要保存用的是存储标题，因此对这类工作区直接确认未改动的初值即可固定该名称，该行不再跟随语言；重名检查按工作区身份而非标题排除目标自身。
 
-本包注入 Client `remoteAccess` 服务，并提供根作用域标准 Hook `useWorkspaceAccess(workspaceId, action)`，回答当前 Peer 能否在某个 Workspace 资源上调用 `action`；其快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
+本包注入 Client `remoteAccess` 服务，并提供根作用域标准 Hook `useWorkspaceAccess(workspaceId, action)`，回答当前 Peer 能否在某个 Workspace 资源上调用 `action`，以及 `ctx.uiWorkspace.whenAccess(workspaceId, action, callback)`，在该答案为 true 期间保持回调的效果，语义同 `ctx.remoteAccess.whenAccess`；快照语义归 [`dsh-api-remote-access`](../../api/remote-access/README.zh.md#client-face)。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -190,9 +192,9 @@ Workspace 基线就绪后，浏览器持久化的展开状态和 Session 顺序�
 
 侧边栏隐藏持久化摘要中带有 `origin: 'subagent'` 的行。可见普通行的共享 ongoing loading 来自其已加载 parent 目录中正在运行的直接 child，绝不来自摘要谱系。Child 活动状态使用最新 UI status，尚无该状态时使用 Session 摘要。
 
-行动画由 [AnimatedRows](src/client/rows/AnimatedRows.tsx) 负责。它仅在 React 提交改变行成员或顺序时读取更新前后的位置，并使用浏览器原生位移与透明度动画。被移除的行以不可交互的副本在滚动列表外淡出，不会延迟 React 卸载，也不会扩大列表的滚动范围。初始加载、拖拽提交、展开其余会话和视图选项变化直接完成。动画组件不使用布局观察器或轮询，也不会因仅内容更新或滚动而测量位置。
+行动画由 [AnimatedRows](../ui-primitives/src/AnimatedRows.tsx) 负责。它仅在 React 提交改变行成员或顺序时读取更新前后的位置，并使用浏览器原生位移与透明度动画。被移除的行以不可交互的副本在滚动列表外淡出，不会延迟 React 卸载，也不会扩大列表的滚动范围。初始加载、拖拽提交、展开其余会话和视图选项变化直接完成。动画组件不使用布局观察器或轮询，也不会因仅内容更新或滚动而测量位置。
 
-Workspace 和 Session 的原生拖拽预览使用不可交互的离屏副本，在主题侧栏底色上保留行尺寸和缩进。[useRowDragPreview](src/client/rows/useRowDragPreview.ts) 在拖拽结束、替换预览或行卸载时移除副本。预览不改变原行的背景或拖放事件处理。如果浏览器拒绝自定义拖拽图片，则移除副本并继续原生拖动。
+Workspace 和 Session 的原生拖拽预览使用不可交互的离屏副本，在主题侧栏底色上保留行尺寸和缩进。[useRowDragPreview](../ui-primitives/src/useRowDragPreview.ts) 在拖拽结束、替换预览或行卸载时移除副本。预览不改变原行的背景或拖放事件处理。如果浏览器拒绝自定义拖拽图片，则移除副本并继续原生拖动。
 
 ### 悬浮卡片
 

@@ -98,6 +98,8 @@ export function writeProfileBundles(
  * template entries retain their order and duplicates. New bundle dependencies activate automatically.
  * @param options - location, inventory captured before pnpm, and whether explicitly disabled bundles remain disabled.
  * @returns updated inventory and newly added ordinary dependencies for caller-owned warnings.
+ * @throws If a new selection has invalid platform metadata or excludes the Host. Installed dependencies
+ * remain; no bundle selection changes are written.
  */
 export function reconcileProfilePlugins(options: ProfilePluginLocation & {
   readonly before: ProfilePluginInventory

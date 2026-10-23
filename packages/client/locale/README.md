@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-client-locale` to switch the web GUI between the shipped English, Chinese, and Japanese locales or languages added by client plugins. User selections take effect immediately; every authenticated browser persists them as `locale.preference` in `$DSH_HOME/cordis.patch.yml` through the Host settings service. New browsers use the first supported language requested by the browser until the Host read delivers a stored preference. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
+Use `dsh-client-locale` to switch the web GUI between the shipped English, Chinese, Japanese, Spanish, French, German, Russian, and Brazilian Portuguese (`pt`, including `pt-PT` browser requests) locales or languages added by client plugins. User selections take effect immediately; every authenticated browser persists them as `locale.preference` in `$DSH_HOME/cordis.patch.yml` through the Host settings service. New browsers use the first supported language requested by the browser until the Host read delivers a stored preference. Plugin authors add typed namespace dictionaries and translate through the public locale API; slot-rendered copy updates without a reload.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ Native shells may provide `__DSH_LOCALE__` with an asynchronous `read()` and an 
 
 ### Registering a dictionary
 
-Call `ctx.locale.register(ns, { zh, en, ja })` with a namespace merged into `LocaleNamespaceMap`; the compiler checks every key against the namespace's typed key union and requires both baseline locales (`zh` and `en`). Additional locale ids are optional, and their dictionaries are checked against the same namespace keys. Consumers translate through `ctx.locale.bind(ns)` or the framework-injected `t` seat. A dictionary registered after the UI is already mounted is picked up without a remount.
+Call `ctx.locale.register(ns, { zh, en, ja })` with a namespace merged into `LocaleNamespaceMap`; the compiler checks every key against the namespace's typed key union and requires both baseline locales (`zh` and `en`). Additional locale ids are optional, and their dictionaries are checked against the same namespace keys. Consumers translate through `ctx.locale.bind(ns)` or the framework-injected `t` seat. A dictionary registered after the UI is already mounted is picked up without a remount. Preserve named placeholders, slash commands, and API field names verbatim in translations; `pnpm run check:i18n` checks first-party dictionaries and rejects zero-width spaces (U+200B) and byte-order marks (U+FEFF) in locale resources.
 
 ### Resolving package text
 
@@ -52,13 +52,13 @@ export const inject = ['locale']
 
 export function apply(ctx) {
   ctx.effect(
-    () => ctx.locale.addLanguage({ id: 'fr', label: 'Français', fallback: 'en' }),
+    () => ctx.locale.addLanguage({ id: 'it', label: 'Italiano', fallback: 'en' }),
     'my-locale: language',
   )
   ctx.effect(
-    () => ctx.locale.register('common', 'fr', {
-      cancel: 'Annuler',
-      close: 'Fermer',
+    () => ctx.locale.register('common', 'it', {
+      cancel: 'Annulla',
+      close: 'Chiudi',
     }),
     'my-locale: common dictionary',
   )
@@ -102,7 +102,7 @@ The typed object form requires complete dictionaries for both baseline locales. 
 | [`src/client/index.ts`](src/client/index.ts) | `LocaleRuntime`, dictionary registry, Language row registration, `locale/change` event |
 | [`src/index.ts`](src/index.ts) | Node half: registers the `locale` settings namespace |
 | [`src/locale-settings.ts`](src/locale-settings.ts) | The durable schema for `locale.preference` |
-| [`src/locales/`](src/locales/) | The shipped `zh`/`en`/`ja` dictionaries |
+| [`src/locales/`](src/locales/) | The shipped language dictionaries |
 
 </details>
 

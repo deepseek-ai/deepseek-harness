@@ -36,6 +36,12 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
+| [`action-cards`](action-cards/README.zh.md) | 回答下方的可选操作卡片：提议工具、卡片状态、用户操作与状态通知 | `ctx.actionCards` |
+| [`client-ui-action-cards`](client-ui-action-cards/README.zh.md) | 已完成回答下方的卡片框架、种类正文与提议过程行 | — |
+| [`creation-recommendations`](creation-recommendations/README.zh.md) | 针对明确需求创建持续可用、可移除的界面插件 | — |
+| [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.zh.md) | 个性化页面卡片正文、位置选择和撤销 | — |
+| [`plugin-recommendations`](plugin-recommendations/README.zh.md) | 在对话中针对明确需求推荐官方插件 | `ctx.pluginRecommendations` |
+| [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.zh.md) | 官方插件卡片正文：目录文本与启用 | — |
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |
 | [`session-search`](session-search/README.zh.md) | 可选实验性全局会话搜索工具 | — |
 | [`ralph-bundle`](ralph-bundle/README.zh.md) | 带隔离 workflow 引擎的可选重复委派 | — |
@@ -58,7 +64,7 @@ kind: "package-group"
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.zh.md) | 托管本地 SenseVoice 推理 | — |
 | [`api-speech-to-text`](api-speech-to-text/README.zh.md) | 带认证的临时转写 Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.zh.md) | 麦克风录音与版本检查后的草稿插入 | — |
-| [`plugin-market-bundle`](plugin-market-bundle/README.zh.md) | 默认禁用的可选自定义插件市场：市场服务和「发现」标签页 | — |
+| [`plugin-market-bundle`](plugin-market-bundle/README.zh.md) | 默认禁用的可选自定义插件索引：索引服务和「发现」标签页 | — |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 协作、工具与 Web UI 组合包 | — |
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间直接消息与持久共享任务板 | `ctx.agentTeams` |

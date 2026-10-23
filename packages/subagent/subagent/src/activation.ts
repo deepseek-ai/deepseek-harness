@@ -84,6 +84,12 @@ export type ActivationResource =
     failureAt: SessionLogOffset | undefined
     /** Renewed when local settlement must recheck input or owned children. */
     poke: PromiseWithResolvers<void>
+    /**
+     * Whether this child's settlement notice omits its closing text: true while
+     * the child's last logged tool call was a message to its direct parent and
+     * no input was claimed since.
+     */
+    omitClosingText: boolean
   }
   | {
     readonly kind: 'external'

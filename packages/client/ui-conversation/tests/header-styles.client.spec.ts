@@ -8,8 +8,10 @@ describe('conversation header geometry', () => {
   it('keeps the single-line header at the shared 76px height', () => {
     expect(css.match(/\.header\s*\{([^}]*)\}/)?.[1]).toContain('min-height: 76px')
     expect(css.match(/\.viewTabs\s*\{([^}]*)\}/)?.[1]).toContain('min-height: 25px')
-    expect(css.match(/\.tab\s*\{([^}]*)\}/)?.[1]).toContain('min-height: 25px')
-    expect(css.match(/\.tab\s*\{([^}]*)\}/)?.[1]).toContain('padding: 0 0 9px')
+    // The tab's 35px press target sits 10px above its 25px row through a negative top margin.
+    expect(css.match(/\.tab\s*\{([^}]*)\}/)?.[1]).toContain('min-height: 35px')
+    expect(css.match(/\.tab\s*\{([^}]*)\}/)?.[1]).toContain('margin: -10px calc(-1 * var(--dsh-tab-hit-inline)) 0')
+    expect(css.match(/\.tab\s*\{([^}]*)\}/)?.[1]).toContain('padding: 10px var(--dsh-tab-hit-inline) 9px')
   })
 
   it('uses 32px between view labels without changing the action gap', () => {

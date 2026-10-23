@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Timeout-Kontrolle für Tool-Aufrufe",
+    "description": "Senden Sie ein Abbruchsignal entsprechend dem Zeitlimit jedes Tools und geben Sie das Timeout-Ergebnis zurück."
+  }
+}

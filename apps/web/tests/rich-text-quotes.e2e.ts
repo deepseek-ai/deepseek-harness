@@ -15,7 +15,7 @@ import {
   parseSeedFixture, renderSeedFixture, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/rich-text-quotes', import.meta.url))
 const BORROWED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.jsonl', import.meta.url))
@@ -289,8 +289,10 @@ describe.skipIf(MODE === 'record')('web e2e: rich-text quotes', () => {
   let page: Page
   let replayDir: string
   let tripwire: ReturnType<typeof watchConsole>
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
+    hostClock = pinHostClock()
     replayDir = await mkdtemp(join(tmpdir(), 'dsh-rich-text-quotes-replay-'))
     const replayOverride = join(replayDir, 'replay.override.json')
     await writeFile(replayOverride, JSON.stringify(REPLAY))
@@ -316,6 +318,7 @@ describe.skipIf(MODE === 'record')('web e2e: rich-text quotes', () => {
     await seedSession(scaffold, otherSessionFixture(borrowed), OTHER_ID, undefined, { createdAt: createdAt + 1_000 })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await pinBrowserClock(page)
     await page.addInitScript(({ key, value }) => {
       if (localStorage.getItem(key) === null) localStorage.setItem(key, value)
     }, { key: LEGACY_DRAFT_KEY, value: LEGACY_DRAFT })
@@ -336,6 +339,7 @@ describe.skipIf(MODE === 'record')('web e2e: rich-text quotes', () => {
       await rm(replayDir, { recursive: true, force: true })
         .catch((error: unknown) => failures.push(error))
     }
+    hostClock?.mockRestore()
     if (failures.length === 1) throw failures[0]
     if (failures.length > 1) throw new AggregateError(failures, 'rich-text-quotes e2e cleanup failed')
   })

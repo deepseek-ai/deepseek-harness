@@ -4,17 +4,18 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { FileUploads } from './index.ts'
-import type { FileUploadValue } from './types.ts'
+import type { FileUploadValue, ImageUploadValue } from './types.ts'
 
 type FileUploadHttpResult =
-  | { readonly ok: true; readonly value: FileUploadValue }
+  | { readonly ok: true; readonly value: FileUploadValue | ImageUploadValue }
   | {
     readonly ok: false
     readonly error: { readonly code: string; readonly message: string; readonly details: object }
   }
 
 /**
- * Handle one authenticated raw-byte upload.
+ * Handle one authenticated raw-byte upload. A `mediaType` query parameter
+ * stages the body as a prompt image; without it the body is stored verbatim.
  * @param service - Host upload service receiving streamed bytes.
  * @param request - authenticated HTTP request from Connection.
  * @returns JSON result using HTTP status 200 after request validation.
@@ -33,16 +34,20 @@ export async function handleFileUploadHttp(service: FileUploads, request: Reques
     return new Response('sessionId is required', { status: 400 })
   }
   const name = url.searchParams.get('name') ?? undefined
+  const imageMediaType = url.searchParams.get('mediaType') ?? undefined
+  const upload = {
+    sessionId: brandString<SessionId>(sessionId),
+    data: requestBodyChunks(request.body),
+    signal: request.signal,
+    ...(name === undefined ? {} : { name }),
+  }
   let result: FileUploadHttpResult
   try {
     result = {
       ok: true,
-      value: await service.uploadStream({
-        sessionId: brandString<SessionId>(sessionId),
-        data: requestBodyChunks(request.body),
-        signal: request.signal,
-        ...(name === undefined ? {} : { name }),
-      }),
+      value: imageMediaType === undefined
+        ? await service.uploadStream(upload)
+        : await service.uploadImageStream({ ...upload, mediaType: imageMediaType }),
     }
   } catch (error) {
     const failure = remoteErrorOf(error)

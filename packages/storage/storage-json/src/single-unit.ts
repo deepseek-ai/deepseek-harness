@@ -1,7 +1,8 @@
 /**
  * One opened JSON unit in `single` layout: the whole unit is one document at
  * `<root>/<name>.json`. The in-memory state is authoritative; every write
- * primitive mutates it and republishes the whole file atomically. Writes are
+ * primitive mutates it and republishes the whole file atomically, including a
+ * batch delete, which changes several records but publishes once. Writes are
  * NOT queued here — per the backend contract, write ordering belongs to the
  * caller (the domain layer's write chain); this unit only guarantees that
  * each single call publishes a complete, durable file. The `per-record`
@@ -94,6 +95,24 @@ class SingleJsonUnit implements KvUnit {
     records.delete(key)
     await this.publish().catch((error: unknown) => {
       records.set(key, previous)
+      throw error
+    })
+  }
+
+  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
+    this.assertOpen()
+    const records = this.records(table)
+    const removed = new Map<string, unknown>()
+    for (const key of new Set(keys)) {
+      if (!records.has(key)) continue
+      removed.set(key, records.get(key))
+      records.delete(key)
+    }
+    if (removed.size === 0) return
+    // One atomic publish applies the whole batch; a failed publish restores
+    // every removed entry so memory and the medium stay together.
+    await this.publish().catch((error: unknown) => {
+      for (const [key, value] of removed) records.set(key, value)
       throw error
     })
   }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "lokale Prozess-Sandbox",
+    "description": "Sorgen Sie für eine Prozessisolierung nach Betriebssystem und begrenzen Sie den Zugriffsbereich von Befehlen."
+  }
+}

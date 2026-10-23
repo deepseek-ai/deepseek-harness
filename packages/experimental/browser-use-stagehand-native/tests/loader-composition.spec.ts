@@ -1,5 +1,6 @@
 /** A real Loader and AgentLoop exercise independently configured browser inference and durable screenshots. */
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,6 +82,7 @@ it('loads browser tools from cordis.yml, logs browser results, and admits the sc
 
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
+    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-attachment-local', LocalAttachmentStore],

@@ -392,9 +392,9 @@ describe('SettingsPanel navigation', () => {
       ],
     })
     openPanel()
-    // Glyphs carry no id of their own, so the drawn paths are what tells them apart.
+    // Each product glyph names its sprite symbol id in data-icon.
     const glyphs = ['General', 'Models', 'Agent presets', 'Plugins', 'Archived sessions', 'Contributed']
-      .map(name => screen.getByRole('button', { name }).querySelector('svg')?.innerHTML)
+      .map(name => screen.getByRole('button', { name }).querySelector('svg')?.getAttribute('data-icon'))
 
     expect(glyphs.every(glyph => glyph !== undefined && glyph !== '')).toBe(true)
     // The four ids the shell names get their own glyph; every other section —

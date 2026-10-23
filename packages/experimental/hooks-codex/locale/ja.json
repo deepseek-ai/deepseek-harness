@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex フック",
+    "description": "Harness のインターセプトポイントで、Codex の hooks.json に設定されたフックを実行します。"
+  }
+}
