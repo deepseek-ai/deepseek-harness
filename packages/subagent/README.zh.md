@@ -25,6 +25,7 @@ subagent 包家族让 agent（智能体）将任务委派给子 agent、继续�
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`subagent/`](subagent/README.zh.md) | 定义委派服务：提供方注册表、一次性运行、可继续子级与发现 | `ctx.subagents` |
+| [`subagent-names/`](subagent-names/README.zh.md) | 为委派和控制工具添加可选名字，保持执行服务不变 | `ctx.subagentNames` |
 | [`subagent-spawn-in-process/`](subagent-spawn-in-process/README.zh.md) | 运行全新的进程内子 agent | 注册到 `ctx.subagents` |
 | [`subagent-fork-in-process/`](subagent-fork-in-process/README.zh.md) | 运行从父级已完成历史派生的进程内子 agent | 注册到 `ctx.subagents` |
 | [`subagent-acp/`](subagent-acp/README.zh.md) | 经 Agent Client Protocol 运行进程外子 agent | 注册到 `ctx.subagents` |

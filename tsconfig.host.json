@@ -512,6 +512,7 @@
     { "path": "./packages/experimental/webworker-packer" },
     { "path": "./packages/experimental/inspector/tsconfig.host.json" },
     { "path": "./packages/subagent/subagent" },
+    { "path": "./packages/subagent/subagent-names" },
     { "path": "./packages/subagent/tool-subagent" },
     { "path": "./packages/subagent/tool-subagent-control" },
     { "path": "./packages/subagent/subagent-spawn-in-process" },

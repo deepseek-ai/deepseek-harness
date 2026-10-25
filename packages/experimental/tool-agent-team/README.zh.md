@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-experimental-agent-team` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
+模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-experimental-agent-team` 和 `@deepseek-ai/dsh-subagent-names` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
 
 ### 何时选择
 
@@ -33,16 +33,17 @@ kind: "package-reference"
 
 ### 最小工作示例
 
-本插件不接受配置；按照 [agent-team 配置](../agent-team/README.zh.md#smallest-working-setup)，把它挂载在 Team 领域包旁边：
+本插件不接受配置。在 [Team 领域包](../agent-team/README.zh.md#smallest-working-setup)和共享 subagent 服务可用后，在工具旁挂载一次命名服务：
 
 ```yaml
+- name: '@deepseek-ai/dsh-subagent-names'
 - id: tool-agent-team
   name: '@deepseek-ai/dsh-experimental-tool-agent-team'
 ```
 
 设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
 
-让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的 id 用于寻址。
+让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的完整路径用于寻址。
 
 ### 模型能做什么
 
@@ -52,11 +53,11 @@ kind: "package-reference"
 - **等待收件箱输入** — `wait_agent` 属于 `@deepseek-ai/dsh-tool-subagent-control`，无需此包即可使用。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-任务 `owner` 参数和 `ownerId` 结果使用 Session id。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
+任务 `owner` 参数和 `ownerName` 结果使用完整 agent 路径。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
 
 ### 成功与失败的表现
 
-任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。
+任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。更新在修改前解析输入与结果中的负责人名称；名称查询失败或不完整时任务保持不变，已提交结果无需再查询名称。完整读取树后仍不存在的已存储负责人显示为 `legacy:<id>`；不可读分支使查询失败，不表示负责人不存在。
 
 -----
 
@@ -77,6 +78,8 @@ kind: "package-reference"
 - **声明式结果，紧凑 JSON。** 每个工具都声明完整结果 schema，并把该值渲染为紧凑 JSON，因此编译器会对照向模型承诺的结果检查 `execute`，任何结果都不会在缩进上消耗 token。
 - **领域掌握裁决权。** 工具委托给 `ctx.agentTeams`，后者强制执行 Lead 权限与 revision 校验；适配器不添加更弱的路径。
 
+适配器使用 `ctx.subagentNames` 解析完整路径，`ctx.agentTeams` 继续使用 Session id 处理任务归属和权限。任务列表先按状态、就绪情况和未分配条件筛选，再解析名称。没有精确负责人名称筛选时，只解析请求页中的名称；按精确负责人名称筛选时，在分页前解析剩余候选任务的负责人名称。
+
 [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责模型侧与 scoping 决策。
 
 ### 源码地图
@@ -87,7 +90,7 @@ kind: "package-reference"
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。身份从 `ctx.subagents.rootOf(agent)` 派生，不使用独立成员关系服务。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供显示的完整路径。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -103,6 +106,7 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从领域服务逐步进入精确 schema 与设计背后的决策。
 
 - [agent-team 包](../agent-team/README.zh.md)——这些工具背后的 `ctx.agentTeams` 领域服务。
+- [Subagent 命名](../../subagent/subagent-names/README.zh.md)——名字分配与完整路径查询。
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与服务 API。
 - [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md) — 通信、列表、中断和收件箱等待。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)——模型接收的每个工具 schema。
@@ -122,7 +126,7 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -141,18 +145,18 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 
 #### 模型看到什么
 
-必需的 `team:identity` 上下文使用以下文本，将 `<agent-id>` 或 `<root-id>` 替换为从 subagent 树派生的 JSON 编码 Session id。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
+必需的 `team:identity` 上下文对根和队友使用以下文本。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
 
 ##### 根身份
 
 ```markdown
-You are the Team Lead. Your agent id is <agent-id>.
+You are the Team Lead. Your name is lead.
 ```
 
 ##### 队友身份
 
 ```markdown
-You are a teammate in the Team led by agent <root-id>.
+You are a teammate in the Team led by "lead".
 ```
 
 #### Token 影响

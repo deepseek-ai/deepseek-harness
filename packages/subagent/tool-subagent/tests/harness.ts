@@ -7,6 +7,7 @@ import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
 import type { Config as toolConfig } from '../src/index.ts'
@@ -35,6 +36,7 @@ let setupAgentCounter = 0
 
 /** Test-only opt-in translated to the real Host setting and Session path. */
 type SetupConfig = toolConfig & {
+  withNames?: boolean
   withModelSelection?: boolean
   /** Host setting sampled by a `withModelSelection` setup; defaults to enabled. */
   hostSelectionEnabled?: boolean
@@ -52,7 +54,7 @@ const TEST_ALLOWED_MODELS = [
 
 export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Config> = {}): Promise<Context> {
   const ctx = ownContext(new Context())
-  const { withModelSelection, hostSelectionEnabled = true, parentAgentOptions, ...config } = toolConfig
+  const { withNames = true, withModelSelection, hostSelectionEnabled = true, parentAgentOptions, ...config } = toolConfig
   await mountAgentLoopTestDependencies(ctx)
   if (withModelSelection === true) {
     await ctx.plugin(SubagentModelSelectionConfig, {
@@ -62,6 +64,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    if (withNames) await ctx.plugin(SubagentNames)
     const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
     setupProviders.set(ctx, provider)
     const handle = await ctx.agents.create({
@@ -80,6 +83,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  if (withNames) await ctx.plugin(SubagentNames)
   const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
   setupProviders.set(ctx, provider)
   await ctx.plugin(tool, config)

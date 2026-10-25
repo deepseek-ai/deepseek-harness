@@ -359,6 +359,9 @@
     - id: subagent
       name: '@deepseek-ai/dsh-subagent'
 
+    - id: subagent-names
+      name: '@deepseek-ai/dsh-subagent-names'
+
     - id: subagent-spawn-in-process
       name: '@deepseek-ai/dsh-subagent-spawn-in-process'
       config:

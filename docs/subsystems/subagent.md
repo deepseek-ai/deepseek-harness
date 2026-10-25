@@ -225,6 +225,10 @@ type SubagentInterruptAuthority =
 
 The parent-owned `subagentCatalog` projection lists all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes the root and reachable continuable descendants with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
 
+## Optional tool names
+
+The [naming plugin](../../packages/subagent/subagent-names/README.md) owns name allocation and path lookup for model-facing tools. It combines its own parent-owned bindings with the existing catalog; execution, authorization, provider requests and runtime notifications continue to use Session ids. Direct service callers do not acquire names automatically.
+
 ## Results and backend handles
 
 SubagentResult is available to program consumers. The activation registry retains the external backend handle until disposal completes. A cleanup failure does not replace a captured execution result: the activation result and parent notice retain it, while dispose rejects and the live subagent/end event reports error. Backend-owned diagnostics must satisfy the safe-detail requirements below.
@@ -404,6 +408,54 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Host settings owner that records Session authorization before the first model request.
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
+
+<a id="ctxsubagentnames--subagentnames"></a>
+
+### `ctx.subagentNames` — `SubagentNames`
+
+Catalog-backed names that leave subagent execution and authorization with their existing owner.
+
+```ts cordis-catalog
+/**
+ * Start a named child, reserving its sibling name until startup settles.
+ * Parent delivery retains catalog membership. Local names precede catalog publication;
+ * external names follow accepted startup.
+ * @param spec - ordinary activation options and an optional lower-case sibling name.
+ * @returns the existing activation receipt plus its full name.
+ * @throws SubagentNameError for invalid or duplicate names. An external binding failure
+ * includes childId and awaits disposal without undoing completed work.
+ */
+async startActivation(spec: NamedSubagentActivationSpec): Promise<SubagentActivation & { readonly name: string }>
+
+/**
+ * Read the full name of an exact live Agent without restoring its ancestors.
+ * @param agent - live root or managed child whose name is requested.
+ * @param signal - cancellation during parent catalog reads.
+ * @returns lead, named path segments, or legacy id segments for unnamed children.
+ */
+async nameOf(agent: Agent, signal?: AbortSignal): Promise<string>
+
+/**
+ * Translate a canonical path or a tree member's exact id without granting authority.
+ * @param caller - exact live Agent selecting the subagent tree.
+ * @param name - lead, a lead-prefixed path, or an existing member's exact Session id.
+ * @param signal - cancellation during catalog reads.
+ * @returns the identity for the subagent operation to authorize.
+ */
+async resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
+
+/**
+ * Attach relative names to the existing catalog traversal and its branch diagnostics.
+ * @param rootId - Session whose catalog starts discovery.
+ * @param signal - cancellation while reading descendant and name projections.
+ * @returns existing descendant rows with paths relative to rootId.
+ */
+async listDescendants(rootId: SessionId, signal?: AbortSignal): Promise<(SubagentDescendantListEntry & { readonly path: string })[]>
+```
+
+Types: [Agent](core.md) · [SessionId](core.md)
+
+Source: [`packages/subagent/subagent-names/src/index.ts`](../../packages/subagent/subagent-names/src/index.ts)
 
 <a id="ctxsubagents--subagentruntime"></a>
 

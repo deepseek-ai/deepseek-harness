@@ -225,6 +225,10 @@ type SubagentInterruptAuthority =
 
 父级拥有的 `subagentCatalog` 投影列出所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根和可达的可继续后代，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
 
+## 可选工具名字
+
+[命名插件](../../packages/subagent/subagent-names/README.zh.md)负责模型工具的名字分配和路径查询。它将自己持有的父级绑定与现有 catalog 结合；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
+
 ## 结果与后端句柄
 
 SubagentResult 供程序消费方读取。activation 注册表保留外部后端句柄，直到释放完成。清理失败不会覆盖已捕获的执行结果：activation 结果与父级通知保留该结果，dispose 拒绝，而在线 subagent/end 事件报告 error。后端提供的诊断必须满足下述安全信息要求。
@@ -406,6 +410,54 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Host settings owner that records Session authorization before the first model request.
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
+
+<a id="ctxsubagentnames--subagentnames"></a>
+
+### `ctx.subagentNames` — `SubagentNames`
+
+Catalog-backed names that leave subagent execution and authorization with their existing owner.
+
+```ts cordis-catalog
+/**
+ * Start a named child, reserving its sibling name until startup settles.
+ * Parent delivery retains catalog membership. Local names precede catalog publication;
+ * external names follow accepted startup.
+ * @param spec - ordinary activation options and an optional lower-case sibling name.
+ * @returns the existing activation receipt plus its full name.
+ * @throws SubagentNameError for invalid or duplicate names. An external binding failure
+ * includes childId and awaits disposal without undoing completed work.
+ */
+async startActivation(spec: NamedSubagentActivationSpec): Promise<SubagentActivation & { readonly name: string }>
+
+/**
+ * Read the full name of an exact live Agent without restoring its ancestors.
+ * @param agent - live root or managed child whose name is requested.
+ * @param signal - cancellation during parent catalog reads.
+ * @returns lead, named path segments, or legacy id segments for unnamed children.
+ */
+async nameOf(agent: Agent, signal?: AbortSignal): Promise<string>
+
+/**
+ * Translate a canonical path or a tree member's exact id without granting authority.
+ * @param caller - exact live Agent selecting the subagent tree.
+ * @param name - lead, a lead-prefixed path, or an existing member's exact Session id.
+ * @param signal - cancellation during catalog reads.
+ * @returns the identity for the subagent operation to authorize.
+ */
+async resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
+
+/**
+ * Attach relative names to the existing catalog traversal and its branch diagnostics.
+ * @param rootId - Session whose catalog starts discovery.
+ * @param signal - cancellation while reading descendant and name projections.
+ * @returns existing descendant rows with paths relative to rootId.
+ */
+async listDescendants(rootId: SessionId, signal?: AbortSignal): Promise<(SubagentDescendantListEntry & { readonly path: string })[]>
+```
+
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
+
+Source: [`packages/subagent/subagent-names/src/index.ts`](../../packages/subagent/subagent-names/src/index.ts)
 
 <a id="ctxsubagents--subagentruntime"></a>
 

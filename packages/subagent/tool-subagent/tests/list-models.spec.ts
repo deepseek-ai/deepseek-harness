@@ -18,6 +18,7 @@ import type {
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
@@ -81,6 +82,7 @@ async function setupListTool(routes = [
   await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: routes })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
   const { agent } = await ctx.agents.create({ sessionId: SessionId('discovery-parent') })
   callingAgents.set(ctx, agent)
@@ -177,6 +179,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
     expect(text(await call(ctx, {}))).toContain('requires a calling agent')
     await ctx.fiber.dispose()
@@ -212,6 +215,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
     callingAgents.set(ctx, callingAgents.get(parent)!)
     expect(ctx.tools.get('list_subagent_models')).toBeDefined()

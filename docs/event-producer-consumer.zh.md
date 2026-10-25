@@ -76,7 +76,7 @@
 | `subagent/provider-added` | `emit` | [`packages/subagent/subagent/src/index.ts:137`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`emit`) | [`tool-subagent`](../packages/subagent/tool-subagent) |
 | `subagent/provider-removed` | `emit` | [`packages/subagent/subagent/src/index.ts:143`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`tool-subagent`](../packages/subagent/tool-subagent) |
 | `subagent/start` | `emit` | [`packages/subagent/subagent/src/index.ts:153`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`hooks-claude-code`](../packages/experimental/hooks-claude-code) |
-| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | `browser-use-runtime`, [`working-directory`](../packages/session/working-directory) |
+| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | `browser-use-runtime`, [`tool-subagent-control`](../packages/subagent/tool-subagent-control), [`working-directory`](../packages/session/working-directory) |
 | `system-prompt/change` | `emit` | [`packages/core/system-prompt/src/index.ts:37`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`emit`) | - |
 | `tools/change` | `emit` | [`packages/core/tools/src/events.ts:56`](../packages/core/tools/src/events.ts) | [`agent-preset-registry`](../packages/preset/agent-preset-registry) (`emit`), [`tools`](../packages/core/tools) (`emit`) | `browser-use-runtime`, [`tool-subagent`](../packages/subagent/tool-subagent) |
 | `tools/execute` | `waterfall` | [`packages/core/tools/src/events.ts:29`](../packages/core/tools/src/events.ts) | [`tools`](../packages/core/tools) (`waterfall`) | `browser-use-runtime`, `browser-use-stagehand-native`, `claude-code-mods`, `computer-use-cua-driver-native`, [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), `timeout-policy` |
@@ -105,7 +105,7 @@
 | `internal/config` | - | [`llm-pi-ai`](../packages/llm/llm-pi-ai) |
 | `internal/dispatch` | - | [`terminal-bash`](../packages/terminal/terminal-bash) |
 | `internal/plugin` | - | `computer-use-cua-driver-native`, `inspector`, `loader`, [`lsp-stdio`](../packages/lsp/lsp-stdio), [`mcp-client`](../packages/mcp/mcp-client), `modules` |
-| `internal/service` | - | `gateway` |
+| `internal/service` | - | `gateway`, [`tool-subagent`](../packages/subagent/tool-subagent), [`tool-subagent-control`](../packages/subagent/tool-subagent-control) |
 | `internal/status` | - | [`agent`](../packages/core/agent), `inspector`, `translator`, [`web`](../packages/web/web) |
 | `internal/update` | - | [`app-boot`](../packages/boot/app-boot) |
 | `loader/volatile-update` | - | [`cua`](../packages/experimental/cua), [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |

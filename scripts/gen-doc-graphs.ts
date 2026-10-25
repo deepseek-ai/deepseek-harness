@@ -799,8 +799,16 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Subagent provider and continuation service',
     mode: 'seam',
     implementations: ['subagent-spawn-in-process', 'subagent-fork-in-process', 'subagent-acp', 'subagent-codex', 'subagent-claude-code', 'subagent-dsh-sdk'],
-    consumers: ['tool-subagent', 'tool-subagent-control', 'tool-ralph'],
+    consumers: ['subagent-names', 'tool-subagent', 'tool-subagent-control', 'tool-ralph'],
     note: 'Providers prepare local children or execute external tasks; one activation manager owns both lifecycles. The delegation tool selects a backend, control tools deliver local follow-ups, and workflows await activation results.',
+  },
+  {
+    key: 'subagentNames',
+    pkg: 'subagent-names',
+    title: 'Optional subagent names',
+    mode: 'core',
+    consumers: ['tool-subagent', 'tool-subagent-control', 'experimental-tool-agent-team', 'experimental-tool-subagent-oar'],
+    note: 'Owns sibling name reservations, durable bindings, and catalog-backed path lookup. Execution and authorization remain with the subagent service.',
   },
   {
     key: 'speechToText',

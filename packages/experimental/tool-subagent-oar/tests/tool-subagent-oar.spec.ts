@@ -7,6 +7,7 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import type { ResolvedSubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import { expect, it } from 'vitest'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
@@ -18,6 +19,7 @@ async function setup() {
   const harness = await mountAgentLoopTestHarness(ctx)
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   const calls: { provider: string; request: ResolvedSubagentStartRequest }[] = []
   for (const name of ['codex-provider', 'claude-provider', 'future-provider']) {
     ctx.subagents.registerProvider({
@@ -44,9 +46,9 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   })
   const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
   expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
-  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'prompt', 'runtime'])
+  expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
-  for (const runtime of ['codex', 'claude', 'future']) {
+  for (const [index, runtime] of ['codex', 'claude', 'future'].entries()) {
     const result = await executeToolFixture(ctx, {
       agent: parent, name: 'subagent_oar', signal: test.signal,
       callId: ToolCallId(randomUUID()),
@@ -56,10 +58,13 @@ it('selects one configured provider per call and exposes only task inputs', asyn
     expect(result.content).toHaveLength(1)
     const content = result.content[0]
     expect(content?.type).toBe('text')
-    if (content?.type === 'text') expect(content.text).toMatch(/^started subagent /u)
+    if (content?.type === 'text') expect(content.text).toBe(`started subagent lead/agent-${index + 1}`)
   }
   expect(calls.map(call => call.provider)).toEqual(['codex-provider', 'claude-provider', 'future-provider'])
-  expect(calls[0]?.request.prompt).toEqual([{ type: 'text', text: 'independent task' }])
+  expect(calls[0]?.request.prompt).toEqual([
+    { type: 'text', text: 'independent task' },
+    { type: 'text', text: 'Your name is "lead/agent-1". Your parent agent name is "lead".' },
+  ])
   expect(calls[0]?.request.parent).toBe(parent)
   expect(calls[0]?.request.cwd).toBe(process.cwd())
   expect(ctx.tools.get('subagent_oar')?.isConcurrencySafe?.({
@@ -113,7 +118,7 @@ it('requires a caller and independently scoped one-shot providers', async (test)
     start: async () => { throw new Error('must not run') },
   })
   await ctx.plugin(externalTool, { providers: { inherited: 'inherited' } })
-  const args = { runtime: 'inherited', description: 'task', prompt: 'task' }
+  const args = { name: 'inspector', runtime: 'inherited', description: 'task', prompt: 'task' }
   const noParent = await executeToolFixture(ctx, {
     name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
@@ -129,7 +134,7 @@ it('passes an explicit child directory and presents the task description', async
   const { ctx, parent, calls } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(externalTool, { providers: { codex: 'codex-provider' } })
-  const args = { runtime: 'codex', description: 'Inspect child', prompt: 'task', cwd: 'packages' }
+  const args = { name: 'inspector', runtime: 'codex', description: 'Inspect child', prompt: 'task', cwd: 'packages' }
   expect(ctx.tools.get('subagent_oar')?.presentCall?.(args)).toEqual({
     card: 'generic', title: 'Inspect child', rawInput: args,
   })
@@ -137,6 +142,7 @@ it('passes an explicit child directory and presents the task description', async
     agent: parent, name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
   expect(result.isError).toBe(false)
+  expect(result.content).toEqual([{ type: 'text', text: 'started subagent lead/inspector' }])
   expect(calls[0]?.request.cwd).toBe(join(process.cwd(), 'packages'))
 })
 

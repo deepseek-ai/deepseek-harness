@@ -1,10 +1,14 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import LlmRuntime, {
@@ -35,6 +39,7 @@ import {
   prepareSessionSnapshotFixtureForComparison,
   resolveScriptedEntry,
 } from '../src/index.ts'
+import { TestSessionQuery } from '../../../subagent/subagent/tests/test-session-query.ts'
 
 declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions/types' {
   interface DeepSeekLlmApiExtensionMap {
@@ -1993,6 +1998,31 @@ describe('installLlmReplay (per-session keying)', () => {
   const live = (id: string): GenerateOptions =>
     ({ provider: 'm', model: 'm', messages: [], sessionId: id as NonNullable<GenerateOptions['sessionId']> })
 
+  async function namedParent() {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(TestSessionQuery)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
+    const parent = await ctx.agentLoop.create(SessionId('live-parent'))
+    const childId = SessionId('live-child-before-call')
+    parent.session.append('subagent-name/bound', { version: 1, childId, name: 'reviewer' })
+    parent.session.append('subagent/catalog', {
+      version: 0, childId, childCreatedAt: 2, mode: 'continuable', label: 'Review',
+    })
+    return { ctx, parent, childId }
+  }
+
+  function namedReceipt(name = 'lead/reviewer'): GenerateOptions['messages'] {
+    return [createToolResultMessage({
+      callId: ToolCallId('start-reviewer'),
+      isError: false,
+      content: [{ type: 'text', text: `started subagent ${name}` }],
+    })]
+  }
+
   it('routes each live session to its own script by FIRST-CALL order', async () => {
     const parentFile = writeSession('session.jsonl', { id: 'rec-parent', createdAt: 100 }, [TEXT_CHUNKS])
     const childFile = writeSession('session.1.jsonl', { id: 'rec-child', createdAt: 200 }, [second])
@@ -2075,26 +2105,124 @@ describe('installLlmReplay (per-session keying)', () => {
 
   it('learns a background child id from its started-subagent tool result', async () => {
     const reference: StreamChunk[] = [
+      { type: 'text-delta', index: 0, text: '{{session:2}} {{session:3}}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const otherChildFile = writeSession('session.2.jsonl', { id: '{{session:3}}', createdAt: 3 }, [second])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile, otherChildFile] })
+    const options: GenerateOptions = {
+      ...live('live-parent'),
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'started subagent live-child-before-call started subagent live-child-before-call started subagent live-other-child' }],
+        source: { kind: 'user' },
+      })],
+    }
+
+    expect(await drain(ctx.llm.stream(options))).toEqual([
+      { type: 'text-delta', index: 0, text: 'live-child-before-call live-other-child' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+  })
+
+  it('resolves a named receipt to the catalog child before its first model call', async () => {
+    const reference: StreamChunk[] = [
+      { type: 'text-delta', index: 0, text: '{{session:2}}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const { ctx, parent, childId } = await namedParent()
+    const replay = installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+
+    expect(await drain(ctx.llm.stream({
+      ...live(parent.id),
+      messages: namedReceipt(),
+    }))).toEqual([
+      { type: 'text-delta', index: 0, text: childId },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+    expect(await drain(ctx.llm.stream(live(childId)))).toEqual(second)
+    replay.assertConsumed()
+  })
+
+  it('retains a child binding made while its receipt name is resolving', async () => {
+    const reference: StreamChunk[] = [
+      { type: 'text-delta', index: 0, text: '{{session:2}}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const { ctx, parent, childId } = await namedParent()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const resolveName = ctx.subagentNames.resolveName.bind(ctx.subagentNames)
+    vi.spyOn(ctx.subagentNames, 'resolveName').mockImplementationOnce(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return resolveName(...args)
+    })
+    const replay = installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+    const pending = drain(ctx.llm.stream({ ...live(parent.id), messages: namedReceipt() }))
+    try {
+      await entered.promise
+      expect(await drain(ctx.llm.stream(live(childId)))).toEqual(second)
+    } finally {
+      release.resolve(undefined)
+      await pending
+    }
+    expect(await pending).toEqual([
+      { type: 'text-delta', index: 0, text: childId },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+    replay.assertConsumed()
+  })
+
+  it('rejects a named receipt absent from the caller catalog', async () => {
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [TEXT_CHUNKS])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const { ctx, parent } = await namedParent()
+    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+
+    await expect(drain(ctx.llm.stream({
+      ...live(parent.id), messages: namedReceipt('lead/missing'),
+    }))).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+  })
+
+  it('rejects a named receipt when its calling Agent is unavailable', async () => {
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [TEXT_CHUNKS])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const { ctx } = await namedParent()
+    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+
+    await expect(drain(ctx.llm.stream({
+      ...live('unavailable-parent'), messages: namedReceipt(),
+    }))).rejects.toThrow('named subagent receipt lead/reviewer requires subagentNames and its live calling Agent')
+  })
+
+  it.each([undefined, 'live-parent'])('rejects a named receipt without its naming context (%s)', async (sessionId) => {
+    const reference: StreamChunk[] = [
       { type: 'text-delta', index: 0, text: '{{session:2}}' },
       { type: 'finish', reason: { kind: 'stop' } },
     ]
     const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
     const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(LlmRuntime)
     installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
-    const options: GenerateOptions = {
-      ...live('live-parent'),
+
+    await expect(drain(ctx.llm.stream({
+      provider: 'm', model: 'm',
+      ...sessionId === undefined ? {} : { sessionId: SessionId(sessionId) },
       messages: [createUserMessage({
-        content: [{ type: 'text', text: 'started subagent live-child-before-call started subagent live-child-before-call' }],
+        content: [{ type: 'text', text: 'started subagent lead/reviewer' }],
         source: { kind: 'user' },
       })],
-    }
-
-    expect(await drain(ctx.llm.stream(options))).toEqual([
-      { type: 'text-delta', index: 0, text: 'live-child-before-call' },
-      { type: 'finish', reason: { kind: 'stop' } },
-    ])
+    }))).rejects.toThrow('named subagent receipt lead/reviewer requires subagentNames and its live calling Agent')
   })
 
   it('ignores started-subagent text after every recorded session has bound', async () => {

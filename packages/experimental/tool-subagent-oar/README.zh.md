@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用一个 `subagent_oar` 工具，为每个独立文本任务选择已配置的外部智能体。配置固定可用的运行时别名及其提供方；模型选择别名，不能更改原生参数或权限。每个任务使用独立上下文并返回子任务 id，完成通知稍后送达父智能体。
+使用一个 `subagent_oar` 工具，为每个独立文本任务选择已配置的外部智能体。配置固定可用的运行时别名及其提供方；模型选择别名，不能更改原生参数或权限。每个任务使用独立上下文并返回子级完整路径，完成通知稍后送达父智能体。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在已配置的外部提供方旁挂载此工具，例如 [OAR 提供方实例](../subagent-oar/README.zh.md)。在组合中将工具包和提供方包声明为依赖。
+将此工具与 `@deepseek-ai/dsh-subagent-names` 一起挂载在已配置的外部提供方旁，例如 [OAR 提供方实例](../subagent-oar/README.zh.md)。在组合中将命名、工具和提供方包声明为依赖。
 
 ### 适用场景
 
@@ -33,9 +33,10 @@ kind: "package-reference"
 
 ### 最小配置
 
-在 `oar-codex` 和 `oar-claude` 已注册的情况下，在组合中挂载此行：
+在共享 subagent 服务可用，且 `oar-codex` 和 `oar-claude` 已注册后，在此工具旁挂载一次命名服务：
 
 ```yaml
+- name: '@deepseek-ai/dsh-subagent-names'
 - name: '@deepseek-ai/dsh-experimental-tool-subagent-oar'
   config:
     providers:
@@ -48,7 +49,7 @@ kind: "package-reference"
 | `providers` | 必填 | 从模型可见运行时别名映射到已注册提供方名称的非空映射 |
 | `toolName` | `subagent_oar` | 工具名称；每个挂载实例需要不同名称 |
 
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`；可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义接受的字段和校验规则。调用要求提供 `runtime`、`description` 和 `prompt`；可选的 `name` 按[命名服务规则](../../subagent/subagent-names/README.zh.md)选择同级路径段；可选的 `cwd` 选择子任务目录，相对路径从父智能体的当前目录解析。提示必须包含子任务需要的上下文。原生安装、认证、模型设置和权限由所选提供方负责。
 
 -----
 
@@ -58,7 +59,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts)根据配置的别名构建运行时枚举，并注册一个工具。每次调用解析其提供方，并通过共享子智能体服务启动激活；该服务负责容量、父智能体生命周期、取消、最终记录和完成通知交付。工具调用卡片使用任务描述和提交的参数。释放插件会移除其工具注册；激活管理器继续负责已接受的子任务。
+[`src/index.ts`](src/index.ts)根据配置的别名构建运行时枚举，并注册一个工具。每次调用解析其提供方，并通过 `ctx.subagentNames` 启动具名激活；命名服务包装 `ctx.subagents.startActivation()`。subagent 服务负责容量、父智能体生命周期、取消、最终记录和完成通知交付。工具调用卡片使用任务描述和提交的参数。释放插件会移除其工具注册；激活管理器继续负责已接受的子任务。
 
 </details>
 
@@ -68,6 +69,7 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [子智能体服务](../../subagent/subagent/README.zh.md) — 提供方注册和激活所有权。
+- [Subagent 命名](../../subagent/subagent-names/README.zh.md) — 同级名字和完整路径结果。
 - [OAR 提供方](../subagent-oar/README.zh.md) — 原生运行时配置和权限配置。
 - [子智能体子系统](../../../docs/subsystems/subagent.zh.md) — 父智能体完成通知和保留结果。
 
@@ -80,7 +82,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义描述和参数 schema。`runtime` 枚举包含配置的别名。接受任务后，工具返回 `started subagent <id>`，其中 `<id>` 标识子任务。共享子智能体服务稍后提供子任务的答复或失败通知。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-tool-subagent-oar)定义描述和参数 schema。`runtime` 枚举包含配置的别名。接受任务后，工具返回 `started subagent <name>`，其中 `<name>` 是子级完整路径。共享子智能体服务稍后提供子任务的答复或失败通知，以子任务 id 标识外部执行。
 
 #### Token 影响
 

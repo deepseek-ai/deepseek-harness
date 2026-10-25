@@ -13,6 +13,7 @@ import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as tool from '../src/index.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
@@ -417,6 +418,7 @@ describe('SubagentModelSelectionConfig', () => {
     await mountAgentLoopTestDependencies(ctx)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     await ctx.plugin(tool, { provider: 'spawn', modelSelection: true })
     await ctx.plugin(tool, { provider: 'spawn', toolName: 'another_spawn', modelSelection: true })

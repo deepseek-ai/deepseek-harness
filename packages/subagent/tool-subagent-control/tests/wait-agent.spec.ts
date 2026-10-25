@@ -7,6 +7,7 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import * as control from '../src/index.ts'
 
@@ -23,6 +24,7 @@ async function setup() {
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true, systemPrompt: { includeRuntimeContext: false } })
   const harness = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   const fiber = await ctx.plugin(control)
   const handle = await ctx.agents.create({ sessionId: SessionId('waiting') })
   const other = await harness.create(SessionId('other'))

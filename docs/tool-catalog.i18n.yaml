@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: d98e333552fd31a3
-  zh: d66ffe883134f5a0
+  en: 032f2dde75d30202
+  zh: 2ea1f54a96e15461
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -237,8 +237,8 @@
   en: 8daafae6faf7898e
   zh: 8daafae6faf7898e
 /tool-schema-catalog/deepseek-ai-dsh-experimental-tool-subagent-oar/subagent-oar:
-  en: 6283c3023d6ea436
-  zh: 9c018b8c12a3f1e7
+  en: a29a86479752a3ef
+  zh: 8582b31fc5e99c17
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent:
   en: 841abe0dd5913ea7
   zh: 841abe0dd5913ea7
@@ -246,8 +246,8 @@
   en: 207228068bc61885
   zh: 36e9344ee1af8869
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent/subagent:
-  en: 430672da3c1a6ca6
-  zh: bd3a9ab4089f9dbb
+  en: 510d7dd3afaa98b9
+  zh: 01e3650be0e1acd9
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control:
   en: ab82e130c3413f04
   zh: ab82e130c3413f04
@@ -255,14 +255,14 @@
   en: a622b15cc2598d51
   zh: 48e1b05956d63e26
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/list-agents:
-  en: 6ff6254e604397d2
-  zh: 32b2f1ba4052b19e
+  en: 27354bec67e9f3c1
+  zh: 282ef6ae40681e2b
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/send-message:
   en: aaccc4f194398018
   zh: d918c1346a87a4b1
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/wait-agent:
-  en: f3cf5a0c56ddc07a
-  zh: 7f6754d71e1b4ae4
+  en: d150b517e88f87f0
+  zh: ba83919e0e13543a
 /tool-schema-catalog/deepseek-ai-dsh-tool-jobs:
   en: 9be673b1604d0114
   zh: 9be673b1604d0114

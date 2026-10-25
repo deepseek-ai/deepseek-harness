@@ -19,6 +19,9 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../subagent/subagent-names"
     }
   ]
 }

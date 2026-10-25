@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent-control` lets agents discover and message their subagent tree by Session id, interrupt descendants, and wait for their own next-step inbox. By default, one plugin instance registers all four tools; members inherit the same definitions and ordering.
+`dsh-tool-subagent-control` lets agents discover and message their subagent tree by path or Session id, interrupt descendants, and wait for their own next-step inbox. By default, one plugin instance registers all four tools; members inherit the same definitions and ordering.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`.
+Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`. The optional [subagent-names](../subagent-names/README.md) plugin enables named addressing; without it, the tools retain their `agent_id` arguments and id-based listing. Tool definitions update when the naming service loads or unloads.
 
 ### Minimal configuration
 
@@ -33,6 +33,7 @@ With the required services available, load the subagent service, a backend, the 
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
+- name: '@deepseek-ai/dsh-subagent-names'
 - name: '@deepseek-ai/dsh-subagent-spawn-in-process'
 - name: '@deepseek-ai/dsh-tool-subagent'
   config:
@@ -44,11 +45,11 @@ Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. 
 
 ### send_message
 
-Sends a message to another agent in the same subagent tree by `agent_id`. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+In named mode, `name` selects a full path or Session id of another agent in the same subagent tree. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
-`agent_id` identifies a descendant by Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+In named mode, `name` identifies a descendant by full path or Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. Cancellation during name resolution leaves the target running. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -57,7 +58,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Descendant rows carry their direct parent id and depth from the root. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Named rows carry full paths, with `lead` for the root; descendants carry their direct parent path and depth from the root. Unnamed children use `legacy:<SessionId>` path segments. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
 
 -----
 
@@ -71,7 +72,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-Messaging, interruption, and discovery delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+The optional `ctx.subagentNames` resolves names; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 
@@ -111,7 +112,7 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or a wait signal, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) define path- or id-addressed messaging and interruption, whole-tree discovery, and inbox waiting with `timeout_ms`. `wait_agent` returns `{ "timedOut": false }` for available input or a wait signal, and `{ "timedOut": true }` on timeout. It returns no message body or peer-activity diagnosis.
 
 #### Token effect
 
@@ -125,7 +126,7 @@ Prefix-stable; the schemas do not change at runtime, and a parent and its contin
 
 #### What the model sees
 
-The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded id and how to send findings that change the parent’s next action. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
+The logged `subagent:communication` runtime context tells delegated children their own and direct creator’s JSON-encoded names (or the parent id without naming) and how to send findings that change the parent’s next action. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
@@ -133,13 +134,13 @@ One short context entry per delegated child, independent of tree size.
 
 #### KV Cache effect
 
-Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the parent id again from the target Session.
+Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the parent address again from durable records. If the runtime root is unavailable, guidance retains the parent id; corrupt naming records reject assembly.
 
 ### Interrupt result
 
 #### What the model sees
 
-`interrupt requested for agent <agent_id>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; an absent or settled target still renders the acceptance line.
+`interrupt requested for agent <address>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; a known settled target still renders the acceptance line. Named mode rejects unknown addresses; id mode retains an accepted no-op for absent targets.
 
 #### Token effect
 
@@ -153,11 +154,11 @@ Append-only; each result follows the reusable request prefix.
 
 #### What the model sees
 
-`message delivered to agent <id>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s subagent tree or rejected admission produces an errored result.
+`message delivered to agent <address>` on acceptance; canonical output carries the accepted `messageId`. A target outside the caller’s subagent tree or rejected admission produces an errored result.
 
 #### Token effect
 
-One short acknowledgement per call; replies arrive as separately addressed messages. Use ids from `list_agents` for follow-ups across the subagent tree.
+One short acknowledgement per call; replies arrive as separately addressed messages. Use addresses from `list_agents` for follow-ups across the subagent tree.
 
 #### KV Cache effect
 
@@ -167,7 +168,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<address> [<status>] — root agent`. Each continuable descendant follows as `<address> [<status>] parent=<address> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<address> [diagnostic: <reason>] parent=<address> depth=<n>`. Status describes turn activity, not task completion.
 
 #### Token effect
 

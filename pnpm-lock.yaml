@@ -442,6 +442,9 @@ importers:
       '@deepseek-ai/dsh-skill-office':
         specifier: workspace:*
         version: link:../../packages/skill/skill-office
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../packages/subagent/subagent-names
       '@deepseek-ai/dsh-terminal':
         specifier: workspace:*
         version: link:../../packages/terminal/terminal
@@ -2549,6 +2552,9 @@ importers:
       '@deepseek-ai/dsh-subagent-fork-in-process':
         specifier: workspace:*
         version: link:../../subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-names
       '@deepseek-ai/dsh-subagent-spawn-in-process':
         specifier: workspace:*
         version: link:../../subagent/subagent-spawn-in-process
@@ -10305,6 +10311,9 @@ importers:
       '@deepseek-ai/dsh-subagent-fork-in-process':
         specifier: workspace:*
         version: link:../../subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-names
       '@deepseek-ai/dsh-subagent-spawn-in-process':
         specifier: workspace:*
         version: link:../../subagent/subagent-spawn-in-process
@@ -10464,6 +10473,9 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-names
       '@deepseek-ai/dsh-tool-testkit':
         specifier: workspace:*
         version: link:../../test-support/tool-testkit
@@ -15682,6 +15694,52 @@ importers:
         specifier: workspace:*
         version: link:../subagent-spawn-in-process
 
+  packages/subagent/subagent-names:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:*
+        version: link:../../session/session-persistence
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../session/session-persistence-jsonl
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:*
+        version: link:../../session-query/session-query
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:*
+        version: link:../subagent
+      '@deepseek-ai/dsh-subagent-spawn-in-process':
+        specifier: workspace:*
+        version: link:../subagent-spawn-in-process
+      '@deepseek-ai/dsh-working-directory':
+        specifier: workspace:*
+        version: link:../../session/working-directory
+
   packages/subagent/subagent-spawn-in-process:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -15727,6 +15785,9 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../subagent
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../subagent-names
       '@deepseek-ai/dsh-subprocess-local':
         specifier: workspace:*
         version: link:../../subprocess/subprocess-local
@@ -15779,6 +15840,9 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../subagent
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../subagent-names
       '@deepseek-ai/dsh-subagent-spawn-in-process':
         specifier: workspace:*
         version: link:../subagent-spawn-in-process
@@ -15797,9 +15861,6 @@ importers:
 
   packages/subagent/tool-subagent-control:
     dependencies:
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:*
-        version: link:../../util/brand
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -15843,6 +15904,9 @@ importers:
       '@deepseek-ai/dsh-subagent-fork-in-process':
         specifier: workspace:*
         version: link:../subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../subagent-names
       '@deepseek-ai/dsh-subagent-spawn-in-process':
         specifier: workspace:*
         version: link:../subagent-spawn-in-process
@@ -16186,6 +16250,15 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../agent-loop-testkit
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:*
         version: link:../../compaction/compaction
@@ -16198,6 +16271,12 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-names
 
   packages/test-support/loader-smoke:
     dependencies:

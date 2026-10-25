@@ -9,8 +9,8 @@
   en: 1387c4505dde2faf
   zh: 48570fa1c13d6910
 /session-persistence-event-catalog/persistence-type-fingerprints:
-  en: 3e24343c4745793d
-  zh: 90f808fd6b79c5a3
+  en: 74b497d16862ed7b
+  zh: c70f43a287216d23
 /session-persistence-event-catalog/event-envelope:
   en: 56414ffd00cdc32a
   zh: 6dc11eb013e95e41
@@ -215,6 +215,12 @@
 /session-persistence-event-catalog/events/subagent/subagent-model-selection-policy-log-only:
   en: cdf085d18fae747a
   zh: 83cd5cf56fef4050
+/session-persistence-event-catalog/events/subagent-name:
+  en: 3fb34edd9191b767
+  zh: 3fb34edd9191b767
+/session-persistence-event-catalog/events/subagent-name/subagent-name-bound-log-only:
+  en: 6f236923579ebe96
+  zh: 7e84a057c561273f
 /session-persistence-event-catalog/events/system:
   en: 8cac41d2fb575975
   zh: 8cac41d2fb575975
@@ -774,8 +780,11 @@
   en: a47689c9fcc1045c
   zh: a47689c9fcc1045c
 /session-persistence-event-catalog/resolved-persistence-types/subagent:
-  en: 8f1cd1eb572c9fc8
-  zh: 8f1cd1eb572c9fc8
+  en: 9326e218063b2946
+  zh: 9326e218063b2946
+/session-persistence-event-catalog/resolved-persistence-types/subagent-name-bound:
+  en: 32d1380ad38e23c5
+  zh: 32d1380ad38e23c5
 /session-persistence-event-catalog/resolved-persistence-types/subagent-settled:
   en: 50f7e0fd99eeed4c
   zh: 50f7e0fd99eeed4c
@@ -1443,8 +1452,11 @@
   en: 43cf5cd666b591a0
   zh: 7c7a3011f8681f12
 /session-persistence-event-catalog/resolved-persistence-types/childcreatedat-childid-label-mode~6:
-  en: a1f188c9058cf621
-  zh: eb43c0f045fb9afb
+  en: 6b32845511022a16
+  zh: c0f010a64bb90d05
+/session-persistence-event-catalog/resolved-persistence-types/childid-name-version:
+  en: 2135ac5fa1d91490
+  zh: ca8dcc844a04b1ad
 /session-persistence-event-catalog/resolved-persistence-types/code-name-reason:
   en: 25df2af19bc9c46d
   zh: ebb6ecbeee25c9be
@@ -2079,8 +2091,11 @@
   en: 7fc233c4a569dae2
   zh: bc2b3fed4a397c00
 /session-persistence-event-catalog/resolved-persistence-types/type-step-start:
-  en: bb27281e17bb5e4f
-  zh: b53e3fc8d916118b
+  en: 3dfeb4cc5b0414de
+  zh: 201d930633e984f8
+/session-persistence-event-catalog/resolved-persistence-types/type-subagent-name-bound:
+  en: 81c372932460f332
+  zh: 4b8be2de62503fac
 /session-persistence-event-catalog/resolved-persistence-types/type-subagent-catalog:
   en: 0f697ddcde1625dd
   zh: 0dd87d2e108c5312

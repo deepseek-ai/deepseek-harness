@@ -15,38 +15,38 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package:
-  en: 7698f4d960499512
-  zh: 9df422eb5d1b5801
+  en: 9ef1122e013e7c0e
+  zh: 0268c1b5e48a7701
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/when-to-choose-it:
   en: c27d5457e1183675
   zh: 3c36d513e6400446
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/smallest-working-example:
-  en: 24b61d5204ef2adc
-  zh: 720620ab65464cb1
+  en: 2d034608b7213085
+  zh: 7b395feef826badb
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-the-model-can-do:
-  en: 4aee48f5debcc7d1
-  zh: 4eb148aa5e42398b
+  en: f4c91b124496d1a6
+  zh: a2149d32e11d634a
 /deepseek-ai-dsh-experimental-tool-agent-team/use-this-package/what-success-and-failure-look-like:
-  en: bf1eb0e693610f5b
-  zh: 2b29e5cf63623909
+  en: 35cb41b66c414afb
+  zh: 6f50731763cebe45
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation:
   en: 3952eb1d9de1f988
   zh: 789d51b88f41b710
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/design-philosophy:
-  en: 9b3218d9dd0019e4
-  zh: cefbcdbdb91648ab
+  en: 04791b530f48a523
+  zh: 4f36247ea732a364
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/source-map:
   en: 29ff96b23b25b13e
   zh: 7d2cdf9be86d1ed4
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 335596358368be0c
-  zh: 7db81d81c2d3cb4e
+  en: 68956deedf9885ea
+  zh: 1d29d7dc5a6a6866
 /deepseek-ai-dsh-experimental-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: ef8a0940f658d225
   zh: c13048bcda07d006
 /deepseek-ai-dsh-experimental-tool-agent-team/further-exploration:
-  en: 87d4f26b5d6e0361
-  zh: 1a012fa95808e8fa
+  en: ebe2e64c00ce92d2
+  zh: 74ca7e453b7d5ee2
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -69,8 +69,8 @@
   en: ed8642015d306d6d
   zh: 31496981d115ba40
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees:
-  en: f53d44b775dadb2f
-  zh: ff7d8144fc003d53
+  en: 03e9192abe6c2c8f
+  zh: 273f4238e40721cd
 /deepseek-ai-dsh-experimental-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/root-identity:
   en: 58d2b04f507baa5f
   zh: 773786c59605a154

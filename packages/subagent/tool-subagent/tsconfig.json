@@ -43,6 +43,9 @@
     },
     {
       "path": "../subagent"
+    },
+    {
+      "path": "../subagent-names"
     }
   ]
 }

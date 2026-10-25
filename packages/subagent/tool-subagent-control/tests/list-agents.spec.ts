@@ -11,6 +11,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import type { SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -68,6 +69,7 @@ async function setupWith(adapter: MockAdapter | GatedAdapter) {
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -121,7 +123,7 @@ describe('list_agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
+    expect(text(result)).toBe(`lead [inactive] — root agent\nlead/legacy:${started.childId} [inactive] parent=lead depth=1 — workflow child`)
   })
 
   it('omits external leaves without diagnostics', async () => {
@@ -132,7 +134,7 @@ describe('list_agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
+    expect(text(result)).toBe('lead [inactive] — root agent')
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -153,7 +155,7 @@ describe('list_agents', () => {
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
+    expect(text(result)).toBe('lead [inactive] — root agent')
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -194,9 +196,9 @@ describe('list_agents', () => {
         mode: 'continuable',
       },
     ] satisfies SubagentCatalogEntry[]
-    ctx.subagents.listDescendants = () => Promise.resolve(entries.map(entry => ({
+    ctx.subagentNames.listDescendants = () => Promise.resolve(entries.map(entry => ({
       ...entry, kind: 'child' as const, activity: 'inactive' as const, hasChildren: false,
-      parentId: parent.id, depth: 1,
+      parentId: parent.id, depth: 1, path: `legacy:${entry.id}`,
     })))
     const agents = new Map<string, {
       status: 'running' | 'idle'
@@ -208,17 +210,17 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
-      + `${started.childId} [inactive] parent=${parent.id} depth=1 — real child\n`
-      + `running-child [running] parent=${parent.id} depth=1 — still working\n`
-      + `waiting-child [inactive] parent=${parent.id} depth=1 — waiting on descendants`,
+      'lead [inactive] — root agent\n'
+      + `lead/legacy:${started.childId} [inactive] parent=lead depth=1 — real child\n`
+      + 'lead/legacy:running-child [running] parent=lead depth=1 — still working\n'
+      + 'lead/legacy:waiting-child [inactive] parent=lead depth=1 — waiting on descendants',
     )
   })
 
   it('always lists descendants and forwards the caller id and cancellation signal', async () => {
     const { ctx, parent } = await setup([])
     const signal = new AbortController().signal
-    const listDescendants = vi.spyOn(ctx.subagents, 'listDescendants').mockResolvedValue([])
+    const listDescendants = vi.spyOn(ctx.subagentNames, 'listDescendants').mockResolvedValue([])
 
     const result = await callTool(ctx, 'list_agents', {}, parent, signal)
 
@@ -242,9 +244,9 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
-      + `historical-one-shot [diagnostic: unavailable] parent=${parent.id} depth=1\n`
-      + `${started.childId} [inactive] parent=${parent.id} depth=1 — summarize the doc`,
+      'lead [inactive] — root agent\n'
+      + 'lead/legacy:historical-one-shot [diagnostic: unavailable] parent=lead depth=1\n'
+      + `lead/legacy:${started.childId} [inactive] parent=lead depth=1 — summarize the doc`,
     )
   })
 
@@ -276,6 +278,7 @@ describe('list_agents', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     const fiber = await ctx.plugin(tool)
     expect(ctx.tools.schemas().some(schema => schema.name === 'list_agents')).toBe(true)
     await fiber.dispose()
@@ -321,9 +324,9 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
-      + `${started.childId} [inactive] parent=${parent.id} depth=1 — waiting branch\n`
-      + `${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
+      'lead [inactive] — root agent\n'
+      + `lead/legacy:${started.childId} [inactive] parent=lead depth=1 — waiting branch\n`
+      + `lead/legacy:${started.childId}/legacy:${grandchild.childId} [running] parent=lead/legacy:${started.childId} depth=2 — nested leaf`,
     )
 
     expect(text(await callTool(ctx, 'list_agents', {}, ctx.agents.get(grandchild.childId)))).toBe(text(result))
@@ -337,10 +340,11 @@ describe('list_agents', () => {
     const { ctx, parent } = await setup([])
     // Deterministic service rows: a one-shot intermediate owning a continuable
     // leaf, plus a positioned diagnostic. The tool filters only the one-shot.
-    ctx.subagents.listDescendants = () => Promise.resolve([
+    ctx.subagentNames.listDescendants = () => Promise.resolve([
       {
         kind: 'child',
         id: SessionId('one-shot-mid'),
+        path: 'legacy:one-shot-mid',
         label: 'one-shot intermediate',
         mode: 'one-shot',
         activity: 'inactive',
@@ -351,6 +355,7 @@ describe('list_agents', () => {
       {
         kind: 'child',
         id: SessionId('deep-leaf'),
+        path: 'legacy:one-shot-mid/legacy:deep-leaf',
         label: 'deep leaf',
         mode: 'continuable',
         activity: 'inactive',
@@ -361,6 +366,7 @@ describe('list_agents', () => {
       {
         kind: 'diagnostic',
         id: SessionId('broken-node'),
+        path: 'legacy:broken-node',
         reason: 'unavailable',
         parentId: parent.id,
         depth: 1,
@@ -369,9 +375,9 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
-      + 'deep-leaf [inactive] parent=one-shot-mid depth=2 — deep leaf\n'
-      + `broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
+      'lead [inactive] — root agent\n'
+      + 'lead/legacy:one-shot-mid/legacy:deep-leaf [inactive] parent=lead/legacy:one-shot-mid depth=2 — deep leaf\n'
+      + 'lead/legacy:broken-node [diagnostic: unavailable] parent=lead depth=1',
     )
   })
 
@@ -399,11 +405,11 @@ describe('list_agents', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
     const expected = [
-      `${parent.id} [inactive] — root agent`,
-      `${alpha} [running] parent=${parent.id} depth=1 — alpha task`,
-      `${beta} [inactive] parent=${parent.id} depth=1 — beta task`,
-      `${gamma} [inactive] parent=${parent.id} depth=1 — gamma task`,
-      `${delta} [running] parent=${parent.id} depth=1 — delta task`,
+      'lead [inactive] — root agent',
+      `lead/legacy:${alpha} [running] parent=lead depth=1 — alpha task`,
+      `lead/legacy:${beta} [inactive] parent=lead depth=1 — beta task`,
+      `lead/legacy:${gamma} [inactive] parent=lead depth=1 — gamma task`,
+      `lead/legacy:${delta} [running] parent=lead depth=1 — delta task`,
     ].join('\n')
     for (const caller of [parent, ctx.agents.get(alpha), ctx.agents.get(delta)]) {
       const result = await callTool(ctx, 'list_agents', {}, caller)

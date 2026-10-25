@@ -2,7 +2,7 @@
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
  * wording. Every delegation starts a managed activation and returns its child
- * id; the subagent runtime owns result delivery and resource cleanup.
+ * address; the subagent runtime owns result delivery and resource cleanup.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -20,6 +20,7 @@ import {
   parentAgentOptionsForDelegation,
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import {
   assertAllowedModelSelection,
   hasConfiguredLlmSelection,
@@ -201,6 +202,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
+      const names = runtimeCtx.get('subagentNames')
+      const resultKey = names === undefined ? 'subagentId' : 'name'
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined
@@ -209,7 +212,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
+          + ` This tool starts an independently managed subagent and immediately returns its ${names === undefined ? 'id' : 'name'}. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.`
           + (subagentProvider.prepareContinuable !== undefined
             ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' This backend does not accept follow-up messages.')
@@ -218,6 +221,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
             : ''),
         parameters: {
+          ...names === undefined ? {} : { name: {
+            type: 'string' as const,
+            description: 'Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
+          } },
           cwd: {
             type: 'string',
             description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -260,10 +267,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             additionalProperties: false,
             properties: {
               kind: { type: 'string', required: true, const: 'activation' },
-              subagentId: { type: 'string', required: true },
+              [resultKey]: { type: 'string', required: true },
             },
           },
-          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+          render: (_args, value) => [{ type: 'text', text: `started subagent ${value[resultKey]}` }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -322,14 +329,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             ...maxDepth !== undefined ? { maxDepth } : {},
           }
 
-          const started = await runtimeCtx.subagents.startActivation({
+          const spec = {
             provider: config.provider,
             label: args.description,
             ...request,
             signal: exec.signal,
-            delivery: 'parent',
-          })
-          return { kind: 'activation' as const, subagentId: started.childId }
+            delivery: 'parent' as const,
+          }
+          if (names === undefined) {
+            const started = await runtimeCtx.subagents.startActivation(spec)
+            return { kind: 'activation' as const, subagentId: started.childId }
+          }
+          const started = await names.startActivation({ ...spec, ...args.name === undefined ? {} : { name: args.name } })
+          return { kind: 'activation' as const, name: started.name }
         },
       })
       const disposeTool = runtimeCtx.effect(() => {
@@ -343,6 +355,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
       mounted = { subagentProvider, definition, disposeTool }
     }
+
+    runtimeCtx.on('internal/service', (name) => {
+      if (name !== 'subagentNames' || mounted === undefined) return
+      const { subagentProvider } = mounted
+      mounted.disposeTool()
+      mounted = undefined
+      mount(subagentProvider)
+    })
 
     // Register listeners before checking presence so no synchronous change is missed.
     runtimeCtx.on('subagent/provider-added', (subagentProvider) => {

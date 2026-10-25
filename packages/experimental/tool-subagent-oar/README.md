@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns a child id, with a later completion notice delivered to the parent.
+Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns a full child path, with a later completion notice delivered to the parent.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Use one `subagent_oar` tool to choose a configured external agent for each stand
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this tool beside configured external providers, such as [OAR provider instances](../subagent-oar/README.md). Declare the tool and provider packages as dependencies of your composition.
+Mount this tool with `@deepseek-ai/dsh-subagent-names` beside configured external providers, such as [OAR provider instances](../subagent-oar/README.md). Declare the naming, tool, and provider packages as dependencies of your composition.
 
 ### When to choose it
 
@@ -33,9 +33,10 @@ Choose this tool when one model-facing entry should select among independent, on
 
 ### Minimal configuration
 
-With `oar-codex` and `oar-claude` already registered, mount this row in the composition:
+With the shared subagent services available and `oar-codex` and `oar-claude` already registered, mount the naming service once alongside this tool:
 
 ```yaml
+- name: '@deepseek-ai/dsh-subagent-names'
 - name: '@deepseek-ai/dsh-experimental-tool-subagent-oar'
   config:
     providers:
@@ -48,7 +49,7 @@ With `oar-codex` and `oar-claude` already registered, mount this row in the comp
 | `providers` | required | Nonempty map from model-visible runtime aliases to registered provider names |
 | `toolName` | `subagent_oar` | Tool name; every mounted instance needs a distinct name |
 
-The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns accepted fields and validation. A call requires `runtime`, `description`, and `prompt`; optional `cwd` selects the child directory, with relative paths resolved from the parent's current directory. The prompt must contain the context the child needs. Native installation, authentication, model settings, and permissions belong to the selected provider.
+The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns accepted fields and validation. A call requires `runtime`, `description`, and `prompt`; optional `name` selects a sibling segment under the [naming service rules](../../subagent/subagent-names/README.md); optional `cwd` selects the child directory, with relative paths resolved from the parent's current directory. The prompt must contain the context the child needs. Native installation, authentication, model settings, and permissions belong to the selected provider.
 
 -----
 
@@ -58,7 +59,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) builds the runtime enum from the configured aliases and registers one tool. Each call resolves its provider and starts an activation through the shared subagent service, which owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
+[`src/index.ts`](src/index.ts) builds the runtime enum from the configured aliases and registers one tool. Each call resolves its provider and starts a named activation through `ctx.subagentNames`, which wraps `ctx.subagents.startActivation()`. The subagent service owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
 
 </details>
 
@@ -68,6 +69,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 ## Further Exploration
 
 - [Subagent service](../../subagent/subagent/README.md) — provider registration and activation ownership.
+- [Subagent names](../../subagent/subagent-names/README.md) — sibling names and full-path results.
 - [OAR provider](../subagent-oar/README.md) — native runtime setup and permission configuration.
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — parent completion notices and retained results.
 
@@ -80,7 +82,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the tool returns `started subagent <id>`, where `<id>` identifies the child. The shared subagent service later supplies the child's answer or failure notice.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the tool returns `started subagent <name>`, where `<name>` is the full child path. The shared subagent service later supplies the child's answer or failure notice, identifying the external execution by its child id.
 
 #### Token effect
 

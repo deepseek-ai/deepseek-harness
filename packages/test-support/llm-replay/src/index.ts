@@ -10,10 +10,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { delimiter as pathDelimiter } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import {
   createSessionFormatCatalogWithChildren,
   SessionFormatUnsupportedMigrationError,
@@ -645,20 +647,33 @@ function materializeSessionTokens(entry: ReplayEntry, liveSessionIds: readonly (
   return replace(entry) as ReplayEntry
 }
 
-/** Learn a background child id from the stable tool-result text before that child reaches its first model call. */
-function inferStartedSubagents(
-  messages: GenerateOptions['messages'],
+/** Resolve background-child receipts to Session ids before those children reach their first model calls. */
+async function inferStartedSubagents(
+  ctx: Context,
+  options: GenerateOptions,
   liveSessionIds: (string | undefined)[],
-): void {
+): Promise<void> {
   const leaves: string[] = []
-  collectStrings(messages, leaves)
+  collectStrings(options.messages, leaves)
   for (const leaf of leaves) {
     for (const match of leaf.matchAll(/started subagent ([^\s"'<>]+)/g)) {
-      const id = match[1]
+      const receipt = match[1]
       /* v8 ignore next -- the fixed regular expression always has capture group 1. */
-      if (id === undefined || liveSessionIds.includes(id)) continue
-      const index = liveSessionIds.findIndex((value, candidate) => candidate > 0 && value === undefined)
+      if (receipt === undefined) continue
+      let index = liveSessionIds.findIndex((value, candidate) => candidate > 0 && value === undefined)
       if (index < 0) return
+      let id = receipt
+      if (receipt.startsWith('lead/')) {
+        const names = ctx.get('subagentNames')
+        const caller = options.sessionId === undefined ? undefined : ctx.get('agents')?.get(options.sessionId)
+        if (names === undefined || caller === undefined) {
+          throw new Error(`llm-replay: named subagent receipt ${receipt} requires subagentNames and its live calling Agent`)
+        }
+        id = await names.resolveName(caller, receipt, options.signal)
+        index = liveSessionIds.findIndex((value, candidate) => candidate > 0 && value === undefined)
+        if (index < 0) return
+      }
+      if (liveSessionIds.includes(id)) continue
       liveSessionIds[index] = id
     }
   }
@@ -1079,7 +1094,7 @@ export function installLlmReplay(ctx: Context, config: ReplayConfig): ReplayHand
           + `but its script has only ${boundState.entries.length}; re-record the scenario`,
         )
       }
-      inferStartedSubagents(options.messages, liveSessionIds)
+      await inferStartedSubagents(ctx, options, liveSessionIds)
       const resolved = resolveScriptedEntry(materializeSessionTokens(entry, liveSessionIds), options.messages)
       if (options.provider === 'deepseek-official' && providerAccepted(resolved)) {
         const extensions = ctx.get('deepseekLlmApiExtensions')

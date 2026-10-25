@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/subagent/subagent-names/README.md
+/:
+  en: ac134a941d5a4791
+  zh: 2e78de95e7019137
+/deepseek-ai-dsh-subagent-names:
+  en: 622989d6dcd8611a
+  zh: 6f0a3beb8e665332
+/deepseek-ai-dsh-subagent-names/summary:
+  en: dce79dec57405de4
+  zh: 322c420f5779baaa
+/deepseek-ai-dsh-subagent-names/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: c614dc45fe9577a5
+/deepseek-ai-dsh-subagent-names/use-this-package:
+  en: 15e2ab025baa3f2e
+  zh: eab7ed264c78a4e4
+/deepseek-ai-dsh-subagent-names/use-this-package/minimal-configuration:
+  en: 12034dd48a7e0c1b
+  zh: a84690d6356ffbd3
+/deepseek-ai-dsh-subagent-names/use-this-package/choosing-and-finding-names:
+  en: 3f36d041164a1e04
+  zh: 97418063aec0a08c
+/deepseek-ai-dsh-subagent-names/use-this-package/creation-and-failure:
+  en: f5ee74db9a397c18
+  zh: 3c9acad39ef8127d
+/deepseek-ai-dsh-subagent-names/understand-the-implementation:
+  en: 4b0f042e1512b764
+  zh: 65329202d8ce93b3
+/deepseek-ai-dsh-subagent-names/further-exploration:
+  en: 8509edc3d9146efa
+  zh: 09a6e3ebd1a75011
+/deepseek-ai-dsh-subagent-names/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity:
+  en: 22f7737ddb8bb24b
+  zh: 497b7190cf316a0d
+/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/what-the-model-sees:
+  en: d05d767ea412d8bd
+  zh: 031080dcce3211d6
+/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/what-the-model-sees/identity-message:
+  en: d032a01e1b229d26
+  zh: 05dd1a8dc54e9109
+/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/token-effect:
+  en: 63fa3c1fab95b75a
+  zh: 9805b73493dddb66
+/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/kv-cache-effect:
+  en: 248a19e7e4b73b1d
+  zh: 6d360af936b15bb5
+/deepseek-ai-dsh-subagent-names/known-limitations-and-deferred-work:
+  en: 9b06e33292c3ff6d
+  zh: 654cd7f7b49bfc2f
+/deepseek-ai-dsh-subagent-names/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

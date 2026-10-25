@@ -11,6 +11,8 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
+import { TestSessionQuery } from '../../subagent/tests/test-session-query.ts'
 import * as Spawn from '../src/index.ts'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 
@@ -40,6 +42,8 @@ export async function spawnHarness(workdir: string): Promise<Context> {
   await ctx.plugin(JsonlSessionPersistence, { root: join(workdir, '.sessions') })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(TestSessionQuery)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   // The model-facing subagent tool, bound to the spawn backend.
   await ctx.plugin(ToolSubagent, { provider: 'spawn' })
