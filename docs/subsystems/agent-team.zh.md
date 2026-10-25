@@ -2,7 +2,7 @@
 
 [English](agent-team.md) | 中文
 
-共享任务板、模型工具和 host 适配器共享的类型。[任务板等待决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/subagent/agent-team/src/types.ts`](../../packages/subagent/agent-team/src/types.ts) 中的持久化和客户端可见形式。
+共享任务板、模型工具和 host 适配器共享的类型。[任务板等待决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/team/agent-team/src/types.ts`](../../packages/team/agent-team/src/types.ts) 中的持久化和客户端可见形式。
 
 ## 身份与历史名册
 
@@ -110,7 +110,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/subagent/agent-team/README.zh.md)定义任务操作、等待信号和限制。
+`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/team/agent-team/README.zh.md)定义任务操作、等待信号和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -186,7 +186,7 @@ async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSi
 
 Types: [Agent](core.zh.md)
 
-Source: [`packages/subagent/agent-team/src/index.ts`](../../packages/subagent/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 
 <a id="team-events"></a>
 
@@ -209,5 +209,5 @@ Synchronize scoped consumers with the root's current Team selection, including r
 
 Types: [Agent](core.zh.md)
 
-Source: [`packages/subagent/agent-team/src/index.ts`](../../packages/subagent/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 <!-- END GENERATED cordis-surface -->

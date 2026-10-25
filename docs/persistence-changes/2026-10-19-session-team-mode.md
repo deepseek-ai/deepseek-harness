@@ -35,7 +35,7 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-Existing V4 logs remain readable. Without a selection, historical tasks enable Team; otherwise the deployment default applies. Readers predating team/mode refuse the unknown required discriminator, so they cannot silently restore the wrong mode. No existing payload or Session header version changes.
+Existing V4 logs remain readable. Without a selection, historical tasks enable Team; without historical tasks it remains disabled. Readers predating team/mode refuse the unknown required discriminator, so they cannot silently restore the wrong mode. Ordinary forks ignore inherited mode selections and start disabled. No existing payload or Session header version changes.
 
 <a id="verification"></a>
 ## Verification

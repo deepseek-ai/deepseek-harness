@@ -92,7 +92,7 @@ kind: "package-reference"
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -108,9 +108,9 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从领域服务逐步进入精确 schema 与设计背后的决策。
 
 - [agent-team 包](../agent-team/README.zh.md)——这些工具背后的 `ctx.agentTeams` 领域服务。
-- [Subagent 命名](../subagent-names/README.zh.md)——名字分配与完整路径查询。
+- [Subagent 命名](../../subagent/subagent-names/README.zh.md)——名字分配与完整路径查询。
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与服务 API。
-- [subagent 控制工具](../tool-subagent-control/README.zh.md) — 通信、列表、中断和收件箱等待。
+- [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md) — 通信、列表、中断和收件箱等待。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-agent-team)——模型接收的每个工具 schema。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——模型侧、scoping 与工具族决策。
 

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-新 Session 默认关闭 Team 模式。参见[会话模式升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)。在模型与推理等级菜单中打开**使用智能体团队**，或在根 Session 执行 `/team on`。`/team off` 移除整棵树的 Team 工具和提示词，同时保留任务与子代理。选择重启后仍有效；没有保存选择的历史任务板保持开启。
+新 Session（包括普通分叉）默认关闭 Team 模式。参见[会话模式升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)。在模型与推理等级菜单中打开**使用智能体团队**，或在根 Session 执行 `/team on`。`/team off` 移除整棵树的 Team 工具和提示词，同时保留任务与子代理。选择重启后仍有效；没有保存选择的历史任务板保持开启。
 
 模式切换无需等待排队中的任务修改即可生效。每项修改在开始时检查当前模式：已经进入执行的操作继续完成，仍在排队的操作若开始时 Team 仍关闭则被拒绝。重新开启允许后续操作继续。同步或保存失败时，已经追加的选择仍然有效；重试同一选择会重新同步工具并保存，不重复记录模式。
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 等待与中断
 
-标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../tool-subagent-control/README.zh.md#wait_agent)。Team 模式还会在任务板提交完成刷盘后结束正在进行的等待。等待结束后重新读取任务板。不在等待期间发生的变更不会保留，也不能使后续等待立即返回。
+标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。Team 模式还会在任务板提交完成刷盘后结束正在进行的等待。等待结束后重新读取任务板。不在等待期间发生的变更不会保留，也不能使后续等待立即返回。
 
 祖先通过标准 `interrupt_agent` 工具停止后代的当前轮次。中断保留尚未认领的排队消息，也不改变任务归属。
 
@@ -148,7 +148,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 ### 浏览器投影
 
-`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段保留在持久化投影状态中以供解码，不发送到浏览器，也不授予运行时权限。投影失败后，后续 Team 读取和修改均报错，不再追加 Team 事件。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段保留在持久化投影状态中以供解码，不发送到浏览器，也不授予运行时权限。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
 [Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签复用 Session 和目录数据，缺失时使用 id。
 
@@ -163,7 +163,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。
 - [tool-agent-team 包](../tool-agent-team/README.zh.md) — 任务工具和共享任务板策略。
-- [Subagent 运行时](../subagent/README.zh.md)——teammate 使用的可继续子级、消息、中断与生命周期。
+- [Subagent 运行时](../../subagent/subagent/README.zh.md)——teammate 使用的可继续子级、消息、中断与生命周期。
 - [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)——为何 teammate 是subagent，以及 Team 保留了什么。
 - [升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)——已移除的 Team 工具、服务方法与配置键的替代方式。
 

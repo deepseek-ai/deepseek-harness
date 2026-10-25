@@ -368,7 +368,9 @@ function CatalogRows({
                           return next
                         })
                       }}
-                      onKeyDown={(event) => { event.stopPropagation() }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
+                      }}
                     >
                       <span>{description}</span><IconChevronRightOutlineRegular size={12} />
                     </button>

@@ -92,7 +92,7 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../tool-subagent-control/README.md); the subagent runtime delivers final results.
+One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
@@ -108,9 +108,9 @@ Installation covers current live Agents and subscribes to `agent/created`, `suba
 Read these pages when the package-level contract is not enough. They move from the domain service to the exact schemas and the decisions behind the design.
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
-- [Subagent names](../subagent-names/README.md) — name allocation and full-path lookup.
+- [Subagent names](../../subagent/subagent-names/README.md) — name allocation and full-path lookup.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
-- [Subagent control tools](../tool-subagent-control/README.md) — messaging, listing, interruption, and inbox waiting.
+- [Subagent control tools](../../subagent/tool-subagent-control/README.md) — messaging, listing, interruption, and inbox waiting.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-agent-team) — every tool schema the model receives.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — model-facing, scoping, and tool-family decisions.
 

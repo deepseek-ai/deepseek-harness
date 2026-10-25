@@ -410,6 +410,22 @@ describe('candidates', () => {
       expect(rows[8]).toEqual({ name: 'deploy', description: 'third-party command', section: 'command:section.commands' })
     })
 
+    it.each([['en', en], ['zh', zh]] as const)('localizes the Team command and dispatches its alias under %s', async (_locale, dictionary) => {
+      const descriptor = { definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'), name: 'team', description: 'Host description', input: { hint: 'on|off' } }
+      const { fiber, source, warm } = await bench({
+        commands: () => Promise.resolve({ commands: [descriptor] }),
+        translate: (_namespace, key) => dictionary[key as CommandKey],
+      })
+      onTestFinished(() => fiber.dispose())
+      await warm(proj('s1'))
+      const [row] = await source.candidates(proj('s1'), req(''))
+      expect(row).toMatchObject({ label: dictionary['label.team'], description: dictionary['description.team'] })
+      expect(row?.icon).toBeDefined()
+      expect(menuPick(source, 'team', proj('s1'))).toHaveProperty('claim.token', `/${dictionary['token.team']} `)
+      expect(source.matchSpace!(proj('s1'), '/团队')).toHaveProperty('claim.name', 'team')
+      expect(source.matchSpace!(proj('s1'), '/team')).toHaveProperty('claim.name', 'team')
+    })
+
     it('a same-name override keeps its own presentation even when it copies the first-party description', async () => {
       const commands: CommandDescriptor[] = [{ name: 'goal', description: en['description.goal'], input: { hint: 'x' } }]
       const { source } = await bench({ commands: () => Promise.resolve({ commands }) })

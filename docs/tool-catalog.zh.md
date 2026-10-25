@@ -2423,7 +2423,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2444,7 +2444,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2483,7 +2483,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2550,7 +2550,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式后，会在标准子代理委派和控制工具之外增加任务板指导与必需的 Team 身份。
 

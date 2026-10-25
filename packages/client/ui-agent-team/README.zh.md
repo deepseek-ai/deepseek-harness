@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在根会话的模型与推理等级菜单中打开**使用智能体团队**。新 Session 默认关闭。开启后，通过根会话的 Subagent 入口同时查看上方的成员树和下方的共享任务。子会话保留子智能体导航，不显示任务板。尚无成员时也保留根会话入口。关闭后保留任务和子代理。开关等待保存后的投影更新，失败由菜单宿主提示。
+在根会话的模型与推理等级菜单中打开**使用智能体团队**。新 Session 默认关闭。开启后，通过根会话的 Subagent 入口同时查看上方的成员树和下方的共享任务。子会话保留子智能体导航，不显示任务板或 Team 开关，包括尚未发现子代理地址时。尚无成员时也保留根会话入口。关闭后保留任务和子代理。开关等待保存后的投影更新，失败由菜单宿主提示。
 
 [Web bundle](../../bundle/web-app/README.zh.md) 默认加载本包。Web Client loader 挂载 `/client` export；root Host export 不执行行为，本包也没有用户配置字段。
 
@@ -62,7 +62,7 @@ Subagent 目录负责共享面板的滚动、悬停、键盘和关闭交互。�
 ## 进一步探索
 
 - [Web bundle](../../bundle/web-app/README.zh.md)——默认挂载本 Client plugin。
-- [Agent Teams 服务](../../subagent/agent-team/README.zh.md) — 任务和投影行为的权威来源。
+- [Agent Teams 服务](../../team/agent-team/README.zh.md) — 任务和投影行为的权威来源。
 - [会话 UI](../ui-conversation/README.zh.md)——稳定 header slot 与 addressed-subagent 导航表层。
 
 -----

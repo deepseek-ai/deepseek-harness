@@ -113,8 +113,19 @@ describe('Agent Teams projection events', () => {
     expect(on.tasks).toBe(completed.tasks)
     expect(teamProjectionView(on)).toMatchObject({ enabled: true, tasks: [{ status: 'completed' }] })
     expect(teamProjectionView(on)).toBe(teamProjectionView(on))
-    expect(() => teamProjectionDefinition.apply(on, JSON.parse('{"type":"team/mode","data":{"enabled":"yes"}}') as SessionEvent)).toThrow()
+    const failed = teamProjectionDefinition.apply(on, JSON.parse('{"type":"team/mode","seq":4,"data":{"enabled":"yes"}}') as SessionEvent)
+    expect(teamProjectionView(failed)).toMatchObject({ enabled: true, failure: 'persisted Agent Teams team/mode payload is invalid' })
+    expect(failed.tasks).toBe(on.tasks)
     expect(() => teamProjectionDefinition.stateSchema.parse({ ...on, enabled: 'yes' })).toThrow()
+  })
+
+  it('starts a fork with Team disabled and applies only its own mode selection', () => {
+    const inherited = event('team/mode', { enabled: true }, SessionSeq(0))
+    const fork = project(SessionId('fork'), [inherited], 1)
+    expect(teamProjectionView(fork)).toEqual({ enabled: false, tasks: [] })
+    const restored = teamProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(fork)))
+    const enabled = teamProjectionDefinition.apply(restored, event('team/mode', { enabled: true }, SessionSeq(1)))
+    expect(teamProjectionView(enabled).enabled).toBe(true)
   })
 
   it('rebuilds version-4 checkpoints with the saved mode and historical tasks', async () => {
@@ -135,6 +146,44 @@ describe('Agent Teams projection events', () => {
       const state = teamProjectionDefinition.stateSchema.parse(restored.checkpoint['agentTeam']!.val)
       expect(teamProjectionView(state)).toMatchObject({ enabled: records.length === 1, tasks: [{ id: 'task-1' }] })
     }
+  })
+
+  it('rebuilds a version-5 fork checkpoint without inheriting its mode', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.sessionProjections.register(teamProjectionDefinition)
+    const forkId = SessionId('fork')
+    const records = [event('team/mode', { enabled: true }, SessionSeq(0))]
+    const restored = ctx.sessionProjections.restore(
+      { agentTeam: { ver: 5, seq: 0, val: {
+        enabled: true, id: TeamId(forkId), members: [], tasks: [], messages: [], delivered: [], nextTaskNumber: 1,
+      } } },
+      records, SessionLogOffset(0),
+      { version: SESSION_FORMAT_VERSION, id: forkId, createdAt: 0, isSeeded: true },
+      SessionLogOffset(1),
+    )
+    const state = teamProjectionDefinition.stateSchema.parse(restored.checkpoint['agentTeam']!.val)
+    expect(teamProjectionView(state)).toEqual({ enabled: false, tasks: [] })
+  })
+
+  it('restores a malformed mode record as a visible failure without aborting Session recovery', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.sessionProjections.register(teamProjectionDefinition)
+    const records = [
+      event('team/mode', { enabled: true }, SessionSeq(0)),
+      JSON.parse('{"type":"team/mode","seq":1,"time":1,"data":{"enabled":"yes"}}') as SessionEvent,
+    ]
+    const restored = ctx.sessionProjections.restore({}, records, SessionLogOffset(0),
+      { version: SESSION_FORMAT_VERSION, id: ROOT, createdAt: 0, isSeeded: false }, SessionLogOffset(0))
+    const state = teamProjectionDefinition.stateSchema.parse(restored.checkpoint['agentTeam']!.val)
+    expect(teamProjectionView(state)).toEqual({ enabled: true, tasks: [], failure: 'persisted Agent Teams team/mode payload is invalid' })
+    const disabled = teamProjectionDefinition.apply(state, event('team/mode', { enabled: false }, SessionSeq(2)))
+    expect(teamProjectionView(disabled)).toMatchObject({ enabled: false, failure: state.failure })
+    const invalidAgain = teamProjectionDefinition.apply(disabled, records[1]!)
+    expect(invalidAgain.failure).toBe(state.failure)
   })
 
   it('allows disabling tools after a task-board failure without discarding its error', () => {

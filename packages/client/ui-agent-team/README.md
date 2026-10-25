@@ -25,7 +25,7 @@ This package displays shared tasks below the Subagent tree in one header panel. 
 <a id="use-this-package"></a>
 ## Use this package
 
-In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the root conversation’s Subagent control to see members above shared tasks. Child conversations keep subagent navigation without a task board. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
+In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the root conversation’s Subagent control to see members above shared tasks. Child conversations keep subagent navigation without a task board or Team switch, including before their subagent address is discovered. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
 
 The [Web bundle](../../bundle/web-app/README.md) loads this package by default. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 
@@ -62,7 +62,7 @@ The Subagent catalog owns the shared panel, scrolling, hover, keyboard, and dism
 ## Further Exploration
 
 - [Web bundle](../../bundle/web-app/README.md) — mounts the Client plugin by default.
-- [Agent Teams service](../../subagent/agent-team/README.md) — authoritative task and projection behavior.
+- [Agent Teams service](../../team/agent-team/README.md) — authoritative task and projection behavior.
 - [Conversation UI](../ui-conversation/README.md) — the stable header slot and addressed-subagent navigation surface.
 
 -----

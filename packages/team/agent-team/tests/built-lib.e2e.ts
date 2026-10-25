@@ -12,13 +12,13 @@ const artifact = (path: string): string => join(root, path)
 const artifactUrl = (path: string): string => pathToFileURL(artifact(path)).href
 
 const requiredArtifacts = [
-  'packages/subagent/agent-team/lib/index.js',
+  'packages/team/agent-team/lib/index.js',
 ].every(path => existsSync(artifact(path)))
 
 describe.skipIf(!requiredArtifacts)('Agent Teams built LIB service', () => {
   it('loads the Host service under plain Node', async () => {
     const urls = {
-      host: artifactUrl('packages/subagent/agent-team/lib/index.js'),
+      host: artifactUrl('packages/team/agent-team/lib/index.js'),
     }
     const script = `
       const host = await import(${JSON.stringify(urls.host)})

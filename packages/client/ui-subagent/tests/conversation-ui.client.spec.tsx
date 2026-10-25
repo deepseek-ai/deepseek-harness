@@ -187,12 +187,15 @@ describe('SubagentHeaderLineage', () => {
     expect(toggle.textContent).toBe(description)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.keyDown(toggle, { key: 'Enter' })
+    fireEvent.keyDown(toggle, { key: ' ' })
     expect(input.openChild).not.toHaveBeenCalled()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(input.openChild).not.toHaveBeenCalled()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.keyDown(toggle, { key: 'Escape' })
+    expect(screen.queryByRole('treeitem')).toBeNull()
   })
 
   it('keeps the shared panel reachable with no children while Team mode is enabled', () => {

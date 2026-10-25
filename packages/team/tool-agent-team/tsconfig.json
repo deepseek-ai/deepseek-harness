@@ -14,8 +14,8 @@
     { "path": "../../core/session" },
     { "path": "../../core/system-prompt" },
     { "path": "../../core/tools" },
-    { "path": "../subagent" },
-    { "path": "../subagent-names" },
+    { "path": "../../subagent/subagent" },
+    { "path": "../../subagent/subagent-names" },
     { "path": "../agent-team" }
   ]
 }

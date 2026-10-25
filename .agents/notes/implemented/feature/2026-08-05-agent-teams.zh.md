@@ -36,7 +36,7 @@ Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍�
 
 历史 Lead-log mailbox 仍是可读格式：queued 与 delivered 记录保留稳定身份与发送者，Team payload 校验仍适用于它们。Team 从不投递或确认这些记录；member 之间的消息通过 subagent 操作进入目标 Agent inbox（[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)）。
 
-事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/subagent/agent-team/README.zh.md)拥有恢复行为的说明。
+事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/team/agent-team/README.zh.md)拥有恢复行为的说明。
 
 member 消息使用 subagent 的 `send_message` 操作，它对 running、idle 和 cold target 使用 Steer，并返回 inbox 接收结果。
 
@@ -78,7 +78,7 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及提交后等待信号。普通 subagent 测试覆盖收件箱等待；录制 Team 组合覆盖身份、任务策略和工具。
 
-收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/subagent/tool-agent-team/README.zh.md)。
+收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/team/tool-agent-team/README.zh.md)。
 
 ## Consequences
 

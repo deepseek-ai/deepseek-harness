@@ -39,7 +39,7 @@ The optional `searchMode` defaults to `'substring'`, matching `label` and `detai
 
 ### Built-in row faces
 
-First-party command definitions carry stable `definitionId` values. The client selects their localized titles, descriptions, icons, and input spellings by identity; changing a Host description cannot change that selection. Same-name overrides without the matching identity keep their own copy and receive no first-party aliases. Chinese and English spellings resolve through the same effective Session catalog in every locale, preserving the typed spelling in the draft and submitting the registered Host name. Contributions supply their own `label`, `description`, and `icon`, read on every candidate pass. Empty-query section order follows names, with unlisted rows closing Commands.
+First-party command definitions carry stable `definitionId` values. The client selects their localized titles, descriptions, icons, and input spellings by identity; changing a Host description cannot change that selection. Same-name overrides without the matching identity keep their own copy and receive no first-party aliases. `/team` has a localized Team label and description; `/团队` selects the same Host command. Chinese and English spellings resolve through the same effective Session catalog in every locale, preserving the typed spelling in the draft and submitting the registered Host name. Contributions supply their own `label`, `description`, and `icon`, read on every candidate pass. Empty-query section order follows names, with unlisted rows closing Commands.
 
 ### Attachment-carrying submissions
 

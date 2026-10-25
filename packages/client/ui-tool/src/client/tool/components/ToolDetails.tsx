@@ -82,7 +82,9 @@ function DetailItem({ item, compact, t, onOpenFile }: { item: ToolDetailItem; co
           type="button"
           className={css.subtitleToggle}
           aria-expanded={expanded}
-          aria-label={`${t(expanded ? 'collapse' : 'expand')} ${item.title ?? ''}`}
+          aria-label={item.title === undefined
+            ? t(expanded ? 'collapse' : 'expand')
+            : t(expanded ? 'subtitle.collapse' : 'subtitle.expand', { name: item.title })}
           onClick={() => { setExpanded(value => !value) }}
         >
           <span>{item.subtitle}</span><IconChevronRightOutlineRegular size={12} />

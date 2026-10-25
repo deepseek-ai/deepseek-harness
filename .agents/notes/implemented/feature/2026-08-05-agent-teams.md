@@ -36,7 +36,7 @@ Teammate creation and cold resume belong to the subagent runtime ([subagent team
 
 The historical Lead-log mailbox remains a readable format: queued and delivered records keep their stable identity and sender, and Team payload validation still applies to them. Team never delivers or acknowledges them; messages between members use the target Agent inbox through the subagent operation ([subagents](../architecture/2026-10-15-agent-teams-as-subagents.md)).
 
-Unknown mailbox content stays as decoded JSON during event projection and checkpoint admission. Validation inspects its type without rebuilding its fields, because generic object parsing can omit a valid own `__proto__` key. Locally declared content variants undergo structural validation; opaque plugin fields do not gain Team semantics. Cache invalidation is necessary because parser correction alone cannot recover keys omitted from cached state. The [Team documentation](../../../../packages/subagent/agent-team/README.md) owns the restore behavior.
+Unknown mailbox content stays as decoded JSON during event projection and checkpoint admission. Validation inspects its type without rebuilding its fields, because generic object parsing can omit a valid own `__proto__` key. Locally declared content variants undergo structural validation; opaque plugin fields do not gain Team semantics. Cache invalidation is necessary because parser correction alone cannot recover keys omitted from cached state. The [Team documentation](../../../../packages/team/agent-team/README.md) owns the restore behavior.
 
 Member messages use the subagent `send_message` operation, which steers running, idle, and cold targets and returns inbox acceptance.
 
@@ -78,7 +78,7 @@ Publication requires `apply` to return a new state per applied event and replace
 
 Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and post-commit wait signals. Ordinary subagent tests cover inbox waiting; recorded Team compositions cover identity, task policy, and tools.
 
-Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/subagent/tool-agent-team/README.md).
+Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/team/tool-agent-team/README.md).
 
 ## Consequences
 

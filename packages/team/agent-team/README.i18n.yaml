@@ -1,13 +1,13 @@
 # Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write packages/subagent/agent-team/README.md
+#   pnpm run verify-translation-pairing --write packages/team/agent-team/README.md
 /:
   en: 03bfe939e62d80aa
   zh: 9db4ba086a4ed6f4
 /deepseek-ai-dsh-agent-team:
-  en: 80b485e2799df851
-  zh: 31770395bc932701
+  en: 7b6634fba007904f
+  zh: ba0ef9d7e8802685
 /deepseek-ai-dsh-agent-team/summary:
   en: 308b7d3adf3dc2ea
   zh: 08406c822fbc8b4b
@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent-team/use-this-package:
-  en: 2da4bb22ca2f9b2b
-  zh: dde370adce784943
+  en: 6d2262849d2bdd62
+  zh: f2d4d39c0fcf23a9
 /deepseek-ai-dsh-agent-team/use-this-package/when-to-choose-it:
   en: 41e193fafb0b96f9
   zh: 3265330fe77b3707
@@ -69,11 +69,11 @@
   en: a8baf51f2fcd6d49
   zh: 357c8db36823fe0e
 /deepseek-ai-dsh-agent-team/understand-the-implementation/browser-projection:
-  en: 40bbc604de932447
-  zh: 19dcd492551792c5
+  en: 7a319252488b33ad
+  zh: 672d7230b051de2a
 /deepseek-ai-dsh-agent-team/further-exploration:
-  en: 84b5ec5de64726da
-  zh: 25305f7dc054336f
+  en: 60d969ec526f5556
+  zh: ed4f813006f86215
 /deepseek-ai-dsh-agent-team/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90

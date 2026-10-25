@@ -553,7 +553,7 @@ importers:
         version: link:../../packages/test-support/agent-loop-testkit
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../packages/subagent/agent-team
+        version: link:../../packages/team/agent-team
       '@deepseek-ai/dsh-attachment-local':
         specifier: workspace:*
         version: link:../../packages/attachment/attachment-local
@@ -664,7 +664,7 @@ importers:
         version: link:../../packages/core/system-prompt
       '@deepseek-ai/dsh-tool-agent-team':
         specifier: workspace:*
-        version: link:../../packages/subagent/tool-agent-team
+        version: link:../../packages/team/tool-agent-team
       '@deepseek-ai/dsh-tool-ralph':
         specifier: workspace:*
         version: link:../../packages/experimental/tool-ralph
@@ -944,7 +944,7 @@ importers:
         version: link:../../vendor/group
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../packages/subagent/agent-team
+        version: link:../../packages/team/agent-team
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:*
         version: link:../../packages/client/modules
@@ -2371,7 +2371,7 @@ importers:
         version: link:../../core/agent-loop
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../subagent/agent-team
+        version: link:../../team/agent-team
       '@deepseek-ai/dsh-api-gateway':
         specifier: workspace:*
         version: link:../../api/gateway
@@ -2569,7 +2569,7 @@ importers:
         version: link:../../llm/token-meter
       '@deepseek-ai/dsh-tool-agent-team':
         specifier: workspace:*
-        version: link:../../subagent/tool-agent-team
+        version: link:../../team/tool-agent-team
       '@deepseek-ai/dsh-tool-bash':
         specifier: workspace:*
         version: link:../../shell/tool-bash
@@ -3702,7 +3702,7 @@ importers:
         version: link:../../core/agent
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../subagent/agent-team
+        version: link:../../team/agent-team
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:*
         version: link:../../api/remotes
@@ -6495,7 +6495,7 @@ importers:
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../subagent/agent-team
+        version: link:../../team/agent-team
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:*
         version: link:../../api/session-controller
@@ -15178,61 +15178,6 @@ importers:
         specifier: workspace:*
         version: link:../storage
 
-  packages/subagent/agent-team:
-    dependencies:
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:*
-        version: link:../../util/brand
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../core/agent
-      '@deepseek-ai/dsh-agent-loop':
-        specifier: workspace:*
-        version: link:../../core/agent-loop
-      '@deepseek-ai/dsh-agent-loop-testkit':
-        specifier: workspace:*
-        version: link:../../test-support/agent-loop-testkit
-      '@deepseek-ai/dsh-commands':
-        specifier: workspace:*
-        version: link:../../interaction/commands
-      '@deepseek-ai/dsh-llm':
-        specifier: workspace:*
-        version: link:../../llm/llm
-      '@deepseek-ai/dsh-session':
-        specifier: workspace:*
-        version: link:../../core/session
-      '@deepseek-ai/dsh-session-persistence':
-        specifier: workspace:*
-        version: link:../../session/session-persistence
-      '@deepseek-ai/dsh-session-persistence-jsonl':
-        specifier: workspace:*
-        version: link:../../session/session-persistence-jsonl
-      '@deepseek-ai/dsh-session-projection':
-        specifier: workspace:*
-        version: link:../../session/session-projection
-      '@deepseek-ai/dsh-session-query':
-        specifier: workspace:*
-        version: link:../../session-query/session-query
-      '@deepseek-ai/dsh-subagent':
-        specifier: workspace:*
-        version: link:../subagent
-      '@deepseek-ai/dsh-subagent-fork-in-process':
-        specifier: workspace:*
-        version: link:../subagent-fork-in-process
-      '@deepseek-ai/dsh-subagent-spawn-in-process':
-        specifier: workspace:*
-        version: link:../subagent-spawn-in-process
-
   packages/subagent/subagent:
     dependencies:
       '@deepseek-ai/dsh-brand':
@@ -15748,73 +15693,6 @@ importers:
         specifier: workspace:*
         version: link:../tool-subagent
 
-  packages/subagent/tool-agent-team:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-agent':
-        specifier: workspace:*
-        version: link:../../core/agent
-      '@deepseek-ai/dsh-agent-loop':
-        specifier: workspace:*
-        version: link:../../core/agent-loop
-      '@deepseek-ai/dsh-agent-loop-testkit':
-        specifier: workspace:*
-        version: link:../../test-support/agent-loop-testkit
-      '@deepseek-ai/dsh-agent-team':
-        specifier: workspace:*
-        version: link:../agent-team
-      '@deepseek-ai/dsh-llm':
-        specifier: workspace:*
-        version: link:../../llm/llm
-      '@deepseek-ai/dsh-llm-deepseek':
-        specifier: workspace:*
-        version: link:../../llm/llm-deepseek
-      '@deepseek-ai/dsh-scope':
-        specifier: workspace:*
-        version: link:../../core/scope
-      '@deepseek-ai/dsh-session':
-        specifier: workspace:*
-        version: link:../../core/session
-      '@deepseek-ai/dsh-session-persistence-jsonl':
-        specifier: workspace:*
-        version: link:../../session/session-persistence-jsonl
-      '@deepseek-ai/dsh-session-projection':
-        specifier: workspace:*
-        version: link:../../session/session-projection
-      '@deepseek-ai/dsh-session-query':
-        specifier: workspace:*
-        version: link:../../session-query/session-query
-      '@deepseek-ai/dsh-subagent':
-        specifier: workspace:*
-        version: link:../subagent
-      '@deepseek-ai/dsh-subagent-fork-in-process':
-        specifier: workspace:*
-        version: link:../subagent-fork-in-process
-      '@deepseek-ai/dsh-subagent-names':
-        specifier: workspace:*
-        version: link:../subagent-names
-      '@deepseek-ai/dsh-subagent-spawn-in-process':
-        specifier: workspace:*
-        version: link:../subagent-spawn-in-process
-      '@deepseek-ai/dsh-system-prompt':
-        specifier: workspace:*
-        version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-tool-subagent-control':
-        specifier: workspace:*
-        version: link:../tool-subagent-control
-      '@deepseek-ai/dsh-tool-testkit':
-        specifier: workspace:*
-        version: link:../../test-support/tool-testkit
-      '@deepseek-ai/dsh-tools':
-        specifier: workspace:*
-        version: link:../../core/tools
-
   packages/subagent/tool-subagent:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -15989,6 +15867,128 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+
+  packages/team/agent-team:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:*
+        version: link:../../interaction/commands
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:*
+        version: link:../../session/session-persistence
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../session/session-persistence-jsonl
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:*
+        version: link:../../session-query/session-query
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-subagent-fork-in-process':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-spawn-in-process':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-spawn-in-process
+
+  packages/team/tool-agent-team:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-loop-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-agent-team':
+        specifier: workspace:*
+        version: link:../agent-team
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-llm-deepseek':
+        specifier: workspace:*
+        version: link:../../llm/llm-deepseek
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:*
+        version: link:../../core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../session/session-persistence-jsonl
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-session-query':
+        specifier: workspace:*
+        version: link:../../session-query/session-query
+      '@deepseek-ai/dsh-subagent':
+        specifier: workspace:*
+        version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-subagent-fork-in-process':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-fork-in-process
+      '@deepseek-ai/dsh-subagent-names':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-names
+      '@deepseek-ai/dsh-subagent-spawn-in-process':
+        specifier: workspace:*
+        version: link:../../subagent/subagent-spawn-in-process
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tool-subagent-control':
+        specifier: workspace:*
+        version: link:../../subagent/tool-subagent-control
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/tool-testkit
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
 
   packages/telemetry/otel:
     dependencies:
@@ -17157,7 +17157,7 @@ importers:
         version: link:../../packages/preset/agent-preset-registry
       '@deepseek-ai/dsh-agent-team':
         specifier: workspace:*
-        version: link:../../packages/subagent/agent-team
+        version: link:../../packages/team/agent-team
       '@deepseek-ai/dsh-agent-tool-presentation':
         specifier: workspace:*
         version: link:../../packages/core/agent-tool-presentation
@@ -17469,7 +17469,7 @@ importers:
         version: link:../../packages/llm/token-meter
       '@deepseek-ai/dsh-tool-agent-team':
         specifier: workspace:*
-        version: link:../../packages/subagent/tool-agent-team
+        version: link:../../packages/team/tool-agent-team
       '@deepseek-ai/dsh-tool-ask-user':
         specifier: workspace:*
         version: link:../../packages/interaction/tool-ask-user

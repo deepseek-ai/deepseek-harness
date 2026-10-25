@@ -998,7 +998,7 @@ describe('Node 24 lane ownership', () => {
         'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
-        'packages/subagent/agent-team/tests/built-lib.e2e.ts',
+        'packages/team/agent-team/tests/built-lib.e2e.ts',
       ]),
     )
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({

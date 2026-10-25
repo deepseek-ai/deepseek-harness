@@ -23,7 +23,15 @@ export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options
  * @param props - Session projection, menu state, localized copy, and selection command.
  * @returns the Team switch when the capability projection is available.
  */
-export function TeamModeToggle({ useProjection, locked, reportFailure, selectTeamMode, t }: TeamModeToggleProps) {
+export function TeamModeToggle(props: TeamModeToggleProps) {
+  const addressedChild = props.useSession(snapshot => snapshot.subagent !== null)
+  const listedChild = props.useSessions(state => state.byId[props.sessionId]?.origin === 'subagent')
+  if (addressedChild || listedChild) return null
+  return <RootTeamModeToggle {...props} />
+}
+
+/** Read and change the selection only for root Sessions. */
+function RootTeamModeToggle({ useProjection, locked, reportFailure, selectTeamMode, t }: TeamModeToggleProps) {
   const mode = useProjection('agentTeam')
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null

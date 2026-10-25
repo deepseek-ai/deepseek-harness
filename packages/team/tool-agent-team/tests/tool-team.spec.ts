@@ -324,6 +324,8 @@ describe('dsh-tool-team', () => {
       agentOptions: { provider: 'mock', model: 'mock' },
       signal: SIGNAL,
     })
+    expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(false)
+    await ctx.agentTeams.setEnabled(handle.agent, true)
     await runTurn(handle.agent, 'Continue independently')
     const parentRequest = serializeRequest(adapter.requests[0]!)
     const childRequest = serializeRequest(adapter.requests[1]!)
@@ -887,7 +889,7 @@ describe('dsh-tool-team', () => {
     expect(() => ctx.agentTeams.listTasks(child)).toThrow('enable Agent Teams')
     await ctx.agentTeams.setEnabled(lead, true)
     expect(ctx.agentTeams.listTasks(lead)).toEqual([task])
-    await ctx.subagents.interruptByUser(child.id)
+    ctx.subagents.interruptByUser(child.id)
     await waitNoAgent(ctx, child.id)
     await other.dispose()
   })

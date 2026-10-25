@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent, SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionEventMap, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {
   TeamId,
@@ -142,10 +142,12 @@ export interface TeamState {
 /**
  * Construct empty state for one Team identity.
  * @param rootId - root Session identity.
+ * @param inheritedEventCount - inherited prefix excluded from the new root's Team mode; defaults to zero.
  * @returns empty Team state.
  */
-export function emptyTeamState(rootId: SessionId): TeamProjectionState {
+export function emptyTeamState(rootId: SessionId, inheritedEventCount = 0): TeamProjectionState {
   return {
+    inheritedEventCount,
     id: toTeamId(rootId),
     members: [],
     tasks: [],
@@ -157,12 +159,14 @@ export function emptyTeamState(rootId: SessionId): TeamProjectionState {
 
 /** Checkpoint-safe state for the Team owned by the projected Session. */
 export interface TeamProjectionState extends TeamState {
+  readonly inheritedEventCount: number
   readonly failure?: string
 }
 
 const teamModeSchema = z.object({ enabled: z.boolean() }).strict()
 
 const teamProjectionEntrySchema = z.object({
+  inheritedEventCount: nonNegativeSafeInteger,
   enabled: z.boolean().optional(),
   id: teamIdSchema,
   members: z.array(teamMemberSnapshotSchema),
@@ -196,7 +200,7 @@ export function isTeamEvent(event: SessionEvent): event is TeamSessionEvent {
 }
 
 /** Decode one persisted Team value and retain the schema failure as its cause. */
-function parsePersisted<T>(type: TeamEventType, schema: z.ZodType<T>, value: unknown): T {
+function parsePersisted<T>(type: TeamEventType | 'team/mode', schema: z.ZodType<T>, value: unknown): T {
   try {
     return schema.parse(value)
   } catch (error: unknown) {
@@ -222,10 +226,12 @@ function parseCurrentTeamEvent(event: TeamSessionEvent): TeamSessionEvent {
 }
 
 function applyProjectionEvent(state: TeamProjectionState, event: SessionEvent): TeamProjectionState {
-  if (event.type === 'team/mode') return { ...state, ...teamModeSchema.parse(event.data) }
-  if (state.failure !== undefined) return state
-  if (!isTeamEvent(event)) return state
   try {
+    if (event.type === 'team/mode') {
+      if (event.seq < state.inheritedEventCount) return state
+      return { ...state, ...parsePersisted(event.type, teamModeSchema, event.data) }
+    }
+    if (state.failure !== undefined || !isTeamEvent(event)) return state
     const selector = parsePersisted(event.type, teamEventSelectorSchema, event.data)
     if (selector.teamId !== state.id) return state
     if (selector.version !== 2) {
@@ -234,7 +240,7 @@ function applyProjectionEvent(state: TeamProjectionState, event: SessionEvent): 
     return applyCurrentTeamEvent(state, parseCurrentTeamEvent(event))
   } catch (error: unknown) {
     /* v8 ignore next -- the owned Team transition throws Error instances. */
-    return { ...state, failure: error instanceof Error ? error.message : String(error) }
+    return { ...state, failure: state.failure ?? (error instanceof Error ? error.message : String(error)) }
   }
 }
 
@@ -365,9 +371,9 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 5,
+  stateVersion: 6,
   stateSchema: teamProjectionEntrySchema,
-  init: (header, _inheritedEventCount) => emptyTeamState(header.id),
+  init: (header, inheritedEventCount: SessionLogOffset) => emptyTeamState(header.id, inheritedEventCount),
   apply: applyProjectionEvent,
   wire: { viewSchema: teamProjectionSchema, view: teamProjectionView },
 } satisfies ProjectionDefinition<'agentTeam', TeamProjectionState>

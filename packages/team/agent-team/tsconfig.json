@@ -14,7 +14,7 @@
     { "path": "../../llm/llm" },
     { "path": "../../core/session" },
     { "path": "../../core/agent" },
-    { "path": "../subagent" },
+    { "path": "../../subagent/subagent" },
     { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" }
   ]

@@ -118,13 +118,20 @@ describe('DetailsRow', () => {
     const model = detailsCardModel(block, t, 'en')!
     render(<ToolDetails model={model} t={t} />)
     const name = screen.getByText('lead/tree-checker')
-    const toggle = screen.getByRole('button', { name: 'Expand lead/tree-checker' })
+    const toggle = screen.getByRole('button', { name: 'Expand description for lead/tree-checker' })
     expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(toggle.textContent).toBe(description)
     fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Collapse lead/tree-checker' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Collapse description for lead/tree-checker' }).getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('uses an unqualified accessible name when a compact description has no title', () => {
+    render(<ToolDetails model={{ compact: true, items: [{ subtitle: 'Details', fields: [] }] }} t={t} />)
+    const toggle = screen.getByRole('button', { name: 'Expand' })
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBe(toggle)
   })
 
   it('expands fields with the keyboard and keeps Inspect available', () => {

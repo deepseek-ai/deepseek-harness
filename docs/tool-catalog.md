@@ -2417,7 +2417,7 @@ Create one unowned pending task on the shared Team task board.
 }
 ```
 
-Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2438,7 +2438,7 @@ Read the complete latest value of one shared task before changing or executing i
 }
 ```
 
-Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2477,7 +2477,7 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
 }
 ```
 
-Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2544,7 +2544,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
 }
 ```
 
-Source: [`packages/subagent/tool-agent-team/src/index.ts`](../packages/subagent/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance and required Team identity alongside standard subagent delegation and control tools.
 

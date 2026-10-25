@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-New Sessions default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the model and reasoning menu, or run `/team on` in the root Session. `/team off` removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled.
+New Sessions, including ordinary forks, default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the model and reasoning menu, or run `/team on` in the root Session. `/team off` removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled.
 
 Mode changes take effect without waiting for queued task mutations. Each mutation checks the current mode when it starts: an admitted operation finishes, while queued work is rejected if Team is still off when it starts. Enabling again permits subsequent operations. A failed synchronization or save leaves an appended selection active; retrying the same selection synchronizes tools and saves without another mode record.
 
@@ -75,7 +75,7 @@ File hints produce warnings when two in-progress tasks plan to touch overlapping
 
 ### Waiting and interruption
 
-The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../tool-subagent-control/README.md#wait_agent). Team mode also ends an active wait when a task-board commit finishes flushing. Re-read the board after waiting. A change outside an active wait is not retained and cannot make a later wait return immediately.
+The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Team mode also ends an active wait when a task-board commit finishes flushing. Re-read the board after waiting. A change outside an active wait is not retained and cannot make a later wait return immediately.
 
 An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
@@ -148,7 +148,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 ### Browser projection
 
-The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical member fields remain in persisted projection state for decoding compatibility, are omitted from the browser view, and grant no runtime authority. A failed projection rejects subsequent Team reads and mutations without appending further Team events. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical member fields remain in persisted projection state for decoding compatibility, are omitted from the browser view, and grant no runtime authority. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
 The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels reuse Session and catalog data with an id fallback.
 
@@ -163,7 +163,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and the `ctx.agentTeams` service API.
 - [tool-agent-team package](../tool-agent-team/README.md) — task tools and shared-board policy.
-- [Subagent runtime](../subagent/README.md) — continuable children, messaging, interruption, and lifecycle that teammates use.
+- [Subagent runtime](../../subagent/subagent/README.md) — continuable children, messaging, interruption, and lifecycle that teammates use.
 - [Subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) — why teammates are subagents and what Team keeps.
 - [Upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) — replacements for the removed Team tools, service methods, and configuration keys.
 

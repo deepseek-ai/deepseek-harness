@@ -81,20 +81,7 @@ export class TeamService extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, this.projection, (root) => {
-      for (const agent of ctx.agents.list()) {
-        let agentRoot: Agent
-        try {
-          agentRoot = ctx.subagents.rootOf(agent)
-        } catch (error: unknown) {
-          if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
-          throw error
-        }
-        if (agentRoot === root) {
-          emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
-        }
-      }
-    })
+    this.journal = new TeamJournal(ctx, this.projection, (root) => { this.notifyWaits(root) })
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
     ctx.inject(['commands'], (scope) => {
       scope.commands.register({
@@ -143,6 +130,10 @@ export class TeamService extends Service {
     if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
     await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
+    this.notifyWaits(root)
+  }
+
+  private notifyWaits(root: Agent): void {
     for (const agent of this.ctx.agents.list()) {
       let agentRoot: Agent
       try {

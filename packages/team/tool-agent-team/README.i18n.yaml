@@ -1,13 +1,13 @@
 # Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write packages/subagent/tool-agent-team/README.md
+#   pnpm run verify-translation-pairing --write packages/team/tool-agent-team/README.md
 /:
   en: ca1947ba4777c2a0
   zh: bed18854b761aae4
 /deepseek-ai-dsh-tool-agent-team:
-  en: eb00a9f551eeca17
-  zh: a59692cd060109e0
+  en: 533f0cbcca7f6d2e
+  zh: df480f25b4808b57
 /deepseek-ai-dsh-tool-agent-team/summary:
   en: 656bbce0b74cc562
   zh: 20212fe57a0b04cc
@@ -21,8 +21,8 @@
   en: c27d5457e1183675
   zh: 3c36d513e6400446
 /deepseek-ai-dsh-tool-agent-team/use-this-package/smallest-working-example:
-  en: 4c527b3c3014afc5
-  zh: 9e0abfb6f10c3f4d
+  en: b6194a6256aedb12
+  zh: dd2cf9ba58a2e389
 /deepseek-ai-dsh-tool-agent-team/use-this-package/what-the-model-can-do:
   en: d8294e282ee26b0d
   zh: f6579be994043294
@@ -45,8 +45,8 @@
   en: 61f78346d308a38d
   zh: 94bd891a618b462a
 /deepseek-ai-dsh-tool-agent-team/further-exploration:
-  en: 5be3254d53d2500b
-  zh: 9a425cae1a0d34a1
+  en: 855e3e7a0f9162e3
+  zh: 04adc19e419e3655
 /deepseek-ai-dsh-tool-agent-team/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90

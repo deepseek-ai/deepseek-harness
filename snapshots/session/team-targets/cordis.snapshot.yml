@@ -46,4 +46,4 @@
 
 - insert:
     - id: enable-team-fixture
-      name: ../../../packages/subagent/agent-team/tests/enable-team-fixture.ts
+      name: ../../../packages/team/agent-team/tests/enable-team-fixture.ts

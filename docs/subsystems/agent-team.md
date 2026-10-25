@@ -2,7 +2,7 @@
 
 English | [中文](agent-team.zh.md)
 
-Types shared by the shared task board, model tools, and host adapters. The [task-board wait decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/subagent/agent-team/src/types.ts`](../../packages/subagent/agent-team/src/types.ts).
+Types shared by the shared task board, model tools, and host adapters. The [task-board wait decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/team/agent-team/src/types.ts`](../../packages/team/agent-team/src/types.ts).
 
 ## Identity and historical roster
 
@@ -110,7 +110,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/subagent/agent-team/README.md) defines task operations, wait signals, and limits.
+The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/team/agent-team/README.md) defines task operations, wait signals, and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -186,7 +186,7 @@ async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSi
 
 Types: [Agent](core.md)
 
-Source: [`packages/subagent/agent-team/src/index.ts`](../../packages/subagent/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 
 <a id="team-events"></a>
 
@@ -209,5 +209,5 @@ Synchronize scoped consumers with the root's current Team selection, including r
 
 Types: [Agent](core.md)
 
-Source: [`packages/subagent/agent-team/src/index.ts`](../../packages/subagent/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 <!-- END GENERATED cordis-surface -->
