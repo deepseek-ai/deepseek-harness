@@ -36,7 +36,7 @@ export interface IncompatiblePlugin {
 
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'unsupported-platform' | 'operation-error'
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
@@ -83,7 +83,7 @@ export interface BundleInfo {
   meta?: PluginLocalizedMeta
   /** Untranslated `description` of this bundle's package manifest. */
   description?: string
-  /** GUI listing before explicit selection or profile installation; omission means true. */
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   listedByDefault?: boolean
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean

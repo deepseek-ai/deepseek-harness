@@ -41,6 +41,8 @@ On-demand Official cards are visible offline before installation. Turning one On
 
 The first list read shows a short group-heading placeholder and four skeleton cards, using the real cards' row, icon, and text-line spacing, with the action area left blank. They use the same opacity pulse as Session search and remain static with reduced motion. The accessible loading label and read timing are unchanged; refreshes retain the existing list, and installation and component-loading indicators keep their own states.
 
+A bundle unavailable on the DSH Host operating system shows the reason on its card and details page. Its disabled switch prevents enabling it; an already selected bundle can still be switched off. [Plugin Manager](../../boot/plugin-manager/README.md#use-this-package) enforces the same restriction for direct requests.
+
 The **Refresh** button shows its tooltip after 500 ms of hovering or keyboard focus. It reads the list again, then checks every updatable bundle for newer versions one after another; a failed read checks nothing. During a manual refresh, the button shows a spinner and stays disabled until all pending reads and those checks settle and at least 400 ms have elapsed, preventing a brief spinner flash; repeated refresh requests are ignored and the existing list remains visible. Success shows no toast. With a loaded list, a failed manual refresh keeps the cached content and shows a failure toast, including after leaving Plugins; select the button again to retry. Before any successful list read, failures show an in-place message with **Retry**. Background reads do not show the refresh spinner.
 
 ### Installing a bundle

@@ -547,7 +547,7 @@ Declared only to an Agent that loaded the skill of a registered card kind; the k
 
 ### `ask_user_question`
 
-Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding.
+Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.
 
 ```json
 {

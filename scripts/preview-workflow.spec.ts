@@ -10,18 +10,35 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   env: Record<string, string>
   jobs: Record<'preview', {
     'runs-on': string
-    steps: Array<{ name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> }>
+    steps: Array<{ name?: string; uses?: string; run?: string; if?: string; 'continue-on-error'?: boolean; with?: Record<string, unknown>; env?: Record<string, string> }>
   }>
 }
 const preview = workflow.jobs.preview
 
 describe('PR preview workflow', () => {
-  it('keeps every PR author on the selected GitHub-hosted runner', () => {
+  it('keeps every PR author on the selected runner', () => {
     expect(Object.keys(workflow.jobs)).toEqual(['preview'])
-    expect(preview['runs-on']).toBe('ubuntu-24.04')
+    // The required outcome is the build, so the lane runs on four vCPUs; the
+    // hosted label stays as the fallback when the Blacksmith pool is not chosen.
+    expect(preview['runs-on']).toContain('blacksmith-4vcpu-ubuntu-2404')
+    expect(preview['runs-on']).toContain("'ubuntu-24.04'")
+    expect(preview['runs-on']).toContain('DSH_CI_FAILOVER_LINUX')
     expect(workflow.on).toEqual({ pull_request: { types: ['opened', 'synchronize', 'reopened'] } })
     expect(workflow.permissions).toEqual({ contents: 'read', 'pull-requests': 'write' })
     expect(preview.steps.find(step => step.uses === 'actions/checkout@v7.0.1')?.with).toEqual({ 'persist-credentials': false })
+  })
+
+  it('fails the check only for build failures and warns about publication', () => {
+    const byName = (name: string) => preview.steps.find(step => step.name === name)
+    for (const name of ['Build workspace and check aggregate programs', 'Build the preview page and pack the VFS image', 'Shape the upload']) {
+      expect(byName(name)?.['continue-on-error'], `${name} must stay blocking`).toBeUndefined()
+    }
+    for (const name of ['Upload to Cloudflare Pages', 'Verify the protected deployment serves the image', 'Comment the preview URL']) {
+      expect(byName(name)?.['continue-on-error'], `${name} must warn instead of failing`).toBe(true)
+    }
+    const report = byName('Report preview publication failures')
+    expect(report?.if).toBe("steps.upload.outcome == 'failure' || steps.verify.outcome == 'failure' || steps.comment.outcome == 'failure'")
+    expect(report?.run).toContain('::warning::')
   })
 
   it('keeps the immutable complete artifact build and restore-only dependency cache', () => {
@@ -29,9 +46,12 @@ describe('PR preview workflow', () => {
     expect(workflow.env.DSH_TELEMETRY_DISABLED).toBe('1')
     const commands = preview.steps.map(step => step.run)
     expect(commands).toContain('pnpm install --frozen-lockfile')
-    expect(commands).toContain('pnpm run build:artifacts')
+    expect(commands).toContain('pnpm run build')
     expect(commands).toContain('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview')
-    expect(commands.indexOf('pnpm run build:artifacts')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
+    expect(commands.indexOf('pnpm run build')).toBeLessThan(commands.indexOf('pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview'))
+    // The complete build also runs the aggregate type checks the required
+    // consumers dropped.
+    expect(commands).not.toContain('pnpm run build:check')
     expect(preview.steps.filter(step => step.uses?.startsWith('actions/cache'))).toHaveLength(1)
     expect(preview.steps.find(step => step.uses === 'actions/cache/restore@v6.1.0')?.with).toMatchObject({
       key: "${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}",

@@ -8,10 +8,16 @@ const read = (name: string): string =>
 
 describe('Turn tail slot spacing', () => {
   it('combines the flow and footer offsets around turn-tail content', () => {
-    expect(read('ChatView.module.css')).toMatch(/margin-top:\s*var\(--dsh-chat-flow-gap, 6px\)/)
+    expect(read('ChatView.module.css')).toMatch(/margin-top:\s*var\(--dsh-chat-flow-gap, 4px\)/)
     const tail = read('TurnTailNodeView.module.css')
     expect(tail).toMatch(/\.root\s*\{[^}]*gap:\s*16px/s)
     expect(tail).toMatch(/\.actions\s*\{[^}]*margin-top:\s*4px/s)
+  })
+
+  it('keeps process rows inside and outside a group on the same gap', () => {
+    const group = read('ChatGroupSeat.module.css')
+    expect(group).toMatch(/\.body \{[^}]*--dsh-chat-flow-gap: 4px;/s)
+    expect(group).toMatch(/margin-top:\s*var\(--dsh-chat-flow-gap, 4px\)/)
   })
 
   it('keeps the tail slot above a marked steering batch start and out of neighbour gaps', () => {
@@ -44,7 +50,7 @@ describe('Running status move below the first output', () => {
     const view = read('ChatView.module.css')
     // A process row or group header after a mid-Turn input: the default sits on the single-class
     // status rule, the lowest-specificity selector, so each variant below outranks it.
-    expect(view).toMatch(new RegExp(String.raw`\n\.running \{[^}]*${travel(6)}`))
+    expect(view).toMatch(new RegExp(String.raw`\n\.running \{[^}]*${travel(4)}`))
     expect(view.match(/--dsh-running-follow: calc\(/g)).toHaveLength(3)
     // A response keeps its 12px clearance.
     expect(view).toMatch(new RegExp(String.raw`\)\)\)\)\[data-chat-group-part="response"\] ~ \.running \{\s*${travel(12)}`))

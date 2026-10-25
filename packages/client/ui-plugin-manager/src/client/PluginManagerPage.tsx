@@ -392,7 +392,8 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
       <Switch
         checked={pkg.enabled}
         label={t('enableToggle', { name: title })}
-        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
+          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))}
         {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
         onChange={onSetEnabled}
       />
@@ -548,6 +549,7 @@ function PackageCard({ pkg, t, resolveText, busy, highlighted, newer, onOpen, on
         end={<EnableSwitch pkg={pkg} title={title} t={t} busy={busy} onSetEnabled={onSetEnabled} />}
       />
       <MetadataError error={pkg.meta?.error} t={t} />
+      {pkg.error?.code === 'unsupported-platform' && <p className={css.reason} role="status">{managementText(pkg.error, t)}</p>}
     </li>
   )
 }

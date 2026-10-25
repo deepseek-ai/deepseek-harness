@@ -41,7 +41,7 @@ Edit this package when the installation's bundle selection or the plugin manager
 
 ### On-demand bundles
 
-`ON_DEMAND_BUNDLES` names the public Official packages installed only on request. `OFFICIAL_ON_DEMAND_CATALOG` embeds their package-owned localized metadata and icons for offline discovery; `pnpm gen-official-bundle-catalog` explicitly updates generated content, and `verify-official-bundle-catalog` checks resource completeness and freshness; builds consume the committed catalog without importing provider code. The catalog contains no install target: the plugin manager derives it from the running version and installation and uses the ordinary bundle installer. The [product-use check](../../../scripts/verify-product-use.ts) composes shipped and on-demand selections against Web without executing providers.
+`ON_DEMAND_BUNDLES` names the public Official packages installed only on request. `OFFICIAL_ON_DEMAND_CATALOG` embeds their package-owned localized metadata, icons, and optional `dsh.bundle.platforms` declarations for offline discovery and Host platform checks before installation; `pnpm gen-official-bundle-catalog` explicitly updates generated content, and `verify-official-bundle-catalog` checks resource completeness and freshness; builds consume the committed catalog without importing provider code. The catalog contains no install target: the plugin manager derives it from the running version and installation and uses the ordinary bundle installer. The [product-use check](../../../scripts/verify-product-use.ts) composes shipped and on-demand selections against Web without executing providers.
 
 -----
 

@@ -43,6 +43,7 @@ import {
 import {
   VFS_EXAMPLE_SESSION_IDS,
   VFS_EXAMPLE_REASONING,
+  VFS_EXAMPLE_SPACING_TITLE,
   VFS_EXAMPLE_WRAPPED_COMMAND,
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
@@ -470,6 +471,9 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     const showcase = sessions.getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE })
     await expect.poll(() => showcase.count(), { timeout: 15_000 }).toBe(1)
+    // The current-generation spacing sample ships beside the showcase and must be listed cold.
+    const spacingSample = sessions.getByRole('treeitem').filter({ hasText: VFS_EXAMPLE_SPACING_TITLE })
+    await expect.poll(() => spacingSample.count(), { timeout: 15_000 }).toBe(1)
     // The packed deployment ships the Schedule rows, and the preview storage
     // seeds the showcase Session with active tasks.
     expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(1)
@@ -697,22 +701,17 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   })
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
-  expect(result.optional.filter(entry => entry.error !== null)).toEqual([])
+  expect(result.optional.filter(entry => entry.error !== null)).toEqual([
+    expect.objectContaining({ name: '@deepseek-ai/dsh-cua-bundle', error: { code: 'unsupported-platform' } }),
+  ])
   // Metadata resolves through the Worker's Node internal modules: every optional bundle shows its title and icon.
   expect(result.optional.filter(entry => entry.metaError !== null || entry.title !== 'object' || entry.icon !== 'string')).toEqual([])
   expect(result.inventoryErrors).toEqual([])
   console.info(`preview boot: optional bundle toggles ${JSON.stringify(result.toggles.map(({ name, enable, disable, error }) => ({ name, enable, disable, error })))}`)
-  const cua = result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')!
-  expect(cua).toMatchObject({
-    enable: 'applied', disable: 'applied',
-    error: null,
-    restored: true,
+  expect(result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')).toMatchObject({
+    enable: 'failed', disable: 'applied', error: { code: 'unsupported-platform' },
+    changed: 0, inactive: [], restored: true,
   })
-  expect(cua.changed).toBeGreaterThan(0)
-  expect(cua.inactive).toEqual([])
-  expect(cua.plugins).toContainEqual(expect.objectContaining({
-    moduleName: '@deepseek-ai/dsh-experimental-cua-macos', enabled: false, fiberPhase: null,
-  }))
   const supported = result.toggles.filter(toggle => toggle.name !== '@deepseek-ai/dsh-cua-bundle')
   expect(supported.filter(toggle => toggle.enable !== 'applied' || toggle.disable !== 'applied')
     .map(({ name, enable, disable }) => ({ name, enable, disable }))).toEqual([])

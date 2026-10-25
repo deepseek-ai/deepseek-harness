@@ -91,6 +91,40 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
   return { ctx, dir, manager: ctx.pluginManager, bundle, profile, stopHmr, overlays, connection }
 }
 
+it.each(['live', 'startup'] as const)('refuses an unsupported bundle before saving or applying it with %s reload', async (reload) => {
+  const { manager, dir, ctx } = await fixture(reload, false, undefined, {}, undefined, (dir) => {
+    const path = join(dir, 'node_modules/extra/package.json')
+    writeFileSync(path, JSON.stringify({ name: 'extra', version: '1.0.0', description: 'Platform-limited bundle',
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh = { profile: { bundles: ['core'] } }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  })
+  const before = readFileSync(join(dir, 'package.json'), 'utf8')
+  const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
+    enabled: false, installed: true, listedByDefault: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+  })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
+  expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  expect(ctx.get('managedProbe')).toBeUndefined()
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(patchBefore)
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: false })
+})
+
+it('allows supported bundle activation and permits deselecting an unsupported saved bundle', async () => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules/extra/package.json')
+  const metadata = readProfileManifest('test', join(dir, 'node_modules/extra'))
+  metadata.dsh = { bundle: { patch: './cordis.patch.yml', platforms: [process.platform] } }
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: true, application: 'applied' })
+  metadata.dsh.bundle!.platforms = [process.platform === 'darwin' ? 'win32' : 'darwin']
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+})
+
 it.each(['network', 'timeout'] as const)('stops a GitHub %s before pnpm and attributes it to the repository', async (kind) => {
   const { manager, dir, connection } = await fixture()
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
@@ -1613,7 +1647,6 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['core', 'extra'])
 })
 
-
 it('lists absent Official entries offline without resolving their packages or consulting registries', async () => {
   const { manager } = await fixture()
   const resolve = vi.spyOn(operations, 'bundleManifest')
@@ -1629,6 +1662,30 @@ it('lists absent Official entries offline without resolving their packages or co
     expect(resolve.mock.calls.some(([name]) => name === entry.packageName)).toBe(false)
   }
   expect(registry).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('applies offline platform admission to an uninstalled Official bundle (selected=%s)', async (selected) => {
+  const entry = OFFICIAL_ON_DEMAND_CATALOG[0]!
+  const previous = Object.getOwnPropertyDescriptor(entry, 'platforms')
+  onTestFinished(() => {
+    if (previous === undefined) Reflect.deleteProperty(entry, 'platforms')
+    else Object.defineProperty(entry, 'platforms', previous)
+  })
+  Object.defineProperty(entry, 'platforms', { configurable: true, value: [process.platform === 'darwin' ? 'linux' : 'darwin'] })
+  const { manager, dir } = await fixture('startup')
+  if (selected) {
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh!.profile!.bundles!.push(entry.packageName)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  }
+  expect((await manager.listBundles()).find(bundle => bundle.name === entry.packageName)).toMatchObject({
+    installed: false, availability: 'missing', enabled: selected, listedByDefault: false,
+    error: { code: 'unsupported-platform' },
+  })
+  if (selected) {
+    expect(await manager.setBundleEnabled(entry.packageName, false)).toMatchObject({ changed: true, enabled: false })
+    expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(entry.packageName)
+  }
 })
 
 it('distinguishes an unreadable profile dependency from an absent catalog selection', async () => {

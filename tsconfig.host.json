@@ -85,6 +85,7 @@
     "apps/web/tests/plugin-sticky-motion.e2e.ts",
     "apps/web/tests/entry-customization.e2e.ts",
     "apps/web/tests/cua-optin.e2e.ts",
+    "apps/web/tests/bundle-platform.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
     "apps/web/tests/schedule-phone.e2e.ts",

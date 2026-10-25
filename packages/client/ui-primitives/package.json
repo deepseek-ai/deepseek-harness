@@ -34,6 +34,7 @@
     "katex": "^0.18.7",
     "micromark-core-commonmark": "^2.0.3",
     "micromark-util-character": "^2.1.1",
+    "micromark-util-decode-string": "^2.0.1",
     "micromark-util-classify-character": "^2.0.1",
     "micromark-util-symbol": "^2.0.1",
     "micromark-util-types": "^2.0.2",

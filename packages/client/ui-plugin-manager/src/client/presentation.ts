@@ -59,6 +59,7 @@ const CODE_KEYS = {
   'bundle-in-use': 'reasonBundleInUse',
   'stale-approval': 'reasonStaleApproval',
   'incompatible-version': 'reasonIncompatibleVersionUnnamed',
+  'unsupported-platform': 'reasonUnsupportedPlatform',
   'operation-error': 'reasonOperationError',
 } satisfies Record<ManagementError['code'], PluginManagerLocaleKey>
 
