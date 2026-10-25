@@ -96,8 +96,10 @@ function PanelRow({
       </Tooltip>
       {wide && canUnpin && <Tooltip label={unpinTooltip} side="bottom" align="end" delayMs={500} portal>
         <button type="button" className={css.panelUnpin} aria-label={unpinLabel} onClick={(event) => {
-          const more = event.currentTarget.closest('nav')?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
-          if (more !== null && more !== undefined) focusWithoutRing(more)
+          // Unpin is rendered only while this navigation also renders More.
+          const navigation = event.currentTarget.closest('nav') as HTMLElement
+          const more = navigation.querySelector('button[aria-haspopup="menu"]') as HTMLButtonElement
+          focusWithoutRing(more)
           setPinned(id, false)
         }}>
           <IconPinFillRegular size={14} />
