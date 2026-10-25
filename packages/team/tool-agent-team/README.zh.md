@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-仅当根 Session 开启 Team 模式时安装 Team 工具和提示词。模式变更同步到全部驻留后代；普通 subagent 控制工具始终可用。
+仅当根 Session 开启 Team 模式时安装 Team 工具和提示词。模式变更只更新该根及其驻留后代，不受其他树的工具安装失败影响。普通 subagent 控制工具始终可用。
 
 模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-agent-team` 和 `@deepseek-ai/dsh-subagent-names` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
 

@@ -378,6 +378,27 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await writeComposerDraft(page, input, '')
   })
 
+  it('enters the member tree after pointer or keyboard activation of its trigger', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-trigger-focus'))
+    const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
+    const panel = page.locator('[data-subagent-panel]')
+    try {
+      for (const activation of ['click', 'Enter', 'Space']) {
+        if (activation === 'click') await trigger.click()
+        else await trigger.press(activation)
+        await expect.poll(() => panel.evaluate(element => element === document.activeElement)).toBe(true)
+        await page.keyboard.press('ArrowDown')
+        expect(await panel.locator('[role="treeitem"]:not([aria-disabled="true"])').first()
+          .evaluate(element => element === document.activeElement)).toBe(true)
+        await page.keyboard.press('Escape')
+        await panel.waitFor({ state: 'detached' })
+        expect(await trigger.evaluate(element => element === document.activeElement)).toBe(true)
+      }
+    } finally {
+      await page.locator('[data-composer-input]').first().hover()
+    }
+  })
+
   it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
     await page.getByRole('button', { name: '2 subagents' }).hover()

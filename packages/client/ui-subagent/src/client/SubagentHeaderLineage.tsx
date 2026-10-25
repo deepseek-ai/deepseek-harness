@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import {
   type SessionProjectionMap, type SessionSummary,
@@ -453,17 +453,16 @@ interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected>
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
   withBoard?: boolean
-  renderFooter?: () => ReactNode
 }
 
 type CatalogDropdownProps = CatalogDropdownSharedProps & (
-  | {
+  | ({
     /** Descendant-count control. */
     variant: 'count'
     currentSessionId?: never
     displayTitle?: never
     openTitle?: never
-  }
+  } & Partial<Pick<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'renderSlot'>>)
   | {
     /** Current-title sibling switcher. */
     variant: 'switcher'
@@ -692,7 +691,8 @@ function CatalogDropdown(props: CatalogDropdownProps) {
 
   const navigate = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.target instanceof Element
-      && event.target !== triggerRef.current && event.target.closest('[role="tree"]') === null) return
+      && event.target !== triggerRef.current && event.target !== menuRef.current
+      && event.target.closest('[role="tree"]') === null) return
     const items = treeItems(menuRef.current)
     const index = items.indexOf(document.activeElement as HTMLElement)
     if (event.key === 'Home') {
@@ -803,7 +803,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
                 t={t}
               />
             </div>
-            {props.renderFooter?.()}
+            {props.variant === 'count' && props.renderSlot?.('conversation.session.header.actions.subagent.footer', {})}
           </div>
         </MenuSurface>
       ), document.body)}
@@ -844,7 +844,7 @@ function RootCatalogAction({
       rootSessionId={sessionId}
       variant="count"
       withBoard={footerAvailable && teamEnabled}
-      renderFooter={() => renderSlot('conversation.session.header.actions.subagent.footer', {})}
+      renderSlot={renderSlot}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}
       openChild={openChild}

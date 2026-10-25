@@ -409,6 +409,17 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByRole('button', { name: /展开 reviewer/ })).toBeTruthy()
   })
 
+  it.each([
+    ['ArrowDown', /worker/], ['Home', /worker/], ['ArrowUp', /reviewer/], ['End', /reviewer/],
+  ] as const)('enters the tree with %s after clicking the trigger', async (key, name) => {
+    render(<HeaderCatalog {...props(catalog())} />)
+    fireEvent.click(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    await Promise.resolve()
+    expect(document.activeElement).toBe(screen.getByRole('dialog'))
+    fireEvent.keyDown(document.activeElement as Element, { key })
+    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name }))
+  })
+
   it('supports trigger/menu keyboard traversal, Escape focus restore, and outside close', async () => {
     const input = props(catalog())
     render(<HeaderCatalog {...input} />)

@@ -981,6 +981,34 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
   })
 
+  it('isolates mode changes from failed tool installation in another tree', async () => {
+    const { ctx, lead } = await setup([])
+    const other = await ctx.agents.create({
+      sessionId: SessionId('colliding-root'), agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    const removeCollision = other.agent.ctx.tools.register(defineContentToolFixture({
+      name: 'team_task_create',
+      description: 'intentional collision',
+      parameters: {},
+      async execute() { return [{ type: 'text', text: 'collision' }] },
+    }))
+    await expect(ctx.agentTeams.setEnabled(other.agent, true)).rejects.toBeInstanceOf(AggregateError)
+
+    const flush = vi.spyOn(ctx.sessions, 'flush')
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(flush).toHaveBeenCalledWith(lead.session)
+    expect(teamTools(await assembly(ctx, lead))).toEqual([])
+    await ctx.agentTeams.setEnabled(lead, true)
+    expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
+    expect(teamTools(await assembly(ctx, other.agent))).toEqual(['team_task_create'])
+
+    removeCollision()
+    await ctx.agentTeams.setEnabled(other.agent, true)
+    expect(teamTools(await assembly(ctx, other.agent))).toEqual(TEAM_TOOLS)
+    expect(other.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+    await other.dispose()
+  })
+
   it('installs Team scope before a cold-resumed teammate request', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('first'), textResponse('lead received settlement'), 'hang'])
     const childActivation = await spawn(ctx, lead, 'cold-worker', 'finish once')
@@ -1004,7 +1032,7 @@ describe('dsh-tool-team', () => {
   })
 
   it('keeps Team tools absent while an orphaned subagent continues ordinary work', async () => {
-    const { ctx, adapter } = await setup([
+    const { ctx, lead, adapter } = await setup([
       textResponse('child done'), textResponse('parent received settlement'), textResponse('independent work done'),
     ])
     const parent = await ctx.agents.create({
@@ -1036,6 +1064,8 @@ describe('dsh-tool-team', () => {
       .toContain(`Your parent agent id is ${JSON.stringify(parent.agent.id)}`)
     expect(orphan.agent.session.ownEvents().some(event => event.type === 'assistant/message'
       && event.data.message.content.some(block => block.type === 'text' && block.text === 'independent work done'))).toBe(true)
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(teamTools(await assembly(ctx, orphan.agent))).toEqual([])
     await orphan.dispose()
   })
 

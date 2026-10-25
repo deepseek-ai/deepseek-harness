@@ -12,7 +12,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/agent-team-panel', import.meta.url))
 const PANEL_EXPECTED = join(SNAPSHOT_DIR, 'task.expected.md')
@@ -90,6 +90,31 @@ describe('web e2e: Agent Teams panel', () => {
     await page.keyboard.press('Escape')
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
+
+  it('submits Team commands and keeps text editing usable after refocusing', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-command-input'))
+    const input = page.locator('[data-composer-input]').first()
+    const agent = scaffold.ctx.agents.list()[0]!
+    for (const enabled of [false, true]) {
+      await writeComposerDraft(page, input, `/team ${enabled ? 'on' : 'off'}`)
+      await input.press('Enter')
+      await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
+      await expect.poll(() => input.textContent()).toBe('')
+      await page.getByRole('button', { name: 'Account menu', exact: true }).focus()
+      await input.click()
+      await page.keyboard.insertText('asdas')
+      await expect.poll(() => input.textContent()).toBe('asdas')
+      expect(await input.evaluate((element) => {
+        const selection = window.getSelection()
+        return document.activeElement === element && selection?.isCollapsed === true
+          && selection.anchorNode?.textContent === 'asdas' && selection.anchorOffset === 5
+      })).toBe(true)
+      await input.press('Backspace')
+      await expect.poll(() => input.textContent()).toBe('asda')
+      await writeComposerDraft(page, input, '')
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  })
 
   it('opens the member tree and live read-only tasks in one panel', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))

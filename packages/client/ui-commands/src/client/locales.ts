@@ -117,7 +117,7 @@ export const ja = {
 export const es = {
   'label.team': 'Equipo',
   'description.team': 'Activar o desactivar equipos de agentes para esta sesión',
-  'token.team': 'equipo',
+  'token.team': 'team',
   'section.add': 'Añadir',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',
@@ -152,7 +152,7 @@ export const es = {
 export const fr = {
   'label.team': 'Équipe',
   'description.team': 'Activer ou désactiver les équipes d’agents pour cette session',
-  'token.team': 'équipe',
+  'token.team': 'team',
   'section.add': 'Ajouter',
   'section.commands': 'Commandes',
   'label.goal': 'Objectif',
@@ -222,7 +222,7 @@ export const de = {
 export const ru = {
   'label.team': 'Команда',
   'description.team': 'Включить или отключить команды агентов для этого сеанса',
-  'token.team': 'команда',
+  'token.team': 'team',
   'section.add': 'Добавить',
   'section.commands': 'Команды',
   'label.goal': 'Цель',
@@ -257,7 +257,7 @@ export const ru = {
 export const pt = {
   'label.team': 'Equipe',
   'description.team': 'Ativar ou desativar equipes de agentes nesta sessão',
-  'token.team': 'equipe',
+  'token.team': 'team',
   'section.add': 'Adicionar',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',

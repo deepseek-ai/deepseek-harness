@@ -267,6 +267,7 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
 
 /**
  * Install Team tools in every live or subsequently published Team member scope.
+ * Mode changes reconcile only the selected root and its live descendants.
  * @param ctx - context carrying the Agent registry, Team and subagent services, tools, and system prompt.
  * @param config - the empty plugin configuration; removed keys fail at load.
  */
@@ -277,12 +278,14 @@ export function apply(ctx: Context, config: Config = {}): void {
     }
   }
   const installed = new Map<Agent, () => void>()
-  const maybeInstall = (agent: Agent): void => {
+  const maybeInstall = (agent: Agent, root?: Agent): void => {
     let enabled: boolean
     try {
+      if (root !== undefined && ctx.subagents.rootOf(agent) !== root) return
       enabled = ctx.agentTeams.isEnabled(agent)
     } catch (error: unknown) {
       if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
+      if (root !== undefined) return
       // An independently resumed child has no active root to supply Team mode.
       enabled = false
     }
@@ -299,8 +302,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     const agent = ctx.agents.get(id)
     if (agent !== undefined) maybeInstall(agent)
   })
-  ctx.on('team/mode-changed', () => {
-    for (const agent of ctx.agents.list()) maybeInstall(agent)
+  ctx.on('team/mode-changed', (root) => {
+    for (const agent of ctx.agents.list()) maybeInstall(agent, root)
   })
   ctx.on('agent/disposed', ({ agent }) => {
     installed.get(agent)?.()

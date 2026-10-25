@@ -20,7 +20,7 @@ import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, Input
 import type { CommandContribution, CommandDecoration, PopupSelectSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'
-import { en, zh, type CommandKey } from '../src/client/locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh, type CommandKey } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -410,7 +410,9 @@ describe('candidates', () => {
       expect(rows[8]).toEqual({ name: 'deploy', description: 'third-party command', section: 'command:section.commands' })
     })
 
-    it.each([['en', en], ['zh', zh]] as const)('localizes the Team command and dispatches its alias under %s', async (_locale, dictionary) => {
+    it.each([
+      ['en', en], ['zh', zh], ['ja', ja], ['es', es], ['fr', fr], ['de', de], ['ru', ru], ['pt', pt],
+    ] as const)('localizes the Team command and restores its menu token under %s', async (_locale, dictionary) => {
       const descriptor = { definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'), name: 'team', description: 'Host description', input: { hint: 'on|off' } }
       const { fiber, source, warm } = await bench({
         commands: () => Promise.resolve({ commands: [descriptor] }),
@@ -424,6 +426,10 @@ describe('candidates', () => {
       expect(menuPick(source, 'team', proj('s1'))).toHaveProperty('claim.token', `/${dictionary['token.team']} `)
       expect(source.matchSpace!(proj('s1'), '/团队')).toHaveProperty('claim.name', 'team')
       expect(source.matchSpace!(proj('s1'), '/team')).toHaveProperty('claim.name', 'team')
+      const token = `/${dictionary['token.team']}`
+      expect(source.matchSpace!(proj('s1'), token)).toHaveProperty('claim.name', 'team')
+      await expect(source.matchClaim!(proj('s1'), token, new AbortController().signal))
+        .resolves.toMatchObject({ name: 'team', token: `${token} ` })
     })
 
     it('a same-name override keeps its own presentation even when it copies the first-party description', async () => {
