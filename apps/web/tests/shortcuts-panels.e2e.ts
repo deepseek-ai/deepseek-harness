@@ -127,10 +127,11 @@ describe.skipIf(process.platform === 'win32')('Web sidebar shortcuts', () => {
 
       const terminalEntry = panel.locator('[data-sidebar-right-guide-entry="terminal"]')
       const shellMenu = terminalEntry.getByRole('button', { name: 'Choose shell', exact: true })
-      const titleBounds = await terminalEntry.getByText('New terminal', { exact: true }).boundingBox()
-      const arrowBounds = await shellMenu.boundingBox()
-      expect(arrowBounds!.x).toBeGreaterThanOrEqual(titleBounds!.x + titleBounds!.width)
-      expect(arrowBounds!.x - titleBounds!.x - titleBounds!.width).toBeLessThan(8)
+      // Both rectangles must come from the same animation frame while the sidebar slides.
+      const gap = await terminalEntry.getByText('New terminal', { exact: true }).evaluate((title, arrow) =>
+        arrow!.getBoundingClientRect().left - title.getBoundingClientRect().right, await shellMenu.elementHandle())
+      expect(gap).toBeGreaterThanOrEqual(0)
+      expect(gap).toBeLessThan(8)
       await shellMenu.click()
       await page.getByRole('menu').waitFor()
       expect(await panel.locator('[data-sidebar-terminal]').count()).toBe(0)
