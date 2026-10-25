@@ -225,9 +225,9 @@ type SubagentInterruptAuthority =
 
 The parent-owned `subagentCatalog` projection lists all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes the root and reachable continuable descendants with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
 
-## Optional tool names
+## Tool names
 
-The [naming plugin](../../packages/subagent/subagent-names/README.md) owns name allocation and path lookup for model-facing tools. It stores name-to-id bindings in the root Session; execution, authorization, provider requests and runtime notifications continue to use Session ids. Direct service callers do not acquire names automatically.
+Model-facing subagent tools require the [naming plugin](../../packages/subagent/subagent-names/README.md), which owns name allocation and path lookup. It stores name-to-id bindings in the root Session; execution, authorization, provider requests and runtime notifications continue to use Session ids. Direct service callers do not acquire names automatically.
 
 ## Results and backend handles
 

@@ -5,12 +5,12 @@
 /:
   en: 17fbe065c454bfce
   zh: 1f9fe6287993abdb
-/subagent-tools-use-optional-names:
-  en: 73ec1920e6ebd4bc
-  zh: 1b7688c81f1dfc9a
-/subagent-tools-use-optional-names/change:
-  en: 7220e2906196bdf2
-  zh: f7a1dc36354d0dd3
-/subagent-tools-use-optional-names/migration:
-  en: 4505282768738c8e
-  zh: 71b829888a5eacd2
+/subagent-tools-require-the-naming-plugin:
+  en: 183491734336053d
+  zh: fddd829da66becae
+/subagent-tools-require-the-naming-plugin/change:
+  en: 99dbb0705fca4572
+  zh: 7772309f35c3f949
+/subagent-tools-require-the-naming-plugin/migration:
+  en: 0db31f99da6de4b5
+  zh: 40a439e97edfc86c

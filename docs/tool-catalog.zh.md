@@ -44,8 +44,8 @@
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`、`ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
 | `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents`, `ctx.subagentNames` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | subagent_oar 工具在为外部提供方配置的别名之间选择。本目录展示 Codex 和 Claude Code 别名；每个部署自行选择提供方。原生模型和权限设置由所选提供方的配置决定。 |
-| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于附加名称的可选 ctx.subagentNames`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。本目录加载可选的命名插件：委派接受同级名称，并在子级 Session id 之外返回完整路径。没有该插件时，不接受名称，返回 Session id。本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
-| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents`、`ctx.systemPrompt`、`用于附加名称的可选 ctx.subagentNames` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。本目录加载可选命名功能：控制工具通过 `name` 接受名称路径或 Session id，发现结果保留 Session id，并附加名称。没有该插件时，控制工具保留 `agent_id`，发现结果返回 Session id。 |
+| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`ctx.subagentNames`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。必需的命名插件让委派接受同级名称，并在子级 Session id 之外返回完整路径。本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
+| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents`、`ctx.systemPrompt`、`ctx.subagentNames` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。控制工具需要命名插件，通过 `name` 接受名称路径或 Session id；发现结果保留 Session id，并附加可用的名称。 |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`、`job_list`、`job_output` | `ctx.tools`、`ctx.jobs`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`user/message via agent.inject() for background completion notices` | - | 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。 |
 | `@deepseek-ai/dsh-experimental-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `ctx.subagentNames`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。可选 Agent Teams profile 在标准子代理委派和控制工具之外增加任务板指导，以及从 subagent 根派生的必需 Team 身份。 |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
@@ -2222,7 +2222,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 来源：[`packages/subagent/tool-subagent/src/index.ts`](../packages/subagent/tool-subagent/src/index.ts)
 
-加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。本目录加载可选的命名插件：委派接受同级名称，并在子级 Session id 之外返回完整路径。没有该插件时，不接受名称，返回 Session id。本地子代理接受后续消息，外部后端自动汇报单次执行结果。
+加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。必需的命名插件让委派接受同级名称，并在子级 Session id 之外返回完整路径。本地子代理接受后续消息，外部后端自动汇报单次执行结果。
 
 <a id="deepseek-aidsh-tool-subagent-control"></a>
 
@@ -2306,7 +2306,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 来源：[`packages/subagent/tool-subagent-control/src/wait-agent.ts`](../packages/subagent/tool-subagent-control/src/wait-agent.ts)
 
-共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。本目录加载可选命名功能：控制工具通过 `name` 接受名称路径或 Session id，发现结果保留 Session id，并附加名称。没有该插件时，控制工具保留 `agent_id`，发现结果返回 Session id。
+共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。控制工具需要命名插件，通过 `name` 接受名称路径或 Session id；发现结果保留 Session id，并附加可用的名称。
 
 <a id="deepseek-aidsh-tool-jobs"></a>
 

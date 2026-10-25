@@ -1,3 +1,4 @@
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
@@ -1370,6 +1371,7 @@ describe('out-of-process delegation boundary', () => {
       scriptedDecision('allow', 'allow'),
     ])
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     let providerRequest: SubagentStartRequest | undefined
     ctx.subagents.registerProvider({
       name: 'remote-boundary',

@@ -72,13 +72,13 @@ function project(
  * @returns the registration disposer.
  */
 export function registerListAgents(ctx: Context): () => void {
-  const names = ctx.get('subagentNames')
+  const names = ctx.subagentNames
   return ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
       'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
-      + (names === undefined ? '' : 'Rows also include available names alongside Session ids. ')
+      + 'Rows also include available names alongside Session ids. '
       + 'You can message any other agent in the subagent tree listed as running or inactive. '
       + 'running means it is working; inactive means it is not currently working. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
@@ -95,7 +95,7 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['root'] },
                 id: { type: 'string', required: true },
-                ...names === undefined ? {} : { name: { type: 'string' as const } },
+                name: { type: 'string' },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
               },
             },
@@ -105,11 +105,11 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['child'] },
                 id: { type: 'string', required: true },
-                ...names === undefined ? {} : { name: { type: 'string' as const } },
+                name: { type: 'string' },
                 label: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
                 parent: { type: 'string' },
-                ...names === undefined ? {} : { parentName: { type: 'string' as const } },
+                parentName: { type: 'string' },
                 depth: { type: 'number' },
               },
             },
@@ -119,10 +119,10 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['diagnostic'] },
                 id: { type: 'string', required: true },
-                ...names === undefined ? {} : { name: { type: 'string' as const } },
+                name: { type: 'string' },
                 reason: { type: 'string', required: true, enum: ['corrupt', 'unsupported', 'unavailable'] },
                 parent: { type: 'string' },
-                ...names === undefined ? {} : { parentName: { type: 'string' as const } },
+                parentName: { type: 'string' },
                 depth: { type: 'number' },
               },
             },
@@ -152,13 +152,12 @@ export function registerListAgents(ctx: Context): () => void {
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
       const nameOf = (id: SessionId): string | undefined => {
-        const name = names?.nameOf(parent, id)
+        const name = names.nameOf(parent, id)
         return name === id ? undefined : name
       }
-      const name = nameOf(root.id)
       return [
         { kind: 'root' as const, id: root.id, status: statusOf(ctx.agents, root.id),
-          ...name === undefined ? {} : { name } },
+          name: names.nameOf(parent, root.id) },
         ...entries
           .map(entry => project(ctx.agents, entry, nameOf))
           .filter(entry => entry !== undefined),

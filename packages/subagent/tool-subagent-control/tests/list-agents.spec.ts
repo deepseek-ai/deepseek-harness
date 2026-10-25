@@ -69,6 +69,7 @@ async function setupWith(adapter: MockAdapter | GatedAdapter) {
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -124,15 +125,14 @@ describe('list_agents', () => {
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error(text(result))
     expect(result.value).toEqual([
-      { kind: 'root', id: parent.id, status: 'inactive' },
-      { kind: 'child', id: started.childId, label: 'workflow child', parent: parent.id, depth: 1, status: 'inactive' },
+      { kind: 'root', id: parent.id, name: 'lead', status: 'inactive' },
+      { kind: 'child', id: started.childId, label: 'workflow child', parent: parent.id, parentName: 'lead', depth: 1, status: 'inactive' },
     ])
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
   })
 
   it('annotates the original child rows with names while retaining Session ids and labels', async () => {
     const { ctx, parent } = await setup([textResponse('named result'), textResponse('unnamed result')])
-    await ctx.plugin(SubagentNames)
     const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
     const child = await ctx.subagents.startActivation({
       delivery: 'parent', provider: 'spawn', label: 'review implementation',
@@ -179,7 +179,7 @@ describe('list_agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent`)
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -200,7 +200,7 @@ describe('list_agents', () => {
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent`)
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -255,7 +255,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
+      `${parent.id} [inactive] — lead: root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — real child\n`
       + `running-child [running] parent=${parent.id} depth=1 — still working\n`
       + `waiting-child [inactive] parent=${parent.id} depth=1 — waiting on descendants`,
@@ -289,7 +289,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
+      `${parent.id} [inactive] — lead: root agent\n`
       + `historical-one-shot [diagnostic: unavailable] parent=${parent.id} depth=1\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — summarize the doc`,
     )
@@ -323,6 +323,7 @@ describe('list_agents', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     const fiber = await ctx.plugin(tool)
     expect(ctx.tools.schemas().some(schema => schema.name === 'list_agents')).toBe(true)
     await fiber.dispose()
@@ -332,7 +333,7 @@ describe('list_agents', () => {
   it('has the namespace-plugin export shape', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'systemPrompt'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'subagentNames', 'agents', 'systemPrompt'])
     expect(typeof tool.apply).toBe('function')
   })
 
@@ -368,7 +369,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
+      `${parent.id} [inactive] — lead: root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — waiting branch\n`
       + `${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
     )
@@ -416,7 +417,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — root agent\n`
+      `${parent.id} [inactive] — lead: root agent\n`
       + 'deep-leaf [inactive] parent=one-shot-mid depth=2 — deep leaf\n'
       + `broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
     )
@@ -446,7 +447,7 @@ describe('list_agents', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
     const expected = [
-      `${parent.id} [inactive] — root agent`,
+      `${parent.id} [inactive] — lead: root agent`,
       `${alpha} [running] parent=${parent.id} depth=1 — alpha task`,
       `${beta} [inactive] parent=${parent.id} depth=1 — beta task`,
       `${gamma} [inactive] parent=${parent.id} depth=1 — gamma task`,

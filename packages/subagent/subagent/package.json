@@ -128,6 +128,7 @@
     "@deepseek-ai/dsh-fs-sandbox": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-subagent-names": "workspace:*"
   }
 }

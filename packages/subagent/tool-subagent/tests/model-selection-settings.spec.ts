@@ -49,6 +49,7 @@ async function boot(withPreset = true): Promise<Context> {
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   if (withPreset) {
     const preset = createScope(ctx, { preset: 'model-selection-test' })

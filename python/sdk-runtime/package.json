@@ -110,6 +110,7 @@
     "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
     "@deepseek-ai/dsh-spill": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
+    "@deepseek-ai/dsh-subagent-names": "workspace:*",
     "@deepseek-ai/dsh-subagent-acp": "workspace:*",
     "@deepseek-ai/dsh-subagent-fork-in-process": "workspace:*",
     "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",

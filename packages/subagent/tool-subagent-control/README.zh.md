@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个工具作用域挂载一次此包。它需要 `tools`、`subagents`、`agents` 和 `systemPrompt`。可选的 [subagent-names](../subagent-names/README.zh.md) 插件启用名称寻址；没有该插件时，工具保留原有 `agent_id` 参数和 id 列表。命名服务加载或卸载时，工具定义随之更新。
+每个工具作用域挂载一次此包。它需要 `tools`、`subagents`、`subagentNames`、`agents` 和 `systemPrompt`。[subagent-names](../subagent-names/README.zh.md) 插件通过固定的 `name` 参数解析名称和 Session id。命名服务卸载时 Cordis 移除这些工具，服务恢复时重新注册它们。
 
 ### 最小配置
 
@@ -45,11 +45,11 @@ kind: "package-reference"
 
 ### send_message
 
-命名模式通过 `name` 指定完整路径或 Session id，向同一 subagent 树中的另一个 agent 发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
+通过 `name` 指定完整路径或 Session id，向同一 subagent 树中的另一个 agent 发送消息。调用方必须是在线根代理或驻留的可继续子代理。工作中的目标在下一步接收 Steer 输入；不活跃目标开始或恢复一个轮次。只恢复目标，其创建祖先保持离线。成功返回收件箱接受结果（`messageId`），不返回回复。自身、无关树、不支持的目标、未知 id、不可用历史和被拒绝的输入都会返回错误。
 
 ### interrupt_agent
 
-命名模式的 `name` 使用完整路径或 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
+`name` 使用完整路径或 Session id 指定后代。外部执行永久停止，不能接收后续消息。本地目标只停止当前轮次：排队消息保留到后续 `send_message`，后代继续运行，子级仍可接受后续任务。调用在停止请求被接受时返回，不等待目标静止；中断已结束代理是成功的空操作，自身、同级、过期或非祖先调用方会收到错误。
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -58,7 +58,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。行保留 Session id、父级 id 与相对根的深度。可选命名插件在映射可用时增加 `name` 与 `parentName`；根的名称为 `lead`。未命名子级保留其 id。每个子级的标签来自创建时提供的 `description`。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。行保留 Session id、父级 id 与相对根的深度。命名插件在映射可用时增加 `name` 与 `parentName`；根的名称为 `lead`。未命名子级保留其 id。每个子级的标签来自创建时提供的 `description`。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
 
 -----
 
@@ -72,7 +72,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-命名由可选的 `ctx.subagentNames` 同步解析；通信、中断和目录遍历委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱和等待信号，并在每次结束时移除监听器和定时器。
+命名由 `ctx.subagentNames` 同步解析；通信、中断和目录遍历委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱和等待信号，并在每次结束时移除监听器和定时器。
 
 ### 投递与信号所有权
 
@@ -120,7 +120,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-命名服务的可用性不变时，schema 前缀保持稳定。父级与其可继续子级（包括 fork 子级）继承相同的定义。
+这些工具可用期间，schema 前缀保持稳定。父级与其可继续子级（包括 fork 子级）继承相同的定义。
 
 ### 通信上下文
 
@@ -168,7 +168,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<parent-id> depth=<n> — <label>`。名称可用时，文本在标签前增加 `<name>: `；规范结果行保留原始 `label`，并另加 `name`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断保留 id、原因、父级与深度，并可在 ` — ` 后显示名称。状态描述轮次活动，不表示任务完成。
+首行为 `<id> [<status>] — lead: root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<parent-id> depth=<n> — <label>`。名称可用时，文本在标签前增加 `<name>: `；规范结果行保留原始 `label`，并另加 `name`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断保留 id、原因、父级与深度，并可在 ` — ` 后显示名称。状态描述轮次活动，不表示任务完成。
 
 #### Token 影响
 

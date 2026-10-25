@@ -51,9 +51,6 @@
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-agent-preset-registry": {
       "optional": true
-    },
-    "@deepseek-ai/dsh-subagent-names": {
-      "optional": true
     }
   },
   "dependencies": {

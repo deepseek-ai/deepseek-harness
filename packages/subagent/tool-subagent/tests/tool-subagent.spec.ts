@@ -145,23 +145,27 @@ describe('dsh-tool-subagent', () => {
     expect(cleanupDone).toBe(true)
   })
 
-  it('keeps id-based delegation without naming and refreshes the schema when naming loads or unloads', async () => {
-    const ctx = await setup({ provider: 'mock', withNames: false })
-    const properties = () => ctx.tools.get('subagent')!.parameters.properties
-    expect(properties()).not.toHaveProperty('name')
-    const original = await callSubagent(ctx, { description: 'original task', prompt: 'work' })
-    expect(original.isError).toBe(false)
-    if (original.isError) throw new Error('expected subagent success')
-    expect(original.value).toHaveProperty('subagentId', expect.any(String))
+  it('waits for names and restores delegation when the dependency returns', async () => {
+    const ctx = await projectedContext()
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await mock.mountScriptedProvider(ctx, { name: 'mock' })
+    const delegation = await ctx.plugin(tool, { provider: 'mock' })
+    expect(ctx.tools.get('subagent')).toBeUndefined()
     const names = await ctx.plugin(SubagentNames)
-    expect(properties()).toHaveProperty('name')
-    const named = await callSubagent(ctx, { name: 'reviewer', description: 'named task', prompt: 'review' })
-    expect(named.isError).toBe(false)
-    if (named.isError) throw new Error('expected named subagent success')
-    expect(named.value).toMatchObject({ kind: 'activation', name: 'lead/reviewer' })
-    expect(named.value).toHaveProperty('subagentId', expect.any(String))
+    await delegation.await()
+    const schema = ctx.tools.schemas().find(entry => entry.name === 'subagent')
+    expect(schema?.parameters.properties).toHaveProperty('name')
+    const result = await callSubagent(ctx, { name: 'reviewer', description: 'named task', prompt: 'review' })
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('expected named subagent success')
+    expect(result.value).toMatchObject({ kind: 'activation', name: 'lead/reviewer' })
+    expect(result.value).toHaveProperty('subagentId', expect.any(String))
     await names.dispose()
-    expect(properties()).not.toHaveProperty('name')
+    expect(ctx.tools.get('subagent')).toBeUndefined()
+    await ctx.plugin(SubagentNames)
+    await delegation.await()
+    expect(ctx.tools.schemas().find(entry => entry.name === 'subagent')).toEqual(schema)
   })
 
   it('resolves an explicit child directory without changing the parent directory', async () => {
@@ -665,13 +669,13 @@ describe('dsh-tool-subagent', () => {
     // load with "cannot get property … without inject". Guard the shape directly.
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'subagentNames', 'systemPrompt', 'sessionProjections'])
 
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(tool) as Record<string, unknown>
     expect(unwrapped).toBe(tool)
     expect(unwrapped.name).toBe('tool-subagent')
-    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'systemPrompt', 'sessionProjections'])
+    expect(unwrapped.inject).toEqual(['tools', 'subagents', 'subagentNames', 'systemPrompt', 'sessionProjections'])
     expect(typeof unwrapped.apply).toBe('function')
     expect(unwrapped.Config).toBeDefined()
   })

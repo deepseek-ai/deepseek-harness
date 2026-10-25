@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this package once per tool scope. It requires `tools`, `subagents`, `agents`, and `systemPrompt`. The optional [subagent-names](../subagent-names/README.md) plugin enables named addressing; without it, the tools retain their `agent_id` arguments and id-based listing. Tool definitions update when the naming service loads or unloads.
+Mount this package once per tool scope. It requires `tools`, `subagents`, `subagentNames`, `agents`, and `systemPrompt`. The [subagent-names](../subagent-names/README.md) plugin resolves names and Session ids through the fixed `name` argument. Cordis removes these tools when the naming service unloads and restores them when it returns.
 
 ### Minimal configuration
 
@@ -45,11 +45,11 @@ Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. 
 
 ### send_message
 
-In named mode, `name` selects a full path or Session id of another agent in the same subagent tree. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
+`name` selects a full path or Session id of another agent in the same subagent tree. The caller must be the live root or a resident continuable subagent. A working target receives Steer input at its next step; an inactive target starts or resumes a turn. Only the target resumes; its creation ancestors stay offline. Success returns inbox acceptance (`messageId`), never a reply. Self, unrelated trees, unsupported targets, unknown ids, unavailable history, and rejected admission return errors.
 
 ### interrupt_agent
 
-In named mode, `name` identifies a descendant by full path or Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+`name` identifies a descendant by full path or Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -58,7 +58,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Rows retain Session ids, parent ids, and depth from the root. The optional naming plugin adds `name` and `parentName` when a mapping is available; the root is named `lead`. Unnamed children retain their ids. Each child’s label comes from the `description` supplied at creation. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Rows retain Session ids, parent ids, and depth from the root. The naming plugin adds `name` and `parentName` when a mapping is available; the root is named `lead`. Unnamed children retain their ids. Each child’s label comes from the `description` supplied at creation. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
 
 -----
 
@@ -72,7 +72,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-The optional `ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+`ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 
@@ -120,7 +120,7 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 
 #### KV Cache effect
 
-The schema prefix stays stable while the naming service’s availability is unchanged. A parent and its continuable children, including fork children, inherit the same definitions.
+The schema prefix stays stable while these tools are available. A parent and its continuable children, including fork children, inherit the same definitions.
 
 ### Communication context
 
@@ -168,7 +168,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion.
+The first row is `<id> [<status>] — lead: root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion.
 
 #### Token effect
 

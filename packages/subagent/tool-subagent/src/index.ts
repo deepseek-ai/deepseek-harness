@@ -6,7 +6,6 @@
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
-import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
@@ -38,7 +37,7 @@ import {
 } from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
-export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
+export const inject = ['tools', 'subagents', 'subagentNames', 'systemPrompt', 'sessionProjections']
 
 // Definition identity keeps shared guidance scoped to the actual visible tools,
 // including scoped overrides and independently loaded tool registries.
@@ -200,10 +199,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const install = (runtimeCtx: Context): void => {
     // Load order and HMR replacement can change provider availability while
     // this fiber remains active.
-    let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
+    let mounted: { definition: ToolDefinition; disposeTool: () => void } | undefined
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
-      const names = runtimeCtx.get('subagentNames')
+      const names = runtimeCtx.subagentNames
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined
@@ -221,10 +220,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
             : ''),
         parameters: {
-          ...names === undefined ? {} : { name: {
-            type: 'string' as const,
+          name: {
+            type: 'string',
             description: 'Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
-          } },
+          },
           cwd: {
             type: 'string',
             description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -268,11 +267,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             properties: {
               kind: { type: 'string', required: true, const: 'activation' },
               subagentId: { type: 'string', required: true },
-              ...names === undefined ? {} : { name: { type: 'string' as const, required: true as const } },
+              name: { type: 'string', required: true },
             },
           },
           render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}`
-            + (value.name === undefined ? '' : `\nname: ${value.name}`) }],
+            + `\nname: ${value.name}` }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -338,10 +337,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             signal: exec.signal,
             delivery: 'parent' as const,
           }
-          if (names === undefined) {
-            const started = await runtimeCtx.subagents.startActivation(spec)
-            return { kind: 'activation' as const, subagentId: started.childId }
-          }
           const reservation = names.reserve(parent, args.name)
           try {
             const started = await runtimeCtx.subagents.startActivation(spec)
@@ -369,17 +364,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         }
       })
       // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
-      mounted = { subagentProvider, definition, disposeTool }
+      mounted = { definition, disposeTool }
     }
-
-    runtimeCtx.on('internal/service', (name) => {
-      if (name !== 'subagentNames' || mounted === undefined
-        || runtimeCtx.fiber.uid === null || runtimeCtx.fiber.state === FiberState.UNLOADING) return
-      const { subagentProvider } = mounted
-      mounted.disposeTool()
-      mounted = undefined
-      mount(subagentProvider)
-    })
 
     // Register listeners before checking presence so no synchronous change is missed.
     runtimeCtx.on('subagent/provider-added', (subagentProvider) => {
@@ -443,7 +429,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const installScoped = (candidate: Agent): ReturnType<Context['inject']> | undefined => {
     const existing = scopedInstalls.get(candidate)
     if (existing !== undefined) return existing
-    const fiber = candidate.ctx.inject(['tools', 'subagents', 'systemPrompt', 'sessionProjections'], async (runtimeCtx) => {
+    const fiber = candidate.ctx.inject(inject, async (runtimeCtx) => {
       await presets.validate(ctx)
       install(runtimeCtx)
     })

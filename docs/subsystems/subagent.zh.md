@@ -225,9 +225,9 @@ type SubagentInterruptAuthority =
 
 父级拥有的 `subagentCatalog` 投影列出所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根和可达的可继续后代，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
 
-## 可选工具名字
+## 工具名字
 
-[命名插件](../../packages/subagent/subagent-names/README.zh.md)负责模型工具的名字分配和路径查询。它在根 Session 中保存名字到 ID 的绑定；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
+面向模型的子代理工具需要[命名插件](../../packages/subagent/subagent-names/README.zh.md)，由它负责名字分配和路径查询。它在根 Session 中保存名字到 ID 的绑定；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
 
 ## 结果与后端句柄
 
