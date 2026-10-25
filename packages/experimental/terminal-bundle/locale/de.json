@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Persistente Terminals",
+    "description": "Halten Sie Shell-Prozesse über Tool-Aufrufe hinweg am Leben.",
+    "detail": "docs/DETAIL.md"
+  }
+}

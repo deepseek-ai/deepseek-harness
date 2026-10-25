@@ -116,9 +116,10 @@ describe('web e2e: Agent Teams panel', () => {
       }),
     }))
     const member = await scaffold.ctx.subagents.startActivation({
-      name: 'researcher', provider: 'team-panel-member', label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(), delivery: 'caller', signal: test.signal,
-      request: { parent: agent, prompt: [{ type: 'text', text: 'Research the task' }] },
+      provider: 'team-panel-member', label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(), delivery: 'caller', signal: test.signal,
+      parent: agent, prompt: [{ type: 'text', text: 'Research the task' }],
     })
+    scaffold.ctx.subagentNames.bind(agent, member.childId, 'lead/researcher')
     onTestFinished(() => member.dispose())
     await member.result
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()

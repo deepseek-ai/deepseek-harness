@@ -70,7 +70,7 @@ function textCompletion(text: string): object {
   }
 }
 
-describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over the real composition', () => {
+describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the real composition', () => {
   let scaffold: WebScaffold
   let sidecarRoot: string
   let readyFile: string
@@ -108,12 +108,12 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const parent = scaffold.ctx.agents.get(parentId)
     if (parent === undefined) throw new Error('created parent session did not publish a live Agent')
 
-    const started = await scaffold.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    const started = await scaffold.ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'event-sourcing researcher',
       signal: new AbortController().signal,
-      request: { prompt: [{ type: 'text', text: INITIAL }], parent },
+      prompt: [{ type: 'text', text: INITIAL }], parent,
     })
     childId = started.childId
     // The hang entry writes readyFile after its prefix chunks, immediately
@@ -134,9 +134,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const queued = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: FOLLOWUP }],
       },
@@ -144,10 +142,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     expect(queued).toMatchObject({ ok: true })
 
     const settled = scaffold.whenTurnSettled()
-    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByParent', {
+    const interrupted = await remote<{ accepted: true }>(scaffold, 'subagents/interruptByUser', {
       childSessionId: childId,
-      parentSessionId: parentId,
-      mode: 'continuable',
     })
     expect(interrupted).toMatchObject({ ok: true, value: { accepted: true } })
     // accepted acknowledges the admitted cancel, not quiescence: wait for the
@@ -169,9 +165,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     const waking = await remote<{ messageId: string }>(scaffold, 'subagents/prompt', {
       request: {
         requestId: randomUUID(),
-        parentSessionId: parentId,
         childSessionId: childId,
-        mode: 'continuable',
         delivery: 'queue',
         content: [{ type: 'text', text: WAKING }],
       },
@@ -189,7 +183,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
-    expect(userTexts[1]).toMatch(/^Your name is .+Your parent agent name is .+send_message\(\{ name: /)
+    expect(userTexts[1]).toMatch(/^Your final answer is delivered automatically if your parent is still online\./)
     expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')

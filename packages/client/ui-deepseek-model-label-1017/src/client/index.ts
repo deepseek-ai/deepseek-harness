@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { DeepSeekModelLabel } from './DeepSeekModelLabel.tsx'
-import { en, zh, type LabelKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type LabelKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -22,7 +22,7 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: Context): void {
   const namespace = 'deepseek-model-label-1017'
-  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'deepseek-model-label-1017: dictionaries')
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en, ja, es, fr, de, ru, pt }), 'deepseek-model-label-1017: dictionaries')
   ctx.slots.inject('conversation.input.model.label', () => ctx.slots.register({
     name: 'conversation.input.model.label', locale: namespace,
   }, DeepSeekModelLabel))

@@ -151,9 +151,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when fields are malformed, the id is occupied, or the fallback target is unknown or creates a cycle.'],
       },
       {
-        signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void',
-        description: 'Register a declared namespace\'s dictionaries, all locales in one call — the typed form: each dictionary is checked against the namespace\'s LocaleNamespaceMap key union (a missing or extra key is a compile error), and every shipped locale is required (bilingual balance enforced at registration). Duplicate (ns, locale) throws (single occupant; a namespace\'s texts have one owner). Registration bumps the revision so mounted outlets pick up late-arriving dictionaries.',
-        parameters: [{ name: 'ns', description: 'a namespace merged into LocaleNamespaceMap.' }, { name: 'dicts', description: 'complete dictionaries keyed by built-in locale id.' }],
+        signature: 'register<N extends Extract<keyof LocaleNamespaceMap, string>>( ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>> & Record<LocaleId, LocaleDictOf<N>>, ): () => void',
+        description: 'Register a declared namespace\'s dictionaries, all locales in one call — the typed form: each dictionary is checked against the namespace\'s LocaleNamespaceMap key union (a missing or extra key is a compile error), and both baseline locales are required (bilingual balance enforced at registration). Duplicate (ns, locale) throws (single occupant; a namespace\'s texts have one owner). Registration bumps the revision so mounted outlets pick up late-arriving dictionaries.',
+        parameters: [{ name: 'ns', description: 'a namespace merged into LocaleNamespaceMap.' }, { name: 'dicts', description: 'complete baseline dictionaries and optional dictionaries for additional locale ids.' }],
         returns: 'disposer removing every locale registered by this call (idempotent).',
       },
       {
@@ -282,7 +282,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'register(definition: ThemeDefinition): () => void',
         description: 'Register a theme. Duplicate id throws (single occupant per id; the built-in pair counts; `system` is a preference, not a registrable id).',
-        parameters: [{ name: 'definition', description: 'theme id, colorScheme, and alias-token overrides.' }],
+        parameters: [{ name: 'definition', description: 'theme id, colorScheme, alias-token overrides, and optional icon replacements; the runtime keeps a frozen copy of `icons`. Invalid icon replacements throw a `TypeError` naming the theme and icon.' }],
         returns: 'disposer. Disposing the theme backing the active preference resets the preference to the default so the UI never keeps tokens of an unregistered theme.',
       },
       {
@@ -355,7 +355,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'connectWorkspace(workspaceId: WorkspaceId, options?: Pick<StartSessionOptions, \'agentPreset\'>): Promise<SessionId>',
-        description: 'Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member, skipping blanks that list a preset other than a requested one, and the Host reuses it under the requested preset or its default, or creates another Session.',
+        description: 'Resolve the Session for a new conversation in a Workspace: navigation names the first reusable blank member — listed in the Workspace, not archived, and listing no preset or the requested one — and the Host reuses it under the requested preset or its default, creating another Session when it reuses none. Concurrent calls for the same Workspace and preset share one attempt.',
         parameters: [{ name: 'workspaceId', description: 'target Workspace.' }, { name: 'options', description: 'choices for the created or reused Session.' }],
         returns: 'a Session already addressable through the Session Controller.',
       },
@@ -646,6 +646,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'HostObservable',
     declaration: 'export type HostObservable<T> = ObservableSnapshot<T>;',
+  },
+  {
+    name: 'IconGlyph',
+    declaration: 'export type IconGlyph = keyof typeof ICON_ARTWORK;',
+  },
+  {
+    name: 'IconReplacements',
+    declaration: 'export type IconReplacements = Readonly<Partial<Record<IconSymbolId, string>>>;',
+  },
+  {
+    name: 'IconSymbolId',
+    declaration: 'export type IconSymbolId = `dsw-icon-${IconGlyph}-${IconWeight}`;',
+  },
+  {
+    name: 'IconWeight',
+    declaration: 'export type IconWeight = \'regular\' | \'medium\';',
   },
   {
     name: 'InjectFace',
@@ -1049,7 +1065,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ThemeDefinition',
-    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n}',
+    declaration: 'export interface ThemeDefinition {\n    id: string;\n    colorScheme: \'light\' | \'dark\';\n    tokens: ThemeTokens;\n    icons?: IconReplacements | undefined;\n}',
   },
   {
     name: 'ThemePreference',

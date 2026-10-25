@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Contrôle de la longueur du résultat de l'outil",
+    "description": "Limitez la longueur des résultats des outils placés directement dans le contexte et conservez le chemin de lecture pour les résultats complets."
+  }
+}

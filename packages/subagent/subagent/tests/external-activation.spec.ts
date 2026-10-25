@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External execution ownership, result delivery, and process cleanup. */
 
@@ -29,7 +29,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
     ctx, parent, controller,
     start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
-      request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
+      parent, prompt: [{ type: 'text', text: 'Work independently' }],
     }),
     records: () => ctx.sessionProjections.snapshot(parent.session, ['subagentCatalog']).values.subagentCatalog,
   }
@@ -89,7 +89,7 @@ describe('external subagent activations', () => {
       })
       const session = fixture.ctx.sessions.create(SessionId('publication-parent'))
       const parent = { ...fixture.parent, id: session.id, session }
-      const detachParent = fixture.ctx.agents.enter(parent, undefined)
+      const detachParent = fixture.ctx.agents.enter(parent)
       let detachReplacement: (() => void) | undefined
       let drain = Promise.resolve()
       fixture.ctx.on('subagent/start', () => {
@@ -98,14 +98,14 @@ describe('external subagent activations', () => {
         } else {
           detachParent()
           if (change === 'parent-replace') {
-            detachReplacement = fixture.ctx.agents.enter({ ...parent }, undefined)
+            detachReplacement = fixture.ctx.agents.enter({ ...parent })
           }
         }
       })
       try {
-        await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+        await expect(fixture.ctx.subagents.startActivation({
           provider: 'external', label: 'Unpublished work', signal: fixture.controller.signal, delivery: 'parent',
-          request: { parent, prompt: [{ type: 'text', text: 'Must not publish' }] },
+          parent, prompt: [{ type: 'text', text: 'Must not publish' }],
         })).rejects.toMatchObject({ code: change === 'drain' ? 'DRAINING' : 'UNAUTHORIZED' })
         await drain
         expect(backend.dispose).toHaveBeenCalledTimes(1)
@@ -131,7 +131,7 @@ describe('external subagent activations', () => {
     await backend.cleaning.promise
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     const disposal = activation.dispose()
@@ -149,7 +149,7 @@ describe('external subagent activations', () => {
     await expect(waiting).resolves.toBe(true)
     await activation.dispose()
     expect(backend.dispose).toHaveBeenCalledTimes(1)
-    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external' }])
+    expect(fixture.records()).toEqual([])
     expect(fixture.parent.inbox.nextTurn).toEqual([])
   })
 
@@ -160,7 +160,7 @@ describe('external subagent activations', () => {
     const error = new Error('backend execution failed')
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     backend.result.reject(error)
@@ -176,7 +176,7 @@ describe('external subagent activations', () => {
     }
     await expect(activation.result).rejects.toBe(error)
     await expect(waiting).resolves.toBe(true)
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it('cancels the external process once when the receipt is repeatedly disposed', async () => {
@@ -274,7 +274,7 @@ describe('external subagent activations', () => {
       backend.cleanup.resolve(undefined)
       await rejected
     }
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it.each(['parent', 'caller'] as const)('delivers the full failed result with %s delivery', async (delivery) => {
@@ -286,7 +286,7 @@ describe('external subagent activations', () => {
     backend.result.resolve(failed)
     await expect(activation.result).resolves.toEqual(failed)
     await activation.dispose()
-    expect(fixture.records()).toMatchObject([{ id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external' }])
+    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{ id: activation.childId, mode: 'external' }] : [])
     if (delivery === 'caller') {
       expect(fixture.parent.inbox.nextTurn).toEqual([])
     } else {
@@ -318,9 +318,9 @@ describe('external subagent activations', () => {
     expect((error as Error).message).not.toContain('/private/path')
     await expect(activation.result).resolves.toEqual(completed)
     expect(activation.dispose()).toBe(disposal)
-    expect(fixture.records()).toMatchObject([{
-      id: activation.childId, name: activation.name.slice('lead/'.length), mode: 'external',
-    }])
+    expect(fixture.records()).toMatchObject(delivery === 'parent' ? [{
+      id: activation.childId, mode: 'external',
+    }] : [])
     expect(ended).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ stopReason: 'error' }))
     if (delivery === 'parent') {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
@@ -348,14 +348,14 @@ it('records external membership at creation without publishing settlement update
   try {
     const activation = await fixture.start('parent')
     const expected = { id: activation.childId, mode: 'external', label: 'External work' }
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(fixture.ctx.sessions.get(activation.childId)).toBeUndefined()
     const result: SubagentResult = { output: [{ type: 'text', text: 'x'.repeat(100_000) }], stopReason: 'completed' }
     backend.result.resolve(result)
     backend.cleanup.resolve(undefined)
     await expect(activation.result).resolves.toEqual(result)
     await activation.dispose()
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(snapshots).toHaveLength(1)
     expect(JSON.stringify(snapshots).length).toBeLessThan(1_000)
   } finally {
@@ -366,9 +366,9 @@ it('records external membership at creation without publishing settlement update
 it('refuses a reserved Session id for an external provider before dispatch', async () => {
   const start = vi.fn()
   const fixture = await setup(start)
-  await expect(fixture.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+  await expect(fixture.ctx.subagents.startActivation({
     provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
-    signal: fixture.controller.signal, request: { parent: fixture.parent, prompt: [] },
+    signal: fixture.controller.signal, parent: fixture.parent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
   expect(start).not.toHaveBeenCalled()
 })

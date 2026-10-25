@@ -6,7 +6,7 @@
 // under the standard discipline: turn 1 produces a bash call plus two
 // parallel reads in one assistant message (tool-call density for the
 // trajectory ledger/timing lanes), turn 2 a markdown-rich reply.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, Response } from 'playwright'
@@ -14,7 +14,7 @@ import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -32,6 +32,7 @@ const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const CODE_CARD_DIR = fileURLToPath(new URL('./expected/navigation-panes', import.meta.url))
 const COMMAND_WRAP_EXPECTED = join(CODE_CARD_DIR, 'command-wrap.expected.md')
 const CODE_CARD_EXPECTED = join(CODE_CARD_DIR, 'code-card.expected.md')
+const COPY_MARKDOWN_EXPECTED = join(CODE_CARD_DIR, 'copy-markdown.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
 const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
@@ -424,6 +425,66 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     }
   }, 120_000)
 
+  it.skipIf(MODE === 'record')('copies the complete Session as Markdown from the Session Header', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-copy-markdown'))
+    await ensureSeedOpen(page)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    expect(await page.evaluate(() => typeof ClipboardItem)).toBe('function')
+    expect(await page.evaluate(() => typeof navigator.clipboard.write)).toBe('function')
+    await page.evaluate(() => {
+      const clipboard = navigator.clipboard
+      const originalWrite = clipboard.write.bind(clipboard)
+      Reflect.set(globalThis, '__dshClipboardWrites', 0)
+      Object.defineProperty(clipboard, 'write', {
+        configurable: true,
+        value: (...args: Parameters<typeof originalWrite>) => {
+          Reflect.set(globalThis, '__dshClipboardWrites', Number(Reflect.get(globalThis, '__dshClipboardWrites')) + 1)
+          return originalWrite(...args)
+        },
+      })
+    })
+    const markdownResponse = page.waitForResponse(response =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === '/api/session.markdown', { timeout: 30_000 })
+    const copyButton = page.getByRole('button', { name: 'More actions' })
+    await copyButton.click()
+    await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).click()
+    const response = await markdownResponse
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toBe('text/markdown; charset=utf-8')
+    await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
+
+    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(SessionId(SEED_ID)))?.location?.path
+    if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
+    expect((await stat(sourcePath)).isFile()).toBe(true)
+    expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
+    const markdown = await page.evaluate(() => navigator.clipboard.readText())
+    expect(markdown).toContain(`Session file:\n\n\`\`\`text\n${sourcePath}\n\`\`\``)
+    const normalized = markdown
+      .split(sourcePath).join('{{sessionFile}}')
+      .split(scaffold.workspaceCwd).join('{{cwd}}')
+    // compareOrRefreshGolden appends its own newline; the clipboard text already ends with exactly one.
+    await compareOrRefreshGolden(COPY_MARKDOWN_EXPECTED, normalized.replace(/\n$/u, ''), MODE)
+    expect(normalized).toContain('Session file:\n\n```text\n{{sessionFile}}\n```')
+    expect(normalized).toContain('# NavScenario: first run bash to')
+    expect(normalized).toContain('> NavScenario: first run bash to print exactly NAVIGATION_OK')
+    expect(normalized).toContain('<details><summary>3 previous messages</summary>')
+    expect(normalized).toContain('**Tool: `bash`**')
+    expect(normalized).toContain('NAVIGATION_OK')
+    expect(normalized).toContain('FIRST_DONE')
+    expect(normalized).toContain('Navigation Summary')
+    expect(normalized).not.toContain('The user wants me to follow')
+    expect(normalized).not.toContain('{{system}}')
+    expect(normalized).not.toContain('request/header')
+    expect(normalized.endsWith('\n')).toBe(true)
+    expect(normalized.endsWith('\n\n')).toBe(false)
+
+    await copyButton.click()
+    expect(await page.getByRole('menuitem', { name: 'Copy Session as Markdown' }).isDisabled()).toBe(false)
+    await page.keyboard.press('Escape')
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('focuses the ledger by dragging an overview interval', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-timeline'))
     await ensureSeedOpen(page)
@@ -561,7 +622,9 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   }, 60_000)
 
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
-    await assertFixtureInventory(CODE_CARD_DIR, ['code-card.expected.md', 'command-wrap.expected.md'])
+    await assertFixtureInventory(CODE_CARD_DIR, [
+      'code-card.expected.md', 'command-wrap.expected.md', 'copy-markdown.expected.md',
+    ])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'search-id-results.expected.md', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md', 'timing.expected.md',

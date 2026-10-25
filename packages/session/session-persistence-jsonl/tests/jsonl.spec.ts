@@ -1223,11 +1223,35 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
       await writeFile(path, `${JSON.stringify(physical)}\n`)
       const formatStatus = version === SESSION_FORMAT_VERSION ? 'current' : 'migration-required'
       expect(await ctx.sessionPersistence.stat(header.id)).toMatchObject({
-        header: { version: SESSION_FORMAT_VERSION }, formatStatus,
+        header: { version: SESSION_FORMAT_VERSION },
+        formatStatus,
+        location: { kind: 'jsonl', path },
       })
       const [listed] = await ctx.sessionPersistence.list()
       expect(listed?.formatStatus).toBe(formatStatus)
+      expect(listed?.location).toEqual({ kind: 'jsonl', path })
       expect(readTally.bySuffix.size).toBe(0)
+    }
+  })
+
+
+  it('reports the selected compressed artifact path in stat and list metadata', async () => {
+    const compressedRoot = await freshRoot()
+    const compressed = new Context()
+    try {
+      await compressed.plugin(JsonlSessionPersistence, { root: compressedRoot, compression: 'zstd' })
+      const header = meta('zstd-location', '/work')
+      const handle = await compressed.sessionPersistence.create(header)
+      await handle.append(oneTurnLog())
+      await handle.flush()
+      await handle.close()
+      const path = logPath(compressedRoot, header.cwd, header.id, 'zstd')
+      expect((await compressed.sessionPersistence.stat(header.id))?.location)
+        .toEqual({ kind: 'jsonl', path })
+      const [listed] = await compressed.sessionPersistence.list()
+      expect(listed?.location).toEqual({ kind: 'jsonl', path })
+    } finally {
+      await compressed.fiber.dispose()
     }
   })
 
@@ -1421,13 +1445,21 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     expect(pendingRows.map(s => s.header.id)).toContain(m.id)
     expect(pending?.sizeBytes).toBeUndefined()
     expect(pending?.formatStatus).toBeUndefined()
+    expect(pending?.location).toBeUndefined()
     expect(pendingRows.find(s => s.header.id === m.id)?.formatStatus).toBeUndefined()
+    expect(pendingRows.find(s => s.header.id === m.id)?.location).toBeUndefined()
 
     await handle.append(oneTurnLog())
     expect((await stat(dir)).isDirectory()).toBe(true)
     expect((await stat(rawLogPath(root, '/work', m.id))).isFile()).toBe(true)
+    const materializedPath = rawLogPath(root, '/work', m.id)
     expect((await ctx.sessionPersistence.list()).map(s => s.header.id)).toContain(m.id)
-    expect((await ctx.sessionPersistence.stat(m.id))?.formatStatus).toBe('current')
+    expect(await ctx.sessionPersistence.stat(m.id)).toMatchObject({
+      formatStatus: 'current',
+      location: { kind: 'jsonl', path: materializedPath },
+    })
+    expect((await ctx.sessionPersistence.list()).find(s => s.header.id === m.id)?.location)
+      .toEqual({ kind: 'jsonl', path: materializedPath })
     await handle.close()
   })
 

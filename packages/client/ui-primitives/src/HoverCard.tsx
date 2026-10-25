@@ -16,16 +16,29 @@ const INLINE_PREVIEW_WIDTH = 300
 const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
+interface CardPosition {
+  left: number
+  top: number
+  width?: number
+  maxWidth?: number
+  maxHeight?: number
+  bridge?: { left: number; top: number; width: number; height: number }
+}
+
 /**
  * Render an anchor with a hover-triggered preview card independently of nested tooltips.
+ * Touch entry does not open a preview or intercept the anchor's action.
  * @param props.anchor - the hover target (rendered in place inside a wrapper span).
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
  * @param props.variant - compact card beside the anchor, or a preview above/below it
- * with 24px side insets, a 420px height cap, frame-top clearance, and 100ms opacity transitions.
+ * with 24px side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip),
+ * and 100ms opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
  * @param props.inline - keep the anchor in prose; show a contained preview on hover or keyboard focus.
+ * Its hover region connects the anchor and preview across the visual gap.
+ * @param props.fitContent - size an inline card to its content within the usual width cap.
  * @param props.disabled - suppress opening; turning true dismisses an open card.
  * @param props.grouped - share first-display dwell across the surrounding list and active portal.
  * Group replacement removes the previous card immediately, including a fading preview.
@@ -37,11 +50,12 @@ const VIEWPORT_MARGIN = 8
  */
 export function HoverCard({
   anchor, content, openDelayMs = 500, disabled = false, grouped = false,
-  copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false,
+  copyText, copyLabel, copiedLabel, variant = 'compact', widthAnchorRef, inline = false, fitContent = false,
 }: {
   anchor: ReactNode
   /** Inline media preview using the shared menu material and keyboard focus. */
   inline?: boolean
+  fitContent?: boolean
   content: ReactNode
   openDelayMs?: number
   disabled?: boolean
@@ -55,6 +69,7 @@ export function HoverCard({
 })) {
   const rootRef = useRef<HTMLSpanElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const portalRef = useRef<HTMLSpanElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyHeightRef = useRef<number | null>(null)
@@ -64,7 +79,7 @@ export function HoverCard({
   const [phase, setPhase] = useState<'closed' | 'open' | 'closing'>('closed')
   const open = phase !== 'closed'
   const closing = phase === 'closing'
-  const [pos, setPos] = useState<{ left: number; top: number; width?: number; maxHeight?: number } | null>(null)
+  const [pos, setPos] = useState<CardPosition | null>(null)
   const positioned = pos !== null
   const [copied, setCopied] = useState(false)
   const parentGroup = useContext(HoverCardGroupContext)
@@ -106,8 +121,8 @@ export function HoverCard({
   const groupVisible = open && positioned
   useLayoutEffect(() => {
     if (!groupVisible || group === null) return
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The visible card's ref is attached before layout effects.
-    group.shown(groupOwner, dismissImmediately, cardRef.current!)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The visible portal's ref is attached before layout effects.
+    group.shown(groupOwner, dismissImmediately, portalRef.current!)
     return () => { group.release(groupOwner) }
   }, [group, groupOwner, groupVisible, dismissImmediately])
 
@@ -164,7 +179,7 @@ export function HoverCard({
       if (variant === 'preview') {
         const bounds = widthAnchorRef?.current?.getBoundingClientRect() ?? r
         const width = Math.max(0, Math.min(bounds.width - PREVIEW_INSET * 2, window.innerWidth - VIEWPORT_MARGIN * 2))
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
@@ -179,17 +194,25 @@ export function HoverCard({
       }
       if (inline) {
         const height = Math.max(h, cardRef.current?.scrollHeight ?? 0)
-        const width = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
-        const topMargin = overlayTopMargin(VIEWPORT_MARGIN)
+        const maxWidth = Math.max(0, Math.min(INLINE_PREVIEW_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2))
+        const width = fitContent ? Math.min(cardRef.current?.offsetWidth ?? maxWidth, maxWidth) : maxWidth
+        const topMargin = overlayTopMargin(VIEWPORT_MARGIN, r, ANCHOR_GAP)
         const belowTop = Math.max(topMargin, r.bottom + ANCHOR_GAP)
         const above = Math.max(0, r.top - ANCHOR_GAP - topMargin)
         const below = Math.max(0, window.innerHeight - belowTop - VIEWPORT_MARGIN)
         const onTop = height > below && above > below
         const maxHeight = onTop ? above : below
+        const left = Math.max(VIEWPORT_MARGIN, Math.min(r.left, window.innerWidth - width - VIEWPORT_MARGIN))
+        const top = onTop ? r.top - ANCHOR_GAP - Math.min(height, maxHeight) : belowTop
+        const bridgeTop = onTop ? top + Math.min(height, maxHeight) : r.bottom
+        const bridgeLeft = Math.min(r.left, left)
         setPos({
-          left: Math.max(VIEWPORT_MARGIN, Math.min(r.left, window.innerWidth - width - VIEWPORT_MARGIN)),
-          top: onTop ? r.top - ANCHOR_GAP - Math.min(height, maxHeight) : belowTop,
-          width, maxHeight,
+          left, top, ...fitContent ? {} : { width }, maxWidth, maxHeight,
+          bridge: {
+            left: bridgeLeft, top: bridgeTop,
+            width: Math.max(r.right, left + width) - bridgeLeft,
+            height: Math.max(0, (onTop ? r.top : top) - bridgeTop),
+          },
         })
         return
       }
@@ -208,7 +231,7 @@ export function HoverCard({
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, variant, widthAnchorRef, positioned, inline])
+  }, [open, variant, widthAnchorRef, positioned, inline, fitContent])
 
   // The first placement ran before the card mounted (height read 0): once the
   // card's real height is measurable, correct the bottom-edge clamp. The
@@ -239,7 +262,7 @@ export function HoverCard({
   const copyable = copyText !== undefined
   const dismissFromAnchor = (event: SyntheticEvent<HTMLSpanElement>): void => {
     // Portal content is a React child, but its clicks and text selection do not activate the anchor.
-    if (cardRef.current?.contains(event.target as Node)) return
+    if (portalRef.current?.contains(event.target as Node)) return
     clearTimer()
     cancelClose()
     close()
@@ -247,10 +270,11 @@ export function HoverCard({
   const card = open && pos !== null && (
     <div
       ref={cardRef}
-      className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, copyable && css.copyable, copied && css.feedback)}
+      className={clsx(css.card, variant === 'preview' && css.preview, inline && css.media, inline && fitContent && css.fitContent, copyable && css.copyable, copied && css.feedback)}
       data-closing={closing || undefined}
       style={{
-        ...pos, minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
+        left: pos.left, top: pos.top, width: pos.width, maxWidth: pos.maxWidth, maxHeight: pos.maxHeight,
+        minHeight: copied && copyHeightRef.current !== null ? copyHeightRef.current : undefined,
         '--dsh-hover-preview-fade': `${PREVIEW_FADE_MS}ms`,
       } as CSSProperties}
       role={copyable ? 'button' : undefined}
@@ -290,7 +314,8 @@ export function HoverCard({
         if (!event.currentTarget.contains(event.relatedTarget)) { clearTimer(); cancelClose(); close() }
       } : undefined}
       onPointerEnter={(event) => {
-        if (disabled || (inline && event.pointerType === 'touch')) return
+        if (disabled || event.pointerType === 'touch') return
+        if (event.pointerType === 'mouse' && !window.matchMedia('(any-hover: hover)').matches) return
         // Coming back inside during the grace (the gap, or the card itself)
         // keeps the current card rather than restarting the dwell.
         cancelClose()
@@ -310,7 +335,12 @@ export function HoverCard({
     >
       {anchor}
       {open && copyable && <span className={css.status} role="status">{copied ? copiedLabel : ''}</span>}
-      {card !== false && createPortal(card, document.body)}
+      {card !== false && createPortal(
+        <span ref={portalRef} className={css.portal}>
+          {pos.bridge !== undefined && <span className={css.bridge} style={pos.bridge} data-hovercard-bridge="" aria-hidden />}
+          {card}
+        </span>, document.body,
+      )}
     </span>
   )
 }

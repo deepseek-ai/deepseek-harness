@@ -3,8 +3,6 @@ scenario: subagent-multi
 profile: headless
 composition: default
 recording: live
-replay:
-  override: true
 sessionFormat:
   version: 0
   coverage: [multi-hop, shipped-profile]

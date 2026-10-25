@@ -271,6 +271,7 @@ describe('DockSurface', () => {
     const intents = spyIntents()
     const { unmount } = renderSurface(controller, intents)
     fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }))
+    fireEvent.click(screen.getByRole('button', { name: TEST_LABELS.splitPane }).parentElement!)
     expect(intents.splitPane).toHaveBeenCalledWith(controller.getSnapshot().state.rootId)
     expect(intents.focusPane).not.toHaveBeenCalled()
     unmount()
@@ -280,6 +281,15 @@ describe('DockSurface', () => {
     expect(disabled.hasAttribute('disabled')).toBe(true)
     expect(disabled.parentElement?.getAttribute('aria-label')).toBe(TEST_LABELS.splitPaneDisabled)
     expect(disabled.getAttribute('data-dockkit-split-blocked')).toBe('budget')
+    intents.splitPane.mockClear()
+    const hint = disabled.parentElement!
+    fireEvent.pointerDown(hint, { pointerType: 'touch' })
+    fireEvent.click(hint)
+    expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPaneDisabled)
+    expect(intents.splitPane).not.toHaveBeenCalled()
+    expect(intents.focusPane).not.toHaveBeenCalled()
+    fireEvent.pointerDown(document.body, { pointerType: 'touch' })
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
   it('names the enabled split control through the shared tooltip, not a native title', () => {
@@ -288,10 +298,10 @@ describe('DockSurface', () => {
       renderSurface(seededController(), spyIntents())
       const button = screen.getByRole('button', { name: TEST_LABELS.splitPane })
       expect(button.hasAttribute('title')).toBe(false)
-      fireEvent.mouseEnter(button)
+      fireEvent.pointerEnter(button)
       act(() => { vi.advanceTimersByTime(500) })
       expect(screen.getByRole('tooltip').textContent).toBe(TEST_LABELS.splitPane)
-      fireEvent.mouseLeave(button)
+      fireEvent.pointerLeave(button)
       expect(screen.queryByRole('tooltip')).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -968,19 +978,61 @@ describe('DockSurface', () => {
 })
 
 describe('tab drags', () => {
-  it('previews a caret at the slot under the pointer and reports that slot on release', () => {
+  it('keeps a dragged tab when the middle button is released while the primary button stays down', () => {
+    const controller = seededController()
+    const tabId = controller.openContent({ contentId: 'file:a', title: 'a.txt', kind: 'file' })
+    const state = controller.getSnapshot().state
+    const paneId = getPane(state, state.rootId).id
+    layOut([paneId], 420)
+    const intents = spyIntents()
+    intents.closeTab.mockImplementation(controller.closeTab.bind(controller))
+    intents.placeTab.mockImplementation(controller.placeTab.bind(controller))
+    renderSurface(controller, intents)
+    const chip = screen.getByRole('tab', { name: /a\.txt/u })
+
+    drag(chip, FILE_CHIP, [30, 18], false)
+    fireEvent(chip, new MouseEvent('auxclick', { button: 1, buttons: 1, bubbles: true, cancelable: true }))
+    expect(intents.closeTab).not.toHaveBeenCalled()
+    fireEvent.pointerUp(window, { pointerId: 7, button: 0, buttons: 0, clientX: 30, clientY: 18 })
+    expect(intents.placeTab).toHaveBeenCalledExactlyOnceWith(tabId, paneId, 0)
+    expect(getPane(controller.getSnapshot().state, paneId).tabs[0]).toBe(tabId)
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+  })
+
+  it('previews only strip slots that change the tab order', () => {
     const { intents, first, fileTabId, chip } = twoPanes()
     // Left of the first chip's midpoint: slot 0.
     drag(chip(fileTabId), FILE_CHIP, [30, 18], false)
     expect(document.querySelector('[data-dockkit-caret]')?.getAttribute('data-dockkit-caret')).toBe('0')
-    // Past both chips: the slot after the last one, drawn at the strip's end.
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 300, clientY: 18 })
-    expect(document.querySelector('[data-dockkit-caret]')?.getAttribute('data-dockkit-caret')).toBe('2')
-    fireEvent.pointerUp(window, { pointerId: 7, clientX: 300, clientY: 18 })
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 120, clientY: 18 })
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerMove(window, { pointerId: 7, clientX: 30, clientY: 18 })
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 30, clientY: 18 })
     // The slot counts the dragged chip itself; the planner turns it into a reorder.
-    expect(intents.placeTab).toHaveBeenCalledWith(fileTabId, first, 2)
+    expect(intents.placeTab).toHaveBeenCalledWith(fileTabId, first, 0)
     expect(gestureIntents(intents)).toEqual(['placeTab'])
     expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+  })
+
+  it.each([30, 300])('does not offer a strip placement for the lone Start tab at x=%s', (x) => {
+    const controller = seededController()
+    controller.setExpanded(true)
+    const panes = dockPaneIds(controller.getSnapshot().state)
+    layOut(panes, 520)
+    const intents = spyIntents()
+    renderSurface(controller, intents)
+    const chip = screen.getByRole('tab')
+    drag(chip, [51, 18], [x, 18], false)
+    expect(document.querySelector('[data-dockkit-caret]')).toBeNull()
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: x, clientY: 18 })
+    expect(gestureIntents(intents)).toEqual([])
+
+    drag(chip, [51, 18], [260, 590], false)
+    expect(document.querySelector('[data-dockkit-drop-active]')?.getAttribute('data-dockkit-dock-zone')).toBe('bottom')
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 260, clientY: 590 })
+    expect(intents.dropTab).toHaveBeenCalledExactlyOnceWith(chip.getAttribute('data-dockkit-tab'), panes[0], 'bottom')
   })
 
   it('reports a slot in another pane\'s strip as a placement there', () => {

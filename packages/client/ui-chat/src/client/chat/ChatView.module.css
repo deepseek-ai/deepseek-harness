@@ -22,6 +22,10 @@
 .scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* Never expose horizontal scrollable overflow: the absolutely positioned
+     text-interaction surface adds it transiently, and the changing scroll range
+     makes the transcript jitter while the tail is pinned. */
+  overflow-x: clip;
   overflow-y: auto;
   /* Sides = composer clearance + 16px: on narrow viewports the transcript
      stays exactly 32px narrower than the input card (the shared width rule). */
@@ -46,7 +50,10 @@
 }
 
 :global([data-conversation-scroll]) .scroll {
-  overflow: visible;
+  /* A host scrollport still owns vertical overflow; horizontal overflow is
+     clipped for the same reason as the self-scrolled case above. */
+  overflow-x: clip;
+  overflow-y: visible;
   flex: 0 0 auto;
   min-height: auto;
 }
@@ -55,6 +62,7 @@
    centered on the same axis as the input box (which caps at chat + 16px); the
    scroller itself stays full-bleed. */
 .column {
+  position: relative;
   max-width: var(--dsh-chat-content-width);
   width: 100%;
   margin: 0 auto;
@@ -66,14 +74,14 @@
    `hidden="until-found"` retains a searchable zero-height box; hidden and empty
    Seats do not contribute spacing. The older-history control precedes the anchor;
    an ancestor :has() here also invalidates the history on unrelated descendant edits. */
-:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
-  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
+  ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
 .column > .older + :global([data-slot="conversation.chat.flow"])
-  > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
-  margin-top: var(--dsh-chat-flow-gap, 6px);
+  > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
+  margin-top: var(--dsh-chat-flow-gap, 4px);
 }
 
-/* Process rows sit 6px apart; an Assistant response is separated from its
+/* Process rows sit 4px apart; an Assistant response is separated from its
    neighbours by 12px. */
 .flowItem[data-chat-group-part="response"] {
   --dsh-chat-flow-gap: 12px;
@@ -128,7 +136,7 @@
    steering row of each claim that Chat orders after the Turn's process
    control; that row keeps the slot above it, the way a completed Turn's
    actions row precedes the next user message, while rows claimed together
-   stay 6px apart and opening inputs keep ordinary spacing. The first waiting
+   stay 4px apart and opening inputs keep ordinary spacing. The first waiting
    echo sits directly below the running status, so admission swaps the two
    without moving any bubble. Neighbour gap rules exclude the batch start so
    this slot always applies. */
@@ -170,7 +178,7 @@
 /* While the running Step has no output, the status sits directly below the
    input. When the first output row appears, the status enters its slot below
    that row from where it stood: it travels the row's gap plus one 24px row,
-   which follows the content font size. The gap is 6px for a process row or
+   which follows the content font size. The gap is 4px for a process row or
    group header (the default declared on `.running`), 12px for a response, and
    16px after the running Turn's process control, which renders empty until the
    Turn closes, so it precedes a new Turn's first output. The default sits on
@@ -187,7 +195,7 @@
 @media (prefers-reduced-motion: no-preference) {
   :where(.column > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
     .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-    [data-chat-group-key]
+  [data-chat-group-key]
   )) ~ .running {
     animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -199,6 +207,7 @@
      turning a switch on completes a running move at once. The structural rules
      above are wrapped in :where() so these rules outrank them. An input fold
      runs both moves at zero duration. */
+
   .column[data-input-fold] .running {
     animation-duration: 0s;
   }
@@ -207,9 +216,10 @@
      status keeps its on-screen position, so the first-output slide runs at zero
      duration. Admitted steering still passes its pending echo below the status,
      so the steering entrance keeps its duration. */
+
   .column[data-chat-tail-pinned] > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
     .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-    [data-chat-group-key]
+  [data-chat-group-key]
   ) ~ .running {
     animation-duration: 0s;
   }
@@ -250,7 +260,7 @@
   flex-direction: column;
   align-items: flex-start;
   --dsh-chat-flow-gap: 12px;
-  --dsh-running-follow: calc(6px + 24px + var(--dsh-content-font-delta, 0px));
+  --dsh-running-follow: calc(4px + 24px + var(--dsh-content-font-delta, 0px));
   --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
   color: var(--dsw-alias-label-deep-diving);
   font-size: calc(var(--dsh-content-font-size, 14px) - 2px);
@@ -415,11 +425,23 @@
   pointer-events: auto;
 }
 
-.toBottom:hover {
-  background: var(--dsw-alias-button-floating-hover);
+@media (hover: hover) {
+  .toBottom:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }
 
 /* Host open-path refusal: same dialog family as the workspace folder error. */
 .modalAction {
   min-width: 72px;
+}
+
+/* Local surfaces do not contribute flex spacing or selected message text. */
+.column > .textInteraction {
+  position: absolute;
+  /* Remain below the sticky composer while scroll placement catches up. */
+  z-index: 6;
+  visibility: hidden;
+  margin: 0;
+  width: max-content;
 }

@@ -139,9 +139,20 @@
   cursor: pointer;
 }
 
-.cardContent:hover,
 .card[data-open='true'] > .cardContent {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Hover stays behind @media (hover: hover) so a tap cannot latch it; the press
+   state carries the feedback a touch client would otherwise lose. */
+.cardContent:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .cardContent:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cardContent:focus-visible {
@@ -319,8 +330,14 @@
   cursor: pointer;
 }
 
-.switcher:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.switcher:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .switcher:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .switcher:focus-visible {
@@ -484,5 +501,12 @@
 @container plugin-inventory (max-width: 520px) {
   .cards {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* iOS Safari zooms the visual viewport for a focused field under 16px. */
+@media (pointer: coarse) {
+  .search input {
+    font-size: 16px;
   }
 }

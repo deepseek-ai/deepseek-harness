@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PowerShell-Sandbox-Ausführung",
+    "description": "Führen Sie PowerShell-Befehle innerhalb der aktuellen Sandbox-Berechtigungen aus."
+  }
+}

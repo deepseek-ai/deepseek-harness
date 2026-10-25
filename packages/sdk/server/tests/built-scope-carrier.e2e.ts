@@ -69,11 +69,10 @@ try {
   });
   const run = await ctx.subagents.startActivation({
     provider: "built-local",
-    name: "scope-child",
     childId: SessionId("built-child"),
     label: "built scope carrier",
     delivery: "caller",
-    request: { parent: parent.agent, prompt: [{ type: "text", text: "Use the unavailable test model." }] },
+    parent: parent.agent, prompt: [{ type: "text", text: "Use the unavailable test model." }],
     signal: new AbortController().signal,
   });
   await run.result;

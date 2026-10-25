@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_claude_foreground",
         "name": "subagent_codex",
-        "argumentsDelta": "{\"description\":\"Observe Claude foreground diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\",\"name\":\"worker-1\"}"
+        "argumentsDelta": "{\"description\":\"Observe Claude foreground diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_claude_foreground",
           "name": "subagent_codex",
-          "arguments": "{\"description\":\"Observe Claude foreground diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\",\"name\":\"worker-1\"}"
+          "arguments": "{\"description\":\"Observe Claude foreground diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\"}"
         }
       },
       {
@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_claude_background",
         "name": "subagent_codex",
-        "argumentsDelta": "{\"description\":\"Observe Claude background diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\",\"name\":\"worker-2\"}"
+        "argumentsDelta": "{\"description\":\"Observe Claude background diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_claude_background",
           "name": "subagent_codex",
-          "arguments": "{\"description\":\"Observe Claude background diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\",\"name\":\"worker-2\"}"
+          "arguments": "{\"description\":\"Observe Claude background diagnostic\",\"prompt\":\"Return the Claude diagnostic failure.\"}"
         }
       },
       {
@@ -92,7 +92,7 @@
         "index": 0,
         "id": "call_codex_foreground",
         "name": "subagent_codex",
-        "argumentsDelta": "{\"description\":\"Observe Codex foreground diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\",\"name\":\"worker-3\"}"
+        "argumentsDelta": "{\"description\":\"Observe Codex foreground diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\"}"
       },
       {
         "type": "block-end",
@@ -101,7 +101,7 @@
           "type": "tool-call",
           "id": "call_codex_foreground",
           "name": "subagent_codex",
-          "arguments": "{\"description\":\"Observe Codex foreground diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\",\"name\":\"worker-3\"}"
+          "arguments": "{\"description\":\"Observe Codex foreground diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\"}"
         }
       },
       {
@@ -132,7 +132,7 @@
         "index": 0,
         "id": "call_codex_background",
         "name": "subagent_codex",
-        "argumentsDelta": "{\"description\":\"Observe Codex background diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\",\"name\":\"worker-4\"}"
+        "argumentsDelta": "{\"description\":\"Observe Codex background diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\"}"
       },
       {
         "type": "block-end",
@@ -141,7 +141,7 @@
           "type": "tool-call",
           "id": "call_codex_background",
           "name": "subagent_codex",
-          "arguments": "{\"description\":\"Observe Codex background diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\",\"name\":\"worker-4\"}"
+          "arguments": "{\"description\":\"Observe Codex background diagnostic\",\"prompt\":\"Return the Codex diagnostic failure.\"}"
         }
       },
       {
@@ -172,7 +172,7 @@
         "index": 0,
         "id": "call_cleanup_failure",
         "name": "subagent_codex",
-        "argumentsDelta": "{\"description\":\"Observe completed output after cleanup failure\",\"prompt\":\"Complete the task, then fail cleanup.\",\"name\":\"worker-5\"}"
+        "argumentsDelta": "{\"description\":\"Observe completed output after cleanup failure\",\"prompt\":\"Complete the task, then fail cleanup.\"}"
       },
       {
         "type": "block-end",
@@ -181,7 +181,7 @@
           "type": "tool-call",
           "id": "call_cleanup_failure",
           "name": "subagent_codex",
-          "arguments": "{\"description\":\"Observe completed output after cleanup failure\",\"prompt\":\"Complete the task, then fail cleanup.\",\"name\":\"worker-5\"}"
+          "arguments": "{\"description\":\"Observe completed output after cleanup failure\",\"prompt\":\"Complete the task, then fail cleanup.\"}"
         }
       },
       {

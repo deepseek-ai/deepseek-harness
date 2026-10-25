@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "interface de contrôle des terminaux",
+    "description": "Fournit aux clients la possibilité de créer, saisir, lire et restaurer des terminaux de session."
+  }
+}

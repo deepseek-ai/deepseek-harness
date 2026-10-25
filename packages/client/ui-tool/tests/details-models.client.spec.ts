@@ -88,6 +88,17 @@ describe('control detail adapters', () => {
     expect(details('lsp', 'hover text', { file_path: 'src/main.ts', line: 2, character: 3, operation: 'hover' })?.items[0]?.markdown).toBe('hover text')
   })
 
+  it('shows named agent targets in recorded messaging and interruption receipts', () => {
+    expect(details('send_message', 'message delivered to agent lead/reviewer', {
+      name: 'lead/reviewer', message: 'Review the change.',
+    })?.summary).toBe('lead/reviewer · Message delivered')
+    expect(details('interrupt_agent', '{"previousStatus":"running"}', {
+      name: 'lead/reviewer',
+    })?.items[0]).toMatchObject({
+      title: 'lead/reviewer', fields: [{ label: 'Previous status', value: 'Running' }],
+    })
+  })
+
   it('renders receipts, reports malformed formats, and handles truncation', () => {
     expect(details('spawn_teammate', '{"member":{"id":"a1","status":"running"}}', { name: 'A' })?.items[0]).toMatchObject({ title: 'a1', badge: { label: 'Running' } })
     expect(details('team_task_create', '{"id":"task-1","subject":"Review","status":"pending"}')?.summary).toBe('Review')

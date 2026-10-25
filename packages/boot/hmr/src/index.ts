@@ -646,7 +646,7 @@ class Hmr extends Service {
       ...info, previous,
       fibers: [...info.runtime?.fibers ?? []].map((fiber) => {
         const entry = fiber.entry?.fiber?.uid === fiber.uid ? fiber.entry : undefined
-        const config: unknown = entry === undefined ? fiber._config : entry.options.config
+        const config: unknown = entry === undefined ? fiber.rawConfig : entry.options.config
         return { fiber, entry, config, moduleNamespace: entry?.moduleNamespace }
       }),
     }))

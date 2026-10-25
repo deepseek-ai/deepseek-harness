@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Recherche de sessions",
+    "description": "Donnez aux agents des outils pour rechercher et lire les sessions précédentes à partir de l’espace de travail actuel.",
+    "detail": "docs/DETAIL.md"
+  }
+}

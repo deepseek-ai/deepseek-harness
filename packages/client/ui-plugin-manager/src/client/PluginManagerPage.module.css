@@ -1,23 +1,148 @@
-/* Plugin manager page: a centred column with its header, notices, and the package cards. */
+/* Plugin manager page: the main header and content share one scroller; the header retains its flow height.
+   The More list has a separate fixed head, and detail views scroll with their content.
+
+   Hover affordances sit under @media (hover: hover): a tap latches :hover, which
+   would strand a card, row, or control in its pointer-only state. Text fields take
+   a 16px floor under @media (pointer: coarse): iOS Safari zooms the visual viewport
+   for a focused field under 16px and leaves the page pannable afterwards. */
 
 .page {
+  --plugin-page-inset: clamp(24px, 4vw, 48px);
+  /* Every head row's top inset; the collapsed page bar narrows it. */
+  --plugin-page-top-inset: 28px;
+  --bundle-progress-size: 14px;
+  --bundle-toggle-gap: 8px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  /* Inline inset only: the 28px top inset belongs to the head row
+     (`.pageHead`, `.detailTop`, `.moreHead`). macOS window dragging is owned by a row's own box,
+     so an inset above that box leaves a top strip no drag region covers. */
+  padding: 0 var(--plugin-page-inset);
+  color: var(--dsw-alias-label-primary);
+}
+
+.page > * {
+  flex: none;
+  width: 100%;
+  max-width: 960px;
+}
+
+.pageBody > .pageBar {
+  container: plugin-page-bar / inline-size;
+  align-self: flex-start;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% + 2 * var(--plugin-page-inset) + var(--plugin-page-scrollbar-width, 0px));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
+  box-sizing: border-box;
+  padding-inline: var(--plugin-page-inset);
+}
+
+.pageBar > .pageHead {
+  align-self: center;
+  width: 100%;
+  max-width: 960px;
+}
+
+/* Spans the page's full width, so its scrollbar sits at the page edge, and re-centres the column inside. */
+.page > .pageBody {
+  flex: 1;
+  min-height: 0;
+  width: calc(100% + 2 * var(--plugin-page-inset));
+  max-width: none;
+  margin-inline: calc(-1 * var(--plugin-page-inset));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 32px;
   box-sizing: border-box;
-  height: 100%;
-  overflow: auto;
-  /* Inline and bottom insets only: the 28px top inset belongs to the head row
-     (`.pageHead`, `.detailTop`). macOS window dragging is owned by a row's own box,
-     so an inset above that box leaves a top strip no drag region covers. */
-  padding: 0 clamp(24px, 4vw, 48px) 48px;
-  color: var(--dsw-alias-label-primary);
+  padding: 0 var(--plugin-page-inset) 48px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  scroll-padding-top: var(--plugin-header-scroll-padding, 0px);
 }
 
-.page > * {
+/* The initial list inset scrolls away; the scroll viewport meets the fixed bar directly. */
+.page > :not(.pageBody) + .pageBody {
+  padding-top: 32px;
+}
+
+.pageBody > * {
+  flex: none;
   width: 100%;
   max-width: 960px;
+}
+
+/* Endpoint copies never enter the scroll layout or the accessibility tree. */
+.pageBody > .pageBar[data-measuring] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pageBody > .pageBar[data-natural] {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageHead {
+  position: relative;
+  height: var(--plugin-header-rest-height);
+  clip-path: inset(0 0 max(0px, calc(var(--plugin-header-rest-height) - var(--plugin-header-paint-height))) 0);
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageHeading {
+  display: contents;
+}
+
+.pageBar[data-natural] [data-plugin-header-part] {
+  position: absolute;
+  left: var(--plugin-part-x);
+  top: var(--plugin-part-y);
+  width: var(--plugin-part-width);
+  margin: 0;
+  pointer-events: auto;
+}
+
+.pageBar[data-natural] .pageTabs {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.pageBar[data-natural] .pageTabList {
+  pointer-events: auto;
+}
+
+.pageBar[data-natural]::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--plugin-header-paint-height, var(--plugin-header-rest-height));
+  background: var(--dsw-alias-bg-base);
+  pointer-events: none;
+}
+
+.pageBar[data-natural][data-compact]::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: var(--plugin-header-compact-height);
+  box-sizing: border-box;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .pageHead {
@@ -29,7 +154,7 @@
   box-sizing: border-box;
   /* The page's former top inset: the row starts at the window's top edge, so the whole
      strip above the page content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 /* macOS hiddenInset titlebar: the frame's top clearance keeps the head below
@@ -37,12 +162,13 @@
    owns the window drag over its own box — clearance included — so this page's
    top strip drags without a frame band. */
 :global([data-platform='darwin']) .pageHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .pageHeading {
   min-width: 0;
   max-width: 100%;
+  order: 1;
 }
 
 .pageTitle {
@@ -79,6 +205,7 @@
   gap: 8px 16px;
   min-width: 0;
   white-space: nowrap;
+  order: 2;
 }
 
 .addMenu {
@@ -164,9 +291,14 @@
   color: color-mix(in srgb, var(--dsw-alias-label-secondary) 60%, var(--dsw-alias-label-tertiary));
 }
 
-.groupMore:hover,
 .groupMore:focus-visible {
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .groupMore:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .moreHead {
@@ -177,19 +309,6 @@
 .moreBack {
   width: 28px;
   padding: 0;
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* The group's explanation, folded behind a hover/focus tooltip. */
-.groupInfo {
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
-  color: var(--dsw-alias-label-caption);
-}
-
-.groupInfo:hover,
-.groupInfo:focus-visible {
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -311,8 +430,16 @@
   position: relative;
 }
 
-.cardLink:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+/* Press feedback carries the tap: with hover fenced off, a card would otherwise
+   read as inert between touch-down and release. */
+.cardLink:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .cardLink:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cardOpen {
@@ -380,9 +507,9 @@
 .skeletonDescription { width: min(280px, 85%); }
 .skeletonIcon { border-color: transparent; }
 
-/* Keep text-column metrics while leaving the action area blank. */
+/* Switch.module.css owns the 36px switch; ongoing StateDot occupies the reserved progress size. */
 .skeletonActions {
-  width: 36px;
+  width: calc(36px + var(--bundle-toggle-gap) + var(--bundle-progress-size));
   height: 20px;
 }
 
@@ -405,6 +532,29 @@
   gap: 8px;
 }
 
+.bundleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bundle-toggle-gap);
+}
+
+.toggleProgress {
+  display: inline-flex;
+  width: var(--bundle-progress-size);
+  height: var(--bundle-progress-size);
+}
+
+.toggleProgress > svg { width: 100%; height: 100%; }
+
+.progressAnnouncement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The toolbar's icon action, round like the message-row actions. */
 .iconButton {
   display: inline-flex;
@@ -419,9 +569,15 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+.iconButton:active:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .iconButton:disabled {
@@ -499,8 +655,14 @@
   cursor: pointer;
 }
 
-.deleteButton:hover:not(:disabled) {
+.deleteButton:active:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-interactive-bg-hover));
+}
+
+@media (hover: hover) {
+  .deleteButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-interactive-bg-hover));
+  }
 }
 
 .deleteButton:disabled {
@@ -634,8 +796,10 @@
   cursor: pointer;
 }
 
-.guideToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .guideToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .guideChevron {
@@ -765,8 +929,10 @@
   cursor: pointer;
 }
 
-.registryToggle:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .registryToggle:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .registryToggle:disabled {
@@ -819,8 +985,10 @@
   cursor: pointer;
 }
 
-.registryOption:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .registryOption:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* An offered registry is one row: the radio beside its title and the line under it. */
@@ -954,9 +1122,11 @@ label.registryOption {
   cursor: pointer;
 }
 
-.wizardClose:hover {
-  background: var(--dsw-alias-bg-layer-3);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .wizardClose:hover {
+    background: var(--dsw-alias-bg-layer-3);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .wizardHero {
@@ -1213,9 +1383,9 @@ label.registryOption {
 .detailTop,
 .moreHead {
   display: flex;
-  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+  /* The same top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
-  padding-top: 28px;
+  padding-top: var(--plugin-page-top-inset);
 }
 
 .detailTop {
@@ -1224,7 +1394,7 @@ label.registryOption {
 
 :global([data-platform='darwin']) .detailTop,
 :global([data-platform='darwin']) .moreHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
 }
 
 .crumb {
@@ -1240,8 +1410,10 @@ label.registryOption {
   cursor: pointer;
 }
 
-.crumb:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .crumb:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .crumb:focus-visible {
@@ -1466,9 +1638,11 @@ label.registryOption {
   cursor: pointer;
 }
 
-.rowOpen:hover .rowId {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+@media (hover: hover) {
+  .rowOpen:hover .rowId {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 .rowOpenIcon {
@@ -1476,8 +1650,10 @@ label.registryOption {
   color: var(--dsw-alias-label-tertiary);
 }
 
-.rowOpen:hover .rowOpenIcon {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .rowOpen:hover .rowOpenIcon {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .rowState {
@@ -1509,16 +1685,119 @@ label.registryOption {
   display: none;
 }
 
-/* Installed and contributed tabs under the page header, aligned with the title; the negative margin halves
-   the page's 32px row gap, so the tabs read as part of the header. */
+/* Installed and contributed tabs under the page header at rest; the scrolled bar
+   pulls them onto the actions' row. */
 .pageTabs {
   display: flex;
-  margin-top: -16px;
+  order: 3;
+  flex: 1 1 100%;
+}
+
+/* Keep spacing inside the compact bar, above its divider rather than outside the scroll viewport. */
+.pageBar[data-compact]:not([data-natural]) {
+  --plugin-page-top-inset: 16px;
+
+  padding-bottom: 16px;
+}
+
+/* With the sidebar open, native window controls sit in the sidebar rather than above the page. */
+:global([data-platform='darwin']) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  padding-top: var(--plugin-page-top-inset);
+}
+
+/* Collapsing the sidebar moves those controls above the page; the compact bar then clears them. */
+:global([data-platform='darwin']) :global([data-sidebar-collapsed]) .pageBar[data-compact]:not([data-natural]) .pageHead {
+  --plugin-page-top-inset: 8px;
+
+  padding-top: calc(var(--plugin-page-top-inset) + var(--dsh-frame-top-clearance, 0px));
+}
+
+/* The collapsed bar's divider spans the page like the scrolled list and its scrollbar. */
+.pageBar[data-compact]:not([data-natural])::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  pointer-events: none;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageHead {
+  align-items: center;
+}
+
+.pageBar[data-compact]:not([data-natural]) .pageIntro {
+  display: none;
+}
+
+/* Visually hidden rather than removed, so the page keeps its only heading for assistive technology. */
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageHeading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pageBarWithTabs[data-compact]:not([data-natural]) .pageTabs {
+  order: 1;
+  flex: 0 0 auto;
 }
 
 .pageTabList {
   width: fit-content;
   min-width: 240px;
+}
+
+@container plugin-page-bar (width < 600px) {
+  .pageBarWithTabs .pageHead {
+    align-items: center;
+  }
+
+  .pageBarWithTabs .pageHeading {
+    flex-basis: 100%;
+  }
+
+  .pageBarWithTabs .pageTabs {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .pageBarWithTabs .toolbar {
+    order: 3;
+  }
+
+  .toolbarLabel {
+    display: none;
+  }
+
+  .pageHead .addButton,
+  .pageHead .addPrimary {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
+  /* The icon actions keep their width; a wrapped update note stays within the head. */
+  .toolbar {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  .updatesNote {
+    order: 3;
+    flex-basis: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
+
+/* Keep the usual tab width until the icon actions and their gaps need its space. */
+@container plugin-page-bar (width < 372px) {
+  .pageTabList {
+    min-width: 0;
+  }
 }
 
 /* The Installed groups keep the page's row gap inside their tab panel. */
@@ -1577,8 +1856,10 @@ button.versionSummary {
   cursor: pointer;
 }
 
-button.versionSummary:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  button.versionSummary:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .versionSummary[aria-expanded='true'] {
@@ -1940,5 +2221,13 @@ button.versionSummary:focus-visible {
 
   .versionSpacer {
     display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .installField input[type='text'],
+  .registryCustomField,
+  .partsFilter input {
+    font-size: 16px;
   }
 }

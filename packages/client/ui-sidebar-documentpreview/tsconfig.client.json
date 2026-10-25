@@ -67,6 +67,9 @@
     },
     {
       "path": "../ui-settings/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-file-drag"
     }
   ]
 }

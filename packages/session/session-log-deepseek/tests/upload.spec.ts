@@ -246,6 +246,7 @@ describe('incremental DeepSeek session-log upload', () => {
       artifact.header as unknown as SessionHeader, SessionLogOffset(artifact.inheritedEventCount), 'detached')
     const { ctx } = await harness('delivery-migration-owner')
     ctx.effect(() => ctx.sessions.enter(session))
+    ctx.sessions.announce(session)
 
     const first = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: id })
     expect(first.fields.dsh_session_log).toMatchObject({ sessionFormatVersion: SESSION_FORMAT_VERSION, afterSeq: -1 })

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /** Independent domain image positions with one shared official gallery Factory. */
+import * as fileDragPlugin from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import { act, cleanup, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -27,6 +28,7 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   new UiConversation(runtime.ctx, runtime.sessions)
+  await runtime.mount(fileDragPlugin)
   await runtime.mount(attachmentPlugin)
   await runtime.sessions.add({ id: 'image-domains' })
   const session = runtime.sessions.retainFor(runtime.ctx, SessionId('image-domains'))

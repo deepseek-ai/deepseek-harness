@@ -27,7 +27,7 @@ import { TEXTPREVIEW_ID, textDefinition } from './definition.ts'
 import { textFace } from './face.ts'
 import { createReadPage } from './rpc.ts'
 import { createTextStore } from './store.ts'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 import { DocumentPreviewRegistry } from './document/registry.ts'
 import { documentTabInfoFactory } from './document/contract.ts'
 import { apply as registerText } from './text/index.ts'
@@ -79,7 +79,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * Required browser services: the tab registry, the slot registry, copy, and the
  * workspace Remote for bytes and paged text reads.
  */
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'configForms', 'resources']
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'configForms', 'resources', 'fileDrag']
 
 /**
  * Client plugin body: register the type, its dictionaries, its body, and its chip title.
@@ -91,7 +91,7 @@ export function apply(ctx: ClientContext): void {
   const disposePreviews = ctx.reflect.provide('documentPreviews', previews)
   ctx.effect(() => disposePreviews)
   ctx.effect(() => ctx.sidebarRightTabs.register(textDefinition()), 'ui-sidebar-documentpreview: text type')
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-documentpreview: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-sidebar-documentpreview: dictionaries')
 
   const store = createTextStore()
   const face = textFace(

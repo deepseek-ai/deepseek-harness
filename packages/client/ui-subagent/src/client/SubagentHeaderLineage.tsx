@@ -14,12 +14,13 @@ import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import type {} from './slots.ts'
 import css from './SubagentHeaderLineage.module.css'
 
 type SubagentCatalogSnapshot = Omit<SessionProjectionSnapshot, 'values' | 'state'> & {
   state: 'loading' | 'ready' | 'migration-required' | 'error'
-  entries: (SessionProjectionMap['subagentCatalog'][number] & { activity: 'running' | 'inactive' })[]
+  entries: (SessionProjectionMap['subagentCatalog'][number] & { name: string | undefined; activity: 'running' | 'inactive' })[]
 }
 type Catalogs = Readonly<Record<SessionId, SubagentCatalogSnapshot>>
 
@@ -387,24 +388,26 @@ function CatalogRows({
                     )}
                   </span>
                 )}
-                {!isCurrent && !external && (
-                  <Tooltip label={t('open.sidebar')} side="bottom" align="end">
-                    <button
-                      type="button"
-                      className={css.sidebarButton}
-                      aria-label={t('open.sidebar.aria', { label })}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
-                        closeCatalog()
-                      }}
-                      onKeyDown={(event) => { event.stopPropagation() }}
-                    >
-                      <IconChevronRightOutlineRegular />
-                    </button>
-                  </Tooltip>
-                )}
+                {isCurrent || external
+                  ? <span className={css.sidebarSpace} />
+                  : (
+                    <Tooltip label={t('open.sidebar')} side="bottom" align="end">
+                      <button
+                        type="button"
+                        className={css.sidebarButton}
+                        aria-label={t('open.sidebar.aria', { label })}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
+                          closeCatalog()
+                        }}
+                        onKeyDown={(event) => { event.stopPropagation() }}
+                      >
+                        <IconChevronRightOutlineRegular />
+                      </button>
+                    </Tooltip>
+                  )}
               </div>
             </div>
             {isExpanded && (
@@ -497,6 +500,8 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const summaries = useSessions(state => state.byId)
   const statuses = useSessionStatus(value => value)
   const catalogs = useMemo<Catalogs>(() => {
+    const names = new Map(Object.values(projections).flatMap(snapshot =>
+      (snapshot.values.subagentNames ?? []).map(binding => [binding.childId, binding.name] as const)))
     return Object.fromEntries(Object.entries(projections).map(([id, snapshot]) => {
       const projected = snapshot.values.subagentCatalog
       const state = snapshot.state === 'idle'
@@ -507,6 +512,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
         error: snapshot.error,
         entries: (projected ?? []).map(entry => ({
           ...entry,
+          name: names.get(entry.id)?.split('/').at(-1),
           activity: (statuses.get(entry.id)?.running ?? summaries[entry.id]?.running) === true
             ? 'running' as const : 'inactive' as const,
         })),
@@ -526,7 +532,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const pinnedRef = useRef(false)
   const currentEntry = currentSessionId === undefined
     ? undefined
-    : projections[rootSessionId]?.values.subagentCatalog?.find(entry => entry.id === currentSessionId)
+    : catalog?.entries.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
     ? currentEntry.name ?? currentEntry.label ?? currentEntry.id
     : displayTitle
@@ -708,11 +714,13 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       ref={rootRef}
       data-subagent-action
       onKeyDown={navigate}
-      onMouseLeave={scheduleHoverClose}
+      onPointerLeave={scheduleHoverClose}
     >
       <button
         ref={triggerRef}
-        onMouseEnter={scheduleHoverOpen}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'touch') scheduleHoverOpen()
+        }}
         type="button"
         className={variant === 'switcher'
           ? `${css.switcherTrigger} ${ancestorSwitcher ? css.ancestorSwitcherTrigger : ''}`
@@ -770,8 +778,10 @@ function CatalogDropdown(props: CatalogDropdownProps) {
           tabIndex={-1}
           aria-label={t('tree.aria')}
           data-subagent-panel
-          onMouseEnter={cancelHoverClose}
-          onMouseLeave={scheduleHoverClose}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== 'touch') cancelHoverClose()
+          }}
+          onPointerLeave={scheduleHoverClose}
         >
           <div className={css.menuBody}>
             <div role="tree" aria-label={t('tree.aria')}>

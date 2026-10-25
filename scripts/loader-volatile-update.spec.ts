@@ -47,9 +47,9 @@ describe('volatile Loader updates', () => {
     const fiber = await mountEntry(ctx, { Config, apply(owner: Context) {
       owner.on('loader/volatile-update', events)
     } }, { title: 'first' })
-    const reference = fiber.config as ReturnType<typeof Config>
+    const reference = fiber.effectiveConfig as ReturnType<typeof Config>
     await update(fiber, { title: 'second' })
-    expect(fiber.config).toBe(reference)
+    expect(fiber.effectiveConfig).toBe(reference)
     expect(reference.get()).toEqual({ title: 'second' })
     expect(events).toHaveBeenCalledExactlyOnceWith([[]])
   })
@@ -70,7 +70,7 @@ describe('volatile Loader updates', () => {
     await update(first, { title: 'next', nested: { count: 2 } })
     await first.await()
     expect(mount).toHaveBeenCalledTimes(2)
-    expect(first.config).toBe(initial)
+    expect(first.effectiveConfig).toBe(initial)
     expect(initial.title).toBe(title)
     expect(configs[1]!.title.get()).toBe('hello')
     expect(observed).toEqual([{ paths: [['title'], ['nested', 'count']], title: 'next', count: 2 }])
@@ -117,9 +117,9 @@ describe('volatile Loader updates', () => {
         hooks.push(config.title.get())
       })
     } }, {})
-    const initial = fiber.config as ReturnType<typeof Config>
+    const initial = fiber.effectiveConfig as ReturnType<typeof Config>
     await update(fiber, { title: 'accepted' })
-    expect(fiber.config).toBe(initial)
+    expect(fiber.effectiveConfig).toBe(initial)
     expect(initial.title.get()).toBe('accepted')
     await update(fiber, { title: 'accepted' })
     expect(hooks).toEqual([])
@@ -180,11 +180,11 @@ describe('volatile Loader updates', () => {
     const oldUrl = 'https://a.example/'
     const newUrl = 'https://b.example/'
     const fiber = await mountEntry(ctx, { Config: schema, apply }, { live: 'a', url: oldUrl })
-    const before = fiber.config as ReturnType<typeof schema>
+    const before = fiber.effectiveConfig as ReturnType<typeof schema>
     await update(fiber, { live: 'b', url: newUrl })
     await fiber.await()
     expect(apply).toHaveBeenCalledTimes(2)
-    expect((fiber.config as ReturnType<typeof schema>).url.href).toBe(newUrl)
+    expect((fiber.effectiveConfig as ReturnType<typeof schema>).url.href).toBe(newUrl)
     expect(before.live.get()).toBe('a')
     await update(fiber, { live: 'c', url: newUrl, data: 'first' })
     await update(fiber, { live: 'd', url: newUrl, data: 'second' })
@@ -199,7 +199,7 @@ describe('volatile Loader updates', () => {
       owner.on('loader/volatile-update', events)
     } }, { values: [undefined] })
     await update(fiber, { values: [null] })
-    expect((fiber.config as ReturnType<typeof schema>).values.get()).toEqual([null])
+    expect((fiber.effectiveConfig as ReturnType<typeof schema>).values.get()).toEqual([null])
     expect(events).toHaveBeenCalledExactlyOnceWith([['values']])
   })
 })
@@ -308,7 +308,7 @@ it('updates volatile children through Group and Include custom updates and saves
   expect(includeEntry.fiber).toBe(originalInclude)
   expect(group.fiber).toBe(originalGroup)
   expect(consumer.fiber).toBe(originalConsumer)
-  expect(consumer.fiber!.config).toBe(initial)
+  expect(consumer.fiber!.effectiveConfig).toBe(initial)
   expect(configs).toHaveLength(1)
   expect(notifications).toHaveBeenCalledTimes(2)
   expect(childUpdates).not.toHaveBeenCalled()
@@ -318,7 +318,7 @@ it('updates volatile children through Group and Include custom updates and saves
   entry.fiber!.update({ title: 'custom-update', fixed: 'ordinary' })
   expect(childUpdates).toHaveBeenCalledOnce()
   expect(entry.options.config).toEqual({ title: 'custom-update', fixed: 'ordinary' })
-  expect((entry.fiber!.config as ReturnType<typeof Config>).title.get()).toBe('hello')
+  expect((entry.fiber!.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('hello')
   entry.fiber!.update({ title: 'ephemeral', fixed: 'ordinary' }, true)
   expect(childUpdates).toHaveBeenCalledTimes(2)
   expect(entry.options.config).toEqual({ title: 'custom-update', fixed: 'ordinary' })
@@ -332,11 +332,11 @@ it('commits volatile edits in place and retains direct Fiber updates', async () 
   const notifications = vi.fn()
   const apply = vi.fn(function (owner: Context) { owner.on('loader/volatile-update', notifications) })
   const fiber = await mountEntry(ctx, { Config, apply }, {})
-  const original = fiber.config as ReturnType<typeof Config>
+  const original = fiber.effectiveConfig as ReturnType<typeof Config>
   await ctx.loader.create({ name: 'cordis:disabled', disabled: true })
   await update(fiber, { title: 'enabled' })
   expect(apply).toHaveBeenCalledOnce()
-  expect(fiber.config).toBe(original)
+  expect(fiber.effectiveConfig).toBe(original)
   expect(original.title.get()).toBe('enabled')
   expect(notifications).toHaveBeenCalledExactlyOnceWith([['title']])
   await update(fiber, { title: 'invalid', nested: { count: -1 } })
@@ -344,7 +344,7 @@ it('commits volatile edits in place and retains direct Fiber updates', async () 
   await update(fiber, { title: 'mixed', fixed: 'changed' })
   expect(apply).toHaveBeenCalledTimes(2)
   expect(original.title.get()).toBe('enabled')
-  const current = fiber.config as ReturnType<typeof Config>
+  const current = fiber.effectiveConfig as ReturnType<typeof Config>
   expect(current.title.get()).toBe('mixed')
 
   const hook = vi.fn((_config: unknown, _noSave: boolean, next: () => void) => { next() })
@@ -365,7 +365,7 @@ it('parses a volatile-only update through the config hook without patching the e
   const fiber = await mountEntry(ctx, { Config, apply(owner: Context) {
     owner.on('loader/volatile-update', () => { trace.push('notify') })
   } }, { block: { title: 'initial' } })
-  const current = fiber.config as ReturnType<typeof Config>
+  const current = fiber.effectiveConfig as ReturnType<typeof Config>
   const resolveHook = vi.fn((_raw: unknown, next: () => unknown) => next())
   fiber.ctx.on('internal/config', resolveHook)
   const contextPatch = vi.fn((_entry: unknown, next: () => void) => { next() })
@@ -379,7 +379,7 @@ it('parses a volatile-only update through the config hook without patching the e
   expect(resolveHook).toHaveBeenCalledOnce()
   expect(trace).toEqual(['validate', 'notify'])
   expect(current.block.get()).toEqual({ title: 'changed' })
-  expect(fiber._config).toBe(raw)
+  expect(fiber.rawConfig).toBe(raw)
 })
 
 it.each([true, false])('keeps old references untouched when isolation replaces a dependency (available: %s)', async (available) => {
@@ -452,7 +452,7 @@ it.each(['group', 'include'] as const)('applies profile patches to a %s subtree 
   await reconcileProfilePatches(ctx, patch('second'), 'volatile-test')
   expect(parent.fiber).toBe(parentFiber)
   expect(entry.fiber).toBe(childFiber)
-  expect(entry.fiber!.config).toBe(original)
+  expect(entry.fiber!.effectiveConfig).toBe(original)
   expect(original.title).toBe(reference)
   expect(reference.get()).toBe('second')
   expect(configs).toHaveLength(1)
@@ -481,9 +481,9 @@ it('logs an invalid candidate and keeps its references while other entries commi
   await invalid.entry!.update({ config: { title: 'invalid', nested: { count: -1 } } })
   await healthy.entry!.update({ config: { title: 'healthy' } })
   expect(warning).toHaveBeenCalledTimes(2)
-  expect((invalid.config as ReturnType<typeof Config>).title.get()).toBe('hello')
-  expect(invalid._config).toEqual({ title: 'invalid', nested: { count: -1 } })
-  expect((healthy.config as ReturnType<typeof Config>).title.get()).toBe('healthy')
+  expect((invalid.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('hello')
+  expect(invalid.rawConfig).toEqual({ title: 'invalid', nested: { count: -1 } })
+  expect((healthy.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('healthy')
   expect(events).toHaveBeenCalledExactlyOnceWith([['title']])
 })
 
@@ -500,7 +500,7 @@ it.each([false, true])('retains raw expression edits for dependency restoration 
   await fiber.entry!.update({ config: raw })
   await fiber.await()
   expect(values).toEqual(volatile ? ['same'] : ['same', 'same'])
-  expect(fiber._config).toBe(raw)
+  expect(fiber.rawConfig).toBe(raw)
   await provider.dispose()
   await provide('old-route', 'new-route')
   await fiber.await()
@@ -540,10 +540,10 @@ it('compares ordinary URL transforms by value and remounts when an expression re
   const fixed = { __jsExpr: "ctx.get('volatile-transform-source').value" }
   const raw = { url: 'https://example.com/', fixed, live: 'old' }
   const fiber = await mountEntry(ctx, { Config: schema, apply: mount }, raw)
-  const current = fiber.config as ReturnType<typeof schema>
+  const current = fiber.effectiveConfig as ReturnType<typeof schema>
   await update(fiber, { ...raw, live: 'new' })
   expect(mount).toHaveBeenCalledOnce()
-  expect(fiber.config).toBe(current)
+  expect(fiber.effectiveConfig).toBe(current)
   expect(current.url.href).toBe(raw.url)
   expect(current.fixed).toBe('initial')
   expect(current.live.get()).toBe('new')
@@ -554,7 +554,7 @@ it('compares ordinary URL transforms by value and remounts when an expression re
   expect(current.fixed).toBe('initial')
   expect(current.live.get()).toBe('new')
   expect(events).toHaveBeenCalledOnce()
-  const replaced = fiber.config as ReturnType<typeof schema>
+  const replaced = fiber.effectiveConfig as ReturnType<typeof schema>
   expect(replaced.fixed).toBe('changed')
   expect(replaced.live.get()).toBe('remounted')
 })
@@ -568,13 +568,13 @@ it('remounts when an ordinary parent expression removes a live reference path', 
   const mount = vi.fn(function (owner: Context) { owner.on('loader/volatile-update', events) })
   const raw = { block: { __jsExpr: "ctx.get('volatile-path-source').block" }, live: 'old' }
   const fiber = await mountEntry(ctx, { Config: schema, apply: mount }, raw)
-  const current = fiber.config as ReturnType<typeof schema>
+  const current = fiber.effectiveConfig as ReturnType<typeof schema>
   source.block = undefined
   await update(fiber, { ...raw, live: 'new' })
   expect(mount).toHaveBeenCalledTimes(2)
   expect(current.block.value.get()).toBe('old')
   expect(events).not.toHaveBeenCalled()
-  expect((fiber.config as ReturnType<typeof schema>).block).toBeUndefined()
+  expect((fiber.effectiveConfig as ReturnType<typeof schema>).block).toBeUndefined()
 })
 
 it('keeps an ordinary plugin mounted when an absent object becomes its explicit default', async () => {
@@ -582,13 +582,13 @@ it('keeps an ordinary plugin mounted when an absent object becomes its explicit 
   const Config = z.object({ nested: z.object({ fixed: z.string() }).default({ fixed: 'default' }) })
   const mount = vi.fn()
   const fiber = await mountEntry(ctx, { Config, apply: mount }, {})
-  const config: unknown = fiber.config
+  const config: unknown = fiber.effectiveConfig
   await update(fiber, { nested: { fixed: 'default' } })
-  expect(fiber.config).toBe(config)
+  expect(fiber.effectiveConfig).toBe(config)
   expect(mount).toHaveBeenCalledTimes(1)
   await update(fiber, { nested: { fixed: 'changed' } })
   expect(mount).toHaveBeenCalledTimes(2)
-  expect(fiber.config).toEqual({ nested: { fixed: 'changed' } })
+  expect(fiber.effectiveConfig).toEqual({ nested: { fixed: 'changed' } })
 })
 
 it('keeps a noSave volatile value as the pending raw config across a no-op entry update', async () => {
@@ -596,11 +596,11 @@ it('keeps a noSave volatile value as the pending raw config across a no-op entry
   const fiber = await mountEntry(ctx, { Config, apply() {} }, { title: 'saved' })
   fiber.update({ title: 'ephemeral' }, true)
   await fiber.await()
-  expect((fiber.config as ReturnType<typeof Config>).title.get()).toBe('ephemeral')
+  expect((fiber.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('ephemeral')
   expect(fiber.entry!.options.config).toEqual({ title: 'saved' })
   await fiber.entry!.update({ config: { title: 'saved' } })
-  expect(fiber._config).toEqual({ title: 'ephemeral' })
-  expect((fiber.config as ReturnType<typeof Config>).title.get()).toBe('ephemeral')
+  expect(fiber.rawConfig).toEqual({ title: 'ephemeral' })
+  expect((fiber.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('ephemeral')
 })
 
 it('isolates a failing notification listener and dispatches with a Context receiver', async () => {
@@ -613,11 +613,11 @@ it('isolates a failing notification listener and dispatches with a Context recei
   const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
   onTestFinished(() => { warning.mockRestore() })
   await update(fiber, { title: 'committed' })
-  expect((fiber.config as ReturnType<typeof Config>).title.get()).toBe('committed')
+  expect((fiber.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('committed')
   expect(receivers).toEqual([fiber])
   expect(warning).toHaveBeenCalledWith(expect.objectContaining({ message: 'listener boom' }))
   await update(other, { title: 'unaffected' })
-  expect((other.config as ReturnType<typeof Config>).title.get()).toBe('unaffected')
+  expect((other.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('unaffected')
 })
 
 it('remounts instead of committing when an ordinary field parses into a fresh class instance', async () => {
@@ -626,9 +626,9 @@ it('remounts instead of committing when an ordinary field parses into a fresh cl
   const schema = z.object({ handle: z.transform(z.string(), value => new Handle(value)), live: z.string().volatile() })
   const mount = vi.fn()
   const fiber = await mountEntry(ctx, { Config: schema, apply: mount }, { handle: 'h', live: 'old' })
-  const before = fiber.config as ReturnType<typeof schema>
+  const before = fiber.effectiveConfig as ReturnType<typeof schema>
   await update(fiber, { handle: 'h', live: 'new' })
   expect(mount).toHaveBeenCalledTimes(2)
   expect(before.live.get()).toBe('old')
-  expect((fiber.config as ReturnType<typeof schema>).live.get()).toBe('new')
+  expect((fiber.effectiveConfig as ReturnType<typeof schema>).live.get()).toBe('new')
 })

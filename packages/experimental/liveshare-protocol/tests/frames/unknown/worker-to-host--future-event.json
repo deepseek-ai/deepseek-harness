@@ -1,0 +1,5 @@
+{
+  "dir": "worker->host",
+  "note": "an event this host does not know: it must be ignored rather than misread as a known event",
+  "frame": { "type": "share-progress", "shareId": "share-one", "percent": 50 }
+}

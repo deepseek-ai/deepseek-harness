@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.2/cua-relative-coordinates/guide.md
+/:
+  en: ffbf3ccb8ac486ea
+  zh: 1712a76e8e3a664a
+/cua-relative-coordinates-use-0-999:
+  en: 1952d155be13e0d1
+  zh: 01b2f9f27499f033
+/cua-relative-coordinates-use-0-999/change:
+  en: 311311c2056c8e93
+  zh: 63f4dc87c9d22f99
+/cua-relative-coordinates-use-0-999/migration:
+  en: de5b600f1d9ae83c
+  zh: e2de8ebd5c7ca2bb

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,11 +57,11 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       settled.resolve(undefined)
     })
 
-    const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { parent, prompt: [{ type: 'text', text: 'child task' }] },
+      parent, prompt: [{ type: 'text', text: 'child task' }],
       signal: new AbortController().signal,
     })
     await settled.promise
@@ -80,7 +79,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
     expect(requests.map(request => request.path)).toEqual(['/anthropic/v1/messages', '/anthropic/v1/messages'])
     const notice = parent.session.deriveMessages().find(message => message.source.kind === 'subagent-settled')
     const closingContent = [
-      { type: 'text', text: `Background subagent ${started.name} finished and will do no further work unless you send it more.` },
+      { type: 'text', text: `Background subagent ${started.childId} finished and will do no further work unless you send it more.` },
       { type: 'text', text: 'Its closing message:' },
       { type: 'text', text: 'child answer' },
     ]

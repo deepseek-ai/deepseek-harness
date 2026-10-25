@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto'
-import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 /** Default-off settings and per-session model-selection decisions. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -13,6 +13,7 @@ import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as tool from '../src/index.ts'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
@@ -48,6 +49,7 @@ async function boot(withPreset = true): Promise<Context> {
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   subagentConfigs.set(ctx, await liveConfig(ctx, SubagentRuntime))
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   if (withPreset) {
     const preset = createScope(ctx, { preset: 'model-selection-test' })
@@ -173,16 +175,16 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.fiber.dispose()
   })
 
-  it('installs a direct Agent setup before Session publication', async () => {
+  it('installs a direct Agent setup before Agent publication', async () => {
     const ctx = await boot(false)
     await selectionConfigs.get(ctx)!.update({
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
     let prepared: Awaited<ReturnType<Context['agents']['create']>>['agent'] | undefined
-    let visibleAtSessionCreated = false
-    ctx.on('session/created', () => {
-      visibleAtSessionCreated = prepared !== undefined && selectable(ctx, prepared)
+    let visibleAtAgentCreated = false
+    ctx.on('agent/created', () => {
+      visibleAtAgentCreated = prepared !== undefined && selectable(ctx, prepared)
     })
 
     const handle = await ctx.agents.create({
@@ -200,7 +202,7 @@ describe('SubagentModelSelectionConfig', () => {
       },
     })
 
-    expect(visibleAtSessionCreated).toBe(true)
+    expect(visibleAtAgentCreated).toBe(true)
     expect(selectable(ctx, handle.agent)).toBe(true)
     await handle.dispose()
     await ctx.fiber.dispose()
@@ -269,11 +271,11 @@ describe('SubagentModelSelectionConfig', () => {
     })
     const agent = await createAgent(ctx, 'enforced')
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: new AbortController().signal,
       callId: ToolCallId('disallowed-session-route'),
       name: 'subagent',
-      arguments: { name: `child-${randomUUID()}`,
+      arguments: {
         description: 'forced route',
         prompt: 'do it',
         provider: 'alpha',
@@ -324,6 +326,7 @@ describe('SubagentModelSelectionConfig', () => {
     const next = () => Promise.resolve({ kind: 'enter' as const, messages: [] })
     const payload = {
       agent: enabled.agent,
+      modelSelection: { provider: 'mock', model: 'mock' },
       messages: [],
       turn: 1,
       step: 1,
@@ -360,7 +363,7 @@ describe('SubagentModelSelectionConfig', () => {
       expect(ctx.tools.get('subagent', parent)).toBeDefined()
       expect(ctx.tools.get('subagent', child)).toBeUndefined()
       expect(ctx.tools.get('list_subagent_models', child)).toBeUndefined()
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         name: 'subagent', callId: ToolCallId('filtered-delegation'), arguments: {},
         agent: child, signal: new AbortController().signal,
       })
@@ -416,6 +419,7 @@ describe('SubagentModelSelectionConfig', () => {
     await mountAgentLoopTestDependencies(ctx)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentNames)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     await ctx.plugin(tool, { provider: 'spawn', modelSelection: true })
     await ctx.plugin(tool, { provider: 'spawn', toolName: 'another_spawn', modelSelection: true })
@@ -445,12 +449,12 @@ it('reads the saved default depth at each delegation without remounting the tool
     const initial = await ctx.systemPrompt.assemble(assembleContextFor(agent))
     expect(initial.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
       .toBe('')
-    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'first', prompt: 'work' })
+    await callSubagent(ctx, { description: 'first', prompt: 'work' })
     await subagentConfigs.get(ctx)!.update({ maxDepth: 5 })
     const updated = ctx.systemPrompt.refreshContext(initial, assembleContextFor(agent))
     expect(updated.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
       .toBe('')
-    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'second', prompt: 'work' })
+    await callSubagent(ctx, { description: 'second', prompt: 'work' })
     await subagentConfigs.get(ctx)!.update({ maxDepth: 0 })
     const disabled = ctx.systemPrompt.refreshContext(initial, assembleContextFor(agent))
     expect(disabled.contexts.find(part => part.name === 'tool:subagent:depth')?.text)
@@ -461,7 +465,7 @@ it('reads the saved default depth at each delegation without remounting the tool
     expect(ctx.systemPrompt.refreshContext(disabled, assembleContextFor(agent))
       .contexts.find(part => part.name === 'tool:subagent:depth')?.text).toBe('')
     await subagentConfigs.get(ctx)!.update({ maxDepth: 0 })
-    await callSubagent(ctx, { name: `child-${randomUUID()}`, description: 'disabled', prompt: 'work' })
+    await callSubagent(ctx, { description: 'disabled', prompt: 'work' })
     expect(depths).toEqual([1, 5, 0])
   } finally {
     await ctx.fiber.dispose()

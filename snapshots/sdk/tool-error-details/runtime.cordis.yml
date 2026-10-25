@@ -1,6 +1,8 @@
-- id: tools
-  config:
-    mode: native
+- id: tool-executor-native
+  disabled: false
+
+- id: tool-executor-ptc
+  disabled: true
 
 - insert:
     - id: ptc-runtime

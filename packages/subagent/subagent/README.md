@@ -42,7 +42,7 @@ Mount the service with `@deepseek-ai/dsh-session-projection`, a provider, and th
     toolName: subagent
 ```
 
-The tool accepts an optional sibling-unique name segment and immediately returns the full child path. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
+The tool returns a child session id immediately. The parent receives a completion notice when the background activation settles. Mounting the service alone enables no delegation.
 
 ### Delegation settings
 
@@ -50,18 +50,17 @@ The limits section on the **Plugins → Subagent** page edits the Host’s `suba
 
 ### Activation capacity
 
-Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each Team. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
+Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
 
 The current `maxActiveSubagents` value is sampled before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
 
 At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (browser prompts receive `subagent/delivery-unavailable`): wait for a child to finish or continue using the existing agents. Admission does not queue, because a parent waiting for descendants must not wait for its own occupied slot. Slots are process-local and do not constrain cumulative Session history or token usage.
 
-<a id="local-and-external-children"></a>
 ### Local and external children
 
-`startActivation({ name, provider, label, request, signal, delivery })` returns `{ childId, name, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `request.agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
+`startActivation({ provider, label, prompt, parent, signal, delivery })` returns `{ childId, messageId?, result, dispose }`. Supplying `childId` selects a local backend and guarantees `messageId`. Local children accept later messages and can cold-resume; external children expose one execution and reject continuation. `agentOptions` overrides supported child model settings. `delivery: 'parent'` supplies the model-facing completion notice; `delivery: 'caller'` lets workflows await the result without a parent notice or initial return guidance. Local parent delivery requires persistence; caller delivery can use an ephemeral local session. Cold resume requires persistence and Session query.
 
-Agent names are immutable segments unique among one parent’s direct children. Creation accepts a lower-case letter followed by lower-case letters, digits, underscores, or hyphens. The returned `name` is a full path: `lead`, `lead/reviewer`, or `lead/explore/alice`. Each parent’s catalog retains the segment; ancestry supplies the prefix. Both tools and `startActivation()` accept optional `name`; omission selects the first unused `agent-N`, starting at `agent-1`, across cataloged and pending siblings before provider preparation. Failed unpublished reservations release their names. Every activation enters the catalog regardless of delivery mode. Pending reservations are scoped to the live parent and released when creation returns or fails. Cataloged names remain taken after settlement. `nameOf(agent)` derives the path from creation ancestry; `resolveName()` follows only the catalogs along a full path and grants no operation authority. Unrelated unreadable branches do not block creation or lookup. Historical unnamed children use `legacy:<session-id>` as their path segment.
+`rootOf(agent)` resolves a managed local Agent through its existing Activation and checks the exact live child and root instances. Intermediate creators can leave without changing that root; same-id replacements cannot inherit membership. Ordinary live Agents resolve to themselves, while unmanaged delegated Agents are rejected. The query does not activate Sessions.
 
 ### Child presets
 
@@ -69,13 +68,11 @@ In-process spawn accepts an independent `agentPreset`; fork and external backend
 
 ### Messaging, interrupting, and discovering
 
-`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the Team root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Interruption still requires ancestor authority. Browser prompts validate the durable direct-creator address and require a live Team root; the creator may be offline. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. Direct-child discovery reads `subagentCatalog` through `listChildren(parentSessionId, signal?)`, owning and releasing a live-preferred Session observation. Recursive discovery preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
+`sendMessage()` lets the live root and resident continuable subagents contact any other root or continuable member in the same tree by Session id. The target receives Steer input at its next step or starts an idle turn. Only the cold target resumes, under the subagent tree root; its creation ancestors stay offline and the message retains its actual sender. `rootOf()` resolves the caller’s live root. Agent interruption requires ancestor authority. Browser prompts and user interrupts address only the child Session; the Gateway checks the corresponding action on that Session before any side effect. Parent or global grants do not imply child access. Prompts require a live subagent tree root; the creator may be offline. User interrupts perform no restoration and accept absent targets as no-ops. They select Queue or Steer and admit image batches through the attachment store; incompatible target models reject images. `listDescendants()` discovers members recursively through parent-owned `subagentCatalog` projections. It preserves catalog order, reads each reachable Session once, skips external leaves, and reports unreadable branches without activating Agents.
 
 ### Failure and recovery
 
-Name admission rejects invalid segments with `INVALID_AGENT_NAME` and occupied siblings with `DUPLICATE_AGENT_NAME`; choose a valid unused segment or omit it. Lookup reports `AGENT_NAME_NOT_FOUND` for an absent path: rediscover with `list_agents`. `CORRUPT_AGENT_NAMES` means a parent catalog has ambiguous assignments and needs repair. `AGENT_TREE_UNAVAILABLE` means the required live ancestry is missing or changed during creation; restore the root before retrying.
-
-Starting without the `agents` service rejects with `CONTINUATION_UNAVAILABLE`; an available runtime rejects a missing or replaced parent with `UNAUTHORIZED`. Providers implementing neither execution method are rejected at registration with `UNSUPPORTED_CAPABILITY`; unsupported requested capabilities reject creation with the same code. The caller signal cancels only unpublished work; after publication, `dispose()` cancels the exact activation and waits for its resource cleanup. Creation descendants continue independently; hosts must await `drainDescendants([root])` before disposing the root handle to stop all members and await pending startup. `result` settles after teardown and notifications, carrying output, optional structured data, and a stop reason; capture failures reject it after teardown. Cleanup failures reject `dispose()` and mark the lifecycle end as failed; the result promise and parent notification retain the captured execution result.
+Starting without the `agents` service rejects with `CONTINUATION_UNAVAILABLE`; an available runtime rejects a missing or replaced parent with `UNAUTHORIZED`. Providers implementing neither execution method are rejected at registration with `UNSUPPORTED_CAPABILITY`; unsupported requested capabilities reject creation with the same code. If a provider is removed or replaced while directory resolution is pending, creation rejects with `PROVIDER_CHANGED` before invoking either provider; retry the delegation against the current registration. The caller signal cancels only unpublished work; after publication, `dispose()` cancels the exact activation and waits for its resource cleanup. Creation descendants continue independently; hosts must await `drainDescendants([root])` before disposing the root handle to stop all members and await pending startup. `result` settles after teardown and notifications, carrying output, optional structured data, and a stop reason; capture failures reject it after teardown. Cleanup failures reject `dispose()` and mark the lifecycle end as failed; the result promise and parent notification retain the captured execution result.
 
 -----
 
@@ -90,7 +87,7 @@ This section explains how the service is built and where the observable behavior
 ### Design concept
 
 - **One service, many providers.** The service is a named-provider registry; each backend registers under a unique name and a request picks one by name.
-- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, Team ownership, and disposal. Each activation retains a local AgentHandle or external SubagentRun directly; local inbox and idle state belong only to the local variant.
+- **One managed lifetime.** `SubagentManager` owns startup, message admission, capacity, runtime ownership, and disposal. Each activation retains its lifecycle identity and a local AgentHandle or external SubagentRun; the manager publishes paired events through the service's scoped emitter. Local inbox and idle state belong only to the local variant.
 - **Fulfillment is publication.** `startActivation()` returns only after the child is accepted and its handle can cancel that exact execution.
 - **Trusted same-process values.** Requests, descriptors, and results are borrowed immutable; serialization and hostile-input validation belong at process and wire boundaries.
 
@@ -99,10 +96,9 @@ This section explains how the service is built and where the observable behavior
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
-| [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, Team ownership, settlement, and disposal |
+| [`src/manager.ts`](src/manager.ts) | Unified startup, message admission, cold resume, runtime ownership, settlement, and disposal |
 | [`src/activation.ts`](src/activation.ts) | Execution records, capacity slots, child locks, and local output capture |
-| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Team messages, return guidance, and settlement notices |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard Team messaging markers |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Agent messages, return guidance, and settlement notices |
 | [`src/structured.ts`](src/structured.ts) | Activation-scoped structured capture and guards |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
@@ -115,17 +111,17 @@ This section explains how the service is built and where the observable behavior
 
 ### Provider preparation and structured output
 
-The service validates requested capabilities before creation. Local providers supply only `prepareContinuable()`: spawn returns fresh state and fork returns a completed-turn seed. The manager captures the parent model settings, delegated permissions, and composition before creating the child. External providers retain `start()` as a transport adapter and retain their own permission systems. The common manager owns their published execution. Structured tools, instructions, validation, and terminal guards belong to one local activation; they are not persisted as resume configuration. The child can submit its structured result after consuming accepted input. Work that depends on descendants must explicitly wait for their results. Staging a result closes further input through tool-result policy and any enclosing PTC execution; a rejected result reopens input, while a committed result keeps it closed. Later cold resume has no structured schema.
+The service validates requested capabilities and binds execution to that exact provider instance before creation. The manager receives the bound operation rather than a provider lookup. Local providers supply only `prepareContinuable()`: spawn returns fresh state and fork returns a completed-turn seed. The manager captures the parent model settings, delegated permissions, and composition before creating the child. External providers retain `start()` as a transport adapter and retain their own permission systems. The common manager owns their published execution. Structured tools, instructions, validation, and terminal guards belong to one local activation; they are not persisted as resume configuration. The child can submit its structured result after consuming accepted input. Work that depends on descendants must explicitly wait for their results. Staging a result closes further input through tool-result policy and any enclosing PTC execution; a rejected result reopens input, while a committed result keeps it closed. Later cold resume has no structured schema.
 
 External providers mint a fresh `SubagentRun.id` for each execution in the runtime's shared Session id namespace, across all parents and providers. A collision with a resident Agent, Session, or activation rejects startup with `DUPLICATE_CHILD` and disposes the new external handle without replacing the existing execution.
 
 ### Activation settlement
 
-The manager reserves child identity and capacity, materializes a local Agent or external execution, and accepts the initial task. Local admission closes after Agent activity and pending input finish, with activity revalidated after the final Session flush. Both local and external activations deliver their result after handle cleanup, capacity release, and settlement notifications. Host waits on the Team root join progressing members and their cleanup, including failed executions; idle members with parked input remain resident without delaying host completion. Ordinary members do not wait for descendants. Closing admission and disposing the handle prevent late work from entering a released Agent. Parent delivery emits its notice after settlement only if the creator is still online; caller delivery leaves collection to the awaiting workflow. Headless hosts repeat `agent.whenIdle()` and `waitForChildren(agent)` until no child work remains and the parent stays idle with an unchanged Session sequence across the child check, so completion notices can produce the final parent answer.
+The manager reserves child identity and capacity, materializes a local Agent or external execution, and accepts the initial task. Local admission closes after Agent activity and pending input finish, with activity revalidated after the final Session flush. Both local and external activations deliver their result after handle cleanup, capacity release, and settlement notifications. Host waits on the subagent tree root join progressing members and their cleanup, including failed executions; idle members with parked input remain resident without delaying host completion. Ordinary members do not wait for descendants. Closing admission and disposing the handle prevent late work from entering a released Agent. Parent delivery emits its notice after settlement only if the creator is still online; caller delivery leaves collection to the awaiting workflow. Headless hosts repeat `agent.whenIdle()` and `waitForTreeWork(agent)` until no child work remains and the parent stays idle with an unchanged Session sequence across the child check, so completion notices can produce the final parent answer.
 
 A local Agent failure without a subsequently committed `turn/end` settles as `error` independently of its descendants. Unclaimed input cannot keep that failed activation resident. A later committed turn ending supersedes the live failure and supplies the recovered outcome.
 
-Local and external creation appends a direct-child `subagent/catalog` fact to the parent Session regardless of result delivery. That append commits the child’s name; nested children require no additional root record. A failed append releases the pending name and disposes the activation. A local descriptor can remain, but a child can resume only when its direct parent catalog contains its id. After the append, execution or notification failure does not release the name. Persistence flush remains separate from the synchronous append. Historical unnamed catalog entries retain legacy paths.
+Successful local creation appends a `subagent/catalog` fact to the parent Session regardless of result delivery. External creation appends a catalog fact only with `delivery: 'parent'`; caller-owned external executions retain their caller's membership records. External entries use `mode: 'external'` to identify children without a local Session. Catalog entries record membership once at creation and carry no execution status. Complete results go to the caller or the parent completion notice. Projections exclude inherited facts. Direct lists read one parent projection, so completed local workflow children remain discoverable and can be opened or continued. Catalog payload v0 records local modes; v1 also accepts unknown mode; v2 records external executions. Readers support all three versions. Historical migration appends a v1 `subagent/catalog` from a readable child header when its descriptor is unavailable; local creation retains v0. Its `mode: 'unknown'` projection keeps the child visible without claiming continuation support; an existing complete entry remains authoritative.
 
 <a id="restoring-child-composition"></a>
 ### Restoring child composition
@@ -136,11 +132,11 @@ Targets without a saved preset use the host composition and retain their histori
 
 ### Ownership and invariants
 
-- **The manager owns accepted work** — unpublished failures roll back; published handles cancel and release only their exact activation. Every instance belongs to the Team root; creation parent ids remain unchanged.
+- **The manager owns accepted work** — unpublished failures roll back; published handles cancel and release only their exact activation. Every instance belongs to the subagent tree root; creation parent ids remain unchanged.
 - **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
-- **Agent-message authority follows the tree** — the exact live sender and target must belong to one root. Cold delivery verifies the target descriptor and creation catalogs before restoring only the target. Final inbox admission rechecks the sender and Team root; failed restoration releases the new instance.
+- **Agent-message authority follows the tree** — the exact live sender and target must belong to one root. Cold delivery verifies the target descriptor and creation catalogs before restoring only the target. Final inbox admission rechecks the sender and subagent tree root; failed restoration releases the new instance.
 - **The descriptor is log-only** — a session event absent from model history and retained across compaction; the writer records the resolved child provider, model, and reasoning effort for cold resume. Historical one-shot descriptors remain readable.
-- **This runtime answers archive admission for children** ([seam](../../workspace/workspace/README.md)) — `workspace/session-activity` reports the live subagent descendants inside a turn as the `subagent` family, found by the durable lineage this package records (`parentSession` with the subagent origin, any depth, never a fork) and labelled from each child's descriptor through a live Session observation when the Session query service is composed, otherwise by id; `workspace/session-stop` cancels each of them with the parent cause, one at a time, so one child refusing its cancel is logged while its siblings still stop. The parent's own turn, its jobs, and the archived-lineage step gate belong to the API Session Controller.
+- **This runtime answers archive admission for children** ([seam](../../workspace/workspace/README.md)) — activity queries, parent-cause cancellation, and pre-step rejection use managed creation ancestors even after an intermediate creator goes offline. Agents without a published Activation use live header ancestry; ordinary forks remain independent. Labels use the current identity projection's latest descriptor only when it belongs to the child's own log; missing, invalid, inherited, or unlabelled identities report only the id. Reporting requires no Session query service and starts after identity projection registration. Each cancellation failure is contained. The Agent registry owns the parent’s turn, job providers own jobs, and the API Session Controller checks archived Sessions and available header ancestry.
 
 </details>
 
@@ -169,7 +165,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-Parent delivery sends a user-role status notice to the resident direct parent in the same tree, including an idle parent. It does not restore an offline parent. The notice contains the child’s nonempty final text blocks, regardless of `send_message` availability or use. External notices also state that further messages are unsupported. Reasoning and other nontext blocks are excluded. Every parent notice includes available structured output as `Structured result: <JSON>` and the provider’s safe diagnostic as a separate text block. Empty closing text is reported as `It left no closing message.` Caller delivery emits no notice; SDK lifecycle notifications retain complete child output when cleanup succeeds.
+Parent delivery sends a user-role status notice to the resident direct parent in the same tree, including an idle parent. It does not restore an offline parent. The notice contains the child’s nonempty final text blocks. When the child's last action before that text was a message to its parent, with no input claimed and no tool call logged after it, the notice replaces them with `It sent you a message just before finishing, so its closing message is omitted.`; the parent recovers omitted closing text only by messaging the child again. External notices also state that further messages are unsupported. Reasoning and other nontext blocks are excluded. Every parent notice includes available structured output as `Structured result: <JSON>` and the provider’s safe diagnostic as a separate text block. Empty closing text is reported as `It left no closing message.` Caller delivery emits no notice; SDK lifecycle notifications retain complete child output when cleanup succeeds.
 
 #### Token effect
 
@@ -183,17 +179,17 @@ Append-only in the parent: the notice follows its reusable request prefix. Reach
 
 #### What the model sees
 
-The child's initial task includes the guidance below, with `<child-name>` and `<parent-name>` replaced by JSON-encoded full paths. The child places its result and evidence in its final answer; an intermediate message serves findings that change the parent's next action.
+Local children using `delivery: 'parent'` receive the result-delivery guidance below in their initial task, whether or not messaging tools are installed. Tool usage and communication identity belong to [tool-subagent-control](../tool-subagent-control/README.md).
 
 ##### Return guidance
 
 ```markdown
-Your name is <child-name>. Your parent agent name is <parent-name>. Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: <parent-name>, message: "<finding>" }) when a finding changes what the parent should do next; sending a message does not end your turn.
+Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message.
 ```
 
 #### Token effect
 
-One guidance block in each continuable child's initial task, containing its own path once and its parent's path twice.
+One fixed guidance block per local parent-delivered child's initial task; caller delivery adds none.
 
 #### KV Cache effect
 

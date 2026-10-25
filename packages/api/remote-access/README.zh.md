@@ -37,13 +37,13 @@ kind: "package-reference"
 
 role `{ name, resource, actions }` 是普通值，表示限定一种资源种类（`global` 或在 `TypertResourceMap` 中声明的种类）的 action 集合。binding `{ role, resource, condition? }` 在该 role 种类的一个资源上授予该 role。policy 根据预先载入内存的状态同步回答 `bindings(principal)` 与可选的 `explain(request)`。只有在每个已解析资源上都有某个 binding 指向该资源、其 role 列出该 action、且没有 condition 或 condition 放行时，请求才被放行。资源之间相互独立：`global` 上的授权不蕴含任何其他资源上的授权，任何资源也不蕴含另一个资源。condition 收到 `{ action, resource, args? }`，只对资源与 role 都匹配的 binding 调用；事件、快照与列表过滤时没有 `args`。`bindings()` 在每次 `decide()`、每次 `allows()` 判定与每次快照计算中各调用一次，不跨判定缓存，因此依赖时间的状态对下一次调用即时生效。
 
-Gateway 依次从 `@Remote` 与 `@RemoteScope` 的 `resources` 读取函数、lookup 与 Host Context adapter 的 `resource` 声明、`typert.resources` 中的默认字段解析资源，解析顺序由 [API Gateway](../gateway/README.zh.md) 负责；本包不读取任何参数字段。不指明任何资源的调用只访问 `global` 资源，因此只有 `global` 级 role 能放行；把某个 action 放进 `global` 级 role，等于允许该 principal 在调用未指明的任何资源上调用它。资源非法的调用由 Gateway 以 `resource-invalid` 拒绝，不询问 `decide()`。
+Gateway 依次从 `@Remote` 与 `@RemoteScope` 的 `resources` 读取函数、lookup 与 Host Context adapter 的 `resource` 声明、`typert.resources` 中的默认字段或 resolver 声明解析资源，解析顺序由 [API Gateway](../gateway/README.zh.md) 负责；本包不读取任何参数字段。不指明任何资源的调用只访问 `global` 资源，因此只有 `global` 级 role 能放行；把某个 action 放进 `global` 级 role，等于允许该 principal 在调用未指明的任何资源上调用它。资源非法的调用由 Gateway 以 `resource-invalid` 拒绝，不询问 `decide()`。
 
 `bindings()`、condition 或 `explain()` 抛错时，本次判定以 `policy-failed` 拒绝；计算快照时，`bindings()` 抛错即该 principal 没有 grant，condition 抛错即该 action 不放行。有问题的规则因此不会破坏共享的 `$events` 事件源、快照流或页面渲染。每次 `invalidate()` 以及每次 policy 注册或撤回之后，服务日志对每个 policy 只报告第一次失败；此后该 policy 的失败不再记录，直到下一次上述变化。
 
 转发事件按其转发条目的读取函数指明的资源（条目未声明时为 `global`）判定 action `event:<name>`，对非 owner 整条送达或整条不送，从不裁剪 payload。事件携带其声明的每个资源，因此读取函数返回 `undefined` 时该事件的资源非法，Gateway 不询问 `decide()`，不送达任何非 owner。一个事件至多指明一个资源，因此集合类变化走 follow 类流（`session/follow`、`session/control`、`workspace/follow`），由这些方法内联经 `allows()` 逐项判定。
 
-本服务经 `webserver/index-inject` 为 webServer 渲染的每个 index 加入名为 `REMOTE_ACCESS_SNAPSHOT_KEY`（`__DSH_REMOTE_ACCESS__`）的 `global` 行，值为 owner baseline `{ type: 'baseline', owner: true }`。渲染非 owner 页面的业务包（例如在 owner Host 上渲染 liveshare 读者页）在所有 index 注入行之后放置一条把该全局赋值为 `ctx.remoteAccess.snapshotFor(principal)` 的语句，例如追加到 `ctx.webServer.collectIndexInjections()` 末尾的一条 `global` 行。后写的赋值覆盖 owner baseline，Client 入口在挂载时读取该全局，因此页面以读者的 grant 而非 owner 的快照打开。
+本服务经 `webserver/index-inject` 为 webServer 渲染的每个 index 加入名为 `REMOTE_ACCESS_SNAPSHOT_KEY`（`__DSH_REMOTE_ACCESS__`）的 `global` 行，值为该次渲染所代表 Peer 的 `snapshotFor(peer.principal)`：owner 的浏览器页面以 `{ type: 'baseline', owner: true }` 打开，为非 owner Peer 渲染的页面（例如在 owner Host 上渲染的 liveshare 读者页）以该读者的 grant 打开。Client 入口在挂载时读取该全局。
 
 | `remote-access/denied` 的 `details.reason` | 原因 |
 |---|---|
@@ -60,9 +60,10 @@ Gateway 依次从 `@Remote` 与 `@RemoteScope` 的 `resources` 读取函数、lo
 Client 入口同步读取 index 注入在 `REMOTE_ACCESS_SNAPSHOT_KEY` 下的 baseline，经 `mountAccess(ctx, contribution, initial)` 自行挂载生成的 `remoteAccess` contribution，订阅快照流，并提供：
 
 - Client 服务 `ctx.remoteAccess.source(kind, id, action)`，为已声明种类的某个资源上的每个 `(kind, id, action)` 提供一个身份稳定的布尔 source；
+- `ctx.remoteAccess.whenAccess(action, callback)`，在 `global` 资源允许 `action` 期间保持回调的效果：答案变为 true 时执行回调，变为 false 时逆序撤销其效果，下一次变为 true 时再次执行。回调返回一个 disposer 或一组 disposer，与 `ctx.slots.inject` 相同；答案已为 true 时（owner 恒为 true）回调同步执行；控制器属于调用方 fiber。允许期间的安装失败立即抛出；之后的安装失败使控制器停止，并在微任务中重新抛出。`whenResourceAccess(kind, id, action, callback)` 对已声明种类的某个资源做同样的事；
 - 标准 Hook `useRemoteAccess(action)`，回答 `global` 资源上的访问。
 
-领域 UI 包在 `source()` 之上发布各自资源的 Hook：[ui-session](../../client/ui-session/README.zh.md) 提供 Session 资源上的 `useSessionAccess(sessionId, action)` 与会话作用域的 `useAccess(action)`（与 `global` 资源上的 `useRemoteAccess` 不同名），[ui-workspace](../../client/ui-workspace/README.zh.md) 提供 Workspace 资源上的 `useWorkspaceAccess(workspaceId, action)`。Hook 的 `action` 类型为 `RemoteEndpoint`，即某个 Client Remote namespace 声明的端点。非 owner 的答案是该资源的 grant 是否列出该 action，不回退 `global` 答案，因此没有 grant 或 grant 未列出任何 action 的资源回答 false。owner 的所有答案为 true；没有注入 baseline 的非 owner 页面、快照流终止失败的非 owner 页面，所有答案为 false；终止失败会连同错误一并报告，非 owner 附“刷新页面重连”的提示，owner 附“答案不受影响”的说明；重连期间保留上次快照。注入的 baseline 格式错误时挂载失败。Hook 从不发请求，Host 仍检查每次调用。[`dsh-client-test-runtime`](../../test-support/client-runtime/README.zh.md) 在 Client spec 中以全允许的访问替换本行。
+领域 UI 包在 `source()` 之上发布各自资源的 Hook，在 `whenResourceAccess()` 之上发布各自的 `whenAccess`：[ui-session](../../client/ui-session/README.zh.md) 提供 Session 资源上的 `useSessionAccess(sessionId, action)`、会话作用域的 `useAccess(action)` 与 `ctx.uiSession.whenAccess(sessionId, action, callback)`（与 `global` 资源上的 `useRemoteAccess` 不同名），[ui-workspace](../../client/ui-workspace/README.zh.md) 提供 Workspace 资源上的 `useWorkspaceAccess(workspaceId, action)` 与 `ctx.uiWorkspace.whenAccess(workspaceId, action, callback)`。只有拥有某个资源种类的包才调用 `source()` 与 `whenResourceAccess()`；其他插件经访问 Hook 与各 `whenAccess` 读取访问。Hook 的 `action` 类型为 `RemoteEndpoint`，即某个 Client Remote namespace 声明的端点。非 owner 的答案是该资源的 grant 是否列出该 action，不回退 `global` 答案，因此没有 grant 或 grant 未列出任何 action 的资源回答 false。owner 的所有答案为 true；没有注入 baseline 的非 owner 页面、快照流终止失败的非 owner 页面，所有答案为 false；终止失败会连同错误一并报告，非 owner 附“刷新页面重连”的提示，owner 附“答案不受影响”的说明；重连期间保留上次快照。注入的 baseline 格式错误时挂载失败。Hook 从不发请求，Host 仍检查每次调用。[`dsh-client-test-runtime`](../../test-support/client-runtime/README.zh.md) 在 Client spec 中以固定答案（默认全允许）的访问替换本行。
 
 <a id="model-experience"></a>
 ## 模型体验

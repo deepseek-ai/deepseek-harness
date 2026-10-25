@@ -59,7 +59,7 @@ export class BundleDetailController {
    * @param fromNpm - whether the bundle's files are unavailable, so the Host reads its offered version from the npm file CDNs.
    */
   load(name: string, version: string | undefined, language: string, fromNpm: boolean): void {
-    if (this.store.getSnapshot()[bundleDetailKey(name, version, language)] === undefined) void this.read(name, version, language, fromNpm)
+    if (!this.reads.has(bundleDetailKey(name, version, language))) void this.read(name, version, language, fromNpm)
   }
 
   /**
@@ -88,10 +88,10 @@ export class BundleDetailController {
     return new URL(`${DETAIL_FILE_ROUTE}?${query.toString()}`, this.base()).href
   }
 
-  /** Forget every read, so each shown bundle reads its document again; bundle files can change at any profile change. */
+  /** Invalidate reads while retaining settled documents until their replacements arrive. */
   reset(): void {
     this.reads.clear()
-    this.store.set({})
+    this.store.set(Object.fromEntries(Object.entries(this.store.getSnapshot()).filter(([, value]) => value.status === 'ready')))
   }
 
   /** Stop publishing late settlements. */
@@ -103,7 +103,7 @@ export class BundleDetailController {
     const key = bundleDetailKey(name, version, language)
     const read = ++this.sequence
     this.reads.set(key, read)
-    this.publish(key, { status: 'loading' })
+    if (this.store.getSnapshot()[key]?.status !== 'ready') this.publish(key, { status: 'loading' })
     // The remote is captured before any wait: the plugin's context may be disposed while the comparison runs.
     const { remote } = this.ctx
     const current = (): boolean => !this.disposed && this.reads.get(key) === read

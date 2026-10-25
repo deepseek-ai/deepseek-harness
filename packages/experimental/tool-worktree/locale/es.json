@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "árboles de trabajo de git",
+    "description": "Deje que el agente cree una nueva rama de Git y un árbol de trabajo y luego continúe allí.",
+    "detail": "docs/DETAIL.md"
+  }
+}

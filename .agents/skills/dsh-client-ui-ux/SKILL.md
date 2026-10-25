@@ -56,7 +56,7 @@ Scrollbars stay inside their container: use the shared scrollbar styles rather t
 
 ## Responsive layouts
 
-Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, text truncation, title wrapping, icon-only controls, and focus during width changes.
+Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, mobile and touch detection, text truncation, title wrapping, icon-only controls, and focus during width changes.
 
 ## Platform window adaptation
 

@@ -23,7 +23,7 @@ The SDK stdio application as a `dsh` profile bundle over [`dsh-base`](../base/RE
 <a id="use-this-package"></a>
 ## Use this package
 
-The `sdk` profile includes native desktop tools and model context. Standard tool calling is the default; set `DSH_TOOLS_MODE=ptc` for programmatic tool calling. Both modes use the same plugins.
+The `sdk` profile includes native desktop tools and model context. Native tool execution is the default. For PTC, pass the [executor overlay](../../../apps/cli/config/examples/ptc.yml) through `--patch` or the `patches` option in the TypeScript or Python SDK. `DSH_TOOLS_MODE` is ignored.
 
 The startup provider binds stdin EOF to the launcher's bounded successful shutdown. SDK protocol `shutdown`, SIGINT, and SIGTERM retain their owning server or launcher paths; disposal drains the root profile tree and persistence. Stdout is reserved for newline-delimited JSON-RPC frames. The bundle disables model-generated session titles because the SDK exposes no title surface; deterministic fallback titles remain durable without an auxiliary model request. The inherited projection cache checkpoints SDK-created sessions for later consumers; its durability barrier flushes each covered log prefix before publishing the cache row and may split otherwise coalesced JSONL runs. A deployment selects a different complete composition through profile bundles and patch files, not another app bin.
 

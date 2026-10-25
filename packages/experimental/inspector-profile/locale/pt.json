@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Ferramentas de desenvolvedor",
+    "description": "Inspecione e depure dados brutos da sessão, mensagens de bate-papo agrupadas e o back-end NodeJS.",
+    "detail": "docs/DETAIL.md"
+  }
+}

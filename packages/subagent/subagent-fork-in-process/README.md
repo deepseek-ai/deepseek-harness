@@ -83,7 +83,7 @@ This backend supplies the balanced completed-turn prefix of the parent log as th
 
 ### Lifecycle binding
 
-The delegation tool creates a background activation and returns a stable full child path. Parent and child share the same messaging tool definitions and ordering; the parent path and return guidance follow inherited history in the initial task. Workflows await results with caller delivery and send no completion notice to the parent.
+The delegation tool creates a background activation and returns a stable child session id. Parent and child share the same messaging tool definitions and ordering; the parent id and return guidance follow inherited history in the initial task. Workflows await results with caller delivery and send no completion notice to the parent.
 
 </details>
 
@@ -117,13 +117,13 @@ Forking duplicates retained completed history into the child's request, which th
 
 #### KV Cache effect
 
-The child may reuse the inherited byte-identical prefix under the same provider and model. Structured output, generated-SDK, route changes, or historical descriptor overrides on cold resume can invalidate reuse before inherited history; later child history is append-only. Continuable messaging adds no child-only system-prompt section or tool schema; the parent path and return guidance follow inherited history in the initial user task ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
+The child may reuse the inherited byte-identical prefix under the same provider and model. Structured output, generated-SDK, route changes, or historical descriptor overrides on cold resume can invalidate reuse before inherited history; later child history is append-only. Continuable messaging adds no child-only system-prompt section or tool schema; the parent id and return guidance follow inherited history in the initial user task ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
 
 ### Parent tool result, indirectly
 
 #### What the model sees
 
-Through `dsh-tool-subagent`, the parent first receives the full child path, then a completion notice with its final answer. Child-authored messages arrive through `send_message`; the inherited prefix and internal work remain in the child session.
+Through `dsh-tool-subagent`, the parent first receives the child session id, then a completion notice with its final answer. Child-authored messages arrive through `send_message`; the inherited prefix and internal work remain in the child session.
 
 #### Token effect
 

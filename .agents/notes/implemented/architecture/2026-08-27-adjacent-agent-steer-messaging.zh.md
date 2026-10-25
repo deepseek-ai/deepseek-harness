@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-08-27-adjacent-agent-steer-messaging.md) | 中文
 
-邻接消息、发现范围和父子生命周期限制已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。
+邻接消息、发现范围和父子生命周期限制已由[整树通信](2026-10-16-tree-wide-agent-communication.zh.md)替代；其余决策仍然有效。 下文的工具身份标记和初始任务通信指导由[工具拥有通信指导](2026-10-22-subagent-tool-owned-communication.zh.md)取代。
 
 ## 问题
 

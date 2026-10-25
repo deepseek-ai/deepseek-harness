@@ -8,7 +8,7 @@ Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-
 
 ## Assembly context
 
-`AssembleContext` identifies the scope layer one assembly resolves and may carry the explicit control signal for that request. It is merge-extensible: `dsh-agent` adds the optional live `agent` field, and `assembleContextFor(agent, signal)` sets the explicit fields together. A bare assembly has neither scope nor signal.
+`AssembleContext` identifies the scope layer one assembly resolves and may carry the explicit control signal for that request. It is merge-extensible: `dsh-agent` adds optional `agent` and `modelSelection` fields. `assembleContextFor(agent, signal)` sets the agent, scope, and signal; the loop supplies the model selection captured for the step and retained across retries, with omitted reasoning effort using adapter defaults. A bare assembly has neither scope nor signal.
 
 ```ts type-equiv
 /** Merge-extensible context for one prompt assembly. */
@@ -193,12 +193,12 @@ refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptA
 
 /**
  * Assemble global and scoped providers, detach tool parameters, apply
- * canonical ordering, then run the assembly waterfall. Scoped sections and
- * variables shadow globals. The returned waterfall value is authoritative
- * except that an effective complete section is restored afterwards as the
- * sole prompt section.
- * @param context - the optional scope and plugin-defined assembly fields.
- * @returns the post-waterfall assembly with any complete prompt enforced.
+ * canonical ordering, then run the presentation waterfall. Scoped sections
+ * and variables shadow globals. The waterfall's text is authoritative except
+ * that an effective complete section is restored afterwards as the sole
+ * prompt section; tool declarations stay provider-owned.
+ * @param context - the optional scope, step tool set, and plugin-defined assembly fields.
+ * @returns the post-waterfall assembly with ordered tool declarations and any complete prompt enforced.
  */
 async assemble(context: AssembleContext = {}): Promise<PromptAssembly>
 ```
@@ -213,13 +213,13 @@ Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-
 
 #### `system-prompt/assemble` — waterfall
 
-Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.
+Presentation waterfall over assembled sections, contexts, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.
 
 ```ts cordis-catalog
 /**
- * Expert waterfall over the assembled sections, contexts, tools, and variables.
+ * Presentation waterfall over assembled sections, contexts, and variables.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners
- * receive only that scope's assemblies. The returned value is authoritative.
+ * receive only that scope's assemblies. The returned text is authoritative; tool declarations remain provider-owned.
  * A supplied signal controls only this explicit assembly request and must not
  * be retained to control later turns. A registered complete section is
  * restored after this waterfall, so listeners cannot add to or replace
@@ -228,7 +228,7 @@ Expert waterfall over the assembled sections, contexts, tools, and variables. Sc
  * @param context - the caller's per-assembly context.
  * @mode waterfall
  */
-'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptAssembly, context: AssembleContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly>
+'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptPresentation, context: AssembleContext, next: () => Promise<PromptPresentation>): Promise<PromptPresentation>
 ```
 
 Types: [Scoped](scope.md)

@@ -8,6 +8,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition, type TeamProjectionState } from './projection.ts'
@@ -82,7 +83,14 @@ export class TeamService extends Service {
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
     this.journal = new TeamJournal(ctx, this.projection, (root) => {
       for (const agent of ctx.agents.list()) {
-        if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) {
+        let agentRoot: Agent
+        try {
+          agentRoot = ctx.subagents.rootOf(agent)
+        } catch (error: unknown) {
+          if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
+          throw error
+        }
+        if (agentRoot === root) {
           emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
         }
       }
@@ -90,7 +98,7 @@ export class TeamService extends Service {
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
     ctx.inject(['commands'], (scope) => {
       scope.commands.register({
-        definitionId: CommandDefinitionId('@deepseek-ai/dsh-experimental-agent-team'),
+        definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'),
         name: 'team',
         description: 'Enable or disable Agent Teams for this Session',
         input: { hint: 'on|off', attachments: false },
@@ -136,9 +144,14 @@ export class TeamService extends Service {
     await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
     for (const agent of this.ctx.agents.list()) {
-      if (agent === root || this.ctx.agents.isOwnedBy(agent.id, root)) {
-        emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
+      let agentRoot: Agent
+      try {
+        agentRoot = this.ctx.subagents.rootOf(agent)
+      } catch (error: unknown) {
+        if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
+        throw error
       }
+      if (agentRoot === root) emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
     }
   }
 

@@ -101,12 +101,17 @@
   transition: opacity 0.2s ease-in-out;
 }
 
-.card:hover .remove,
 .remove:focus-visible {
   opacity: 1;
 }
 
-@media (pointer: coarse) {
+@media (hover: hover) {
+  .card:hover .remove {
+    opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
   .remove {
     opacity: 1;
   }
@@ -118,9 +123,14 @@
   }
 }
 
-.card:hover .name,
 .card:focus-within .name {
   padding-right: 18px;
+}
+
+@media (hover: hover) {
+  .card:hover .name {
+    padding-right: 18px;
+  }
 }
 
 .removeFailed {
@@ -158,7 +168,7 @@
   to { transform: translateX(220%); }
 }
 
-@media (pointer: coarse) {
+@media (hover: none), (pointer: coarse) {
   .remove {
     opacity: 1;
   }

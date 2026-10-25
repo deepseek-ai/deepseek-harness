@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** Parent result delivery independent of a local child's messaging tool. */
 
@@ -7,6 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as Control from '@deepseek-ai/dsh-tool-subagent-control'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -20,19 +20,18 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   if (availability !== 'absent') await ctx.plugin(Control)
   const adapter = new MockAdapter([textResponse('CHILD_RESULT_42'), textResponse('Parent received the answer.')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
-  const activation = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+  const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
-    request: {
-      parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
-    },
+    parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
   })
   try {
-    await ctx.subagents.waitForChildren(parent)
+    await ctx.subagents.waitForTreeWork(parent)
     await parent.whenIdle()
     expect(adapter.requests).toHaveLength(2)
     expect(adapter.requests[0]!.tools?.some(tool => tool.name === 'send_message') ?? false).toBe(availability === 'unused')
@@ -51,6 +50,7 @@ it('delivers structured output to the parent when the child has send_message', a
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   await ctx.plugin(Control)
   const adapter = new MockAdapter([
@@ -59,12 +59,10 @@ it('delivers structured output to the parent when the child has send_message', a
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
-  const activation = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+  const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
-    request: {
-      parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
-      outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
-    },
+    parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
+    outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
   })
   try {
     await activation.result

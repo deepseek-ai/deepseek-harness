@@ -36,7 +36,7 @@ export interface IncompatiblePlugin {
 
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'unsupported-platform' | 'operation-error'
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
@@ -83,6 +83,8 @@ export interface BundleInfo {
   meta?: PluginLocalizedMeta
   /** Untranslated `description` of this bundle's package manifest. */
   description?: string
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
+  listedByDefault?: boolean
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean
   /** Whether the profile declares this dependency; availability separately reports whether its files can be read. */
@@ -168,7 +170,7 @@ export interface ChangeResult {
   bundle?: string
   /** The installed bundle's manifest version, when declared; pnpm's `minimumReleaseAge` can make it older than the newest release. */
   version?: string
-  /** Exact package names awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
+  /** Exact `allowBuilds` keys awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
   pendingBuilds?: string[]
   /** Package script permissions saved before this installation attempt. */
   approvedBuilds?: string[]

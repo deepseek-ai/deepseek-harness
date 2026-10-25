@@ -29,11 +29,13 @@ When the agent asks a question, the attached card temporarily occupies the compo
 
 ### Answering
 
-A multi-select draft keeps its selected labels while the user opens or edits the custom answer, so its submitted item may carry both `selected` and `custom`; a single-select custom answer remains exclusive. Question detail reuses the assistant-output `MarkdownText` primitive, including its GFM rendering and untrusted-content policy. The capped card keeps its title, navigation, and submission actions fixed while long detail and choices share an internal scroll region. "Skip" retains other drafts and emits the existing blank `{ selected: [] }` result for that item. Close is not an answer: a question the Host named by tool call only leaves the composer seat, and its `ask_user_question` tool call row brings the panel back; a request that carries no tool call has no row to return from, so closing it rejects the whole wait as `ASK_CANCELLED`.
+A multi-select draft keeps its selected labels while the user opens or edits the custom answer, so its submitted item may carry both `selected` and `custom`; a single-select custom answer remains exclusive. Question detail reuses the assistant-output `MarkdownText` primitive, including its GFM rendering and untrusted-content policy. The capped card keeps navigation and submission actions fixed while the question, long detail, and choices share an internal scroll region. A question appears in full up to three rendered lines; a longer one shows two, fades at the end of the second, and places a downward-chevron expand button there that expands it in place. Option descriptions use 13px text with a 20px line height and sit beside their label when they fit, otherwise below it; a description appears in full up to two lines, and a longer one shows one line with the same fade and expand button. Expanded copy keeps an upward-chevron collapse button on a line below it. Both buttons are named **Expand** or **Collapse**, show that name in a hover tooltip, and are described by the text they control. CSS scroll timelines decide which copy overflows; a browser without them shows all copy in full. "Skip" retains other drafts and emits the existing blank `{ selected: [] }` result for that item. Close is not an answer: a question the Host named by tool call only leaves the composer seat, and its `ask_user_question` tool call row brings the panel back; a request that carries no tool call has no row to return from, so closing it rejects the whole wait as `ASK_CANCELLED`.
+
+Fixed approval questions use the same pending-question and answer channel. A feature plugin can supply a higher-priority composer presentation. When none matches, the generic form keeps the offered options answerable; the caller still decides which responses grant permission.
 
 ### Reading a settled question back
 
-Each late reply is shown once, including when it opens a new Turn. Replies follow normal Chat process grouping and whole-Turn folding. Expand the containing Turn and work group to read a reply that has been folded away.
+Each answered batch appears once in a right-aligned user-style bubble after its answer is recorded, for native and PTC blocking questions and late replies. The bubble shows every question above its selected choices and custom answer, uses lighter question text, and stays visible when process groups or the containing Turn are folded. A blocking-question answer bubble does not prevent completed work steps from collapsing. Late replies admitted after the opening step are interleaved Turn inputs and keep that Turn open. Each bubble separates the process runs before and after its recorded answer. Unanswered questions remain in the question card and tool row.
 
 A question that already settled opens as a read-only card: the same pager over the recorded answers, marked `Answered`. Every option and text field is disabled, Skip and the submit action are gone, a question the user skipped says so in place of its empty answer, and a free-text field appears only where the recorded answer used one. Closing it removes the card, and the tool call row builds another from the same record.
 
@@ -43,7 +45,7 @@ A `plan-review` intent — set by `dsh-plan-mode` on the `exit_plan_mode` review
 
 ### Failure and recovery
 
-An answer field autofocuses only when its answer channel is ready and no countdown exists. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
+An answer field autofocuses only when its answer channel is ready and no countdown exists. Custom-answer focus survives Enter navigation between option questions; navigation resets the question scroll position and collapses expanded copy. Manual focus and blur during the claim handshake are retained: the countdown starts paused only if the answer surface still has focus when the remaining duration arrives.
 
 Returning a local answer does not release its foreground claim: the Host closes that stream after accepting the waterfall outcome. The plugin owns the claim through this delivery interval. Explicit delegation releases it before calling the next answerer, and plugin disposal cancels any remaining claims.
 
@@ -55,7 +57,7 @@ Each Session and pending request has an independent draft in browser storage. A 
 
 A browser that reconnects while the tool call is open receives the pending request again and can still complete it with the remaining time. A Session reopened after the agent or process ended shows the card as continued; submitting resumes the Session's root agent and enters the answer as a new user turn.
 
-Settled question replies remain compact in chat history. A caret marks the bubble as a disclosure; clicking it reopens the read-only question and answer details, and never reopens the settled tool call for a second submission. Its copy action writes each question with the answer the user gave, the same text whether the bubble is open or closed.
+The settled bubble is fully visible and has no disclosure control. Question and answer text renders as plain text; question detail and unselected options are omitted. Its copy action writes each question with the answer the user gave, without reopening the tool call or submitting another answer.
 
 -----
 

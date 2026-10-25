@@ -54,7 +54,7 @@ export function apply(ctx) {
     }
     if (exec.callId === 'read-board') {
       read.resolve()
-      await ctx.subagents.waitForChildren(exec.agent)
+      await ctx.subagents.waitForTreeWork(exec.agent)
     }
     return result
   })

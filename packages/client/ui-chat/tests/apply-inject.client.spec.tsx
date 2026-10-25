@@ -62,6 +62,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   } as never)
   const layout = { closeRightbar: vi.fn(), openRightbar: vi.fn() }
   runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
+  runtime.ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   runtime.ctx.provide('layout', layout as never)
   const sidebarRight = {
     openResource: vi.fn<(address: string) => void>(),
@@ -138,6 +139,50 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
 }
 
 describe('Chat inject API', () => {
+  it('routes text gestures from each Chat view to the registered consumer with its own Session', async () => {
+    const b = await bench()
+    try {
+      const secondId = await b.runtime.sessions.add({ id: 'second-chat' })
+      using secondReference = b.runtime.sessions.retain(secondId)
+      await secondReference.ready
+      const first = b.chatViewApi(b.rootReference).injected
+      const second = b.chatViewApi(secondReference).injected
+      const received: { sessionId: SessionId; text: string | null }[] = []
+      const dispose = b.runtime.ctx.uiConversation.interactions.register({
+        id: 'selection-menu',
+        onInteraction(request) {
+          received.push({ sessionId: request.sessionId, text: request.readText() })
+          if (request.trigger !== 'contextmenu') return
+          request.preventDefault()
+          request.open()
+        },
+      })
+      expect(first.hooks.interactionIds.getSnapshot()).toEqual(['selection-menu'])
+      expect(second.hooks.interactionIds.getSnapshot()).toEqual(['selection-menu'])
+      const nativeMenu = vi.fn()
+      expect(first.dispatchInteraction({
+        trigger: 'selection', hasSelection: true, readText: () => 'first selection', preventDefault: nativeMenu,
+      })).toBeNull()
+      expect(nativeMenu).not.toHaveBeenCalled()
+      const contextMenu = {
+        trigger: 'contextmenu' as const, hasSelection: true,
+        readText: () => 'second selection', preventDefault: nativeMenu,
+      }
+      expect(second.dispatchInteraction(contextMenu)).toBe('selection-menu')
+      expect(nativeMenu).toHaveBeenCalledOnce()
+      expect(received).toEqual([
+        { sessionId: ROOT, text: 'first selection' },
+        { sessionId: secondId, text: 'second selection' },
+      ])
+      dispose()
+      expect(first.hooks.interactionIds.getSnapshot()).toEqual([])
+      expect(second.dispatchInteraction(contextMenu)).toBeNull()
+      expect(nativeMenu).toHaveBeenCalledOnce()
+    } finally {
+      await b.runtime.dispose()
+    }
+  })
+
   it('projects independent Settings choices and saves timing to Host settings', async () => {
     const b = await bench()
     try {
@@ -491,3 +536,5 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 })
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

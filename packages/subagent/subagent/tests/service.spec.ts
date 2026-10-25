@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { bindSubagentActivation } from './manager-internals.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -82,6 +82,7 @@ async function service(withAgents = true): Promise<{ ctx: Context; subagents: Su
     await ctx.plugin(AgentLoop, { agents: [] })
   } else {
     await ctx.plugin(SessionProjectionRegistry)
+
   }
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -97,20 +98,89 @@ async function start(subagents: SubagentRuntime, provider: string, request: Suba
   const parent = ctx.agents.get(request.parent.id)
     ?? (await ctx.agents.create({ sessionId: request.parent.id })).agent
   const { label, signal, ...options } = request
-  return subagents.startActivation({ name: `child-${randomUUID()}`,
-    provider, label: label ?? provider, request: { ...options, parent }, signal, delivery,
+  return subagents.startActivation({
+    provider, label: label ?? provider, ...options, parent, signal, delivery,
   })
 }
 
 describe('SubagentRuntime', () => {
+  it('resolves Activation roots only for exact live child and root instances', async () => {
+    const { ctx, subagents } = await service()
+    const root = await ctx.agents.create({ sessionId: SessionId('lineage-root') })
+    const child = await ctx.agents.create({ sessionId: SessionId('lineage-child'), meta: { origin: 'subagent' } })
+    const fork = await ctx.agents.create({ sessionId: SessionId('ordinary-fork'), meta: { parentSession: root.agent.id } })
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    expect(subagents.rootOf(fork.agent)).toBe(fork.agent)
+    bindSubagentActivation(ctx, child.agent, root.agent)
+    expect(subagents.rootOf(child.agent)).toBe(root.agent)
+    expect(() => subagents.rootOf({ ...child.agent })).toThrow('exact live caller')
+    await root.dispose()
+    const replacementRoot = await ctx.agents.create({ sessionId: root.agent.id })
+    expect(() => subagents.rootOf(child.agent)).toThrow('agent has no active runtime owner')
+    await child.dispose()
+    const replacementChild = await ctx.agents.create({ sessionId: child.agent.id, meta: { origin: 'subagent' } })
+    expect(() => subagents.rootOf(child.agent)).toThrow('exact live caller')
+    expect(() => subagents.rootOf(replacementChild.agent)).toThrow('agent has no active runtime owner')
+    bindSubagentActivation(ctx, replacementChild.agent, replacementRoot.agent)
+    expect(subagents.rootOf(replacementChild.agent)).toBe(replacementRoot.agent)
+  })
+
+  it.each([
+    ['external', 'removed'], ['external', 'external'], ['external', 'local'],
+    ['local', 'removed'], ['local', 'external'], ['local', 'local'],
+  ] as const)('rejects a %s provider changed to %s during directory resolution', async (kind, replacementKind) => {
+    const { ctx, subagents } = await service()
+    const external = new StubProvider('changing')
+    const prepare = vi.fn(async () => ({}))
+    const provider: SubagentProvider = kind === 'external' ? external : {
+      name: 'changing', inheritsParentContext: false, capabilities: ALL_CAPS, prepareContinuable: prepare,
+    }
+    const unregister = subagents.registerProvider(provider)
+    const parent = await ctx.agents.create({ sessionId: SessionId('provider-owner') })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const ensure = ctx.workingDirectory.ensure.bind(ctx.workingDirectory)
+    const directory = vi.spyOn(ctx.workingDirectory, 'ensure').mockImplementation(async (...args) => {
+      entered.resolve(undefined)
+      await release.promise
+      return ensure(...args)
+    })
+    const replacement = new StubProvider('changing')
+    const replacementPrepare = vi.fn(async () => ({}))
+    const pending = subagents.startActivation({
+      ...baseRequest(), provider: 'changing', parent: parent.agent, label: 'changing', delivery: 'caller',
+    })
+    const rejection = expect(pending).rejects.toMatchObject({ code: 'PROVIDER_CHANGED' })
+    try {
+      await entered.promise
+      unregister()
+      if (replacementKind !== 'removed') subagents.registerProvider(replacementKind === 'external' ? replacement : {
+        name: 'changing', inheritsParentContext: false, capabilities: ALL_CAPS, prepareContinuable: replacementPrepare,
+      })
+      release.resolve(undefined)
+      await rejection
+      expect(external.startCount).toBe(0)
+      expect(prepare).not.toHaveBeenCalled()
+      expect(replacement.startCount).toBe(0)
+      expect(replacementPrepare).not.toHaveBeenCalled()
+      expect(ctx.agents.list()).toEqual([parent.agent])
+      await expect(subagents.waitForTreeWork(parent.agent)).resolves.toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([pending])
+      directory.mockRestore()
+    }
+  })
+
   it('has no owned child work before the Agent service is mounted', async () => {
     const { subagents } = await service(false)
-    await expect(subagents.waitForChildren(fakeParent())).resolves.toBe(false)
+    await expect(subagents.waitForTreeWork(fakeParent())).resolves.toBe(false)
   })
 
   it('releases its catalog projection binding with the service fiber', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
+
     await mountWorkingDirectoryFixture(ctx)
     const fiber = await ctx.plugin(SubagentRuntime)
     const parent = Session.create(SessionId('catalog-parent'))
@@ -127,7 +197,7 @@ describe('SubagentRuntime', () => {
     expect(ctx.sessionProjections.snapshot(parent).values.subagentCatalog).toBeUndefined()
   })
 
-  it('registers, lists, looks up, starts, and removes providers', async () => {
+  it('registers, looks up, starts, and removes providers', async () => {
     const { ctx, subagents } = await service()
     const added: string[] = []
     const removed: string[] = []
@@ -136,7 +206,6 @@ describe('SubagentRuntime', () => {
     const provider = new StubProvider('alpha')
 
     const dispose = subagents.registerProvider(provider)
-    expect(subagents.list()).toEqual(['alpha'])
     expect(subagents.getProvider('alpha')).toBe(provider)
     const run = await start(subagents, 'alpha', baseRequest())
     await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
@@ -189,7 +258,6 @@ describe('SubagentRuntime', () => {
     // Without `ctx.agents` no manager exists, so nothing was ever materialized.
     expect('drainContinuable' in subagents).toBe(false)
     await expect(subagents.drainDescendants([])).resolves.toBeUndefined()
-    await expect(subagents.drainChildren(fakeParent(), [SessionId('child')])).resolves.toBeUndefined()
   })
 
   it('treats interrupt as an accepted no-op when no manager was bound', async () => {
@@ -198,17 +266,16 @@ describe('SubagentRuntime', () => {
     // nothing to stop and nothing to authorize against.
     expect(() => { subagents.interrupt(SessionId('child'), {
       kind: 'user',
-      parentSessionId: SessionId('parent-1'),
     }) }).not.toThrow()
   })
 
   it('rejects continuable operations when their runtime services are absent', async () => {
     const { subagents } = await service(false)
-    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
+    await expect(subagents.startActivation({
       delivery: 'parent',
       provider: 'unused',
       label: 'unused child',
-      request: baseRequest(),
+      ...baseRequest(),
       signal: new AbortController().signal,
     })).rejects.toMatchObject({ code: 'NO_PROVIDER' })
     await expect(subagents.sendMessage(
@@ -223,10 +290,10 @@ describe('SubagentRuntime', () => {
     const { subagents } = await service(false)
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
-    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
+    await expect(subagents.startActivation({
       provider: provider.name,
       label: 'Unavailable runtime',
-      request: baseRequest(),
+      ...baseRequest(),
       signal: new AbortController().signal,
       delivery: 'caller',
     })).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
@@ -251,11 +318,11 @@ describe('SubagentRuntime', () => {
     const provider = new StubProvider('external')
     subagents.registerProvider(provider)
     const { agent: parent } = await ctx.agents.create({ sessionId: SessionId('reserved-parent') })
-    await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
+    await expect(subagents.startActivation({
       provider: provider.name,
       label: 'Reserved team child',
       childId: SessionId('reserved-child'),
-      request: { parent, prompt: [{ type: 'text', text: 'Work' }] },
+      parent, prompt: [{ type: 'text', text: 'Work' }],
       signal: new AbortController().signal,
       delivery: 'caller',
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
@@ -275,7 +342,7 @@ describe('SubagentRuntime', () => {
     expect(() => { assertSubagentMaxDepth(undefined) }).not.toThrow()
   })
 
-  it('publishes lifecycle only after async provider start and keeps parent scope', async () => {
+  it('publishes lifecycle only after async provider start and keeps root scope', async () => {
     const { ctx, subagents } = await service()
     const ready = Promise.withResolvers<SubagentRun>()
     const result = Promise.withResolvers<SubagentResult>()
@@ -287,6 +354,9 @@ describe('SubagentRuntime', () => {
     })
     const parent = (await ctx.agents.create({ sessionId: SessionId('delegator') })).agent
     const events: string[] = []
+    const scopedEvents: string[] = []
+    parent.ctx.on('subagent/start', () => { scopedEvents.push('start') })
+    parent.ctx.on('subagent/end', () => { scopedEvents.push('end') })
     const keys: unknown[] = []
     const runIds: string[] = []
     ctx.on('subagent/start', function (info) { events.push('start'); keys.push(carrierKeyOf(this)); runIds.push(info.runId) })
@@ -302,27 +372,21 @@ describe('SubagentRuntime', () => {
     await run.result
     await run.dispose()
     expect(events).toEqual(['start', 'end'])
+    expect(scopedEvents).toEqual(['start', 'end'])
     expect(keys).toEqual([parent, parent])
     expect(runIds[0]).toBe(runIds[1])
   })
 
-  it('mints distinct lifecycle identities when provider and child ids repeat across roots', async () => {
+  it('mints distinct lifecycle identities when provider and child ids repeat', async () => {
     const { ctx, subagents } = await service()
-    subagents.registerProvider({
-      name: 'reused', capabilities: NO_CAPS, inheritsParentContext: false,
-      start: async () => ({
-        id: SessionId('reused-child'),
-        result: Promise.resolve({ output: [], stopReason: 'completed' }),
-        async dispose() {},
-      }),
-    })
+    subagents.registerProvider(new StubProvider('reused'))
     const runIds: string[] = []
     ctx.on('subagent/start', info => void runIds.push(info.runId))
 
     const first = await start(subagents, 'reused', baseRequest())
     await first.result
     await first.dispose()
-    const second = await start(subagents, 'reused', baseRequest({ parent: fakeParent('parent-2') }))
+    const second = await start(subagents, 'reused', baseRequest())
     await Promise.all([first.result, second.result])
 
     expect(runIds).toHaveLength(2)
@@ -654,9 +718,9 @@ it('rejects a disposed parent before starting provider execution', async () => {
   subagents.registerProvider(provider)
   const handle = await ctx.agents.create({ sessionId: SessionId('disposed-parent') })
   await handle.dispose()
-  await expect(subagents.startActivation({ name: `child-${randomUUID()}`,
+  await expect(subagents.startActivation({
     provider: provider.name, label: 'work', delivery: 'caller', signal: new AbortController().signal,
-    request: { parent: handle.agent, prompt: [] },
+    parent: handle.agent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   expect(provider.startCount).toBe(0)
 })

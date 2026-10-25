@@ -14,7 +14,7 @@
  * `startActivation` establishes every child under the activation manager, which
  * owns execution, result delivery, and resource release. Local providers seed
  * resumable Agents; external providers return a single execution handle.
- * `sendMessage` steers between local Agents in one Team without exposing
+ * `sendMessage` steers between local Agents in one subagent tree without exposing
  * whether a child is resident. Discovery combines real child Sessions with
  * parent-owned records for external executions.
  * Direct discovery reads parent catalogs; descendants recursively read reachable
@@ -36,25 +36,21 @@ import type {} from '@deepseek-ai/dsh-attachment'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { Remote, RemoteError, TypertRemoteService, principalOf, type Principal } from '@deepseek-ai/dsh-typert-protocol'
 import {
   rejectPrompt, validateControlRequest,
 } from './control.ts'
 import type {
-  SubagentDelivery,
   SubagentInterruptReceipt,
   SubagentPromptReceipt,
   SubagentPromptRequest,
   SubagentPromptRequestId,
 } from './control-types.ts'
 import type {
-  ContinuableCreateRequest,
-  ContinuableCreateSpec,
   SubagentCapabilities,
   SubagentActivation,
   SubagentActivationSpec,
@@ -67,17 +63,13 @@ import type {
 } from './types.ts'
 import { SubagentError } from './error.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
-import { createActivationObserver, createLifecycleEmitter } from './lifecycle.ts'
-import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
+import { createLifecycleEmitter } from './lifecycle.ts'
+import type { LifecycleEmitter } from './lifecycle.ts'
 import SubagentManager from './manager.ts'
-import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from './list-children.ts'
+import { listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry } from './list-children.ts'
-import { installSubagentArchiveAdmission } from './archive-admission.ts'
-import type { SubagentCatalogEntry } from './projection-types.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
-import type { IdentityState } from './projection.ts'
-import { subagentCatalogProjectionDefinition, subagentCatalogEntries, type SubagentCatalogState } from './catalog.ts'
-import { deliverSubagentPrompt } from './internal.ts'
+import { subagentCatalogProjectionDefinition } from './catalog.ts'
 
 export type {} from './catalog.ts'
 export type {} from './projection.ts'
@@ -152,15 +144,15 @@ declare module '@deepseek-ai/cordis' {
     /**
      * A provider established a published child. For in-process providers,
      * `ctx.agents.get(info.id)` resolves during this notification.
-     * Scope-filtered dispatch keys the carrier by the Team root, so a
-     * root-scoped listener observes all Team activations. Paired with
+     * Scope-filtered dispatch keys the carrier by the subagent tree root, so a
+     * root-scoped listener observes all subagent tree activations. Paired with
      * `subagent/end`.
      * @param info - provider, child identity, and durable direct creator `parentSessionId`.
      * @mode emit
      */
     'subagent/start'(this: Scoped<SubagentRuntime>, info: SubagentRunInfo): void
     /**
-     * A published child settled. Scope-filtered dispatch uses the same Team-root
+     * A published child settled. Scope-filtered dispatch uses the same subagent tree-root
      * carrier as `subagent/start`, so the lifecycle pair reaches the
      * same scoped audience.
      * @param info - run identity, durable direct creator `parentSessionId`, and terminal outcome.
@@ -202,8 +194,6 @@ export class SubagentRuntime extends TypertRemoteService {
   static inject = ['workingDirectory', 'sessionProjections']
   private providers = new Map<string, SubagentProvider>()
   private manager: SubagentManager | undefined
-  private catalogProjectionHandle!: ProjectionHandle<SubagentCatalogState>
-  private identityProjectionHandle!: ProjectionHandle<IdentityState>
   /**
    * The contained lifecycle-edge publisher. Built here because scoped dispatch
    * keys its carrier by this exact service instance, whose own context filter
@@ -214,16 +204,18 @@ export class SubagentRuntime extends TypertRemoteService {
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'subagents')
     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    await ctx.sessionProjections.register(subagentCatalogProjectionDefinition)
+    await ctx.sessionProjections.register(subagentTimingProjectionDefinition)
+    const identityProjection = await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
+    if (ctx.fiber.uid === null) return
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentManager(childCtx, {
-        catalogOf: session => subagentCatalogEntries(this.catalogProjectionHandle.stateOf(session)),
-        identityOf: session => this.identityProjectionHandle.stateOf(session).identity,
-        startExternal: (name, request) => {
-          const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'start'>>
-          return provider.start(request)
-        },
-        prepareContinuable: (name, request) => this.prepareContinuable(name, request),
-        observeActivation: (provider, childId, root, parentSessionId) => this.observeActivation(provider, childId, root, parentSessionId),
+        identityOf: session => identityProjection.stateOf(session).identity,
+        emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
       childCtx.effect(() => () => {
@@ -231,16 +223,6 @@ export class SubagentRuntime extends TypertRemoteService {
         if (this.manager === manager) this.manager = undefined
       }, 'subagents.managerBinding()')
     })
-    // Archive admission: this runtime is the owner that knows which live
-    // children descend from a Session and how a parent stops them.
-    ctx.inject(['agents'], (agentsCtx: Context) => { installSubagentArchiveAdmission(agentsCtx) })
-  }
-
-  protected async [Service.init](): Promise<void> {
-    const { sessionProjections } = this.ctx
-    this.catalogProjectionHandle = await sessionProjections.register(subagentCatalogProjectionDefinition)
-    await sessionProjections.register(subagentTimingProjectionDefinition)
-    this.identityProjectionHandle = await sessionProjections.register(subagentIdentityProjectionDefinition)
   }
 
   /**
@@ -274,69 +256,59 @@ export class SubagentRuntime extends TypertRemoteService {
    * @param spec - task, backend, and result recipient.
    * @returns identities, execution result, and exact-activation disposal. A reserved
    * childId requires a local backend and guarantees an accepted messageId.
+   * @throws PROVIDER_CHANGED if the selected provider is removed or replaced before dispatch.
    */
   async startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation> {
     const provider = this.expectProvider(spec.provider)
     if (spec.childId !== undefined && provider.prepareContinuable === undefined) {
       throw new SubagentError('reserved child ids require a local backend', 'UNSUPPORTED_CAPABILITY')
     }
-    assertSubagentMaxDepth(spec.request.maxDepth)
-    this.assertCapabilities(provider, { ...spec.request, signal: spec.signal })
+    assertSubagentMaxDepth(spec.maxDepth)
+    this.assertCapabilities(provider, spec)
     const manager = this.requireManager()
-    if (this.ctx.get('agents')?.get(spec.request.parent.id) !== spec.request.parent) {
+    if (this.ctx.get('agents')?.get(spec.parent.id) !== spec.parent) {
       throw new SubagentError('subagent creation requires the exact live parent agent', 'UNAUTHORIZED')
     }
-    if (spec.request.outputSchema !== undefined) assertObjectJsonSchema(spec.request.outputSchema)
-    return provider.prepareContinuable === undefined
-      ? manager.startExternal(spec)
-      : manager.startLocal(spec)
+    if (spec.outputSchema !== undefined) assertObjectJsonSchema(spec.outputSchema)
+    const prepare = provider.prepareContinuable?.bind(provider)
+    if (prepare !== undefined) {
+      return manager.startLocal(spec, (request) => {
+        this.assertProviderCurrent(provider)
+        return prepare(request)
+      })
+    }
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- registerProvider requires start when prepareContinuable is absent.
+    const start = provider.start!.bind(provider)
+    return manager.startExternal(spec, (request) => {
+      this.assertProviderCurrent(provider)
+      return start(request)
+    })
   }
 
   /**
-   * Derive an Agent's full path from creation ancestry and parent catalogs.
-   * @param agent - exact live Agent whose name is requested.
-   * @returns lead followed by named or legacy child segments.
-   */
-  nameOf(agent: Agent): string {
-    return this.requireManager().names.nameOf(agent)
-  }
-
-  /**
-   * Resolve a full agent path without granting authority to act on its Agent.
-   * @param caller - exact live Agent selecting the tree.
-   * @param name - a full path returned by creation or discovery.
-   * @param signal - cancellation during historical discovery.
-   * @returns the durable Session identity for the consuming operation to authorize.
-   * @throws when the path is absent or a required ancestor is unavailable.
-   */
-  resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId> {
-    return this.requireManager().names.resolve(caller, name, signal)
-  }
-
-  /**
-   * Resolve the root shared by an Agent and its teammates.
+   * Resolve the root shared by an Agent and its other agents in its subagent tree.
    * @param caller - exact live Agent whose subagent ancestry selects the tree.
    * @returns the live root; ordinary Session forks lead independent trees.
-   * @throws when the caller or its runtime Team owner is unavailable.
+   * @throws when the caller or its runtime owner is unavailable.
    */
   rootOf(caller: Agent): Agent {
     return this.requireManager().rootOf(caller)
   }
 
   /**
-   * Join progressing Team work for its root. Idle members with parked input
+   * Join progressing subagent tree work for its root. Idle members with parked input
    * stay resident without delaying host completion. Ordinary members return false.
-   * @param parent - exact live Agent; only the Team root joins member work.
+   * @param root - exact live subagent tree root whose member work is awaited.
    * @returns whether work was joined; hosts recheck root idle after true.
    */
-  async waitForChildren(parent: Agent): Promise<boolean> {
-    return this.manager?.waitForChildren(parent) ?? false
+  async waitForTreeWork(root: Agent): Promise<boolean> {
+    return this.manager?.waitForTreeWork(root) ?? false
   }
 
   /**
    * Steer one model-authored message to another member of the same subagent tree.
    * A running target receives it at its next step; an idle target starts a turn.
-   * A cold target resumes under its runtime Team root without restoring
+   * A cold target resumes under its runtime subagent tree root without restoring
    * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
    * stops only pre-acceptance work and never retracts an accepted message.
    * @param sender - exact live root or resident continuable Agent originating the message.
@@ -356,33 +328,8 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Deliver one host-protocol message to a direct continuable child.
-   * Symbol-keyed so host adapters can preserve their own source descriptors without
-   * widening the public Service Definition or impersonating an Agent sender.
-   * @param parentSessionId - durable direct creator authorizing delivery.
-   * @param childId - durable direct-child session id.
-   * @param content - host-authored content to deliver.
-   * @param source - durable host-protocol source descriptor.
-   * @param signal - caller cancellation before inbox acceptance.
-   * @param delivery - Queue as a distinct turn or Steer at the nearest step.
-   * @returns the accepted message's inbox id.
-   */
-  private [deliverSubagentPrompt](
-    parentSessionId: SessionId,
-    childId: SessionId,
-    content: ContentBlock[],
-    source: MessageSource,
-    signal: AbortSignal,
-    delivery: SubagentDelivery,
-  ): Promise<MessageId> {
-    return delivery === 'steer'
-      ? this.requireManager().steerPrompt(parentSessionId, childId, content, source, signal)
-      : this.requireManager().queuePrompt(parentSessionId, childId, content, source, signal)
-  }
-
-  /**
-   * Interrupt one live child's current execution under a human parent
-   * address or an exact live ancestor Agent. Fire-and-return: the cancel
+   * Interrupt one live child's current execution under a trusted user
+   * operation or an exact live ancestor Agent. Fire-and-return: the cancel
    * signal is issued before this returns, but the target may keep running
    * until it observes the signal. Unclaimed pending inbox work, the Activation,
    * and published descendants are preserved; claimed work is not requeued.
@@ -391,7 +338,7 @@ export class SubagentRuntime extends TypertRemoteService {
    * is an accepted no-op, as is a manager-less composition, which cannot own a
    * live Activation.
    * @param targetSessionId - the durable child session id to interrupt.
-   * @param authority - the human parent address or exact live ancestor Agent.
+   * @param authority - a trusted user operation or exact live ancestor Agent.
    * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
    *   live target.
    */
@@ -400,10 +347,10 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Close admission and stop all instances in the selected Teams, then await
+   * Close admission and stop all instances in the selected subagent trees, then await
    * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
-   * until each exact root leaves the registry; unrelated Teams remain live.
-   * @param parents - exact live Team roots entering teardown.
+   * until each exact root leaves the registry; unrelated subagent trees remain live.
+   * @param parents - exact live subagent tree roots entering teardown.
    * @returns once all admitted startup and member cleanup have settled.
    * @throws an aggregate error after all branches settle when any failed.
    */
@@ -412,35 +359,6 @@ export class SubagentRuntime extends TypertRemoteService {
     // An absent activation manager cannot own materialized children.
     if (manager === undefined) return
     await manager.drainDescendants(parents)
-  }
-
-  /**
-   * Release selected resident direct children of one exact live
-   * parent. Every unselected member, including their descendants, stays resident.
-   * Absent targets and a manager-less composition are accepted no-ops.
-   * @param parent - exact live direct parent authorizing the selected release.
-   * @param childIds - durable direct-child ids to release when resident.
-   * @returns once every selected activation released its execution handle.
-   * @throws {SubagentError} `UNAUTHORIZED` when a resident target belongs to a
-   *   different parent or the supplied parent identity is stale.
-   */
-  async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void> {
-    const manager = this.manager
-    if (manager === undefined) return
-    await manager.drainChildren(parent, childIds)
-  }
-
-  /**
-   * Read the parent's durable direct-child catalog without loading or resuming an Agent.
-   * The service owns and releases the live-preferred Session observation.
-   * @param parentSessionId - parent whose direct children are requested.
-   * @param signal - cancellation forwarded to the Session query.
-   * @returns committed catalog children in parent event order.
-   * @throws {@link SubagentError} when query or catalog projection is unavailable.
-   * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
-   */
-  listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]> {
-    return listSubagentChildren(this.ctx, parentSessionId, signal)
   }
 
   /**
@@ -464,8 +382,8 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Deliver one browser-authored message to a continuable child through the
-   * live Team root under its durable creation address, retaining the caller-minted request identity and
+   * Deliver one browser-authored message to a continuable child through its
+   * live subagent tree root, retaining the caller-minted request identity and
    * validated browser zone on the accepted message. Success identifies the
    * message the child's inbox accepted; later execution is independent of this
    * call. Queue delivery targets a later turn; steer delivery targets the
@@ -473,7 +391,8 @@ export class SubagentRuntime extends TypertRemoteService {
    * Image parts are admitted and persisted through the attachment store
    * before delivery, and the child's model must accept image input.
    * Cold resume at capacity rejects with `subagent/delivery-unavailable`.
-   * @param request - durable address, delivery, minted identity, content, and optional browser zone.
+   * Access is checked on the target Session before attachment admission or restoration.
+   * @param request - target id, delivery, minted identity, content, and optional browser zone.
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
    * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
@@ -481,9 +400,9 @@ export class SubagentRuntime extends TypertRemoteService {
    *   `subagent/not-resumable`, `subagent/unauthorized`,
    *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
    */
-  @Remote('prompt')
+  @Remote({ name: 'prompt', resources: { session: request => request.childSessionId } })
   async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
-    const { parentSessionId, childSessionId, clientTimeZone, delivery } = request
+    const { childSessionId, clientTimeZone, delivery } = request
     validateControlRequest('subagent.prompt', request)
     const canonicalTimeZone = clientTimeZone === undefined
       ? undefined
@@ -514,13 +433,10 @@ export class SubagentRuntime extends TypertRemoteService {
         content = await attachments.admitPromptContent(request.content)
       }
       return {
-        messageId: await this[deliverSubagentPrompt](
-          parentSessionId,
+        messageId: await this.requireManager().deliverPrompt(
           childSessionId,
           content,
-          source,
-          signal,
-          delivery,
+          { source, signal, delivery },
         ),
       }
     } catch (error: unknown) {
@@ -529,37 +445,20 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * Remote face of {@link interrupt} under one durable parent address. No
-   * catalog, history, persistence, or parent Agent lookup runs: the core
-   * primitive alone authorizes the address against the live Activation, which
-   * is what keeps a live child interruptible while its parent Agent is offline.
+   * Remote face of {@link interrupt}, authorized on the target Session by the Gateway.
+   * No catalog, history, persistence, or parent Agent lookup runs.
    * Absent, idle, and already-completed targets are accepted no-ops there.
    * @param childSessionId - durable child session id to interrupt.
-   * @param parentSessionId - durable direct parent whose authority is claimed.
-   * @param mode - required continuable-address discriminator.
    * @returns acknowledgement that the cancel signal was admitted, not that the target is quiescent.
    * @throws {RemoteError} `gateway/bad-request` for an empty id,
-   *   `subagent/unauthorized` when the address does not own the live target,
    *   otherwise `gateway/internal`.
    */
-  @Remote('interruptByParent')
-  interruptByParent(
-    childSessionId: SessionId,
-    parentSessionId: SessionId,
-    mode: 'continuable',
-  ): SubagentInterruptReceipt {
-    validateControlRequest('subagent.interrupt', { childSessionId, parentSessionId, mode })
+  @Remote({ name: 'interruptByUser', resources: { session: childSessionId => childSessionId } })
+  interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt {
+    validateControlRequest('subagent.interrupt', { childSessionId })
     try {
-      this.interrupt(childSessionId, { kind: 'user', parentSessionId })
+      this.interrupt(childSessionId, { kind: 'user' })
     } catch (error: unknown) {
-      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') {
-        throw new RemoteError(
-          'subagent/unauthorized',
-          'subagent does not belong to this parent',
-          { childSessionId },
-          { cause: error },
-        )
-      }
       throw new RemoteError('gateway/internal', 'subagent interrupt failed', {}, { cause: error })
     }
     return { accepted: true }
@@ -603,25 +502,11 @@ export class SubagentRuntime extends TypertRemoteService {
     return this.providers.get(name)
   }
 
-  /**
-   * List registered provider names in insertion order.
-   * @returns the registered names.
-   */
-  list(): string[] {
-    return [...this.providers.keys()]
-  }
-
-  /**
-   * Resolve one provider's detached continuable-creation contribution. Method
-   * presence on the provider IS the capability, so a provider without it is
-   * rejected before the manager reserves any child resources.
-   */
-  private async prepareContinuable(
-    name: string,
-    request: ContinuableCreateRequest,
-  ): Promise<ContinuableCreateSpec> {
-    const provider = this.expectProvider(name) as SubagentProvider & Required<Pick<SubagentProvider, 'prepareContinuable'>>
-    return provider.prepareContinuable(request)
+  /** A pending start must use the exact provider whose capabilities were checked. */
+  private assertProviderCurrent(provider: SubagentProvider): void {
+    if (this.providers.get(provider.name) !== provider) {
+      throw new SubagentError(`subagent provider "${provider.name}" changed during startup; retry the delegation`, 'PROVIDER_CHANGED')
+    }
   }
 
   /** Look up a provider for dispatch or fail loud. */
@@ -642,19 +527,6 @@ export class SubagentRuntime extends TypertRemoteService {
       )
     }
     return this.manager
-  }
-
-  /**
-   * Build the lifecycle observer for one continuable Activation's residency
-   * epoch, so the manager publishes its edges without owning event dispatch.
-   */
-  private observeActivation(
-    provider: string,
-    childId: SessionId,
-    root: Agent,
-    parentSessionId: SessionId,
-  ): ActivationObserver {
-    return createActivationObserver(this.emitLifecycle, provider, childId, root, parentSessionId)
   }
 
   /** Reject the first requested capability that the provider lacks. */

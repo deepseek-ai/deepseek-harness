@@ -27,7 +27,7 @@ import { ExpandButton } from '../src/client/shell/ExpandButton.tsx'
 import { GuideBody } from '../src/client/tabs/guide/GuideBody.tsx'
 import { GuideTitle } from '../src/client/tabs/guide/GuideTitle.tsx'
 import { GUIDE_ID } from '../src/client/tabs/guide/definition.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 
 const SHORTCUT_CATALOG: readonly never[] = []
 
@@ -124,7 +124,7 @@ describe('ui-sidebar-right apply', () => {
     expect(ctx.sidebarRightTabs).toBeInstanceOf(SidebarRightTabRegistry)
     expect(ctx.sidebarRight).toBeInstanceOf(SidebarRightController)
     expect('adopt' in ctx.sidebarRight).toBe(false)
-    expect(dictionaries.get('sidebarRight')).toEqual({ zh, en })
+    expect(dictionaries.get('sidebarRight')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     const guide = ctx.sidebarRightTabs.get('guide')
     expect(guide?.id).toBe(GUIDE_ID)
     expect(guide?.priority).toBe('builtin')

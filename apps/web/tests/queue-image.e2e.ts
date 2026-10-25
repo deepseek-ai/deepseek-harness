@@ -100,6 +100,9 @@ describe('web e2e: queued image submission', () => {
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await pasteImage(page, await readFile(PNG))
     await page.getByRole('img', { name: 'queued.png' }).waitFor({ timeout: 10_000 })
+    // The image uploads as soon as it is added, and Send waits for its receipt.
+    await page.locator('button[aria-busy="false"]', { has: page.getByRole('img', { name: 'queued.png' }) })
+      .waitFor({ timeout: 10_000 })
     const releasePrompt = Promise.withResolvers<undefined>()
     const releaseImage = Promise.withResolvers<undefined>()
     let cleanupPromise: Promise<void> | undefined

@@ -66,6 +66,8 @@ export interface DeepSeekHarnessOptions extends HarnessClientOptions {
   reasoningEffort?: ReasoningEffortId
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
+  /** Enable server approval requests; install client.onRequest() after client.start() and before harness.start(). */
+  approvalRequests?: boolean
 }
 
 /** One owned session activity interval, from enqueue receipt through idle. */

@@ -56,17 +56,15 @@ function agentMessageSource(sender: Agent): AgentMessageSource {
  * Build the model-visible and durable representation of one Agent message.
  * @param sender - exact live Agent that authored the message.
  * @param content - model-visible message blocks supplied by the sender.
- * @param senderName - full agent path shown to the recipient.
  * @returns the durable user-message representation delivered to the recipient.
  */
 export function createAgentMessage(
   sender: Agent,
   content: ContentBlock[],
-  senderName: string,
 ): ReturnType<typeof createUserMessage> {
   return createUserMessage({
     content: [
-      { type: 'text' as const, text: `Agent ${senderName} sent a message: ` },
+      { type: 'text' as const, text: `Agent ${sender.id} sent a message: ` },
       ...content,
     ],
     source: agentMessageSource(sender),
@@ -74,27 +72,21 @@ export function createAgentMessage(
 }
 
 /**
- * Append parent communication guidance to a continuable child's initial task.
- * @param parentName - name of the direct parent.
- * @param childName - name assigned to this child.
+ * Append automatic result-delivery guidance to a parent-delivered child's initial task.
  * @param prompt - initial model-visible task blocks.
- * @returns task blocks followed by the continuable return guidance.
+ * @returns task blocks followed by the result-delivery guidance.
  */
-export function withContinuableReturnGuidance(
-  parentName: string,
-  childName: string,
+export function withResultDeliveryGuidance(
   prompt: ContentBlock[],
 ): ContentBlock[] {
-  const encodedParentName = JSON.stringify(parentName)
   return [
     ...prompt,
     {
       type: 'text',
-      text: `Your name is ${JSON.stringify(childName)}. Your parent agent name is ${encodedParentName}. Your final answer is delivered automatically if your `
+      text: 'Your final answer is delivered automatically if your '
         + 'parent is still online. Include the result and relevant evidence in that answer; the parent does not '
-        + 'receive your full transcript, tool output, or reasoning. Use '
-        + `send_message({ name: ${encodedParentName}, message: "<finding>" }) when a finding changes what the `
-        + 'parent should do next; sending a message does not end your turn.',
+        + 'receive your full transcript, tool output, or reasoning. If your last action is a message to your '
+        + 'parent, the completion notice omits your final answer; include the result and relevant evidence in that message.',
     },
   ]
 }
@@ -102,13 +94,13 @@ export function withContinuableReturnGuidance(
 /**
  * One line telling a parent that a background child is finished and why, in
  * the parent's own task vocabulary.
- * @param childName - the immutable name the parent uses for the child.
+ * @param childId - the durable child the parent knows by id.
  * @param stopReason - how the child's last ordinary turn ended.
  * @param continuable - whether the child accepts a later message.
  * @returns the model-facing opening line of the settlement notice.
  */
-function settlementSummary(childName: string, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
-  const subject = `Background subagent ${childName}`
+function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
+  const subject = `Background subagent ${childId}`
   switch (stopReason) {
     case 'completed':
       return continuable
@@ -134,19 +126,20 @@ function settlementSummary(childName: string, stopReason: SubagentResult['stopRe
 
 /**
  * Build the runtime-owned settlement notice from the child's nonempty closing text.
- * @param childId - durable child identity retained in message attribution.
- * @param childName - immutable name shown in the notice.
+ * @param childId - durable child session id named in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
  * @param continuable - whether the child can accept another task.
+ * @param omitClosingText - replace the closing text when the child's last action
+ *   was a message to its direct parent.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
   childId: SessionId,
-  childName: string,
   terminal: SubagentResult,
   continuable = true,
+  omitClosingText = false,
 ): ReturnType<typeof createUserMessage> {
-  const summary = settlementSummary(childName, terminal.stopReason, continuable)
+  const summary = settlementSummary(childId, terminal.stopReason, continuable)
   // Parent providers receive this notice as a user message and may reject
   // nontext assistant blocks. Keep this conversion local so SDK/UI consumers
   // retain the complete child output.
@@ -156,9 +149,11 @@ export function createSettlementMessage(
   return createUserMessage({
     content: [
       { type: 'text' as const, text: summary },
-      ...closingText.length === 0
-        ? [{ type: 'text' as const, text: 'It left no closing message.' }]
-        : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingText],
+      ...omitClosingText
+        ? [{ type: 'text' as const, text: 'It sent you a message just before finishing, so its closing message is omitted.' }]
+        : closingText.length === 0
+          ? [{ type: 'text' as const, text: 'It left no closing message.' }]
+          : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingText],
       ...terminal.structured !== undefined
         ? [{ type: 'text' as const, text: `Structured result: ${JSON.stringify(terminal.structured)}` }] : [],
       ...terminal.diagnostic !== undefined

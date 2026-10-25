@@ -49,7 +49,7 @@ kind: "package-reference"
 | `presets` | `workspace-write`、`danger-full-access` | 预设名称 → 沙箱／审批捆绑的表 |
 | `defaultPreset` | 推断 | 固定到新会话的预设；组合默认值不匹配任何预设时必填 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-permission-presets)是每个受支持字段及其 JSDoc 的穷尽式真源。`custom` 保留给推导出的非预设状态，`auto` 则保留给 Auto review integration。挂载需要具有约束能力的 bash 执行器（会报告 `sandboxMode` 的执行器）与审批服务。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-permission-presets)是每个受支持字段及其 JSDoc 的穷尽式真源。`custom` 保留给推导出的非预设状态，`auto` 则保留给 Auto review integration。挂载需要具有约束能力的 bash 执行器（会报告 `sandboxMode` 的执行器）、审批服务和 Agent 注册表。
 
 ### 切换预设
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 
 ### 会话默认值
 
-`permission` 设置命名空间为未来会话持有 `defaultPreset`，且只接受配置预设。创建会话时读取它，将其应用于沙箱模式与审批策略，并把应用的预设记录为一次 `permission/preset` 选择。之后的设置变更绝不会改变现有会话。恢复的 seed（包括由 `session/end-seed` 明确标记的空 seed）会保留其有效权限，并只接收缺失的持久事实，而不会接收最新用户默认值；持久化的 `auto` 身份在发布前必须存在 live Auto 注册并通过准入。
+`permission` 设置命名空间为未来会话持有 `defaultPreset`，且只接受配置预设。创建 Agent 时读取它，将其应用于 Session 的沙箱模式与审批策略，并把应用的预设记录为一次 `permission/preset` 选择。之后的设置变更绝不会改变现有会话。恢复的 seed（包括由 `session/end-seed` 明确标记的空 seed）会保留其有效权限，并只接收缺失的持久事实，而不会接收最新用户默认值；持久化的 `auto` 身份在发布前必须存在 live Auto 注册并通过准入。
 
 -----
 
@@ -92,7 +92,7 @@ kind: "package-reference"
 
 ### 会话固定与空白复用
 
-挂载时会固定所有存活与未来的会话：真正全新的会话获得配置默认预设与两个旋钮事实，而 seed 会话或部分初始化的会话保留其有效旋钮值，只补充缺失的持久事实。投影自有的 seed 标记让该判断与旋钮值共用同一份增量状态。同步创建监听器在投影注册开始前安装。读取句柄尚未就绪时，Session 创建失败，Agent 创建回滚；调用方必须等待插件激活完成后再创建或恢复会话。存储的 `auto` 身份在 Auto integration 缺失或拒绝准入时无法发布；服务既不会改写它，也不会静默推导为 Full access。
+挂载时会固定所有存活与未来 Agent 的 Session：真正全新的会话获得配置默认预设与两个旋钮事实，而 seed 会话或部分初始化的会话保留其有效旋钮值，只补充缺失的持久事实。投影自有的 seed 标记让该判断与旋钮值共用同一份增量状态。服务在投影注册开始前安装 `agent/created` 监听器，因此激活期间的创建会失败，而不会跳过权限固定。`prepend: true` 使权限固定先于普通创建观察者执行，后者可以读取已记录的权限事实。后来使用 `prepend` 的监听器可能更早执行，不能假定权限已固定。读取句柄尚未就绪时，Agent 创建回滚；调用方必须等待插件激活完成后再创建或恢复 Agent。只创建 Session 而不创建 Agent 时，不会初始化权限。存储的 `auto` 身份在 Auto integration 缺失或拒绝准入时无法发布；服务既不会改写它，也不会静默推导为 Full access。
 
 ### 目录、投影与可选命令
 

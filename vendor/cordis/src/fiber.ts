@@ -186,9 +186,9 @@ export class Fiber {
   public uid: number | null
   /** The context this fiber's plugin runs in (extends the parent context). */
   public readonly ctx: Context
-  /** The validated plugin config (updated by `update()`). */
+  /** The validated plugin config (updated by `update()`); read through {@link effectiveConfig}. */
   public config: any
-  /** The raw plugin config, re-resolved before each activation. */
+  /** The raw plugin config, re-resolved before activation; use {@link rawConfig} to read or retain it. */
   public _config: any
   /** Current lifecycle state; transitions emit `internal/status`. */
   public state = FiberState.PENDING
@@ -638,9 +638,36 @@ export class Fiber {
     })
   }
 
-  private _resolveConfig(config: any) {
-    config = this.context.waterfall(this, 'internal/config', config, () => config)
-    return this.runtime ? resolveConfig(this.runtime, config) : config
+  /** Raw input retained for the next activation, without evaluating expressions or validating it. */
+  get rawConfig(): unknown {
+    return this.ctx.fiber._config
+  }
+
+  /** Retain raw input without changing the running config or triggering an update. */
+  set rawConfig(config: unknown) {
+    this.ctx.fiber._config = config
+  }
+
+  /**
+   * The config object published by the existing activation/update lifecycle, without cloning or re-parsing.
+   * It is undefined before the first resolution and remains readable after unload; callers requiring a live instance check `state`.
+   */
+  get effectiveConfig(): unknown {
+    return this.ctx.fiber.config
+  }
+
+  /**
+   * Evaluate and validate a candidate using this fiber's `internal/config` hooks and runtime schema.
+   * Does not publish the result, replace raw input, or commit running volatile references.
+   * Required injections must be available when a hook uses them.
+   * @param config Raw candidate input.
+   * @returns The candidate's resolved config, retaining the schema's result identity.
+   * @throws {ValidationError} when the runtime schema rejects the candidate; hook errors propagate.
+   */
+  resolveConfig(config: unknown): unknown {
+    const fiber = this.ctx.fiber
+    config = fiber.context.waterfall(fiber, 'internal/config', config, () => config)
+    return fiber.runtime ? resolveConfig(fiber.runtime, config) : config
   }
 
   private async _reload() {
@@ -652,7 +679,7 @@ export class Fiber {
       // the load. Do not run plugin code for a stale epoch; the state update
       // below will drain any effects collected while the fiber was PENDING.
       if (this._runner.epoch === oldEpoch) {
-        this.config = this._resolveConfig(this._config)
+        this.config = this.resolveConfig(this._config)
         await this._execute(this._runner)
         this._error = undefined
       }
@@ -716,10 +743,11 @@ export class Fiber {
    * @throws {CordisError} `INACTIVE_EFFECT` when the fiber is already disposed.
    */
   async restart() {
-    this.assertActive()
-    this._setEpoch(INACTIVE)
-    this._refresh()
-    await this.await()
+    const fiber = this.ctx.fiber
+    fiber.assertActive()
+    fiber._setEpoch(INACTIVE)
+    fiber._refresh()
+    await fiber.await()
   }
 
   /**
@@ -734,21 +762,22 @@ export class Fiber {
    * @throws {ValidationError} when the new config fails validation.
    */
   update(config: any, noSave = false) {
-    this.assertActive()
-    this._config = config
-    if (this.state !== FiberState.ACTIVE) {
+    const fiber = this.ctx.fiber
+    fiber.assertActive()
+    fiber._config = config
+    if (fiber.state !== FiberState.ACTIVE) {
       // Config resolution may access injected services, so defer it until the
       // fiber can activate.
-      this._error = undefined
-      this._setEpoch(INACTIVE)
-      this._refresh()
+      fiber._error = undefined
+      fiber._setEpoch(INACTIVE)
+      fiber._refresh()
       return
     }
-    config = this._resolveConfig(config)
-    this.context.waterfall(this, 'internal/update', config, noSave, () => {
-      this.config = config
-      this._error = undefined
-      return this.restart()
+    config = fiber.resolveConfig(config)
+    fiber.context.waterfall(fiber, 'internal/update', config, noSave, () => {
+      fiber.config = config
+      fiber._error = undefined
+      return fiber.restart()
     })
   }
 }

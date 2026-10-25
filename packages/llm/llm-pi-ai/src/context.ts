@@ -219,6 +219,7 @@ function appendSharedHistory(
   options: GenerateOptions,
   messages: PiMessage[],
   toolNames: Map<ToolCallId, string>,
+  supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
 ): boolean {
   if (message.role === 'developer') {
@@ -227,7 +228,14 @@ function appendSharedHistory(
   }
   if (message.role === 'system') {
     const content = flattenText(message)
-    if (content.length > 0) messages.push({ role: 'system', content, timestamp: 0 })
+    if (content.length > 0) {
+      if (supportsMidConvoSystemMessages) {
+        messages.push({ role: 'system', content, timestamp: 0 })
+      } else {
+        const reminder = content.replaceAll('</system-reminder>', '<\\/system-reminder>')
+        messages.push({ role: 'user', content: `<system-reminder>\n${reminder}\n</system-reminder>`, timestamp: 0 })
+      }
+    }
     return true
   }
   if (message.role === 'assistant') {
@@ -237,7 +245,11 @@ function appendSharedHistory(
   return false
 }
 
-function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
+function textOnlyContext(
+  options: GenerateOptions,
+  supportsMidConvoSystemMessages: boolean,
+  onReplayDegrade?: (reason: string) => void,
+): PiContext {
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
   const toolNames = new Map<ToolCallId, string>()
@@ -246,7 +258,7 @@ function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: st
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
-    if (appendSharedHistory(message, options, messages, toolNames, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, flattenText(message)))
       continue
@@ -292,6 +304,7 @@ export function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageReque
  * @param options - projected request; one-shot system text precedes the leading history prompt.
  * @param images - absent; selects the synchronous conversion.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
+ * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
  * @returns the pi-ai context; `tools` is omitted when the request declares none.
  * @throws {LlmError} `UNSUPPORTED_CONTENT` for images in any history role, including a leading system message.
  */
@@ -299,6 +312,7 @@ export function toPiContext(
   options: GenerateOptions,
   images?: undefined,
   onReplayDegrade?: (reason: string) => void,
+  supportsMidConvoSystemMessages?: boolean,
 ): PiContext
 /**
  * Convert harness history to a pi-ai Context while resolving durable images.
@@ -310,26 +324,30 @@ export function toPiContext(
  * @param options - projected request; one-shot system text precedes the leading history prompt.
  * @param images - attachment provider, current path resolver, and request limits.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
+ * @param supportsMidConvoSystemMessages - native model capability; otherwise later system text becomes a user-role system-reminder.
  * @returns the asynchronously resolved pi-ai context.
  */
 export function toPiContext(
   options: GenerateOptions,
   images: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
+  supportsMidConvoSystemMessages?: boolean,
 ): Promise<PiContext>
 export function toPiContext(
   options: GenerateOptions,
   images?: PiImageRequestContext,
   onReplayDegrade?: (reason: string) => void,
+  supportsMidConvoSystemMessages = false,
 ): PiContext | Promise<PiContext> {
   return images === undefined
-    ? textOnlyContext(options, onReplayDegrade)
-    : toPiContextWithImages(options, images, onReplayDegrade)
+    ? textOnlyContext(options, supportsMidConvoSystemMessages, onReplayDegrade)
+    : toPiContextWithImages(options, images, supportsMidConvoSystemMessages, onReplayDegrade)
 }
 
 async function toPiContextWithImages(
   options: GenerateOptions,
   images: PiImageRequestContext,
+  supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
 ): Promise<PiContext> {
   const { attachments, resolveImageAccess, maxRequestImageBytes } = images
@@ -362,7 +380,7 @@ async function toPiContextWithImages(
   const messages: PiMessage[] = []
 
   for (const message of exactMessages) {
-    if (appendSharedHistory(message, options, messages, toolNames, onReplayDegrade)) continue
+    if (appendSharedHistory(message, options, messages, toolNames, supportsMidConvoSystemMessages, onReplayDegrade)) continue
     if (message.role === 'tool') {
       messages.push(toolResultOf(message, toolNames, userContent(message.content, requestImages, resolveImageAccess)))
       continue

@@ -1,3 +1,4 @@
+import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -16,7 +17,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { TestSessionQuery } from './test-session-query.ts'
-import { managerState } from './manager-internals.ts'
+import { managerState, subagentManager } from './manager-internals.ts'
 import { requireLocalActivation } from '../src/activation.ts'
 
 /** A model reply, or a turn that stays open until its Agent is cancelled. */
@@ -81,10 +82,10 @@ const signal = new AbortController().signal
 
 /** Start one caller-delivery child whose history carries `TASK:<marker>`. */
 async function start(ctx: Context, parent: Agent, marker: string, description = 'shared responsibility'): Promise<SessionId> {
-  const started = await ctx.subagents.startActivation({ name: marker,
+  const started = await ctx.subagents.startActivation({
     provider: 'spawn',
     label: description,
-    request: { prompt: [{ type: 'text', text: `TASK:${marker}` }], parent },
+    prompt: [{ type: 'text', text: `TASK:${marker}` }], parent,
     signal,
     delivery: 'caller',
   })
@@ -122,7 +123,7 @@ describe('subagent sibling messages', () => {
     const b = await start(ctx, parent, 'b')
     await settled(ctx, b)
     expect(a).not.toBe(b)
-    expect(await ctx.subagents.listChildren(parent.id)).toEqual([
+    expect(await listChildren(ctx, parent.id)).toEqual([
       expect.objectContaining({ id: a, mode: 'continuable', label: 'shared responsibility' }),
       expect.objectContaining({ id: b, mode: 'continuable', label: 'shared responsibility' }),
     ])
@@ -131,7 +132,7 @@ describe('subagent sibling messages', () => {
 
     await ctx.subagents.sendMessage(sender, b, [{ type: 'text', text: 'hello' }], { signal })
     const delivered = (await storedUserMessages(ctx, b)).find(event => event.data.source.kind === 'agent-message')!
-    expect(textOf(delivered)).toBe('Agent lead/a sent a message: hello')
+    expect(textOf(delivered)).toBe(`Agent ${a} sent a message: hello`)
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     ctx.subagents.interrupt(a, { kind: 'ancestor', agent: parent })
     await settled(ctx, a)
@@ -164,7 +165,7 @@ describe('tree-wide messages', () => {
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const fork = ctx.sessions.fork(source, undefined, SessionId('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }
-    onTestFinished(ctx.agents.enter(caller, undefined))
+    onTestFinished(ctx.agents.enter(caller))
     expect(ctx.subagents.rootOf(caller)).toBe(caller)
     for (const [id, parentSession] of [
       ['orphan', undefined], ['offline-parent', SessionId('absent')], ['cycle', SessionId('cycle')],
@@ -173,7 +174,7 @@ describe('tree-wide messages', () => {
         meta: { origin: 'subagent', ...parentSession === undefined ? {} : { parentSession } },
       })
       const child = { ...parent, id: session.id, session }
-      onTestFinished(ctx.agents.enter(child, undefined))
+      onTestFinished(ctx.agents.enter(child))
       expect(() => ctx.subagents.rootOf(child)).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     }
   })
@@ -197,16 +198,16 @@ describe('tree-wide messages', () => {
     await ctx.subagents.sendMessage(parent, leafId, [{ type: 'text', text: 'grandchild' }], { signal })
     await ctx.subagents.sendMessage(leaf, parent.id, [{ type: 'text', text: 'grandparent' }], { signal })
     expect(received).toEqual([
-      { target: leafId, sender: a, text: 'Agent lead/a sent a message: cousin' },
-      { target: leafId, sender: parent.id, text: 'Agent lead sent a message: grandchild' },
-      { target: parent.id, sender: leafId, text: 'Agent lead/b/leaf sent a message: grandparent' },
+      { target: leafId, sender: a, text: `Agent ${a} sent a message: cousin` },
+      { target: leafId, sender: parent.id, text: `Agent ${parent.id} sent a message: grandchild` },
+      { target: parent.id, sender: leafId, text: `Agent ${leafId} sent a message: grandparent` },
     ])
     expect(() => { ctx.subagents.interrupt(leafId, { kind: 'ancestor', agent: sender }) })
       .toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     await expect(ctx.subagents.sendMessage(sender, a, [], { signal })).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
   })
 
-  it('restores only the target within Team capacity while its creator remains offline', async () => {
+  it('restores only the target within subagent tree capacity while its creator remains offline', async () => {
     const { ctx, parent, adapter } = await setup({
       a: ['hang'], branch: ['hang'], leaf: [textResponse('first'), textResponse('reply')],
     }, 2)
@@ -225,7 +226,7 @@ describe('tree-wide messages', () => {
 
     const messages = await storedUserMessages(ctx, leafId)
     const delivered = messages.find(event => event.data.source.kind === 'agent-message')!
-    expect(textOf(delivered)).toBe('Agent lead/a sent a message: cold cousin')
+    expect(textOf(delivered)).toBe(`Agent ${a} sent a message: cold cousin`)
     expect(delivered.data.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: a })
     await settled(ctx, branchId)
     expect(resumed).toEqual([{ id: leafId, parent: branchId }])
@@ -345,7 +346,7 @@ describe('tree-wide messages', () => {
       await dispose()
       if (failCleanup) throw new Error('cleanup report failed')
     }
-    const drained = ctx.subagents.drainChildren(parent, [branchId]).catch((error: unknown) => error)
+    const drained = subagentManager(ctx)['dispose'](activation).catch((error: unknown) => error)
     let delivery: Promise<unknown> | undefined
     try {
       await entered.promise
@@ -354,7 +355,7 @@ describe('tree-wide messages', () => {
       expect(ctx.agents.get(branchId)).toBe(branch)
       release.resolve(undefined)
       const messages = await storedUserMessages(ctx, leafId)
-      expect(messages.some(message => textOf(message) === 'Agent lead sent a message: after close')).toBe(true)
+      expect(messages.some(message => textOf(message) === `Agent ${parent.id} sent a message: after close`)).toBe(true)
       await settled(ctx, branchId)
     } finally {
       release.resolve(undefined)

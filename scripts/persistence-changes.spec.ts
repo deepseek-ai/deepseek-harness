@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join, posix, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, schemaDigest } from './persistence-schema-model.ts'
 import type { PersistenceRoot, PersistenceSchemaInventory, SchemaNode, SchemaProperty, SourceCompatibility } from './persistence-schema-model.ts'
 import { extractPersistenceSchema } from './persistence-schema.ts'
 import { persistenceCatalogArtifacts } from './gen-persistence-catalog.ts'
@@ -25,7 +25,7 @@ function runPersistenceChanges(
   args: readonly string[], root: string, extract: (root: string) => PersistenceSchemaInventory,
 ): string {
   return executePersistenceChanges(args, root, extract, (_root, current) => [{
-    path: 'docs/persistence-schema.json', content: JSON.stringify(current, null, 2) + '\n',
+    path: 'docs/persistence-schema.json', content: encodePersistenceSnapshot(current),
   }])
 }
 
@@ -102,6 +102,25 @@ function entry(
   }
 }
 
+interface SnapshotText {
+  formatVersion: number
+  roots: Record<string, unknown>[]
+  types: Record<string, unknown>[]
+  nodes: Record<string, Record<string, unknown>>
+}
+
+/** Encode a snapshot, then apply one invalid edit to its committed JSON fields. */
+function tamper(snapshot: PersistenceSchemaInventory, change: (value: SnapshotText) => void): string {
+  const value = JSON.parse(encodePersistenceSnapshot(snapshot)) as SnapshotText
+  change(value)
+  return JSON.stringify(value)
+}
+
+/** Replace the node that the first root graph starts from. */
+function replaceRootNode(node: Record<string, unknown>): (value: SnapshotText) => void {
+  return (value) => { value.nodes[String(value.roots[0]!.digest).slice(0, 16)] = node }
+}
+
 const BASE_ID = '2026-09-11-baseline'
 const NEXT_ID = '2026-09-11-change'
 
@@ -126,7 +145,7 @@ describe('historical persistence snapshot parsing', () => {
     const root = snapshot.roots[0]!
     const sources = ['packages/core/example/src/types.ts']
     const complete = { ...snapshot, types: [{ schema: root.schema, digest: root.digest, names: ['Example'], sources }] }
-    expect(parseHistoricalPersistenceSnapshot(complete)).toEqual(complete)
+    expect(parseHistoricalPersistenceSnapshot(encodePersistenceSnapshot(complete))).toEqual(complete)
   })
 
   it.each([':8', ':8:3', '#L8', '#L8-L12'])('rejects source coordinates %s only in historical inventories', (suffix) => {
@@ -134,29 +153,31 @@ describe('historical persistence snapshot parsing', () => {
     const root = snapshot.roots[0]!
     const sources = [`packages/core/example/src/types.ts${suffix}`]
     const complete = { ...snapshot, types: [{ schema: root.schema, digest: root.digest, names: [], sources }] }
-    expect(() => parseHistoricalPersistenceSnapshot(complete)).toThrow('historical schema sources must omit line numbers')
-    expect(parsePersistenceSnapshot(complete)).toEqual(complete)
+    expect(() => parseHistoricalPersistenceSnapshot(encodePersistenceSnapshot(complete))).toThrow('historical schema sources must omit line numbers')
+    expect(parsePersistenceSnapshot(encodePersistenceSnapshot(complete))).toEqual(complete)
   })
 
   it('admits optional surface operations only through the historical parser', () => {
     const snapshot = historicalSurface('optional')
-    expect(() => parsePersistenceSnapshot(snapshot)).toThrow('surface metadata')
-    expect(parseHistoricalPersistenceSnapshot(snapshot)).toEqual(snapshot)
-    expect(parsePersistenceSnapshot(historicalSurface('required'))).toEqual(historicalSurface('required'))
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot(snapshot))).toThrow('surface metadata')
+    expect(parseHistoricalPersistenceSnapshot(encodePersistenceSnapshot(snapshot))).toEqual(snapshot)
+    expect(parsePersistenceSnapshot(encodePersistenceSnapshot(historicalSurface('required')))).toEqual(historicalSurface('required'))
   })
 
   it('still rejects absent operations, mismatched event tags, and invalid roots', () => {
-    expect(() => parseHistoricalPersistenceSnapshot(historicalSurface('absent'))).toThrow('surface metadata')
-    expect(() => parseHistoricalPersistenceSnapshot(historicalSurface('optional', 'wrong/tag'))).toThrow('type does not match')
+    expect(() => parseHistoricalPersistenceSnapshot(encodePersistenceSnapshot(historicalSurface('absent')))).toThrow('surface metadata')
+    expect(() => parseHistoricalPersistenceSnapshot(encodePersistenceSnapshot(historicalSurface('optional', 'wrong/tag')))).toThrow('type does not match')
     const snapshot = historicalSurface('optional')
-    expect(() => parseHistoricalPersistenceSnapshot({ ...snapshot, roots: snapshot.roots.map(root => ({ ...root, key: 'event:wrong/key' })) })).toThrow('invalid event root key')
-    expect(() => parseHistoricalPersistenceSnapshot({ ...snapshot, roots: snapshot.roots.map(root => ({ ...root, surface: false })) })).toThrow('surface metadata')
+    expect(() => parseHistoricalPersistenceSnapshot(tamper(snapshot, (value) => { value.roots[0]!.key = 'event:wrong/key' }))).toThrow('invalid event root key')
+    expect(() => parseHistoricalPersistenceSnapshot(tamper(snapshot, (value) => { value.roots[0]!.surface = false }))).toThrow('surface metadata')
   })
 
   it('preserves graph and digest validation in historical mode', () => {
     const snapshot = historicalSurface('optional')
-    expect(() => parseHistoricalPersistenceSnapshot({ ...snapshot, roots: snapshot.roots.map(root => ({ ...root, digest: 'f'.repeat(64) })) })).toThrow('digest mismatch')
-    expect(() => parseHistoricalPersistenceSnapshot({ ...snapshot, roots: snapshot.roots.map(root => ({ ...root, schema: { root: 0, nodes: [{ kind: 'array', element: 9 }] } })) })).toThrow('unknown schema node')
+    expect(() => parseHistoricalPersistenceSnapshot(tamper(snapshot, (value) => {
+      value.roots[0]!.digest = String(value.roots[0]!.digest).slice(0, 16) + 'f'.repeat(48)
+    }))).toThrow('digest mismatch')
+    expect(() => parseHistoricalPersistenceSnapshot(tamper(snapshot, replaceRootNode({ kind: 'array', element: '9'.repeat(16) })))).toThrow('unknown schema node')
   })
 })
 
@@ -312,10 +333,10 @@ describe('accepted persistence baseline', () => {
     const current = inventory({ value: version === 4 ? 'number' : 'boolean' }, version)
     if (version === 5) runPersistenceChanges(['--record', FUTURE_ID, '--prose', proseFile(root)], root, () => current)
     const snapshotPath = join(root, `docs/persistence-changes/${FINALIZED_ID}.schema.json`)
-    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as PersistenceSchemaInventory
+    const snapshot = parsePersistenceSnapshot(readFileSync(snapshotPath, 'utf8'))
     const replacement = typeRoot('event:example/value', { value: 'number', extra: 'string' })
     const original = snapshot.roots.find(root => root.key === replacement.key)!
-    writeFileSync(snapshotPath, JSON.stringify({ ...snapshot,
+    writeFileSync(snapshotPath, encodePersistenceSnapshot({ ...snapshot,
       roots: snapshot.roots.map(root => root.key === replacement.key ? replacement : root) }))
     for (const suffix of ['.md', '.zh.md']) {
       const path = join(root, `docs/persistence-changes/${FINALIZED_ID}${suffix}`)
@@ -375,7 +396,7 @@ function finishDocuments(root: string, id: string): void {
 }
 
 function commitCurrent(root: string, schema: PersistenceSchemaInventory): void {
-  writeFileSync(join(root, 'docs/persistence-schema.json'), JSON.stringify(schema, null, 2) + '\n')
+  writeFileSync(join(root, 'docs/persistence-schema.json'), encodePersistenceSnapshot(schema))
 }
 
 function baseline(root: string, schema = inventory()): void {
@@ -624,15 +645,12 @@ describe('persistence history verification', () => {
 
   it('rejects malformed references, unknown schema variants, digest tampering, and extra snapshot roots', () => {
     const schema = inventory()
-    const malformed: { roots: readonly { schema: { nodes: readonly unknown[] }; digest: string }[] } = structuredClone(schema)
-    malformed.roots[0]!.schema.nodes = [{ kind: 'array', element: 99 }]
-    expect(() => parsePersistenceSnapshot(malformed)).toThrow('unknown schema node')
-    malformed.roots[0]!.schema.nodes = [{ kind: 'future' }]
-    expect(() => parsePersistenceSnapshot(malformed)).toThrow('unknown schema node kind')
-    const tampered = structuredClone(schema)
-    Object.assign(tampered.roots[0]!, { digest: '0'.repeat(64) })
-    expect(() => parsePersistenceSnapshot(tampered)).toThrow('digest mismatch')
-    expect(() => parsePersistenceSnapshot({ ...schema, formatVersion: 3 })).toThrow('normalization version')
+    expect(() => parsePersistenceSnapshot(tamper(schema, replaceRootNode({ kind: 'array', element: '9'.repeat(16) })))).toThrow('unknown schema node')
+    expect(() => parsePersistenceSnapshot(tamper(schema, replaceRootNode({ kind: 'future' })))).toThrow('unknown schema node kind')
+    expect(() => parsePersistenceSnapshot(tamper(schema, (value) => {
+      value.roots[0]!.digest = String(value.roots[0]!.digest).slice(0, 16) + '0'.repeat(48)
+    }))).toThrow('digest mismatch')
+    expect(() => parsePersistenceSnapshot(tamper(schema, (value) => { value.formatVersion = 3 }))).toThrow('normalization version')
     const next = entry(NEXT_ID, onlyEvent(inventory({ value: 'string', 'label?': 'string' })), BASE_ID)
     expect(() => validatePersistenceHistory([entry(BASE_ID, schema, null, true), { ...next, snapshot: inventory() }])).toThrow('snapshot roots')
   })
@@ -951,7 +969,7 @@ describe('recorded source compatibility policy', () => {
     expect(after.digest).not.toBe(before.digest)
     expect(classifyPersistenceChange(before, after)).toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresCompatibilityReview: false })])
     const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [after], types: [] }
-    expect(parsePersistenceSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot)
+    expect(parsePersistenceSnapshot(encodePersistenceSnapshot(snapshot))).toEqual(snapshot)
   })
 
   it('allows ordinary optional fields in an existing group alongside a qualified addition', () => {
@@ -1017,25 +1035,30 @@ describe('recorded source compatibility policy', () => {
   it.each(['auto-review', 'compact-basic', 'ptc-mode'])('rejects saved qualification of reserved producer kind %s', (kind) => {
     const root = attributedRoot([EXISTING_SOURCE, { kind }], { policy: attributionPolicy([kind]) })
     const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [root], types: [] }
-    expect(() => parsePersistenceSnapshot(snapshot)).toThrow('invalid source compatibility')
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot(snapshot))).toThrow('invalid source compatibility')
   })
 
   it('rejects old-format policy fields, policy tampering, unsupported promises and invalid bindings', () => {
     const root = attributedRoot([EXISTING_SOURCE])
     const snapshot: PersistenceSchemaInventory = { formatVersion: 2, roots: [root], types: [] }
-    expect(() => parsePersistenceSnapshot({ ...snapshot, formatVersion: 1 })).toThrow('unknown field compatibility')
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot({ ...snapshot, formatVersion: 1 }))).toThrow('unknown field compatibility')
+    const patchPolicy = (patch: Record<string, unknown>) => (value: SnapshotText): void => {
+      const properties = Object.values(value.nodes).flatMap(node => node.kind === 'object' ? node.properties as Record<string, unknown>[] : [])
+      Object.assign(properties.find(property => property.compatibility !== undefined)!.compatibility as object, patch)
+    }
     for (const patch of [{ version: 2 }, { policy: 'arbitrary' }, { discriminator: 'type' }, { unknownKinds: 'discard' }]) {
-      const tampered = JSON.parse(JSON.stringify(snapshot)) as PersistenceSchemaInventory
-      const property = tampered.roots[0]!.schema.nodes.flatMap(node => node.kind === 'object' ? node.properties : []).find(property => property.compatibility !== undefined)!
-      Object.assign(property.compatibility!, patch)
-      expect(() => parsePersistenceSnapshot(tampered)).toThrow('unsupported source compatibility')
+      expect(() => parsePersistenceSnapshot(tamper(snapshot, patchPolicy(patch)))).toThrow('unsupported source compatibility')
     }
     const wrongRole = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([], 'developer') })
-    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [wrongRole] })).toThrow('invalid source compatibility')
-    const changedQualification = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy([EXISTING_SOURCE.kind]) })
-    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [{ ...changedQualification, digest: root.digest }] })).toThrow('digest mismatch')
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot({ ...snapshot, roots: [wrongRole] }))).toThrow('invalid source compatibility')
+    expect(() => parsePersistenceSnapshot(tamper(snapshot, patchPolicy({ attributionKinds: [EXISTING_SOURCE.kind] })))).toThrow('key does not match')
+    const qualified: PersistenceSchemaInventory = { formatVersion: 2, types: [],
+      roots: [attributedRoot([EXISTING_SOURCE, NEW_SOURCE, { kind: 'other-attribution' }], { policy: attributionPolicy([NEW_SOURCE.kind, 'other-attribution']) })] }
+    for (const kinds of [['other-attribution', NEW_SOURCE.kind], [NEW_SOURCE.kind, NEW_SOURCE.kind, 'other-attribution']]) {
+      expect(() => parsePersistenceSnapshot(tamper(qualified, patchPolicy({ attributionKinds: kinds })))).toThrow('node is not canonical')
+    }
     const unknownKind = attributedRoot([EXISTING_SOURCE], { policy: attributionPolicy(['absent']) })
-    expect(() => parsePersistenceSnapshot({ ...snapshot, roots: [unknownKind] })).toThrow('invalid source compatibility')
+    expect(() => parsePersistenceSnapshot(encodePersistenceSnapshot({ ...snapshot, roots: [unknownKind] }))).toThrow('invalid source compatibility')
   })
 })
 

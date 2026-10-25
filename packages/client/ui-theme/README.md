@@ -29,6 +29,8 @@ Users switch the color scheme, font sizes, and fonts from rows in Settings (Gene
 
 ### Appearance and font size
 
+In narrow browser settings, the three Appearance choices share one row and font-size labels use a smaller gutter. Windows and macOS desktop windows retain wrapping choices and standard spacing.
+
 The plugin registers Appearance preference cubes and the text font-size stepper in the General section. A More font settings button after the stepper expands a region below it, collapsed on every settings open, with a font row for each of text, code, and the terminal, plus the code and terminal font-size steppers. The text stepper accepts integer values from 10 through 22 px and defaults to 14 px. It changes conversation headings and base text by the same increment, including the user bubble and composer draft; flow-row titles, summaries, and tables follow one step under the body size, while small text keeps a fixed size. The code stepper (10–16 px, default 11) sets the code-block size; inline code stays 1 px larger, and the small tool-output variant uses the same size. The terminal stepper (10–20 px, default 13) sets the sidebar terminal cell font size; changing it keeps the shell and output and refits the grid. Each accepted change writes through the Host settings API. Rapid changes serialize in gesture order with namespace revisions, and a rejected latest write reloads the durable values.
 
 Desktop's fixed `Cmd`/`Ctrl` + `+` (or `=`) and `Cmd`/`Ctrl` + `-` shortcuts change the text, code, and terminal font sizes together by 1 px, each within its own range. Each physical key press saves the changed fields in one settings mutation; holding a key does not repeat the adjustment. The actions appear in the shortcut reference and work in the main document, including dialogs and text inputs, unless a local control consumes the input; terminal input retains its own key handling. Web retains the browser's zoom shortcuts.
@@ -39,7 +41,7 @@ Three rows set the text font (interface and conversation text), the code font (c
 
 ### Registering a theme
 
-A composition can register a third-party theme id with alias-token overrides through `ctx.theme`; the override layer folds into the active snapshot's tokens in registration order. Removing one never overwrites the last durable built-in preference. Third-party theme ids remain an in-process extension and do not cross the built-in settings schema.
+A composition can register a third-party theme id with alias-token overrides through `ctx.theme`; the override layer folds into the active snapshot's tokens in registration order. A theme can also replace product icons: `ThemeDefinition.icons` maps ui-primitives `ICON_SYMBOLS` ids to complete SVG documents. The plugin keeps one hidden icon sprite at the start of `body` whose `<symbol>` children follow the active theme's replacements and fall back to the defaults, so a replacement may be multi-color and may paint with `currentColor` or `--dsw-*` variables that follow the palette. Replacement markup is trusted like the registering plugin's code. `register` rejects unknown ids, documents without a well-formed SVG-namespace `<svg>` root and `viewBox`, `<style>` or `<script>` elements, which would apply to the whole document, and element ids that do not start with `<symbol id>-`. The root's `width`, `height`, `class`, and `aria-hidden` are ignored because the use site sizes the icon. Gradients and other paint servers resolve their stops in the sprite, so they follow palette tokens but not use-site color overrides. Removing one never overwrites the last durable built-in preference. Third-party theme ids remain an in-process extension and do not cross the built-in settings schema.
 
 ### Pre-plugin palette
 
@@ -134,6 +136,7 @@ These limits define the theme extension surface and the color authority; they ar
 
 - **Third-party themes are an extension point, not a product** — registering one means overriding same-named alias variables; no validation exists that an override set is complete.
 - **The token sheets are the sole color authority** — values absent from the design system are deliberately not appended; the nearest semantic token wins, and design-owner-approved additions enter as a static step plus a semantic alias in the same change.
+- **Only product icons are replaceable** — `ThemeDefinition.icons` covers the ui-primitives product icon set; file-type, plugin, site, and brand artwork still render fixed inline SVG.
 
 <a id="dev-note"></a>
 ### Dev Note

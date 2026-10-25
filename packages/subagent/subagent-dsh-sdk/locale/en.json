@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH SDK subagent backend",
+    "description": "Run Harness in a subprocess through the TypeScript SDK and JSON-RPC over standard input and output."
+  }
+}

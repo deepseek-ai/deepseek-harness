@@ -19,6 +19,12 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../tool-executor-native"
+    },
+    {
+      "path": "../tool-executor-ptc"
     }
   ]
 }

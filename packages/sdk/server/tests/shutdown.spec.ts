@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 /** SDK shutdown releases managed descendants before their root Agents leave the registry. */
 
@@ -50,9 +49,9 @@ describe('SDK descendant shutdown', () => {
     const start = async (parent: Agent, id: SessionId): Promise<Agent> => {
       const gate = { entered: Promise.withResolvers<undefined>(), release: Promise.withResolvers<undefined>() }
       gates.set(id, gate)
-      const receipt = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+      const receipt = await ctx.subagents.startActivation({
         provider: 'local-test', childId: id, label: 'parked child', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'work' }] },
+        parent, prompt: [{ type: 'text', text: 'work' }],
       })
       receipts.push(receipt)
       await gate.entered.promise

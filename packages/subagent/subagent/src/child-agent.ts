@@ -9,7 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 // Type-only: make `ctx.get('sandboxPolicy')`, `ctx.get('approval')`, and
@@ -257,11 +257,11 @@ export function captureDelegatedPolicyOverrides(parent: Agent): DelegatedPolicyO
 
 /**
  * Append the captured delegation policy onto the child's own log as
- * `source: 'delegation'` events inside the unpublished creation window, so the
+ * `source: 'delegation'` events after Session announcement and before Agent registration, so the
  * child's effective policy is reconstructable from its log alone. Appends land
  * after any fork seed, so fresh policy wins stale seed state; later child
  * switches still win over these events.
- * @param childSession - the unpublished child's session.
+ * @param childSession - the child's announced, writable Session.
  * @param overrides - the policy captured at delegation.
  */
 export function appendDelegatedPolicyOverrides(
@@ -277,16 +277,4 @@ export function appendDelegatedPolicyOverrides(
   if (overrides.permissionPreset !== undefined) {
     childSession.append('permission/preset', { preset: overrides.permissionPreset })
   }
-}
-
-/** Identity and lineage inputs shared by every in-process child creation. */
-export interface ChildCreateInputs {
-  /** The child's reserved session id. */
-  readonly sessionId: SessionId
-  /** The delegating parent agent. */
-  readonly parent: Agent
-  /** The resolved delegation depth. */
-  readonly childDepth: number
-  /** How many leading seed events came from the parent's log. */
-  readonly lineageSeedLength: number
 }

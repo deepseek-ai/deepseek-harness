@@ -17,10 +17,11 @@
   config:
     maxBytes: 65536
 
-- id: tools
-  name: '@deepseek-ai/dsh-tools'
-  config:
-    mode: ptc
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
 
 - id: ptc-runtime
   disabled: true

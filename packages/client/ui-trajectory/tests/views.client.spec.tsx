@@ -216,6 +216,7 @@ function standaloneProps(
     draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
   })
   const inputActions: InputActions = {
+    insertQuote: () => false,
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
     setDraft: () => {},
@@ -345,6 +346,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
   }))
   const inputActions: InputActions = {
+    insertQuote: () => false,
     captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
     insertText: () => false,
     setDraft: vi.fn(),
@@ -849,7 +851,7 @@ describe('timeline projection', () => {
       expect(span?.getAttribute('data-assistant-timing')).toBe('true')
       expect(span?.style.getPropertyValue('--trajectory-assistant-ttft')).toBe('25%')
 
-      fireEvent.mouseEnter(span as HTMLElement)
+      fireEvent.pointerEnter(span as HTMLElement)
       act(() => { vi.advanceTimersByTime(499) })
       expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
       act(() => { vi.advanceTimersByTime(1) })

@@ -5,6 +5,7 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import { TeamTaskId, type TeamTaskView } from '@deepseek-ai/dsh-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
@@ -12,7 +13,7 @@ import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agents', 'agentTeams', 'subagents', 'tools', 'systemPrompt']
+export const inject = ['agents', 'agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -24,7 +25,7 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -76,32 +77,22 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 
 type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
 
-/** Read immutable owner names before a mutation or for the requested result rows. */
-async function taskOwnerNames(
-  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[], signal: AbortSignal,
-): Promise<ReadonlyMap<SessionId, string>> {
-  const root = ctx.subagents.rootOf(caller)
-  const names = new Map<SessionId, string>([[root.id, 'lead']])
-  const missing = new Set<SessionId>()
+/** Capture owner display names before a mutation or for the requested result rows. */
+function taskOwnerNames(
+  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[],
+): ReadonlyMap<SessionId, string> {
+  const names = new Map<SessionId, string>()
   for (const ownerId of owners) {
-    if (ownerId === undefined || names.has(ownerId)) continue
-    const agent = ctx.agents.get(ownerId)
-    if (agent === undefined) missing.add(ownerId)
-    else names.set(ownerId, ctx.subagents.nameOf(agent))
-  }
-  if (missing.size > 0) {
-    for (const entry of await ctx.subagents.listDescendants(root.id, signal)) {
-      names.set(entry.id, `lead/${entry.path}`)
-    }
+    if (ownerId !== undefined && !names.has(ownerId)) names.set(ownerId, ctx.subagentNames.nameOf(caller, ownerId))
   }
   return names
 }
 
-/** Format a task without querying mutable services after its commit. */
+/** Format a task from names captured for each possible result owner before its commit. */
 function namedTask({ ownerId, ...view }: TeamTaskView, names: ReadonlyMap<SessionId, string>): NamedTaskView {
   return {
     ...view,
-    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
+    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) as string },
   }
 }
 
@@ -131,16 +122,17 @@ function install(agent: Agent, ctx: Context): () => void {
       text: () => {
         try {
           const root = ctx.subagents.rootOf(agent)
-          const identity = root === agent
-            ? 'You are the Team Lead. Your name is lead.'
-            : `Your name is ${JSON.stringify(ctx.subagents.nameOf(agent))}. You are a teammate in the Team led by ${JSON.stringify(ctx.subagents.nameOf(root))}.
-To message your Team Lead, use send_message({ name: "lead", message: "..." }).`
-          return `${identity}
+          return root === agent
+            ? `You are the Team Lead. Your name is lead.
+Use list_agents({}) to find your teammates and their full names.
+To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
+            : `You are a teammate in the Team led by "lead".
+To message your Team Lead, use send_message({ name: "lead", message: "..." }).
 Use list_agents({}) to find your teammates and their full names.
 To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
         } catch (error: unknown) {
           if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
-          return 'Your Team root agent is unavailable. Continue independent work; Team discovery and messaging require an active root.'
+          return 'Your Team root agent is unavailable. Continue independent work; shared tasks, subagent discovery, and messaging require an active root.'
         }
       },
     }))
@@ -185,7 +177,7 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      async execute(args, exec) {
+      execute(args, exec) {
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
         if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
@@ -197,12 +189,12 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
           && (args.ready === undefined || task.ready === args.ready))
         const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
         const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
-        const names = await taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId), exec.signal)
+        const names = taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId))
         if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
-        return {
+        return Promise.resolve({
           tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
           ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
-        }
+        })
       },
     })))
 
@@ -213,11 +205,11 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
-      async execute(args, exec) {
+      execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_get')
         const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-        const names = await taskOwnerNames(ctx, caller, [task.ownerId], exec.signal)
-        return namedTask(task, names)
+        const names = taskOwnerNames(ctx, caller, [task.ownerId])
+        return Promise.resolve(namedTask(task, names))
       },
     })))
 
@@ -237,7 +229,7 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Full agent path of the root or any continuable descendant for root-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
@@ -245,12 +237,12 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
         const taskId = TeamTaskId(args.task_id)
         const current = ctx.agentTeams.getTask(caller, taskId)
         const owner = args.owner === undefined ? undefined
-          : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
+          : ctx.subagentNames.resolveName(caller, args.owner)
         const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
         // Names are immutable; the service still checks the revision and authority after these reads.
-        const names = await taskOwnerNames(ctx, caller, [
+        const names = taskOwnerNames(ctx, caller, [
           caller.id, owner, keepsOwner ? current.ownerId : undefined,
-        ], exec.signal)
+        ])
         const task = await ctx.agentTeams.updateTask(caller, {
           taskId,
           expectedRevision: args.expected_revision,
@@ -303,10 +295,12 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   for (const agent of ctx.agents.list()) maybeInstall(agent)
   ctx.on('agent/created', ({ agent }) => { maybeInstall(agent) })
-  ctx.on('team/mode-changed', (root) => {
-    for (const agent of ctx.agents.list()) {
-      if (agent === root || ctx.agents.isOwnedBy(agent.id, root)) maybeInstall(agent)
-    }
+  ctx.on('subagent/start', ({ id }) => {
+    const agent = ctx.agents.get(id)
+    if (agent !== undefined) maybeInstall(agent)
+  })
+  ctx.on('team/mode-changed', () => {
+    for (const agent of ctx.agents.list()) maybeInstall(agent)
   })
   ctx.on('agent/disposed', ({ agent }) => {
     installed.get(agent)?.()

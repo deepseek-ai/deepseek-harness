@@ -17,6 +17,12 @@
 - term: Which color do you prefer?
 - definition: Blue Include accessibility notes
 - button "Inspect"
+- group "Questions and answers":
+  - term: Pick one Which color do you prefer?
+  - definition: Blue, Include accessibility notes
+  - text: {{clock}}
+  - button "Copy"
+- button "Analysis completed" [expanded]
 - button "Think The user answered \"Blue\". I should now reply with the single word DONE and stop."
 - paragraph: DONE
 - button "Copy"

@@ -77,10 +77,11 @@ export interface KvUnitDescriptor {
  * One opened unit. Values are opaque JSON to this layer: no schema, no
  * events, no domain meaning. The unit does NOT serialize concurrent writes —
  * write ordering is the caller's responsibility (the domain layer runs one
- * write chain per unit); the unit only guarantees that each single call is
- * atomic on the medium and durable once resolved (a crash after resolution
- * followed by a re-open observes the write). Any call after {@link close}
- * rejects with `closed`.
+ * write chain per unit); each single call is atomic on the medium. Durability
+ * holds for single-record writes and whole-file publishes. In the
+ * `per-record` layout batch deletions rely on the filesystem persisting
+ * directory-entry updates, so a crash can restore a deleted document. Any call
+ * after {@link close} rejects with `closed`.
  */
 export interface KvUnit {
   /**
@@ -108,6 +109,29 @@ export interface KvUnit {
    * @returns resolution after durability.
    */
   deleteRecord(table: string, key: string): Promise<void>
+
+  /**
+   * Delete several records durably as one batch. Idempotent: missing keys are
+   * no-ops. Resolves once every listed record is absent from the readable
+   * state and the backend accepted the batch. A rejection normally leaves the
+   * batch unapplied, so no listed record was removed. A backend that cannot
+   * establish or restore the batch's state rejects with `unknown-state`
+   * instead: the readable state is then unknown, every later operation on that
+   * unit rejects with the same error until {@link close} releases it, and
+   * calls after close reject `closed`. On the `single` layout a
+   * directory-fsync failure can arrive after the atomic replacement: the new
+   * file may already hold the batch while the caller sees a rejection, and the
+   * next publish rewrites it. A backend whose medium can apply a whole batch
+   * in one operation (the `single` document, a row store) must do that instead
+   * of repeating {@link deleteRecord} per key.
+   * @param table - Declared table name.
+   * @param keys - Record keys; duplicates are harmless. In the `per-record`
+   * layout every key becomes a path segment and must match `[a-zA-Z0-9_-]+`
+   * (an unsafe key rejects before any deletion); in the `single` layout keys
+   * stay opaque.
+   * @returns resolution after the backend accepted the batch.
+   */
+  deleteRecords(table: string, keys: readonly string[]): Promise<void>
 
   /**
    * Move one record's stored document out of the unit's readable set,

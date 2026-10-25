@@ -12,7 +12,7 @@ Expand a **Think** row to read its reasoning in your interface language. Paragra
 
 - The reasoning you expand can contain your code and conversation details.
 - Bing is the default; Google is also available. Neither needs an account or API key, but neither guarantees availability or a free quota.
-- With a DeepSeek account or Official API set up, **DeepSeek Flash — Account (paid)** and **DeepSeek Flash — Official API (paid)** also appear. Each text piece without a saved translation is then a paid request.
+- With a DeepSeek account or official API set up, **DeepSeek Flash — account (paid)** and **DeepSeek Flash — official API (paid)** also appear. Each text piece without a saved translation is then a paid request.
 - Translations are saved in the session and reused when you reopen it. The original reasoning and the model's input stay unchanged.
 - Collapsed summaries stay in the original language. Translation can change Markdown formatting or code.
 - Turning the plugin off removes its buttons and cancels pending translations; saved translations stay in the session.

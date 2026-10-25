@@ -1,4 +1,5 @@
 /** Keyless assembled-Web evidence for conversational Schedule delivery. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,6 +20,7 @@ import type { ContextFormed, GenerateOptions, StreamChunk } from '@deepseek-ai/d
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   ScheduleId,
+  createAfterScheduleRecord,
   createEveryScheduleRecord,
   foldScheduleEvents,
   type EveryScheduleRecord,
@@ -354,7 +356,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
       source: { kind: 'user' },
     })
     await workspace.attachSession(afterHandle.agent.id)
-    const afterCreated = await scaffold.ctx.tools.execute({
+    const afterCreated = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000),
       callId: ToolCallId('schedule-after-create'),
       name: 'schedule_create',
@@ -420,7 +422,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversational reminders', () => {
     })
     await scaffold.ctx.schedule.delete({ sessionId: everyHandle.agent.id, id: wake.id })
     await workspace.attachSession(everyHandle.agent.id)
-    const everyListed = await scaffold.ctx.tools.execute({
+    const everyListed = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000),
       callId: ToolCallId('schedule-every-list'),
       name: 'schedule_list',
@@ -1181,7 +1183,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     })
     const time = clock.format(new Date(Date.now() + 3_600_000))
     const prompt = 'Inspect the daily calendar rule'
-    const result = await scaffold.ctx.tools.execute({
+    const result = await executeToolFixture(scaffold.ctx, {
       signal: AbortSignal.timeout(10_000), callId: ToolCallId('schedule-daily-catalog-create'),
       name: 'schedule_create', arguments: { prompt, title: prompt, daily: { time, time_zone: timeZone } }, agent,
     })
@@ -1256,6 +1258,88 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     } finally {
       await scaffold.ctx.schedule.delete({ sessionId: CATALOG_SESSION_ID, id: created.id })
       await page.clock.setFixedTime(new Date(CATALOG_NOW))
+    }
+  }, 60_000)
+
+  it('removes every ended task from the page and keeps the active ones', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-schedule-clear-ended'))
+    const endedSession = SessionId('schedule-manager-ended-clear')
+    const domain = scaffold.ctx.storageDomain.get('schedule')
+    if (domain === undefined) throw new Error('Schedule domain was not opened')
+    const endedIds = [ScheduleId('schedule-ended-first'), ScheduleId('schedule-ended-second')]
+    const endedTitles = ['Ended release check', 'Ended metrics check'] as const
+    // An earlier scenario may leave an ended row behind; the confirmation states
+    // the whole ended set, so the lane starts from an empty one.
+    await scaffold.ctx.schedule.deleteInactive()
+    for (const [index, id] of endedIds.entries()) {
+      const title = endedTitles[index]!
+      const record = createAfterScheduleRecord(id, title, 60, Date.now(), title)
+      const receipt = {
+        scheduledAt: record.scheduledAt,
+        deliveredAt: new Date(Date.parse(record.scheduledAt) + 1_000).toISOString(),
+        messageId: MessageId(`${id}-delivery`),
+      }
+      await domain.table('tasks').put(record.id, {
+        sessionId: endedSession, record, status: 'inactive', lastDelivery: receipt,
+        deliveryHistory: { records: [receipt], earlierRecordsUnavailable: false },
+      })
+    }
+    // The running task is what the cleanup must leave alone. Creating it also
+    // announces a committed Host change, so the open page reads the rows seeded
+    // above without waiting for its own first catalog read.
+    const kept = await scaffold.ctx.schedule.create(endedSession, {
+      prompt: 'Keep this running task', title: 'Keep this running task', at: '2099-08-25T12:08:00.000Z',
+    })
+    try {
+      await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      // Earlier scenarios leave their own search text and status filter on this
+      // shared page; this scenario asserts the complete list.
+      await manager.getByRole('searchbox', { name: 'Search tasks' }).fill('')
+      await manager.getByRole('button', { name: 'All', exact: true }).click()
+      const more = manager.getByRole('button', { name: 'More task actions', exact: true })
+      await more.waitFor({ timeout: 15_000 })
+
+      // The confirmation states the Host-side target and removes nothing until it
+      // is confirmed.
+      await more.click()
+      await page.getByRole('menuitem', { name: 'Clear all inactive tasks', exact: true }).click()
+      const confirmation = page.getByRole('dialog', { name: 'Clear inactive tasks (2)?' })
+      await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+      expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toHaveLength(2)
+
+      await more.click()
+      await page.getByRole('menuitem', { name: 'Clear all inactive tasks', exact: true }).click()
+      await confirmation.getByRole('button', { name: 'Clear tasks', exact: true }).click()
+      await expect.poll(
+        async () => (await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive'),
+        { timeout: 15_000 },
+      ).toEqual([])
+      const remaining = await scaffold.ctx.schedule.catalog()
+      expect(remaining.some(task => endedIds.includes(task.id))).toBe(false)
+      expect(remaining.map(task => task.title)).toContain('Keep this running task')
+      await page.getByText('Cleared 2 inactive tasks.', { exact: true }).waitFor({ timeout: 15_000 })
+      // The trigger left with the rows it removed, so the page heading owns the
+      // focus after the confirmation closes; this confirms the heading fallback
+      // in a real browser.
+      await expect.poll(() => page.evaluate(() => document.activeElement?.tagName), { timeout: 15_000 })
+        .toBe('H1')
+      // The page follows the acknowledged removal: no ended row or cleanup action
+      // remains, and the running task is still listed.
+      await expect.poll(() => manager.getByRole('button', { name: 'More task actions', exact: true }).count(), { timeout: 15_000 })
+        .toBe(0)
+      await manager.getByRole('button', { name: 'All', exact: true }).click()
+      await expect.poll(() => manager.getByRole('list', { name: 'Task catalog' })
+        .getByRole('button', { name: kept.title, exact: true }).count(), { timeout: 15_000 }).toBe(1)
+      expect((await scaffold.ctx.schedule.catalog()).filter(task => task.status === 'inactive')).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      // The shared page and Host outlive a failed assertion: remove every row
+      // this scenario introduced so the next one starts from the same state. A
+      // teardown rejection must not mask the assertion that failed first.
+      await Promise.allSettled(
+        [kept.id, ...endedIds].map(id => scaffold.ctx.schedule.delete({ sessionId: endedSession, id })),
+      )
     }
   }, 60_000)
 })

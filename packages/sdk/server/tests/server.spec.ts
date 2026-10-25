@@ -139,11 +139,11 @@ describe('HarnessSdkJsonRpcServer', () => {
     try {
       const root = await ctx.agents.create({ sessionId: SessionId('root'), meta: { cwd: storageDir } })
       const creator = await ctx.agents.create({
-        sessionId: SessionId('creator'), parentAgent: root.agent,
+        sessionId: SessionId('creator'),
         meta: { cwd: storageDir, parentSession: root.agent.id, origin: 'subagent' },
       })
       const child = await ctx.agents.create({
-        sessionId: SessionId('leaf'), parentAgent: root.agent,
+        sessionId: SessionId('leaf'),
         meta: { cwd: storageDir, parentSession: creator.agent.id, origin: 'subagent' },
       })
       await creator.dispose()
@@ -193,7 +193,7 @@ describe('HarnessSdkJsonRpcServer', () => {
       const parent = ctx.agents.get(SessionId('main'))!
       const observed = Promise.withResolvers<undefined>()
       const children = Promise.withResolvers<boolean>()
-      vi.spyOn(ctx.subagents, 'waitForChildren')
+      vi.spyOn(ctx.subagents, 'waitForTreeWork')
         .mockImplementationOnce(() => { observed.resolve(undefined); return children.promise })
         .mockResolvedValue(false)
       let settled = false
@@ -514,7 +514,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     await ctx.fiber.dispose()
   })
 
-  it('notifies the host when a child session is created with parent lineage', async () => {
+  it('notifies the host only for subagent sessions with a direct creator', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-subagent-'))
     const ctx = await makeHarness(storageDir)
     try {
@@ -525,16 +525,22 @@ describe('HarnessSdkJsonRpcServer', () => {
         meta: { cwd: storageDir },
       })
       ctx.sessions.create(SessionId('child-session'), {
-        meta: { cwd: storageDir, parentSession: SessionId('main') },
+        meta: { cwd: storageDir, parentSession: SessionId('main'), origin: 'subagent' },
       })
 
-      expect(transport.notifications).toContainEqual({
+      ctx.sessions.create(SessionId('legacy-fork'), {
+        meta: { cwd: storageDir, parentSession: SessionId('main') },
+      })
+      ctx.sessions.fork(SessionId('child-session'), undefined, SessionId('ordinary-fork'))
+      ctx.sessions.create(SessionId('unparented-subagent'), { meta: { origin: 'subagent' } })
+
+      expect(transport.notifications.filter(item => item.method === 'subagent.started')).toEqual([{
         method: 'subagent.started',
         params: {
           parentSessionId: 'main',
           childSessionId: 'child-session',
         },
-      })
+      }])
 
       await server.shutdown()
     } finally {
@@ -578,19 +584,15 @@ describe('HarnessSdkJsonRpcServer', () => {
         meta: { cwd: storageDir },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
       })
-      // A custom in-process provider may own its child at the provider/root
-      // scope while preserving durable parent lineage.
       const handle = await ctx.agents.create({
         sessionId: SessionId('child-session'),
         meta: { cwd: storageDir, parentSession: SessionId('main') },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
       })
-      expect(ctx.agents.roots()).toContain(handle.agent)
       const parentlessHandle = await parentHandle.agent.ctx.agents.create({
         sessionId: SessionId('parentless-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
       })
       await settleSubagent(ctx, parentHandle.agent, {
         provider: 'spawn',
@@ -653,7 +655,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('remote-run-id'),
         meta: { cwd: storageDir, parentSession: SessionId('collision-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -692,7 +693,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('continuation-child'),
         meta: { cwd: storageDir, parentSession: SessionId('continuation-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
       })
 
       await settleSubagent(ctx, parentHandle.agent, {
@@ -738,7 +738,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('old-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: oldParent.agent,
       })
       const first = Promise.withResolvers<SubagentResult>()
       const sameLifetime = Promise.withResolvers<SubagentResult>()
@@ -782,7 +781,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('reused-child'),
         meta: { cwd: storageDir, parentSession: SessionId('new-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: newParent.agent,
       })
       const secondRun = await startLifecycleFixture(ctx, 'reused', {
         parent: newParent.agent,
@@ -840,7 +838,6 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('provider-reuse-child'),
         meta: { cwd: storageDir, parentSession: SessionId('provider-reuse-parent') },
         agentOptions: { model: 'deepseek-official' },
-        parentAgent: parent.agent,
       })
       const localResult = Promise.withResolvers<SubagentResult>()
       const remoteResult = Promise.withResolvers<SubagentResult>()
@@ -938,14 +935,12 @@ describe('HarnessSdkJsonRpcServer', () => {
         sessionId: SessionId('fallback-child-session'),
         meta: { cwd: storageDir, parentSession: SessionId('fallback-parent') },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
       })
       const fallbackChild = handle.agent
       failedHandle = await parentHandle.agent.ctx.agents.create({
         sessionId: SessionId('failed-child-session'),
         meta: { cwd: storageDir },
         agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
-        parentAgent: parentHandle.agent,
       })
       const missedStartResult = Promise.withResolvers<SubagentResult>()
       const disposeMissedStartProvider = ctx.subagents.registerProvider({
@@ -1040,7 +1035,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
+    await ctx.plugin(LlmDeepSeek, { models: [{ id: 'preinstalled-model' }] })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       const inspect = server as unknown as { hasAdapterFor(provider: string): boolean }
@@ -1190,6 +1185,8 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-unsupported-reasoning-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // A loopback endpoint keeps the fallback-mounted official route off the network; no request is sent.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       await expect(server.handleRequest('initialize', {

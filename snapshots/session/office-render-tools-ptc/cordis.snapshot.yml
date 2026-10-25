@@ -61,9 +61,11 @@
 - id: tool-pwsh
   disabled: true
 
-- id: tools
-  config:
-    mode: ptc
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
 
 - id: ptc-runtime
   config:

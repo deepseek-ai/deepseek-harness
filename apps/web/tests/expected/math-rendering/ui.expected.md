@@ -19,6 +19,7 @@
   - text: .
 - math: π 4 < θ < π 2
 - math: θ ∈ ( π 4 , π 2 ) . (1)
+- math: α + β γ
 - table:
   - rowgroup:
     - row "Symbol Value":

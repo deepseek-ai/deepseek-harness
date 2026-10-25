@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Konversationsfolgende Titel",
+    "description": "Aktualisieren Sie die Sitzungstitel, wenn neue menschliche Eingabeaufforderungen eintreffen.",
+    "detail": "docs/DETAIL.md"
+  }
+}

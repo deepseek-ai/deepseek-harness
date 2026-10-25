@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "PORTUGUESEBR",
+  "strings": {
+    "INSTALLER_INSTALL": "Instale agora",
+    "INSTALLER_FINISH": "Concluir",
+    "INSTALLER_NATIVE_PROGRESS": "Preparando a instalação… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "Extraindo arquivos… %d%%",
+    "INSTALLER_PROGRESS_COPY": "Instalando arquivos… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "Concluindo a instalação… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "Limpando arquivos temporários… %d%%",
+    "INSTALLER_CHOOSE_PATH": "Escolha o local",
+    "INSTALLER_BROWSE": "Procurar",
+    "INSTALLER_LAUNCH": "Lançar agora",
+    "INSTALLER_LAUNCH_FAILED": "DeepSeek Harness não pôde ser iniciado. Tente novamente ou desmarque Iniciar agora e feche o instalador.",
+    "INSTALLER_UI_ERROR": "O instalador não conseguiu inicializar sua janela. Feche-o e tente novamente.",
+    "INSTALLER_THEME_ERROR": "Use /THEME=auto, /THEME=light ou /THEME=dark.",
+    "INSTALLER_FAILED": "A instalação não foi concluída. Feche este instalador e tente novamente. Se o problema persistir, baixe o instalador novamente.",
+    "INSTALLER_RUNNING": "DeepSeek Harness está em execução. Saia da bandeja do sistema e tente novamente.",
+    "INSTALLER_DIRECTORY_FAILED": "O diretório de instalação não pôde ser substituído.",
+    "INSTALLER_DIRECTORY_HINT": "Verifique o acesso ao diretório de instalação e feche os programas usando seus arquivos e execute o instalador novamente. Copie os detalhes do erro se o problema persistir.",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "A instalação anterior não pôde ser restaurada. Mantenha o diretório de backup mostrado nos detalhes do erro e entre em contato com o suporte antes de instalar novamente.",
+    "INSTALLER_PATH_INVALID": "Escolha um caminho completo para a pasta local. Raízes de unidade, pastas de sistema, links e caracteres especiais não são suportados.",
+    "INSTALLER_PATH_OWNERSHIP": "Escolha uma pasta vazia ou a pasta de instalação DeepSeek Harness registrada.",
+    "INSTALLER_PATH_WRITABLE": "Este local não é gravável. Escolha uma pasta disponível para o usuário atual.",
+    "INSTALLER_DISK_SPACE": "Não há espaço livre suficiente em disco. Escolha outro local.",
+    "INSTALLER_PER_USER": "Este instalador oferece suporte apenas ao usuário atual. Desinstale primeiro a instalação existente para todos os usuários.",
+    "INSTALLER_EXTRACT_FAILED": "Os arquivos do aplicativo não puderam ser extraídos.",
+    "INSTALLER_EXTRACT_HINT": "O software de segurança pode ter bloqueado um arquivo ou o disco pode estar cheio. Feche este instalador e tente novamente. Se continuar falhando, envie-nos os detalhes do erro abaixo.",
+    "INSTALLER_EXTRACT_COPY": "Copiar detalhes do erro",
+    "INSTALLER_EXTRACT_EXPAND": "Mostrar detalhes",
+    "INSTALLER_EXTRACT_COLLAPSE": "Ocultar detalhes",
+    "INSTALLER_EXTRACT_SAVED": "O relatório completo foi salvo em %s",
+    "INSTALLER_EXTRACT_UNSAVED": "Não foi possível salvar o relatório completo. Use Copiar detalhes do erro para mantê-lo.",
+    "INSTALLER_EXTRACT_COPIED": "Os detalhes do erro foram copiados para a área de transferência."
+  },
+  "uninstaller": {
+    "welcome": "Bem-vindo",
+    "finished": "foi desinstalado"
+  }
+}

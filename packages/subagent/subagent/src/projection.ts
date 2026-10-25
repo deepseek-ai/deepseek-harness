@@ -113,7 +113,12 @@ export interface IdentityState {
   identity?: SubagentIdentityProjection | undefined
 }
 
-const identityValueSchema: z.ZodType<SubagentIdentityProjection> = z.discriminatedUnion('mode', [
+// The cast bridges only the optional-label arm: Zod's optional output
+// includes explicit `undefined`, which exactOptionalPropertyTypes excludes
+// from the public interface. The no-value state itself is the serializable
+// `null` arm — never `undefined` — so every registry read and push frame
+// survives JSON.stringify losslessly.
+const identityValueSchema = z.discriminatedUnion('mode', [
   z.object({
     mode: z.literal('one-shot'),
     label: z.string().optional(),
@@ -124,11 +129,7 @@ const identityValueSchema: z.ZodType<SubagentIdentityProjection> = z.discriminat
     label: z.string(),
     seq: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
   }).strict(),
-]).transform((identity): SubagentIdentityProjection => {
-  if (identity.mode === 'continuable') return identity
-  const { label, ...oneShot } = identity
-  return { ...oneShot, ...label === undefined ? {} : { label } }
-})
+]) as unknown as z.ZodType<SubagentIdentityProjection>
 
 const identitySchema = identityValueSchema.nullable()
 
@@ -147,12 +148,13 @@ function descriptorIdentity(event: SessionEvent): SubagentIdentityProjection | u
     descriptor = undefined
   }
   if (descriptor === undefined) return undefined
-  return {
-    ...descriptor.mode === 'one-shot'
-      ? { mode: 'one-shot', ...descriptor.label === undefined ? {} : { label: descriptor.label } } as const
-      : { mode: 'continuable', label: descriptor.label } as const,
-    seq: event.seq,
-  }
+  return descriptor.mode === 'one-shot'
+    ? {
+      mode: 'one-shot',
+      ...descriptor.label !== undefined ? { label: descriptor.label } : {},
+      seq: event.seq,
+    }
+    : { mode: 'continuable', label: descriptor.label, seq: event.seq }
 }
 
 /**
@@ -176,5 +178,7 @@ export const subagentIdentityProjectionDefinition = {
     return identity === undefined ? {} : { identity }
   },
   wire: { viewSchema: identitySchema, view: state => state.identity ?? null },
+  // Bumped when the identity gained its `seq` field: an older checkpoint row
+  // would replay into a value the schema rejects, so it must refold instead.
   stateVersion: 2,
 } satisfies ProjectionDefinition<'subagent', IdentityState>

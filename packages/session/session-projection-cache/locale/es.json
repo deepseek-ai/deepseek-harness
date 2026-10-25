@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "caché de estado de sesión",
+    "description": "Estado de caché generado a partir de registros de sesión para una lectura rápida mediante funciones como listas de sesiones."
+  }
+}

@@ -58,6 +58,27 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     result = session.run("Continue the task.")
 ```
 
+<a id="client-approvals"></a>
+## 客户端审批
+
+此底层示例接收一次审批并拒绝。完整运行应使用专门处理请求的线程或循环：`next_request()` 会阻塞，请求处理器必须与 `session/wait` 或高层 `run()` 并行运行。仅在处理器就绪时，在 `HarnessClient.initialize()` 或 `DeepSeekHarnessConfig` 设置 `approval_requests=True`；省略时保留运行时应答链。决定只作用于单次操作；无效响应和断连会拒绝放行，取消后丢弃迟到响应。构造决定时，可用 `ApprovalRequestResult` 校验响应值。
+
+```py
+from deepseek_harness import ApprovalRequestParams, HarnessClient, HarnessConfig
+
+with HarnessClient(HarnessConfig(dsh_home="/absolute/path/to/dsh-home")) as client:
+    client.initialize(cwd="/absolute/path/to/workspace", provider="deepseek-official",
+                      model="deepseek-v4-flash", approval_requests=True)
+    client.session_prompt("main", [{"type": "text", "text": "Run the operation requiring approval."}])
+    request = client.next_request()
+    if request.method == "approval/request":
+        question = ApprovalRequestParams.model_validate(request.payload)
+        print(question.toolName, question.reason)
+        client.respond(request.id, {"outcome": "rejected"})
+    else:
+        client.respond_error(request.id, code=-32601, message="Unsupported client request")
+```
+
 ## 自定义插件
 
 持久自定义属于 `dsh` profile。使用运行时 wheel 包提供的 `dsh` 命令初始化随附的 SDK profile，并安装外部 bundle：

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-agent-team",
   "description": "Web shared task board for a subagent tree",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -63,7 +63,8 @@
     "@deepseek-ai/dsh-client-ui-model-selection": "workspace:*",
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-commands": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-subagent": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-subagent": "workspace:*",
+    "@deepseek-ai/dsh-agent": "workspace:*"
   },
   "files": [
     "locale/*.json",

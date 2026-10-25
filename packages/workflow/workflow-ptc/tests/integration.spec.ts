@@ -60,8 +60,8 @@ return { prose, verdict: judged.verdict, confidence: judged.confidence }`,
     expect(parentFollowup).not.toHaveBeenCalled()
     expect(parentSteer).not.toHaveBeenCalled()
     expect(parent.session.snapshotEvents()
-      .flatMap(event => event.type === 'subagent/catalog'
-        ? [{ id: event.data.childId, mode: event.data.mode }] : []))
+      .filter(event => event.type === 'subagent/catalog')
+      .map(event => ({ id: event.data.childId, mode: event.data.mode })))
       .toEqual(childIds.map(id => ({ id, mode: 'continuable' })))
     // Both children were disposed to quiescence — no live child agents remain.
     expect(childIds.length).toBe(2)

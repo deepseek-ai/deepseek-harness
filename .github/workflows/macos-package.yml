@@ -9,6 +9,12 @@ on:
         options: [test, production]
         default: test
         required: true
+      zip_compression_level:
+        description: 'ZIP 压缩等级：只影响 ZIP 和自动升级下载，不影响 DMG；3 打包较快，7 压缩更强'
+        type: choice
+        options: ['3', '7']
+        default: '3'
+        required: true
       skip_notarization:
         description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
         type: boolean
@@ -57,6 +63,7 @@ jobs:
       run:
         shell: bash
     env:
+      PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: ${{ inputs.zip_compression_level }}
       PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
       PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
       PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}
@@ -95,6 +102,12 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Configure persistent package caches
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          echo "DSH_DESKTOP_PACKAGE_CACHE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Validate preset and resolve build version
@@ -138,5 +151,6 @@ jobs:
           name: macos-arm64-${{ steps.settings.outputs.mode }}-${{ steps.settings.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
           path: ${{ steps.retained.outputs.directory }}/*
+          compression-level: 0
           if-no-files-found: error
           retention-days: 14

@@ -8,7 +8,7 @@ import UserQuestionService, {
   type AskUserQuestionRequest,
 } from '@deepseek-ai/dsh-user-questions'
 import { createToolResultMessage, createUserMessage, ToolCallId, type ToolSchema, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SESSION_FORMAT_VERSION, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 interface QuestionAnswerer {
@@ -32,12 +32,15 @@ function provider(answer = 'approved'): QuestionAnswerer & { seen: AskUserQuesti
   }
 }
 
-function stubAgent(id: string, delegationDepth = 0): Agent {
-  const agentId = id as Agent['id']
+function stubAgent(id: string, delegationDepth = 0, origin?: 'subagent'): Agent {
+  const agentId = SessionId(id)
   return {
     id: agentId,
-    session: { id: agentId, header: { delegationDepth } },
-  } as unknown as Agent
+    session: Session.create(agentId, undefined, {
+      version: SESSION_FORMAT_VERSION, id: agentId, createdAt: 0, isSeeded: false,
+      delegationDepth, ...origin === undefined ? {} : { origin },
+    }),
+  } as Agent
 }
 
 describe('UserQuestionService', () => {
@@ -196,7 +199,7 @@ describe('UserQuestionService', () => {
     expect(p.ask).not.toHaveBeenCalled()
   })
 
-  it('rejects a live runtime-owned agent before reaching the provider', async () => {
+  it('rejects a live subagent before reaching the provider', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
@@ -204,9 +207,9 @@ describe('UserQuestionService', () => {
     const p = { ask: vi.fn(async () => ({ answers: [] })) }
     registerAnswerer(ctx, p)
     const root = stubAgent('root', 0)
-    const child = stubAgent('child', 0)
-    ctx.agents.enter(root, undefined)
-    ctx.agents.enter(child, root)
+    const child = stubAgent('child', 0, 'subagent')
+    ctx.agents.enter(root)
+    ctx.agents.enter(child)
 
     await expect(ctx.userQuestions.ask({
       questions: [{ id: 'confirm', question: 'Proceed?' }],
@@ -227,7 +230,7 @@ describe('UserQuestionService', () => {
     const p = provider('yes')
     registerAnswerer(ctx, p)
     const agent = stubAgent('resumed-root', 1)
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
 
     const result = await ctx.userQuestions.ask({
       questions: [{ id: 'confirm', question: 'Proceed?', options: [{ label: 'yes' }] }],
@@ -258,7 +261,7 @@ describe('UserQuestionService', () => {
     const p = { ask: vi.fn(async () => ({ answers: [] })) }
     registerAnswerer(ctx, p)
     const live = stubAgent('same-id')
-    ctx.agents.enter(live, undefined)
+    ctx.agents.enter(live)
 
     await expect(ctx.userQuestions.ask({
       questions: [{ id: 'confirm', question: 'Proceed?' }],
@@ -312,7 +315,8 @@ describe('UserQuestionService', () => {
           ...(options === undefined ? {} : { options }),
           intent: { kind: 'plan-review', approve: 'Ship it' },
         }],
-      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+      })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+        message: 'question plan-review declares intent plan-review whose approve label "Ship it" names none of its options' })
     }
     expect(p.ask).not.toHaveBeenCalled()
   })
@@ -331,7 +335,8 @@ describe('UserQuestionService', () => {
         options: [{ label: 'Approve' }, { label: 'Keep planning' }],
         intent: { kind: 'plan-review', approve: 'Approve' },
       }],
-    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT' })
+    })).rejects.toMatchObject({ name: 'UserQuestionError', code: 'BAD_INTENT',
+      message: 'question plan-review declares intent plan-review without the detail it reviews' })
     expect(p.ask).not.toHaveBeenCalled()
   })
 
@@ -414,7 +419,7 @@ describe('askTimed', () => {
     const ctx = await timedContext()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     const agent = liveAgent('timed-sibling-waits')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const service = ctx.userQuestions
     const laterCallId = ToolCallId('ask-later')
     const first = service.askTimed({ agent, questions: timedQuestions }, timedCallId, 1_000)
@@ -440,7 +445,7 @@ describe('askTimed', () => {
     const ctx = await timedContext()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     const agent = liveAgent('timed-no-client')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const turn = new AbortController()
     let forwardedSignal: AbortSignal | undefined
     registerAnswerer(ctx, {
@@ -468,7 +473,7 @@ describe('askTimed', () => {
     const ctx = await timedContext()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     const agent = liveAgent('timed-claimed')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const answer = Promise.withResolvers<AskUserQuestionAnswer>()
     registerAnswerer(ctx, { ask: () => answer.promise })
     let settled = false
@@ -493,7 +498,7 @@ describe('askTimed', () => {
   it('returns the answer when a Client settles the request inside the window', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-answered')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const seen: AskUserQuestionRequest[] = []
     registerAnswerer(ctx, {
       ask: async (request) => { seen.push(request); return { answers: [{ id: 'scope', selected: ['Tool only'] }] } },
@@ -509,7 +514,7 @@ describe('askTimed', () => {
   it('maps the Client deadline rejection to the pending result and rethrows any other code', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-expired')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     let code = 'ASK_TIMED_OUT'
     registerAnswerer(ctx, { ask: () => Promise.reject(wireRejection(code)) })
 
@@ -526,7 +531,7 @@ describe('askTimed', () => {
     try {
       const ctx = await timedContext()
       const agent = liveAgent('timed-unclaimed')
-      ctx.agents.enter(agent, undefined)
+      ctx.agents.enter(agent)
       let settled = false
       const result = ctx.userQuestions.askTimed({ agent, questions: timedQuestions }, timedCallId, 5_000)
         .finally(() => { settled = true })
@@ -546,7 +551,7 @@ describe('askTimed', () => {
     try {
       const ctx = await timedContext()
       const agent = liveAgent('timed-aborted-hold')
-      ctx.agents.enter(agent, undefined)
+      ctx.agents.enter(agent)
       const controller = new AbortController()
       const result = ctx.userQuestions.askTimed(
         { agent, questions: timedQuestions, signal: controller.signal }, timedCallId, 5_000,
@@ -566,7 +571,7 @@ describe('askTimed', () => {
   it('rethrows a provider failure that is not a question error', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-provider-crash')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     registerAnswerer(ctx, { ask: () => Promise.reject(new TypeError('provider crashed')) })
 
     await expect(ctx.userQuestions.askTimed({ agent, questions: timedQuestions }, timedCallId, 120_000))
@@ -577,7 +582,7 @@ describe('askTimed', () => {
   it('does not start the unclaimed hold when the turn ended while the request went unclaimed', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-preaborted-hold')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const controller = new AbortController()
     registerAnswerer(ctx, {
       ask: () => {
@@ -595,7 +600,7 @@ describe('askTimed', () => {
   it('rejects non-positive waits before dispatching', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('timed-invalid')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const ask = vi.fn(async () => ({ answers: [] }))
     registerAnswerer(ctx, { ask })
 
@@ -639,7 +644,7 @@ describe('late replies', () => {
   it('steers an answer into a continued question and closes it once the reply is admitted', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-answer')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -663,7 +668,7 @@ describe('late replies', () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-out-of-order')
     const secondCallId = ToolCallId('another-timed-batch')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     agent.session.append('tool/call', {
@@ -686,7 +691,7 @@ describe('late replies', () => {
   it('accepts one queued reply and permits retry when it is discarded', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-duplicate')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -707,7 +712,7 @@ describe('late replies', () => {
   it('refuses a reply already present in the durable inbox', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-inbox')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -730,7 +735,7 @@ describe('late replies', () => {
   it('reserves a restored inbox reply while it is claimed for admission', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-restored-claim')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -763,7 +768,7 @@ describe('late replies', () => {
   it('keeps the reservation through unrelated inbox and Session events', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-unrelated')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -801,7 +806,7 @@ describe('late replies', () => {
   it('permits retry when a claimed reply ends without admission', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-claimed')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -823,7 +828,7 @@ describe('late replies', () => {
   it('permits retry when steering a reply throws before it is queued', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-steer-error')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
     const batch = { answers: [{ id: 'scope', selected: ['Tool only'] }] }
@@ -840,7 +845,6 @@ describe('late replies', () => {
     const agent = liveAgent('late-no-projections')
     ctx.provide('agents', {
       get: (id: SessionId) => id === agent.id ? agent : undefined,
-      roots: () => [agent],
     } as never)
     await ctx.plugin(UserQuestionService)
     askInLog(agent, timedCallId)
@@ -854,7 +858,7 @@ describe('late replies', () => {
   it('refuses an open question and an unknown call', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-open')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
 
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [] })).toBe(false)
@@ -867,7 +871,7 @@ describe('late replies', () => {
   it('refuses a batch that does not name each question of the call exactly once', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('late-malformed')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     askInLog(agent, timedCallId)
     continueInLog(agent, timedCallId)
 
@@ -889,7 +893,7 @@ describe('late replies', () => {
   it('never lists a call the blocking legacy tool made, even one the process never finished', async () => {
     const ctx = await timedContext()
     const agent = liveAgent('legacy-interrupted')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const legacySchema: ToolSchema = { ...timedToolSchema, parameters: { type: 'object', properties: { questions: { type: 'array' } } } }
     askInLog(agent, timedCallId, [legacySchema])
     agent.session.append('tool/result', {
@@ -904,5 +908,49 @@ describe('late replies', () => {
     expect(ctx.userQuestions.answer(agent, timedCallId, { answers: [{ id: 'scope', selected: [] }] })).toBe(false)
     expect(agent.steer).not.toHaveBeenCalled()
     await ctx.fiber.dispose()
+  })
+})
+
+describe('fixed approval presentation', () => {
+  const question = { id: 'access', question: 'Allow access?', detail: 'Scope of access',
+    options: [{ label: 'Task' }, { label: 'Deny' }, { label: 'Always' }],
+    intent: { kind: 'approval' as const, approve: 'Task', reject: 'Deny', always: 'Always' } }
+  it.each([true, false])('preserves fixed choices with persistent action offered=%s', async (persistent) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const selected = persistent ? 'Always' : 'Task'
+    const p = provider(selected)
+    registerAnswerer(ctx, p)
+    const item = persistent ? question : { ...question, options: question.options.slice(0, 2),
+      intent: { kind: 'approval' as const, approve: 'Task', reject: 'Deny' } }
+    expect(await ctx.userQuestions.ask({ questions: [item] })).toEqual({ answers: [{ id: 'access', selected: [selected] }] })
+    expect(p.seen[0]?.questions[0]?.intent).toEqual(item.intent)
+  })
+  it.each([
+    ['unoffered', 'question access declares intent approval whose action label "Unknown" names none of its options'],
+    ['duplicate', 'approval question access requires distinct action labels; received ["Task","Deny","Task"]'],
+    ['extra', 'approval question access requires 3 options matching its actions; received 4'],
+    ['multiple', 'approval presentation requires one question; received 2'],
+    ['multiselect', 'approval question access does not support multiSelect'],
+    ['timed', 'approval question access requires a blocking request without wait'],
+    ['detail', 'question access declares intent approval without the scope detail it requires'],
+  ])('rejects %s approval actions before display', async (kind, message) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(UserQuestionService)
+    const p = provider()
+    registerAnswerer(ctx, p)
+    const item = structuredClone(question)
+    if (kind === 'unoffered') item.intent.approve = 'Unknown'
+    if (kind === 'duplicate') item.intent.always = 'Task'
+    if (kind === 'extra') item.options.push({ label: 'Something else' })
+    const { detail: _detail, ...withoutDetail } = item
+    const questions = kind === 'multiple' ? [item, { ...item, id: 'other' }]
+      : kind === 'detail' ? [withoutDetail] : [{ ...item, multiSelect: kind === 'multiselect' }]
+    await expect(ctx.userQuestions.ask({ questions,
+      ...(kind === 'timed' ? { wait: { callId: ToolCallId('call') } } : {}),
+    })).rejects.toMatchObject({ code: 'BAD_INTENT', message })
+    expect(p.seen).toEqual([])
   })
 })

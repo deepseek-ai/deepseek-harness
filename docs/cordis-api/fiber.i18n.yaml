@@ -24,8 +24,8 @@
   en: 1b527d85759324f9
   zh: 54aa40db2705b95c
 /fiber/the-fiber-class/fiber-config:
-  en: ee804c03c39e7806
-  zh: 4353ba7817ec61ec
+  en: 1efe137a7ef0e599
+  zh: bb4b9818fb48f4e9
 /fiber/the-fiber-class/fiber-state:
   en: 999ad29dfc29661b
   zh: 20245d11c338e3f1
@@ -50,15 +50,24 @@
 /fiber/the-fiber-class/fiber-geteffects:
   en: 4d739a9c186fd9c2
   zh: f80fd3b87e79b004
+/fiber/the-fiber-class/fiber-rawconfig:
+  en: 898aab51825bd8c3
+  zh: b9ab6339574002df
+/fiber/the-fiber-class/fiber-effectiveconfig:
+  en: 93ac680251e7023f
+  zh: 8ea7d7de5db39b8e
+/fiber/the-fiber-class/fiber-resolveconfig-config:
+  en: d7319852e2a1c3a9
+  zh: 3300fac049227006
 /fiber/the-fiber-class/fiber-await:
-  en: 1d6258cbea61cd18
-  zh: 2f10dda8918dadc5
+  en: c9a6544cacdbc28e
+  zh: 636bf93efad95bc9
 /fiber/the-fiber-class/fiber-restart:
-  en: 62d68dedb20b4fa9
-  zh: 5a735ae0ff1266f4
+  en: 6ffc1baba98d689f
+  zh: 7e13bc92225c7e0a
 /fiber/the-fiber-class/fiber-update-config-nosave:
-  en: b57ce0f6260c2cb8
-  zh: 3bfb6c5bc252a2c2
+  en: 5c176a6e67073e92
+  zh: ee07edc8dbf7c1f3
 /fiber/effect:
   en: 007d5b214e8a8610
   zh: d74c26fbb1b8aeb6

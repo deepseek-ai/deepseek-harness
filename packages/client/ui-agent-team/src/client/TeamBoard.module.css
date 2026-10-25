@@ -105,9 +105,14 @@
   cursor: pointer;
 }
 
-.expandToggle:hover,
 .expandToggle:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .expandToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .expandToggle svg {
@@ -133,4 +138,10 @@
   gap: 6px;
   padding: 9px;
   font-size: 12px;
+}
+
+@media (hover: none) {
+  .memberModel {
+    display: inline;
+  }
 }

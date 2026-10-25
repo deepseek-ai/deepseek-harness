@@ -18,7 +18,7 @@ import { TerminalGuide, type TerminalGuideInjected } from '../src/client/Termina
 import { LazyTerminalBody } from '../src/client/LazyTerminalBody.tsx'
 import { TerminalTitle } from '../src/client/TerminalTitle.tsx'
 import type { TerminalBodyInjected } from '../src/client/face.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 
 vi.mock('@xterm/xterm', () => ({ Terminal: vi.fn() }))
 const SHORTCUT_CATALOG: readonly never[] = []
@@ -97,7 +97,7 @@ it('registers terminal views without recovery or cleanup slots, then releases co
     expect(renderToStaticMarkup(createElement(Icon, { size: 22 }))).toContain('width="22"')
     expect(renderToStaticMarkup(createElement(Icon))).toContain('width="36"')
     expect(definition.multiple).toBe(true)
-    expect(h.dictionaries.get('sidebarTerminal')).toEqual({ en, zh })
+    expect(h.dictionaries.get('sidebarTerminal')).toEqual({ en, zh, ja, es, fr, de, ru, pt })
     expect(h.entries.map(entry => [entry.name, entry.component, entry.locale])).toEqual([
       ['sidebar.right.tab.guide.entry', TerminalGuide, 'sidebarTerminal'],
       ['sidebar.right.pane.tab', LazyTerminalBody, 'sidebarTerminal'],

@@ -58,6 +58,27 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     result = session.run("Continue the task.")
 ```
 
+<a id="client-approvals"></a>
+## Client approvals
+
+This low-level example receives one approval and rejects it. Use a dedicated request-handling thread or loop for a full run: `next_request()` blocks, and the request handler must run concurrently with `session/wait` or a high-level `run()`. Set `approval_requests=True` on `HarnessClient.initialize()` or `DeepSeekHarnessConfig` only when that handler is ready. Omission preserves the runtime's answerer chain. Decisions are one-shot; invalid responses and lost connections fail closed, and cancellation discards late replies. `ApprovalRequestResult` validates response values when constructing decisions.
+
+```py
+from deepseek_harness import ApprovalRequestParams, HarnessClient, HarnessConfig
+
+with HarnessClient(HarnessConfig(dsh_home="/absolute/path/to/dsh-home")) as client:
+    client.initialize(cwd="/absolute/path/to/workspace", provider="deepseek-official",
+                      model="deepseek-v4-flash", approval_requests=True)
+    client.session_prompt("main", [{"type": "text", "text": "Run the operation requiring approval."}])
+    request = client.next_request()
+    if request.method == "approval/request":
+        question = ApprovalRequestParams.model_validate(request.payload)
+        print(question.toolName, question.reason)
+        client.respond(request.id, {"outcome": "rejected"})
+    else:
+        client.respond_error(request.id, code=-32601, message="Unsupported client request")
+```
+
 ## Customize plugins
 
 Persistent customization belongs to a `dsh` profile. Initialize the shipped SDK profile and install an external bundle with the runtime wheel's `dsh` command:

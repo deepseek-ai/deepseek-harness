@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_acp_first",
         "name": "subagent_acp",
-        "argumentsDelta": "{\"description\":\"Observe first ACP failure\",\"prompt\":\"Return the scripted ACP failure.\",\"name\":\"worker-1\"}"
+        "argumentsDelta": "{\"description\":\"Observe first ACP failure\",\"prompt\":\"Return the scripted ACP failure.\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_acp_first",
           "name": "subagent_acp",
-          "arguments": "{\"description\":\"Observe first ACP failure\",\"prompt\":\"Return the scripted ACP failure.\",\"name\":\"worker-1\"}"
+          "arguments": "{\"description\":\"Observe first ACP failure\",\"prompt\":\"Return the scripted ACP failure.\"}"
         }
       },
       {
@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_acp_second",
         "name": "subagent_acp",
-        "argumentsDelta": "{\"description\":\"Observe second ACP failure\",\"prompt\":\"Return the scripted ACP failure.\",\"name\":\"worker-2\"}"
+        "argumentsDelta": "{\"description\":\"Observe second ACP failure\",\"prompt\":\"Return the scripted ACP failure.\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_acp_second",
           "name": "subagent_acp",
-          "arguments": "{\"description\":\"Observe second ACP failure\",\"prompt\":\"Return the scripted ACP failure.\",\"name\":\"worker-2\"}"
+          "arguments": "{\"description\":\"Observe second ACP failure\",\"prompt\":\"Return the scripted ACP failure.\"}"
         }
       },
       {

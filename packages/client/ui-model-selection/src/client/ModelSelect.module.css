@@ -29,8 +29,10 @@
   cursor: pointer;
 }
 
-.trigger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .trigger:focus-visible:not([data-selection-focus]) {
@@ -193,10 +195,16 @@
   cursor: pointer;
 }
 
-.searchClear:hover,
 .searchClear:focus-visible {
   outline: none;
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .searchClear:hover {
+    outline: none;
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchRow .search:focus-within {
@@ -236,10 +244,15 @@
   cursor: pointer;
 }
 
-.option:not(.modelOption):hover:not(:disabled),
 .option:focus-visible,
 .optionActive:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .option:not(.modelOption):hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selection marker is the trailing check, not a fill — matches the Menu
@@ -303,9 +316,14 @@
   outline: none;
 }
 
-.cell:hover,
 .cell:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .cell:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cellLabel {

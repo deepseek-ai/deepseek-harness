@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Git-Arbeitsbäume",
+    "description": "Lassen Sie den Agenten einen neuen Git-Zweig und Arbeitsbaum erstellen und fahren Sie dann dort fort.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { startTestActivation } from './local-activation.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
@@ -69,10 +68,10 @@ describe('subagent working directories', () => {
   it.each(['relative', 'absolute'])('retains an explicit %s directory when a continuable child cold-resumes', async (form) => {
     const { ctx, parent, origin, first, second } = await fixture()
     const selected = await realpath(second)
-    const started = await ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    const started = await ctx.subagents.startActivation({
       delivery: 'caller',
       provider: 'spawn', label: 'directory child',
-      request: { parent, cwd: form === 'absolute' ? second : 'second', prompt: [{ type: 'text', text: 'child' }] },
+      parent, cwd: form === 'absolute' ? second : 'second', prompt: [{ type: 'text', text: 'child' }],
       signal: new AbortController().signal,
     })
     await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeUndefined() })
@@ -97,10 +96,10 @@ describe('subagent working directories', () => {
       setup: (childCtx, child) => options.setup?.(childCtx.isolate('workingDirectory'), child),
     }))
     try {
-      await expect(ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+      await expect(ctx.subagents.startActivation({
         delivery: 'caller',
         provider: 'spawn', label: 'unavailable directory service', childId,
-        request: { parent, cwd: second, prompt: [{ type: 'text', text: 'child' }] },
+        parent, cwd: second, prompt: [{ type: 'text', text: 'child' }],
         signal: new AbortController().signal,
       })).rejects.toThrow(/subagents require the working-directory service/)
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP 子智能体后端",
+    "description": "在子进程中通过 ACP 协议驱动外部智能体。"
+  }
+}

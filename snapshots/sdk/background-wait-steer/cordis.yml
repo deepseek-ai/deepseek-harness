@@ -1,0 +1,35 @@
+# SDK composition for the steered background wait: the shipped profile plus the
+# scenario-owned barrier. Quiet completion delivery keeps the settlement in the
+# next-step inbox, where the fixture checks the single notice the released read
+# withheld; no provider title or durable session-log mirror may add records.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: session-log-deepseek
+  config:
+    enabled: false
+
+- id: session-title-llm
+  disabled: true
+
+# Time sampling is wall-clock dependent, so the recorded transcript cannot be
+# replayed against a committed fixture; the scenario pins only the job wait.
+- id: time-context
+  disabled: true
+
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+  config:
+    completionDelivery: quiet
+
+- insert:
+    - id: background-wait-steer-fixture
+      name: './wait-fixture.mjs'

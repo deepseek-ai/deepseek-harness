@@ -39,7 +39,7 @@ import { derivePresentationPolicy, type CollapseTiming, type FoldedReplies } fro
 import { CHAT_FLOW_INJECT, CHAT_NODE_INJECT } from '../src/client/apply.ts'
 import { ChatView } from '../src/client/chat/ChatView.tsx'
 import { ChatFlow } from '../src/client/chat/ChatFlow.tsx'
-import { en, zh } from '../src/client/locale.ts'
+import { en, zh, pt } from '../src/client/locale.ts'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { CommandNodeView, ManualCompactionNodeView } from '../src/client/chat/CommandNodeView.tsx'
 import {
@@ -260,7 +260,7 @@ function bindKeyedSnapshotSelector<Value>(
 }
 
 declare const nodeDispatch: PropsRenderSlots<'conversation.chat.node'>['renderSlot']
-declare const flowDispatch: ChatViewSlotProps['renderSlot']
+declare const flowDispatch: PropsRenderSlots<'conversation.chat.flow'>['renderSlot']
 type NodeRenderer = typeof nodeDispatch<'conversation.chat.node'>
 type FlowRenderer = typeof flowDispatch<'conversation.chat.flow'>
 type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
@@ -453,7 +453,8 @@ function makeHarness(
     if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
     return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
-  const renderSlot: FlowRenderer = (key, owner, opts) => {
+  const renderSlot = (key: string, owner: ChatFlowOwnerProps, opts: Parameters<FlowRenderer>[2]) => {
+    if (key === 'conversation.chat.text-interaction') return null
     if (key !== 'conversation.chat.flow') throw new Error(`Undeclared ChatView child: ${key}`)
     if ('renderSlot' in owner || 'useStore' in owner || 'actions' in owner) {
       throw new Error('Flow owner data must not replace its rendering or store authority')
@@ -467,6 +468,7 @@ function makeHarness(
   const useConnectionState = bindSnapshotSelector(connection)
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
+    fileDrag,
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -492,6 +494,7 @@ function makeHarness(
     },
     useInput: (() => { throw new Error('unused') }),
     inputActions: {
+      insertQuote: () => false,
       captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
       insertText: () => false,
       setDraft: () => {},
@@ -503,6 +506,8 @@ function makeHarness(
     },
     useStore: bindSnapshotSelector(chat),
     actions: chat.actions,
+    useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
+    dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
@@ -3534,8 +3539,13 @@ describe('ChatView', () => {
     expect(chat.locations.getTurn(1)).toContain(later.key)
     const branch = view.getByRole('button', { name: '在新对话中分支' })
     expect(branch.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
     fireEvent.click(branch)
     expect(h.forkAt).not.toHaveBeenCalled()
+    expect(view.getByRole('tooltip', { hidden: true }).textContent).toBe(h.props.t('message.branchUnavailable'))
+    fireEvent.pointerDown(branch, { pointerType: 'touch' })
+    fireEvent.click(branch)
+    expect(view.queryByRole('tooltip', { hidden: true })).toBeNull()
   })
 
   it('keeps final content actions but disables branch when Tool and interrupted Think follow it', () => {
@@ -4570,7 +4580,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const column = view.container.querySelector('[data-chat-flow]')!
     const status = column.querySelector('[data-chat-running]')
-    expect(column.lastElementChild).toBe(status)
+    expect([...column.children].filter(child => !child.hasAttribute('data-text-interaction-surface')).at(-1)).toBe(status)
     expect(within(status as HTMLElement).getByRole('status').textContent).toBe('深度求索中')
     expect(status?.lastElementChild?.textContent).toBe('深度求索中')
     const icon = status?.querySelector('svg')?.parentElement
@@ -4599,4 +4609,10 @@ describe('ChatView', () => {
       .map(element => element.closest<HTMLElement>('[data-chat-node-key]')?.dataset.chatNodeKey)
     expect(rows).toEqual(['fixture:steering:3'])
   })
+})
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }
+
+it('formats Portuguese elapsed minutes with numeric units', () => {
+  expect(formatRunDuration(90_000, key => pt[key])).toBe('1m 30s')
 })

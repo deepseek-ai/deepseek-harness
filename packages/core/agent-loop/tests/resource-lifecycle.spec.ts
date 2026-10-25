@@ -1,3 +1,5 @@
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { setImmediate } from 'node:timers/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -89,6 +91,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
   await ctx.plugin(JsonlSessionPersistence, { root })
   const loop = await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(SubagentSpawn)
   await ctx.plugin(ToolSubagent, { provider: 'spawn' })
@@ -113,10 +116,10 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
     await release.promise
     return next()
   })
-  const started = await ctx.tools.execute({
+  const started = await executeToolFixture(ctx, {
     agent: parent, signal: new AbortController().signal,
     callId: ToolCallId('background-start'), name: 'subagent',
-    arguments: { name: 'child', description: 'child', prompt: 'wait' },
+    arguments: { description: 'child', prompt: 'wait' },
   })
   expect(started.isError).toBe(false)
   const child = await requestEntered.promise

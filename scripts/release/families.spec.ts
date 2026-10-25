@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { officialClientBuildEnvironment, writeClientBuildRecord } from '../client-build-environment.ts'
-import { ON_DEMAND_BUNDLES } from '../../packages/boot/app-boot/src/official-bundles.ts'
+import { ON_DEMAND_BUNDLES } from '../../packages/util/official-bundles/src/bundles.ts'
 import { releaseFamily, type ReleaseMember } from './families.ts'
 import { compareVersions, nextVendorVersion, planShared, reachesPayload } from './bump.ts'
 
@@ -49,6 +49,7 @@ describe('release families', () => {
     expect(members
       .filter(member => member.directory.startsWith('packages/experimental/'))
       .map(member => member.name)).toEqual([
+      '@deepseek-ai/dsh-action-cards',
       '@deepseek-ai/dsh-experimental-api-speech-to-text',
       '@deepseek-ai/dsh-experimental-auto-review',
       '@deepseek-ai/dsh-experimental-badge-skill-bundle',
@@ -57,12 +58,16 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-browser-use-runtime',
       '@deepseek-ai/dsh-experimental-browser-use-stagehand-native',
       '@deepseek-ai/dsh-experimental-claude-code-mods',
+      '@deepseek-ai/dsh-client-ui-action-cards',
       '@deepseek-ai/dsh-experimental-client-ui-claude-code-mods',
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
+      '@deepseek-ai/dsh-client-ui-creation-recommendations',
+      '@deepseek-ai/dsh-client-ui-plugin-recommendations',
       '@deepseek-ai/dsh-experimental-client-ui-voice-input',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native',
       '@deepseek-ai/dsh-experimental-cot-translation-bundle',
+      '@deepseek-ai/dsh-creation-recommendations',
       '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-cua-macos',
       '@deepseek-ai/dsh-cua',
@@ -71,7 +76,10 @@ describe('release families', () => {
       '@deepseek-ai/dsh-hooks-codex',
       '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-experimental-inspector',
+      '@deepseek-ai/dsh-experimental-liveshare-protocol',
+      '@deepseek-ai/dsh-personalized-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-market-bundle',
+      '@deepseek-ai/dsh-plugin-recommendations',
       '@deepseek-ai/dsh-experimental-ptc-runtime-python',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@deepseek-ai/dsh-experimental-session-inspector',

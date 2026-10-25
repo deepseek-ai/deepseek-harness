@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-webhook-github",
   "description": "Signed GitHub HTTP webhook adapter for the DeepSeek Harness webhook runtime",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -23,10 +23,12 @@
       "default": "./lib/types/types.js"
     },
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json",
     "./examples/*": "./examples/*"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "examples/github-review/cordis.yml",
     "examples/github-review/github-ready-review-rule.mjs",

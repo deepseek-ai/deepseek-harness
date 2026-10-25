@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "conexión",
+    "description": "Establezca comunicaciones autenticadas con el cliente y administre el ciclo de vida de la conexión."
+  }
+}

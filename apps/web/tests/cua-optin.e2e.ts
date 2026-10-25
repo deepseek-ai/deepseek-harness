@@ -8,11 +8,12 @@ import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { expect, it } from 'vitest'
-import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
+import { expect, it, vi } from 'vitest'
+import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
+// The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
+it.skipIf(process.platform !== 'darwin').each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserving default %s until the explicit persistent-runtime action', async (selectedDefault) => {
   const directory = await mkdtemp(join(tmpdir(), 'cua-optin-web-'))
   let ownedScaffold: WebScaffold | undefined
   let browser: Browser | undefined
@@ -43,25 +44,62 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
     const settingsPath = join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml')
     const before = await readFile(settingsPath, 'utf8')
-    const selected = () => readProfileManifest('scaffold', join(scaffold.harnessHome, 'profiles/scaffold')).dsh?.profile?.bundles
+    const profileManifest = () => readProfileManifest('scaffold', join(scaffold.harnessHome, 'profiles/scaffold'))
+    const selected = () => profileManifest().dsh?.profile?.bundles
+    const dependencies = profileManifest().dependencies
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const plugins = page.locator('[data-plugin-panel]')
     await plugins.getByRole('button', { name: '更多', exact: true }).waitFor()
     expect(await page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count()).toBe(0)
     await plugins.getByRole('button', { name: '更多', exact: true }).click()
     const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
-    expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
+    expect(await card.count()).toBe(0)
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+      .toMatchObject({ listedByDefault: false, enabled: false, installed: false })
+    await plugins.getByRole('button', { name: '返回插件', exact: true }).click()
+    const offerCua = async () => {
+      await plugins.getByRole('button', { name: '添加插件', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: '添加插件', exact: true })
+      await dialog.getByRole('textbox', { name: '包名或地址', exact: true }).fill('@deepseek-ai/dsh-cua-bundle')
+      await dialog.getByRole('button', { name: '安装', exact: true }).click()
+      const ready = page.getByRole('dialog', { name: '插件已随 DSH 提供', exact: true })
+      await ready.waitFor()
+      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(1)
+      return ready.getByRole('button', { name: '立即启用', exact: true })
+    }
+    const enableNow = await offerCua()
     const toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
-    expect(await toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await card.textContent()).toContain('请切换到 PTC 模式')
+    const enabling = Promise.withResolvers<undefined>()
+    const setEnabled = scaffold.ctx.pluginManager.setBundleEnabled.bind(scaffold.ctx.pluginManager)
+    let applying: ReturnType<typeof setEnabled> | undefined
+    // Hold the Host request so the pending UI does not depend on machine speed; release into the real operation.
+    const enableCall = vi.spyOn(scaffold.ctx.pluginManager, 'setBundleEnabled').mockImplementationOnce((name, enabled) => {
+      applying = enabling.promise.then(() => setEnabled(name, enabled))
+      return applying
+    })
+    try {
+      await enableNow.click()
+      await expect.poll(() => enableNow.isEnabled()).toBe(false)
+      expect(await enableNow.getAttribute('aria-busy')).toBe('true')
+      expect(await card.count()).toBe(0)
+      await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/enabling.expected.md', import.meta.url)),
+        await captureStableAria(page, '[data-install-phase="done"] button[aria-busy]', scaffold.workspaceCwd), webSnapshotMode())
+    } finally {
+      enabling.resolve(undefined)
+      enableCall.mockRestore()
+      await applying
+    }
     // Bundle transitions await native cleanup under the browser action deadline.
-    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
+    await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor({ state: 'hidden' })
     const setup = page.getByRole('dialog', { name: '使用 Computer Use 前需要设置', exact: true })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
+    expect(profileManifest().dependencies).toEqual(dependencies)
+    expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
+    expect(await card.textContent()).toContain('请切换到 PTC 模式')
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
@@ -75,15 +113,16 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     })
     expect(scaffold.ctx.tools.schemas(fresh.agent).some(tool => tool.name === 'cua')).toBe(true)
     await toggle.click()
-    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
+    await card.waitFor({ state: 'hidden' })
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     for (const agent of [ptcAgent, fresh.agent]) expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe('function-body')
     expect(await readFile(settingsPath, 'utf8')).toBe(before)
+    await (await offerCua()).click()
+    await setup.getByRole('button', { name: '稍后', exact: true }).click()
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     const detailToggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
-    await detailToggle.click()
     await detailToggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     const panel = page.locator('[data-cua-settings]')
     await panel.waitFor()
@@ -115,11 +154,13 @@ it.each([undefined, 'minimal'] as const)('adds CUA to PTC sessions while preserv
     expect(scaffold.ctx.agentPresets.defaultId).toBe('ptc')
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     await detailToggle.click()
-    await detailToggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
+    await panel.waitFor({ state: 'hidden' })
+    await card.waitFor({ state: 'hidden' })
     expect(await readFile(settingsPath, 'utf8')).toBe(configured)
     expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
-    await detailToggle.click()
+    await (await offerCua()).click()
+    await panel.waitFor({ state: 'visible' })
     await detailToggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     expect(await readFile(settingsPath, 'utf8')).toBe(configured)
     expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)

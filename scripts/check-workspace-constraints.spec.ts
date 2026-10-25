@@ -328,6 +328,24 @@ describe('package payload constraints', () => {
     ])
   })
 
+  it('publishes tools entry points and shared runtime chunks', () => {
+    const dir = 'packages/core/tools'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    for (const omitted of ['lib/pipeline.js', 'lib/shared-*.js']) {
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== omitted),
+      } })).toEqual([expect.stringContaining('package.json files must be')])
+    }
+    expect(checkWorkspaceManifest({ dir, manifest: {
+      ...manifest,
+      exports: {
+        ...manifest.exports,
+        './pipeline': { types: './lib/types/pipeline.d.ts', default: './lib/index.js' },
+      },
+    } })).toContainEqual(expect.stringContaining('exports["./pipeline"] must expose'))
+  })
+
   it('publishes the directory of each locale detail document after the locale resources', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })

@@ -1,0 +1,10 @@
+version: 1
+scenario: background-job-notice
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default
+replay:
+  override: true
+platform: posix

@@ -34,7 +34,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
   ...allowAllAccess,
-  inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
+  inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
 
@@ -119,6 +119,12 @@ describe('GuideBody', () => {
     const guide = b.view.container.querySelector('[data-sidebar-right-guide]')
     expect(guide?.lastElementChild?.contains(more)).toBe(true)
     expect(more.getAttribute('aria-haspopup')).toBe('menu')
+    const glyph = more.querySelector('svg')
+    expect(glyph?.getAttribute('width')).toBe('22')
+    expect(glyph?.getAttribute('height')).toBe('22')
+    expect(glyph?.getAttribute('stroke')).toBe('#A6B2C7')
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true')
+    expect(glyph?.querySelectorAll('path')).toHaveLength(4)
     fireEvent.click(more)
     expect(more.getAttribute('aria-expanded')).toBe('true')
     expect(b.actionsOwner().entries).toEqual([

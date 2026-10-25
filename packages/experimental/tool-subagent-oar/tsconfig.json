@@ -18,7 +18,13 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../subagent/subagent-names"
     }
   ]
 }

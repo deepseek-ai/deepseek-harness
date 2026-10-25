@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -6,6 +7,7 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import * as control from '../src/index.ts'
 
@@ -22,6 +24,7 @@ async function setup() {
   await mountAgentLoopTestDependencies(ctx, { workingDirectory: true, systemPrompt: { includeRuntimeContext: false } })
   const harness = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(SubagentRuntime)
+  await ctx.plugin(SubagentNames)
   const fiber = await ctx.plugin(control)
   const handle = await ctx.agents.create({ sessionId: SessionId('waiting') })
   const other = await harness.create(SessionId('other'))
@@ -40,7 +43,7 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
     if (exec.name === 'wait_agent' && exec.agent === agent) entered.resolve(undefined)
     return result
   })
-  const result = ctx.tools.execute({
+  const result = executeToolFixture(ctx, {
     name: 'wait_agent', callId: ToolCallId('wait'), arguments: args, agent, signal,
   })
   await entered.promise
@@ -49,13 +52,14 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
 }
 
 describe('wait_agent', () => {
-  it('adds no collaboration policy or identity without Team mode', async () => {
+  it('registers without Team policy or root communication context', async () => {
     const { ctx, agent } = await setup()
     const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
     expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
     expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
-    expect(renderContextSnapshot(assembled)).not.toContain('Your agent id')
+    expect(renderContextSnapshot(assembled)).not.toContain('Your parent agent id')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
+    expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
   })
 
   it('is available without Team mode and leaves pending input for normal admission', async () => {
@@ -249,7 +253,7 @@ describe('wait_agent', () => {
 
   it('rejects calls without a live calling agent', async () => {
     const { ctx, agent, handle } = await setup()
-    const missing = await ctx.tools.execute({
+    const missing = await executeToolFixture(ctx, {
       name: 'wait_agent', callId: ToolCallId('missing'), arguments: {}, signal: new AbortController().signal,
     })
     expect(missing).toMatchObject({ isError: true, error: { info: { code: 'WAIT_UNAVAILABLE' } } })

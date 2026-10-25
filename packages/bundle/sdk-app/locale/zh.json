@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK 运行配置",
+    "description": "在 dsh-base 上提供标准输入输出 JSON-RPC 与进程生命周期管理。"
+  }
+}

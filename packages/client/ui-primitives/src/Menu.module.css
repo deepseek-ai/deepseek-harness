@@ -109,8 +109,10 @@
   text-align: left;
 }
 
-.item:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .item:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Arrow navigation moves real focus, so the row the keyboard is on carries the
@@ -206,6 +208,12 @@
   line-height: 16px;
 }
 
+@media (pointer: coarse) {
+  :global(html:not([data-input-modality='keyboard'])) .shortcut {
+    display: none;
+  }
+}
+
 .check {
   flex: none;
   color: var(--dsw-alias-label-primary);
@@ -231,8 +239,10 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-.danger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
+@media (hover: hover) {
+  .danger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+  }
 }
 
 .danger:focus-visible:not(:disabled) {

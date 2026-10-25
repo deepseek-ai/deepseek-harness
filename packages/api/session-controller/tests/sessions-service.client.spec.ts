@@ -1002,10 +1002,10 @@ describe('fork', () => {
     expect(b.svc.binding(sid('child'))).toBeUndefined()
     expect(b.svc.retainInfo(sid('child')).getSnapshot().referenceCount).toBe(0)
     await Promise.resolve()
+    expect(b.svc.list.getSnapshot().byId[sid('child')]).not.toHaveProperty('parentId')
     expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({
       title: childTitle,
       displayTitle: childTitle,
-      parentId: 'source',
     })
   })
 

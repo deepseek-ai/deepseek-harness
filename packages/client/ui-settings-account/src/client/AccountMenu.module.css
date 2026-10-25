@@ -2,7 +2,9 @@
 .anchor { width: 100%; }
 .trigger { user-select: none; display: flex; align-items: center; width: 100%; height: 44px; gap: 8px; padding: 6px; border: 0; border-radius: var(--dsw-radius-md); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer; }
 .trigger[data-collapsed='true'] { box-sizing: border-box; width: 36px; height: 36px; justify-content: center; gap: 0; padding: 0; }
-.trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }
+@media (hover: hover) {
+  .trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
 .avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 50%;
   corner-shape: round; background: var(--dsw-alias-bg-skeleton); color: var(--dsw-alias-label-tertiary); }
 .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

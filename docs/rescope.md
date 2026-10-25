@@ -28,7 +28,9 @@ Subpath exports keep their path: `@cordisjs/plugin-loader/repository` becomes `@
 - **The `cordis.yml` configuration family**, including `*.cordis.yml`, `*.cordis.snapshot.yml`, and `cordis.patch.yml`.
 - **Harness packages whose own names contain the word**, such as `@deepseek-ai/dsh-tool-cordis`.
 - **Upstream runtime identifiers**, such as Schemastery's `Symbol.for('schemastery')` and its `vendor:` metadata field.
-- **Prose outside `docs/`.** `vendor/*/README.md`, package READMEs, and Agent Notes keep the names they were written with; a bare `cordis` there can also be the Python SDK's option name or an agent-preset id. Inside `docs/`, prose and every Markdown fence follow the rename.
+- **Product identifiers.** Files in `GENERIC_SKIPS` keep preset IDs, event names, directory group names, and locale or input-source keys for the listed upstream name. Source imports, exports, module declarations and JSDoc import types still change in both directions, including in JavaScript/TypeScript fences. YAML plugin `name:` values also change. Other string uses of the listed name stay intact; other library names remain checked.
+- **Rewrite fixtures.** `scripts/rescope-vendor.spec.ts` and `scripts/gen-third-party-notices.spec.ts` keep both package spellings as test data.
+- **Prose outside `docs/`.** `vendor/*/README.md`, package READMEs, and Agent Notes keep the names they were written with; a bare `cordis` there can also be the Python SDK's option name or an agent-preset id. Inside `docs/`, prose and Markdown fences follow the token rule except for the audited identifiers above.
 
 ## What your code has to change
 

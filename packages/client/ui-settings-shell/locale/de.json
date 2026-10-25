@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Einstellungen zur Befehlsausführung",
+    "description": "Konfigurieren Sie das Zeitlimit für die Befehlsausführung und die Begrenzung der Ausgabelänge."
+  }
+}

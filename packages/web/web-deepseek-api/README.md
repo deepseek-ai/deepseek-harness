@@ -48,9 +48,12 @@ Fill `baseURL` with the complete API base, including its path prefix and excludi
 
 Run the real API tests with `DEEPSEEK_API_KEY` and `DEEPSEEK_SEARCH_API_TEST_BASE_URL`; both are required, and the latter includes the API path prefix.
 
+<a id="authentication"></a>
 ### Authentication
 
 A Session using the `deepseek-account` route asks the account service for a token authorized for the resolved endpoint and sends it as `x-dsh-auth-token`; the public Search and Fetch routes accepted it on 2026-10-16. Otherwise a non-empty literal `apiKey` wins over `apiKeyEnv`; the reference resolves through `ctx.credentials`, or the launch environment when that service is absent. API keys use `Authorization: Bearer`. Credential resolution and endpoint selection share one settings snapshot.
+
+Each provider's `ready()` answers whether an operation for a model request has a credential, on any model route: the request's route is `deepseek-account` and `ctx.deepseekAccount` resolves a token for the API base, or a literal `apiKey` is set or `ctx.credentials.describe` reports the `apiKeyEnv` reference configured (without that service, the launch environment must carry it). A failed account-token or credential-store read answers false. While these providers are selected, [`dsh-tool-web`](../tool-web/README.md#search-readiness) withholds `web_search` and `web_fetch` with their prompt guidance from each request for which they answer false. Only presence is checked: a wrong key counts as ready and fails each call.
 
 ### Results and failures
 
@@ -91,6 +94,20 @@ No auxiliary model tokens are consumed. Conversation result tokens scale with re
 
 Tool results append after the existing conversation prefix. Provider registration adds no model context.
 
+### Conversation tool list, indirectly
+
+#### What the model sees
+
+While these providers are selected, a conversation request for which one is not ready carries neither its tool's schema, `web_search` or `web_fetch`, nor that tool's prompt guidance; [`dsh-tool-web`](../tool-web/README.md#search-readiness) owns that effect.
+
+#### Token effect
+
+Withholding removes the tool's schema and its prompt guidance from the request.
+
+#### KV Cache effect
+
+A returning or removed web tool changes the declared tools as [`dsh-tool-web`](../tool-web/README.md#search-readiness) describes.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -98,7 +115,8 @@ Tool results append after the existing conversation prefix. Provider registratio
 - The shared search request does not expose `localization`; the provider does not request full search content or consume `site_name`, `site_icon`, `rerank_score`, or `authority`. Returned summaries measured 1,000–2,300 characters on 2026-10-16, above the consumer's default cap.
 - In 2026-10-16 probes, different `ori_question` values left result order, scores, and summaries unchanged; the provider still sends it because the guide documents it as an intent signal.
 - API query and URL constraints are enforced by the remote service. An unresolvable Fetch target returned HTTP 500 rather than the documented 404 on 2026-10-16, and its failure carries the same endpoint guidance as an endpoint failure. Fetch exposes neither the target status nor the final redirect URL, so results report HTTP 200 and the requested URL; the provider discards the API's page title.
-- Availability checks cannot query asynchronous credential stores. A configured resolver can still fail with a missing-credential error when called.
+- `available()` cannot query asynchronous credential stores; `ready()` does, so model steps withhold the tools when the store lacks the key. A direct `ctx.web.search()` or `ctx.web.fetch()` call can still fail with a missing-credential error.
+- When the official route chats through a gateway, operations still send the key to the configured API base and fail unless it accepts the key.
 
 <a id="dev-note"></a>
 ### Dev Note

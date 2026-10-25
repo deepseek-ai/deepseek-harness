@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
@@ -31,6 +32,7 @@ import {
   parseToolSchemasSnapshot,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  REPLAY_CREDENTIAL_ENV,
   restorePinnedToolSchemas,
   scrubSessionSnapshot,
   scrubSystemPrompts,
@@ -682,11 +684,6 @@ function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   expect(leaf.filter(event => event.type === 'turn/start')).toHaveLength(2)
   expect(leaf.some(event => event.type === 'assistant/message'
     && event.data.message.content.some(block => block.type === 'text' && block.text === 'LEAF_RESUMED'))).toBe(true)
-  const listing = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-  expect(listing).toContain('lead [running] — team lead')
-  expect(listing.split('\n').filter(line => line.startsWith('lead/'))).toHaveLength(2)
-  expect(listing).toContain('depth=2')
-  expect(parseSessionLog(logs[0]!.content).filter(event => event.type === 'subagent/catalog')).toHaveLength(1)
   const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'agent-message' ? [{
       sender: event.data.source.senderSessionId,
@@ -722,14 +719,12 @@ function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
       || event.type === 'agent/inbox/spliced' && event.data.inserted.length > 0)).toBe(false)
   }
   const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-  expect(results).toHaveLength(8)
+  expect(results).toHaveLength(7)
   expect(results.every(result => result.isError === false)).toBe(true)
   expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
   expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":false}' }])
-  expect(results.find(result => result.toolCallId === 'read-unowned')?.content)
-    .toEqual([{ type: 'text', text: '{"tasks":[]}' }])
 }
 
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
@@ -746,7 +741,9 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe('started subagent lead/worker-1')
+  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}\nname: lead/agent-1`)
+  expect(events.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
+    .toEqual([{ version: 1, childId: logs[1]!.header.id, name: 'lead/agent-1' }])
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,
@@ -917,6 +914,7 @@ async function verifyProviderCwdResume(
   expect(primary?.header.cwd).not.toBe(cwd)
   const otherHostCwd = await mkdtemp(join(tmpdir(), 'dsh-provider-resume-'))
   const env = {
+    ...REPLAY_CREDENTIAL_ENV,
     DSH_HOME: join(cwd, '.dsh'),
     DSH_SNAPSHOT: 'replay',
     DSH_SNAPSHOT_FILE: fixture,
@@ -1359,6 +1357,7 @@ describe('headless recorded-session snapshots', () => {
             ? 0
             : 1,
           env: {
+            ...(replaying ? REPLAY_CREDENTIAL_ENV : {}),
             DSH_SNAPSHOT: replaying ? 'replay' : 'record',
             DSH_SNAPSHOT_PROVIDER: model.provider,
             DSH_SNAPSHOT_MODEL: model.model,
@@ -1426,6 +1425,15 @@ describe('headless recorded-session snapshots', () => {
               expect(results).toHaveLength(4)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office task routing')
+            }
+            if (scenario.name === 'subagent-spawn-in-process') {
+              const parent = parseSessionLog(actualLogs[0]!.content)
+              expect(parent.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
+                .toEqual([{ version: 1, childId: actualLogs[1]!.header.id, name: 'lead/reviewer' }])
+              const receipt = parent.find(event => event.type === 'tool/result')
+              expect(receipt).toMatchObject({ data: { message: { content: [{
+                type: 'text', text: `started subagent ${actualLogs[1]!.header.id}\nname: lead/reviewer`,
+              }] } } })
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {

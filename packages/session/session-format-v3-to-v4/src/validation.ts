@@ -115,7 +115,7 @@ export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, k
     assertV4MessageSources(event)
     const deliveryId = validateDeliveryAccepted(event, 4)
     if (deliveryId !== undefined
-      && !(artifact.header.parentSession !== undefined && event.seq < artifact.inheritedEventCount)
+      && event.seq >= artifact.inheritedEventCount
       && deliveryId !== artifact.header.id) {
       throw new SessionFormatError('current-generation delivery marker names the wrong Session')
     }

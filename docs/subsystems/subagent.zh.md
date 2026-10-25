@@ -2,13 +2,13 @@
 
 [English](subagent.md) | 中文
 
-统一的 activation API 管理本地对话和外部执行。subagent 树定义 Team，与可选任务板无关。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责当前调用者的收件箱等待；实验性 Team 工具添加共享任务、任务策略和 Team 身份。
+统一的 activation API 管理本地对话和外部执行。创建祖先关系、运行归属和通信由 subagent 树管理。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责当前调用者的收件箱等待；实验性 Team 工具添加共享任务、任务策略和 Team 身份。
 
 ## 能力与 activation 请求
 
 所有后端都使用 startActivation。能力标记校验请求选项；prepareContinuable 选择本地 Agent 创建，start 选择一次外部执行。面向模型的工具采用 parent 回传。Workflow 与 code mode 消费者可以等待 caller 结果，不额外向父代理注入消息。历史子会话的 descriptor 不可用时，以 `mode: 'unknown'` 保持可发现性，但不授予继续执行能力；[包 README](../../packages/subagent/subagent/README.zh.md) 定义目录持久化语义。
 
-可选的 `request.cwd` 指定子级的初始目录；相对路径以父级当前有效目录为基准解析。省略时，在准入阶段捕获该目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
+可选的 `cwd` 指定子级的初始目录；相对路径以父级当前有效目录为基准解析。省略时，在准入阶段捕获该目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
 
 ```ts type-equiv
 /**
@@ -28,20 +28,16 @@ interface SubagentCapabilities {
 
 ```ts type-equiv
 /** One managed child execution and its result delivery policy. */
-interface SubagentActivationSpec {
-  /** Immutable sibling name; omission reserves the first unused agent-N segment, starting at 1. */
-  readonly name?: string
+interface SubagentActivationSpec extends Omit<SubagentStartRequest, 'label' | 'signal'> {
   /** Registered backend to use. */
   readonly provider: string
   /** Short task label retained in cataloged child membership. */
   readonly label: string
   /** Optional reserved identity for a local child; external backends allocate their own ids. */
   readonly childId?: SessionId
-  /** Task, parent, and backend-supported execution options. */
-  readonly request: Omit<SubagentStartRequest, 'label' | 'signal'>
   /** Cancellation before publication; callers own later cancellation through dispose. */
   readonly signal: AbortSignal
-  /** Parent delivery notifies the model; caller delivery only returns the result. Both enter the parent catalog. */
+  /** Parent delivery notifies the model; caller delivery only returns the result. Local children always enter the parent catalog. */
   readonly delivery: 'parent' | 'caller'
 }
 ```
@@ -49,8 +45,6 @@ interface SubagentActivationSpec {
 ```ts type-equiv
 /** A managed execution; disposal addresses this exact activation, never a later resume. */
 interface SubagentActivation {
-  /** Full path used by model-facing collaboration tools. */
-  readonly name: string
   /** Stable identity of the child. */
   readonly childId: SessionId
   /** Accepted inbox message, when the backend has a local inbox. */
@@ -67,9 +61,8 @@ interface SubagentActivation {
 
 ```ts type-equiv
 /**
- * Task and optional capabilities supplied to a backend. startActivation carries
- * these fields in request while owning its label, cancellation, and delivery
- * policy separately.
+ * Task and optional capabilities supplied to a backend. The activation spec
+ * shares these task options and defines its own label and cancellation policy.
  */
 interface SubagentStartRequest {
   /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
@@ -177,7 +170,7 @@ interface ContinuableCreateSpec {
 
 ## 消息与中断
 
-`sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 和 `drainChildren` 等待所属资源释放。
+`sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 等待整棵树释放；activation 回执的 `dispose()` 仅释放那一次执行。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -219,18 +212,22 @@ interface SubagentSendMessageOptions {
 
 ```ts type-equiv
 /**
- * Authority under which one interrupt request is admitted. `user` carries the
- * durable direct-parent address a human client presented; `ancestor` carries
- * the exact live Agent object whose recorded lineage must contain the caller.
+ * Authority under which one interrupt request is admitted. `user` is a trusted
+ * host operation; Remote callers need permission on the target Session before
+ * invoking it. `ancestor` carries an exact live Agent in the target's creation ancestry.
  */
 type SubagentInterruptAuthority =
-  | { readonly kind: 'user'; readonly parentSessionId: SessionId }
+  | { readonly kind: 'user' }
   | { readonly kind: 'ancestor'; readonly agent: Agent }
 ```
 
 ## 持久枚举
 
-`listChildren` 读取父级拥有的目录，其中包含所有本地和外部子级，包括 caller 投递的任务。caller 投递由调用方收集结果；目录成员关系在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根及其完整后代树，包括外部叶子和不可读子级的诊断；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
+父级拥有的 `subagentCatalog` 投影列出所有本地子级及 parent 投递的外部子级。caller 投递的外部执行由调用方负责成员关系与结果收集；本地工作流子级在完成后仍可被发现。外部条目携带 `mode: 'external'`，不能打开子 Session 或接受后续消息。目录在创建时记录成员关系，不携带执行状态。`list_agents` 展示根和可达的可继续后代，其活跃状态为 `running` 或 `inactive`；参见[控制工具](../../packages/subagent/tool-subagent-control/README.zh.md#list_agents)。
+
+## 工具名字
+
+面向模型的子代理工具需要[命名插件](../../packages/subagent/subagent-names/README.zh.md)，由它负责名字分配和路径查询。它在根 Session 中保存名字到 ID 的绑定；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
 
 ## 结果与后端句柄
 
@@ -376,19 +373,17 @@ interface SubagentProvider {
 }
 ```
 
-## 持久化枚举：`listChildren()`、`listDescendants()` 与其条目
+## 持久化枚举：`listDescendants()` 与目录条目
 
 模型侧的 `list_agents` 适配器将当前活动表示为 `running` 或 `inactive`。这些值不描述任务完成情况，也不保证 `send_message` 会成功。
 
-`SubagentRuntime.listChildren(parentSessionId, signal?)` 通过优先使用在线 Session 的观察读取父会话的 `subagentCatalog` 视图，并在成功或失败时释放观察。它按父会话事件顺序返回直接子级条目，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影时显式失败。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
+通过 `ctx.sessionQuery.observeSession(parentSessionId, { signal })`，可从 `observation.projections?.values.subagentCatalog` 获取直接子级条目；调用方使用 `using` 释放观察对象。条目遵循父会话事件顺序，不读取子级日志，也不枚举 Session 语料库。查询失败直接传播；缺少目录投影意味着发现功能不可用。浏览器条目从共享 projection store 派生成员关系，并从 Session 状态补充活动状态；control stream 推送完整目录更新。`listDescendants()` 递归读取这些目录，并从每个子级目录推导 `hasChildren`。[父目录 Agent Note](../../.agents/notes/implemented/architecture/2026-09-01-parent-owned-subagent-catalog.zh.md) 说明创建、fork 隔离、排序和持久化成本。
 
-`SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。外部条目是没有本地 Session 的叶节点。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。对每个可达子级目录观察一次；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
+`SubagentRuntime.listDescendants(rootSessionId)` 以稳定前序递归调用同一目录读取函数，保留每个父级的事件顺序。外部条目是没有本地 Session 的叶节点。一次性和未知模式条目仍是遍历节点；未知模式产生 `unsupported` 诊断。无法读取的子级目录产生 `corrupt` 或 `unavailable`，只停止该分支。根读取失败、服务或投影缺失、取消会使整个查询失败。每个可达目录只观察一次，并在下一次读取前释放；重复 id 和循环引用会被跳过。可达目录中不存在的 Session 不会被发现，包括普通 Session fork 及其下的子 agent。每行携带目录中的父级和相对根的深度：
 
 ```ts type-equiv
 /** One catalog descendant with its direct parent and edge distance from the requested root. */
 type SubagentDescendantListEntry = SubagentListEntry & {
-  /** Slash-separated named or legacy segments relative to the requested root. */
-  readonly path: string
   /** Parent whose catalog contains this child. */
   readonly parentId: SessionId
   /** Edge distance from the requested root; direct children are `1`. */
@@ -399,10 +394,6 @@ type SubagentDescendantListEntry = SubagentListEntry & {
 
 <a id="the-terminal-result-subagentresult"></a>
 
-
-## Agent 名字
-
-同级名字在一个父级下唯一；完整路径以 `lead` 开头。父级 catalog 保留名字路径段。临时预留属于在线父级。详见[命名规则](../../packages/subagent/subagent/README.zh.md#local-and-external-children)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -419,6 +410,51 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Host settings owner that records Session authorization before the first model request.
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
+
+<a id="ctxsubagentnames--subagentnames"></a>
+
+### `ctx.subagentNames` — `SubagentNames`
+
+Root-Session aliases shared by named creation, discovery, and control tools.
+
+```ts cordis-catalog
+/**
+ * Reserve a complete name without starting an agent or writing a Session event.
+ * @param parent - exact live caller whose name prefixes the child name.
+ * @param requested - optional sibling segment; omission selects the first free agent-N.
+ * @returns a reservation the caller must dispose after startup and binding.
+ */
+reserve(parent: Agent, requested?: string): SubagentNameReservation
+
+/**
+ * Record an accepted child's full name in the caller's root Session.
+ * Binding failure does not cancel or dispose the child; callers report its id.
+ * @param parent - exact live caller whose root owns the alias.
+ * @param childId - identity returned by the subagent service.
+ * @param name - complete name returned by reserve.
+ */
+bind(parent: Agent, childId: SessionId, name: string): void
+
+/**
+ * Read a bound name from the live root's projection without loading ancestors.
+ * @param caller - exact live caller selecting the tree.
+ * @param targetId - requested identity; omission selects the caller.
+ * @returns lead for the root, a bound full name, or the unchanged id.
+ */
+nameOf(caller: Agent, targetId: SessionId = caller.id): string
+
+/**
+ * Resolve an alias or pass through an id for the subagent service to authorize.
+ * @param caller - exact live caller selecting the root mapping.
+ * @param name - lead, a bound full name, or a raw Session id.
+ * @returns the target identity; an unknown lead/... name throws.
+ */
+resolveName(caller: Agent, name: string): SessionId
+```
+
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
+
+Source: [`packages/subagent/subagent-names/src/index.ts`](../../packages/subagent/subagent-names/src/index.ts)
 
 <a id="ctxsubagents--subagentruntime"></a>
 
@@ -449,42 +485,25 @@ startActivation(spec: SubagentActivationSpec & { readonly childId: SessionId }):
 startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 
 /**
- * Derive an Agent's full path from creation ancestry and parent catalogs.
- * @param agent - exact live Agent whose name is requested.
- * @returns lead followed by named or legacy child segments.
- */
-nameOf(agent: Agent): string
-
-/**
- * Resolve a full agent path without granting authority to act on its Agent.
- * @param caller - exact live Agent selecting the tree.
- * @param name - a full path returned by creation or discovery.
- * @param signal - cancellation during historical discovery.
- * @returns the durable Session identity for the consuming operation to authorize.
- * @throws when the path is absent or a required ancestor is unavailable.
- */
-resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
-
-/**
- * Resolve the root shared by an Agent and its teammates.
+ * Resolve the root shared by an Agent and its other agents in its subagent tree.
  * @param caller - exact live Agent whose subagent ancestry selects the tree.
  * @returns the live root; ordinary Session forks lead independent trees.
- * @throws when the caller or its runtime Team owner is unavailable.
+ * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
 
 /**
- * Join progressing Team work for its root. Idle members with parked input
+ * Join progressing subagent tree work for its root. Idle members with parked input
  * stay resident without delaying host completion. Ordinary members return false.
- * @param parent - exact live Agent; only the Team root joins member work.
+ * @param root - exact live subagent tree root whose member work is awaited.
  * @returns whether work was joined; hosts recheck root idle after true.
  */
-async waitForChildren(parent: Agent): Promise<boolean>
+async waitForTreeWork(root: Agent): Promise<boolean>
 
 /**
  * Steer one model-authored message to another member of the same subagent tree.
  * A running target receives it at its next step; an idle target starts a turn.
- * A cold target resumes under its runtime Team root without restoring
+ * A cold target resumes under its runtime subagent tree root without restoring
  * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
  * stops only pre-acceptance work and never retracts an accepted message.
  * @param sender - exact live root or resident continuable Agent originating the message.
@@ -497,8 +516,8 @@ async waitForChildren(parent: Agent): Promise<boolean>
 async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>
 
 /**
- * Interrupt one live child's current execution under a human parent
- * address or an exact live ancestor Agent. Fire-and-return: the cancel
+ * Interrupt one live child's current execution under a trusted user
+ * operation or an exact live ancestor Agent. Fire-and-return: the cancel
  * signal is issued before this returns, but the target may keep running
  * until it observes the signal. Unclaimed pending inbox work, the Activation,
  * and published descendants are preserved; claimed work is not requeued.
@@ -507,44 +526,21 @@ async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], 
  * is an accepted no-op, as is a manager-less composition, which cannot own a
  * live Activation.
  * @param targetSessionId - the durable child session id to interrupt.
- * @param authority - the human parent address or exact live ancestor Agent.
+ * @param authority - a trusted user operation or exact live ancestor Agent.
  * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
  *   live target.
  */
 interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
 
 /**
- * Close admission and stop all instances in the selected Teams, then await
+ * Close admission and stop all instances in the selected subagent trees, then await
  * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
- * until each exact root leaves the registry; unrelated Teams remain live.
- * @param parents - exact live Team roots entering teardown.
+ * until each exact root leaves the registry; unrelated subagent trees remain live.
+ * @param parents - exact live subagent tree roots entering teardown.
  * @returns once all admitted startup and member cleanup have settled.
  * @throws an aggregate error after all branches settle when any failed.
  */
 async drainDescendants(parents: readonly Agent[]): Promise<void>
-
-/**
- * Release selected resident direct children of one exact live
- * parent. Every unselected member, including their descendants, stays resident.
- * Absent targets and a manager-less composition are accepted no-ops.
- * @param parent - exact live direct parent authorizing the selected release.
- * @param childIds - durable direct-child ids to release when resident.
- * @returns once every selected activation released its execution handle.
- * @throws {SubagentError} `UNAUTHORIZED` when a resident target belongs to a
- *   different parent or the supplied parent identity is stale.
- */
-async drainChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>
-
-/**
- * Read the parent's durable direct-child catalog without loading or resuming an Agent.
- * The service owns and releases the live-preferred Session observation.
- * @param parentSessionId - parent whose direct children are requested.
- * @param signal - cancellation forwarded to the Session query.
- * @returns committed catalog children in parent event order.
- * @throws {@link SubagentError} when query or catalog projection is unavailable.
- * @throws SessionQueryError when the parent cannot be read or the query is cancelled.
- */
-listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentCatalogEntry[]>
 
 /**
  * Recursively list reachable parent catalogs in stable pre-order, preserving
@@ -565,8 +561,8 @@ listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<Subagent
 listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>
 
 /**
- * Deliver one browser-authored message to a continuable child through the
- * live Team root under its durable creation address, retaining the caller-minted request identity and
+ * Deliver one browser-authored message to a continuable child through its
+ * live subagent tree root, retaining the caller-minted request identity and
  * validated browser zone on the accepted message. Success identifies the
  * message the child's inbox accepted; later execution is independent of this
  * call. Queue delivery targets a later turn; steer delivery targets the
@@ -574,7 +570,8 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  * Image parts are admitted and persisted through the attachment store
  * before delivery, and the child's model must accept image input.
  * Cold resume at capacity rejects with `subagent/delivery-unavailable`.
- * @param request - durable address, delivery, minted identity, content, and optional browser zone.
+ * Access is checked on the target Session before attachment admission or restoration.
+ * @param request - target id, delivery, minted identity, content, and optional browser zone.
  * @param signal - carrier cancellation, owning the call until inbox acceptance.
  * @returns the accepted message's inbox identity.
  * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
@@ -582,23 +579,18 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
  *   `subagent/not-resumable`, `subagent/unauthorized`,
  *   `subagent/delivery-unavailable`, `gateway/cancelled`, or `gateway/internal`.
  */
-@Remote('prompt') async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>
+@Remote({ name: 'prompt', resources: { session: request => request.childSessionId } }) async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>
 
 /**
- * Remote face of {@link interrupt} under one durable parent address. No
- * catalog, history, persistence, or parent Agent lookup runs: the core
- * primitive alone authorizes the address against the live Activation, which
- * is what keeps a live child interruptible while its parent Agent is offline.
+ * Remote face of {@link interrupt}, authorized on the target Session by the Gateway.
+ * No catalog, history, persistence, or parent Agent lookup runs.
  * Absent, idle, and already-completed targets are accepted no-ops there.
  * @param childSessionId - durable child session id to interrupt.
- * @param parentSessionId - durable direct parent whose authority is claimed.
- * @param mode - required continuable-address discriminator.
  * @returns acknowledgement that the cancel signal was admitted, not that the target is quiescent.
  * @throws {RemoteError} `gateway/bad-request` for an empty id,
- *   `subagent/unauthorized` when the address does not own the live target,
  *   otherwise `gateway/internal`.
  */
-@Remote('interruptByParent') interruptByParent( childSessionId: SessionId, parentSessionId: SessionId, mode: 'continuable', ): SubagentInterruptReceipt
+@Remote({ name: 'interruptByUser', resources: { session: childSessionId => childSessionId } }) interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt
 
 /**
  * Register a provider under its name. Registration is effect-scoped and HMR
@@ -616,12 +608,6 @@ registerProvider(provider: SubagentProvider): () => void
  * @returns the provider, or undefined when absent.
  */
 getProvider(name: string): SubagentProvider | undefined
-
-/**
- * List registered provider names in insertion order.
- * @returns the registered names.
- */
-list(): string[]
 ```
 
 Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [SessionId](core.zh.md)
@@ -636,11 +622,11 @@ Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/suba
 
 #### `subagent/end` — emit
 
-A published child settled. Scope-filtered dispatch uses the same Team-root carrier as `subagent/start`, so the lifecycle pair reaches the same scoped audience.
+A published child settled. Scope-filtered dispatch uses the same subagent tree-root carrier as `subagent/start`, so the lifecycle pair reaches the same scoped audience.
 
 ```ts cordis-catalog
 /**
- * A published child settled. Scope-filtered dispatch uses the same Team-root
+ * A published child settled. Scope-filtered dispatch uses the same subagent tree-root
  * carrier as `subagent/start`, so the lifecycle pair reaches the
  * same scoped audience.
  * @param info - run identity, durable direct creator `parentSessionId`, and terminal outcome.
@@ -691,14 +677,14 @@ Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/suba
 
 #### `subagent/start` — emit
 
-A provider established a published child. For in-process providers, `ctx.agents.get(info.id)` resolves during this notification. Scope-filtered dispatch keys the carrier by the Team root, so a root-scoped listener observes all Team activations. Paired with `subagent/end`.
+A provider established a published child. For in-process providers, `ctx.agents.get(info.id)` resolves during this notification. Scope-filtered dispatch keys the carrier by the subagent tree root, so a root-scoped listener observes all subagent tree activations. Paired with `subagent/end`.
 
 ```ts cordis-catalog
 /**
  * A provider established a published child. For in-process providers,
  * `ctx.agents.get(info.id)` resolves during this notification.
- * Scope-filtered dispatch keys the carrier by the Team root, so a
- * root-scoped listener observes all Team activations. Paired with
+ * Scope-filtered dispatch keys the carrier by the subagent tree root, so a
+ * root-scoped listener observes all subagent tree activations. Paired with
  * `subagent/end`.
  * @param info - provider, child identity, and durable direct creator `parentSessionId`.
  * @mode emit

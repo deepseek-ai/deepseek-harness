@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -97,15 +96,13 @@ describe('web e2e: sidebar subagent activity', () => {
       source: { kind: 'user' },
     }))
     await parentHandle.agent.whenIdle()
-    const started = await scaffold.ctx.subagents.startActivation({ name: `child-${randomUUID()}`,
+    const started = await scaffold.ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'sidebar activity child',
       signal: new AbortController().signal,
-      request: {
-        prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
-        parent: parentHandle.agent,
-      },
+      prompt: [{ type: 'text', text: 'Hold this delegated task open.' }],
+      parent: parentHandle.agent,
     })
     childId = started.childId
     await waitForRunningChild(scaffold, adapter, childId)

@@ -5,6 +5,7 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/product-analytics/tsconfig.client.json" },
     { "path": "../../client/ui-sidebar" },
     { "path": "../../client/ui-conversation/tsconfig.client.json" },
     { "path": "../../client/ui-sidebar-right" },
@@ -12,6 +13,7 @@
     { "path": "../../client/ui-workspace" },
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },
-    { "path": "../../client/ui-slots" }
+    { "path": "../../client/ui-slots" },
+    { "path": "../store" }
   ]
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Références inter-sessions",
+    "description": "Fournit à l’IA un instantané en lecture seule du contenu des autres sessions."
+  }
+}

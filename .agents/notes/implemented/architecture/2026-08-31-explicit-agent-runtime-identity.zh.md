@@ -14,34 +14,34 @@ Agent 的 Cordis Context 拥有注册及其清理。Agent 身份则为某项操�
 
 ## 决策
 
-运行时接口在拥有身份的位置携带 Agent 身份。`AgentSetup` 接收 `(agentCtx, agent)`；创建与恢复 Agent 的 options 通过 `parentAgent` 标识运行时子级；作用域事件在 payload 中携带 Agent；Remote 转发校验 `request.agent` 就是 carrier key；Host Typert Context 解析则把协议身份映射到存活 Agent Context，不执行反向扫描。`agent.ctx` 继续拥有注册和生命周期，不暴露反向 Agent 属性。
+运行时接口在拥有身份的位置携带 Agent 身份。`AgentSetup` 接收 `(agentCtx, agent)`；每个 subagent Activation 保留其确切运行时树根；作用域事件在 payload 中携带 Agent；Remote 转发校验 `request.agent` 就是 carrier key；Host Typert Context 解析则把协议身份映射到存活 Agent Context，不执行反向扫描。`agent.ctx` 继续拥有注册和生命周期，不暴露反向 Agent 属性。
 
-感知作用域的注册表继续仅使用不透明作用域键判断注册成员关系。tool-subagent 不会分类该键，也不会从 Context 解析 Agent。直接 `AgentSetup` 显式传入尚未发布的 Session，并在发布前通过所给 Context 完成安装。对于由设置控制的常驻 preset，事件 payload 提供 Agent，其 Session 提供策略目标，其 Context 拥有注册项。
+感知作用域的注册表继续仅使用不透明作用域键判断注册成员关系。tool-subagent 不会分类该键，也不会从 Context 解析 Agent。直接 `AgentSetup` 显式接收 Agent，并在 Agent 发布前通过所给 Context 完成安装。对于由设置控制的常驻 preset，事件 payload 提供 Agent，其 Session 提供策略目标，其 Context 拥有注册项。
 
-`SubagentManager` 会把确切父级放进全新创建与冷恢复的 options。因此，存活的可续跑子级不会出现在 `AgentRegistry.roots()` 中，并且满足 `isOwnedBy(child.id, parent)`。持久化 `parentSession` 元数据不能代替这项关系：没有存活 Agent 拥有 fork 或已恢复会话时，它仍可成为 runtime root。
+`SubagentManager.rootOf(agent)` 从已有 Activation 读取运行时成员关系；子级和树根都必须匹配注册表中的存活对象。普通 Session 返回自身，非托管的 subagent header 不授予成员身份。持久化 `parentSession` 描述创建关系；中间创建者离线时，Activation 保留确切树根，同 id 替代实例不能继承它。仅限根级的消费方依据显式 subagent 来源分类。
 
 [作用域参考](../../../../packages/core/scope/README.zh.md)与 [Agent loop 参考](../../../../packages/core/agent-loop/README.zh.md)说明注册和生命周期行为。[发起方作用域决策](2026-07-15-agent-initiator-scope.zh.md)负责私有调用链理由；显式运行时归属不改变因果发起关系或注册生命周期。
 
 ## 验证
 
-Agent 创建测试锁定显式的根级与子级归属。continuation 集成测试让一个真实子级保持存活，直到断言其既不属于 `roots()`、又满足 `isOwnedBy()`。现有 Schedule 测试验证仅限根级的注册项不会出现在显式归属的子级中。
+托管子级测试验证中间创建者释放，以及子级或树根替换后的确切实例检查。SDK 审批测试验证直接创建者退出后的轮次内路由。Schedule 与用户问题测试拒绝委派 Session，历史普通 fork 则保持独立。
 
-Remote 事件测试会在转发作用域 waterfall 前拒绝缺失或不匹配的 Agent。tool-subagent 测试验证 direct setup 会在 Session 发布前完成安装；常驻 preset 测试验证逐 Session 的策略读取与继承。
+Remote 事件测试会在转发作用域 waterfall 前拒绝缺失或不匹配的 Agent。tool-subagent 测试验证 direct setup 会在 Agent 发布前完成安装；常驻 preset 测试验证逐 Session 的策略读取与继承。
 
 ## 考虑过的替代方案
 
 **保留 `Context.agent`。** 反向 accessor 会让注册所有权看起来等同于操作身份，还要求每个 Context 派生、适配器和测试替身保留一项与 Cordis 服务选择或 effect 清理无关的关联。
 
-**从调用方 Context 推断运行时归属。** 私有管理器 Context、Agent Context 和常驻 preset Context 都能调用同一个工厂。因此，Context 祖先关系无法说明由哪个存活 Agent 拥有结果；创建方必须把它已知的父级放进请求 options。
+**从调用方 Context 推断运行时归属。** 私有管理器 Context、Agent Context 和常驻 preset Context 都能调用同一个工厂。因此，Context 祖先关系无法说明由哪个存活 Agent 拥有结果；subagent Activation 保留准入时传入的确切树根。
 
 **分类 Agent 作用域键。** 不透明作用域键表达路由成员关系，而不是领域身份。分类该键会让 Agent 成为组合中心，也仍会把插件的 effect 所有者与策略所需的 Session 耦合起来。
 
 **使用发起 Agent 作为创建归属。** 发起方作用域记录异步执行的因果关系，而非生命周期归属。父级可能发起有意创建根级 Agent 的工作，而 setup 仍位于子级驱动边界之外。
 
-**使用持久化会话谱系。** `parentSession` 跨进程生命周期记录对话祖先关系。运行时归属控制存活根级和 teardown，因此把二者等同会阻止合法恢复的 fork 成为顶层 Agent。
+**使用持久化会话谱系。** `parentSession` 跨进程生命周期记录创建祖先关系。中间创建者可以离线，而后代仍由存活树根管理；持久 id 也无法区分替换后的 Agent 实例。历史普通 fork 可能保留父级元数据，但并不属于委派。
 
 ## 后果
 
 生命周期 options、事件、服务请求和传输请求会携带显式 Agent 身份，因此每项操作都会声明自身使用的身份，TypeScript 也会检查两侧。Context 可以继续复用于依赖访问与 effect 所有权，而不会成为另一种领域对象定位器。
 
-可续跑子级与一次性进程内子级使用同一种运行时父级关系。仅限根级的消费方会排除这些子级，父级 teardown 可以依据唯一的存活归属图推理，而持久化谱系仍可描述历史，不必承担进程内生命周期语义。
+可续跑子级拥有独立于创建者驻留状态的唯一运行时树根。subagent 管理器拥有整树 teardown 和本地成员关系；核心工厂与注册表仅保留实例创建、发布和释放。第三方调用方通过 subagent 服务创建托管子级，而非给任意工厂创建的 Agent 指定归属。

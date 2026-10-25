@@ -25,37 +25,33 @@ describe('default navigation entry customization', () => {
     try { await browser?.close() } finally { await scaffold?.close() }
   })
 
-  it('unpins a sidebar panel across reloads while its panel stays reachable from More', async () => {
+  it('keeps navigation outside More and offers only browsing and creation after reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'entry-customization'))
     const nav = page.getByRole('navigation', { name: 'Global panels' })
-    const plugins = nav.getByRole('button', { name: 'Plugins', exact: true })
     const tasks = nav.getByRole('button', { name: 'Automation tasks', exact: true })
     const more = nav.getByRole('button', { name: 'More', exact: true })
-    await plugins.waitFor()
     await tasks.waitFor()
-    await more.waitFor()
-    const menu = page.getByRole('menu')
-
-    await more.click()
-    expect(await menu.getByRole('menuitem', { name: 'Plugins', exact: true }).count()).toBe(0)
-    await menu.getByRole('menuitem', { name: 'Unpin from left sidebar: Automation tasks', exact: true }).click()
-    await tasks.waitFor({ state: 'detached' })
-    await menu.getByRole('menuitem', { name: 'Automation tasks', exact: true }).click()
+    await tasks.click()
     await page.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
-    // The selected panel keeps its row until another panel is selected.
-    await tasks.waitFor()
-    expect(await tasks.getAttribute('aria-current')).toBe('page')
-    await plugins.click()
-    await tasks.waitFor({ state: 'detached' })
-    expect(await plugins.getAttribute('aria-current')).toBe('page')
-
-    await page.reload({ waitUntil: 'load' })
-    await plugins.waitFor()
-    await more.waitFor()
-    expect(await tasks.count()).toBe(0)
-    await more.click()
-    await menu.getByRole('menuitem', { name: 'Pin to left sidebar: Automation tasks', exact: true }).click()
-    await tasks.waitFor()
+    for (const reload of [false, true]) {
+      if (reload) {
+        await page.reload({ waitUntil: 'load' })
+        await tasks.click()
+        await page.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
+      }
+      await tasks.waitFor()
+      await more.click()
+      const menu = page.getByRole('menu')
+      await menu.getByRole('menuitem', { name: 'Browse other plugins', exact: true }).waitFor()
+      expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['Browse other plugins', 'Create your plugin'])
+      expect(await menu.getByRole('separator').count()).toBe(0)
+      expect(await tasks.getAttribute('aria-current')).toBe('page')
+      await menu.getByRole('menuitem', { name: 'Browse other plugins', exact: true }).click()
+      await menu.waitFor({ state: 'detached' })
+      expect(await nav.getByRole('button', { name: 'Plugins', exact: true }).getAttribute('aria-current')).toBe('page')
+      await tasks.click()
+      await page.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
+    }
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

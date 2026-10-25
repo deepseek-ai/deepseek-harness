@@ -869,8 +869,7 @@ describe('subagent catalogs', () => {
     expect(remote.subagents.prompt.mock.calls.map(([request]) => request)).toEqual([
       {
         requestId: expect.any(String) as unknown as string,
-        parentSessionId: S1, childSessionId: S2,
-        mode: 'continuable',
+        childSessionId: S2,
         delivery: 'queue',
         content: [{ type: 'text', text: 'continue' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -1212,7 +1211,8 @@ describe('remaining branches', () => {
 
     expect(remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: S1, atSeq: 7, ...permission })
     expect(remote.session.follow).not.toHaveBeenCalled()
-    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, parentSessionId: S1 })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2 })
+    expect(manager.getListSnapshot().items[0]).not.toHaveProperty('parentSessionId')
   })
 
   it('reconciles a fork child published before workspace attachment fails', async ({ mock, remote }) => {
@@ -1224,13 +1224,12 @@ describe('remaining branches', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'session/workspace-attach-failed' } })
     expect(manager.getListSnapshot().items).toEqual([expect.objectContaining({
       sessionId: S2,
-      parentSessionId: S1,
       blank: true,
     })])
 
-    manager.handleSessionAdded(summary(S2, { blank: true, parentSessionId: S1 }))
+    manager.handleSessionAdded(summary(S2, { blank: true }))
     expect(manager.getListSnapshot().items[0]?.blank).toBe(true)
-    manager.handleSessionAdded(summary(S2, { blank: false, parentSessionId: S1 }))
+    manager.handleSessionAdded(summary(S2, { blank: false }))
     expect(manager.getListSnapshot().items[0]?.blank).toBe(false)
   })
 

@@ -8,6 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { CommandContribution, CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISession, SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import * as messageQuotes from '@deepseek-ai/dsh-message-quotes/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import {
   SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages,
@@ -22,6 +23,12 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createConversationStore } from '../src/client/stores.ts'
 import type { SessionInputShell } from '../src/client/input/facade.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'quote-probe': { kind: 'single'; scope: 'session' }
+  }
+}
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -38,7 +45,7 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
-async function bench() {
+async function bench(renderQuote = false) {
   const runtime = await SlotTestRuntime.create()
   const rootUpload = vi.fn(() => Promise.resolve({
     ok: true as const,
@@ -98,9 +105,15 @@ async function bench() {
   runtime.slots.installLocale(locale)
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
-  }, (_props: { renderSlot?: unknown }) => null)
+    'quote-probe': { kind: 'single', scope: 'session' },
+  }, ({ renderFactorySlot, SessionProvider }) => renderQuote ? (
+    <SessionProvider session={rootReference}>
+      {renderFactorySlot('conversation.user.text', { text: '> @literal /review', facts: {} })}
+    </SessionProvider>
+  ) : null)
 
   const feature = await runtime.mount({ inject: [...inject], apply })
+  if (renderQuote) await runtime.mount(messageQuotes)
   runtime.renderRoot()
   const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
     runtime.slots.entries(key)[0]!
@@ -145,6 +158,17 @@ async function bench() {
 }
 
 describe('Conversation inject API', () => {
+  it('renders literal quote text through the actual Factory and keyed node registration', async () => {
+    const b = await bench(true)
+    onTestFinished(() => b.runtime.dispose())
+    const errors = vi.fn()
+    const unsubscribe = b.slots.onEntryError(errors)
+    onTestFinished(unsubscribe)
+    await vi.waitFor(() => { expect(document.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review') })
+    expect(document.querySelector('[data-slot-error]')).toBeNull()
+    expect(errors).not.toHaveBeenCalled()
+  })
+
   it('owns the File action, reads its mounted composer availability, and unregisters on disposal', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())

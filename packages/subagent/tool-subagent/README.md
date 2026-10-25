@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to give an agent a named tool that delegates work to a configured backend. Every call starts a managed activation and returns its name; the runtime owns completion notices and cleanup. Local children support messages and restoration, while external backends execute one task and return their final answer through the completion notice. Supported backends can expose approved child LLM routes. Each instance can select a child preset and depth limit.
+Use this package to give an agent a named tool that delegates work to a configured backend. Every call starts a managed activation and returns a child Session id; the runtime owns completion notices and cleanup. Local children support messages and restoration, while external backends execute one task and return their final answer through the completion notice. Supported backends can expose approved child LLM routes. Each instance can select a child preset and depth limit.
 
 ## Table of Contents
 
@@ -29,12 +29,15 @@ The optional `cwd` argument selects the child's initial working directory. Relat
 
 Mount one instance per delegation target, each with a distinct `toolName`. The tool exists exactly while its provider does, so sibling load order and provider reloads never strand it.
 
+The tool requires [subagent-names](../subagent-names/README.md). The optional `name` argument chooses a unique sibling name; omission selects the first unused `agent-N`. The result contains the child Session id and a full path such as `lead/reviewer`. Cordis removes the tool when the naming service unloads and restores it when the service returns.
+
 ### Minimal configuration
 
-Load the subagent service, an in-process or remote backend, and this tool; then name the provider. This composition exposes a `subagent` tool that delegates to the `spawn` backend:
+Load the subagent service, the naming plugin, an in-process or remote backend, and this tool; then name the provider. This composition exposes a `subagent` tool that delegates to the `spawn` backend:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent'
+- name: '@deepseek-ai/dsh-subagent-names'
 - name: '@deepseek-ai/dsh-subagent-spawn-in-process'
 - name: '@deepseek-ai/dsh-tool-subagent'
   config:
@@ -57,9 +60,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Managed delegation
 
-Every call accepts an optional sibling-unique `name` and returns `started subagent <full-path>` after the runtime accepts the child. It does not wait for the result. Names follow the [subagent naming rules](../subagent/README.md#local-and-external-children). The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
+Every successful call returns `started subagent <id>` and a second line, `name: <path>`. It does not wait for the child's result. The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
 
-For every backend, the runtime automatically delivers the completion notice and any final answer if the calling Agent is still online when the child finishes. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
+For every backend, the runtime automatically delivers the completion notice if the calling Agent is still online when the child finishes. The notice includes the final answer unless the child sent that Agent a message just before finishing. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
 
 `maxDepth` caps recursion (`0` forbids delegation); omission reads the current Host `subagent.maxDepth` setting, initially `1`, at each delegation. A numeric depth requires a provider with the `depthLimit` capability; `'provider-managed'` leaves the budget to an out-of-process provider. The tool stays visible at the cap; each attempted start checks the calling agent's current depth and rejects with an errored result.
 
@@ -94,11 +97,11 @@ One instance is one provider plus one tool name. The plugin registers its defini
 
 ### Activation ownership
 
-The tool calls `ctx.subagents.startActivation()` with parent delivery selected. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result; failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
+The tool calls `ctx.subagents.startActivation()` with parent delivery. It reserves the requested name before startup, binds the returned child id afterward, and releases the reservation when the call settles. A failed binding reports the already-started child id without stopping its work; callers must check that child before retrying. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. Failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
 
 ### Result acknowledgement
 
-The canonical tool result is `{ kind: 'activation', name }`. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
+The result is `{ kind: 'activation', subagentId, name }`. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
 
 ### Context-sensitive wording
 
@@ -167,12 +170,12 @@ The schema is prefix-stable across adapter registration and catalog changes. Eac
 
 #### What the model sees
 
-Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run. Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
+Visible delegation tools share one guidance paragraph, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Ending the turn works because a settled child notifies its parent and a notice that reaches an idle parent starts one independent model request; hosts that keep children progressing alternate `agent.whenIdle()` and `waitForChildren(agent)` ([`dsh-subagent`](../subagent/README.md), [`session.ts`](../../acp/acp/src/session.ts)). Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible, the text is:
 
 ##### Tool-guidance section
 
 ```markdown
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.
 ```
 
 #### Token effect
@@ -207,7 +210,7 @@ Depth changes do not alter the system prompt or tool schemas. Updated runtime co
 
 #### What the model sees
 
-The call retains the task description and prompt. Success returns `started subagent <full-path>`; startup rejection returns an error. Child execution details are delivered separately from this acknowledgement.
+The call retains the task description and prompt. Success returns `started subagent <id>` and a `name: <path>` line; startup rejection returns an error. Child execution details are delivered separately from this acknowledgement.
 
 #### Token effect
 
@@ -221,7 +224,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Answer delivery follows the managed delegation rules above. The returned full child path identifies subsequent control operations; only backends with continuation support accept follow-up messages.
+Answer delivery follows the managed delegation rules above. The returned child address identifies subsequent control and catalog operations; only backends with continuation support accept follow-up messages.
 
 #### Token effect
 

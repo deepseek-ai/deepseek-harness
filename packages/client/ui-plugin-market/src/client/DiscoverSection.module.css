@@ -112,8 +112,10 @@
   border-radius: var(--dsw-radius-xl);
 }
 
-.card:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .card:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .icon {
@@ -250,8 +252,10 @@
   cursor: pointer;
 }
 
-.crumb:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .crumb:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .crumb:focus-visible {
@@ -439,6 +443,8 @@
   text-decoration: none;
 }
 
-.link:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline;
+  }
 }

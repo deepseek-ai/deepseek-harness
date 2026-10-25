@@ -73,6 +73,7 @@ export type {
   TypertResourceReader,
   TypertResourceReaders,
   TypertResourceRegistry,
+  TypertResourceResolveInput,
   TypertLocalRegistry,
   TypertLookup,
   TypertLookupDefinition,
@@ -157,11 +158,14 @@ export interface RemoteScopeOptions<WireArgs extends readonly unknown[] = never>
    * throw, an empty list, or an identity other than a non-empty string
    * refuses the call. For a kind without a reader, the Gateway reads the
    * identity of a scoped Context whose Host adapter declares that `resource`
-   * and of lookup parameters declaring it, else the field registered in
-   * `typert.resources`: a top-level argument or, failing that, the first
-   * object argument. A call that carries no identity touches `global`. The
-   * readers and these defaults together must name every resource the method
-   * accesses: access control never checks a resource they omit.
+   * and of lookup parameters declaring it, else the registered default of
+   * `typert.resources`: a `resolve` function receiving the validated named
+   * wire values and their ordered parameters, or a `field` naming a top-level
+   * argument or, failing that, a field of the first object argument. A
+   * throwing resolver, an array result, or a field holding an array refuses
+   * the call. A call that carries no identity touches `global`. The readers
+   * and these defaults together must name every resource the method accesses:
+   * access control never checks a resource they omit.
    */
   readonly resources?: TypertResourceReaders<WireArgs>
 }

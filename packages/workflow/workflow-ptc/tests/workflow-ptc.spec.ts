@@ -97,7 +97,7 @@ class StubProvider implements SubagentProvider {
     }
     if (request.signal.aborted) throw new Error('child start aborted before publication')
     return {
-      id: SessionId(`${this.name}-child-${index}`),
+      id: SessionId(`stub-child-${index}`),
       result: terminal.promise,
       dispose: () => {
         controlled.disposeCalls += 1
@@ -514,7 +514,6 @@ describe('dsh-workflow-ptc', { timeout: 120_000 }, () => {
       } as unknown as SubagentResult
       const start = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
         childId: SessionId('raw-invalid-child'),
-        name: 'workflow-child',
         result: Promise.resolve(invalid),
         dispose: () => Promise.resolve(),
       })

@@ -156,12 +156,21 @@ class HarnessClient:
         model: str,
         reasoning_effort: str | None = None,
         max_tokens: int | None = None,
+        approval_requests: bool = False,
     ) -> InitializeResponse:
+        """Initialize the runtime; approval_requests enables approval/request reception.
+
+        When enabled, drain next_request() concurrently with blocking waits and
+        return one-operation decisions through respond(). Omission preserves the
+        runtime's composed approval answerers.
+        """
         payload: JsonObject = {
             "cwd": str(Path(cwd).resolve()),
             "provider": provider,
             "model": model,
         }
+        if approval_requests:
+            payload["approvalRequests"] = True
         if reasoning_effort is not None:
             payload["reasoningEffort"] = reasoning_effort
         if max_tokens is not None:

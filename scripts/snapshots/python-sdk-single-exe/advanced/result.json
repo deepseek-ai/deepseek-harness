@@ -98,7 +98,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Serial agent creation completed."
+            "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
           }
         ],
         "source": {
@@ -763,7 +763,7 @@
               "type": "tool-call",
               "id": "advanced-direct-child",
               "name": "subagent",
-              "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+              "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
             }
           ],
           "source": {
@@ -818,7 +818,7 @@
             "dt": [],
             "id": "advanced-direct-child",
             "args": [
-              "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+              "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
             ]
           },
           {
@@ -831,7 +831,7 @@
                 "type": "tool-call",
                 "id": "advanced-direct-child",
                 "name": "subagent",
-                "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
               }
             }
           },
@@ -882,7 +882,7 @@
         "step": 3,
         "callId": "advanced-direct-child",
         "name": "subagent",
-        "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+        "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
       }
     },
     {
@@ -894,13 +894,22 @@
         "childId": "{{child-1}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "Check direct child",
-        "name": "direct-child"
+        "label": "Check direct child"
+      }
+    },
+    {
+      "type": "subagent-name/bound",
+      "seq": 38,
+      "time": 0,
+      "data": {
+        "version": 1,
+        "childId": "{{child-1}}",
+        "name": "lead/agent-1"
       }
     },
     {
       "type": "tool/result",
-      "seq": 38,
+      "seq": 39,
       "time": 0,
       "data": {
         "turn": 1,
@@ -915,7 +924,7 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent lead/direct-child"
+              "text": "started subagent {{child-1}}\nname: lead/agent-1"
             }
           ],
           "isError": false,
@@ -929,7 +938,7 @@
     },
     {
       "type": "step/end",
-      "seq": 39,
+      "seq": 40,
       "time": 0,
       "data": {
         "turn": 1,
@@ -938,7 +947,7 @@
     },
     {
       "type": "step/start",
-      "seq": 40,
+      "seq": 41,
       "time": 0,
       "data": {
         "turn": 1,
@@ -947,17 +956,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 41,
+      "seq": 42,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 40
+        "throughSeq": 41
       }
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 42,
+      "seq": 43,
       "time": 0,
       "data": {
         "target": "next-step",
@@ -967,7 +976,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
+                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -981,7 +990,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
+              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -992,7 +1001,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 43,
+      "seq": 44,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1116,7 +1125,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 44,
+      "seq": 45,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1128,7 +1137,7 @@
     },
     {
       "type": "tool-workflow/run-start",
-      "seq": 45,
+      "seq": 46,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1137,20 +1146,19 @@
     },
     {
       "type": "subagent/catalog",
-      "seq": 46,
+      "seq": 47,
       "time": 0,
       "data": {
         "version": 0,
         "childId": "{{child-2}}",
         "childCreatedAt": 0,
         "mode": "continuable",
-        "label": "advanced-exe-snapshot child 1",
-        "name": "agent-1"
+        "label": "advanced-exe-snapshot child 1"
       }
     },
     {
       "type": "tool-workflow/agent-start",
-      "seq": 47,
+      "seq": 48,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1162,7 +1170,7 @@
     },
     {
       "type": "tool-workflow/agent-end",
-      "seq": 48,
+      "seq": 49,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1172,7 +1180,7 @@
     },
     {
       "type": "tool-workflow/run-end",
-      "seq": 49,
+      "seq": 50,
       "time": 0,
       "data": {
         "runId": "{{workflow-run}}",
@@ -1181,7 +1189,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 50,
+      "seq": 51,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1204,13 +1212,13 @@
         }
       },
       "sourceEventSeqs": [
-        44
+        45
       ],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 51,
+      "seq": 52,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1219,7 +1227,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 52,
+      "seq": 53,
       "time": 0,
       "data": {
         "target": "next-step",
@@ -1230,7 +1238,7 @@
     },
     {
       "type": "step/start",
-      "seq": 53,
+      "seq": 54,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1239,13 +1247,13 @@
     },
     {
       "type": "user/message",
-      "seq": 54,
+      "seq": 55,
       "time": 0,
       "data": {
         "content": [
           {
             "type": "text",
-            "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
+            "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
           },
           {
             "type": "text",
@@ -1259,7 +1267,7 @@
         "source": {
           "kind": "subagent-settled",
           "form": "notice",
-          "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
+          "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -1269,17 +1277,17 @@
     },
     {
       "type": "session-log-deepseek/delivery-accepted",
-      "seq": 55,
+      "seq": 56,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
         "sessionFormatVersion": 4,
-        "throughSeq": 54
+        "throughSeq": 55
       }
     },
     {
       "type": "assistant/message",
-      "seq": 56,
+      "seq": 57,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1387,7 +1395,7 @@
     },
     {
       "type": "step/end",
-      "seq": 57,
+      "seq": 58,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1396,7 +1404,7 @@
     },
     {
       "type": "command/run",
-      "seq": 58,
+      "seq": 59,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1408,7 +1416,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 59,
+      "seq": 60,
       "time": 0,
       "data": {
         "text": "The session needs a clearer explanation."
@@ -1416,7 +1424,7 @@
     },
     {
       "type": "command/done",
-      "seq": 60,
+      "seq": 61,
       "time": 0,
       "data": {
         "commandId": "{{command:1}}",
@@ -1426,7 +1434,7 @@
     },
     {
       "type": "feedback/record",
-      "seq": 61,
+      "seq": 62,
       "time": 0,
       "data": {
         "category": "other"
@@ -1434,7 +1442,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 62,
+      "seq": 63,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1451,7 +1459,7 @@
     },
     {
       "type": "feedback/message-put",
-      "seq": 63,
+      "seq": 64,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1467,7 +1475,7 @@
     },
     {
       "type": "feedback/message-delete",
-      "seq": 64,
+      "seq": 65,
       "time": 0,
       "data": {
         "sessionId": "{{parent}}",
@@ -1476,7 +1484,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 65,
+      "seq": 66,
       "time": 0,
       "data": {
         "turn": 1,
@@ -1630,7 +1638,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed."
+                "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
               }
             ],
             "source": {
@@ -2445,7 +2453,7 @@
                   "type": "tool-call",
                   "id": "advanced-direct-child",
                   "name": "subagent",
-                  "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                  "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                 }
               ],
               "source": {
@@ -2500,7 +2508,7 @@
                 "dt": [],
                 "id": "advanced-direct-child",
                 "args": [
-                  "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                  "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                 ]
               },
               {
@@ -2513,7 +2521,7 @@
                     "type": "tool-call",
                     "id": "advanced-direct-child",
                     "name": "subagent",
-                    "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+                    "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
                   }
                 }
               },
@@ -2570,7 +2578,7 @@
             "step": 3,
             "callId": "advanced-direct-child",
             "name": "subagent",
-            "arguments": "{\"name\": \"direct-child\", \"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
+            "arguments": "{\"description\": \"Check direct child\", \"prompt\": \"Reply with exactly DIRECT_CHILD_OK and nothing else.\"}"
           }
         }
       }
@@ -2580,6 +2588,70 @@
       "payload": {
         "parentSessionId": "{{parent}}",
         "childSessionId": "{{child-1}}"
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "Check direct child",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
       }
     },
     {
@@ -2629,6 +2701,10 @@
                   {
                     "type": "text",
                     "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+                  },
+                  {
+                    "type": "text",
+                    "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
                 "source": {
@@ -2710,8 +2786,23 @@
             "childId": "{{child-1}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "Check direct child",
-            "name": "direct-child"
+            "label": "Check direct child"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "subagent-name/bound",
+          "seq": 38,
+          "time": 0,
+          "data": {
+            "version": 1,
+            "childId": "{{child-1}}",
+            "name": "lead/agent-1"
           }
         }
       }
@@ -2722,7 +2813,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 38,
+          "seq": 39,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2737,7 +2828,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent lead/direct-child"
+                  "text": "started subagent {{child-1}}\nname: lead/agent-1"
                 }
               ],
               "isError": false,
@@ -2757,7 +2848,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 39,
+          "seq": 40,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2772,7 +2863,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 40,
+          "seq": 41,
           "time": 0,
           "data": {
             "turn": 1,
@@ -2787,12 +2878,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 41,
+          "seq": 42,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 40
+            "throughSeq": 41
           }
         }
       }
@@ -2879,6 +2970,10 @@
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
+              },
+              {
+                "type": "text",
+                "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
               }
             ],
             "source": {
@@ -3186,7 +3281,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 42,
+          "seq": 43,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3196,7 +3291,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
+                    "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
                   },
                   {
                     "type": "text",
@@ -3210,7 +3305,7 @@
                 "source": {
                   "kind": "subagent-settled",
                   "form": "notice",
-                  "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
+                  "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -3244,7 +3339,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 43,
+          "seq": 44,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3374,7 +3469,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/call",
-          "seq": 44,
+          "seq": 45,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3392,7 +3487,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-start",
-          "seq": 45,
+          "seq": 46,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3406,6 +3501,70 @@
       "payload": {
         "parentSessionId": "{{parent}}",
         "childSessionId": "{{child-2}}"
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "advanced-exe-snapshot child 1",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
       }
     },
     {
@@ -3529,15 +3688,14 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 46,
+          "seq": 47,
           "time": 0,
           "data": {
             "version": 0,
             "childId": "{{child-2}}",
             "childCreatedAt": 0,
             "mode": "continuable",
-            "label": "advanced-exe-snapshot child 1",
-            "name": "agent-1"
+            "label": "advanced-exe-snapshot child 1"
           }
         }
       }
@@ -3548,7 +3706,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-start",
-          "seq": 47,
+          "seq": 48,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3966,7 +4124,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/agent-end",
-          "seq": 48,
+          "seq": 49,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3982,7 +4140,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool-workflow/run-end",
-          "seq": 49,
+          "seq": 50,
           "time": 0,
           "data": {
             "runId": "{{workflow-run}}",
@@ -3997,7 +4155,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "tool/result",
-          "seq": 50,
+          "seq": 51,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4020,7 +4178,7 @@
             }
           },
           "sourceEventSeqs": [
-            44
+            45
           ],
           "surfaceOp": "append"
         }
@@ -4032,7 +4190,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 51,
+          "seq": 52,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4047,7 +4205,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 52,
+          "seq": 53,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -4064,7 +4222,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/start",
-          "seq": 53,
+          "seq": 54,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4079,13 +4237,13 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "user/message",
-          "seq": 54,
+          "seq": 55,
           "time": 0,
           "data": {
             "content": [
               {
                 "type": "text",
-                "text": "Background subagent lead/direct-child finished and will do no further work unless you send it more."
+                "text": "Background subagent {{child-1}} finished and will do no further work unless you send it more."
               },
               {
                 "type": "text",
@@ -4099,7 +4257,7 @@
             "source": {
               "kind": "subagent-settled",
               "form": "notice",
-              "summary": "Background subagent lead/direct-child finished and will do no further work unless you send it more.",
+              "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -4115,12 +4273,12 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 55,
+          "seq": 56,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 54
+            "throughSeq": 55
           }
         }
       }
@@ -4131,7 +4289,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "assistant/message",
-          "seq": 56,
+          "seq": 57,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4245,7 +4403,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "step/end",
-          "seq": 57,
+          "seq": 58,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4260,7 +4418,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/run",
-          "seq": 58,
+          "seq": 59,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4278,7 +4436,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 59,
+          "seq": 60,
           "time": 0,
           "data": {
             "text": "The session needs a clearer explanation."
@@ -4292,7 +4450,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "command/done",
-          "seq": 60,
+          "seq": 61,
           "time": 0,
           "data": {
             "commandId": "{{command:1}}",
@@ -4308,7 +4466,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/record",
-          "seq": 61,
+          "seq": 62,
           "time": 0,
           "data": {
             "category": "other"
@@ -4322,7 +4480,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 62,
+          "seq": 63,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4345,7 +4503,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-put",
-          "seq": 63,
+          "seq": 64,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4367,7 +4525,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "feedback/message-delete",
-          "seq": 64,
+          "seq": 65,
           "time": 0,
           "data": {
             "sessionId": "{{parent}}",
@@ -4382,7 +4540,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "turn/end",
-          "seq": 65,
+          "seq": 66,
           "time": 0,
           "data": {
             "turn": 1,

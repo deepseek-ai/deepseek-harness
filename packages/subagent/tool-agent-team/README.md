@@ -27,7 +27,7 @@ This package lets every agent in a subagent tree create, claim, and complete sha
 
 Team tools and guidance are installed only while the root Session enables Team mode. Mode changes update all resident descendants; ordinary subagent controls remain available.
 
-Mount this package with `@deepseek-ai/dsh-agent-team` when models need the shared board. The root and descendants receive identical task schemas and task policy.
+Mount this package with `@deepseek-ai/dsh-agent-team` and `@deepseek-ai/dsh-subagent-names` when models need the shared board. The root and descendants receive identical task schemas and task policy.
 
 ### When to choose it
 
@@ -35,16 +35,17 @@ Choose it whenever the Team domain is mounted and models should use the board; w
 
 ### Smallest working example
 
-The plugin takes no configuration; mount it beside the Team domain as in the [agent-team setup](../agent-team/README.md#smallest-working-setup):
+The plugin takes no configuration. With the [Team domain](../agent-team/README.md#smallest-working-setup) and shared subagent services available, mount the naming service once alongside the tools:
 
 ```yaml
+- name: '@deepseek-ai/dsh-subagent-names'
 - id: tool-agent-team
   name: '@deepseek-ai/dsh-tool-agent-team'
 ```
 
 A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-agent-team) records the empty configuration.
 
-Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned full path addresses it.
+Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned name or Session id addresses it.
 
 ### What the model can do
 
@@ -54,11 +55,11 @@ The task tools complement the ordinary subagent controls:
 - **Wait for inbox input** — `wait_agent` belongs to `@deepseek-ai/dsh-tool-subagent-control` and remains available without this package.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerName` results use full agent paths. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
+Task owners use bound names or Session ids in `owner` arguments and `ownerName` results. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
 ### What success and failure look like
 
-Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. Updates resolve result-owner names before mutation; a name lookup failure leaves the task unchanged, and a committed result needs no further name lookup.
+Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. Updates resolve input names and capture result-owner names before mutation. An unbound owner displays its original Session id; display names require no Session query or child catalog traversal. Name resolution grants no authority: the Team service still checks every reassignment target.
 
 -----
 
@@ -79,7 +80,7 @@ The adapter is built on four commitments:
 - **Declared results, compact JSON.** Every tool declares its complete result schema and renders that value as compact JSON, so the compiler checks `execute` against what the model is promised and no result spends tokens on indentation.
 - **The domain owns authority.** Tools delegate to `ctx.agentTeams`, which enforces Lead authority and revision checks; the adapter adds no weaker path.
 
-Task listing applies status, readiness, and unowned filters before resolving names. Without an exact owner-name filter, only the requested page needs name resolution; an exact owner-name filter resolves the remaining candidates before pagination.
+The adapter reads the root Session’s name-to-id mapping synchronously through `ctx.subagentNames`; `ctx.agentTeams` retains Session ids for task ownership and authority. Task listing applies status, readiness, and unowned filters before resolving names. Without an exact owner-name filter, only the requested page needs name resolution; an exact owner-name filter resolves the remaining candidates before pagination.
 
 The [subagent teammates Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.md) owns the model-facing and scoping decisions.
 
@@ -91,11 +92,11 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Identity comes from `ctx.subagents.rootOf(agent)`, without a separate membership service. Communication and waiting belong to [subagent controls](../tool-subagent-control/README.md); the subagent runtime delivers final results.
+One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
-Installation covers current live Agents and subscribes to `agent/created`. Agent disposal and plugin HMR unwind registrations in reverse order; a failed install cannot leave a partial scope.
+Installation covers current live Agents and subscribes to `agent/created`, `subagent/start`, and `team/mode-changed`. Subagent startup installs tools after its activation establishes tree membership and before its first model request. Agent disposal and plugin HMR unwind registrations in reverse order; a failed install cannot leave a partial scope.
 
 </details>
 
@@ -107,6 +108,7 @@ Installation covers current live Agents and subscribes to `agent/created`. Agent
 Read these pages when the package-level contract is not enough. They move from the domain service to the exact schemas and the decisions behind the design.
 
 - [agent-team package](../agent-team/README.md) — the `ctx.agentTeams` domain service behind these tools.
+- [Subagent names](../subagent-names/README.md) — name allocation and full-path lookup.
 - [Agent Teams subsystem](../../../docs/subsystems/agent-team.md) — durable Team types and service API.
 - [Subagent control tools](../tool-subagent-control/README.md) — messaging, listing, interruption, and inbox waiting.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-agent-team) — every tool schema the model receives.
@@ -126,7 +128,7 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -145,7 +147,7 @@ The text is identical for the Lead and every descendant and does not change whil
 
 #### What the model sees
 
-Required `team:identity` context uses the following text, replacing `<name>` with the JSON-encoded full path derived from the subagent tree. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
+Required `team:identity` context uses the following text for the root and its teammates. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
 
 ##### Root identity
 
@@ -158,7 +160,7 @@ To message another teammate, use send_message({ name: "<full agent path>", messa
 ##### Teammate identity
 
 ```markdown
-Your name is <name>. You are a teammate in the Team led by "lead".
+You are a teammate in the Team led by "lead".
 To message your Team Lead, use send_message({ name: "lead", message: "..." }).
 Use list_agents({}) to find your teammates and their full names.
 To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).

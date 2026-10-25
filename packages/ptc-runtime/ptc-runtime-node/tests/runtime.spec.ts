@@ -103,6 +103,15 @@ describe('Node program process', () => {
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
+  it('returns cleanly while an unawaited binding call is still running', async () => {
+    const { run } = await setup()
+    const release = Promise.withResolvers<null>()
+    onTestFinished(() => { release.resolve(null) })
+    const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
+    expect(result).toMatchObject({ logs: [], value: 1 })
+    expect(result.error).toBeUndefined()
+  })
+
   it('retains raw native stdout and stderr separately from control frames', async () => {
     const { run } = await setup()
     const result = await run({ program: 'const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); return 42;', bindings: [] })
@@ -235,10 +244,10 @@ describe('Node program process', () => {
   })
 
   it.each([
-    'const fs = await import("node:fs"); const b=Buffer.alloc(4); b.writeUInt32BE(4294967295); fs.writeSync(7,b); await new Promise(()=>{});',
-    'const fs = await import("node:fs"); const body=Buffer.from(JSON.stringify({type:"call",id:1,global:"tools",name:"undeclared",args:[]})); const h=Buffer.alloc(4); h.writeUInt32BE(body.length); fs.writeSync(7,Buffer.concat([h,body])); await new Promise(()=>{});',
+    'const fs = await import("node:fs"); fs.writeSync(7,"x".repeat(2048)); await new Promise(()=>{});',
+    'const fs = await import("node:fs"); fs.writeSync(7,JSON.stringify({t:"q",i:"forged",m:"invoke",a:[1,"tools","undeclared",[]]})+"\\n"); await new Promise(()=>{});',
   ])('refuses hostile program control traffic', async (program) => {
-    const { run } = await setup()
+    const { run } = await setup({ maxMessageBytes: 1024 })
     expect((await run({ program, bindings: [] })).error?.kind).toBe('protocol')
   })
 

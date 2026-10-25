@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-agent-tool-presentation",
-  "description": "Agent-plane presentation selector: composes one agent's tools as PTC mode or native tool calls",
-  "version": "0.2.1-rc.2",
+  "description": "Deprecated tool presentation selector; use dsh-tool-executor-native or dsh-tool-executor-ptc directly",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -29,6 +29,8 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~"
   },
   "peerDependencies": {

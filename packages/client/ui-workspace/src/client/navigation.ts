@@ -1,6 +1,7 @@
 /** Workspace archive and directory UI capability. */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
+import type { AccessEffect, RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   ISessions,
@@ -70,9 +71,10 @@ export interface UiWorkspace {
     options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
   ): Promise<SessionId>
   /**
-   * Resolve the Session for a new conversation in a Workspace: navigation names the first
-   * reusable blank member, skipping blanks that list a preset other than a requested one, and
-   * the Host reuses it under the requested preset or its default, or creates another Session.
+   * Resolve the Session for a new conversation in a Workspace: navigation names the first reusable
+   * blank member — listed in the Workspace, not archived, and listing no preset or the requested one —
+   * and the Host reuses it under the requested preset or its default, creating another Session when it
+   * reuses none. Concurrent calls for the same Workspace and preset share one attempt.
    * @param workspaceId - target Workspace.
    * @param options - choices for the created or reused Session.
    * @returns a Session already addressable through the Session Controller.
@@ -130,6 +132,17 @@ export interface UiWorkspace {
    * @returns created absolute path.
    */
   createDirectory(path: string, name: string): Promise<string>
+  /**
+   * Keep `callback`'s effects installed while the current Peer may call
+   * `action` on one Workspace resource, with the semantics of
+   * `ctx.remoteAccess.whenAccess`: `useWorkspaceAccess` answers the same
+   * question during render.
+   * @param workspaceId - the Workspace resource the guarded effects depend on.
+   * @param action - endpoint action the guarded effects depend on.
+   * @param callback - creates one disposer or an iterable of disposers.
+   * @returns idempotent disposer owned by the caller's Cordis fiber.
+   */
+  whenAccess(workspaceId: WorkspaceId, action: RemoteEndpoint, callback: () => AccessEffect): () => void
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -161,6 +174,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     {}, { persist: { name: 'dsh.sessions.current' } },
   )
   private mainReference: SessionReference | undefined
+  private restorationNavigation: AbortSignal | undefined
 
   /**
    * @param ctx - Client root Context.
@@ -406,12 +420,20 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     return result.value
   }
 
+  whenAccess(workspaceId: WorkspaceId, action: RemoteEndpoint, callback: () => AccessEffect): () => void {
+    // `ctx.get` traces the service to the caller's Context, which then owns the controller.
+    const access = this.ctx.get('remoteAccess')
+    /* v8 ignore next -- this plugin injects remoteAccess, so the service is active while uiWorkspace is reachable. */
+    if (access === undefined) throw new Error('ui-workspace: whenAccess requires the remoteAccess service')
+    return access.whenResourceAccess('workspace', workspaceId, action, callback)
+  }
+
   private watchNavigation(): () => void {
     let initial: 'waiting' | 'connecting' | 'done' = 'waiting'
     const reconcile = (): void => {
       if (this.lifetime.signal.aborted) return
       if (this.clearArchivedCurrent()) return
-      if (initial !== 'waiting') return
+      if (initial !== 'waiting' || this.restorationNavigation?.aborted === true) return
       const workspace = this.workspaces.list.getSnapshot()
       const sessions = this.sessions.list.getSnapshot()
       if (workspace.phase !== 'ready' || sessions.phase !== 'ready') return
@@ -454,6 +476,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
       return
     }
     const navigation = AbortSignal.any([this.ctx.layout.beginNavigation(), this.lifetime.signal])
+    this.restorationNavigation = navigation
     let sessionId: SessionId | undefined
     if (summary !== undefined && workspace !== undefined && summary.cwd === workspace.path
       && !workspaces.archivedSessionIds.includes(summary.id)) {

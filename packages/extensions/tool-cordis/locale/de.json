@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin API-Abfragetool",
+    "description": "Lassen Sie AI den Server und den Browser nach verfügbaren API abfragen, bevor Sie das Plug-in entwickeln."
+  }
+}

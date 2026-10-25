@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-ralph-bundle",
   "description": "Run explicitly requested repeated work with fresh agents.",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"
@@ -35,7 +35,8 @@
   "license": "MIT",
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": false
     }
   },
   "dependencies": {

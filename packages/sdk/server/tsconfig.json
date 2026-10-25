@@ -43,6 +43,9 @@
     },
     {
       "path": "../../interaction/user-questions"
+    },
+    {
+      "path": "../../interaction/user-approval"
     }
   ]
 }

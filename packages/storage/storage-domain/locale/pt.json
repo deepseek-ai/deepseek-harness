@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Armazenamento de dados estruturados",
+    "description": "Salve dados de valor-chave por soma de verificação da estrutura de dados e notifique outros plug-ins sobre alterações."
+  }
+}

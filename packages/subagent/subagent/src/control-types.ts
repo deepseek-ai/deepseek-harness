@@ -9,6 +9,7 @@ import type { PromptContentPart } from '@deepseek-ai/dsh-attachment/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { KnownSubagentCatalogFields } from './projection-types.ts'
 // Type-only: the Workspace registry's archive-admission family map this runtime merges `subagent` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
 
@@ -31,35 +32,14 @@ export type SubagentCatalogRow =
      * does not encode a durable outcome or guarantee continuation delivery.
      */
     readonly activity: 'running' | 'inactive'
-  } & (
-    | {
-      /** A terminal one-shot child. */
-      readonly mode: 'one-shot'
-      /** Optional durable creation label from the parent catalog. */
-      readonly label?: string
-    }
-    | {
-      /** An external execution without a local child Session. */
-      readonly mode: 'external'
-      /** Optional durable creation label from the parent catalog. */
-      readonly label?: string
-    }
-    | {
-      /** A resumable conversation. */
-      readonly mode: 'continuable'
-      /** Durable creation label from the parent catalog. */
-      readonly label: string
-    }
-  )
+  }
+  & KnownSubagentCatalogFields
 
 /**
  * One recursive catalog row. Traversal may also return diagnostics for
  * unknown catalog modes or unreadable child catalogs.
  */
-export type SubagentListEntry = {
-  /** Immutable name from the parent catalog; absent for older children. */
-  readonly name?: string
-} & (
+export type SubagentListEntry =
   | SubagentCatalogRow & {
     readonly kind: 'child'
     /** Whether the child catalog contains a direct child. */
@@ -77,7 +57,6 @@ export type SubagentListEntry = {
      */
     readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
   }
-)
 
 /** Durable parent/child browsing address; unknown mode is resolved when child history is read. */
 export type SubagentAddress =
@@ -91,19 +70,16 @@ export type SubagentAddress =
     | { readonly mode: 'unknown' }
   )
 
-/** One Agent inbox destination, as the prompt request selects it. */
-export type SubagentDelivery = SubagentPromptRequest['delivery']
+/** One Agent inbox destination for a continuation message. */
+export type SubagentDelivery = 'queue' | 'steer'
 
-/** One human message addressed to a continuable direct child. */
+/** One human message addressed to a continuable subagent. */
 export interface SubagentPromptRequest {
   /** Identity persisted on the accepted message, minted before the call. */
   readonly requestId: SubagentPromptRequestId
-  readonly parentSessionId: SessionId
   readonly childSessionId: SessionId
-  /** Required discriminator retained from the browser control address. */
-  readonly mode: 'continuable'
   /** Whether this message queues a later turn or targets the nearest step. */
-  readonly delivery: 'queue' | 'steer'
+  readonly delivery: SubagentDelivery
   /**
    * Browser prompt parts delivered as the child's user message. The Host
    * admits and persists image parts before delivery, so the wire never
@@ -141,7 +117,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'subagent/invalid-time-zone': { readonly value: string }
     /** The addressed child cannot take a continuation. */
     'subagent/not-resumable': { readonly childSessionId: SessionId }
-    /** The claimed parent does not own the addressed child. */
+    /** The supplied address or live subagent-tree identity could not be verified. */
     'subagent/unauthorized': { readonly childSessionId: SessionId }
     /** Image admission or model image-capability refusal. */
     'subagent/attachment-invalid': { readonly reason: string }

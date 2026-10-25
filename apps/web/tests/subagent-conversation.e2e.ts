@@ -20,7 +20,7 @@ import {
   launchWebScaffold, readPersistedEvents, realizeSeedFixture, seedSession, selectedSessionFixture, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const AVAILABLE_CHILD_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/ui.expected.md', import.meta.url))
@@ -109,9 +109,11 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
   let liveReferenceOptions: string[]
   let tripwire: ReturnType<typeof watchConsole>
   const apiCalls: string[] = []
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
     if (MODE === 'record') throw new Error('subagent conversation is a keyless assembled snapshot')
+    hostClock = pinHostClock()
     const selectedBaseFixture = await selectedSessionFixture(BASE_FIXTURE)
     const baseFixture = prepareSessionSnapshotFixtureForComparison(
       await readFile(selectedBaseFixture, 'utf8'),
@@ -128,6 +130,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     browser = await chromium.launch()
     await mkdir(fileURLToPath(new URL('../../../.artifacts/screenshots/non-migrating-session-reads', import.meta.url)), { recursive: true })
     page = await newEnglishPage(browser)
+    await pinBrowserClock(page)
     page.on('request', (request) => {
       const path = new URL(request.url()).pathname
       if (path.startsWith('/api/')) apiCalls.push(path)
@@ -137,7 +140,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
 
-    const parent = scaffold.ctx.agents.roots()[0]
+    const parent = scaffold.ctx.agents.list().filter(agent => agent.session.header.origin !== 'subagent')[0]
     if (parent === undefined) throw new Error('fresh workspace did not publish its parent Agent')
     parentId = parent.id
     const parentSettled = scaffold.whenTurnSettled()
@@ -146,16 +149,15 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await parentInput.press('Enter')
     expect(await parentSettled).toBe(parent.id)
 
-    const started = await scaffold.ctx.subagents.startActivation({ name: 'researcher',
+    const started = await scaffold.ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: LABEL,
       signal: new AbortController().signal,
-      request: {
-        prompt: [{ type: 'text', text: INITIAL_PROMPT }],
-        parent,
-      },
+      prompt: [{ type: 'text', text: INITIAL_PROMPT }],
+      parent,
     })
+    scaffold.ctx.subagentNames.bind(parent, started.childId, 'lead/researcher')
     childId = started.childId
     await waitForAgentToSettle(scaffold, childId)
     const liveInput = page.locator('[data-composer-input][contenteditable="true"]').first()
@@ -308,24 +310,22 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(oneShotId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
-    expect(await scaffold.ctx.subagents.listChildren(parent.id)).toMatchObject([
-      {
-        id: childId, mode: 'continuable', label: LABEL,
-      },
-      {
-        id: oneShotId, mode: 'one-shot', label: ONE_SHOT_LABEL,
-      },
-    ])
+    {
+      using observed = await scaffold.ctx.sessionQuery.observeSession(parent.id)
+      expect(observed.projections?.values.subagentCatalog).toMatchObject([
+        {
+          id: childId, mode: 'continuable', label: LABEL,
+        },
+        {
+          id: oneShotId, mode: 'one-shot', label: ONE_SHOT_LABEL,
+        },
+      ])
+    }
     {
       using observed = await scaffold.ctx.sessionQuery.observeSession(childId)
       expect(observed.source).toBe('prepared')
       expect(observed.projections?.values.subagentCatalog).toEqual([
         { id: grandchildId, createdAt: authoredAt, mode: 'continuable', label: NESTED_LABEL },
-      ])
-      expect(await scaffold.ctx.subagents.listChildren(childId)).toMatchObject([
-        {
-          id: grandchildId, mode: 'continuable', label: NESTED_LABEL,
-        },
       ])
     }
     await waitForCacheRow(scaffold, childHeader)
@@ -359,6 +359,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await rm(sidecarRoot, { recursive: true, force: true })
         .catch((error: unknown) => failures.push(error))
     }
+    hostClock?.mockRestore()
     if (failures.length === 1) throw failures[0]
     if (failures.length > 1) throw new AggregateError(failures, 'subagent Web teardown failed')
   })
@@ -433,7 +434,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: '2 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByRole('button', { name: 'Open researcher in sidebar', exact: true }).click()
     const sidebarChat = page.locator('[data-sidebar-chat]')
-    await sidebarChat.getByText(/^Explain event sourcing in one sentence\.Your name is /).waitFor({ timeout: 15_000 })
+    await sidebarChat.getByText(/^Explain event sourcing in one sentence\./).waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
       SIDEBAR_CHAT_EXPECTED,
       await captureStableAria(page, '[data-sidebar-chat]', scaffold.workspaceCwd),
@@ -456,7 +457,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: '2 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText('researcher', { exact: true }).click()
     await expect.poll(
-      () => page.getByText(/^Explain event sourcing in one sentence\.Your name is /).count(),
+      () => page.getByText(/^Explain event sourcing in one sentence\./).count(),
       { timeout: 15_000 },
     ).toBe(1)
     if (scaffold.ctx.agents.get(childId) !== undefined) {
@@ -492,7 +493,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await expect.poll(() => requested, { timeout: 15_000 }).toBe(true)
       expect(await page.getByText('This subagent is read-only for now', { exact: true }).count()).toBe(0)
       expect(await page.getByRole('navigation', { name: 'Session hierarchy' }).count()).toBe(0)
-      expect(await page.getByText(/^Explain event sourcing in one sentence\.Your name is /).count()).toBe(0)
+      expect(await page.getByText(/^Explain event sourcing in one sentence\./).count()).toBe(0)
       releaseCatalog()
       await page.getByRole('button', { name: 'Switch subagent: researcher' }).waitFor({ timeout: 15_000 })
       const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
@@ -718,10 +719,10 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const before = parent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'external-caller-fixture', label: 'Caller external task', delivery: 'caller', signal: test.signal,
-      request: { parent, prompt: [{ type: 'text', text: 'Return to the host caller' }] },
+      parent, prompt: [{ type: 'text', text: 'Return to the host caller' }],
     })
     onTestFinished(() => activation.dispose())
-    expect(activation.name).toBe('lead/agent-1')
+    scaffold.ctx.subagentNames.bind(parent, activation.childId, 'lead/agent-1')
     expect(await activation.result).toMatchObject({ stopReason: 'completed' })
     expect(scaffold.ctx.sessions.get(activation.childId)).toBeUndefined()
     expect(parent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toEqual(before)

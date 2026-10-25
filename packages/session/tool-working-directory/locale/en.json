@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Working directory tools",
+    "description": "Read and change the current session's working directory."
+  }
+}

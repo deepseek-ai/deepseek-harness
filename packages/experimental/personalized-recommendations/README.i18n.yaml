@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/personalized-recommendations/README.md
+/:
+  en: d7cf0e812c2b84ef
+  zh: 959798411569393e
+/deepseek-ai-dsh-personalized-recommendations:
+  en: 4f78733960cd89fa
+  zh: da27faf83f5e53bd
+/deepseek-ai-dsh-personalized-recommendations/summary:
+  en: 5508a30d24f41f16
+  zh: dae436e8131b1b65
+/deepseek-ai-dsh-personalized-recommendations/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ce40cab8e7534137
+/deepseek-ai-dsh-personalized-recommendations/use-this-package:
+  en: 391782dd00ef7700
+  zh: 346ae3ac63482b92
+/deepseek-ai-dsh-personalized-recommendations/understand-the-implementation:
+  en: e386724a57fffa9b
+  zh: 865f1db569dcafc8
+/deepseek-ai-dsh-personalized-recommendations/further-exploration:
+  en: 0e308f273a226d6c
+  zh: 2b13028f9abb32e2
+/deepseek-ai-dsh-personalized-recommendations/model-experience:
+  en: 8c3ddb0d6cbd0d6b
+  zh: 603f48a0df45ee7d
+/deepseek-ai-dsh-personalized-recommendations/model-experience/kv-cache-effect:
+  en: 9ee776745fc68e18
+  zh: 126dcac4b16b31dd
+/deepseek-ai-dsh-personalized-recommendations/known-limitations-and-deferred-work:
+  en: 965570522f569e46
+  zh: 63a608a10cdd6b80
+/deepseek-ai-dsh-personalized-recommendations/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

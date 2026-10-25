@@ -7,7 +7,7 @@
  */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -20,7 +20,11 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { type Config as ToolsConfig } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
+import { PtcExecutor } from '@deepseek-ai/dsh-tool-executor-ptc'
+import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import LocalSandboxProvider from '@deepseek-ai/dsh-sandbox-local'
 import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
@@ -37,9 +41,12 @@ import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import * as ToolSubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
+import ActionCards from '@deepseek-ai/dsh-action-cards'
+import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import * as SkillFileSystem from '@deepseek-ai/dsh-skill-filesystem'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolAskUser from '@deepseek-ai/dsh-tool-ask-user'
@@ -180,13 +187,8 @@ export interface ToolPackage {
   mount: (ctx: Context) => Promise<void>
   /** Agent-like scope key whose tool view is catalogued instead of the global view. */
   scope?: (ctx: Context) => Agent
-  /**
-   * Config for the caller's `ToolRuntime` mount. The registry itself ships a
-   * model-facing tool (`run_code`, registered under a non-native `mode`), so
-   * ITS catalog entry boots the registry in the mode that exposes it;
-   * every other entry uses the default (native) registry.
-   */
-  toolsConfig?: ToolsConfig
+  /** Select the program transport when harvesting the PTC package. */
+  executor?: 'ptc'
   /**
    * A deployment note rendered after the package's tools, for a fact that
    * booting the package alone cannot show. The registered tool NAME can be a
@@ -256,6 +258,19 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
   },
   {
+    pkg: '@deepseek-ai/dsh-action-cards',
+    dir: 'action-cards',
+    source: 'packages/experimental/action-cards/src/index.ts',
+    requires: ['ctx.tools', 'ctx.agents', 'ctx.sessionProjections', 'ctx.remoteAccess'],
+    writes: ['tool/call', 'tool/result', 'plugin:action-cards/decision', 'user/message'],
+    async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(RemoteAccess)
+      await ctx.plugin(ActionCards)
+    },
+    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized recommendations bundle supplies the shipped kinds.',
+  },
+  {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',
     source: 'packages/interaction/tool-ask-user/src/index.ts',
@@ -269,18 +284,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tools',
-    dir: 'tools',
-    source: 'packages/core/tools/src/ptc.ts',
-    requires: ['ctx.workingDirectory (Agent executions)', 'ctx.tools', 'ctx.ptcRuntime (execution time)', 'ctx.systemPrompt'],
+    pkg: '@deepseek-ai/dsh-tool-executor-ptc',
+    dir: 'tool-executor-ptc',
+    source: 'packages/core/tool-executor-ptc/src/ptc.ts',
+    requires: ['ctx.workingDirectory (Agent executions)', 'ctx.tools', 'ctx.ptcRuntime', 'ctx.systemPrompt'],
     writes: ['tool/call', 'one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call', 'tool/result'],
-    // The registry's OWN tool: run_code exists only under a non-native mode
-    // (the registry registers it in its constructor; the PTC runtime is read
-    // at assembly/execution time, so the schema harvest needs none mounted).
-    toolsConfig: { mode: 'ptc' },
-    async mount() {},
+    executor: 'ptc',
+    async mount(ctx) {
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(LocalSandboxProvider)
+      await ctx.plugin(SandboxPolicy)
+      await ctx.plugin(NodePtcRuntime)
+    },
     note:
-      'Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: ptc` (see the PTC mode Agent Note). Under `ptc` it is the registry\'s only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime\'s language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result.',
+      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',
@@ -539,10 +556,12 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-experimental-tool-subagent-oar',
     dir: 'tool-subagent-oar',
     source: 'packages/experimental/tool-subagent-oar/src/index.ts',
-    requires: ['ctx.tools', 'ctx.subagents'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.subagentNames'],
     writes: ['tool/call', 'tool/result', 'parent subagent catalog and completion notices'],
     async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(SubagentRuntime)
+      await ctx.plugin(SubagentNames)
       await ctx.plugin(ToolSubagentOar, {
         providers: { codex: 'oar-codex', claude: 'oar-claude' },
       })
@@ -556,17 +575,19 @@ const TOOL_PACKAGES: ToolPackage[] = [
       list_subagent_models: 'packages/subagent/tool-subagent/src/list-models.ts',
       subagent: 'packages/subagent/tool-subagent/src/index.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'ctx.llm for model discovery and selected-route validation'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'ctx.subagentNames', 'ctx.llm for model discovery and selected-route validation'],
     writes: ['tool/call', 'tool/result', 'child session events through the chosen provider'],
     shippedNames: ['subagent', 'subagent_fork'],
     async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(SubagentRuntime)
+      await ctx.plugin(SubagentNames)
       await ctx.plugin(LlmRuntime)
       registerCatalogSubagentProvider(ctx, 'mock')
       await ctx.plugin(ToolSubagent, { provider: 'mock', modelDiscovery: true })
     },
     note:
-      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a unique agent path promptly; local children accept follow-ups, while external backends report their single execution automatically.',
+      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. The required naming plugin lets delegation accept a sibling name and return its full path alongside the child Session id. Local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',
@@ -577,17 +598,18 @@ const TOOL_PACKAGES: ToolPackage[] = [
       send_message: 'packages/subagent/tool-subagent-control/src/index.ts',
       wait_agent: 'packages/subagent/tool-subagent-control/src/wait-agent.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents', 'ctx.systemPrompt', 'ctx.subagentNames'],
     writes: ['tool/call', 'tool/result', 'child session events through ctx.subagents'],
     async mount(ctx) {
       await ctx.plugin(SubagentRuntime)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SubagentNames)
       await ctx.plugin(ToolSubagentControl)
     },
     note:
-      'The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools.',
+      'The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. Controls require the naming plugin and accept a name path or Session id through `name`; discovery adds available names while retaining Session ids.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-jobs',
@@ -606,12 +628,13 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-agent-team',
     dir: 'tool-agent-team',
     source: 'packages/subagent/tool-agent-team/src/index.ts',
-    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'ctx.subagents', 'an exact live Team member Agent'],
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.agentTeams', 'ctx.subagents', 'ctx.subagentNames', 'an exact live Team member Agent'],
     writes: ['tool/call', 'team/task', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(SessionStore)
       await ctx.plugin(SubagentRuntime)
+      await ctx.plugin(SubagentNames)
       await ctx.plugin(CatalogSessionPersistence)
       await ctx.plugin(TeamService)
       const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
@@ -632,7 +655,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     scope: ctx => catalogChildScopes.get(ctx) as Agent,
     note:
-      'Four task-board tools share the subagent tree’s root Session. The optional Agent Teams profile adds task-board guidance and required Team identity derived from the subagent root, alongside standard subagent delegation and control tools.',
+      'Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance and required Team identity alongside standard subagent delegation and control tools.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-todo',
@@ -731,7 +754,7 @@ export type ToolCatalog = CatalogPackage[]
 
 /**
  * Assert the boot manifest covers every shipped tool package on disk (a
- * `tool-*` leaf under `packages/`).
+ * `tool-*` leaf under `packages/`, excluding test support).
  * Booting has no source declaration to enumerate, so this glob restores the
  * "a new tool cannot be silently undocumented" guarantee: an unlisted package
  * fails the generator (and the freshness gate) until it is added to
@@ -740,7 +763,11 @@ export type ToolCatalog = CatalogPackage[]
  * `scanRoot` defaults to the repo root; a test may point it at a fixture tree.
  */
 export function assertManifestComplete(packages: ToolPackage[] = TOOL_PACKAGES, scanRoot: string = root): void {
-  const onDisk = globSync('packages/*/tool-*', { cwd: scanRoot }).map(p => basename(p)).sort()
+  // Native execution owns no tool definitions; PTC contributes run_code.
+  const onDisk = globSync('packages/*/tool-*', { cwd: scanRoot })
+    .filter(path => basename(dirname(path)) !== 'test-support')
+    .map(p => basename(p))
+    .filter(dir => dir !== 'tool-executor-native').sort()
   const listed = new Set(packages.map(p => p.dir))
   const missing = onDisk.filter(dir => !listed.has(dir))
   if (missing.length > 0) {
@@ -793,9 +820,14 @@ export async function collectToolCatalog(packages: ToolPackage[] = TOOL_PACKAGES
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(LocalFileSystem)
       await ctx.plugin(WorkingDirectory)
-      await ctx.plugin(ToolRuntime, entry.toolsConfig ?? {})
+      await ctx.plugin(ToolRuntime)
+      const executor = entry.executor === 'ptc' ? new PtcExecutor(ctx) : new NativeToolExecutor(ctx)
+      ctx.tools.setExecutor(executor)
       await entry.mount(ctx)
-      const schemas = ctx.tools.schemas(entry.scope?.(ctx)).sort((a, b) => a.name.localeCompare(b.name))
+      const scope = entry.scope?.(ctx)
+      const described = executor.describe(ctx.tools.definitions(scope))
+      const schemas = [...new Map([...ctx.tools.schemas(scope), ...described.schemas].map(schema => [schema.name, schema])).values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
       assertToolsHarvested(entry, schemas.length)
       catalog.push({
         pkg: entry.pkg,

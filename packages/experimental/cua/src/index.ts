@@ -16,7 +16,7 @@ import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelF
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
-import { AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -268,8 +268,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         : await requestNative()
       if (method === 'getApp') {
         const prepared = AppResult.extend({ pid: AppResult.shape.pid.nullable() }).parse(result)
-        const { authorization } = z.object({ authorization: ApplicationAuthorizationResult }).parse(result)
-        await access.select(agent, client, prepared.appHandle, authorization, signal)
+        const { authorization, applicationIcon } = z.object({ authorization: ApplicationAuthorizationResult,
+          applicationIcon: ApplicationIcon.optional(),
+        }).parse(result)
+        await access.select(agent, client, prepared.appHandle, authorization, signal, applicationIcon)
         signal.throwIfAborted()
         const selected = prepared.pid === null
           ? AppResult.parse(await access.run(client, prepared.appHandle, signal,

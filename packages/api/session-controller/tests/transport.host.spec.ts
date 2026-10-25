@@ -278,11 +278,6 @@ describe('SessionHistoryController', () => {
     }
     const seed = [event('fixture/start', SessionSeq(0))]
     cold(ctx, header, seed)
-    agentCtx.on('session/created', (session) => {
-      if (session.id !== sessionId) return
-      append(session, 'fixture/setup-one', {})
-      append(session, 'fixture/setup-two', {})
-    })
     const abort = new AbortController()
     const iterator = transport.follow({ address: { kind: 'session', sessionId } }, abort.signal)
       [Symbol.asyncIterator]()
@@ -292,6 +287,8 @@ describe('SessionHistoryController', () => {
     const attached = agentCtx.sessions.prepare(sessionId, { meta: header, seed })
     agentCtx.sessions.enter(attached)
     agentCtx.sessions.announce(attached)
+    append(attached, 'fixture/setup-one', {})
+    append(attached, 'fixture/setup-two', {})
     await expect(iterator.next()).resolves.toMatchObject({
       done: false,
       value: { type: 'event', event: { type: 'session/end-seed', seq: 1 } },

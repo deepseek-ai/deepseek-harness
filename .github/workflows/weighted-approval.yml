@@ -13,6 +13,7 @@ permissions:
   checks: write
   contents: read
   pull-requests: write
+  statuses: write
 
 concurrency:
   group: weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
@@ -29,20 +30,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # SECURITY: the check-writing job executes policy from the trusted default
+      # SECURITY: the status-writing job executes policy from the trusted default
       # branch and reads pull-request reviews and comments only as API data.
       - name: Check out trusted approval policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
-      - name: Revoke previous approval decision
+      # The decision check run is published by a dedicated approval App so GitHub associates its
+      # check suite with the pull request and no other workflow owns that identity; the job token
+      # alone keeps the run out of the merge box. The App holds only Checks write. A missing App
+      # permission leaves the token empty and the publisher falls back to the job token.
+      - name: Create decision check token
+        id: decision-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}
+          owner: deepseek-harness
+          repositories: deepseek-harness
+          permission-checks: write
+      - name: Revoke previous approval status
         id: revoke
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node .github/review-ownership/check-approval.mjs revoke
-      # SECURITY: dependency setup runs in the check-writing job.
+        run: node .github/review-ownership/check-approval.mjs pending
+      # SECURITY: dependency setup runs in the status-writing job.
       - if: steps.revoke.outputs.active == 'true'
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
@@ -52,19 +69,19 @@ jobs:
       - name: Install production lexer
         if: steps.revoke.outputs.active == 'true'
         run: python3 -m pip install -r .github/review-ownership/requirements.txt
-      - name: Publish weighted approval decision
-        id: publish
+      - name: Publish weighted approval status
         if: steps.revoke.outputs.active == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs
-      # A failed or cancelled run must not leave an earlier conclusion standing. The publish step
-      # records the conclusion it wrote, so a decision already published survives a later failure or
-      # cancellation, and a cancelled publish step that wrote nothing still concludes failure.
       - name: Publish approval setup failure
-        if: (failure() || cancelled()) && steps.publish.outputs.concluded == ''
+        if: failure() && steps.revoke.outputs.active == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DECISION_TOKEN: ${{ steps.decision-token.outputs.token }}
+          DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: node .github/review-ownership/check-approval.mjs failure
+        run: node .github/review-ownership/check-approval.mjs error

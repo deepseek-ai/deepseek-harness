@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "terminal",
+    "description": "Gerencie sessões de terminal interativo persistentes e sua entrada, saída e limpeza."
+  }
+}

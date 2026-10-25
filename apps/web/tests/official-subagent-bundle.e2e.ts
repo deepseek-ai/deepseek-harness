@@ -156,7 +156,9 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     if (notice?.data.source.kind !== 'subagent-settled') throw new Error('Native completion was not delivered to the parent')
     expect(notice.data.source.senderSessionId).toBe(catalog[0]?.childId)
     expect(notice.data.content).toContainEqual({ type: 'text', text: RESPONSE })
-    expect(dispatches[0]?.content).toEqual([{ type: 'text', text: 'started subagent lead/native-worker' }])
+    expect(dispatches[0]?.content).toEqual([{
+      type: 'text', text: `started subagent ${notice.data.source.senderSessionId}\nname: lead/native-worker`,
+    }])
     expect(events.filter(event => event.type === 'turn/end')).toHaveLength(2)
     expect(server.requests).toHaveLength(1)
     expect(server.requests[0]?.body).toMatchObject({ model: 'fixture-model' })

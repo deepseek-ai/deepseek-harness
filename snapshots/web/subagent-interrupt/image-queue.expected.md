@@ -13,7 +13,7 @@
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
-- text: "Explain event sourcing in one sentence.Your name is \"lead/interrupt-worker\". Your parent agent name is \"lead\". Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. Use send_message({ name: \"lead\", message: \"<finding>\" }) when a finding changes what the parent should do next; sending a message does not end your turn. {{clock}}"
+- text: Explain event sourcing in one sentence.Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message. {{clock}}
 - button "Copy"
 - status: Stopped
 - button "Stopped" [disabled]
