@@ -887,7 +887,7 @@ describe('dsh-tool-team', () => {
     expect(() => ctx.agentTeams.listTasks(child)).toThrow('enable Agent Teams')
     await ctx.agentTeams.setEnabled(lead, true)
     expect(ctx.agentTeams.listTasks(lead)).toEqual([task])
-    await ctx.subagents.interruptByUser(child.id)
+    ctx.subagents.interruptByUser(child.id)
     await waitNoAgent(ctx, child.id)
     await other.dispose()
   })
