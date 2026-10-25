@@ -6,13 +6,14 @@
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
+import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { HarnessError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   assertSubagentMaxDepth,
@@ -203,7 +204,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const mount = (subagentProvider: SubagentProvider): void => {
       assertSubagentProviderConfiguration(subagentProvider)
       const names = runtimeCtx.get('subagentNames')
-      const resultKey = names === undefined ? 'subagentId' : 'name'
       const wording = providerWording(subagentProvider.inheritsParentContext)
       const providerRouteDefaults = subagentProvider.agentRouteDefaults
       const selectionDescription = providerRouteDefaults !== undefined
@@ -212,7 +212,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const definition = defineTool({
         name: toolName,
         description: wording.description
-          + ` This tool starts an independently managed subagent and immediately returns its ${names === undefined ? 'id' : 'name'}. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.`
+          + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
           + (subagentProvider.prepareContinuable !== undefined
             ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' This backend does not accept follow-up messages.')
@@ -267,10 +267,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             additionalProperties: false,
             properties: {
               kind: { type: 'string', required: true, const: 'activation' },
-              [resultKey]: { type: 'string', required: true },
+              subagentId: { type: 'string', required: true },
+              ...names === undefined ? {} : { name: { type: 'string' as const, required: true as const } },
             },
           },
-          render: (_args, value) => [{ type: 'text', text: `started subagent ${value[resultKey]}` }],
+          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}`
+            + (value.name === undefined ? '' : `\nname: ${value.name}`) }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -340,8 +342,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             const started = await runtimeCtx.subagents.startActivation(spec)
             return { kind: 'activation' as const, subagentId: started.childId }
           }
-          const started = await names.startActivation({ ...spec, ...args.name === undefined ? {} : { name: args.name } })
-          return { kind: 'activation' as const, name: started.name }
+          const reservation = names.reserve(parent, args.name)
+          try {
+            const started = await runtimeCtx.subagents.startActivation(spec)
+            try {
+              names.bind(parent, started.childId, reservation.name)
+            } catch (cause: unknown) {
+              throw new HarnessError(
+                `Subagent ${started.childId} started, but its name ${reservation.name} could not be recorded. `
+                + 'Its execution is still managed by the subagent service. Check this child before retrying.',
+                'SUBAGENT_NAME_BIND_FAILED', { cause },
+              )
+            }
+            return { kind: 'activation' as const, subagentId: started.childId, name: reservation.name }
+          } finally {
+            reservation.dispose()
+          }
         },
       })
       const disposeTool = runtimeCtx.effect(() => {
@@ -352,11 +368,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           unregister()
         }
       })
+      // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
       mounted = { subagentProvider, definition, disposeTool }
     }
 
     runtimeCtx.on('internal/service', (name) => {
-      if (name !== 'subagentNames' || mounted === undefined) return
+      if (name !== 'subagentNames' || mounted === undefined
+        || runtimeCtx.fiber.uid === null || runtimeCtx.fiber.state === FiberState.UNLOADING) return
       const { subagentProvider } = mounted
       mounted.disposeTool()
       mounted = undefined

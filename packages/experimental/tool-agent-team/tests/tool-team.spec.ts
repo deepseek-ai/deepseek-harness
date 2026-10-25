@@ -82,7 +82,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   const queryFiber = await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentService)
-  await ctx.plugin(SubagentNames)
+  const namesFiber = await ctx.plugin(SubagentNames)
   await ctx.plugin(ToolSubagentControl)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
@@ -91,7 +91,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const lead = await ctx.agentLoop.create(SessionId('tool-team-lead'), { provider: 'mock', model: 'mock' })
-  return { ctx, lead, fiber, adapter, queryFiber }
+  return { ctx, lead, fiber, adapter, queryFiber, namesFiber }
 }
 
 function execute(
@@ -128,16 +128,22 @@ async function startWait(ctx: Context, agent: Agent) {
   return { result }
 }
 
-/** Start a continuable child of the Lead with a task description. */
+/** Start a continuable child and record its display name after acceptance. */
 async function spawn(ctx: Context, lead: Agent, description: string | undefined, prompt: string, provider = 'spawn'): Promise<SubagentActivation & { readonly name: string }> {
-  const started = await ctx.subagentNames.startActivation({ name: `child-${randomUUID()}`,
-    provider,
-    label: `${description ?? 'shared'} task`,
-    prompt: [{ type: 'text', text: prompt }], parent: lead,
-    signal: SIGNAL,
-    delivery: 'parent',
-  })
-  return started
+  const reservation = ctx.subagentNames.reserve(lead, `child-${randomUUID()}`)
+  try {
+    const started = await ctx.subagents.startActivation({
+      provider,
+      label: `${description ?? 'shared'} task`,
+      prompt: [{ type: 'text', text: prompt }], parent: lead,
+      signal: SIGNAL,
+      delivery: 'parent',
+    })
+    ctx.subagentNames.bind(lead, started.childId, reservation.name)
+    return { ...started, name: reservation.name }
+  } finally {
+    reservation.dispose()
+  }
 }
 
 async function assembly(ctx: Context, agent: Agent) {
@@ -171,25 +177,9 @@ async function waitNoAgent(ctx: Context, id: SessionId): Promise<void> {
   await vi.waitFor(() => { expect(ctx.agents.get(id)).toBeUndefined() }, { timeout: 5_000 })
 }
 
-/** Publish the catalog membership required by named discovery for synthetic child Agents. */
-function bindTeamChild(ctx: Context, child: Agent, root: Agent, ancestors: readonly SessionId[] = [root.id]): void {
-  bindSubagentActivation(ctx, child, root, ancestors)
-  const parentId = ancestors.at(-1)
-  const parent = parentId === undefined ? undefined : ctx.agents.get(parentId)
-  if (parent === undefined) throw new Error('expected a live fixture creator')
-  parent.session.append('subagent/catalog', {
-    version: 0, childId: child.id, childCreatedAt: child.session.header.createdAt,
-    mode: 'continuable', label: 'Fixture child',
-  })
-}
-
-/** Assign a task to a child whose name must be read from its durable catalog. */
+/** Assign a task to a settled child with a persisted name binding. */
 async function taskWithSettledOwner(ctx: Context, lead: Agent) {
-  const activation = await ctx.subagentNames.startActivation({
-    name: 'worker', provider: 'spawn', label: 'Review',
-    parent: lead, prompt: [{ type: 'text', text: 'Review the change' }],
-    signal: SIGNAL, delivery: 'parent',
-  })
+  const activation = await spawn(ctx, lead, 'worker', 'Review the change')
   try {
     await activation.result
   } finally {
@@ -220,7 +210,7 @@ describe('dsh-tool-team', () => {
     })
     const controller = new AbortController()
     const result = execute(ctx, lead, 'team_task_update', {
-      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: await ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
     }, controller.signal)
     try {
       await entered.promise
@@ -321,15 +311,15 @@ describe('dsh-tool-team', () => {
     const child = await ctx.agents.create({
       sessionId: SessionId('identity-child'),
       meta: { parentSession: lead.id, origin: 'subagent' },
-      setup: (_ctx, agent) => { bindTeamChild(ctx, agent, lead) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const nested = await ctx.agents.create({
       sessionId: SessionId('identity-nested'),
       meta: { parentSession: child.agent.id, origin: 'subagent' },
-      setup: (_ctx, agent) => { bindTeamChild(ctx, agent, lead, [lead.id, child.agent.id]) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, child.agent.id]) },
     })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
-    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(await ctx.subagentNames.nameOf(child.agent))}`)
+    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(ctx.subagentNames.nameOf(child.agent))}`)
   })
 
   it.each([undefined, 'in-history'] as const)('appends current Lead identity to a teammate fork with update mode %s', async (systemPromptUpdate) => {
@@ -444,7 +434,7 @@ describe('dsh-tool-team', () => {
       expected_revision: task.revision,
       action: 'claim',
     })
-    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: await ctx.subagentNames.nameOf(ctx.agents.get(childId)!) })
+    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: ctx.subagentNames.nameOf(ctx.agents.get(childId)!) })
     const stale = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id,
       expected_revision: task.revision,
@@ -520,7 +510,7 @@ describe('dsh-tool-team', () => {
       task_id: first.id,
       expected_revision: dependency.revision,
       action: 'reassign',
-      owner: await ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
+      owner: ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
     })).isError).toBe(true)
 
     const child = ctx.agents.get(childId)!
@@ -534,7 +524,7 @@ describe('dsh-tool-team', () => {
     await waitNoAgent(ctx, childId)
   })
 
-  it('retains a settled task owner’s catalog name and rejects its legacy alias', async () => {
+  it('retains a settled task owner’s bound name and rejects its legacy alias', async () => {
     const { ctx, lead } = await setup([textResponse('done')])
     const { childId: id, name } = await spawn(ctx, lead, 'reviewer', 'review')
     await waitNoAgent(ctx, id)
@@ -550,7 +540,7 @@ describe('dsh-tool-team', () => {
     })).isError).toBe(true)
   })
 
-  it('leaves a task unchanged when its owner name cannot be read before an edit', async () => {
+  it('edits named task owners without Session queries', async () => {
     const { ctx, lead, queryFiber } = await setup([textResponse('done')])
     const { task } = await taskWithSettledOwner(ctx, lead)
     await queryFiber.dispose()
@@ -558,20 +548,20 @@ describe('dsh-tool-team', () => {
     const result = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
     })
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain('listing subagents requires the sessionQuery service')
-    expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', ownerName: ctx.subagentNames.nameOf(lead, task.ownerId) })
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
     await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
-    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(2)
+    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(3)
   })
 
-  it('returns the committed task when Session queries unload during the commit', async () => {
-    const { ctx, lead, queryFiber } = await setup([textResponse('done')])
+  it('returns captured owner names when the naming plugin unloads during the commit', async () => {
+    const { ctx, lead, namesFiber } = await setup([textResponse('done')])
     const { task, ownerName } = await taskWithSettledOwner(ctx, lead)
     const flush = ctx.sessions.flush.bind(ctx.sessions)
     vi.spyOn(ctx.sessions, 'flush').mockImplementationOnce(async (session) => {
       const flushed = await flush(session)
-      await queryFiber.dispose()
+      await namesFiber.dispose()
       return flushed
     })
 
@@ -583,42 +573,26 @@ describe('dsh-tool-team', () => {
     expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
   })
 
-  it('rejects an edit if another writer changes the task while its owner name is being read', async () => {
-    const { ctx, lead } = await setup([textResponse('done')])
-    const { task } = await taskWithSettledOwner(ctx, lead)
-    const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    const discover = ctx.subagentNames.listDescendants.bind(ctx.subagentNames)
-    vi.spyOn(ctx.subagentNames, 'listDescendants').mockImplementationOnce(async (...args) => {
-      const entries = await discover(...args)
-      entered.resolve(undefined)
-      await release.promise
-      return entries
+  it('does not grant task authority through a name binding for an unrelated Agent', async () => {
+    const { ctx, lead } = await setup([])
+    const unrelated = await ctx.agents.create({
+      sessionId: SessionId('unrelated-task-owner'), agentOptions: { provider: 'mock', model: 'mock' },
     })
-    const result = execute(ctx, lead, 'team_task_update', {
-      task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Delayed edit',
+    ctx.subagentNames.bind(lead, unrelated.agent.id, 'lead/not-a-teammate')
+    const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Requires a teammate' })
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: 'lead/not-a-teammate',
     })
-    try {
-      await entered.promise
-      expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
-      await ctx.agentTeams.updateTask(lead, {
-        taskId: task.id, expectedRevision: task.revision, action: 'edit', subject: 'Concurrent edit',
-      })
-    } finally {
-      release.resolve(undefined)
-    }
-    expect((await result).isError).toBe(true)
-    expect(text(await result)).toContain('stale team task')
-    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({
-      subject: 'Concurrent edit', revision: task.revision + 1,
-    })
+    expect(result.isError).toBe(true)
+    expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
+    await unrelated.dispose()
   })
 
   it('reads owner names only for rows surviving filters and pagination', async () => {
     const { ctx, lead } = await setup([textResponse('done')])
     const unowned = await ctx.agentTeams.createTask(lead, { subject: 'First', description: 'Unowned' })
     const { task, ownerName } = await taskWithSettledOwner(ctx, lead)
-    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    const observe = vi.spyOn(ctx.subagentNames, 'nameOf')
     for (const filter of [{ owner: 'unowned' }, { status: 'pending' }, { ready: true }, { limit: 1 }]) {
       const result = await execute(ctx, lead, 'team_task_list', filter)
       expect(result.isError).toBe(false)
@@ -648,16 +622,18 @@ describe('dsh-tool-team', () => {
       ? await ctx.agentTeams.updateTask(lead, { taskId: task.id, expectedRevision: task.revision, action: 'complete' })
       : task
     await queryFiber.dispose()
+    const nameOf = vi.spyOn(ctx.subagentNames, 'nameOf')
     const result = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: current.revision, action,
       ...action === 'reassign' ? { owner: 'lead' } : {},
     })
     expect(result.isError).toBe(false)
+    expect(nameOf.mock.calls.some(([, id]) => id === task.ownerId)).toBe(false)
     if (action === 'reassign') expect(JSON.parse(text(result))).toMatchObject({ ownerName: 'lead' })
     else expect(JSON.parse(text(result))).not.toHaveProperty('ownerName')
   })
 
-  it('retains an uncataloged historical task owner as a legacy id', async () => {
+  it('displays an unnamed historical task owner by its Session id', async () => {
     const { ctx, lead } = await setup([])
     const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
@@ -666,10 +642,10 @@ describe('dsh-tool-team', () => {
       task: { ...saved, revision: 2, ownerId: SessionId('missing-worker') },
     })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id }))))
-      .toMatchObject({ ownerName: 'legacy:missing-worker' })
+      .toMatchObject({ ownerName: 'missing-worker' })
   })
 
-  it('rejects a task edit when an unreadable branch may contain its owner', async () => {
+  it('edits an unnamed task owner without traversing unreadable child catalogs', async () => {
     const { ctx, lead } = await setup([])
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
@@ -685,10 +661,10 @@ describe('dsh-tool-team', () => {
     const result = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
     })
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain('subagent discovery is incomplete')
-    expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
-    expect(lead.session.ownEvents().filter(event => event.type === 'team/task')).toHaveLength(2)
+    expect(result.isError).toBe(false)
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', ownerName: 'unobserved-worker' })
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/task')).toHaveLength(3)
   })
 
   it.each([false, true])('rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (cataloged) => {
@@ -702,11 +678,11 @@ describe('dsh-tool-team', () => {
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Review history' })
     expect((await execute(ctx, lead, 'team_task_update', {
       task_id: created.id, expected_revision: created.revision, action: 'reassign',
-      owner: cataloged ? 'lead/legacy:historical-worker' : 'legacy:historical-worker',
+      owner: id,
     })).isError).toBe(true)
-    expect((await execute(ctx, lead, 'send_message', { name: 'legacy:historical-worker', message: 'hello' })).isError).toBe(true)
+    expect((await execute(ctx, lead, 'send_message', { name: id, message: 'hello' })).isError).toBe(true)
     expect((await execute(ctx, lead, 'team_task_update', {
-      task_id: created.id, expected_revision: 2, action: 'reassign', owner: 'legacy:missing',
+      task_id: created.id, expected_revision: 2, action: 'reassign', owner: 'missing',
     })).isError).toBe(true)
   })
 
@@ -748,7 +724,7 @@ describe('dsh-tool-team', () => {
       const child = await ctx.agents.create({
         sessionId: id, agentOptions: { provider: 'mock', model: 'mock' },
         meta: { origin: 'subagent', parentSession: lead.id },
-        setup: (_ctx, agent) => { bindTeamChild(ctx, agent, lead) },
+        setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
       })
       expect(teamTools(await assembly(ctx, child.agent))).toEqual(TEAM_TOOLS)
       const created = await execute(ctx, child.agent, 'team_task_create', {
@@ -767,7 +743,7 @@ describe('dsh-tool-team', () => {
     const child = await ctx.agents.create({
       sessionId: SessionId('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
-      setup: (_ctx, agent) => { bindTeamChild(ctx, agent, lead) },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const unrelated = await ctx.agents.create({
       sessionId: SessionId('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },

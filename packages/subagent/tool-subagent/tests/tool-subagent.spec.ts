@@ -16,7 +16,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SubagentNames from '@deepseek-ai/dsh-subagent-names'
-import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
+import type { SubagentActivation, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
@@ -65,7 +65,7 @@ describe('dsh-tool-subagent', () => {
     )).rejects.toThrow('does not support child agentOptions')
   })
 
-  it('starts a managed subagent and returns its name without collecting its output', async () => {
+  it('starts a managed subagent and returns its ID and name without collecting its output', async () => {
     const ctx = await setup({ provider: 'mock' }, { reply: 'child says hi' })
     const result = await callSubagent(ctx, {
       description: 'do a thing',
@@ -76,6 +76,73 @@ describe('dsh-tool-subagent', () => {
     expect(result.value).toHaveProperty('kind', 'activation')
     expect(result.value).toHaveProperty('name', 'lead/agent-1')
     expect(text(result)).toMatch(/^started subagent /)
+  })
+
+  it('rejects invalid names before starting a child', async () => {
+    const ctx = await setup({ provider: 'mock' })
+    const start = vi.spyOn(ctx.subagents, 'startActivation')
+    const result = await callSubagent(ctx, { name: 'bad/name', description: 'invalid name', prompt: 'work' })
+    expect(result.isError).toBe(true)
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('reports a binding failure with the accepted child ID and leaves its work running', async () => {
+    const release = Promise.withResolvers<undefined>()
+    const ctx = await setup({ provider: 'mock' }, { onStart: () => release.promise })
+    const parent = modelSelectionSetupAgent(ctx)
+    const accepted = Promise.withResolvers<SubagentActivation>()
+    const start = ctx.subagents.startActivation.bind(ctx.subagents)
+    vi.spyOn(ctx.subagents, 'startActivation').mockImplementation(async (spec) => {
+      const child = await start(spec)
+      accepted.resolve(child)
+      return child
+    })
+    vi.spyOn(ctx.subagentNames, 'bind').mockImplementationOnce(() => { throw new Error('name storage unavailable') })
+    try {
+      const result = await callSubagent(ctx, { name: 'reviewer', description: 'review code', prompt: 'work' })
+      const child = await accepted.promise
+      expect(result.error?.info?.code).toBe('SUBAGENT_NAME_BIND_FAILED')
+      expect(text(result)).toContain(child.childId)
+      const retry = ctx.subagentNames.reserve(parent, 'reviewer')
+      retry.dispose()
+      release.resolve(undefined)
+      await expect(child.result).resolves.toMatchObject({ stopReason: 'completed' })
+    } finally {
+      release.resolve(undefined)
+    }
+  })
+
+  it.each(['root disposal', 'plugin restart'] as const)('does not reinstall delegation while %s drains', async (mode) => {
+    const ctx = await projectedContext()
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await mock.mountScriptedProvider(ctx, { name: 'mock' })
+    const names = await ctx.plugin(SubagentNames)
+    const delegation = await ctx.plugin(tool, { provider: 'mock' })
+    expect(ctx.tools.get('subagent')).toBeDefined()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let cleanupDone = false
+    delegation.ctx.effect(() => async () => {
+      entered.resolve(undefined)
+      await release.promise
+      cleanupDone = true
+    })
+    const register = vi.spyOn(ctx.tools, 'register')
+    let settled = false
+    const stop = mode === 'root disposal' ? ctx.fiber.dispose() : delegation.restart()
+    const removeNames = mode === 'root disposal' ? Promise.resolve() : names.dispose()
+    const drained = Promise.allSettled([stop, removeNames]).then((results) => { settled = true; return results })
+    try {
+      await entered.promise
+      expect(settled).toBe(false)
+      expect(cleanupDone).toBe(false)
+      expect(register).not.toHaveBeenCalled()
+    } finally {
+      release.resolve(undefined)
+    }
+    expect((await drained).every(result => result.status === 'fulfilled')).toBe(true)
+    expect(cleanupDone).toBe(true)
   })
 
   it('keeps id-based delegation without naming and refreshes the schema when naming loads or unloads', async () => {
@@ -91,7 +158,8 @@ describe('dsh-tool-subagent', () => {
     const named = await callSubagent(ctx, { name: 'reviewer', description: 'named task', prompt: 'review' })
     expect(named.isError).toBe(false)
     if (named.isError) throw new Error('expected named subagent success')
-    expect(named.value).toEqual({ kind: 'activation', name: 'lead/reviewer' })
+    expect(named.value).toMatchObject({ kind: 'activation', name: 'lead/reviewer' })
+    expect(named.value).toHaveProperty('subagentId', expect.any(String))
     await names.dispose()
     expect(properties()).not.toHaveProperty('name')
   })
@@ -737,7 +805,7 @@ describe('dsh-tool-subagent local activation', () => {
     })).toEqual({ kind: 'parallel' })
   })
 
-  it('starts a local activation and returns only its full name', async () => {
+  it('starts a local activation and keeps its Session id alongside its full name', async () => {
     const { ctx, parent } = await continuableSetup()
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')!
     // Continuable delegation has no Task, so the schema promises no collection.
@@ -746,7 +814,7 @@ describe('dsh-tool-subagent local activation', () => {
     expect(schema.description).toContain('send_message')
     expect(schema.description).toContain('steer it while running')
     expect(schema.description).not.toContain('send_message` starts a later turn')
-    expect(schema.description).toContain('immediately returns its name')
+    expect(schema.description).toContain('immediately returns its id')
     expect(schema.description).not.toContain('never poll or wait on it')
     const properties = (schema.parameters as {
       properties: Record<string, { description?: string }>
@@ -762,12 +830,12 @@ describe('dsh-tool-subagent local activation', () => {
       { agent: parent },
     )
     expect(started.isError, text(started)).toBe(false)
-    const match = /^started subagent (\S+)$/.exec(text(started))
+    const match = /^started subagent (\S+)\nname: lead\/agent-1$/.exec(text(started))
     expect(match).not.toBeNull()
-    expect(match?.[1]).toBe('lead/agent-1')
     const catalog = ctx.sessionProjections.snapshot(parent.session, ['subagentCatalog']).values.subagentCatalog!
     expect(catalog).toHaveLength(1)
     const childId = catalog[0]!.id
+    expect(match?.[1]).toBe(childId)
 
     await vi.waitFor(() => {
       expect(ctx.agents.get(childId)).toBeUndefined()
@@ -839,6 +907,7 @@ describe('dsh-tool-subagent local activation', () => {
 
     expect(succeeded.isError ? undefined : succeeded.value).toEqual({
       kind: 'activation',
+      subagentId: survivingChildId,
       name: 'lead/agent-2',
     })
     await vi.waitFor(() => {

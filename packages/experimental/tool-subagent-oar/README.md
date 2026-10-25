@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns a full child path, with a later completion notice delivered to the parent.
+Use one `subagent_oar` tool to choose a configured external agent for each standalone text task. Configuration fixes the available runtime aliases and their providers; the model selects an alias without changing native arguments or permissions. Each task uses independent context and returns its child id and full name, with a later completion notice delivered to the parent.
 
 ## Table of Contents
 
@@ -59,7 +59,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) builds the runtime enum from the configured aliases and registers one tool. Each call resolves its provider and starts a named activation through `ctx.subagentNames`, which wraps `ctx.subagents.startActivation()`. The subagent service owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
+[`src/index.ts`](src/index.ts) registers the configured runtime choices and calls `ctx.subagents.startActivation()` directly. The naming service reserves a sibling name and maps the accepted child id to its full name; the child's prompt is the submitted task. The subagent service owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
 
 </details>
 
@@ -69,7 +69,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 ## Further Exploration
 
 - [Subagent service](../../subagent/subagent/README.md) — provider registration and activation ownership.
-- [Subagent names](../../subagent/subagent-names/README.md) — sibling names and full-path results.
+- [Subagent names](../../subagent/subagent-names/README.md) — sibling names and full-name lookup.
 - [OAR provider](../subagent-oar/README.md) — native runtime setup and permission configuration.
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — parent completion notices and retained results.
 
@@ -82,7 +82,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the tool returns `started subagent <name>`, where `<name>` is the full child path. The shared subagent service later supplies the child's answer or failure notice, identifying the external execution by its child id.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-subagent-oar) owns the description and argument schema. The `runtime` enum contains the configured aliases. After acceptance, the result contains `kind: "activation"`, `subagentId`, and `name`. The model sees `started subagent <ID>` followed by `name: <full name>` on the next line. The shared subagent service later supplies the child's answer or failure notice, identifying the external execution by the same child id.
 
 #### Token effect
 
@@ -100,6 +100,7 @@ The tool's choices and execution capabilities are fixed by its configured provid
 
 - **One-shot providers only:** child context is independent, and the tool exposes no follow-up, resume, structured output, or per-call native permission override.
 - **Provider availability:** a selected provider that is absent or unloaded fails at call time; its configured alias remains in the schema until this tool's configuration changes.
+- **Name binding failure:** if the accepted child's name cannot be recorded, the error reports its id and leaves execution managed by the subagent service. Check that child's outcome before retrying; the reserved name is released.
 - **Provider-owned work:** runtime setup, startup cancellation, process cleanup, and answer selection follow the selected provider's documented behavior. Removing this tool does not revoke accepted activations.
 
 <a id="dev-note"></a>

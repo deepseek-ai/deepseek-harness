@@ -25,7 +25,7 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -77,34 +77,22 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 
 type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
 
-/** Read immutable owner names before a mutation or for the requested result rows. */
-async function taskOwnerNames(
-  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[], signal: AbortSignal,
-): Promise<ReadonlyMap<SessionId, string>> {
-  const root = ctx.subagents.rootOf(caller)
-  const names = new Map<SessionId, string>([[root.id, 'lead']])
-  const missing = new Set<SessionId>()
+/** Capture owner display names before a mutation or for the requested result rows. */
+function taskOwnerNames(
+  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[],
+): ReadonlyMap<SessionId, string> {
+  const names = new Map<SessionId, string>()
   for (const ownerId of owners) {
-    if (ownerId === undefined || names.has(ownerId)) continue
-    const agent = ctx.agents.get(ownerId)
-    if (agent === undefined) missing.add(ownerId)
-    else names.set(ownerId, await ctx.subagentNames.nameOf(agent, signal))
-  }
-  if (missing.size > 0) {
-    const descendants = await ctx.subagentNames.listDescendants(root.id, signal)
-    for (const entry of descendants) names.set(entry.id, `lead/${entry.path}`)
-    if ([...missing].some(id => !names.has(id)) && descendants.some(entry => entry.kind === 'diagnostic')) {
-      throw new Error('Task owner names are unavailable because subagent discovery is incomplete; restore the unreadable branch and retry.')
-    }
+    if (ownerId !== undefined && !names.has(ownerId)) names.set(ownerId, ctx.subagentNames.nameOf(caller, ownerId))
   }
   return names
 }
 
-/** Format a task without querying mutable services after its commit. */
+/** Format a task from names captured for each possible result owner before its commit. */
 function namedTask({ ownerId, ...view }: TeamTaskView, names: ReadonlyMap<SessionId, string>): NamedTaskView {
   return {
     ...view,
-    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) ?? `legacy:${ownerId}` },
+    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) as string },
   }
 }
 
@@ -184,7 +172,7 @@ function install(agent: Agent, ctx: Context): () => void {
         limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
       },
       output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      async execute(args, exec) {
+      execute(args, exec) {
         const cursor = args.cursor ?? 0
         const limit = args.limit ?? 50
         if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
@@ -196,12 +184,12 @@ function install(agent: Agent, ctx: Context): () => void {
           && (args.ready === undefined || task.ready === args.ready))
         const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
         const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
-        const names = await taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId), exec.signal)
+        const names = taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId))
         if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
-        return {
+        return Promise.resolve({
           tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
           ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
-        }
+        })
       },
     })))
 
@@ -212,11 +200,11 @@ function install(agent: Agent, ctx: Context): () => void {
         task_id: { type: 'string', required: true, description: 'Shared task id.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
-      async execute(args, exec) {
+      execute(args, exec) {
         const caller = callingAgent(exec.agent, 'team_task_get')
         const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-        const names = await taskOwnerNames(ctx, caller, [task.ownerId], exec.signal)
-        return namedTask(task, names)
+        const names = taskOwnerNames(ctx, caller, [task.ownerId])
+        return Promise.resolve(namedTask(task, names))
       },
     })))
 
@@ -236,7 +224,7 @@ function install(agent: Agent, ctx: Context): () => void {
         description: { type: 'string', description: 'Replacement details for edit.' },
         blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
         write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Full agent path of the root or any continuable descendant for root-only reassign; omit to unassign.' },
+        owner: { type: 'string', description: 'Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
       },
       output: jsonOutput(TASK_VIEW_SCHEMA),
       async execute(args, exec) {
@@ -244,12 +232,12 @@ function install(agent: Agent, ctx: Context): () => void {
         const taskId = TeamTaskId(args.task_id)
         const current = ctx.agentTeams.getTask(caller, taskId)
         const owner = args.owner === undefined ? undefined
-          : await ctx.subagentNames.resolveName(caller, args.owner, exec.signal)
+          : ctx.subagentNames.resolveName(caller, args.owner)
         const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
         // Names are immutable; the service still checks the revision and authority after these reads.
-        const names = await taskOwnerNames(ctx, caller, [
+        const names = taskOwnerNames(ctx, caller, [
           caller.id, owner, keepsOwner ? current.ownerId : undefined,
-        ], exec.signal)
+        ])
         const task = await ctx.agentTeams.updateTask(caller, {
           taskId,
           expectedRevision: args.expected_revision,

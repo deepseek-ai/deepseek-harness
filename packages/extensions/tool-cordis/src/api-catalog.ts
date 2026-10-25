@@ -3147,33 +3147,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'subagentNames',
-    summary: 'Catalog-backed names that leave subagent execution and authorization with their existing owner.',
-    description: 'Catalog-backed names that leave subagent execution and authorization with their existing owner.',
+    summary: 'Root-Session aliases shared by named creation, discovery, and control tools.',
+    description: 'Root-Session aliases shared by named creation, discovery, and control tools.',
     methods: [
       {
-        signature: 'async startActivation(spec: NamedSubagentActivationSpec): Promise<SubagentActivation & { readonly name: string }>',
-        description: 'Start a named child, reserving its sibling name until startup settles. Parent delivery retains catalog membership. Local names precede catalog publication; external names follow accepted startup.',
-        parameters: [{ name: 'spec', description: 'ordinary activation options and an optional lower-case sibling name.' }],
-        returns: 'the existing activation receipt plus its full name.',
-        throws: ['SubagentNameError for invalid or duplicate names. An external binding failure includes childId and awaits disposal without undoing completed work.'],
+        signature: 'reserve(parent: Agent, requested?: string): SubagentNameReservation',
+        description: 'Reserve a complete name without starting an agent or writing a Session event.',
+        parameters: [{ name: 'parent', description: 'exact live caller whose name prefixes the child name.' }, { name: 'requested', description: 'optional sibling segment; omission selects the first free agent-N.' }],
+        returns: 'a reservation the caller must dispose after startup and binding.',
       },
       {
-        signature: 'async nameOf(agent: Agent, signal?: AbortSignal): Promise<string>',
-        description: 'Read the full name of an exact live Agent without restoring its ancestors.',
-        parameters: [{ name: 'agent', description: 'live root or managed child whose name is requested.' }, { name: 'signal', description: 'cancellation during parent catalog reads.' }],
-        returns: 'lead, named path segments, or legacy id segments for unnamed children.',
+        signature: 'bind(parent: Agent, childId: SessionId, name: string): void',
+        description: 'Record an accepted child\'s full name in the caller\'s root Session. Binding failure does not cancel or dispose the child; callers report its id.',
+        parameters: [{ name: 'parent', description: 'exact live caller whose root owns the alias.' }, { name: 'childId', description: 'identity returned by the subagent service.' }, { name: 'name', description: 'complete name returned by reserve.' }],
       },
       {
-        signature: 'async resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>',
-        description: 'Translate a canonical path or a tree member\'s exact id without granting authority.',
-        parameters: [{ name: 'caller', description: 'exact live Agent selecting the subagent tree.' }, { name: 'name', description: 'lead, a lead-prefixed path, or an existing member\'s exact Session id.' }, { name: 'signal', description: 'cancellation during catalog reads.' }],
-        returns: 'the identity for the subagent operation to authorize.',
+        signature: 'nameOf(caller: Agent, targetId: SessionId = caller.id): string',
+        description: 'Read a bound name from the live root\'s projection without loading ancestors.',
+        parameters: [{ name: 'caller', description: 'exact live caller selecting the tree.' }, { name: 'targetId', description: 'requested identity; omission selects the caller.' }],
+        returns: 'lead for the root, a bound full name, or the unchanged id.',
       },
       {
-        signature: 'async listDescendants(rootId: SessionId, signal?: AbortSignal): Promise<(SubagentDescendantListEntry & { readonly path: string })[]>',
-        description: 'Attach relative names to the existing catalog traversal and its branch diagnostics.',
-        parameters: [{ name: 'rootId', description: 'Session whose catalog starts discovery.' }, { name: 'signal', description: 'cancellation while reading descendant and name projections.' }],
-        returns: 'existing descendant rows with paths relative to rootId.',
+        signature: 'resolveName(caller: Agent, name: string): SessionId',
+        description: 'Resolve an alias or pass through an id for the subagent service to authorize.',
+        parameters: [{ name: 'caller', description: 'exact live caller selecting the root mapping.' }, { name: 'name', description: 'lead, a bound full name, or a raw Session id.' }],
+        returns: 'the target identity; an unknown lead/... name throws.',
       },
     ],
   },
@@ -6568,10 +6566,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ModTier = \'prepend\' | \'user\' | \'append\' | \'builtin\' | \'core\';',
   },
   {
-    name: 'NamedSubagentActivationSpec',
-    declaration: 'export type NamedSubagentActivationSpec = Omit<SubagentActivationSpec, \'childId\' | \'delivery\'> & {\n    readonly delivery: \'parent\';\n    readonly name?: string;\n};',
-  },
-  {
     name: 'NativeFileApplication',
     declaration: 'export interface NativeFileApplication {\n    readonly id: string;\n    readonly name: string;\n    readonly default: boolean;\n    readonly icon: string | null;\n}',
   },
@@ -8210,6 +8204,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubagentListEntry',
     declaration: 'export type SubagentListEntry = SubagentCatalogRow & {\n    readonly kind: \'child\';\n    readonly hasChildren: boolean;\n} | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n};',
+  },
+  {
+    name: 'SubagentNameReservation',
+    declaration: 'export interface SubagentNameReservation {\n    readonly name: string;\n    dispose(): void;\n}',
   },
   {
     name: 'SubagentPromptReceipt',

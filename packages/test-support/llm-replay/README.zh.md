@@ -73,8 +73,6 @@ fixture 是运行一次真实 agent 所产生的一份选定持久化 Session ge
 
 parent agent 委托给进程内 subagent 的场景会为每个 Session 记录一个角色：parent 为 `session[.vN].jsonl`，随后是连续 child `session.<ordinal>[.vN].jsonl`。snapshot harness 只提供每个角色的最高 generation。live Session id 每次运行都会重新随机生成，因此 replay 按首次调用顺序把每个 live Session 绑定到已记录脚本：第一个发起模型调用的 live Session 取得 parent 脚本，下一个新 Session 取得下一条 child 脚本，依此类推，每个 Session 分别推进自己的 cursor。不同 live Session 数量超过已记录脚本数时会明确报错。
 
-已记录的 `{{session:N}}` token 会解析为相同序号的 live Session id。`started subagent` 回执可以在后台 child 首次调用模型之前绑定该 id。原始 id 回执无需命名服务即可使用；`lead/...` 回执需要存活的调用方 Agent 与 `subagentNames.resolveName`，因此无法解析的名称会报错，不会被当作 Session id。
-
 ### 失败模式与覆盖
 
 当回放在带有 `ctx.deepseekLlmApiExtensions` 的组合中服务 `deepseek-official` 时，它会在选择有效脚本条目后、产生首个分片前准备并接受这些字段。这与实时适配器的 2xx 后提交点一致，因此持久接受水位与 SDK 事件通知在录制和回放中行为相同。回放提供合成 `{ messages: [] }` 基础 body：它证明接受副作用，而非准备后的字段字节。

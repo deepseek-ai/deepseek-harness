@@ -28,12 +28,6 @@
     },
     {
       "path": "../../session/session-format-catalog"
-    },
-    {
-      "path": "../../core/agent"
-    },
-    {
-      "path": "../../subagent/subagent-names"
     }
   ]
 }

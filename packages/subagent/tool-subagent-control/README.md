@@ -49,7 +49,7 @@ In named mode, `name` selects a full path or Session id of another agent in the 
 
 ### interrupt_agent
 
-In named mode, `name` identifies a descendant by full path or Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. Cancellation during name resolution leaves the target running. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
+In named mode, `name` identifies a descendant by full path or Session id. External executions stop permanently and cannot receive follow-ups. Local targets stop only their current turn: queued messages stay parked until a later `send_message`, descendants keep running, and the child stays available for follow-ups. The call returns when the stop request is accepted, not when the target is quiet; interrupting an already-finished agent is an accepted no-op, and self, sibling, stale, and non-ancestor callers get errored results.
 
 <a id="wait_agent"></a>
 ### wait_agent
@@ -58,7 +58,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Named rows carry full paths, with `lead` for the root; descendants carry their direct parent path and depth from the root. Unnamed children use `legacy:<SessionId>` path segments. Each child’s label comes from the `description` supplied at creation. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Rows retain Session ids, parent ids, and depth from the root. The optional naming plugin adds `name` and `parentName` when a mapping is available; the root is named `lead`. Unnamed children retain their ids. Each child’s label comes from the `description` supplied at creation. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
 
 -----
 
@@ -72,7 +72,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-The optional `ctx.subagentNames` resolves names; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+The optional `ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
 
 ### Delivery and signal ownership
 
@@ -120,13 +120,13 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 
 #### KV Cache effect
 
-Prefix-stable; the schemas do not change at runtime, and a parent and its continuable children, including fork children, receive identical definitions.
+The schema prefix stays stable while the naming service’s availability is unchanged. A parent and its continuable children, including fork children, inherit the same definitions.
 
 ### Communication context
 
 #### What the model sees
 
-The logged `subagent:communication` runtime context tells delegated children their own and direct creator’s JSON-encoded names (or the parent id without naming) and how to send findings that change the parent’s next action. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
+The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded Session id and how to send findings that change the parent’s next action. Named controls also accept this id. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
@@ -134,13 +134,13 @@ One short context entry per delegated child, independent of tree size.
 
 #### KV Cache effect
 
-Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the parent address again from durable records. If the runtime root is unavailable, guidance retains the parent id; corrupt naming records reject assembly.
+Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. The parent id comes from the child Session header; prompt assembly does not wait for a name binding or read the name map.
 
 ### Interrupt result
 
 #### What the model sees
 
-`interrupt requested for agent <address>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; a known settled target still renders the acceptance line. Named mode rejects unknown addresses; id mode retains an accepted no-op for absent targets.
+`interrupt requested for agent <address>` on acceptance. An unauthorized caller — self, sibling, stale, or non-ancestor — is an errored result naming the rejection; a known settled target still renders the acceptance line. Unknown name paths are rejected; an absent raw Session id retains an accepted no-op.
 
 #### Token effect
 
@@ -168,7 +168,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<address> [<status>] — root agent`. Each continuable descendant follows as `<address> [<status>] parent=<address> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<address> [diagnostic: <reason>] parent=<address> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion.
 
 #### Token effect
 

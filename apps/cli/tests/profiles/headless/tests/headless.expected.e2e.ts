@@ -1179,8 +1179,8 @@ describe('headless stream-json snapshots', () => {
             && ((row.data as JsonObject).source as JsonObject).kind === 'user')
           if (initial === undefined) throw new Error('Teammate Session has no initial task')
           const content = (initial.data as JsonObject).content as JsonObject[]
-          // Named delegations include the task, return guidance, and identity.
-          expect(content).toHaveLength(3)
+          // The task block is followed by the standard return guidance naming the Lead.
+          expect(content).toHaveLength(2)
           const context = parseJsonl(log.content).find(row => row.type === 'user/message'
             && ((row.data as JsonObject).source as JsonObject).kind === 'runtime-context')
           const source = (context?.data as JsonObject)?.source as JsonObject

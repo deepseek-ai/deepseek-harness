@@ -43,7 +43,7 @@ kind: "package-reference"
 
 设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-tool-agent-team)记录空配置。
 
-让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的完整路径用于寻址。
+让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的名称或 Session id 用于寻址。
 
 ### 模型能做什么
 
@@ -53,11 +53,11 @@ kind: "package-reference"
 - **等待收件箱输入** — `wait_agent` 属于 `@deepseek-ai/dsh-tool-subagent-control`，无需此包即可使用。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-可达任务负责人在 `owner` 参数和 `ownerName` 结果中使用完整 agent 路径。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
+任务负责人在 `owner` 参数和 `ownerName` 结果中使用已绑定名称或 Session id。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
 
 ### 成功与失败的表现
 
-任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。更新在修改前解析输入与结果中的负责人名称；名称查询失败或不完整时任务保持不变，已提交结果无需再查询名称。完整读取树后仍不存在的已存储负责人显示为 `legacy:<id>`；不可读分支使查询失败，不表示负责人不存在。这个缺席负责人标记不能用于发送消息或指定重新分配的目标。
+任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。更新在修改前解析输入名称并保存结果中的负责人名称。未绑定名称的负责人显示原始 Session id；显示名称无需查询 Session 或遍历子级目录。名称解析不授予权限：Team 服务仍检查每个重新分配的目标。
 
 -----
 
@@ -78,7 +78,7 @@ kind: "package-reference"
 - **声明式结果，紧凑 JSON。** 每个工具都声明完整结果 schema，并把该值渲染为紧凑 JSON，因此编译器会对照向模型承诺的结果检查 `execute`，任何结果都不会在缩进上消耗 token。
 - **领域掌握裁决权。** 工具委托给 `ctx.agentTeams`，后者强制执行 Lead 权限与 revision 校验；适配器不添加更弱的路径。
 
-适配器使用 `ctx.subagentNames` 解析完整路径，`ctx.agentTeams` 继续使用 Session id 处理任务归属和权限。任务列表先按状态、就绪情况和未分配条件筛选，再解析名称。没有精确负责人名称筛选时，只解析请求页中的名称；按精确负责人名称筛选时，在分页前解析剩余候选任务的负责人名称。
+适配器通过 `ctx.subagentNames` 同步读取根 Session 中的名称与 id 映射；`ctx.agentTeams` 继续使用 Session id 处理任务归属和权限。任务列表先按状态、就绪情况和未分配条件筛选，再解析名称。没有精确负责人名称筛选时，只解析请求页中的名称；按精确负责人名称筛选时，在分页前解析剩余候选任务的负责人名称。
 
 [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责模型侧与 scoping 决策。
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供显示的完整路径。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -126,7 +126,7 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are full agent paths from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 

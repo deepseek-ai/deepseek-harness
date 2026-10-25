@@ -984,8 +984,8 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../p
 
 ```ts persistence-catalog
 /**
- * A name candidate, usable only while the parent catalog contains its child.
- * @param data - versioned child identity and sibling name.
+ * A root-owned alias for an accepted subagent identity.
+ * @param data - versioned child identity and complete name.
  */
 'subagent-name/bound': SubagentNameBinding & { readonly version: 1 }
 ```

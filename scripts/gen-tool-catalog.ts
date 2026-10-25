@@ -575,7 +575,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       list_subagent_models: 'packages/subagent/tool-subagent/src/list-models.ts',
       subagent: 'packages/subagent/tool-subagent/src/index.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'optional ctx.subagentNames for names instead of Session ids', 'ctx.llm for model discovery and selected-route validation'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.systemPrompt', 'ctx.sessionProjections', 'optional ctx.subagentNames for names alongside Session ids', 'ctx.llm for model discovery and selected-route validation'],
     writes: ['tool/call', 'tool/result', 'child session events through the chosen provider'],
     shippedNames: ['subagent', 'subagent_fork'],
     async mount(ctx) {
@@ -587,7 +587,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolSubagent, { provider: 'mock', modelDiscovery: true })
     },
     note:
-      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. This catalog includes the optional naming plugin: delegation accepts a sibling name and returns its full path promptly. Without that plugin it accepts no name and returns a Session id. Local children accept follow-ups, while external backends report their single execution automatically.',
+      'The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. This catalog includes the optional naming plugin: delegation accepts a sibling name and returns its full path alongside the child Session id. Without that plugin it accepts no name and returns a Session id. Local children accept follow-ups, while external backends report their single execution automatically.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent-control',
@@ -598,7 +598,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       send_message: 'packages/subagent/tool-subagent-control/src/index.ts',
       wait_agent: 'packages/subagent/tool-subagent-control/src/wait-agent.ts',
     },
-    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents', 'ctx.systemPrompt', 'optional ctx.subagentNames for names instead of Session ids'],
+    requires: ['ctx.tools', 'ctx.subagents', 'ctx.agents', 'ctx.systemPrompt', 'optional ctx.subagentNames for names alongside Session ids'],
     writes: ['tool/call', 'tool/result', 'child session events through ctx.subagents'],
     async mount(ctx) {
       await ctx.plugin(SubagentRuntime)
@@ -609,7 +609,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolSubagentControl)
     },
     note:
-      'The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. This catalog includes optional naming: controls accept a name path or Session id through `name`, and discovery returns paths. Without that plugin, controls retain `agent_id` and discovery returns Session ids.',
+      'The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. This catalog includes optional naming: controls accept a name path or Session id through `name`, and discovery adds names while retaining Session ids. Without that plugin, controls retain `agent_id` and discovery returns Session ids.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-jobs',

@@ -8,14 +8,12 @@
  * @module @deepseek-ai/dsh-tool-subagent-control
  */
 
+import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-subagent-names'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -50,7 +48,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     dispose = registerControls(ctx, config.interrupt !== false)
   }
   ctx.on('internal/service', (service) => {
-    if (service !== 'subagentNames' || names === ctx.get('subagentNames')) return
+    if (service !== 'subagentNames' || ctx.fiber.uid === null || ctx.fiber.state === FiberState.UNLOADING
+      || names === ctx.get('subagentNames')) return
     names = ctx.get('subagentNames')
     install()
   })
@@ -93,19 +92,12 @@ function registerControls(ctx: Context, interrupt: boolean): () => void {
         const address = args[parameter] as string
         const message: ContentBlock[] = [{ type: 'text', text: args.message as string }]
         const target = names === undefined ? SessionId(address)
-          : await names.resolveName(sender, address, exec.signal)
+          : names.resolveName(sender, address)
         const messageId = await ctx.subagents.sendMessage(sender, target, message, { signal: exec.signal })
         return { messageId }
       },
     })
     disposers.push(ctx.tools.register(sendMessage))
-    const communication = new WeakMap<Agent, string>()
-    const legacyGuidance = (agent: Agent): string => {
-      const parentId = JSON.stringify(agent.session.header.parentSession)
-      return `Your parent agent id is ${parentId}. Use `
-        + `send_message({ ${parameter}: ${parentId}, message: "<finding>" }) when a finding changes what the `
-        + 'parent should do next; sending a message does not end your turn.'
-    }
     disposers.push(ctx.systemPrompt.context({
       name: 'subagent:communication',
       order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
@@ -114,31 +106,11 @@ function registerControls(ctx: Context, interrupt: boolean): () => void {
       text: ({ agent, scope, toolSet }) => {
         if (agent === undefined || agent.session.header.origin !== 'subagent'
           || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
-        return names === undefined ? legacyGuidance(agent) : communication.get(agent) ?? ''
-      },
-    }))
-    if (names !== undefined) disposers.push(ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-      const assembly = await next()
-      const { agent, scope, toolSet, signal } = context
-      if (agent === undefined || agent.session.header.origin !== 'subagent'
-        || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return assembly
-      communication.delete(agent)
-      let text: string
-      try {
-        const name = await names.nameOf(agent, signal)
-        const parentName = JSON.stringify(name.slice(0, name.lastIndexOf('/')))
-        text = `Your name is ${JSON.stringify(name)}. Your parent agent name is ${parentName}. Use `
-          + `send_message({ name: ${parentName}, message: "<finding>" }) when a finding changes what the `
+        const parentId = JSON.stringify(agent.session.header.parentSession)
+        return `Your parent agent id is ${parentId}. Use `
+          + `send_message({ ${parameter}: ${parentId}, message: "<finding>" }) when a finding changes what the `
           + 'parent should do next; sending a message does not end your turn.'
-      } catch (error: unknown) {
-        if (!(error instanceof SubagentError && error.code === 'UNAUTHORIZED')
-          && !(error instanceof HarnessError && error.code === 'AGENT_NAMES_UNAVAILABLE')) throw error
-        text = legacyGuidance(agent)
-      }
-      // Admission refresh reads the registered provider after this asynchronous assembly.
-      communication.set(agent, text)
-      return { ...assembly, contexts: assembly.contexts.map(entry => entry.name === 'subagent:communication'
-        ? { ...entry, text } : entry) }
+      },
     }))
     if (interrupt) disposers.push(ctx.tools.register(defineTool({
       name: 'interrupt_agent',
@@ -161,16 +133,16 @@ function registerControls(ctx: Context, interrupt: boolean): () => void {
         },
         render: (args, _value) => [{ type: 'text', text: `interrupt requested for agent ${args[parameter]}` }],
       },
-      async execute(args, exec) {
+      execute(args, exec) {
         const caller = exec.agent
         if (!caller) throw new Error('interrupt_agent requires a calling agent (exec.agent was undefined)')
         // The schema requires the dynamic address key before execution.
         const address = args[parameter] as string
         const target = names === undefined ? SessionId(address)
-          : await names.resolveName(caller, address, exec.signal)
+          : names.resolveName(caller, address)
         exec.signal.throwIfAborted()
         ctx.subagents.interrupt(target, { kind: 'ancestor', agent: caller })
-        return { accepted: true }
+        return Promise.resolve({ accepted: true })
       },
     })))
     return dispose

@@ -1,5 +1,5 @@
 ---
-description: "Create subagents with durable sibling names and resolve their tree paths for delegation tools without changing Session identities."
+description: "Bind readable subagent names to Session ids and recover the mappings from the root Session."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Give delegated agents readable names such as `lead/research` and `lead/research/checker`. Names survive Session reloads, and lookup can read parents that are no longer live. Choose this package for named delegation tools while retaining Session ids for execution and authorization. Names identify existing catalog children; a failed creation does not permanently occupy its requested name.
+Address delegated agents by readable names such as `lead/research` and `lead/research/checker`. Bound names survive root Session reloads and keep the same spelling after agents finish. Choose this package when delegation tools need names while preserving Session ids for execution and authorization. Agents without a bound name remain addressable by id.
 
 ## Table of Contents
 
@@ -29,27 +29,25 @@ Mount this plugin with the naming-aware [delegation tool](../tool-subagent/READM
 
 ### Minimal configuration
 
-Add this row to a composition providing `agents`, `subagents`, and `sessionProjections`:
+Add this row to a composition providing `subagents` and `sessionProjections`:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent-names'
 ```
 
-This plugin has no configuration fields. It exposes `ctx.subagentNames`; the existing subagent service continues to own providers, activations, messages, and authorization. Mount `sessionQuery` for parent reads used by name lookup and discovery; starting a root's child and reading the root's name do not require it.
+This plugin has no configuration fields. It exposes `ctx.subagentNames`; the subagent service owns execution, messages, discovery, and authorization.
 
 ### Choosing and finding names
 
-A requested sibling name starts with a lower-case letter and contains only lower-case letters, digits, underscores, and hyphens. Omission selects the first available `agent-N` name, starting at `agent-1`. Names are immutable and unique under their direct parent, including concurrent starts. A committed child keeps its name after execution settles.
+A requested name segment starts with a lower-case letter and contains only lower-case letters, digits, underscores, and hyphens. Omission selects the first available `agent-N` under the parent's name, starting at `agent-1`. Reservations prevent concurrent starts from choosing the same full name. A bound name remains occupied after execution settles.
 
-The live tree root is `lead`; child paths append one segment per parent. An unnamed catalog child uses `legacy:<sessionId>` as its segment. Lookup accepts a full `lead/...` path, `lead`, or a tree member's exact Session id, including ids in existing runtime notices. It resolves identity only; the subsequent subagent operation still authorizes the caller.
+The root is `lead`. `nameOf` returns a bound full name, or the original Session id when no binding exists. `resolveName` accepts `lead` and bound full names; it rejects an unknown `lead/...` name and passes other ids through. The subsequent subagent operation still authorizes the caller.
 
-### Creation and failure
+### Binding after startup
 
-Call `ctx.subagentNames.startActivation` with `delivery: 'parent'` so the existing catalog retains the child identity. For caller-owned delivery, use `ctx.subagents.startActivation`; that operation retains its id-based behavior.
+Call `reserve(parent, requested?)`, start the child through `ctx.subagents.startActivation`, then call `bind(parent, childId, reservation.name)` with the successful receipt. Release the reservation with `dispose()` in `finally`, whether startup and binding succeed or fail.
 
-Local creation records a candidate name before starting the child. The name becomes discoverable only when the existing parent catalog records that child. A candidate left by failed creation or a crash neither resolves nor occupies the name while its child is absent from the catalog. Once the catalog contains the child, a later startup failure does not free its name.
-
-External providers allocate their own ids, so their names are recorded after startup returns. If that recording fails, the operation attempts and awaits disposal, then reports the started child id. Completed external work cannot be undone; if disposal also fails, execution may still be active. Check that child before retrying.
+Binding records the full name in the root Session. If binding fails after startup succeeds, the caller must report the already-started child id; the child remains managed by the subagent service. A crash before binding can likewise leave an unnamed child that remains addressable by id.
 
 -----
 
@@ -59,14 +57,14 @@ External providers allocate their own ids, so their names are recorded after sta
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin owns parent-local name records and joins them with the existing subagent catalog. Its projection excludes inherited fork records. Pending sibling reservations belong to the plugin instance; unloading cancels and awaits in-flight named starts before releasing their state.
+Each root Session stores its own name-to-id bindings. A projection recovers those bindings and excludes inherited fork records. Lookups read this root mapping without observing ancestor Sessions or joining child catalogs. Callers own transient reservations and release them after their operation.
 
-Name reads traverse creation ancestry through Session observations without restoring parent agents. Discovery adds relative paths to the subagent service's existing descendant rows. Missing projections and inconsistent catalog/name records fail explicitly instead of supplying an unverified alias.
+The mapping retains one binding per named child: storage is O(n), a lookup or binding is O(n), and replaying n distinct bindings is O(n²) in the worst case because each event searches the binding array.
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Named startup, reservation lifetime, path lookup, and discovery |
-| [`src/projection.ts`](src/projection.ts) | Durable candidate records and replay validation |
+| [`src/index.ts`](src/index.ts) | Name reservations, binding, and lookup |
+| [`src/projection.ts`](src/projection.ts) | Durable bindings and replay validation |
 
 </details>
 
@@ -75,48 +73,34 @@ Name reads traverse creation ancestry through Session observations without resto
 <a id="further-exploration"></a>
 ## Further Exploration
 
-These pages own the execution behavior and model-facing consumers that use names.
+These pages own execution and the model-facing tools that use names.
 
 - [Subagent service](../subagent/README.md) — activation ownership, catalogs, and authorization.
 - [Delegation tool](../tool-subagent/README.md) — named creation and start acknowledgements.
 - [Control tools](../tool-subagent-control/README.md) — discovery, messaging, and interruption.
-- [Session projections](../../session/session-projection/README.md) — incremental recovery and observation.
+- [Session projections](../../session/session-projection/README.md) — incremental recovery.
 
 -----
 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Initial child identity
-
-#### What the model sees
-
-Named startup appends the child's full name and its parent's full name to the task prompt. Local children receive this text in their durable initial user message; external providers receive it in the delegated prompt. For a child named `research` under the root:
-
-##### Identity message
-
-```markdown
-Your name is "lead/research". Your parent agent name is "lead".
-```
-
-#### Token effect
-
-One short identity sentence is added to each named child's initial prompt; longer ancestry adds path text. This plugin registers no tool schema or system-prompt section.
+Indirectly, through the [delegation tool](../tool-subagent/README.md) and [control tools](../tool-subagent-control/README.md), which render names alongside Session ids and accept names as addresses.
 
 #### KV Cache effect
 
-The identity joins the new task prompt after any inherited history. Existing history remains unchanged; each child receives its own identity text.
+This plugin adds no prompt text or tool schema. Its consumers own any model-visible name text and its cache effect.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
-Names supplement the existing execution identities with these limits:
+Name bindings have these limits:
 
-- **Direct subagent callers remain unnamed** — starts that bypass `ctx.subagentNames` use the `legacy:<sessionId>` path representation.
-- **External name binding follows execution startup** — a recording failure can occur after external work begins or completes.
-- **Runtime notices retain Session ids** — names do not rewrite messages or settlement notices owned by the subagent service.
-- **Names cannot be renamed or reused for cataloged children** — settling or disposing an activation does not remove its durable catalog membership.
+- **Names are available after binding** — the child's first request may precede its binding; this plugin adds no initial identity message.
+- **Names are immutable** — bound names and ids cannot be reassigned or reused after an activation ends.
+- **Paths capture the parent's name at reservation time** — an unnamed parent uses `lead/legacy:<parentId>` as its prefix; a later parent binding does not rewrite the child's stored path.
+- **Naming is explicit** — callers that do not bind a name continue to use Session ids.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to give an agent a named tool that delegates work to a configured backend. Every call starts a managed activation and returns a child address; the runtime owns completion notices and cleanup. Local children support messages and restoration, while external backends execute one task and return their final answer through the completion notice. Supported backends can expose approved child LLM routes. Each instance can select a child preset and depth limit.
+Use this package to give an agent a named tool that delegates work to a configured backend. Every call starts a managed activation and returns a child Session id; the runtime owns completion notices and cleanup. Local children support messages and restoration, while external backends execute one task and return their final answer through the completion notice. Supported backends can expose approved child LLM routes. Each instance can select a child preset and depth limit.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ The optional `cwd` argument selects the child's initial working directory. Relat
 
 Mount one instance per delegation target, each with a distinct `toolName`. The tool exists exactly while its provider does, so sibling load order and provider reloads never strand it.
 
-With [subagent-names](../subagent-names/README.md) loaded, the optional `name` argument chooses a unique sibling name; omission selects the first unused `agent-N`. The result contains a full path such as `lead/reviewer`. Without the naming plugin, the tool retains its Session-id delegation interface.
+With [subagent-names](../subagent-names/README.md) loaded, the optional `name` argument chooses a unique sibling name; omission selects the first unused `agent-N`. The result keeps the child Session id and adds a full path such as `lead/reviewer`. Without the naming plugin, the tool retains its Session-id delegation interface.
 
 ### Minimal configuration
 
@@ -60,7 +60,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Managed delegation
 
-Every call returns `started subagent <address>` after the runtime accepts the child. It does not wait for the child's result. The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
+Every call returns `started subagent <id>` after the runtime accepts the child; named results add a second line, `name: <path>`. It does not wait for the child's result. The activation owns the work independently of the completed tool call; the runtime sends a completion notice and releases execution resources.
 
 For every backend, the runtime automatically delivers the completion notice if the calling Agent is still online when the child finishes. The notice includes the final answer unless the child sent that Agent a message just before finishing. Local Spawn and Fork children can also send messages, accept more work through `send_message` while active, or resume after settling. Codex, Claude Code, ACP, and DSH SDK backends do not accept follow-up messages.
 
@@ -97,11 +97,11 @@ One instance is one provider plus one tool name. The plugin registers its defini
 
 ### Activation ownership
 
-With naming available, the tool binds the name through `ctx.subagentNames.startActivation()`; otherwise it calls `ctx.subagents.startActivation()` directly. Both select parent delivery. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result; failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
+The tool calls `ctx.subagents.startActivation()` with parent delivery. With naming available, it reserves the requested name before startup, binds the returned child id afterward, and releases the reservation when the call settles. A failed binding reports the already-started child id without stopping its work; callers must check that child before retrying. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. Failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
 
 ### Result acknowledgement
 
-The named tool result is `{ kind: 'activation', name }`; without the naming plugin it is `{ kind: 'activation', subagentId }`. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
+The result is `{ kind: 'activation', subagentId }`, with an additional `name` when naming succeeds. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
 
 ### Context-sensitive wording
 
@@ -210,7 +210,7 @@ Depth changes do not alter the system prompt or tool schemas. Updated runtime co
 
 #### What the model sees
 
-The call retains the task description and prompt. Success returns `started subagent <address>`; startup rejection returns an error. Child execution details are delivered separately from this acknowledgement.
+The call retains the task description and prompt. Success returns `started subagent <id>` and an optional `name: <path>` line; startup rejection returns an error. Child execution details are delivered separately from this acknowledgement.
 
 #### Token effect
 

@@ -886,18 +886,8 @@
       }
     },
     {
-      "type": "subagent-name/bound",
-      "seq": 37,
-      "time": 0,
-      "data": {
-        "version": 1,
-        "childId": "{{child-1}}",
-        "name": "agent-1"
-      }
-    },
-    {
       "type": "subagent/catalog",
-      "seq": 38,
+      "seq": 37,
       "time": 0,
       "data": {
         "version": 0,
@@ -905,6 +895,16 @@
         "childCreatedAt": 0,
         "mode": "continuable",
         "label": "Check direct child"
+      }
+    },
+    {
+      "type": "subagent-name/bound",
+      "seq": 38,
+      "time": 0,
+      "data": {
+        "version": 1,
+        "childId": "{{child-1}}",
+        "name": "lead/agent-1"
       }
     },
     {
@@ -924,7 +924,7 @@
           "content": [
             {
               "type": "text",
-              "text": "started subagent lead/agent-1"
+              "text": "started subagent {{child-1}}\nname: lead/agent-1"
             }
           ],
           "isError": false,
@@ -2584,22 +2584,6 @@
       }
     },
     {
-      "method": "session.event",
-      "payload": {
-        "sessionId": "{{parent}}",
-        "event": {
-          "type": "subagent-name/bound",
-          "seq": 37,
-          "time": 0,
-          "data": {
-            "version": 1,
-            "childId": "{{child-1}}",
-            "name": "agent-1"
-          }
-        }
-      }
-    },
-    {
       "method": "subagent.started",
       "payload": {
         "parentSessionId": "{{parent}}",
@@ -2720,10 +2704,6 @@
                   },
                   {
                     "type": "text",
-                    "text": "Your name is \"lead/agent-1\". Your parent agent name is \"lead\"."
-                  },
-                  {
-                    "type": "text",
                     "text": "Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."
                   }
                 ],
@@ -2799,7 +2779,7 @@
         "sessionId": "{{parent}}",
         "event": {
           "type": "subagent/catalog",
-          "seq": 38,
+          "seq": 37,
           "time": 0,
           "data": {
             "version": 0,
@@ -2807,6 +2787,22 @@
             "childCreatedAt": 0,
             "mode": "continuable",
             "label": "Check direct child"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "subagent-name/bound",
+          "seq": 38,
+          "time": 0,
+          "data": {
+            "version": 1,
+            "childId": "{{child-1}}",
+            "name": "lead/agent-1"
           }
         }
       }
@@ -2832,7 +2828,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "started subagent lead/agent-1"
+                  "text": "started subagent {{child-1}}\nname: lead/agent-1"
                 }
               ],
               "isError": false,
@@ -2974,10 +2970,6 @@
               {
                 "type": "text",
                 "text": "Reply with exactly DIRECT_CHILD_OK and nothing else."
-              },
-              {
-                "type": "text",
-                "text": "Your name is \"lead/agent-1\". Your parent agent name is \"lead\"."
               },
               {
                 "type": "text",

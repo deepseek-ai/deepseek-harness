@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-subagent-names",
-  "description": "Optional catalog-backed names for subagent tools",
+  "description": "Durable name mappings for subagent tools",
   "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
@@ -35,7 +35,6 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-session-query": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*"
   },
   "devDependencies": {
@@ -48,14 +47,8 @@
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-session-query": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-subagent-spawn-in-process": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-session-query": {
-      "optional": true
-    }
   }
 }

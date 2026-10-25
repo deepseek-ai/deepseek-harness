@@ -741,9 +741,9 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe('started subagent lead/agent-1')
+  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}\nname: lead/agent-1`)
   expect(events.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
-    .toEqual([{ version: 1, childId: logs[1]!.header.id, name: 'agent-1' }])
+    .toEqual([{ version: 1, childId: logs[1]!.header.id, name: 'lead/agent-1' }])
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,
@@ -1428,13 +1428,12 @@ describe('headless recorded-session snapshots', () => {
             }
             if (scenario.name === 'subagent-spawn-in-process') {
               const parent = parseSessionLog(actualLogs[0]!.content)
-              const child = parseSessionLog(actualLogs[1]!.content)
               expect(parent.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
-                .toEqual([{ version: 1, childId: actualLogs[1]!.header.id, name: 'reviewer' }])
-              const firstInput = child.find(event => event.type === 'user/message' && event.data.source.kind === 'user')
-              expect(firstInput).toMatchObject({ data: { content: expect.arrayContaining([{
-                type: 'text', text: 'Your name is "lead/reviewer". Your parent agent name is "lead".',
-              }]) } })
+                .toEqual([{ version: 1, childId: actualLogs[1]!.header.id, name: 'lead/reviewer' }])
+              const receipt = parent.find(event => event.type === 'tool/result')
+              expect(receipt).toMatchObject({ data: { message: { content: [{
+                type: 'text', text: `started subagent ${actualLogs[1]!.header.id}\nname: lead/reviewer`,
+              }] } } })
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {

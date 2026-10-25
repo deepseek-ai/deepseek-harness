@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务地址；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例可选择子级 preset 和深度限制。
+使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务 Session id；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例可选择子级 preset 和深度限制。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 每个委派目标挂载一个实例，且每个实例的 `toolName` 必须不同。工具与其提供方同时存在、同时消失，因此同级加载顺序与提供方重新加载都不会让工具悬空。
 
-加载 [subagent-names](../subagent-names/README.zh.md) 后，可选 `name` 参数选择同级唯一名称，省略时分配首个未使用的 `agent-N`。工具返回完整路径，例如 `lead/reviewer`。未加载命名插件时，工具保留按 Session id 委派的接口。
+加载 [subagent-names](../subagent-names/README.zh.md) 后，可选 `name` 参数选择同级唯一名称，省略时分配首个未使用的 `agent-N`。工具保留子任务 Session id，并附加完整路径，例如 `lead/reviewer`。未加载命名插件时，工具保留按 Session id 委派的接口。
 
 ### 最小配置
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 
 ### 受管理的委派
 
-运行时接受子任务后，每次调用都会返回 `started subagent <address>`，不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
+运行时接受子任务后，每次调用都会返回 `started subagent <id>`；命名结果增加第二行 `name: <path>`。调用不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
 
 所有后端都由运行时自动递送完成通知，前提是子任务结束时调用方 Agent 仍在线。通知包含最终回答，除非子任务在结束前刚向该 Agent 发过消息。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 
@@ -97,11 +97,11 @@ kind: "package-reference"
 
 ### Activation 所有权
 
-命名插件可用时，工具通过 `ctx.subagentNames.startActivation()` 绑定名称；否则直接调用 `ctx.subagents.startActivation()`。两种方式都选择向父任务交付。运行时拥有启动取消、执行、结果汇报与清理。启动失败产生出错的工具结果；发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
+工具调用 `ctx.subagents.startActivation()`，并选择向父任务交付。命名插件可用时，先预留请求的名称，启动后绑定返回的子任务 id，在调用结束时释放预留。绑定失败会报告已启动的子任务 id，但不会停止其工作；调用方必须先检查该子任务再重试。运行时拥有启动取消、执行、结果汇报与清理。发布后的失败通过完成通知到达，运行时保留诊断和部分输出。
 
 ### 结果确认
 
-命名模式的工具结果为 `{ kind: 'activation', name }`；未加载命名插件时为 `{ kind: 'activation', subagentId }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
+结果为 `{ kind: 'activation', subagentId }`，命名成功时附加 `name`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
 
 ### 随上下文变化的措辞
 
@@ -210,7 +210,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-调用保留任务描述与提示词。成功返回 `started subagent <address>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
+调用保留任务描述与提示词。成功返回 `started subagent <id>`，并可附带 `name: <path>` 行；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
 
 #### Token 影响
 

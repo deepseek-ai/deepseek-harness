@@ -12,7 +12,7 @@ const header: SessionHeader = {
   isSeeded: false,
 }
 
-function bound(seq: number, childId = 'child', name = 'worker'): SessionEvent<'subagent-name/bound'> {
+function bound(seq: number, childId = 'child', name = 'lead/worker'): SessionEvent<'subagent-name/bound'> {
   return {
     type: 'subagent-name/bound', seq: SessionSeq(seq), time: seq,
     data: { version: 1, childId: SessionId(childId), name },
@@ -32,19 +32,21 @@ describe('subagent names projection', () => {
   it('keeps each child binding immutable without mutating earlier states', () => {
     const initial = subagentNamesProjection.init(header, SessionLogOffset(0))
     const first = subagentNamesProjection.apply(initial, bound(0))
-    const second = subagentNamesProjection.apply(first, bound(1, 'other-child', 'reviewer'))
+    const second = subagentNamesProjection.apply(first, bound(1, 'other-child', 'lead/reviewer'))
 
     expect(initial.bindings).toEqual([])
-    expect(first.bindings).toEqual([{ childId: 'child', name: 'worker' }])
+    expect(first.bindings).toEqual([{ childId: 'child', name: 'lead/worker' }])
     expect(second.bindings).toEqual([
-      { childId: 'child', name: 'worker' },
-      { childId: 'other-child', name: 'reviewer' },
+      { childId: 'child', name: 'lead/worker' },
+      { childId: 'other-child', name: 'lead/reviewer' },
     ])
-    expect(() => subagentNamesProjection.apply(second, bound(2, 'child', 'renamed')))
-      .toThrow('subagent name for child is immutable')
+    expect(() => subagentNamesProjection.apply(second, bound(2, 'child', 'lead/renamed')))
+      .toThrow('one immutable binding')
+    expect(() => subagentNamesProjection.apply(second, bound(2, 'different-child', 'lead/worker')))
+      .toThrow('one immutable binding')
     expect(second.bindings).toEqual([
-      { childId: 'child', name: 'worker' },
-      { childId: 'other-child', name: 'reviewer' },
+      { childId: 'child', name: 'lead/worker' },
+      { childId: 'other-child', name: 'lead/reviewer' },
     ])
   })
 
@@ -65,22 +67,22 @@ describe('subagent names projection', () => {
 
   it('excludes inherited bindings and admits the event at the exact inherited cut', () => {
     const initial = subagentNamesProjection.init(header, SessionLogOffset(2))
-    expect(subagentNamesProjection.apply(initial, bound(0, 'child', 'inherited'))).toBe(initial)
-    expect(subagentNamesProjection.apply(initial, bound(1, 'other-child', 'inherited-too'))).toBe(initial)
+    expect(subagentNamesProjection.apply(initial, bound(0, 'child', 'lead/inherited'))).toBe(initial)
+    expect(subagentNamesProjection.apply(initial, bound(1, 'other-child', 'lead/inherited-too'))).toBe(initial)
     const own = subagentNamesProjection.apply(initial, bound(2))
 
-    expect(own.bindings).toEqual([{ childId: 'child', name: 'worker' }])
+    expect(own.bindings).toEqual([{ childId: 'child', name: 'lead/worker' }])
     expect(own.inheritedEventCount).toBe(2)
   })
 
   it.each([
-    { version: 2, childId: 'child', name: 'worker' },
-    { childId: 'child', name: 'worker' },
-    { version: 1, childId: 1, name: 'worker' },
-    { version: 1, name: 'worker' },
+    { version: 2, childId: 'child', name: 'lead/worker' },
+    { childId: 'child', name: 'lead/worker' },
+    { version: 1, childId: 1, name: 'lead/worker' },
+    { version: 1, name: 'lead/worker' },
     { version: 1, childId: 'child' },
     { version: 1, childId: 'child', name: 1 },
-    { version: 1, childId: 'child', name: 'worker', extra: true },
+    { version: 1, childId: 'child', name: 'lead/worker', extra: true },
     ...['', 'Worker', '1worker', 'parent/worker', 'legacy:child', 'worker name'].map(name => ({
       version: 1, childId: 'child', name,
     })),
@@ -99,10 +101,11 @@ describe('subagent names projection', () => {
     { inheritedEventCount: '0', bindings: [] },
     { inheritedEventCount: 0, bindings: {} },
     { inheritedEventCount: 0, bindings: [{ childId: 'child' }] },
-    { inheritedEventCount: 0, bindings: [{ childId: 1, name: 'worker' }] },
+    { inheritedEventCount: 0, bindings: [{ childId: 1, name: 'lead/worker' }] },
     { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'parent/worker' }] },
-    { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'worker', version: 1 }] },
-    { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'worker' }, { childId: 'child', name: 'reviewer' }] },
+    { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'lead/worker', version: 1 }] },
+    { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'lead/worker' }, { childId: 'child', name: 'lead/reviewer' }] },
+    { inheritedEventCount: 0, bindings: [{ childId: 'child', name: 'lead/worker' }, { childId: 'other', name: 'lead/worker' }] },
     { inheritedEventCount: 0, bindings: [], extra: true },
   ])('rejects malformed checkpoint state %j', (state) => {
     expect(subagentNamesProjection.stateSchema.safeParse(state).success).toBe(false)
@@ -112,16 +115,16 @@ describe('subagent names projection', () => {
     const projections = await registry()
     const inheritedEventCount = SessionLogOffset(1)
     const events: SessionEvent[] = [
-      bound(0, 'ancestor-child', 'inherited'),
+      bound(0, 'ancestor-child', 'lead/inherited'),
       bound(1),
       bound(2),
-      bound(3, 'other-child', 'reviewer'),
+      bound(3, 'other-child', 'lead/reviewer'),
       { type: 'turn/start', seq: SessionSeq(4), time: 4, data: { turn: 1 } },
     ]
     const prefix = projections.restore({}, events.slice(0, 2), SessionLogOffset(0), header, inheritedEventCount)
     expect(prefix.checkpoint.subagentNames).toEqual({
       ver: 1, seq: 1,
-      val: { inheritedEventCount: 1, bindings: [{ childId: 'child', name: 'worker' }] },
+      val: { inheritedEventCount: 1, bindings: [{ childId: 'child', name: 'lead/worker' }] },
     })
     const resumed = projections.restore(
       prefix.checkpoint, events.slice(2), SessionLogOffset(2), header, inheritedEventCount,
@@ -132,8 +135,8 @@ describe('subagent names projection', () => {
     expect(resumed.snapshot).toEqual({
       asOfSeq: 4,
       values: { subagentNames: [
-        { childId: 'child', name: 'worker' },
-        { childId: 'other-child', name: 'reviewer' },
+        { childId: 'child', name: 'lead/worker' },
+        { childId: 'other-child', name: 'lead/reviewer' },
       ] },
     })
     expect(projections.viewCheckpoint(resumed.checkpoint)).toEqual(resumed.snapshot.values)
@@ -150,11 +153,11 @@ describe('subagent names projection', () => {
 
     expect(projections.viewCheckpoint(incompatible)).toEqual({})
     expect(() => projections.restore(
-      incompatible, [bound(1, 'other-child', 'reviewer')], SessionLogOffset(1), header, SessionLogOffset(0),
+      incompatible, [bound(1, 'other-child', 'lead/reviewer')], SessionLogOffset(1), header, SessionLogOffset(0),
     )).toThrow(/re-read from seq 0/)
     expect(projections.restore(
       incompatible, [bound(0)], SessionLogOffset(0), header, SessionLogOffset(0),
-    ).snapshot.values.subagentNames).toEqual([{ childId: 'child', name: 'worker' }])
+    ).snapshot.values.subagentNames).toEqual([{ childId: 'child', name: 'lead/worker' }])
   })
 
   it('rejects a version-matching checkpoint with invalid binding fields', async () => {

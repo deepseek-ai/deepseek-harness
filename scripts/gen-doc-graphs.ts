@@ -808,7 +808,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Optional subagent names',
     mode: 'core',
     consumers: ['tool-subagent', 'tool-subagent-control', 'experimental-tool-agent-team', 'experimental-tool-subagent-oar'],
-    note: 'Owns sibling name reservations, durable bindings, and catalog-backed path lookup. Execution and authorization remain with the subagent service.',
+    note: 'Owns name reservations and durable name-to-id bindings in the root Session. Execution and authorization remain with the subagent service.',
   },
   {
     key: 'speechToText',

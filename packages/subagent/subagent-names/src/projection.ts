@@ -1,11 +1,11 @@
-/** Parent-owned alias candidates; the subagent catalog establishes usable membership. @module */
+/** Root-Session aliases restored independently of subagent execution. @module */
 
 import { z } from 'zod'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 
-/** One immutable sibling name requested for a child identity. */
+/** One immutable full name bound to an accepted child identity. */
 export interface SubagentNameBinding {
   readonly childId: SessionId
   readonly name: string
@@ -14,8 +14,8 @@ export interface SubagentNameBinding {
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
-     * A name candidate, usable only while the parent catalog contains its child.
-     * @param data - versioned child identity and sibling name.
+     * A root-owned alias for an accepted subagent identity.
+     * @param data - versioned child identity and complete name.
      */
     'subagent-name/bound': SubagentNameBinding & { readonly version: 1 }
   }
@@ -27,24 +27,28 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   }
 }
 
-/** Names use one lower-case path segment; legacy ids have a separate prefix. */
+/** Requested sibling names use one lower-case path segment. */
 export const nameSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/)
 
-const bindingSchema = z.object({ childId: z.string().transform(SessionId), name: nameSchema }).strict()
+/** Bound paths include the root prefix and may include an unnamed parent's id. */
+export const fullNameSchema = z.string().startsWith('lead/').min(6)
+
+const bindingSchema = z.object({ childId: z.string().transform(SessionId), name: fullNameSchema }).strict()
 const boundSchema = bindingSchema.extend({ version: z.literal(1) })
 const bindingsSchema = z.array(bindingSchema).refine(
-  bindings => new Set(bindings.map(binding => binding.childId)).size === bindings.length,
-  'each child identity must have one name binding',
+  bindings => new Set(bindings.map(binding => binding.childId)).size === bindings.length
+    && new Set(bindings.map(binding => binding.name)).size === bindings.length,
+  'child identities and names must each be unique',
 )
 const stateSchema = z.object({
   inheritedEventCount: z.number().int().nonnegative().transform(SessionLogOffset),
   bindings: bindingsSchema,
 }).strict()
 
-/** Recoverable direct-parent alias candidates, excluding inherited fork records. */
+/** Recoverable root aliases, excluding inherited fork records. */
 export type SubagentNamesState = z.infer<typeof stateSchema>
 
-/** Alias recovery is pure; catalog membership is checked when a name is read. */
+/** Alias recovery does not start agents or read other Sessions. */
 export const subagentNamesProjection = {
   key: 'subagentNames',
   stateVersion: 1,
@@ -56,9 +60,9 @@ export const subagentNamesProjection = {
     if (event.seq < state.inheritedEventCount) return state
     if (event.type === 'subagent-name/bound') {
       const { version: _version, ...binding } = boundSchema.parse(event.data)
-      const previous = state.bindings.find(entry => entry.childId === binding.childId)
+      const previous = state.bindings.find(entry => entry.childId === binding.childId || entry.name === binding.name)
       if (previous !== undefined) {
-        if (previous.name !== binding.name) throw new Error(`subagent name for ${binding.childId} is immutable`)
+        if (previous.name !== binding.name || previous.childId !== binding.childId) throw new Error('subagent names and identities must have one immutable binding')
         return state
       }
       return { ...state, bindings: [...state.bindings, binding] }

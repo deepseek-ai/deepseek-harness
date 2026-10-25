@@ -27,9 +27,6 @@
       "path": "../../session/session-projection"
     },
     {
-      "path": "../../session-query/session-query"
-    },
-    {
       "path": "../subagent"
     }
   ]

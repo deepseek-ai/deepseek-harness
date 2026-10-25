@@ -227,7 +227,7 @@ type SubagentInterruptAuthority =
 
 ## 可选工具名字
 
-[命名插件](../../packages/subagent/subagent-names/README.zh.md)负责模型工具的名字分配和路径查询。它将自己持有的父级绑定与现有 catalog 结合；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
+[命名插件](../../packages/subagent/subagent-names/README.zh.md)负责模型工具的名字分配和路径查询。它在根 Session 中保存名字到 ID 的绑定；执行、授权、provider 请求和运行时通知继续使用 Session id。直接调用服务不会自动分配名字。
 
 ## 结果与后端句柄
 
@@ -415,44 +415,41 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../.
 
 ### `ctx.subagentNames` — `SubagentNames`
 
-Catalog-backed names that leave subagent execution and authorization with their existing owner.
+Root-Session aliases shared by named creation, discovery, and control tools.
 
 ```ts cordis-catalog
 /**
- * Start a named child, reserving its sibling name until startup settles.
- * Parent delivery retains catalog membership. Local names precede catalog publication;
- * external names follow accepted startup.
- * @param spec - ordinary activation options and an optional lower-case sibling name.
- * @returns the existing activation receipt plus its full name.
- * @throws SubagentNameError for invalid or duplicate names. An external binding failure
- * includes childId and awaits disposal without undoing completed work.
+ * Reserve a complete name without starting an agent or writing a Session event.
+ * @param parent - exact live caller whose name prefixes the child name.
+ * @param requested - optional sibling segment; omission selects the first free agent-N.
+ * @returns a reservation the caller must dispose after startup and binding.
  */
-async startActivation(spec: NamedSubagentActivationSpec): Promise<SubagentActivation & { readonly name: string }>
+reserve(parent: Agent, requested?: string): SubagentNameReservation
 
 /**
- * Read the full name of an exact live Agent without restoring its ancestors.
- * @param agent - live root or managed child whose name is requested.
- * @param signal - cancellation during parent catalog reads.
- * @returns lead, named path segments, or legacy id segments for unnamed children.
+ * Record an accepted child's full name in the caller's root Session.
+ * Binding failure does not cancel or dispose the child; callers report its id.
+ * @param parent - exact live caller whose root owns the alias.
+ * @param childId - identity returned by the subagent service.
+ * @param name - complete name returned by reserve.
  */
-async nameOf(agent: Agent, signal?: AbortSignal): Promise<string>
+bind(parent: Agent, childId: SessionId, name: string): void
 
 /**
- * Translate a canonical path or a tree member's exact id without granting authority.
- * @param caller - exact live Agent selecting the subagent tree.
- * @param name - lead, a lead-prefixed path, or an existing member's exact Session id.
- * @param signal - cancellation during catalog reads.
- * @returns the identity for the subagent operation to authorize.
+ * Read a bound name from the live root's projection without loading ancestors.
+ * @param caller - exact live caller selecting the tree.
+ * @param targetId - requested identity; omission selects the caller.
+ * @returns lead for the root, a bound full name, or the unchanged id.
  */
-async resolveName(caller: Agent, name: string, signal?: AbortSignal): Promise<SessionId>
+nameOf(caller: Agent, targetId: SessionId = caller.id): string
 
 /**
- * Attach relative names to the existing catalog traversal and its branch diagnostics.
- * @param rootId - Session whose catalog starts discovery.
- * @param signal - cancellation while reading descendant and name projections.
- * @returns existing descendant rows with paths relative to rootId.
+ * Resolve an alias or pass through an id for the subagent service to authorize.
+ * @param caller - exact live caller selecting the root mapping.
+ * @param name - lead, a bound full name, or a raw Session id.
+ * @returns the target identity; an unknown lead/... name throws.
  */
-async listDescendants(rootId: SessionId, signal?: AbortSignal): Promise<(SubagentDescendantListEntry & { readonly path: string })[]>
+resolveName(caller: Agent, name: string): SessionId
 ```
 
 Types: [Agent](core.zh.md) · [SessionId](core.zh.md)

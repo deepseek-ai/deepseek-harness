@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/subagent/subagent-names/README.md
 /:
-  en: ac134a941d5a4791
-  zh: 2e78de95e7019137
+  en: 26564f09306cf08f
+  zh: b8933154b4911a0c
 /deepseek-ai-dsh-subagent-names:
   en: 622989d6dcd8611a
   zh: 6f0a3beb8e665332
 /deepseek-ai-dsh-subagent-names/summary:
-  en: dce79dec57405de4
-  zh: 322c420f5779baaa
+  en: 1af1d0f9ab2e446e
+  zh: 4846168336979ca6
 /deepseek-ai-dsh-subagent-names/table-of-contents:
   en: d152484eb41ac6b4
   zh: c614dc45fe9577a5
@@ -18,41 +18,29 @@
   en: 15e2ab025baa3f2e
   zh: eab7ed264c78a4e4
 /deepseek-ai-dsh-subagent-names/use-this-package/minimal-configuration:
-  en: 12034dd48a7e0c1b
-  zh: a84690d6356ffbd3
+  en: 46eb3758e96fa2a9
+  zh: d85a69812bb4ed77
 /deepseek-ai-dsh-subagent-names/use-this-package/choosing-and-finding-names:
-  en: 3f36d041164a1e04
-  zh: 97418063aec0a08c
-/deepseek-ai-dsh-subagent-names/use-this-package/creation-and-failure:
-  en: f5ee74db9a397c18
-  zh: 3c9acad39ef8127d
+  en: d7f5ce2da602deb1
+  zh: 9862710f0cd113b9
+/deepseek-ai-dsh-subagent-names/use-this-package/binding-after-startup:
+  en: 9c0853a5c5b3f776
+  zh: 8d63108d8fb65f6e
 /deepseek-ai-dsh-subagent-names/understand-the-implementation:
-  en: 4b0f042e1512b764
-  zh: 65329202d8ce93b3
+  en: e7ead7723e3e5d29
+  zh: 30a1b369fe8df0a5
 /deepseek-ai-dsh-subagent-names/further-exploration:
-  en: 8509edc3d9146efa
-  zh: 09a6e3ebd1a75011
+  en: ed0fb57dc13736e6
+  zh: acd0cd0756510e65
 /deepseek-ai-dsh-subagent-names/model-experience:
-  en: 215e7ba838619b7b
-  zh: a311da3843709f90
-/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity:
-  en: 22f7737ddb8bb24b
-  zh: 497b7190cf316a0d
-/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/what-the-model-sees:
-  en: d05d767ea412d8bd
-  zh: 031080dcce3211d6
-/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/what-the-model-sees/identity-message:
-  en: d032a01e1b229d26
-  zh: 05dd1a8dc54e9109
-/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/token-effect:
-  en: 63fa3c1fab95b75a
-  zh: 9805b73493dddb66
-/deepseek-ai-dsh-subagent-names/model-experience/initial-child-identity/kv-cache-effect:
-  en: 248a19e7e4b73b1d
-  zh: 6d360af936b15bb5
+  en: 40f9481ebd3e077d
+  zh: 118c16ec3fed9652
+/deepseek-ai-dsh-subagent-names/model-experience/kv-cache-effect:
+  en: f1456be695a842d8
+  zh: ba3a1608efd6100b
 /deepseek-ai-dsh-subagent-names/known-limitations-and-deferred-work:
-  en: 9b06e33292c3ff6d
-  zh: 654cd7f7b49bfc2f
+  en: 81988fdd0823cffa
+  zh: 96bacb5621c1e874
 /deepseek-ai-dsh-subagent-names/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

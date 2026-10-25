@@ -73,8 +73,6 @@ The fixture is a projection of one selected persisted Session generation produce
 
 A scenario where a parent agent delegates to in-process subagents records one role per Session: parent `session[.vN].jsonl`, then contiguous children `session.<ordinal>[.vN].jsonl`. The snapshot harness supplies only the highest generation of each role. Live Session ids are freshly random each run, so replay binds each live Session to a recorded script by first-call order: the first live Session to make a model call claims the parent script, the next new Session the next child script, and so on, with each Session advancing its own cursor. More distinct live Sessions than recorded scripts fails loud.
 
-Recorded `{{session:N}}` tokens resolve to the live Session id at the same ordinal. A `started subagent` receipt can bind that id before a background child makes its first model call. Raw-id receipts work without naming services; `lead/...` receipts require the live calling Agent and `subagentNames.resolveName`, so unresolved names fail instead of becoming Session ids.
-
 ### Failure modes and overrides
 
 When replay serves `deepseek-official` with `ctx.deepseekLlmApiExtensions`, it prepares and accepts those fields after selecting a valid script entry and before yielding the first chunk. This mirrors the live adapter's post-2xx commit point, so durable acceptance watermarks and SDK event notifications behave the same in recording and replay. Replay supplies a synthetic `{ messages: [] }` base body: it proves acceptance side effects, not prepared field bytes.

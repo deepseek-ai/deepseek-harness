@@ -9,7 +9,7 @@ English | [中文](2026-10-25-subagent-tool-names.zh.md)
 
 ## Summary
 
-Adds the parent-owned subagent-name/bound event for optional named subagent creation.
+Adds the root-Session-owned subagent-name/bound event for persistent name-to-id bindings.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ Existing V4 Sessions remain readable and unnamed catalog children retain their S
 <a id="verification"></a>
 ## Verification
 
-The subagent-names package tests cover candidate replay, inherited-fork exclusion, checkpoint recovery, duplicate binding rejection, cold parent lookup, and startup failure. The focused storage-contract.spec.ts and V4 codec.spec.ts run passed 37 tests, including refusal of unknown required events before adoption.
+The subagent-names package tests cover binding replay, inherited-fork exclusion, checkpoint recovery, and conflicting binding rejection. The storage-contract.spec.ts and V4 codec.spec.ts tests cover refusal of unknown required events before adoption.
 
 <a id="dev-note"></a>
 ## Dev Note

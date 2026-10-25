@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-为可选的子智能体命名创建增加由父会话持有的 subagent-name/bound 事件。
+增加由根 Session 持有的 subagent-name/bound 事件，持久保存名字到 ID 的绑定。
 
 ## 目录
 
@@ -40,7 +40,7 @@ changes:
 <a id="verification"></a>
 ## 验证
 
-subagent-names 包测试覆盖候选记录回放、排除 fork 继承事件、checkpoint 恢复、拒绝重复绑定、冷父节点查询和启动失败。针对 storage-contract.spec.ts 与 V4 codec.spec.ts 的测试共 37 项通过，其中包含在接管前拒绝未知必读事件。
+subagent-names 包测试覆盖绑定回放、排除 fork 继承事件、checkpoint 恢复及拒绝冲突绑定。storage-contract.spec.ts 与 V4 codec.spec.ts 测试覆盖在接管前拒绝未知必读事件。
 
 <a id="dev-note"></a>
 ## 开发备注

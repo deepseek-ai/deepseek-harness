@@ -651,7 +651,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ContinuableCreateSpec: 'subagent.md',
   SubagentActivation: 'subagent.md',
   SubagentActivationSpec: 'subagent.md',
-  NamedSubagentActivationSpec: 'subagent.md',
+  SubagentNameReservation: 'subagent.md',
   SubagentNameBinding: 'subagent.md',
   SubagentNameError: 'subagent.md',
   SubagentNameErrorCode: 'subagent.md',
