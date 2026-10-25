@@ -328,7 +328,7 @@ describe('sessions.fork', () => {
     },
   )
 
-  it('cuts exactly at a completed turn and records lineage and cwd', async () => {
+  it('cuts exactly at a completed turn and retains cwd without source lineage', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-source', 2)
     const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: 2 }))
@@ -338,7 +338,7 @@ describe('sessions.fork', () => {
     expect(child?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end', 'session/end-seed',
     ])
-    expect(child?.header.parentSession).toBe(source.id)
+    expect(child?.header.parentSession).toBeUndefined()
     expect(child?.header.cwd).toBe('/proj')
     await ctx.fiber.dispose()
   })
@@ -379,10 +379,10 @@ describe('sessions.fork', () => {
     if (!response.ok) return
     expect(attachSession).toHaveBeenCalledWith(response.value.sessionId)
     expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
-      parentSession: grandchild.id,
       cwd: '/proj',
     })
     expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -435,10 +435,10 @@ describe('sessions.fork', () => {
     expect(resume).not.toHaveBeenCalled()
     expect(ctx.agents.get(sourceId)).toBeUndefined()
     expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({
-      parentSession: sourceId,
       cwd: '/proj',
     })
     expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
     await ctx.fiber.dispose()
   })
 

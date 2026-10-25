@@ -24,7 +24,7 @@ The two ownership rules meet at the observation's projection snapshot. Lightweig
 flowchart LR
   List["list / search"] --> Corpus["SessionQuery corpus"]
   Follow["follow"] --> Observe["observeSession"]
-  Page["page / attachment / fork"] --> Observe
+  Page["page / fork"] --> Observe
   Subagent["subagent list / continuation"] --> Observe
   Corpus --> Cache["projection cache hints"]
   Cache --> ClientList["Client Session list"]
@@ -84,7 +84,8 @@ Each public operation chooses one query and projection policy. The choice is par
 | `session.search` | Corpus authorization plus the configured search provider | None for result listing | Never |
 | `session.follow` | One exact observation | All, carried in the opening snapshot | Ordinary cold Session only, after snapshot delivery |
 | `session.page` | One exact observation | None, except projection-backed subagent authorization | Never |
-| Attachment and fork source | One exact observation | None unless authorization requires it | Never for the source |
+| Fork source | One exact observation | None unless authorization requires it | Never for the source |
+| Attachment | Direct store read under the [image access rule](2026-10-23-store-scoped-image-reads.md) | None | Never |
 | Subagent list and continuation | Parent-catalog observations for listing; target observations for continuation | All; listing consumes catalog values, continuation consumes identity and inherited values | Never for listing; continuation follows its explicit command semantics |
 
 ### Replayable Client facts are projection-owned
@@ -179,7 +180,7 @@ Client tests pin higher-sequence-wins projection storage, title updates, model c
 
 **Keep source resolution in each consumer.** Rejected because every caller would continue to implement its own live race, persistence error mapping, preparation lifetime, cancellation, and projection cut, allowing both duplicate work and inconsistent results.
 
-**Activate an Agent for every exact read.** Rejected because list, history, attachment, search, and subagent inspection are read operations. Activation loads plugins and changes process state, and it has no natural retirement point for pagination or catalog reads.
+**Activate an Agent for every exact read.** Rejected because list, history, search, and subagent inspection are read operations. Activation loads plugins and changes process state, and it has no natural retirement point for pagination or catalog reads.
 
 **Prepare only requested projection keys.** Rejected because a partially projected Session creates another lifecycle state that every cache, restore, plugin-registration, and caller path must track. Projection units are pure and few; computing all registered units for an exact observation is simpler than maintaining `O(E*k)` partial state instead of `O(E*P)` complete state.
 

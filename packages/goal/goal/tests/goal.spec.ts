@@ -241,7 +241,7 @@ describe('GoalService creation and replay', () => {
       roundsStarted: 1,
       activation: 'disarmed',
     })
-    expect(child.session.header.parentSession).toBe(parent.session.id)
+    expect(child.session.header.parentSession).toBeUndefined()
     expect(child.session.header.isSeeded).toBe(true)
     expect(child.session.inheritedEventCount).toBe(parent.session.seq)
   })

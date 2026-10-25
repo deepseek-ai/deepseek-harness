@@ -25,6 +25,9 @@ describe('official recommendations', () => {
       { ...bundle, name: 'custom', official: false }, { ...bundle, name: 'missing', availability: 'missing' },
       { ...bundle, name: 'on-demand', optional: false }, { ...bundle, name: 'read-only', readOnlyReason: 'management-required' },
       { ...bundle, name: 'failed', error: { code: 'operation-error', diagnostic: 'load failed' } },
+      { ...bundle, name: 'unsupported-shipped', listedByDefault: false, error: { code: 'unsupported-platform' } },
+      { ...bundle, name: 'unsupported-installed', installed: true, error: { code: 'unsupported-platform' } },
+      { ...bundle, name: 'unsupported-catalog', availability: 'missing', error: { code: 'unsupported-platform' } },
     ])
     const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'official-plugins' }, agent: f.agent,
       callId: ToolCallId('discovery'), signal: new AbortController().signal })

@@ -3,7 +3,7 @@
 import type {} from '@deepseek-ai/dsh-agent/types'
 import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 import type {
-  AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
+  ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -329,12 +329,14 @@ export interface SessionPromptValue {
 
 /** Durable image read request. */
 export interface SessionAttachmentRequest {
+  /** Gateway permission scope only; neither Session existence nor its image references are checked. */
   readonly sessionId: SessionId
-  readonly attachmentId: AttachmentIdType
+  readonly attachment: ImageAttachmentRef
 }
 
 /** Durable image read response value. */
 export interface SessionAttachmentValue {
+  /** Supplied reference after ID, format, byte length, and dimensions verification; display fields are preserved. */
   readonly attachment: ImageAttachmentRef
   readonly data: string
 }

@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-bundle/README.md
 /:
-  en: 84e3dc6f31301114
-  zh: 6d5cad8cbe82552f
+  en: cc518dcd97629a96
+  zh: 465e999011282dc3
 /deepseek-ai-dsh-cua-bundle:
   en: 9084fb48d0f6489c
   zh: ce692972d91cf663
 /deepseek-ai-dsh-cua-bundle/summary:
-  en: 06d8bf4ee1ef6f3b
-  zh: 8568f649fb846615
+  en: 5f213491dd724c91
+  zh: 228439436d3b339c
 /deepseek-ai-dsh-cua-bundle/table-of-contents:
   en: b563e4ec4727d0de
   zh: d0228da978238e05
 /deepseek-ai-dsh-cua-bundle/use-this-package:
-  en: b6d91daced0484ae
-  zh: bbb66c14f0ba2738
+  en: dc35841a42753d00
+  zh: 3c8a03a2ecbec26f
 /deepseek-ai-dsh-cua-bundle/understand-the-implementation:
-  en: 25c57d146e2097f1
-  zh: 0432586fb8441e43
+  en: b1011db52cfc17cd
+  zh: 6fa8798fedc5c0b6
 /deepseek-ai-dsh-cua-bundle/further-exploration:
   en: 9f15d56b5b16e1ca
   zh: 75eb08e8828c8877
 /deepseek-ai-dsh-cua-bundle/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc:
-  en: b932589e03b6ff18
-  zh: b932589e03b6ff18
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/what-the-model-sees:
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions:
+  en: e8f11f45b375771e
+  zh: e8f11f45b375771e
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/what-the-model-sees:
   en: 591af735d1eb92f6
   zh: 3632bffa33c77b28
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/token-effect:
-  en: 4781f86555eb9a82
-  zh: be437d25cc0a6783
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-and-persistent-ptc/kv-cache-effect:
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/token-effect:
+  en: e8de232e96220fe7
+  zh: 5c791307e2123667
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/kv-cache-effect:
   en: 417c40acd93df532
   zh: 69cc5cf7140c75a9
 /deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work:
-  en: 987e53e31c00358d
-  zh: 6a42836830b6d9ca
+  en: 5586cb62bb16d601
+  zh: 8b06372c77d0cd48
 /deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: ce96645b3e75874e

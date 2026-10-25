@@ -24,7 +24,7 @@ Session 精确读取使用可保留的 `SessionObservation`，向 Client 暴露�
 flowchart LR
   List["list / search"] --> Corpus["SessionQuery corpus"]
   Follow["follow"] --> Observe["observeSession"]
-  Page["page / attachment / fork"] --> Observe
+  Page["page / fork"] --> Observe
   Subagent["subagent list / continuation"] --> Observe
   Corpus --> Cache["projection cache hints"]
   Cache --> ClientList["Client Session list"]
@@ -84,7 +84,8 @@ Registry 拥有 fold state；各领域拥有自己的 `init`、`apply`、`view`�
 | `session.search` | Corpus 鉴权加已配置 search provider | 结果列表不计算 | 从不 |
 | `session.follow` | 一份精确 observation | 全算，并由 opening snapshot 携带 | 仅普通 cold Session，且在 snapshot 交付后 |
 | `session.page` | 一份精确 observation | 不计算，但 projection-backed subagent 鉴权除外 | 从不 |
-| Attachment 与 fork source | 一份精确 observation | 鉴权不要求时不计算 | source 从不激活 |
+| Fork source | 一份精确 observation | 鉴权不要求时不计算 | source 从不激活 |
+| Attachment | 按[图片访问规则](2026-10-23-store-scoped-image-reads.zh.md)直接读取存储 | 不计算 | 从不 |
 | Subagent list 与 continuation | Listing 观察父目录；continuation 观察目标 | 全算；listing 消费目录值，continuation 消费身份与继承值 | Listing 从不；continuation 遵循显式命令语义 |
 
 ### 可回放的 Client 事实归 projection 所有
@@ -179,7 +180,7 @@ Client 测试固定 higher-sequence-wins projection store、title 更新、model
 
 **由各消费方继续解析数据源。** 否决，因为每个调用方都需要重复实现 live race、persistence error mapping、preparation lifetime、cancellation 和 projection cut，既会重复工作，也会产生不一致结果。
 
-**每次精确读取都激活 Agent。** 否决，因为 list、history、attachment、search 与 subagent inspection 都是读取操作。Activation 会加载插件并改变进程状态，也没有适合分页或 catalog 读取的自然退出点。
+**每次精确读取都激活 Agent。** 否决，因为 list、history、search 与 subagent inspection 都是读取操作。Activation 会加载插件并改变进程状态，也没有适合分页或 catalog 读取的自然退出点。
 
 **只 prepare 被请求的 projection key。** 否决，因为只完成部分 projection 的 Session 会增加一种生命周期状态，所有 cache、restore、plugin registration 和调用路径都必须追踪它。Projection unit 数量少且为纯函数；精确 observation 计算全部已注册 unit，比为了 `O(E*k)` 而维护部分状态、取代 `O(E*P)` 完整状态更简单。
 

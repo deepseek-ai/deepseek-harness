@@ -43,6 +43,29 @@ function ViewsMoreMenu({ label, current, entries, onOpen, onPinnedChange, render
   )
 }
 
+/** Approximate 13px text advance: full-width glyphs take one em, other glyphs about half. */
+const WIDE_GLYPH = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u
+const WIDE_GLYPH_WIDTH = 13
+const NARROW_GLYPH_WIDTH = 7
+/** Mirrors the `.tabLabel` max-width in `ConversationRoot.module.css`. */
+const TAB_LABEL_MAX_WIDTH = 88
+
+/** Estimate whether a View tab label exceeds its 88px cell. */
+function labelNeedsTooltip(label: string): boolean {
+  let width = 0
+  for (const glyph of label) width += WIDE_GLYPH.test(glyph) ? WIDE_GLYPH_WIDTH : NARROW_GLYPH_WIDTH
+  return width > TAB_LABEL_MAX_WIDTH
+}
+
+/** One View tab label; its full-name tooltip is offered only when the text is expected to overflow. */
+function ViewTabLabel({ label }: { readonly label: string }) {
+  return (
+    <Tooltip label={label} portal disabled={!labelNeedsTooltip(label)}>
+      <span className={css.tabLabel}>{label}</span>
+    </Tooltip>
+  )
+}
+
 interface Breadcrumb {
   readonly id: SessionId
   readonly displayTitle: string
@@ -205,7 +228,7 @@ export function ConversationSessionHeader({
                 className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
                 onClick={() => { selectView(viewTab.id) }}
               >
-                <Tooltip label={viewTab.label} portal><span className={css.tabLabel}>{viewTab.label}</span></Tooltip>
+                <ViewTabLabel label={viewTab.label} />
               </button>
             ))}
           </div>

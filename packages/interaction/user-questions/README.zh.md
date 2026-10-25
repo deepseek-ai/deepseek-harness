@@ -26,7 +26,7 @@ kind: "package-reference"
 
 当工作无法在没有答案的情况下继续时调用 `ask()`。当 agent 可以在一段前台等待后继续独立工作时调用 `askTimed()`。回答 UI 通过 `attachWait` 接手等待，取得 Host 计算的剩余时长，并用本地时钟倒计时。没有接手方时，包括最后一个 Client 断开之后，服务在原 deadline 放行模型。`userQuestions` projection 从工具调用、其结果和最终回复派生持久问题；Client 接手状态不落盘。
 
-对于单选题，`custom` 会覆盖选中的选项，且 `selected` 为空。对于多选题，`custom` 可以补充 `selected` 中的标签。UI 可以把跳过的条目保留为 `{ id, selected: [] }`，既维持现有回答形态，也保留该批次中的其他回答。
+对于单选题，`custom` 会覆盖选中的选项，且 `selected` 为空。对于多选题，`custom` 可以补充 `selected` 中的标签。UI 可以把跳过的条目保留为 `{ id, selected: [] }`，既维持现有回答形态，也保留该批次中的其他回答。`ask_user_question` 工具告诉模型，`selected` 为空且没有 `custom` 的条目表示用户跳过，因此回答方不能用这种形式表示其他回答。
 
 问题可以携带呈现意图 `intent`。`plan-review` 指定批准选项，并将 `detail` 作为待审阅计划。`approval` 将一个阻塞式问题显示为拒绝、允许和可选的始终允许操作，可附带对象信息和本地化文案。操作标签必须互不相同，并完整对应已提供的选项，不支持多选或计时等待。`ask()` 以 `BAD_INTENT` 拒绝无效意图。两种呈现都返回原始选项标签，旧界面仍可显示通用选项列表。授权与持久化仍由调用方负责。
 

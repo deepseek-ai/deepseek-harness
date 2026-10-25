@@ -44,10 +44,10 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   const names = [name]
   await page.locator('[data-plugin-panel]').getByRole('button', { name: '更多', exact: true }).click()
   const cua = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
-  await cua.waitFor()
+  expect(await cua.count()).toBe(0)
   if (process.platform !== 'darwin') {
-    await cua.getByText(reason, { exact: true }).waitFor()
-    expect(await cua.getByRole('switch').isEnabled()).toBe(false)
+    expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+      .toMatchObject({ listedByDefault: false, enabled: false, error: { code: 'unsupported-platform' } })
     names.push('@deepseek-ai/dsh-cua-bundle')
   }
   for (const bundle of names) {

@@ -45,7 +45,7 @@ describe('MessageImage', () => {
     expect(load).toHaveBeenCalledWith(attachment)
   })
 
-  it('loads a session-authorized URL, bounds the thumbnail, and clicks into the original', async () => {
+  it('loads a Gateway-authorized URL, bounds the thumbnail, and clicks into the original', async () => {
     const load = vi.fn().mockResolvedValue('blob:history')
     const view = render(<MessageImage fileDrag={fileDrag} image={{ attachment }} load={load} variant="single" labels={labels} />)
     const frame = view.getByRole('button', { name: 'history.png，点击查看原图' })

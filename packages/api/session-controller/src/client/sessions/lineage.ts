@@ -60,7 +60,8 @@ export function flattenLineage(
   const children = new Map<SessionId, TitledSessionSummary[]>()
   const roots: TitledSessionSummary[] = []
   for (const s of summaries) {
-    if (s.parentSessionId !== undefined && byId.has(s.parentSessionId)) {
+    // Historical ordinary forks may retain a parent id without being subagents.
+    if (s.origin === 'subagent' && s.parentSessionId !== undefined && byId.has(s.parentSessionId)) {
       const list = children.get(s.parentSessionId) ?? []
       list.push(s)
       children.set(s.parentSessionId, list)

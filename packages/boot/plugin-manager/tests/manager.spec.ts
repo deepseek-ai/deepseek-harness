@@ -103,7 +103,7 @@ it.each(['live', 'startup'] as const)('refuses an unsupported bundle before savi
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
   const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
-    enabled: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+    enabled: false, installed: true, listedByDefault: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
   })
   expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
@@ -1662,6 +1662,30 @@ it('lists absent Official entries offline without resolving their packages or co
     expect(resolve.mock.calls.some(([name]) => name === entry.packageName)).toBe(false)
   }
   expect(registry).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('applies offline platform admission to an uninstalled Official bundle (selected=%s)', async (selected) => {
+  const entry = OFFICIAL_ON_DEMAND_CATALOG[0]!
+  const previous = Object.getOwnPropertyDescriptor(entry, 'platforms')
+  onTestFinished(() => {
+    if (previous === undefined) Reflect.deleteProperty(entry, 'platforms')
+    else Object.defineProperty(entry, 'platforms', previous)
+  })
+  Object.defineProperty(entry, 'platforms', { configurable: true, value: [process.platform === 'darwin' ? 'linux' : 'darwin'] })
+  const { manager, dir } = await fixture('startup')
+  if (selected) {
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh!.profile!.bundles!.push(entry.packageName)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  }
+  expect((await manager.listBundles()).find(bundle => bundle.name === entry.packageName)).toMatchObject({
+    installed: false, availability: 'missing', enabled: selected, listedByDefault: false,
+    error: { code: 'unsupported-platform' },
+  })
+  if (selected) {
+    expect(await manager.setBundleEnabled(entry.packageName, false)).toMatchObject({ changed: true, enabled: false })
+    expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(entry.packageName)
+  }
 })
 
 it('distinguishes an unreadable profile dependency from an absent catalog selection', async () => {

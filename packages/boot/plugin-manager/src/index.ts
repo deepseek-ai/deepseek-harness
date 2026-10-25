@@ -494,9 +494,14 @@ export class PluginManager extends TypertRemoteService {
       }
       const catalogMeta = offered === undefined ? {} : { meta: offered.meta }
       if (offered !== undefined && !installed && !shipped) {
+        let platformError: ManagementError | undefined
+        try { assertBundlePlatform(offered.platforms, process.platform) }
+        catch (error) { platformError = managementError(error) }
+        const error = platformError ?? targetError ?? (enabled ? { code: 'not-bundle' as const } : undefined)
         bundles.push({ name, official, availability: 'missing', ...catalogMeta, ...target, enabled, installed, optional,
+          ...platformError?.code === 'unsupported-platform' ? { listedByDefault: false } : {},
           removable: enabled, rows: [], overrides: [],
-          ...targetError !== undefined ? { error: targetError } : enabled ? { error: { code: 'not-bundle' } } : {} })
+          ...error === undefined ? {} : { error } })
         continue
       }
       // Installation-owned copies remain protected even if a profile also declares their names.
@@ -530,7 +535,8 @@ export class PluginManager extends TypertRemoteService {
         let platformError: ManagementError | undefined
         try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
         catch (error) { platformError = managementError(error) }
-        const error = targetError ?? platformError
+        if (platformError?.code === 'unsupported-platform') listing = { listedByDefault: false }
+        const error = platformError ?? targetError
         bundles.push({ name, official, availability, ...listing, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },

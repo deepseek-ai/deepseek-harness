@@ -41,6 +41,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     extraOverlayPath: fixturePatch,
   })
   resources.scaffold = scaffold
+  expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+    .toMatchObject({ listedByDefault: false, enabled: true, installed: true })
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)
@@ -75,16 +77,14 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const card = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
   expect(await card.getByRole('button', { name: /Accessibility permission|Screen Recording permission/ }).count()).toBe(0)
   await page.setViewportSize({ width: 1680, height: 600 })
-  const plugins = page.locator('[data-plugin-body]')
+  const plugins = page.locator('[data-plugin-panel]')
   const openDetails = page.getByRole('button', { name: 'View Computer use', exact: true })
   await openDetails.scrollIntoViewIfNeeded()
-  expect(await plugins.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+  expect(await plugins.locator('[data-plugin-body]').evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   await openDetails.click()
-  await expect.poll(() => plugins.evaluate(element => element.scrollTop)).toBe(0)
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await plugins.evaluate(element => element.scrollTop)).toBe(0)
   expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(4)
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
@@ -195,6 +195,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await trace.evaluate((value) => { value.layouts.length = 0; value.documents.length = 0 })
       for (let cycle = 0; cycle < 3; cycle++) {
         await toggle.click()
+        await expect.poll(async () => (await scaffold.ctx.pluginManager.listBundles())
+          .find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+          .toMatchObject({ enabled: false, installed: true })
         await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
         await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
         await toggle.click()

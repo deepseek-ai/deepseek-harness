@@ -83,7 +83,7 @@ export interface BundleInfo {
   meta?: PluginLocalizedMeta
   /** Untranslated `description` of this bundle's package manifest. */
   description?: string
-  /** GUI listing before explicit selection or profile installation; omission means true. */
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   listedByDefault?: boolean
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean

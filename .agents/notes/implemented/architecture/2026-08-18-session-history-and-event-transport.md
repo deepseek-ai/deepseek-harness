@@ -143,7 +143,7 @@ It owns Session list, search, create, selectModel, rename, fork, prompt, attachm
 
 The package separates agent, commands, control, history, and list controllers internally, but Session identity resolution, activation policy, subagent ownership, and Remote error projection have one public owner.
 
-Other Host Remote namespaces reuse the same identity rules through `ctx.sessionController.inspect()` or `resolveAgent()`; they do not retain a second Session resolver.
+Other Host Remote namespaces reuse the same resume-capable identity rules through `ctx.sessionController.resolveAgent()`; they do not retain a second Session resolver.
 
 #### Activation policy
 
@@ -157,7 +157,8 @@ Each method explicitly selects a cold inspection, live-only lookup, or resume-ca
 | `session.page(address)` | attached Session or persistence log | Never resumes an Agent |
 | `session.follow(address)` | one live or prepared observation carrying the opening page and projections | Publishes the snapshot first, then promotes an ordinary cold Session once in the background |
 | `session.control()` | current attached Agents, pending registry, and process-local registries | Baseline and reconnect do not resume an Agent |
-| `session.attachment`, fork source read | authorized durable Session data | A read does not resume an Agent |
+| Fork source read | authorized durable Session data | A read does not resume an Agent |
+| `session.attachment` | attachment store under the [image access rule](2026-10-23-store-scoped-image-reads.md) | A read does not resume an Agent |
 | `session.updateQueue` | live Agent or ordinary persisted Session | Resumes an ordinary cold Session before mutating its Inbox |
 | `session.cancel` | only the current live Agent | Does not resume vanished state |
 | `models`, `selectModel`, `rename`, `prompt` | command resolves the target Session | Resumes only when the method explicitly permits it |

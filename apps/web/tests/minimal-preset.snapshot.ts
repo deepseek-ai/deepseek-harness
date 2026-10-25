@@ -1,11 +1,12 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { SessionAttachmentValue } from '@deepseek-ai/dsh-api-session-controller'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -18,11 +19,15 @@ import {
   compareOrRefreshGolden,
   fixtureUserPrompts,
   launchWebScaffold,
+  parseSeedFixture,
+  rawSessionLog,
+  renderSeedFixture,
+  seedSession,
   watchConsole,
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/minimal-preset', import.meta.url))
 const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
@@ -322,6 +327,38 @@ describe('minimal image reading', () => {
   let browser: Browser | undefined
   let page: Page | undefined
 
+  async function openSession(id: SessionId): Promise<Page> {
+    if (browser === undefined) throw new Error('image scenario browser has not started')
+    await page?.close()
+    page = await newEnglishPage(browser)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await page.locator('[role="treeitem"]').first().click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+    return page
+  }
+
+  async function imageCard(current: Page): Promise<Locator> {
+    const card = current.locator('[data-tool="read_image"]').first()
+    await card.waitFor({ state: 'attached' })
+    await expandOwningTurnProcess(current, card)
+    const row = card.locator('[data-disclosure-row]')
+    if (await row.getAttribute('aria-expanded') === 'false') await row.click()
+    return card
+  }
+
+  function interruptedTurn(turn: number, text: string): string {
+    return [
+      { type: 'turn/start', data: { turn } },
+      { type: 'step/start', data: { turn, step: 1 } },
+      {
+        type: 'user/message', surfaceOp: 'append',
+        data: createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }),
+      },
+      { type: 'step/end', data: { turn, step: 1 } },
+      { type: 'turn/end', data: { turn, reason: { kind: 'interrupted' } } },
+    ].map(event => JSON.stringify(event)).join('\n')
+  }
+
   beforeAll(async () => {
     scaffold = await launchWebScaffold({
       replayFixture: join(snapshotDir, 'session.v4.jsonl'), compareReplaySession: true, paceMs: 10,
@@ -337,6 +374,7 @@ describe('minimal image reading', () => {
     })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: prompt }], source: { kind: 'user' } }))
     await handle.agent.whenIdle()
+    if (MODE !== 'record') browser = await chromium.launch()
   })
 
   afterAll(async () => {
@@ -363,21 +401,10 @@ describe('minimal image reading', () => {
 
   it.skipIf(MODE === 'record')('renders the existing image tool card and preview', async () => {
     onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-read-image') })
-    browser = await chromium.launch()
-    page = await newEnglishPage(browser)
+    page = await openSession(handle.agent.session.id)
     const tripwire = watchConsole(page)
-    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-    await page.locator('[role="treeitem"]').first().click()
-    await page.locator('[role="treeitem"]').nth(1).click()
     await page.getByText('MINIMAL_IMAGE_OK', { exact: true }).waitFor()
-    await page.locator('[data-turn-process]').click()
-    const group = page.locator('[data-chat-group-key]').first()
-    await group.locator('[data-process-activity]').click()
-    const card = group.locator('[data-tool="read_image"]').first()
-    const row = card.locator('[data-disclosure-row]')
-    await row.click()
-    await expect.poll(() => row.getAttribute('aria-expanded')).toBe('true')
+    const card = await imageCard(page)
     const preview = card.locator('img').first()
     await preview.waitFor()
     await expect.poll(() => preview.evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
@@ -387,9 +414,143 @@ describe('minimal image reading', () => {
     expect(tripwire.warnings).toEqual([])
   })
 
+  it.skipIf(MODE === 'record')('reads image bytes and preserves the supplied reference with another Session as the gateway scope', async () => {
+    const image = handle.agent.session.deriveMessages().flatMap(message => message.content).find(block => block.type === 'image')
+    if (image?.type !== 'image') throw new Error('minimal read_image produced no durable image')
+    const unrelated = await scaffold.ctx.agents.create({ sessionId: SessionId('minimal-image-unrelated') })
+    try {
+      expect(unrelated.agent.session.deriveMessages().flatMap(message => message.content).some(block => block.type === 'image')).toBe(false)
+      const read = async (attachment: unknown, rpcId: string) => {
+        const response = await scaffold.hostFetch('/api/session/attachment', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            type: 'client-request', rpcId, method: 'session/attachment',
+            payload: { args: { request: { sessionId: unrelated.agent.session.id, attachment } } },
+          }),
+        })
+        expect(response.ok).toBe(true)
+        return await response.json() as { result: { ok: boolean; value?: SessionAttachmentValue; error?: { code: string } } }
+      }
+      const reference = { ...image.attachment, name: 'caller-preview.png' }
+      const body = await read(reference, 'minimal-image-unrelated')
+      const stored = await scaffold.ctx.attachments.readImage(image.attachment)
+      expect(body.result).toEqual({
+        ok: true,
+        value: { attachment: reference, data: Buffer.from(stored.data).toString('base64') },
+      })
+      const mismatches = [
+        { mediaType: 'image/jpeg' }, { bytes: reference.bytes + 1 },
+        { width: reference.width + 1 }, { height: reference.height + 1 },
+      ]
+      for (const [index, mismatch] of mismatches.entries()) {
+        const rejected = await read({ ...reference, ...mismatch }, `minimal-image-mismatch-${index}`)
+        expect(rejected.result).toMatchObject({
+          ok: false, error: { code: 'session/attachment-invalid', details: { reason: 'ATTACHMENT_CORRUPT' } },
+        })
+        expect(rejected.result.value).toBeUndefined()
+      }
+      const invalidFields = [
+        { mediaType: 'image/svg+xml' }, { bytes: String(reference.bytes) },
+        { width: String(reference.width) }, { height: String(reference.height) },
+      ]
+      for (const [index, invalid] of invalidFields.entries()) {
+        const rejected = await read({ ...reference, ...invalid }, `minimal-image-schema-${index}`)
+        expect(rejected.result).toMatchObject({ ok: false, error: { code: 'gateway/input-invalid' } })
+        expect(rejected.result.value).toBeUndefined()
+      }
+    } finally {
+      await unrelated.dispose()
+    }
+  })
+
+  it.skipIf(MODE === 'record')('loads persisted images after opening, paging older history, and forking', async () => {
+    onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-historical-read-image') })
+    const { headerLine, events } = parseSeedFixture(rawSessionLog(handle.agent.session))
+    const recorded = renderSeedFixture(headerLine, events)
+    // User-only interrupted turns move the recorded image beyond the 50-message initial page without inventing model output.
+    const laterTurns = Array.from({ length: 52 }, (_, index) =>
+      interruptedTurn(index + 2, `Later image-history message ${index + 2}`))
+    const historicalId = SessionId('minimal-image-cold')
+    await seedSession(scaffold, `${recorded}${laterTurns[0]}\n`, historicalId, 'minimal')
+    expect(scaffold.ctx.agents.get(historicalId)).toBeUndefined()
+    page = await openSession(historicalId)
+    let card = await imageCard(page)
+    await expect.poll(() => card.locator('img').first().evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
+
+    const pagedId = await seedSession(scaffold, `${recorded}${laterTurns.join('\n')}\n`, 'minimal-image-paged', 'minimal')
+    expect(scaffold.ctx.agents.get(pagedId)).toBeUndefined()
+    page = await openSession(pagedId)
+    await page.getByText('Later image-history message 53', { exact: true }).waitFor()
+    expect(await page.locator('[data-tool="read_image"]').count()).toBe(0)
+    await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+    card = await imageCard(page)
+    await expect.poll(() => card.locator('img').first().evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
+
+    const response = await scaffold.hostFetch('/api/session/fork', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request', rpcId: 'minimal-image-fork', method: 'session/fork',
+        payload: { args: { request: { sessionId: historicalId } } },
+      }),
+    })
+    expect(response.ok).toBe(true)
+    const body = await response.json() as { result: { ok: boolean; value?: { sessionId: string } } }
+    expect(body.result.ok).toBe(true)
+    if (body.result.value === undefined) throw new Error('image fork did not return a Session ID')
+    page = await openSession(SessionId(body.result.value.sessionId))
+    card = await imageCard(page)
+    await expect.poll(() => card.locator('img').first().evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
+  })
+
+  it.skipIf(MODE === 'record')('ends loading with a retryable failure when the persisted image is missing', async () => {
+    onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-missing-read-image') })
+    const image = handle.agent.session.deriveMessages().flatMap(message => message.content).find(block => block.type === 'image')
+    if (image?.type !== 'image') throw new Error('minimal read_image produced no durable image')
+    // The blue pixel owns a different storage object from the recorded red pixel.
+    const missingImage = await scaffold.ctx.attachments.saveImage({
+      data: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC', 'base64'),
+      mediaType: 'image/png', name: 'red.png',
+    })
+    expect(missingImage.attachmentId).not.toBe(image.attachment.attachmentId)
+    const { headerLine, events } = parseSeedFixture(rawSessionLog(handle.agent.session))
+    const missingEvents = events.map(event => event.type === 'tool/result'
+      ? {
+        ...event,
+        data: {
+          ...event.data,
+          message: {
+            ...event.data.message,
+            content: event.data.message.content.map(block => block.type === 'image'
+              ? { ...block, attachment: missingImage }
+              : block),
+          },
+        },
+      }
+      : event)
+    const missingId = await seedSession(scaffold,
+      `${renderSeedFixture(headerLine, missingEvents)}${interruptedTurn(2, 'Check the missing image')}\n`,
+      'minimal-image-missing', 'minimal')
+    const stored = await scaffold.ctx.attachments.readImage(missingImage)
+    const path = scaffold.ctx.attachments.imageHostPath(missingImage)
+    if (path === undefined) throw new Error('local attachment store did not return the stored image path')
+    await unlink(path)
+    try {
+      page = await openSession(missingId)
+      const card = await imageCard(page)
+      await card.getByRole('button', { name: 'Image failed to load; click to retry', exact: true }).waitFor()
+      expect(await card.getByText('Loading image…', { exact: true }).count()).toBe(0)
+      expect(await card.locator('[aria-busy="true"]').count()).toBe(0)
+      expect(await card.locator('img').count()).toBe(0)
+      await compareOrRefreshGolden(join(snapshotDir, 'missing-image.expected.md'),
+        await captureStableAria(page, '[data-tool="read_image"]', scaffold.workspaceCwd), MODE)
+    } finally {
+      await scaffold.ctx.attachments.saveImage({ data: stored.data, mediaType: stored.ref.mediaType })
+    }
+  })
+
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(snapshotDir, [
-      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md',
+      'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'missing-image.expected.md',
     ])
   })
 })

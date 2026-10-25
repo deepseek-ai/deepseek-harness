@@ -70,6 +70,23 @@ describe('Official bundle catalog generation', () => {
     expect(() => generateOfficialBundleCatalog(root)).toThrow(/public DSH bundle|duplicate workspace/)
   })
 
+  it('embeds the package platform declaration and detects changes before providers are installed', () => {
+    const root = fixture()
+    const name = ON_DEMAND_BUNDLES[0]!
+    updateManifest(root, name, { dsh: { bundle: { patch: './cordis.patch.yml', platforms: ['darwin'] } } })
+    expect(generateOfficialBundleCatalog(root)[0]?.platforms).toEqual(['darwin'])
+    syncOfficialBundleCatalog(root, false)
+    expect(readFileSync(join(root, output), 'utf8')).toContain("platforms: ['darwin']")
+    updateManifest(root, name, { dsh: { bundle: { patch: './cordis.patch.yml', platforms: ['win32'] } } })
+    expect(() => { syncOfficialBundleCatalog(root, true) }).toThrow('is stale')
+  })
+
+  it.each([[], ['macos'], 'darwin'].map(platforms => ({ platforms })))('rejects invalid package platform metadata $platforms', ({ platforms }) => {
+    const root = fixture()
+    updateManifest(root, ON_DEMAND_BUNDLES[0]!, { dsh: { bundle: { patch: './cordis.patch.yml', platforms } } })
+    expect(() => generateOfficialBundleCatalog(root)).toThrow('dsh.bundle.platforms')
+  })
+
   it.each([false, true])('rejects an on-demand provider in the installed dependency closure (indirect=%s)', (indirect) => {
     const root = fixture()
     const name = ON_DEMAND_BUNDLES[0]!

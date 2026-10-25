@@ -1385,7 +1385,7 @@ export class SessionStore extends Service {
   }
 
   /**
-   * Create a live child session from an exact prefix of a live source.
+   * Create an independent live session from an exact prefix of a live source.
    * `boundary` is an inclusive source event seq; omitted means the source's
    * current last event. An open tail receives synthetic tool results and
    * step/turn closers with the forked cause. Closed steps and turns remain
@@ -1414,7 +1414,6 @@ export class SessionStore extends Service {
       inheritedEventCount: SessionLogOffset(resolved === undefined ? 0 : resolved + 1),
       meta: {
         ...liveSource.header.cwd !== undefined ? { cwd: liveSource.header.cwd } : {},
-        parentSession: liveSource.id,
         isSeeded: true,
       },
     })

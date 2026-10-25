@@ -252,7 +252,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(RemoteAccess)
       await ctx.plugin(ActionCards)
     },
-    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized pages and Plugin recommendations bundles supply the shipped kinds.',
+    note: 'Declared only to an Agent that loaded the skill of a registered card kind; the kind packages register their actions, and the Personalized recommendations bundle supplies the shipped kinds.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',

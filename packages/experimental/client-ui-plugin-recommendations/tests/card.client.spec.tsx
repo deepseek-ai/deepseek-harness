@@ -53,15 +53,16 @@ it('keeps every dictionary aligned', () => {
   for (const dictionary of [en, ja, es, fr, de, ru, pt]) expect(Object.keys(dictionary).sort()).toEqual(Object.keys(zh).sort())
 })
 
-it('shows the catalog text and reason as one details target with the official badge, and enables only on click', async () => {
+it('shows the catalog title and description as one details target with the official badge, and enables only on click', async () => {
   const value = props()
   await shown(value)
   expect(screen.getByText('推荐插件')).toBeTruthy()
   expect(screen.getByText('官方')).toBeTruthy()
   const details = screen.getByRole('button', { name: '查看详情：会话搜索' })
-  expect(details.textContent).toBe('会话搜索帮你找到上周讨论的方案检索过去的会话')
-  // The details label names the plugin; the reason and catalog description stay readable as its description.
-  expect(description(details)).toEqual(['帮你找到上周讨论的方案', '检索过去的会话'])
+  expect(details.textContent).toBe('会话搜索检索过去的会话')
+  // The details label names the plugin; the catalog description stays readable as its description. The model's brief is not shown.
+  expect(description(details)).toEqual(['检索过去的会话'])
+  expect(screen.queryByText(proposal.brief)).toBeNull()
   expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([details.textContent, '暂不需要', '启用'])
   expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
   expect(value.act).not.toHaveBeenCalled()
@@ -141,7 +142,7 @@ it.each([
   await shown(value)
   expect(screen.getByRole('alert').textContent).toBe(message)
   const details = screen.getByRole('button', { name: '查看详情：搜索旧会话' })
-  expect(description(details)).toEqual(['帮你找到上周讨论的方案'])
+  expect(description(details)).toBeUndefined()
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
   await waitFor(() => { expect(value.act).toHaveBeenCalledExactlyOnceWith('dismiss') })
@@ -169,7 +170,7 @@ it('holds the description and action lines while the first catalog lookup is pen
   expect(body).not.toBeNull()
   const details = screen.getByRole('button', { name: '查看详情：搜索旧会话' })
   expect(within(details).getByText('搜索旧会话')).toBeTruthy()
-  expect(description(details)).toEqual(['帮你找到上周讨论的方案'])
+  expect(description(details)).toBeUndefined()
   expect(container.querySelectorAll('button span > span')).toHaveLength(1)
   expect(screen.getByText('启用后可在所有会话中使用')).toBeTruthy()
   for (const name of ['暂不需要', '启用']) expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(true)

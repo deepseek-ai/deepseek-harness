@@ -684,9 +684,11 @@ describe('prompt and cancel errors', () => {
     expect(session.getSnapshot().promptError).toMatchObject({ op: 'stop', error: { code: 'gateway/internal' } })
   })
 
-  it('reads session-authorized attachment bytes and keeps the opaque id on the wire', async ({ mock, start }) => {
+  it('sends the complete image reference and decodes the gateway response', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const result = await session.readAttachment('attachment-1' as never)
+    const attachment = { attachmentId: AttachmentId('attachment-1'), mediaType: 'image/png' as const,
+      bytes: 1, width: 1, height: 1, name: 'picture.png', originalDimensions: { width: 2, height: 2 } }
+    const result = await session.readAttachment(attachment)
     expect(result).toEqual({
       ok: true,
       value: {
@@ -695,7 +697,7 @@ describe('prompt and cancel errors', () => {
       },
     })
     expect(mock.log.requests('session/attachment')).toEqual([{
-      sessionId: SID, attachmentId: 'attachment-1',
+      sessionId: SID, attachment,
     }])
   })
 
@@ -703,7 +705,9 @@ describe('prompt and cancel errors', () => {
     const session = await sessionBench(mock, start, SID)
     const failure = new RemoteError('gateway/internal', 'attachment unavailable', {})
     mock.remote.session.attachment.mockResolvedValueOnce(err(failure))
-    await expect(session.readAttachment(AttachmentId('missing'))).resolves.toMatchObject({ ok: false, error: failure })
+    await expect(session.readAttachment({
+      attachmentId: AttachmentId('missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+    })).resolves.toMatchObject({ ok: false, error: failure })
   })
 
   it('reports an unmatched command and forwards execution failures without opening history', async ({ mock, start }) => {
@@ -840,17 +844,10 @@ describe('remaining branches', () => {
   it('deduplicates repeated running flips and records removal', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     const before = session.getSnapshot()
-    session.handlePresence(true)
-    expect(session.getSnapshot()).toBe(before)
     session.handleRunning(false) // already false: dedup branch
     expect(session.getSnapshot()).toBe(before)
-    session.handlePresence(false)
+    session.handleRemoved()
     expect(session.getSnapshot().removed).toBe(true)
-    const removed = session.getSnapshot()
-    session.handlePresence(false)
-    expect(session.getSnapshot()).toBe(removed)
-    session.handlePresence(true)
-    expect(session.getSnapshot().removed).toBe(false)
   })
 
   it('drops live events while cold/error (no window upkeep)', async ({ mock, start }) => {

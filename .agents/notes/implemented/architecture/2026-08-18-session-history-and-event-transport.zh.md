@@ -143,7 +143,7 @@ repair 期间旧 window 保持可读；page 与期间积累的 live entries 拼�
 
 包内的 agent、commands、control、history 与 list controller 分开实现，但 Session 身份解析、激活策略、subagent ownership 和 Remote 错误投影只有一个公开 owner。
 
-其他 Host Remote namespace 通过 `ctx.sessionController.inspect()` 或 `resolveAgent()` 复用同一身份规则，不保留第二份 Session resolver。
+其他 Host Remote namespace 通过 `ctx.sessionController.resolveAgent()` 复用同一套允许恢复 Session 的身份规则，不保留第二份 Session resolver。
 
 #### 激活策略
 
@@ -157,7 +157,8 @@ Session Remote 方法传递 `SessionId` 或 `SessionAddress`，不靠参数类�
 | `session.page(address)` | attached Session 或 persistence 日志 | 永不恢复 Agent |
 | `session.follow(address)` | 一份携带 opening page 与 projection 的 live 或 prepared observation | 先发布 snapshot，再在后台把普通冷 Session 提升一次 |
 | `session.control()` | 当前 attached Agent、pending registry 与进程内 registry | baseline 与重连不恢复 Agent |
-| `session.attachment`、fork 源读取 | 已授权的持久 Session 数据 | 读取不恢复 Agent |
+| Fork 源读取 | 已授权的持久 Session 数据 | 读取不恢复 Agent |
+| `session.attachment` | 按[图片访问规则](2026-10-23-store-scoped-image-reads.zh.md)读取附件存储 | 读取不恢复 Agent |
 | `session.updateQueue` | live Agent 或普通持久 Session | 修改 Inbox 前恢复普通冷 Session |
 | `session.cancel` | 仅命中当前 live Agent | 不为已消失状态恢复 Agent |
 | `models`、`selectModel`、`rename`、`prompt` | 命令解析目标 Session | 仅按方法约定显式恢复 |

@@ -78,10 +78,10 @@
   ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
 .column > .older + :global([data-slot="conversation.chat.flow"])
   > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
-  margin-top: var(--dsh-chat-flow-gap, 6px);
+  margin-top: var(--dsh-chat-flow-gap, 4px);
 }
 
-/* Process rows sit 6px apart; an Assistant response is separated from its
+/* Process rows sit 4px apart; an Assistant response is separated from its
    neighbours by 12px. */
 .flowItem[data-chat-group-part="response"] {
   --dsh-chat-flow-gap: 12px;
@@ -136,7 +136,7 @@
    steering row of each claim that Chat orders after the Turn's process
    control; that row keeps the slot above it, the way a completed Turn's
    actions row precedes the next user message, while rows claimed together
-   stay 6px apart and opening inputs keep ordinary spacing. The first waiting
+   stay 4px apart and opening inputs keep ordinary spacing. The first waiting
    echo sits directly below the running status, so admission swaps the two
    without moving any bubble. Neighbour gap rules exclude the batch start so
    this slot always applies. */
@@ -178,7 +178,7 @@
 /* While the running Step has no output, the status sits directly below the
    input. When the first output row appears, the status enters its slot below
    that row from where it stood: it travels the row's gap plus one 24px row,
-   which follows the content font size. The gap is 6px for a process row or
+   which follows the content font size. The gap is 4px for a process row or
    group header (the default declared on `.running`), 12px for a response, and
    16px after the running Turn's process control, which renders empty until the
    Turn closes, so it precedes a new Turn's first output. The default sits on
@@ -260,7 +260,7 @@
   flex-direction: column;
   align-items: flex-start;
   --dsh-chat-flow-gap: 12px;
-  --dsh-running-follow: calc(6px + 24px + var(--dsh-content-font-delta, 0px));
+  --dsh-running-follow: calc(4px + 24px + var(--dsh-content-font-delta, 0px));
   --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
   color: var(--dsw-alias-label-deep-diving);
   font-size: calc(var(--dsh-content-font-size, 14px) - 2px);

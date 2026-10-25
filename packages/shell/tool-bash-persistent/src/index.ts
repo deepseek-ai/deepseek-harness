@@ -267,10 +267,12 @@ function persistentShells(ctx: Context, config: ResolvedConfig): PersistentShell
             live.delete(owner)
           }, 'tool-bash-persistent owner cache cleanup')
         }
-        // Echo suppression only: the prompt stays the backend's own, so the
-        // backend's prompt-based readiness detection keeps working.
+        // Suppress input echo and history expansion, which would otherwise
+        // rewrite `!` sequences or discard the whole wrapper line before bash
+        // parses it. The prompt stays the backend's own, so the backend's
+        // prompt-based readiness detection keeps working.
         const setup = ctx.terminals.startSend(owner, spawned.sessionId, {
-          text: 'stty -echo',
+          text: 'stty -echo; set +H',
           submit: true,
           signal: combinedSignal,
         })
