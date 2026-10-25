@@ -758,9 +758,10 @@ describe('Task-board wait notifications', () => {
     await ctx.agentTeams.updateTask(beta, {
       taskId: first.id, expectedRevision: first.revision, action: 'claim',
     })
-    expect(notified).toEqual([lead, alpha, beta, lead, alpha, beta])
-    expect(rootNotifications).toEqual([lead, lead])
-    expect(betaNotifications).toEqual([beta, beta])
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(notified).toEqual([lead, alpha, beta, lead, alpha, beta, lead, alpha, beta])
+    expect(rootNotifications).toEqual([lead, lead, lead])
+    expect(betaNotifications).toEqual([beta, beta, beta])
     for (const agent of [lead, alpha, beta, unrelated, unbound]) {
       expect(agent.inbox.nextStep).toHaveLength(0)
       expect(agent.inbox.nextTurn).toHaveLength(0)
@@ -773,7 +774,7 @@ describe('Task-board wait notifications', () => {
   it.each([
     new Error('unexpected root lookup failure'),
     new SubagentError('runtime unavailable', 'RUNTIME_UNAVAILABLE'),
-  ])('propagates unexpected root lookup failures after committing the task: %s', async (failure) => {
+  ])('reports root lookup failures after persisting tasks and mode selections: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     const child = await resident(ctx, lead, 'failed-root-lookup')
     const rootOf = ctx.subagents.rootOf.bind(ctx.subagents)
@@ -788,6 +789,10 @@ describe('Task-board wait notifications', () => {
       .rejects.toBe(failure)
 
     expect(notified).toEqual([lead])
+    await expect(ctx.agentTeams.setEnabled(lead, false)).rejects.toBe(failure)
+    expect(notified).toEqual([lead, lead])
+    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode').at(-1)?.data.enabled).toBe(false)
+    await expect(ctx.agentTeams.setEnabled(lead, true)).rejects.toBe(failure)
     expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-1'))).toMatchObject({ subject: 'committed', revision: 1 })
     await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
     expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)

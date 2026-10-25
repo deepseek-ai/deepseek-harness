@@ -13,7 +13,7 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
-import SubagentService, { SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
+import SubagentService, { NO_START_CAPABILITIES, SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -229,6 +229,31 @@ describe('dsh-tool-team', () => {
     expect(ctx.agentTeams.getTask(lead, task.id)).toEqual(task)
     await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
     expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
+  })
+
+  it('keeps Team tools local when an external activation starts and settles', async () => {
+    const { ctx, lead } = await setup([])
+    const externalId = SessionId('team-external-result')
+    ctx.effect(() => ctx.subagents.registerProvider({
+      name: 'external-team-fixture', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
+      start: async () => ({
+        id: externalId,
+        result: Promise.resolve({ output: [{ type: 'text', text: 'External result' }], stopReason: 'completed' }),
+        dispose: async () => {},
+      }),
+    }))
+    const activation = await ctx.subagents.startActivation({
+      parent: lead, provider: 'external-team-fixture', label: 'Remote inspection',
+      prompt: [{ type: 'text', text: 'Inspect remotely' }],
+      delivery: 'caller', signal: SIGNAL,
+    })
+    try {
+      expect(await activation.result).toMatchObject({ stopReason: 'completed' })
+      expect(ctx.agents.get(externalId)).toBeUndefined()
+      expect(await execute(ctx, lead, 'team_task_list', {})).toMatchObject({ isError: false })
+    } finally {
+      await activation.dispose()
+    }
   })
 
   it('adds task tools, policy, and scoped identity to the shared subagent controls', async () => {

@@ -8,7 +8,6 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished
 import type {} from '@deepseek-ai/dsh-agent-team'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { NO_START_CAPABILITIES } from '@deepseek-ai/dsh-subagent'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
@@ -92,7 +91,7 @@ describe('web e2e: Agent Teams panel', () => {
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
 
-  it('opens the member tree and live read-only tasks in one panel', async (test) => {
+  it('opens the member tree and live read-only tasks in one panel', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-agent-team-panel'))
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
@@ -107,21 +106,12 @@ describe('web e2e: Agent Teams panel', () => {
 
     // Host-side Team mutations reach the open panel through projection frames only.
     const agent = scaffold.ctx.agents.list()[0]!
-    onTestFinished(scaffold.ctx.subagents.registerProvider({
-      name: 'team-panel-member', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
-      start: async () => ({
-        id: SessionId('team-panel-researcher'),
-        result: Promise.resolve({ output: [{ type: 'text', text: 'Research complete' }], stopReason: 'completed' }),
-        dispose: async () => {},
-      }),
-    }))
-    const member = await scaffold.ctx.subagents.startActivation({
-      provider: 'team-panel-member', label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(), delivery: 'caller', signal: test.signal,
-      parent: agent, prompt: [{ type: 'text', text: 'Research the task' }],
+    const memberId = SessionId('team-panel-researcher')
+    agent.session.append('subagent/catalog', {
+      version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
+      label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(),
     })
-    scaffold.ctx.subagentNames.bind(agent, member.childId, 'lead/researcher')
-    onTestFinished(() => member.dispose())
-    await member.result
+    scaffold.ctx.subagentNames.bind(agent, memberId, 'lead/researcher')
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
     expect(await page.locator('[data-subagent-panel]').count()).toBe(1)
     expect(await page.getByRole('button', { name: 'Task board', exact: true }).count()).toBe(0)

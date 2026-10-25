@@ -1,3 +1,0 @@
-- treeitem "agent-1 Caller external task · External task" [disabled] [level=1]:
-  - text: agent-1
-  - button "Expand description for agent-1": Caller external task
