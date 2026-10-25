@@ -1,12 +1,12 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
-// The browser-facing prompt and interrupt controls and their stable failure
+// The browser-facing child controls and their stable failure
 // codes. Session Controller owns catalog observation and transport.
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AttachmentStore, { AttachmentError } from '@deepseek-ai/dsh-attachment'
-import type { MessageId } from '@deepseek-ai/dsh-llm'
+import { LlmError, type MessageId, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, {
   SubagentError,
@@ -316,5 +316,101 @@ describe('subagent interrupt Remote', () => {
     expect(() => subagents.interruptByUser(CHILD)).toThrow(
       expect.objectContaining({ code: 'gateway/internal', message: 'subagent interrupt failed', details: {} }),
     )
+  })
+})
+
+describe('subagent model selection Remote', () => {
+  const request = { childSessionId: CHILD, provider: 'mock', model: 'chosen' }
+
+  it.each(['childSessionId', 'provider', 'model', 'reasoningEffort'] as const)(
+    'rejects an empty %s before changing the child', async (field) => {
+      const { ctx, subagents } = await bench({})
+      const select = vi.spyOn(subagentManager(ctx), 'selectModel')
+      await expect(subagents.selectModelByUser({ ...request, [field]: '' }, signal))
+        .rejects.toMatchObject(emptyIdFailure('subagent.selectModel', field))
+      expect(select).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([undefined, 'high'])('passes a complete user choice with effort %s through the host service', async (reasoningEffort) => {
+    const { ctx, subagents } = await bench({})
+    const selection = {
+      provider: request.provider, model: request.model,
+      ...reasoningEffort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(reasoningEffort) },
+    }
+    const select = vi.spyOn(subagentManager(ctx), 'selectModel').mockResolvedValue(selection)
+
+    await expect(subagents.selectModelByUser({
+      ...request,
+      ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    }, signal))
+      .resolves.toEqual({ selected: selection })
+    expect(select).toHaveBeenCalledWith(CHILD, selection, { kind: 'user' }, signal)
+  })
+
+  it('maps unavailable runtime services to an actionable refusal', async () => {
+    const { subagents } = await bench()
+    await expect(subagents.selectModel(CHILD, request, { kind: 'user' }, signal))
+      .rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
+    await expect(subagents.selectModelByUser(request, signal))
+      .rejects.toMatchObject({ code: 'subagent/model-selection-unavailable' })
+  })
+
+  it('keeps actionable selection failures distinct and hides backend details', async () => {
+    const { ctx, subagents } = await bench({})
+    const select = vi.spyOn(subagentManager(ctx), 'selectModel')
+    const cases: readonly [SubagentErrorCode, string][] = [
+      ['MODEL_UNAVAILABLE', 'subagent/model-unavailable'],
+      ['UNAUTHORIZED', 'subagent/unauthorized'],
+      ['NOT_RESUMABLE', 'subagent/not-resumable'],
+      ['UNSUPPORTED_CAPABILITY', 'subagent/not-resumable'],
+      ['NOT_CONTINUABLE', 'subagent/not-resumable'],
+      ['DRAINING', 'subagent/model-selection-unavailable'],
+      ['ACTIVATION_CLOSING', 'subagent/model-selection-unavailable'],
+      ['ACTIVATION_LIMIT_REACHED', 'subagent/model-selection-unavailable'],
+      ['CONTINUATION_UNAVAILABLE', 'subagent/model-selection-unavailable'],
+      ['PERSISTENCE_UNAVAILABLE', 'subagent/model-selection-unavailable'],
+    ]
+    for (const [thrown, code] of cases) {
+      select.mockRejectedValue(new SubagentError('private provider detail', thrown))
+      await expect(subagents.selectModelByUser(request, signal))
+        .rejects.toMatchObject({ code, details: { childSessionId: CHILD } })
+    }
+    for (const error of [new SubagentError('private provider detail', 'NO_PROVIDER'), new Error('private provider detail')]) {
+      select.mockRejectedValue(error)
+      await expect(subagents.selectModelByUser(request, signal)).rejects.toMatchObject({
+        code: 'gateway/internal', message: 'subagent model selection failed', details: {},
+      })
+    }
+  })
+
+  it('reports the LLM validation reason for a rejected route', async () => {
+    const { ctx, subagents } = await bench({})
+    const failure = new LlmError('provider "mock" model "chosen" does not support reasoning effort "max"', 'UNSUPPORTED_REASONING_EFFORT')
+    vi.spyOn(subagentManager(ctx), 'selectModel').mockRejectedValue(failure)
+    await expect(subagents.selectModelByUser(request, signal)).rejects.toMatchObject({
+      code: 'subagent/model-unavailable', message: failure.message, details: { childSessionId: CHILD }, cause: failure,
+    })
+  })
+
+  it('preserves operation cancellation and caller cancellation before recording', async () => {
+    const { ctx, subagents } = await bench({})
+    const select = vi.spyOn(subagentManager(ctx), 'selectModel')
+    select.mockRejectedValue(new SubagentError('stopped', 'CANCELLED'))
+    await expect(subagents.selectModelByUser(request, signal)).rejects.toMatchObject({ code: 'gateway/cancelled' })
+
+    select.mockRejectedValue(new Error('aborted operation'))
+    await expect(subagents.selectModelByUser(request, AbortSignal.abort()))
+      .rejects.toMatchObject({ code: 'gateway/cancelled' })
+  })
+
+  it.each([false, true])('reports an uncertain durable outcome even when cancellation is %s', async (cancelled) => {
+    const { ctx, subagents } = await bench({})
+    vi.spyOn(subagentManager(ctx), 'selectModel')
+      .mockRejectedValue(new SubagentError('private provider detail', 'PERSISTENCE_UNCONFIRMED'))
+    await expect(subagents.selectModelByUser(request, cancelled ? AbortSignal.abort() : signal)).rejects.toMatchObject({
+      code: 'subagent/model-selection-unconfirmed', details: { childSessionId: CHILD },
+      message: 'the child model choice may have changed, but persistence is unconfirmed; reload its state before retrying',
+    })
   })
 })

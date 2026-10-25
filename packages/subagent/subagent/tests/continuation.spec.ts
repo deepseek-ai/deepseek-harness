@@ -7,11 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { agentEvents, foldConsumedWork } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -34,7 +34,7 @@ import { requireLocalActivation } from '../src/activation.ts'
 import { finalAssistantOutput } from '../src/assistant-output.ts'
 import { epochStopReason } from '../src/lifecycle.ts'
 import { TestSessionQuery } from './test-session-query.ts'
-import { loadStoredSession } from './persistence-helpers.ts'
+import { loadStoredSession, seedStoredSession } from './persistence-helpers.ts'
 import {
   managerState,
   subagentManager,
@@ -621,9 +621,11 @@ describe('SubagentRuntime.startActivation', () => {
       mode: 'continuable',
       provider: 'spawn',
       label: 'child task',
-      agentProvider: 'mock',
-      agentModel: 'mock',
     })
+    const selectionIndex = loaded.events.findIndex(event => event.type === 'model/selection')
+    expect(selectionIndex).toBeGreaterThan(descriptorIndex)
+    expect(selectionIndex).toBeLessThan(turnStartIndex)
+    expect(loaded.events[selectionIndex]?.data).toEqual({ provider: 'mock', model: 'mock' })
     // Model-hidden: the descriptor never carries surface metadata.
     expect('surfaceOp' in descriptor).toBe(false)
     expect(loaded.meta.id).toBe(started.childId)
@@ -644,7 +646,7 @@ describe('SubagentRuntime.startActivation', () => {
     parkParent(ctx, parent)
     const childEfforts: Array<string | undefined> = []
     ctx.on('agent/created', ({ agent }) => {
-      if (agent !== parent) childEfforts.push(agent.options.reasoningEffort)
+      if (agent !== parent) childEfforts.push(agent.model.current()?.reasoningEffort)
     })
 
     const started = await ctx.subagents.startActivation({
@@ -656,8 +658,8 @@ describe('SubagentRuntime.startActivation', () => {
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data)
-      .toMatchObject({ agentReasoningEffort: 'max' })
+    expect(loaded.events.find(event => event.type === 'model/selection')?.data)
+      .toEqual({ provider: 'mock', model: 'mock', reasoningEffort: effort })
 
     await queuePrompt(ctx, started.childId, message('resume selected reasoning'))
     await waitNoActivation(ctx, started.childId)
@@ -799,59 +801,52 @@ describe('SubagentRuntime.startActivation', () => {
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([brandString<SessionId>('parent')])
   })
 
-  it('omits undeclared composition fields from the descriptor', async () => {
+  it('rejects local creation without a complete model before publishing a child', async () => {
     const { ctx } = await setup([])
     const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless'), {})
-    const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
-    const child = await vi.waitFor(() => {
-      const found = ctx.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
-    })
-    const descriptor = child.session.snapshotEvents().find(event => event.type === 'subagent/descriptor')
-
-    expect(descriptor?.data).toEqual({
-      version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'child task',
-    })
-    await drainManager(ctx)
+    const create = vi.spyOn(managerState(ctx).ownerCtx.agents, 'create')
+    try {
+      await expect(ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' }))
+        .rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' })
+      expect(create).not.toHaveBeenCalled()
+      expect(routeless.session.snapshotEvents().some(event => event.type === 'subagent/catalog')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
-  it('cold-resumes without inventing a model route the descriptor never declared', async () => {
-    const { ctx, root } = await setup([textResponse('first')])
-    const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless-resume'), {})
-    const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
-    await waitNoActivation(ctx, started.childId)
-    // End the first lifecycle so its write leases release before the fresh
-    // context re-creates the parent identity and cold-resumes the child.
-    await ctx.fiber.dispose()
-
-    const fresh = new Context()
-    await mountAgentLoopTestDependencies(fresh)
-    const freshPersistence = await fresh.plugin(JsonlSessionPersistence, { root: root! })
-    // This context opened a second handle on the same root; register it so
-    // afterEach closes it before removing the root (even on a failure path).
-    cleanups.push(async () => { await freshPersistence.dispose() })
-    await fresh.plugin(AgentLoop, { agents: [] })
-    await fresh.plugin(TestSessionQuery)
-    await mountWorkingDirectoryFixture(fresh)
-    await fresh.plugin(SubagentRuntime)
-    await fresh.plugin(SubagentSpawn, { providerName: 'spawn' })
-    // The disposed lifecycle drained the parent's log durably, so the fresh
-    // context resumes that identity instead of re-creating it.
-    await fresh.agents.resume({ resumeSessionId: brandString<SessionId>('routeless-resume'), agentOptions: {} })
-    await queuePrompt(fresh, started.childId, message('resume routeless'))
-
-    const resumed = await vi.waitFor(() => {
-      const found = fresh.agents.get(started.childId)
-      expect(found).toBeDefined()
-      return found!
+  it('requires an explicit choice to resume a child with no saved model', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('recovered child')])
+    parkParent(ctx, parent)
+    const childId = brandString<SessionId>('missing-model')
+    const header = { ...parent.session.header, id: childId, origin: 'subagent' as const, parentSession: parent.id }
+    await seedStoredSession(ctx.sessionPersistence, header, [{
+      type: 'subagent/descriptor', seq: SessionSeq(0), time: Date.now(),
+      data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'missing model' },
+    }])
+    parent.session.append('subagent/catalog', {
+      version: 0, childId, childCreatedAt: header.createdAt, mode: 'continuable', label: 'missing model',
     })
-    expect(resumed.options.provider).toBeUndefined()
-    expect(resumed.options.model).toBeUndefined()
-    await drainManager(fresh)
+    const before = await loadStoredSession(ctx.sessionPersistence, childId)
+    const open = vi.spyOn(ctx.sessionPersistence, 'open')
+    try {
+      await expect(queuePrompt(ctx, childId, message('resume without a saved model')))
+        .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+      expect(open.mock.calls.some(([, access]) => access === 'write')).toBe(false)
+      expect(await loadStoredSession(ctx.sessionPersistence, childId)).toEqual(before)
+      const selected = { provider: 'mock', model: 'replacement' }
+      await expect(ctx.subagents.selectModel(childId, selected, { kind: 'user' }, testSignal)).resolves.toEqual(selected)
+      expect(ctx.agents.get(childId)).toBeUndefined()
+      expect(adapter.requests).toHaveLength(0)
+      await queuePrompt(ctx, childId, message('resume with an explicit choice'))
+      await waitNoActivation(ctx, childId)
+      expect(adapter.requests.map(request => request.model)).toEqual(['replacement'])
+      const after = await loadStoredSession(ctx.sessionPersistence, childId)
+      expect(after.events.slice(0, before.events.length)).toEqual(before.events)
+    } finally {
+      open.mockRestore()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('continues turn numbering after an inherited fork prefix and pre-turn descriptor', async () => {
@@ -880,6 +875,462 @@ describe('SubagentRuntime.startActivation', () => {
 
 })
 
+describe('continuable model selection', () => {
+  it('restores a fork initial model before its first request without inheriting later parent choices', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('parent work'), textResponse('resumed child')])
+    parent.model.select({ provider: 'mock', model: 'parent-before-fork' })
+    parent.followup(createUserMessage({ content: message('parent work'), source: { kind: 'user' } }))
+    await parent.whenIdle()
+    parkParent(ctx, parent)
+    let rejectChild = true
+    ctx.on('agent/pre-step', async ({ agent }, next) => {
+      if (agent !== parent && rejectChild) return { kind: 'reject' as const }
+      return next()
+    })
+    try {
+      const started = await ctx.subagents.startActivation({
+        ...startSpec(parent, 'fork'), delivery: 'parent',
+        agentOptions: { provider: 'mock', model: 'child-initial' },
+      })
+      await waitNoActivation(ctx, started.childId)
+      const before = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(adapter.requests.map(request => request.model)).toEqual(['parent-before-fork'])
+      expect(before.events.slice(0, before.inheritedEventCount).some(event => event.type === 'model/selection'
+        && event.data.model === 'parent-before-fork')).toBe(true)
+      expect(before.events.slice(before.inheritedEventCount).flatMap(event => event.type === 'model/selection'
+        ? [event.data] : [])).toEqual([{ provider: 'mock', model: 'child-initial' }])
+      parent.model.select({ provider: 'mock', model: 'parent-after-fork' })
+      rejectChild = false
+      await queuePrompt(ctx, started.childId, message('resume first request'))
+      await waitNoActivation(ctx, started.childId)
+      expect(adapter.requests.map(request => request.model)).toEqual(['parent-before-fork', 'child-initial'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['pending', 'used'] as const)('restores a %s child choice independently of its parent', async (state) => {
+    const release = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('initial answer'), gate: release.promise },
+      { chunks: textResponse('selected answer') },
+      ...state === 'used' ? [{ chunks: textResponse('resumed answer') }] : [],
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    parkParent(ctx, parent)
+    try {
+      const started = await ctx.subagents.startActivation({
+        ...startSpec(parent), delivery: 'parent', agentOptions: { provider: 'mock', model: 'initial' },
+      })
+      await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+      const selected = { provider: 'mock', model: 'selected' }
+      await expect(ctx.subagents.selectModel(started.childId, selected, { kind: 'ancestor', agent: parent }, testSignal))
+        .resolves.toEqual(selected)
+      expect(adapter.requests[0]?.model).toBe('initial')
+      if (state === 'used') await queuePrompt(ctx, started.childId, message('use selected model'))
+      release.resolve(undefined)
+      await waitNoActivation(ctx, started.childId)
+      parent.model.select({ provider: 'mock', model: 'unrelated-parent-choice' })
+      await queuePrompt(ctx, started.childId, message('restore selected model'))
+      await waitNoActivation(ctx, started.childId)
+      expect(adapter.requests.map(request => request.model)).toEqual(
+        state === 'used' ? ['initial', 'selected', 'selected'] : ['initial', 'selected'],
+      )
+      const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(loaded.events.flatMap(event => event.type === 'model/selection' ? [event.data] : []))
+        .toEqual([{ provider: 'mock', model: 'initial' }, selected])
+      expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data).toEqual({
+        version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'child task',
+      })
+    } finally {
+      release.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('changes a cold child durably without activating it or consuming a capacity slot', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('first'), 'hang', textResponse('continued')])
+    parkParent(ctx, parent)
+    await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 1 })
+    try {
+      const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await waitNoActivation(ctx, target.childId)
+      const before = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      const busy = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+      await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
+      const starts: SessionId[] = []
+      ctx.on('subagent/start', ({ id }) => { starts.push(id) })
+      const parentSeq = parent.session.seq
+      const selection = { provider: 'mock', model: 'cold-selected' }
+      await expect(ctx.subagents.selectModel(target.childId, selection, { kind: 'user' }, testSignal))
+        .resolves.toEqual(selection)
+      expect(ctx.agents.get(target.childId)).toBeUndefined()
+      expect(ctx.sessions.get(target.childId)).toBeUndefined()
+      expect(managerState(ctx).resident.size).toBe(1)
+      expect(starts).toEqual([])
+      expect(parent.session.seq).toBe(parentSeq)
+      expect(adapter.requests).toHaveLength(2)
+      const after = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(after.events.slice(0, before.events.length)).toEqual(before.events)
+      expect(after.events.slice(before.events.length)).toEqual([
+        expect.objectContaining({ type: 'model/selection', data: selection }),
+      ])
+      await busy.dispose()
+      await queuePrompt(ctx, target.childId, message('continue on cold choice'))
+      await waitNoActivation(ctx, target.childId)
+      expect(adapter.requests.map(request => request.model)).toEqual(['mock', 'mock', 'cold-selected'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['live', 'cold'] as const)('requires an exact ancestor or user authority for a %s child', async (residency) => {
+    const { ctx, parent } = await setup(residency === 'live' ? ['hang'] : [textResponse('done')])
+    parkParent(ctx, parent)
+    const stranger = await ctx.agentLoop.create(brandString<SessionId>('selection-stranger'), { provider: 'mock', model: 'mock' })
+    try {
+      const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: residency === 'live' ? 'caller' : 'parent' })
+      if (residency === 'cold') await waitNoActivation(ctx, target.childId)
+      const selection = { provider: 'mock', model: 'chosen-by-parent' }
+      await expect(ctx.subagents.selectModel(target.childId, selection, { kind: 'ancestor', agent: stranger }, testSignal))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+      await expect(ctx.subagents.selectModel(parent.id, selection, { kind: 'ancestor', agent: parent }, testSignal))
+        .rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+      await expect(ctx.subagents.selectModel(target.childId, selection, { kind: 'ancestor', agent: parent }, testSignal))
+        .resolves.toEqual(selection)
+      if (residency === 'live') await target.dispose()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['live', 'cold'] as const)('leaves a %s child unchanged when model validation fails', async (residency) => {
+    const { ctx, parent } = await setup(residency === 'live' ? ['hang'] : [textResponse('done')])
+    parkParent(ctx, parent)
+    try {
+      const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: residency === 'live' ? 'caller' : 'parent' })
+      if (residency === 'cold') await waitNoActivation(ctx, target.childId)
+      const before = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'missing-provider', model: 'unavailable' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ name: 'LlmError', code: 'NO_ADAPTER', message: 'no adapter registered for provider "missing-provider"' })
+      const after = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(after.events.filter(event => event.type === 'model/selection'))
+        .toEqual(before.events.filter(event => event.type === 'model/selection'))
+      if (residency === 'live') await target.dispose()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['live', 'cold'] as const)('rejects a %s model switch when its root drains during validation', async (residency) => {
+    const { ctx, parent } = await setup(residency === 'live' ? ['hang'] : [textResponse('done')])
+    parkParent(ctx, parent)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: residency === 'live' ? 'caller' : 'parent' })
+    if (residency === 'cold') await waitNoActivation(ctx, target.childId)
+    else await vi.waitFor(() => { expect(ctx.agents.get(target.childId)?.status).toBe('running') })
+    const resolve = ctx.llm.resolveCallConfig.bind(ctx.llm)
+    const validation = vi.spyOn(ctx.llm, 'resolveCallConfig').mockImplementation(async (selection, signal) => {
+      entered.resolve(undefined)
+      await release.promise
+      return resolve(selection, signal)
+    })
+    const selecting = ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'too-late' }, { kind: 'user' }, testSignal)
+    const rejected = expect(selecting).rejects.toThrow()
+    try {
+      await entered.promise
+      const drained = drainManager(ctx)
+      release.resolve(undefined)
+      await rejected
+      await drained
+      const stored = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(stored.events.flatMap(event => event.type === 'model/selection' ? [event.data.model] : [])).toEqual(['mock'])
+    } finally {
+      release.resolve(undefined)
+      validation.mockRestore()
+      await rejected
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports an unconfirmed live selection when its durability barrier fails', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const failure = new Error('model selection flush failed')
+    const flush = vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'possibly-saved' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'PERSISTENCE_UNCONFIRMED', cause: failure })
+      flush.mockRestore()
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'confirmed' }, { kind: 'user' }, testSignal))
+        .resolves.toEqual({ provider: 'mock', model: 'confirmed' })
+    } finally {
+      flush.mockRestore()
+      await target.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('confirms repeated live selections without appending another selection event', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const selection = { provider: 'mock', model: 'repeated' }
+    try {
+      await ctx.subagents.selectModel(target.childId, selection, { kind: 'user' }, testSignal)
+      const before = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      await expect(ctx.subagents.selectModel(target.childId, selection, { kind: 'user' }, testSignal)).resolves.toEqual(selection)
+      const stored = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(stored.events.filter(event => event.type === 'model/selection'))
+        .toEqual(before.events.filter(event => event.type === 'model/selection'))
+    } finally {
+      await target.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['header', 'missing-event', 'event-type', 'selection'] as const)('rejects a live durability receipt whose stored %s differs', async (mismatch) => {
+    const { ctx, parent } = await setup(['hang'])
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const open = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await open(...args)
+      if (args[0] === target.childId && args[1] === 'read') {
+        if (mismatch === 'header') Object.defineProperty(handle, 'header', { value: { ...handle.header, createdAt: handle.header.createdAt + 1 } })
+        else {
+          const read = handle.read.bind(handle)
+          vi.spyOn(handle, 'read').mockImplementationOnce(async (...readArgs) => {
+            const result = await read(...readArgs)
+            const event = result.events[0]
+            if (event?.type !== 'model/selection') throw new Error('expected selection durability read')
+            const events: SessionEvent[] = mismatch === 'missing-event' ? []
+              : mismatch === 'event-type' ? [{ type: 'turn/start', seq: event.seq, time: event.time, data: { turn: 1 } }]
+                : [{ ...event, data: { provider: 'mock', model: 'different' } }]
+            return { ...result, events }
+          })
+        }
+      }
+      return handle
+    })
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'unverified' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'PERSISTENCE_UNCONFIRMED' })
+      expect(ctx.agents.get(target.childId)?.model.current()).toEqual({ provider: 'mock', model: 'unverified' })
+    } finally {
+      opened.mockRestore()
+      await target.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects a queued selection when an external child id is reused by another root', async () => {
+    const { ctx, parent } = await setup([])
+    const other = await ctx.agentLoop.create(brandString<SessionId>('replacement-model-owner'), { provider: 'mock', model: 'mock' })
+    const childId = brandString<SessionId>('reused-external-model-target')
+    ctx.subagents.registerProvider({
+      name: 'external-selection', inheritsParentContext: false,
+      capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
+      start: () => {
+        const result = Promise.withResolvers<{ output: ContentBlock[]; stopReason: 'completed' }>()
+        return Promise.resolve({ id: childId, result: result.promise, async dispose() { result.resolve({ output: [], stopReason: 'completed' }) } })
+      },
+    })
+    const first = await ctx.subagents.startActivation({ ...startSpec(parent, 'external-selection'), delivery: 'caller' })
+    const selection = { provider: 'mock', model: 'unrelated' }
+    await expect(ctx.subagents.selectModel(childId, selection, { kind: 'user' }, testSignal))
+      .rejects.toMatchObject({ code: 'NOT_CONTINUABLE' })
+    const held = await holdChildLock(ctx, childId)
+    const selecting = ctx.subagents.selectModel(childId, selection, { kind: 'ancestor', agent: parent }, testSignal)
+    const rejected = expect(selecting).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
+    try {
+      await first.dispose()
+      const replacement = await ctx.subagents.startActivation({ ...startSpec(other, 'external-selection'), delivery: 'caller' })
+      held.release()
+      await held.held
+      await rejected
+      await replacement.dispose()
+    } finally {
+      held.release()
+      await held.held
+      await rejected
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('waits for a closing child and persists the selection after its writer is released', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    parkParent(ctx, parent)
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const activation = requireLocalActivation(managerState(ctx).resident.get(target.childId)!)
+    const release = Promise.withResolvers<undefined>()
+    const entered = Promise.withResolvers<undefined>()
+    const dispose = activation.handle.dispose.bind(activation.handle)
+    vi.spyOn(activation.handle, 'dispose').mockImplementation(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      await dispose()
+    })
+    const closing = target.dispose()
+    try {
+      await entered.promise
+      const selected = ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'after-close' }, { kind: 'user' }, testSignal)
+      await passSettlementCheck(ctx, target.childId)
+      expect(activation.handle.agent.model.current()).toEqual({ provider: 'mock', model: 'mock' })
+      release.resolve(undefined)
+      await closing
+      await expect(selected).resolves.toEqual({ provider: 'mock', model: 'after-close' })
+      expect(ctx.agents.get(target.childId)).toBeUndefined()
+      const stored = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(stored.events.at(-1)).toMatchObject({ type: 'model/selection', data: { provider: 'mock', model: 'after-close' } })
+    } finally {
+      release.resolve(undefined)
+      await closing
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports a live choice as unconfirmed when no persistence listener confirms its flush', async () => {
+    const { ctx, parent } = await setup(['hang'])
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    const flush = vi.spyOn(ctx.sessions, 'flush').mockResolvedValueOnce(false)
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'not-confirmed' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'PERSISTENCE_UNCONFIRMED' })
+      expect(ctx.agents.get(target.childId)?.model.current()).toEqual({ provider: 'mock', model: 'not-confirmed' })
+    } finally {
+      flush.mockRestore()
+      await target.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses a cold one-shot child before acquiring a writer', async () => {
+    const { ctx, parent } = await setup([])
+    const childId = brandString<SessionId>('one-shot-model-target')
+    const header = { ...parent.session.header, id: childId, origin: 'subagent' as const, parentSession: parent.id }
+    await seedStoredSession(ctx.sessionPersistence, header, [{
+      type: 'subagent/descriptor', seq: SessionSeq(0), time: Date.now(),
+      data: { version: 3, mode: 'one-shot', provider: 'external' },
+    }])
+    parent.session.append('subagent/catalog', { version: 0, childId, childCreatedAt: header.createdAt, mode: 'one-shot' })
+    const open = vi.spyOn(ctx.sessionPersistence, 'open')
+    try {
+      await expect(ctx.subagents.selectModel(childId, { provider: 'mock', model: 'unused' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+      expect(open.mock.calls.some(([, access]) => access === 'write')).toBe(false)
+    } finally {
+      open.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses a cold model write when its owned log no longer has a supported descriptor', async () => {
+    const { ctx, parent } = await setup([textResponse('done')])
+    parkParent(ctx, parent)
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await waitNoActivation(ctx, target.childId)
+    const before = await loadStoredSession(ctx.sessionPersistence, target.childId)
+    const open = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await open(...args)
+      if (args[1] === 'write') {
+        const stored = await handle.read()
+        vi.spyOn(handle, 'read').mockResolvedValueOnce({
+          ...stored,
+          events: stored.events.map(event => event.type === 'subagent/descriptor'
+            ? { ...event, data: { version: 3, mode: 'one-shot', provider: 'external' } }
+            : event),
+        })
+      }
+      return handle
+    })
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'unused' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+      opened.mockRestore()
+      expect(await loadStoredSession(ctx.sessionPersistence, target.childId)).toEqual(before)
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'retry' }, { kind: 'user' }, testSignal))
+        .resolves.toEqual({ provider: 'mock', model: 'retry' })
+    } finally {
+      opened.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['append', 'close'] as const)('releases the cold writer and reports an unconfirmed choice after %s fails', async (operation) => {
+    const { ctx, parent } = await setup([textResponse('done')])
+    parkParent(ctx, parent)
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await waitNoActivation(ctx, target.childId)
+    const failure = new Error(`cold selection ${operation} failed`)
+    const open = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await open(...args)
+      if (args[1] === 'write') {
+        if (operation === 'append') vi.spyOn(handle, 'append').mockRejectedValueOnce(failure)
+        else {
+          const close = handle.close.bind(handle)
+          vi.spyOn(handle, 'close').mockImplementationOnce(async () => {
+            await close()
+            throw failure
+          })
+        }
+      }
+      return handle
+    })
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'possibly-saved' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ code: 'PERSISTENCE_UNCONFIRMED', cause: failure })
+      opened.mockRestore()
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'confirmed' }, { kind: 'user' }, testSignal))
+        .resolves.toEqual({ provider: 'mock', model: 'confirmed' })
+    } finally {
+      opened.mockRestore()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['descriptor', 'pending', 'used', 'inherited'] as const)('restores a historical child from its %s selection without rewriting the descriptor', async (source) => {
+    const { ctx, parent, adapter } = await setup([textResponse('legacy continued')])
+    parkParent(ctx, parent)
+    const childId = brandString<SessionId>(`legacy-model-${source}`)
+    const header = { ...parent.session.header, id: childId, origin: 'subagent' as const, parentSession: parent.id, isSeeded: source === 'inherited' }
+    const selected: ModelSelection = { provider: 'mock', model: 'legacy-selected' }
+    const events: SessionEvent[] = source === 'inherited'
+      ? [
+        { type: 'turn/start', data: { turn: 1 }, seq: SessionSeq(0), time: Date.now() },
+        { type: 'request/header', data: { header: { config: selected }, reason: 'initial' }, seq: SessionSeq(1), time: Date.now() },
+        { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } }, seq: SessionSeq(2), time: Date.now() },
+      ]
+      : []
+    const inheritedEventCount = events.length
+    if (source === 'inherited') events.push({ type: 'session/end-seed', data: { inherited: true }, seq: SessionSeq(events.length), time: Date.now() })
+    events.push({
+      type: 'subagent/descriptor', seq: SessionSeq(events.length), time: Date.now(),
+      data: { version: 3, mode: 'continuable', provider: 'spawn', label: 'legacy child', agentProvider: 'mock', agentModel: 'legacy-initial' },
+    })
+    if (source === 'pending' || source === 'used') events.push({ type: 'model/selection', data: selected, seq: SessionSeq(events.length), time: Date.now() })
+    if (source === 'used') {
+      events.push({ type: 'turn/start', data: { turn: 1 }, seq: SessionSeq(events.length), time: Date.now() })
+      events.push({ type: 'request/header', data: { header: { config: selected }, reason: 'initial' }, seq: SessionSeq(events.length), time: Date.now() })
+      events.push({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } }, seq: SessionSeq(events.length), time: Date.now() })
+    }
+    await seedStoredSession(ctx.sessionPersistence, header, events, SessionLogOffset(inheritedEventCount))
+    parent.session.append('subagent/catalog', { version: 0, childId, childCreatedAt: header.createdAt, mode: 'continuable', label: 'legacy child' })
+    try {
+      await queuePrompt(ctx, childId, message('continue historical child'))
+      await waitNoActivation(ctx, childId)
+      expect(adapter.requests.map(request => request.model)).toEqual([source === 'descriptor' ? 'legacy-initial' : 'legacy-selected'])
+      const loaded = await loadStoredSession(ctx.sessionPersistence, childId)
+      expect(loaded.events.slice(0, events.length)).toEqual(events)
+      expect(loaded.events.filter(event => event.type === 'subagent/descriptor')).toHaveLength(1)
+      expect(loaded.events.filter(event => event.type === 'model/selection')).toHaveLength(source === 'pending' || source === 'used' ? 1 : 0)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
 describe('continuable image Queue prompts', () => {
   const imageBlock = {
     type: 'image' as const,
@@ -900,6 +1351,44 @@ describe('continuable image Queue prompts', () => {
     } finally {
       resolve.mockRestore()
       await started.dispose()
+    }
+  })
+
+  it('admits an image message to a routeless tree root without borrowing the sending child model', async () => {
+    const { ctx } = await setup(['hang'])
+    const root = await ctx.agentLoop.create(brandString<SessionId>('routeless-image-root'), {})
+    const started = await ctx.subagents.startActivation({
+      ...startSpec(root), delivery: 'caller', agentOptions: { provider: 'mock', model: 'child-model' },
+    })
+    const child = ctx.agents.get(started.childId)!
+    const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo')
+    try {
+      await expect(ctx.subagents.sendMessage(child, root.id, [imageBlock], { signal: testSignal }))
+        .resolves.toBeTypeOf('string')
+      expect(resolve).not.toHaveBeenCalled()
+      expect(root.model.current()).toBeUndefined()
+    } finally {
+      await started.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('admits an image when a cold child is restored with an image-capable selection', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('image answer')])
+    parkParent(ctx, parent)
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await waitNoActivation(ctx, started.childId)
+    const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo').mockResolvedValue({ inputModalities: ['text', 'image'] } as never)
+    try {
+      await expect(queuePrompt(ctx, started.childId, [imageBlock])).resolves.toBeTypeOf('string')
+      await waitNoActivation(ctx, started.childId)
+      expect(resolve).toHaveBeenCalledWith('mock', 'mock', testSignal)
+      const stored = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(stored.events.some(event => event.type === 'user/message'
+        && event.data.content.some(block => block.type === 'image'))).toBe(true)
+    } finally {
+      resolve.mockRestore()
+      await ctx.fiber.dispose()
     }
   })
 
@@ -951,6 +1440,46 @@ describe('continuable image Queue prompts', () => {
       imageBlock,
     ])
     await drainManager(ctx)
+  })
+
+  it('orders model switches after an image capability read and rejects later images on the new model', async () => {
+    const releaseFirst = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([
+      { chunks: textResponse('first answer'), gate: releaseFirst.promise },
+      { chunks: textResponse('queued image answer') },
+    ])
+    const { ctx, parent } = await setupWith(adapter)
+    parkParent(ctx, parent)
+    const capability = Promise.withResolvers<{ inputModalities: string[] }>()
+    const entered = Promise.withResolvers<undefined>()
+    try {
+      const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+      await ctx.subagents.selectModel(started.childId, { provider: 'mock', model: 'vision' }, { kind: 'user' }, testSignal)
+      const child = ctx.agents.get(started.childId)!
+      const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementationOnce(() => {
+        entered.resolve(undefined)
+        return capability.promise as never
+      }).mockResolvedValue({ inputModalities: ['text'] } as never)
+      const admitted = queuePrompt(ctx, started.childId, [imageBlock])
+      await entered.promise
+      const selected = ctx.subagents.selectModel(started.childId, { provider: 'mock', model: 'text-only' }, { kind: 'user' }, testSignal)
+      expect(child.model.current()).toEqual({ provider: 'mock', model: 'vision' })
+      capability.resolve({ inputModalities: ['text', 'image'] })
+      await expect(admitted).resolves.toBeTypeOf('string')
+      await expect(selected).resolves.toEqual({ provider: 'mock', model: 'text-only' })
+      expect(resolve.mock.calls[0]?.slice(0, 2)).toEqual(['mock', 'vision'])
+      expect(child.inbox.nextTurn.some(item => item.content.some(block => block.type === 'image'))).toBe(true)
+      await expect(queuePrompt(ctx, started.childId, [imageBlock]))
+        .rejects.toMatchObject({ code: 'MODEL_DOES_NOT_SUPPORT_IMAGES' })
+      expect(resolve.mock.calls[1]?.slice(0, 2)).toEqual(['mock', 'text-only'])
+      releaseFirst.resolve(undefined)
+      await waitNoActivation(ctx, started.childId)
+    } finally {
+      capability.resolve({ inputModalities: ['text', 'image'] })
+      releaseFirst.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
   })
 
   it('re-checks the disposal cutoff when a drain begins during a live image capability read', async () => {
@@ -1010,20 +1539,7 @@ describe('continuable image Queue prompts', () => {
       && event.data.content.some(block => block.type === 'image'))).toBe(false)
   })
 
-  it('defers to the text-only projection when the descriptor declares no model route', async () => {
-    const { ctx } = await setup([])
-    const routeless = await ctx.agentLoop.create(brandString<SessionId>('routeless-image'), {})
-    const started = await ctx.subagents.startActivation({ ...startSpec(routeless), delivery: 'parent' })
-    await waitNoActivation(ctx, started.childId)
-    const resolve = vi.spyOn(ctx.llm, 'resolveModelInfo')
 
-    // Acceptance is the success boundary: with no declared route there is no
-    // model to refuse against, so the image message enters the child inbox.
-    await queuePrompt(ctx, started.childId, [imageBlock])
-
-    expect(resolve).not.toHaveBeenCalled()
-    await drainManager(ctx)
-  })
 })
 
 describe('target-only Queue residency routing', () => {
@@ -4128,7 +4644,7 @@ describe('continuable errors', () => {
 
 
 
-  it('reapplies the descriptor model route and reasoning effort on cold resume', async () => {
+  it('reapplies the recorded model route and reasoning effort on cold resume', async () => {
     const effort = brandString<ReasoningEffortId>('high')
     const adapter = new MockAdapter([textResponse('first'), textResponse('resumed')], {
       efforts: [{ id: effort, name: 'High' }],
@@ -4144,17 +4660,14 @@ describe('continuable errors', () => {
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data)
-      .toMatchObject({
-        agentProvider: 'mock',
-        agentModel: 'child-model',
-        agentReasoningEffort: 'high',
-      })
+    expect(loaded.events.find(event => event.type === 'model/selection')?.data)
+      .toEqual({ provider: 'mock', model: 'child-model', reasoningEffort: effort })
 
     // The resumed Activation runs on the declared route, not the parent's.
     await queuePrompt(ctx, started.childId, message('again'))
     await vi.waitFor(() => {
-      expect(ctx.agents.get(started.childId)?.options).toMatchObject({
+      expect(ctx.agents.get(started.childId)?.model.current()).toEqual({
+        provider: 'mock',
         model: 'child-model',
         reasoningEffort: 'high',
       })

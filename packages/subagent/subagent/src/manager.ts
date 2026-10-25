@@ -8,13 +8,14 @@
 
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
-import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentOptions, CreateAgentOptions, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { type ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
@@ -32,6 +33,7 @@ import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor
 import type { SubagentDescriptorData } from './descriptor.ts'
 import { catalogNames, establishCatalogChild, establishExternalCatalogChild } from './catalog.ts'
 import { SubagentError } from './error.ts'
+import { requireInitialModel, restorationOptions } from './model-selection.ts'
 import type { LifecycleEmitter } from './lifecycle.ts'
 import { ROOT_AGENT_NAME, SiblingNameReservations, agentAddress, joinAgentPath, parentAgentPath } from './names.ts'
 import type { SiblingNameReservation } from './names.ts'
@@ -104,6 +106,8 @@ type MaterializeInputs = MaterializeBase & (
       delegatedPolicies: DelegatedPolicyOverrides
       /** Child-owned composition record appended after the inherited marker. */
       descriptor: SubagentDescriptorData
+      /** Complete model choice captured before provider preparation. */
+      initialModel: ModelSelection
     }
     agentOptions: AgentOptions
     composition: ChildComposition
@@ -351,24 +355,21 @@ export class SubagentManager {
       const childId = spec.childId ?? brandString<SessionId>(randomUUID())
       this.assertChildIdAvailable(childId)
       const childDepth = resolveChildDepth(parent, spec.maxDepth)
-      // Snapshot before any await: invalid descriptor JSON rejects the call
-      // before a child exists, and the detached value is what reaches the log.
       const agentOptions = resolveChildAgentOptions(parent, spec.agentOptions, childDepth)
-      const agentProvider = agentOptions.provider
-      const agentModel = agentOptions.model
-      const agentReasoningEffort = agentOptions.reasoningEffort
+      const initialModel = requireInitialModel(agentOptions)
       const descriptor = snapshotSubagentDescriptor({
         mode: 'continuable',
         provider: spec.provider,
         label: spec.label,
-        ...agentProvider !== undefined ? { agentProvider } : {},
-        ...agentModel !== undefined ? { agentModel } : {},
-        ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
       })
       // Capture before the first await: a later parent switch belongs to the
       // parent's future, not to this child.
       const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
 
+      if (spec.agentOptions?.provider !== undefined || spec.agentOptions?.model !== undefined
+        || spec.agentOptions?.reasoningEffort !== undefined) {
+        await this.validateModelSelection(parent.ctx, initialModel, signal)
+      }
       const cwd = await this.resolveDirectory(spec, signal)
       const prepared = await prepare({
         sessionId: childId,
@@ -409,6 +410,7 @@ export class SubagentManager {
             inheritedEventCount,
             delegatedPolicies,
             descriptor,
+            initialModel,
           },
           agentOptions,
           composition: { agentPreset: spec.agentPreset },
@@ -657,6 +659,148 @@ export class SubagentManager {
     return this.deliverToMember(root, childId, content, options)
   }
 
+  /**
+   * Record a child's next selection without waking it or changing user defaults.
+   * @param childId - durable continuable child Session id.
+   * @param selection - complete selection; omitted effort follows adapter defaults.
+   * @param authority - trusted user operation or exact live creation ancestor.
+   * @param signal - cancellation before selection is recorded.
+   * @returns the recorded selection after its durability barrier completes.
+   */
+  async selectModel(
+    childId: SessionId,
+    selection: Readonly<ModelSelection>,
+    authority: SubagentInterruptAuthority,
+    signal: AbortSignal,
+  ): Promise<ModelSelection> {
+    signal.throwIfAborted()
+    const selected = { ...selection }
+    const ancestry = this.resident.get(childId)
+    let root: Agent
+    let ancestors: readonly SessionId[]
+    if (ancestry !== undefined) {
+      ;({ root, ancestors } = ancestry)
+    } else {
+      using source = await this.observeContinuation(childId, signal)
+      ;({ root, ancestors } = await this.resolveCreationAncestry(source, signal))
+    }
+    this.authorizeSelection(childId, root, ancestors, authority)
+    return this.trackStartup(root, signal, async (signal) => {
+      while (true) {
+        const result = await this.locks.run(childId, async () => {
+          signal.throwIfAborted()
+          this.authorizeSelection(childId, root, ancestors, authority)
+          const activation = this.resident.get(childId)
+          if (activation !== undefined) {
+            if (activation.root !== root) throw new SubagentError('target belongs to another subagent tree', 'UNAUTHORIZED')
+            const { handle } = requireLocalActivation(activation)
+            await this.validateModelSelection(this.ctx, selected, signal)
+            signal.throwIfAborted()
+            this.authorizeSelection(childId, root, activation.ancestors, authority)
+            if (activation.closing !== undefined) return { closing: activation.closing }
+            const persistence = this.requirePersistence()
+            const session = handle.agent.session
+            const before = session.seq
+            try {
+              handle.agent.model.select(selected)
+              const appended = session.seq > before
+              const recordedSeq = appended ? before : session.seq - 1
+              if (!await handle.agent.ctx.sessions.flush(session)) {
+                throw new Error('no Session durability listener participated')
+              }
+              await using stored = await persistence.open(childId, 'read')
+              const { events } = await stored.read(recordedSeq, 1)
+              const event = events[0]
+              if (!isDeepStrictEqual(stored.header, session.header) || event?.seq !== recordedSeq
+                || (appended && (event.type !== 'model/selection' || !isDeepStrictEqual(event.data, selected)))) {
+                throw new Error('the recorded selection is not present in the durable child log')
+              }
+            } catch (error: unknown) {
+              throw this.selectionPersistenceFailure(childId, error)
+            }
+          } else {
+            await this.selectColdModel(childId, selected, root, authority, signal)
+          }
+          return { selected }
+        })
+        if ('selected' in result) return result.selected
+        await Promise.allSettled([result.closing])
+      }
+    })
+  }
+
+  /** Recheck exact caller identities after asynchronous validation and storage work. */
+  private authorizeSelection(
+    childId: SessionId, root: Agent, ancestors: readonly SessionId[], authority: SubagentInterruptAuthority,
+  ): void {
+    this.assertAdmitting(root)
+    if (authority.kind === 'user') return
+    const caller = authority.agent
+    if (caller.id === childId || this.rootOf(caller) !== root || !ancestors.includes(caller.id)) {
+      throw new SubagentError(`subagent "${childId}" is not a descendant of the selecting agent`, 'UNAUTHORIZED')
+    }
+    this.assertAdmitting(caller)
+  }
+
+  /** Validate a choice without persisting adapter-defaulted controls; LLM failures keep their class and code. */
+  private async validateModelSelection(ctx: Context, selection: ModelSelection, signal: AbortSignal): Promise<void> {
+    const llm = ctx.get('llm')
+    if (llm === undefined) {
+      throw new SubagentError('cannot validate the selected subagent model because the LLM service is unavailable', 'MODEL_UNAVAILABLE')
+    }
+    try {
+      await llm.resolveCallConfig(selection, signal)
+    } catch (error: unknown) {
+      signal.throwIfAborted()
+      throw error
+    }
+  }
+
+  /** Update a cold log under its exclusive writer without allocating an Activation. */
+  private async selectColdModel(
+    childId: SessionId, selection: ModelSelection, root: Agent,
+    authority: SubagentInterruptAuthority, signal: AbortSignal,
+  ): Promise<void> {
+    using source = await this.observeContinuation(childId, signal)
+    const descriptor = foldSubagentDescriptor(source.events.slice(source.inheritedEventCount))
+    if (descriptor?.mode !== 'continuable') {
+      throw new SubagentError('subagent has no supported continuation state', 'NOT_RESUMABLE')
+    }
+    const { ancestors } = await this.resolveCreationAncestry(source, signal, root)
+    this.authorizeSelection(childId, root, ancestors, authority)
+    await this.validateModelSelection(this.ctx, selection, signal)
+    signal.throwIfAborted()
+    this.authorizeSelection(childId, root, ancestors, authority)
+    let writeStarted = false
+    try {
+      await using handle = await this.requirePersistence().open(childId, 'write', { signal })
+      const { events } = await handle.read(undefined, undefined, { signal })
+      const currentDescriptor = foldSubagentDescriptor(events.slice(handle.inheritedEventCount))
+      if (currentDescriptor?.mode !== 'continuable') {
+        throw new SubagentError('subagent has no supported continuation state', 'NOT_RESUMABLE')
+      }
+      signal.throwIfAborted()
+      this.authorizeSelection(childId, root, ancestors, authority)
+      writeStarted = true
+      await handle.append([{ type: 'model/selection', data: selection, seq: SessionSeq(events.length), time: Date.now() }])
+      // close joins provider withdrawal's same durability barrier if it began
+      // while append was in flight; a later flush would use a closing handle.
+      await handle.close()
+    } catch (error: unknown) {
+      if (writeStarted) throw this.selectionPersistenceFailure(childId, error)
+      throw error
+    }
+  }
+
+  /** Preserve an uncertain durable outcome instead of reporting that no change occurred. */
+  private selectionPersistenceFailure(childId: SessionId, error: unknown): SubagentError {
+    return new SubagentError(
+      `model selection for subagent "${childId}" may have changed, but persistence could not be confirmed; reload its state before retrying`,
+      'PERSISTENCE_UNCONFIRMED',
+      { cause: error },
+    )
+  }
+
   /** Admit local input synchronously before any teardown can begin. */
   private deliver(activation: Activation, message: UserMessage, delivery: SubagentDelivery): void {
     if (activation.closing !== undefined) {
@@ -863,6 +1007,7 @@ export class SubagentManager {
             child.session.append('agent-preset/selected', { agentPreset: inputs.composition.agentPreset })
           }
           child.session.append('subagent/descriptor', create.descriptor)
+          child.session.append('model/selection', create.initialModel)
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) {
@@ -1269,6 +1414,7 @@ export class SubagentManager {
         )
       }
       const { ancestors, path } = await this.resolveCreationAncestry(source, signal, root)
+      const agentOptions = restorationOptions(descriptor, source.projections?.values.modelSelection?.next)
       let activation: Activation
       try {
         const projectedPreset = source.projections?.values.agentPreset
@@ -1283,13 +1429,7 @@ export class SubagentManager {
           root,
           ancestors,
           path,
-          agentOptions: {
-            ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
-            ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
-            ...descriptor.agentReasoningEffort !== undefined
-              ? { reasoningEffort: brandString<ReasoningEffortId>(descriptor.agentReasoningEffort) }
-              : {},
-          },
+          agentOptions,
           composition: {
             agentPreset: agentPreset ?? undefined,
             persona: descriptor.persona,
@@ -1357,13 +1497,14 @@ export class SubagentManager {
     return message.id
   }
 
-  /** Refuse image content for a child whose fixed model accepts text only. */
+  /** Refuse image content for the selection held through inbox admission. */
   private async assertImageCapable(
     agent: Agent,
     signal: AbortSignal,
   ): Promise<void> {
-    const { provider, model } = agent.options
-    if (provider === undefined || model === undefined) return
+    const selection = agent.model.current()
+    if (selection === undefined) return
+    const { provider, model } = selection
     const llm = this.ctx.get('llm')
     /* v8 ignore next -- without an LLM registry, delivery defers to projection. */
     if (llm === undefined) return

@@ -158,7 +158,7 @@ describe('spawn preset selection', () => {
     const { ctx, provider } = await setup(config)
     await provider.dispose()
     await mountSpawn(ctx, 'custom-spawn')
-    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('missing-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('missing-child-preset'), agentOptions: { provider: 'mock', model: 'mock' } })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
     expect(result.isError).toBe(true)
@@ -176,7 +176,7 @@ describe('spawn preset selection', () => {
     await ctx.agentPresets.register({
       id: 'reviewer', plugins: [{ name: 'cordis:missing-plugin' }],
     })
-    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('broken-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('broken-child-preset'), agentOptions: { provider: 'mock', model: 'mock' } })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, args, { agent: parent.agent })
     expect(result.isError).toBe(true)

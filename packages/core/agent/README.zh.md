@@ -107,7 +107,7 @@ await handle.agent.whenIdle()
 
 ### 持久模型选择
 
-`Model` 和 `modelSelection` 投影类型在本包定义。默认驱动器与 inbox 一起创建每个 `AgentModel` 并拥有投影注册。每个实例绑定 Session、实时选项和投影读取器，不维护选择的第二份副本。循环在步骤准备前捕获独立选择，并在重试间保留它。
+`Model` 和 `modelSelection` 投影类型在本包定义。默认驱动器与 inbox 一起创建每个 `AgentModel` 并拥有投影注册。每个实例绑定 Session、实时选项和投影读取器，不维护选择的第二份副本。投影包含继承的 fork 历史：`lastUsed` 是日志中最近一次请求的模型，`pending` 是尚未被匹配请求消费的后续选择。循环在步骤准备前捕获独立选择，并在重试间保留它。
 
 ### 源码地图
 

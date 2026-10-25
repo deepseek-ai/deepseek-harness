@@ -2,8 +2,10 @@
  * The durable subagent-child descriptor: the versioned, model-hidden
  * `subagent/descriptor` session event that identifies every session-backed
  * subagent, including historical one-shot records. The manager appends each
- * continuable child's descriptor inside its initial turn, preserving the
- * declared composition required for cold resume.
+ * continuable child's descriptor during unpublished setup. Current records
+ * contain identity fields; model choices belong to the child's own
+ * `model/selection` events. Historical continuable records may also carry an
+ * initial route, persona, and tool restriction that cold resume reapplies.
  *
  * The descriptor deliberately snapshots explicit fields rather than the
  * merge-extensible `AgentOptions` object: an unrelated extension value cannot
@@ -14,14 +16,12 @@
  * to one activation's result contract rather than durable child composition.
  * Per-activation knobs such as `maxTokens` are omitted for the same reason as
  * `outputSchema`: they budget one activation. Cold resume requires the exact
- * live subagent tree root for authorization but reconstructs child options only from the
- * durable descriptor, so it neither restores the prior budget nor inherits
- * the parent's current one; the resumed route's defaults apply instead.
+ * live subagent tree root for authorization. It neither restores the prior budget
+ * nor inherits the parent's current one; the resumed route's defaults apply instead.
  *
  * @module @deepseek-ai/dsh-subagent/descriptor
  */
 
-import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
@@ -30,9 +30,9 @@ declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
      * Durable identity and lifecycle mode of a session-backed subagent child,
-     * appended once inside the child's initial turn, before its first
-     * request. Continuable records also carry their
-     * resumable composition. Log-only: it carries no `surfaceOp`, never enters
+     * appended once when the child is established, before its first
+     * request. Historical continuable records may also carry their initial
+     * composition. Log-only: it carries no `surfaceOp`, never enters
      * model history, and survives compaction.
      */
     'subagent/descriptor': SubagentDescriptorData
@@ -68,7 +68,11 @@ export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {
   readonly label?: string
 }
 
-/** A session-backed subagent whose declared composition supports cold resume. */
+/**
+ * A session-backed subagent that supports cold resume. Current writers record
+ * only the identity fields; the optional composition fields come from
+ * historical records and are reapplied on resume.
+ */
 export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {
   readonly mode: 'continuable'
   /** The initial delegation's short `description`, used for durable enumeration. */
@@ -90,8 +94,8 @@ export type SubagentDescriptorData =
   | OneShotSubagentDescriptorData
   | ContinuableSubagentDescriptorData
 
-/** Continuable composition fields before the snapshot stamps their format version. */
-export type ContinuableSubagentDescriptorInput = Omit<ContinuableSubagentDescriptorData, 'version'>
+/** Continuable identity fields before the writer stamps their format version. */
+export type ContinuableSubagentDescriptorInput = Pick<ContinuableSubagentDescriptorData, 'mode' | 'provider' | 'label'>
 
 const DESCRIPTOR_BASE_KEYS = [
   'version',
@@ -222,30 +226,19 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
 }
 
 /**
- * Validate and detach a continuable descriptor input.
- * @param input - the caller-collected continuable composition fields.
- * @returns the versioned, detached continuable descriptor payload.
- * @throws when a field is not losslessly JSON-serializable.
+ * Build the current continuable child identity record.
+ * @param input - the caller-collected continuable identity fields.
+ * @returns the versioned continuable descriptor payload.
  */
 export function snapshotSubagentDescriptor(
   input: ContinuableSubagentDescriptorInput,
 ): ContinuableSubagentDescriptorData {
-  const candidate: ContinuableSubagentDescriptorData = {
+  return {
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode: input.mode,
     provider: input.provider,
     label: input.label,
-    ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
-    ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},
-    ...input.agentReasoningEffort !== undefined ? { agentReasoningEffort: input.agentReasoningEffort } : {},
-    ...input.persona !== undefined ? { persona: input.persona } : {},
-    ...input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {},
   }
-  const snapshot = snapshotJsonValue(candidate)
-  if (snapshot === undefined) {
-    throw new Error('subagent descriptor is not losslessly JSON-serializable')
-  }
-  return snapshot
 }
 
 /**
