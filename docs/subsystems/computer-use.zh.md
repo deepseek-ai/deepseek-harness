@@ -17,6 +17,8 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 | `CuaPermissionProcess`、`CuaSystemPermissionState` | 以 `darwin` 或 `win32` 标记的原生访问状态和 helper 进程身份。macOS 包含权限检查、父进程身份和可选的责任应用信息；Windows 包含桌面锁定、截图可用性和提权状态。 |
 | `CuaApplicationState` | 持久授权、拒绝记录，以及能否持久保存。会话授权只保留在 provider 内部。系统权限和应用图标分别查询，页面在各项结果返回后分别显示。 |
 
+窗口级提供方选择独立的 CUA 工具 schema 和 `connectCuaWindows` 对象接口。窗口发现不授予观察或输入权限；每个选定窗口持有连接内的句柄，后续每次操作都会检查当前授权。启动入口具有独立的标识及可选可执行文件路径，与窗口 ID 分离。两个对象接口共用截图像素和相对坐标转换。
+
 ## 选择提供方
 
 在同一组合中挂载 [`dsh-computer-use`](../../packages/computer-use/computer-use/README.zh.md) 和一个提供方。两个 Cua Driver 提供方都是公开发布到 npm 的实验性包，均需显式启用。

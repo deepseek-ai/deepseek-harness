@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { z } from 'zod'
-import { applicationAccessDisplay } from './locales.ts'
+import { applicationAccessDisplay, windowAccessQuestion, launchAccessQuestion } from './locales.ts'
 import { NativeError, type NativeClient } from './native-client.ts'
 import type { CuaAppHandle } from './types.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
@@ -130,10 +130,11 @@ export class ApplicationAccess {
    * @param identity Native executable/signing identity.
    * @param signal Calling tool lifetime.
    * @param icon Native application icon for the permission card; never saved as an identity.
+   * @param purpose Whether consent covers an application, one window, or launch only.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
    */
   async select(agent: Agent, client: NativeClient, handle: CuaAppHandle,
-    identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal, icon?: string): Promise<void> {
+    identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal, icon?: string, purpose: 'application' | 'window' | 'launch' = 'application'): Promise<void> {
     await this.withOperation(agent, client, identity, signal, signal => this.selectInOrder(agent, identity.id, async () => {
       signal.throwIfAborted()
       const observed = await this.read(identity.id, signal)
@@ -156,13 +157,15 @@ export class ApplicationAccess {
         let result: AskUserQuestionAnswer
         try {
           result = await questions.ask({ agent, signal, questions: [{ id: 'cua-app-access',
-            question: `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`,
+            question: purpose === 'application' ? `Allow computer use to launch if needed, read, capture, and control ${identity.name}?`
+              : `${purpose === 'window' ? windowAccessQuestion.en : launchAccessQuestion.en} (${identity.name})`,
             detail: 'Session access applies only to this conversation.',
             options, intent: {
               kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
               ...(identity.persistable && this.options.store.persistent ? { always: 'Always allow' } : {}),
               subject: { name: identity.name, ...(icon === undefined ? {} : { icon }) },
-              display: applicationAccessDisplay,
+              display: purpose === 'application' ? applicationAccessDisplay
+                : { ...applicationAccessDisplay, question: purpose === 'window' ? windowAccessQuestion : launchAccessQuestion },
             } }] })
         } catch (error) {
           if (error instanceof UserQuestionError && error.code === 'ASK_CANCELLED') {

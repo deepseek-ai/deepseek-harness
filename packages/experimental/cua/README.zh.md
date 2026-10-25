@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+选择窗口级执行的提供方暴露 `connectCuaWindows`：`listWindows()` 发现元数据，`getWindows(ids)` 获取授权并创建窗口对象，`findApps(query)` / `launch(target)` 独立发现和启动入口。启动回执不表示进程或窗口已经就绪。窗口输入使用选定的窗口句柄；工具 schema 与执行器拒绝应用级操作。macOS 保留 `connectCua` 及其应用和窗口方法。
+
 ## 概述
 
 检查应用、跨 PTC 调用保留窗口对象，并通过正常工具执行链发送动作。平台提供方负责原生执行；本库负责对象 API、请求校验、应用授权和图像接纳。变量持久性由外部 PTC 运行时负责。

@@ -17,6 +17,8 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 | `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `win32`, with helper process identity. macOS includes permission checks, parent identity and optional responsible-application metadata; Windows includes desktop lock, capture availability and elevation status. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
+Window-directed providers select a separate CUA tool schema and `connectCuaWindows` facade. Window discovery grants no observation or input access; each selected window has a connection-owned handle, and every subsequent operation checks live consent. Launch entries have their own identifiers and optional executable paths, separate from window IDs. The shared screenshot-pixel and relative-coordinate mapping applies to both facades.
+
 ## Choose a provider
 
 Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. Both Cua Driver providers are experimental public npm packages and require explicit activation.

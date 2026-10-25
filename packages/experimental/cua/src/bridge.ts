@@ -1,5 +1,7 @@
 /** Connect retained application objects to the calling program's current logged tool binding. */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { createCuaWindowApi } from './window-api.ts'
+import type { CuaWindowApi, CuaWindowDispatch } from './window-types.ts'
 import { createCuaApi } from './api.ts'
 import type { CuaApi, CuaOperation } from './types.ts'
 
@@ -18,4 +20,13 @@ export function connectCua(getTool: () => CuaToolBinding, onText?: (text: string
     // The standard tools.cua result already carries the screenshot attachment.
     image: () => {},
   })
+}
+
+/** Connect a window-only provider to the current logged tool binding.
+ * @param getTool Resolves the calling execution's tool binding.
+ * @param onText Observation output.
+ * @returns Window discovery, launch and control methods.
+ */
+export function connectCuaWindows(getTool: () => CuaWindowDispatch, onText?: (text: string) => void | Promise<void>): CuaWindowApi {
+  return createCuaWindowApi(operation => getTool()(operation), { text: value => onText?.(value), image: () => {} })
 }

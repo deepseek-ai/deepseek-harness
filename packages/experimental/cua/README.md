@@ -7,6 +7,8 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+Providers opting into window-directed execution expose `connectCuaWindows`: `listWindows()` discovers metadata, `getWindows(ids)` obtains consent and creates window objects, and `findApps(query)` / `launch(target)` discover and dispatch launch entries independently. Launch acknowledgement does not imply a process or window is ready. Window input uses the selected window handle; app-wide operations are rejected by the tool schema and executor. macOS retains `connectCua` and its app/window methods.
+
 ## Summary
 
 Inspect applications, retain window objects across PTC calls, and send actions through the normal tool pipeline. Platform providers supply native execution; this library owns the object API, request validation, application consent, and image admission. The external PTC runtime owns variable persistence.
