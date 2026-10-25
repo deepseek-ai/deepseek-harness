@@ -407,13 +407,13 @@
 - list:
   - listitem:
     - text: agent-demo-review Running
-    - button "Expand agent-demo-review": 检查工具卡片布局
+    - button "Expand description for agent-demo-review": 检查工具卡片布局
   - listitem:
     - text: agent-demo-docs Idle
-    - button "Expand agent-demo-docs": 整理工具展示清单
+    - button "Expand description for agent-demo-docs": 整理工具展示清单
   - listitem:
     - text: agent-demo-icons Ready
-    - button "Expand agent-demo-icons": 检查状态图标
+    - button "Expand description for agent-demo-icons": 检查状态图标
 - button "Inspect"
 - button "Send message agent-demo-review" [expanded]
 - text: Recorded result
