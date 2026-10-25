@@ -156,7 +156,7 @@ describe('Agent Teams projection events', () => {
     const forkId = SessionId('fork')
     const records = [event('team/mode', { enabled: true }, SessionSeq(0))]
     const restored = ctx.sessionProjections.restore(
-      { agentTeam: { ver: 5, seq: 0, val: {
+      { agentTeam: { ver: 5, seq: SessionSeq(0), val: {
         enabled: true, id: TeamId(forkId), members: [], tasks: [], messages: [], delivered: [], nextTaskNumber: 1,
       } } },
       records, SessionLogOffset(0),
