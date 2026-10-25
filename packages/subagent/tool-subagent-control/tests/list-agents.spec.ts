@@ -123,6 +123,14 @@ describe('list_agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
+    if (result.isError) throw new Error(text(result))
+    expect(result.value).toEqual([
+      { kind: 'root', name: 'lead', status: 'inactive' },
+      {
+        kind: 'child', name: `lead/legacy:${started.childId}`, label: 'workflow child',
+        parent: 'lead', depth: 1, status: 'inactive',
+      },
+    ])
     expect(text(result)).toBe(`lead [inactive] — root agent\nlead/legacy:${started.childId} [inactive] parent=lead depth=1 — workflow child`)
   })
 

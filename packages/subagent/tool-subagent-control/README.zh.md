@@ -58,7 +58,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。命名模式的行包含完整路径，根为 `lead`；后代行包含直接父级路径与相对根的深度。未命名子级使用 `legacy:<SessionId>` 路径片段。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。命名模式的行包含完整路径，根为 `lead`；后代行包含直接父级路径与相对根的深度。未命名子级使用 `legacy:<SessionId>` 路径片段。每个子级的标签来自创建时提供的 `description`。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生诊断。普通 Session 分叉形成独立的 subagent 树。
 
 -----
 

@@ -58,7 +58,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Named rows carry full paths, with `lead` for the root; descendants carry their direct parent path and depth from the root. Unnamed children use `legacy:<SessionId>` path segments. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Named rows carry full paths, with `lead` for the root; descendants carry their direct parent path and depth from the root. Unnamed children use `legacy:<SessionId>` path segments. Each child’s label comes from the `description` supplied at creation. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce diagnostics. Ordinary Session forks lead separate subagent trees.
 
 -----
 

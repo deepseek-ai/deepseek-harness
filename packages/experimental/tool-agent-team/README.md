@@ -53,11 +53,11 @@ The task tools complement the ordinary subagent controls:
 - **Wait for inbox input** — `wait_agent` belongs to `@deepseek-ai/dsh-tool-subagent-control` and remains available without this package.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerName` results use full agent paths. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
+Reachable task owners use full agent paths in `owner` arguments and `ownerName` results. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
 ### What success and failure look like
 
-Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. Updates resolve input and result-owner names before mutation; failed or incomplete name lookup leaves the task unchanged, and a committed result needs no further name lookup. A stored owner absent from a completely read tree renders as `legacy:<id>`; unreadable branches fail the lookup instead of implying absence.
+Task tools return compact JSON task views or pages. Stale revisions, unauthorized actions, and unready tasks return errors. Updates resolve input and result-owner names before mutation; failed or incomplete name lookup leaves the task unchanged, and a committed result needs no further name lookup. A stored owner absent from a completely read tree renders as `legacy:<id>`; unreadable branches fail the lookup instead of implying absence. This absent-owner marker cannot address a message or a reassignment target.
 
 -----
 
