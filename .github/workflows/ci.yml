@@ -202,12 +202,81 @@ jobs:
           path: .coverage-times.json
           key: coverage-times-Linux-${{ runner.environment }}-${{ vars.DSH_CI_FAILOVER_LINUX || 'enterprise' }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+  # Lint and duplication get their own lane instead of riding the artifact
+  # consumers: a red lint no longer costs the snapshot and artifact consumers a
+  # full rerun. The lane compiles package declarations because oxlint's
+  # type-aware rules read them.
+  node-24-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-8vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'dsh-ubuntu-24-04-16core' }}
+    name: node 24 / lint
+    env:
+      # Shared hosts expose host CPUs, not an isolated allocation.
+      DSH_GATE_CONCURRENCY: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+      DSH_OXLINT_THREADS: ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '' }}
+    steps:
+      # Runner cleanup owns tool caches and fixtures, including cancelled runs.
+      - name: Use runner-owned temporary storage
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@v6.1.0
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      # oxlint's type-aware rules resolve workspace imports through the package
+      # declarations, so this lane compiles them without bundling anything.
+      - name: Compile package declarations
+        run: pnpm run typecheck
+
+      - name: Run lint and duplication
+        run: pnpm run check:ci:lint:contracts-ready
+
   node-24-bench:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+          || 'ubuntu-24.04' }}
     name: node 24 / benchmarks
     # Wall-clock budgets need an otherwise idle runner, so this job runs the
-    # benchmark lane alone instead of joining a concurrent gate aggregate.
+    # benchmark lane alone instead of joining a concurrent gate aggregate, and
+    # keeps its own two-file parallelism inside that runner. The self-hosted
+    # failover pool is shared, so the benchmarks stay on hosted Linux there.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
@@ -503,7 +572,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-bench, node-24-consumers, node-compat]
+    needs: [node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-consumers, node-compat]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed

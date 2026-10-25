@@ -282,7 +282,7 @@ describe('gate graph validation', () => {
       'npm run build:native-system && npm run build:lib && tsdown --config-loader native --config benchmarks/tsdown.config.ts',
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
-    expect(scripts['test:bench:built']).toBe('vitest run --config vitest.bench.config.ts')
+    expect(scripts['test:bench:built']).toBe('tsx scripts/run-bench-suite.ts')
   })
 
   it('checks all maintained repository references locally and in CI', () => {
@@ -837,10 +837,12 @@ describe('Typert contract preparation', () => {
   it('reuses contracts from the validated consumer build', () => {
     const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
 
-    expect(subject.find(item => item.id === 'lint-and-duplication')).toMatchObject({
-      displayCommand: 'pnpm run check:ci:lint:contracts-ready',
-      args: ['/private/pnpm.cjs', 'run', 'check:ci:lint:contracts-ready'],
-    })
+    // Lint and duplication run in their own lane; the consumers graph only
+    // keeps the readers that consume built artifacts.
+    expect(subject.map(item => item.id)).not.toContain('lint-and-duplication')
+    expect(withPnpmEntrypoint(() => gatesForMode('ci-lint-contracts-ready'))).toContainEqual(expect.objectContaining({
+      id: 'lint',
+    }))
     expect(subject.find(item => item.id === 'doc-typecheck')).toMatchObject({
       displayCommand: 'pnpm run doc-typecheck:contracts-ready',
       args: ['/private/pnpm.cjs', 'run', 'doc-typecheck:contracts-ready'],
@@ -956,7 +958,6 @@ describe('Node 24 lane ownership', () => {
       'build',
       'node-compat',
       'publint',
-      'lint-and-duplication',
       'snapshot',
       'expected-output',
       'web-snapshot',
@@ -965,13 +966,15 @@ describe('Node 24 lane ownership', () => {
       'built-bin-smoke',
     ])
     expect(subject.find(item => item.id === 'publint')?.needs).toEqual(['build'])
-    expect(subject.find(item => item.id === 'build')?.env).toEqual({
-      DSH_BUILD_CLIENT_PROFILE: 'official',
+    // The consumers lane emits artifacts only: the aggregate test and script
+    // type checks belong to the master lanes, not to every pull request.
+    expect(subject.find(item => item.id === 'build')).toMatchObject({
+      displayCommand: 'pnpm run build:artifacts',
+      env: { DSH_BUILD_CLIENT_PROFILE: 'official' },
     })
     expect(subject.find(item => item.id === 'node-compat')?.env).toEqual({
       DSH_BUILD_CLIENT_PROFILE: 'official',
     })
-    expect(subject.find(item => item.id === 'lint-and-duplication')?.needs).toEqual(['build'])
     for (const id of [
       'snapshot',
       'expected-output',
@@ -1003,7 +1006,6 @@ describe('Node 24 lane ownership', () => {
       env: { DSH_SNAPSHOT: 'replay' },
       after: [
         'publint',
-        'lint-and-duplication',
         'snapshot',
         'expected-output',
         'doc-typecheck',

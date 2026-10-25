@@ -1676,8 +1676,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.session.header.actions',
     kind: 'list',
     scope: 'session',
-    summary: 'Title-adjacent Session actions in ascending order.',
-    doc: 'Title-adjacent Session actions in ascending order.',
+    summary: 'Title-adjacent Session actions in ascending order; overflow is clipped and faded before the utilities, so overlays must portal.',
+    doc: 'Title-adjacent Session actions in ascending order; overflow is clipped and faded before the utilities, so overlays must portal.',
     registerOptions: [
       {
         name: 'id',
@@ -1782,8 +1782,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.session.header.lineage',
     kind: 'single',
     scope: 'session',
-    summary: 'Optional replacement for one Session breadcrumb title.',
-    doc: 'Optional replacement for one Session breadcrumb title.',
+    summary: 'Optional replacement for one Session breadcrumb title; overlays must portal because the title area clips overflow.',
+    doc: 'Optional replacement for one Session breadcrumb title; overlays must portal because the title area clips overflow.',
     registerOptions: [],
     ownerProps: [
       '/** Plain breadcrumb data handed to the optional lineage renderer. */\nexport interface ConversationHeaderLineageOwnerProps {\n  /** Session represented by this breadcrumb title. */\n  lineageSessionId: SessionId\n  /** Display title available to a combined title/control renderer. */\n  displayTitle: string\n  /** Navigate to an ancestor title when present. */\n  openTitle?: () => void\n}',

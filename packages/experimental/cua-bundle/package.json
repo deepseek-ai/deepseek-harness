@@ -35,7 +35,11 @@
   "license": "MIT",
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "listedByDefault": false,
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "darwin"
+      ]
     }
   },
   "dependencies": {

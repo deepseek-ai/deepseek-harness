@@ -4,10 +4,11 @@ import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
-import type { LocalizedText } from '../packages/util/package-manifest/src/types.ts'
+import type { DshBundleManifest, LocalizedText } from '../packages/util/package-manifest/src/types.ts'
 import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
 import type { OfficialBundleCatalogEntry } from '../packages/util/official-bundles/src/index.ts'
 import { readPluginMeta, resolvePluginResource } from '../packages/boot/app-boot/src/package-meta.ts'
+import { assertBundlePlatform, UnsupportedBundlePlatformError } from '../packages/boot/app-boot/src/bundle-platform.ts'
 
 import { SHIPPED_LOCALE_IDS } from './shipped-locales.ts'
 
@@ -21,7 +22,7 @@ const OUTPUT = 'packages/util/official-bundles/src/catalog.generated.ts'
  */
 export function generateOfficialBundleCatalog(root: string, names: readonly string[] = ON_DEMAND_BUNDLES): OfficialBundleCatalogEntry[] {
   if (names.length === 0 || new Set(names).size !== names.length) throw new Error('Official on-demand catalog must contain distinct package names')
-  const manifests = new Map<string, { path: string; private: boolean; bundle: boolean; runtime: string[] }>()
+  const manifests = new Map<string, { path: string; private: boolean; bundle: boolean; platforms?: DshBundleManifest['platforms']; runtime: string[] }>()
   for (const path of globSync(['packages/*/*/package.json', 'apps/*/package.json', 'vendor/*/package.json'], { cwd: root }).map(path => path.replaceAll('\\', '/')).sort()) {
     const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as {
       name: string
@@ -29,11 +30,12 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
       dependencies?: Record<string, string>
       optionalDependencies?: Record<string, string>
       peerDependencies?: Record<string, string>
-      dsh?: { bundle?: { patch?: unknown } }
+      dsh?: { bundle?: { patch?: unknown; platforms?: DshBundleManifest['platforms'] } }
     }
     if (manifests.has(manifest.name)) throw new Error(`duplicate workspace package ${manifest.name}`)
     const runtime = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
     manifests.set(manifest.name, { path, private: manifest.private === true, bundle: manifest.dsh?.bundle?.patch !== undefined,
+      ...manifest.dsh?.bundle?.platforms === undefined ? {} : { platforms: manifest.dsh.bundle.platforms },
       runtime: runtime.flatMap(section => Object.keys(manifest[section] ?? {})) })
   }
   const visited = new Set<string>()
@@ -49,6 +51,10 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
     const entry = manifests.get(packageName)
     if (entry === undefined || !entry.path.startsWith('packages/') || !packageName.startsWith('@deepseek-ai/dsh-') || entry.private || !entry.bundle) {
       throw new Error(`${packageName}: Official catalog entries must be public DSH bundle packages`)
+    }
+    try { assertBundlePlatform(entry.platforms, process.platform) } catch (error) {
+      // Catalog generation validates every declaration, including bundles for another Host.
+      if (!(error instanceof UnsupportedBundlePlatformError)) throw error
     }
     const parentURL = pathToFileURL(resolve(root, entry.path)).href
     for (const language of SHIPPED_LOCALE_IDS) {
@@ -71,7 +77,8 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
         }
       }
     }
-    return { packageName, meta: { title: meta.title, description: meta.description, icon: meta.icon } }
+    return { packageName, ...entry.platforms === undefined ? {} : { platforms: entry.platforms },
+      meta: { title: meta.title, description: meta.description, icon: meta.icon } }
   })
 }
 
@@ -87,6 +94,7 @@ export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCata
     + 'export const OFFICIAL_ON_DEMAND_CATALOG: readonly OfficialBundleCatalogEntry[] = [\n'
     + entries.map(entry => '  {\n'
       + `    packageName: ${quote(entry.packageName)},\n`
+      + (entry.platforms === undefined ? '' : `    platforms: [${entry.platforms.map(quote).join(', ')}],\n`)
       + '    meta: {\n'
       + `      title: ${localized(entry.meta.title)},\n`
       + `      description: ${localized(entry.meta.description)},\n`

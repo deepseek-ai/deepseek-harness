@@ -368,15 +368,22 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         const generation = client
         if (!generation || connectedAt === undefined) throw new Error(`${label}: server is disconnected`)
         const options = { signal: exec.signal, timeout: config.toolCallTimeoutMs }
+        // The SDK answers an unadvertised capability with the same empty page, but
+        // writes a console.debug line to stdout, which the ACP profile reserves for JSON-RPC.
+        const listable = generation.getServerCapabilities()?.resources !== undefined
         switch (request.method) {
           case 'resources/list':
-            return await generation.listResources(
-              request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
-            ) as JsonValue
+            return listable
+              ? await generation.listResources(
+                request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
+              ) as JsonValue
+              : { resources: [] }
           case 'resources/templates/list':
-            return await generation.listResourceTemplates(
-              request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
-            ) as JsonValue
+            return listable
+              ? await generation.listResourceTemplates(
+                request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
+              ) as JsonValue
+              : { resourceTemplates: [] }
           case 'resources/read':
             return await generation.readResource({ uri: request.uri }, options) as JsonValue
           /* v8 ignore next 2 -- resource requests are the closed, typed tool operation union */

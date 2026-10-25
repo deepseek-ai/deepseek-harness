@@ -42,6 +42,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
   })
   resources.scaffold = scaffold
+  expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+    .toMatchObject({ listedByDefault: false, enabled: true, installed: true })
   await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],
     value: [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/Applications/Fixture.app' }] }])
   const browser = await chromium.launch()
@@ -82,7 +84,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const plugins = page.locator('[data-plugin-panel]')
   const openDetails = page.getByRole('button', { name: 'View Computer use', exact: true })
   await openDetails.scrollIntoViewIfNeeded()
-  expect(await plugins.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+  expect(await plugins.locator('[data-plugin-body]').evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   await openDetails.click()
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
@@ -194,6 +196,9 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
       await trace.evaluate((value) => { value.layouts.length = 0; value.documents.length = 0 })
       for (let cycle = 0; cycle < 3; cycle++) {
         await toggle.click()
+        await expect.poll(async () => (await scaffold.ctx.pluginManager.listBundles())
+          .find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+          .toMatchObject({ enabled: false, installed: true })
         await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
         await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
         await toggle.click()
@@ -219,7 +224,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await diagnostic.waitFor()
   const diagnosticText = await diagnostic.innerText()
   const height = await panel.evaluate(element => element.getBoundingClientRect().height)
-  const rowToggle = plugins.getByRole('switch', { name: 'Enable component @deepseek-ai/dsh-experimental-cua-macos', exact: true })
+  const rowToggle = plugins.getByRole('switch', { name: 'Enable component macOS Computer Use provider', exact: true })
   const release = Promise.withResolvers<undefined>()
   const changeRow = scaffold.ctx.pluginManager.setPluginEnabled.bind(scaffold.ctx.pluginManager)
   let changing: ReturnType<typeof changeRow> | undefined

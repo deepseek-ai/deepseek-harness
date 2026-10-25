@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-official-bundles
  */
 
-import type { PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
+import type { DshBundleManifest, PluginLocalizedMeta } from '@deepseek-ai/dsh-package-manifest'
 
 export {
   DEFAULT_PROFILE_BUNDLES, INSTALLATION_OWNED_PROFILE_TUPLES, ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES, PROFILE_TEMPLATES,
@@ -15,6 +15,8 @@ export { EXPERIMENTAL_BUNDLES, EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES, 
 export interface OfficialBundleCatalogEntry {
   /** Exact npm package name accepted by the existing bundle installer. */
   readonly packageName: string
+  /** Package-owned Host platform declaration, available before installation. */
+  readonly platforms?: DshBundleManifest['platforms']
   /** Package-owned localized text and a self-contained icon, embedded without provider code. */
   readonly meta: Required<Pick<PluginLocalizedMeta, 'title' | 'description' | 'icon'>>
 }
