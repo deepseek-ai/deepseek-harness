@@ -20,10 +20,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   FishLogo, IconAppsAddOutlineRegular, IconNewChatOutlineMedium, IconNewChatOutlineRegular,
-  IconPanelLeftOutlineRegular, focusWithoutRing, isBehindModal, isDarwinDesktop, Menu, ShortcutKeys, Toast, Tooltip, useModalLayer,
-  writeClipboard,
+  IconPanelLeftOutlineRegular, IconPinFillRegular, focusWithoutRing, isBehindModal, isDarwinDesktop, Menu, ShortcutKeys, Toast,
+  Tooltip, useModalLayer, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   SidebarPanelActionsOwnerProps, SidebarPanelMetadata, SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps,
 } from './contract/slots.ts'
@@ -55,8 +55,9 @@ type PanelRowProps =
   Pick<SidebarPanelMetadata, 'id' | 'label'>
   & Pick<SidebarSectionOwnerProps, 'wide'>
   & Pick<PropsRuntime<'sidebar'>, 'usePanelInfo'>
-  & Pick<InjectFace<SidebarRootInjected>, 'selectPanel' | 'trackEntryClick'>
-  & PropsRenderSlots<'sidebar.panellist'>
+  & Pick<InjectFace<SidebarRootInjected>, 'selectPanel' | 'trackEntryClick' | 'setPinned'>
+  & { readonly unpinLabel: string; readonly unpinTooltip: string; readonly canUnpin: boolean }
+  & PropsRenderFactories
 
 /** Analytics category of an official panel; other panels are never reported. */
 function officialEntry(id: string): 'plugin' | 'cron' | undefined {
@@ -65,31 +66,44 @@ function officialEntry(id: string): 'plugin' | 'cron' | undefined {
 }
 
 /** Each panel row subscribes only to its own selection state. */
-function PanelRow({ id, label, wide, usePanelInfo, selectPanel, trackEntryClick, renderSlot }: PanelRowProps) {
+function PanelRow({
+  id, label, wide, unpinLabel, unpinTooltip, canUnpin, usePanelInfo, selectPanel, setPinned, trackEntryClick, renderFactorySlot,
+}: PanelRowProps) {
   const active = usePanelInfo(info => info.activePanelId === id)
   return (
-    <Tooltip label={label} delayMs={500} disabled={wide}>
-      <button
-        type="button"
-        className={clsx(css.panelRow, active && css.panelActive)}
-        aria-label={label}
-        aria-current={active ? 'page' : undefined}
-        onClick={() => {
-          const entry = officialEntry(id)
-          if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar' })
-          selectPanel(id)
-        }}
-      >
-        <span className={css.panelGlyph} aria-hidden="true">
-          {renderSlot('sidebar.panellist', { size: wide ? 16 : 18, active }, { only: id })}
-        </span>
-        {wide && (
-          <span className={clsx(css.panelTitle, css.wide)}>
-            {label}
+    <div className={clsx(css.panelEntry, wide && css.panelEntryWide, active && css.panelEntryActive)}>
+      <Tooltip label={label} delayMs={500} disabled={wide}>
+        <button
+          type="button"
+          className={css.panelRow}
+          aria-label={label}
+          aria-current={active ? 'page' : undefined}
+          onClick={() => {
+            const entry = officialEntry(id)
+            if (entry !== undefined) trackEntryClick({ menu_name: entry, position: 'sidebar' })
+            selectPanel(id)
+          }}
+        >
+          <span className={css.panelGlyph} aria-hidden="true">
+            {renderFactorySlot('sidebar.panel.icon', { id, size: wide ? 16 : 18, active })}
           </span>
-        )}
-      </button>
-    </Tooltip>
+          {wide && (
+            <span className={clsx(css.panelTitle, css.wide)}>
+              {label}
+            </span>
+          )}
+        </button>
+      </Tooltip>
+      {wide && canUnpin && <Tooltip label={unpinTooltip} side="bottom" align="end" delayMs={500} portal>
+        <button type="button" className={css.panelUnpin} aria-label={unpinLabel} onClick={(event) => {
+          const more = event.currentTarget.closest('nav')?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')
+          if (more !== null && more !== undefined) focusWithoutRing(more)
+          setPinned(id, false)
+        }}>
+          <IconPinFillRegular size={14} />
+        </button>
+      </Tooltip>}
+    </div>
   )
 }
 
@@ -145,6 +159,7 @@ export function SidebarRoot({
   usePanelInfo,
   t,
   renderSlot,
+  renderFactorySlot,
 }: SidebarRootComponentProps) {
   const panels = usePanels(snapshot => snapshot)
   const unpinned = useEntryPins(ids => ids)
@@ -384,10 +399,14 @@ export function SidebarRoot({
               id={id}
               label={label}
               wide={wide}
+              unpinLabel={t('panels.unpin', { name: label })}
+              unpinTooltip={t('panels.unpinTooltip')}
+              canUnpin={hasEntryActions && id !== FIXED_PANEL_ID}
+              setPinned={setPinned}
               usePanelInfo={usePanelInfo}
               selectPanel={selectPanel}
               trackEntryClick={trackEntryClick}
-              renderSlot={renderSlot}
+              renderFactorySlot={renderFactorySlot}
             />
           ))}
           {hasEntryActions && (
