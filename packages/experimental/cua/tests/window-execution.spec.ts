@@ -37,7 +37,7 @@ async function setup(choice = 'Allow for this session') {
     screenshotTimeoutMs: 1000, axTimeoutMs: 100, maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100,
     textEventIntervalMs: 0, maxClickHoldMs: 5000 }, () => { throw new Error('Mock client must not connect') })
   const windows = new CuaWindowExecution()
-  const dispatch = vi.fn(async (_request: import('../src/types.ts').CuaOperation, _signal: AbortSignal) => ({ dispatched: true, verified: false }))
+  const dispatch = vi.fn<(request: import('../src/types.ts').CuaOperation, signal: AbortSignal) => Promise<unknown>>(async () => ({ dispatched: true, verified: false }))
   const run = (method: string, params: object = {}) => windows.run(WindowRequest.parse({ method, params }),
     owner.agent, client, access, new AbortController().signal, undefined, 20, dispatch)
   return { access, run, dispatch, answer }
@@ -75,5 +75,50 @@ it('rejects duplicate IDs and mismatched native selections before asking for con
   expect(mocked.request).not.toHaveBeenCalled()
   mocked.request.mockResolvedValueOnce([{ appHandle: 'other', windowId: 8, pid: 10, authorization: identity }])
   await expect(f.run('getWindows', { ids: [7] })).rejects.toThrow('NATIVE_PROTOCOL')
+  expect(f.answer).not.toHaveBeenCalled()
+})
+
+it('discovers without permission and preserves both Shell and explicit-path metadata', async () => {
+  const f = await setup()
+  await expect(f.run('getCapabilities')).resolves.toEqual({ dispatched: true, verified: false })
+  mocked.request.mockResolvedValueOnce([])
+  await expect(f.run('listWindows')).resolves.toEqual([])
+  const entries = [{ id: 'shell', displayName: 'Settings', kind: 'shell' },
+    { id: 'exe', displayName: 'Editor', kind: 'executable', path: 'C:\\Editor.exe' }]
+  mocked.request.mockResolvedValueOnce(entries)
+  await expect(f.run('findApps', { query: 'e' })).resolves.toEqual(entries)
+  expect(mocked.request).toHaveBeenLastCalledWith('findApps', { query: 'e', maxAppMatches: 20 }, expect.any(AbortSignal), undefined)
+  expect(f.answer).not.toHaveBeenCalled()
+})
+it('returns only the selected observation and rejects changes of handle, PID or window', async () => {
+  const f = await setup()
+  mocked.request.mockResolvedValueOnce([{ appHandle: 'window-a', windowId: 7, pid: 10, authorization: identity }])
+  await f.run('getWindows', { ids: [7] })
+  const state = { appHandle: 'window-a', pid: 10, windowId: 7, tree: 'AX' }
+  f.dispatch.mockResolvedValueOnce(state)
+  await expect(f.run('getState', { windowHandle: 'window-a' })).resolves.toEqual({ windowHandle: 'window-a', pid: 10, windowId: 7, tree: 'AX' })
+  for (const change of [{ appHandle: 'other' }, { pid: 11 }, { windowId: 8 }]) {
+    f.dispatch.mockResolvedValueOnce({ ...state, ...change })
+    await expect(f.run('getState', { windowHandle: 'window-a' })).rejects.toThrow('NATIVE_PROTOCOL')
+  }
+  for (const [method, params] of [
+    ['show', {}], ['screenshot', {}],
+    ['drag', { fromX: 1, fromY: 2, toX: 3, toY: 4 }],
+    ['click', { elementIndex: 1, snapshotId: 's1' }],
+    ['typeText', { text: 'hello' }],
+  ] as const) {
+    await f.run(method, { windowHandle: 'window-a', ...params })
+    const operation = f.dispatch.mock.calls.at(-1)![0]
+    expect(operation.params).toMatchObject({ appHandle: 'window-a', ...params })
+    if (method === 'show' || method === 'screenshot' || method === 'drag') expect(operation.params).toHaveProperty('windowId', 7)
+    else expect(operation.params).not.toHaveProperty('windowId')
+  }
+})
+it('rejects incomplete selection and reused native handles before consent', async () => {
+  const f = await setup()
+  mocked.request.mockResolvedValueOnce([])
+  await expect(f.run('getWindows', { ids: [7] })).rejects.toThrow('NATIVE_PROTOCOL')
+  mocked.request.mockResolvedValueOnce([7, 8].map(windowId => ({ appHandle: 'same', windowId, pid: 10, authorization: identity })))
+  await expect(f.run('getWindows', { ids: [7, 8] })).rejects.toThrow('NATIVE_PROTOCOL')
   expect(f.answer).not.toHaveBeenCalled()
 })

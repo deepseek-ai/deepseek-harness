@@ -36,6 +36,7 @@ it('binds all observation and keyboard operations to a selected window and suppr
   await window.getAXState()
   expect(f.text).toHaveBeenCalledWith('AX window')
   await window.click(0)
+  await window.activate()
   await window.typeText('hello')
   await window.paste('world')
   await window.pressKey('ctrl+a')
@@ -58,6 +59,22 @@ it('rejects application operations, caller-selected native windows and malformed
 it('rejects mismatched selections before reading another window', async () => {
   const f = fixture()
   f.dispatch.mockResolvedValueOnce([{ windowHandle: 'other', windowId: 8, pid: 10 }])
+  await expect(f.api.getWindows([7])).rejects.toThrow('does not match')
+  expect(f.dispatch).toHaveBeenCalledTimes(1)
+})
+
+it('supports discovery without a sink and suppresses requested emissions', async () => {
+  const f = fixture()
+  await f.api.listWindows({ emit: false })
+  expect(f.text).not.toHaveBeenCalled()
+  await createCuaWindowApi(f.dispatch).listWindows()
+  const capabilities = { platform: 'windows', permissions: { accessibility: true, screenRecording: true }, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false }
+  f.dispatch.mockResolvedValueOnce(capabilities)
+  expect(await f.api.getCapabilities()).toEqual(capabilities)
+})
+it('rejects incomplete native selections without observing any window', async () => {
+  const f = fixture()
+  f.dispatch.mockResolvedValueOnce([])
   await expect(f.api.getWindows([7])).rejects.toThrow('does not match')
   expect(f.dispatch).toHaveBeenCalledTimes(1)
 })
