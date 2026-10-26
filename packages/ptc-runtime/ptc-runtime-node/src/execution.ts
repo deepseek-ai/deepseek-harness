@@ -145,13 +145,16 @@ function resolveMode(config: ResolvedConfig): ExecutionMode {
     case 'persistent-in-memory': return {
       format: 'repl',
       retainsState: true,
-      executionInstructions: 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. Only printed values and that final expression become program output. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty. ' + RETAINED_STATE_INSTRUCTIONS,
+      executionInstructions: 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. Only printed values and that final expression become program output. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows the environment\'s launch-time sandbox policy; process.env starts empty. ' + RETAINED_STATE_INSTRUCTIONS,
       stripTypes: stripTypeScriptTypes,
     }
     case 'vm-script': {
       const lifetime = config.scriptPersistence
         ? 'Variables, functions, and imported modules remain in memory for this Agent across calls.'
         : 'Each call runs in a fresh Node process.'
+      const filePolicy = config.scriptPersistence
+        ? 'Direct filesystem access follows the environment\'s launch-time sandbox policy; process.env starts empty.'
+        : 'Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty.'
       const asynchronousFailure = 'Await asynchronous work: an uncaught callback exception or unhandled rejection terminates the process'
         + (config.scriptPersistence ? ' and clears its variables.' : '.')
       const recovery = config.scriptPersistence
@@ -160,7 +163,7 @@ function resolveMode(config: ResolvedConfig): ExecutionMode {
       return {
         format: 'script',
         retainsState: config.scriptPersistence,
-        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. The final expression is awaited if it is a Promise. Only printed values and that final expression become program output. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. Direct filesystem access follows this execution\'s sandbox policy; process.env starts empty. ' + asynchronousFailure + ' Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
+        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. The final expression is awaited if it is a Promise. Only printed values and that final expression become program output. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. ' + filePolicy + ' ' + asynchronousFailure + ' Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
         stripTypes: stripTypeScriptTypes,
       }
     }

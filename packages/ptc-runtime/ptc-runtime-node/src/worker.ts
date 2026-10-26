@@ -186,7 +186,8 @@ export class ProgramWorker {
     if (spec.signal?.aborted) onAbort()
     else {
       try { evaluation.data.code = this.mode.stripTypes(spec.program) } catch (error: unknown) {
-        evaluation.finish({ kind: 'exception', message: messageOf(error) })
+        // A parse failure before startup has no process state or authority to retain.
+        evaluation.finish({ kind: 'exception', message: messageOf(error) }, undefined, !this.ready)
         return await result.promise
       }
       if (this.ready) this.dispatch(evaluation)

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Execute model-written TypeScript with host-provided async functions. The default `per-call` mode runs async function bodies in fresh Node processes; `vm-script` supports top-level await and optionally retains a context per Agent with `scriptPersistence`. Opt-in `persistent-in-memory` retains a REPL per Agent. All modes apply the selected file sandbox policy and return captured logs, lossless JSON, or structured failures. Elapsed deadlines, output bounds and a V8 heap limit constrain execution. Unacknowledged stops and one-shot completion clean up the managed process range; unavailable confinement fails execution.
+Execute model-written TypeScript with host-provided async functions. The default `per-call` mode runs async function bodies in fresh Node processes; `vm-script` supports top-level await and optionally retains a context per Agent with `scriptPersistence`. Opt-in `persistent-in-memory` retains a REPL per Agent. All modes apply the file sandbox policy at process launch and return captured logs, lossless JSON, or structured failures. Elapsed deadlines, output bounds and a V8 heap limit constrain execution. Unacknowledged stops and one-shot completion clean up the managed process range; unavailable confinement fails execution.
 
 ## Table of Contents
 
@@ -83,7 +83,7 @@ Set `executionMode: vm-script` to evaluate erasable TypeScript through `node:vm`
 <a id="persistent-repl"></a>
 ### In-memory modes
 
-The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` retain state per owner. To select the REPL evaluator, set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin. All modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy` and apply the selected file sandbox policy. Enable it deliberately with a profile patch:
+The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` retain state per owner. To select the REPL evaluator, set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin. All modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy` and apply the file sandbox policy at process launch. Enable it deliberately with a profile patch:
 
 ```yaml
 - id: ptc-runtime

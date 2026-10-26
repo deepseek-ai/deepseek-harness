@@ -56,7 +56,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 A plugin calls `ctx.sandboxPolicy.registerWritableRoot(session, directory)` through its owning context to add one physical absolute directory to that live Session's `workspace-write` permissions. The method returns the exact Cordis effect disposer; plugin unload or explicit disposal removes only that registration. Duplicate registrations and configured grants remain independent. Mount session-specific plugins under the Agent's context so their effects also end with the Agent. Prepare the directory on the execution host before granting it; the same path checks as configured roots apply.
 
-Registration and disposal affect subsequent policy resolutions and the next model request's logged context. Other Sessions and agentless calls receive no such grant. Grants are not saved or inherited through Session history; a resumed or forked Session needs its own registration. Already-resolved operations and persistent processes keep their original permissions, including directories whose registration has been removed. Start a new process to use the current grants. `read-only` remains read-only, and the [Windows subprocess restriction](../sandbox-local/README.md#known-limitations-and-deferred-work) still applies.
+Registration and disposal affect subsequent policy resolutions and the next model request's logged context. Other Sessions, including subagent Sessions, and agentless calls receive no such grant. Grants are not saved or inherited through Session history; a resumed or forked Session needs its own registration. Already-resolved operations and persistent processes keep their original permissions, including directories whose registration has been removed. Start a new process to use the current grants. `read-only` remains read-only. On Windows, extra grants cause new `workspace-write` subprocess confinement to fail, even for commands that do not access those directories; see [sandbox-local](../sandbox-local/README.md#known-limitations-and-deferred-work).
 
 ### Switching a session's mode
 
@@ -158,7 +158,7 @@ The stable system prompt remains byte-identical across mode changes. A changed f
 
 These limits define the policy surface this package provides. They are current package constraints, not a general sandbox comparison or a task backlog.
 
-- **Deployment-scoped extra grants** — additional directories come from configuration; they are not per-session permission settings. Backend support is defined by [sandbox-local](../sandbox-local/README.md).
+- **Runtime grants are not persisted** — configured directories are shared across sessions; effect registrations belong to one live Session and must be renewed after restore or fork. Backend support is defined by [sandbox-local](../sandbox-local/README.md).
 - **File-effect modes only** — `SandboxMode` governs file effects; network and process policy are outside its vocabulary, so no knob here restricts them.
 - **Temporary areas are deliberately summarized** — enforcing backends grant different platform temporary areas, which are selected after policy resolution and therefore cannot be enumerated truthfully in the current context.
 

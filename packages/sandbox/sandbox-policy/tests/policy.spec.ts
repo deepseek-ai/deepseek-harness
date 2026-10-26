@@ -90,7 +90,7 @@ describe('SandboxPolicyService', () => {
     try {
       await ctx.plugin(SessionProjectionRegistry)
       await expect(ctx.plugin(SandboxPolicyService, { additionalWritableRoots: ['relative/extra'] }))
-        .rejects.toThrow('sandbox-policy: additionalWritableRoots entries must be absolute execution-world paths')
+        .rejects.toThrow('sandbox-policy: writable directories must be absolute execution-world paths without NUL bytes')
       expect(ctx.get('sandboxPolicy')).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()

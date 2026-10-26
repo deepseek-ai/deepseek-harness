@@ -80,6 +80,43 @@ it.skipIf(process.platform === 'win32').each(['persistent-in-memory', 'vm-script
   expect(await readFile(target, 'utf8')).toBe('renewed')
 })
 
+// Windows ACL rejects additional roots before launching a process.
+it.skipIf(process.platform === 'win32').each([
+  { executionMode: 'persistent-in-memory', change: 'add' },
+  { executionMode: 'persistent-in-memory', change: 'remove' },
+  { executionMode: 'vm-script', change: 'add' },
+  { executionMode: 'vm-script', change: 'remove' },
+] as const)('uses current grants for the first $executionMode process after a syntax error and grant $change', async ({ executionMode, change }) => {
+  const { root, cwd, ctx, runtime, owner } = await setup('workspace-write', executionMode)
+  const extra = join(root, 'extra')
+  await mkdir(extra)
+  const target = join(extra, 'memory.txt')
+  const session = ctx.sessions.create(SessionId('first-launch-grants'), { meta: { cwd } })
+  const request = { bindings: [], stateOwner: owner }
+  const remove = change === 'remove' ? ctx.sandboxPolicy.registerWritableRoot(session, extra) : undefined
+  const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+  onTestFinished(() => { spawn.mockRestore() })
+  expect((await runtime.run(runtime.resolve({
+    ...request, program: 'const =', sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+  }))).error?.kind).toBe('exception')
+  expect(spawn).not.toHaveBeenCalled()
+  if (change === 'add') ctx.sandboxPolicy.registerWritableRoot(session, extra)
+  else remove?.()
+
+  const result = await runtime.run(runtime.resolve({
+    ...request, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
+    program: `await (await import("node:fs/promises")).writeFile(${JSON.stringify(target)}, "memory")`,
+  }))
+  expect(spawn).toHaveBeenCalledTimes(1)
+  if (change === 'add') {
+    expect(result.error).toBeUndefined()
+    expect(await readFile(target, 'utf8')).toBe('memory')
+  } else {
+    expect(result.sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+    await expect(readFile(target)).rejects.toMatchObject({ code: 'ENOENT' })
+  }
+})
+
 it('fails closed when confinement is unavailable without spawning Node', async () => {
   const { ctx, run } = await setup()
   const confine = vi.spyOn(ctx.sandbox, 'confine').mockRejectedValue(new SandboxUnavailableError('read-only'))

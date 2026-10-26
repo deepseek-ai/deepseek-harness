@@ -2,8 +2,9 @@
  * The sandbox POLICY home (`ctx.sandboxPolicy`): the single owner of the
  * deployment's sandbox fallbacks plus per-session resolution: the file-effect
  * {@link SandboxMode}, the `workspace-write` root, the explicit extra writable
- * directories, and the override kit (the `sandbox/mode` event, its fold, and
- * its write path; the fold is the `sandboxMode` session-projection unit
+ * directories from configuration and live Session registrations, and the override
+ * kit (the `sandbox/mode` event, its fold, and its write path; the fold is the
+ * `sandboxMode` session-projection unit
  * registered here, while the event and write path come from
  * `./session-mode.ts`).
  * Before each agent request, the owner also contributes the resolved policy to
@@ -50,7 +51,7 @@ function resolveAdditionalWritableRoots(roots: readonly string[] | undefined): r
   if (roots === undefined || roots.length === 0) return undefined
   for (const root of roots) {
     if (!isAbsolute(root) || root.includes('\0')) {
-      throw new Error('sandbox-policy: additionalWritableRoots entries must be absolute execution-world paths')
+      throw new Error('sandbox-policy: writable directories must be absolute execution-world paths without NUL bytes')
     }
   }
   return Object.freeze([...new Set(roots)])
@@ -127,8 +128,8 @@ const sandboxModeStateSchema = zod.union([
 
 /**
  * The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment
- * default mode, fallback workspace root, and current request-time policy
- * section. Tool layers call {@link resolve} for each execution so a session's
+ * default mode, fallback workspace root, session-scoped directory grants, and
+ * request-time policy section. Tool layers call {@link resolve} for each execution so a session's
  * mode log and immutable cwd travel together to every enforcing capability.
  */
 export class SandboxPolicyService extends Service {
