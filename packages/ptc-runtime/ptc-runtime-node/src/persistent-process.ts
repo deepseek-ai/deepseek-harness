@@ -9,7 +9,7 @@ import type { ProgramImportHandler } from './evaluators/types.ts'
  * Serve evaluations through the installed retained-bootstrap entry.
  * @param stream - Inherited private control endpoint.
  * @param maxMessageBytes - Maximum control frame and queued output bytes.
- * @param processState - Child environment, output and directory control.
+ * @param processState - Native child process; structural test doubles do not replace Node's globals or built-in exports.
  * @param format - Default syntax for hosts that omit it from program data.
  * @param importHandler - Runner-local import decisions; omission retains native loading.
  * @returns After control closure and evaluator cleanup.

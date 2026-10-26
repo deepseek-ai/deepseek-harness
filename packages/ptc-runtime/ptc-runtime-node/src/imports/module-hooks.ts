@@ -5,6 +5,7 @@ import * as module from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ProgramImportHandler } from '../evaluators/types.ts'
+import { ImportEvaluationEndedError } from './evaluation-ended.ts'
 
 /* v8 ignore next 4 -- Typed decisions exhaust this union; the standalone child cannot depend on built workspace packages. */
 function assertNever(value: never): never {
@@ -36,7 +37,15 @@ export class ModuleHooksImportLoader {
         const filename = this.programs.get(context.parentURL)
           ?? (this.scope.getStore() ? this.replPrograms.get(context.parentURL) : undefined)
         if (filename === undefined) return nextResolve(specifier, context)
-        const result = handler({ specifier, referrer: filename, attributes: context.importAttributes })
+        let result
+        try {
+          result = handler({ specifier, referrer: filename, attributes: context.importAttributes })
+        } catch (error) {
+          if (error instanceof ImportEvaluationEndedError && !error.retainsState) {
+            return { url: 'data:text/javascript,await new Promise(() => {})', shortCircuit: true }
+          }
+          throw error
+        }
         if ('then' in result) {
           // Native hooks cannot await this result; consume a rejection before reporting unsupported handling.
           void result.catch(() => {})
@@ -53,6 +62,7 @@ export class ModuleHooksImportLoader {
       },
       load: (url, context, nextLoad) => {
         const source = this.sources.get(url)
+        this.sources.delete(url)
         return source === undefined ? nextLoad(url, context) : { format: 'module', source, shortCircuit: true }
       },
     })

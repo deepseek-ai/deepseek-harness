@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Duplex, PassThrough } from 'node:stream'
+import { registerHooks } from 'node:module'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
 import type { ProgramEvaluator, ProgramImportHandler, ProgramImportRequest, ProgramImportResult } from '../src/evaluators/types.ts'
@@ -241,6 +242,44 @@ it('keeps then exports callable from static ESM imports and assimilates them fro
   expect(await e.expression(`import(${JSON.stringify(fixture.url('then.mjs'))})`)).toBe(17)
 })
 
+it('keeps every native export when a static dependency exports a callable then', async () => {
+  const native = 'data:text/javascript,export const answer = 42; export function then(resolve) { resolve(17) }'
+  const fixture = await moduleFixture({
+    'entry.mjs': `import { answer, then } from ${JSON.stringify(native)}; export const result = [answer, typeof then]`,
+  })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('entry.mjs'))})).result`)).toEqual([42, 'function'])
+  expect(await e.expression(`import(${JSON.stringify(native)})`)).toBe(17)
+})
+
+it.each(['node-addons', 'module-sync'])('uses Node %s conditions for default, redirected, and import.meta resolution', async (condition) => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'import { answer } from "conditional"; export { answer }; export const resolved = import.meta.resolve("conditional")',
+    'node_modules/conditional/package.json': JSON.stringify({ type: 'module', exports: { [condition]: './selected.js', default: './fallback.js' } }),
+    'node_modules/conditional/selected.js': 'export const answer = 42',
+    'node_modules/conditional/fallback.js': 'export const answer = 17',
+  })
+  const e = evaluator('script', ({ specifier }) => specifier === 'runner:redirect'
+    ? { type: 'redirect', specifier: fixture.url('entry.mjs') } : { type: 'default' })
+  for (const specifier of [fixture.url('entry.mjs'), 'runner:redirect']) {
+    expect(await e.expression(`import(${JSON.stringify(specifier)}).then(m => [m.answer, m.resolved])`))
+      .toEqual([42, fixture.url('node_modules/conditional/selected.js')])
+  }
+})
+
+it('preserves nested native resolution performed by another registered hook', async () => {
+  const fixture = await moduleFixture({ 'entry.mjs': 'export const answer = 42' })
+  let nested: string | undefined
+  const hooks = registerHooks({ resolve(specifier, context, nextResolve) {
+    if (specifier === fixture.url('entry.mjs')) nested = import.meta.resolve('node:path')
+    return nextResolve(specifier, context)
+  } })
+  onTestFinished(() => { hooks.deregister() })
+  const e = evaluator('script', () => ({ type: 'default' }))
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('entry.mjs'))})).answer`)).toBe(42)
+  expect(nested).toBe('node:path')
+})
+
 it('retains live dynamic native bindings while static imports capture their exports', async () => {
   const source = 'data:text/javascript,export let value = 1; export function update() { value = 2 }'
   const fixture = await moduleFixture({ 'entry.mjs': `export { value } from ${JSON.stringify(source)}` })
@@ -461,6 +500,20 @@ it.each([false, true])('uses the active evaluation when a retained function impo
   expect(await r.run('(await saved()).count')).toBe(2)
 })
 
+it('rejects a runner invocation outside an evaluation while allowing the saved function in a later evaluation', async () => {
+  let saved: (() => Promise<unknown>) | undefined
+  const holder = { save(fn: () => Promise<unknown>) { saved = fn } }
+  const handler = vi.fn(({ specifier }: ProgramImportRequest): ProgramImportResult => ({
+    type: 'module', exports: specifier === 'runner:holder' ? holder : { answer: 42 },
+  }))
+  const r = await runner(handler)
+  await r.run('var saved = () => import("runner:answer"); (await import("runner:holder")).save(saved)')
+  if (saved === undefined) throw new Error('program did not publish its import function')
+  await expect(saved()).rejects.toThrow('PTC evaluation has ended; import modules from a new run_code evaluation')
+  expect(handler).toHaveBeenCalledTimes(1)
+  expect(await r.run('(await saved()).answer')).toBe(42)
+})
+
 it.each(['script', 'repl'] as const)('rejects a finished %s evaluation before a delayed import can invoke the handler', async (format) => {
   const handler = vi.fn((): ProgramImportResult => ({ type: 'default' }))
   const r = await runner(handler, false, format)
@@ -480,6 +533,71 @@ it('rejects a late handler result before constructing its module', async () => {
   released.resolve({ type: 'module', exports: Object.defineProperty({}, 'value', { enumerable: true, get: read }) })
   expect(await next).toBe('PTC evaluation ended before its import completed')
   expect(read).not.toHaveBeenCalled()
+})
+
+it.each(['link', 'evaluate'] as const)('retries an ESM graph whose background %s expired in an earlier retained evaluation', async (phase) => {
+  const fixture = await moduleFixture({
+    'entry.mjs': 'export { answer } from "./dependency.mjs"',
+    'dependency.mjs': phase === 'link'
+      ? 'import { answer } from "runner:answer"; export { answer }'
+      : 'export const answer = (await import("runner:answer")).answer',
+  })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const released = Promise.withResolvers<ProgramImportResult>()
+  onTestFinished(() => { released.resolve({ type: 'module', exports: { answer: 42 } }) })
+  let pending = true
+  const r = await runner(({ specifier }) => {
+    if (specifier === 'runner:gates') return { type: 'module', exports: { entered: entered.promise } }
+    if (specifier !== 'runner:answer') return { type: 'default' }
+    entered.resolve()
+    return pending ? released.promise : { type: 'module', exports: { answer: 42 } }
+  }, true)
+  await r.run(`var gates = await import('runner:gates'); var late = import(${JSON.stringify(fixture.url('entry.mjs'))}).catch(error => error.message); await gates.entered; void 0`)
+  released.resolve({ type: 'module', exports: { answer: 17 } })
+  expect(await r.run('await late')).toMatch(/PTC evaluation (has ended|ended before)/)
+  pending = false
+  expect(await r.run(`Promise.all([import(${JSON.stringify(fixture.url('entry.mjs'))}), import(${JSON.stringify(fixture.url('entry.mjs'))})]).then(([a, b]) => [a.answer, a === b])`)).toEqual([42, true])
+})
+
+it.each(formats)('does not resume a detached %s import after a temporary evaluation ends', async (format) => {
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  const resumed = vi.fn()
+  const handler = vi.fn((): ProgramImportResult => ({ type: 'module', exports: { wait: released.promise, resumed } }))
+  const r = await runner(handler, false, format, false)
+  await r.run('var control = await import("runner:control"); void control.wait.then(() => import("node:path")).then(control.resumed, control.resumed);')
+  released.resolve()
+  // Reach the next task after the released Promise's import and refusal microtasks.
+  await r.run('await new Promise(resolve => setImmediate(resolve)); void 0')
+  expect(handler).toHaveBeenCalledTimes(1)
+  expect(resumed).not.toHaveBeenCalled()
+})
+
+it.each(['resolve', 'reject'] as const)('keeps a temporary import pending when its handler later %ss', async (settlement) => {
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const released = Promise.withResolvers<ProgramImportResult>()
+  const resumed = vi.fn()
+  const read = vi.fn(() => 42)
+  const r = await runner(({ specifier }) => {
+    if (specifier === 'runner:control') return { type: 'module', exports: { entered: entered.promise, resumed } }
+    entered.resolve()
+    return released.promise
+  }, false, 'script', false)
+  await r.run('var control = await import("runner:control"); void import("runner:late").then(control.resumed, control.resumed); await control.entered; void 0')
+  if (settlement === 'resolve') released.resolve({ type: 'module', exports: Object.defineProperty({}, 'answer', { enumerable: true, get: read }) })
+  else released.reject(new Error('late handler failure'))
+  await r.run('await new Promise(resolve => setImmediate(resolve)); void 0')
+  expect(read).not.toHaveBeenCalled()
+  expect(resumed).not.toHaveBeenCalled()
+})
+
+it('preserves an active handler rejection and classifies a retained late rejection as expired', async () => {
+  const rejected = Promise.withResolvers<ProgramImportResult>()
+  const r = await runner(({ specifier }) => specifier === 'runner:active'
+    ? Promise.reject(new Error('active handler failure')) : rejected.promise)
+  expect(await r.run('await import("runner:active").catch(error => error.message)')).toBe('active handler failure')
+  await r.run('var late = import("runner:late").catch(error => error.message);')
+  rejected.reject(new Error('late handler failure'))
+  expect(await r.run('await late')).toBe('PTC evaluation ended before its import completed')
 })
 
 it.each(formats)('passes the runner handler through a temporary process evaluation for %s', async (programFormat) => {

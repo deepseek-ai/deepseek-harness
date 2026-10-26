@@ -146,11 +146,11 @@ handler 接收程序的动态导入；在 VM Script 中，还接收 VM 加载的
 - `{ type: 'redirect', specifier }` 使用原始属性解析并加载替换后的模块标识符。
 - `{ type: 'module', exports }` 将自有、可枚举的字符串属性暴露为模块导出，包括名为 `default` 的属性。
 
-默认导入和重定向导入相对于实际导入文件解析；替换后的模块标识符不会再次进入 handler。VM Script 使用 import-meta-resolve 解析包，通过 `SourceTextModule` 在 Script context 内加载 `.mjs` 文件以及 `type: module` 包中的 `.js` 文件。其静态依赖、再导出和稍后的动态导入都调用同一个支持异步决策的 handler。每个求值器按解析后的 URL 缓存文件模块，包括加载、链接和求值失败；静态导入只绑定一次。模块保留 `import.meta.url`、`filename`、`dirname`、`resolve()` 和 `main: false`。其他格式使用 Node 加载器；未提供 handler 时，所有导入也使用 Node 加载器。handler 抛出值或拒绝会使导入该依赖的模块图失败，不会回退；无关模块图仍可使用。VM Script 在调用 handler 前拒绝 source 阶段导入，并拒绝 VM 加载的 ESM 上的导入属性。AsyncFunction 和 Node REPL 保留 Node 原生依赖加载与 source 阶段规则。
+默认导入和重定向导入相对于实际导入文件解析；替换后的模块标识符不会再次进入 handler。VM Script 使用 Node ESM 解析器，沿用 runner 当前启用的条件和标志，通过 `SourceTextModule` 在 Script context 内加载 `.mjs` 文件以及 `type: module` 包中的 `.js` 文件。其静态依赖、再导出和稍后的动态导入都调用同一个支持异步决策的 handler。每个求值器按解析后的 URL 缓存文件模块，包括模块与 handler 失败；静态导入只绑定一次。若模块的链接或求值因先前求值结束而失败，后续求值会重新加载该模块，成功求值的模块仍保留身份。模块保留 `import.meta.url`、`filename`、`dirname`、`resolve()` 和 `main: false`。其他格式使用 Node 加载器；未提供 handler 时，所有导入也使用 Node 加载器。handler 抛出值或拒绝会使导入该依赖的模块图失败，不会回退；无关模块图仍可使用。VM Script 在调用 handler 前拒绝 source 阶段导入，并拒绝 VM 加载的 ESM 上的导入属性。AsyncFunction 和 Node REPL 保留 Node 原生依赖加载与 source 阶段规则。
 
 导出值可以是 runner 内的任意对象：原型、私有字段、闭包、循环引用和同步方法都保持正常行为。一个 exports 对象在每个求值器中标识一个模块；名称和值只捕获一次，引用的对象仍可修改。返回不同的 exports 对象会创建另一个模块。每次动态导入以及链接时的每个静态请求都会调用 handler。模块求值失败也会针对该 exports 对象缓存。可调用的 `then` 导出在 AsyncFunction 和 VM Script 中遵循 JavaScript 动态导入的 Promise 同化规则；Node REPL 会拒绝由此产生的非模块值，因此在 REPL 中需使用其他导出名。
 
-AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的全局导出桥接对象。经 VM 编译的工厂使用 Node 默认加载器调用原生 AsyncFunction 构造器，保留严格模式函数体语法和参数绑定。每个求值器与编译文件名组合使用独立的 source URL，确保 V8 构造器缓存保留正确的 import handler 和 referrer。REPL 使用 `AsyncLocalStorage` 区分共享 Node 基于 cwd 生成的导入 URL 的求值器。VM Script 通过逐模块回调管理 ESM 加载与链接；Node 保留求值状态。清理时释放求值器缓存，并移除 hook 和桥接对象；Node 会将原生加载的 ESM 命名空间和 symbol 注册表键保留到进程退出。从已完成求值中发起的导入，以及求值完成后才返回的异步 handler 结果都会被拒绝；保存的函数在后续活动求值中调用时可以正常导入。
+AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的全局导出桥接对象。经 VM 编译的工厂使用 Node 默认加载器调用原生 AsyncFunction 构造器，保留严格模式函数体语法和参数绑定。每个求值器与编译文件名组合使用独立的 source URL，确保 V8 构造器缓存保留正确的 import handler 和 referrer。REPL 使用 `AsyncLocalStorage` 区分共享 Node 基于 cwd 生成的导入 URL 的求值器。VM Script 通过逐模块回调管理 ESM 加载与链接；Node 保留求值状态。清理时释放求值器缓存，并移除 hook 和桥接对象；Node 会将原生加载的 ESM 命名空间和 symbol 注册表键保留到进程退出。保留模式求值结束后才发起或返回结果的导入会被拒绝；临时求值让这些导入保持挂起，直到进程退出。保存的函数在后续活动求值中调用时可以正常导入。
 
 ### 源码索引
 

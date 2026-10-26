@@ -6,8 +6,9 @@ export const STARTUP_ENVIRONMENT_NAMES: ReadonlySet<string> = new Set(['PATH', '
 
 /**
  * Clear inherited credentials while preserving native child-process startup paths.
- * Refresh built-in ESM exports so preloaded node:process imports observe the replacement.
- * @param state - Child process environment, replaced with an empty program-visible object.
+ * With the native child process, preloaded node:process exports observe the replacement.
+ * Isolated state objects only replace their own environment; they do not replace the native process.
+ * @param state - Native child process in production, or isolated state in in-process tests.
  */
 export function clearProgramEnvironment(state: { env: NodeJS.ProcessEnv }): void {
   for (const key of Object.keys(state.env)) {

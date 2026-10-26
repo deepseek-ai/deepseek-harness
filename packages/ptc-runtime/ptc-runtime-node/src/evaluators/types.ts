@@ -28,7 +28,7 @@ export type ProgramImportResult =
  * Intercept program imports inside the runner, independently of evaluation syntax.
  * VM Script recursively loads .mjs files and .js files in type: module packages in its context.
  * Their static and dynamic imports also consult the handler; each static request binds once.
- * Default and redirect resolve relative to the importer; the replacement itself does not reenter the handler.
+ * Default and redirect use Node's active resolution conditions relative to the importer; replacements do not reenter the handler.
  * Other formats, AsyncFunction and Node REPL use Node's loader without intercepting dependencies.
  * A thrown or rejected value rejects the program's import; there is no fallback after failure.
  * VM Script accepts async handlers and requires --experimental-vm-modules.

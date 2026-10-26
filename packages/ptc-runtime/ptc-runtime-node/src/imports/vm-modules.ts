@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises'
 import { dirname, extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { types } from 'node:util'
-import { resolve as resolveImport } from 'import-meta-resolve'
 import { getPackageType } from 'import-meta-resolve/lib/package-json-reader.js'
-import type { ImportAttributes } from 'node:module'
+import { registerHooks, type ImportAttributes } from 'node:module'
 import type { ProgramImportHandler } from '../evaluators/types.ts'
+import { ImportEvaluationEndedError } from './evaluation-ended.ts'
 
 /* v8 ignore next 4 -- Typed decisions exhaust this union; the standalone child cannot depend on built workspace packages. */
 function assertNever(value: never): never {
@@ -26,6 +26,7 @@ const SourceModule = vm.SourceTextModule as new (code: string, options: vm.Sourc
 interface ModuleRecord {
   module: vm.Module
   dependencies?: Promise<ModuleRecord[]>
+  expired?: boolean
 }
 
 type ImportResult = ModuleRecord | { namespace: Record<string, unknown> }
@@ -91,10 +92,19 @@ export class VmModuleImportLoader {
     return load as vm.DynamicModuleLoader<object>
   }
 
-  private async request(specifier: string, referrer: string, attributes: ImportAttributes, phase: string): Promise<ImportResult> {
+  private async request(
+    specifier: string, referrer: string, attributes: ImportAttributes, phase: string, staticImport = false,
+  ): Promise<ImportResult> {
     this.assertOpen()
     if (phase !== 'evaluation') throw new Error('PTC importHandler supports evaluation-phase imports only')
-    const result = await this.handler({ specifier, referrer: fileURLToPath(referrer), attributes })
+    let result
+    try {
+      result = await this.handler({ specifier, referrer: fileURLToPath(referrer), attributes })
+    } catch (error) {
+      // A closing temporary process must not resume detached program catch handlers.
+      if (error instanceof ImportEvaluationEndedError && !error.retainsState) return new Promise<never>(() => {})
+      throw error
+    }
     this.assertOpen(true)
     switch (result.type) {
       case 'module': return this.module(result.exports)
@@ -106,18 +116,34 @@ export class VmModuleImportLoader {
     const url = new URL(resolveImport(specifier, referrer))
     if (isSourceModule(url)) {
       if (Object.keys(attributes).length) throw new TypeError(`PTC ESM imports do not accept import attributes: ${url.href}`)
-      let record = this.files.get(url.href)
-      if (!record) {
-        record = this.sourceModule(url)
-        this.files.set(url.href, record)
-      }
-      return record
+      return this.file(url)
+    }
+    if (staticImport) {
+      // Export the namespace as a value so native Promise assimilation cannot consume its then export.
+      const source = `import * as namespace from ${JSON.stringify(url.href)} with ${JSON.stringify(attributes)}; export { namespace }`
+      const loaded = await this.nativeImport(`data:text/javascript,${encodeURIComponent(source)}`, {}) as { namespace: Record<string, unknown> }
+      this.assertOpen(true)
+      return { namespace: loaded.namespace }
     }
     const value = await this.nativeImport(url.href, attributes)
     this.assertOpen(true)
     if (types.isModuleNamespaceObject(value)) return { namespace: value as Record<string, unknown> }
     // A native then export can settle to any value; the VM callback still requires a module.
     return this.module({ then(resolve: (result: unknown) => void) { resolve(value) } })
+  }
+
+  private async file(url: URL): Promise<ModuleRecord> {
+    let pending = this.files.get(url.href)
+    if (!pending) {
+      pending = this.sourceModule(url)
+      this.files.set(url.href, pending)
+    }
+    const record = await pending
+    if (record.expired || (record.module.status === 'errored' && record.module.error instanceof ImportEvaluationEndedError)) {
+      if (this.files.get(url.href) === pending) this.files.delete(url.href)
+      return this.file(url)
+    }
+    return record
   }
 
   private async sourceModule(url: URL): Promise<ModuleRecord> {
@@ -142,15 +168,20 @@ export class VmModuleImportLoader {
     if (visited.has(record)) return
     visited.add(record)
     record.dependencies ??= this.dependencies(record.module)
-    const dependencies = await record.dependencies
-    this.assertOpen(true)
-    await Promise.all(dependencies.map(dependency => this.link(dependency, visited)))
+    try {
+      const dependencies = await record.dependencies
+      this.assertOpen(true)
+      await Promise.all(dependencies.map(dependency => this.link(dependency, visited)))
+    } catch (error) {
+      if (error instanceof ImportEvaluationEndedError) record.expired = true
+      throw error
+    }
   }
 
   private async dependencies(module: vm.Module): Promise<ModuleRecord[]> {
     if (module instanceof SourceModule) {
       const dependencies = await Promise.all(module.moduleRequests.map(async (request) => {
-        const result = await this.request(request.specifier, module.identifier, request.attributes, request.phase)
+        const result = await this.request(request.specifier, module.identifier, request.attributes, request.phase, true)
         return 'namespace' in result ? this.module(result.namespace) : result
       }))
       this.assertOpen(true)
@@ -175,6 +206,18 @@ export class VmModuleImportLoader {
     this.modules.set(exports, record)
     return record
   }
+}
+
+/** Resolve with the native loader's conditions and flags while retaining the importing filename. */
+function resolveImport(specifier: string, parentURL: string): string {
+  const marker = 'dsh-ptc:resolve'
+  const hooks = registerHooks({
+    resolve(request, context, nextResolve) {
+      return request === marker ? nextResolve(specifier, { ...context, parentURL }) : nextResolve(request, context)
+    },
+  })
+  try { return import.meta.resolve(marker) }
+  finally { hooks.deregister() }
 }
 
 /** Explicit file ESM stays in the evaluator; other formats retain Node's loader. */
