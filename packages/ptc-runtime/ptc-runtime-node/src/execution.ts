@@ -92,10 +92,10 @@ class NodeExecution {
     worker?.assertIdle()
     if (worker && !worker.closed && (worker.policy.mode !== spec.sandboxPolicy.mode
       || worker.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
-      || worker.policy.sessionId !== spec.sandboxPolicy.sessionId
-      || !sameAdditionalRoots(worker.policy.additionalWritableRoots, spec.sandboxPolicy.additionalWritableRoots))) {
+      || worker.policy.sessionId !== spec.sandboxPolicy.sessionId)) {
       throw new Error('persistent PTC: release the retained environment before changing its sandbox policy')
     }
+    // Retained processes keep their launch-time directory grants until release.
     if (!worker || worker.closed) {
       if (worker) this.workers.delete(worker)
       // Direct callers can own mutable policy arrays; the retained process owns its grant snapshot.
@@ -125,19 +125,6 @@ class NodeExecution {
     if (this.owners.get(owner) === worker) this.owners.delete(owner)
     this.workers.delete(worker)
   }
-}
-
-/**
- * Compare requested extra grants without resolving paths in another execution world.
- * @param left - one policy's additional roots.
- * @param right - the other policy's additional roots.
- * @returns whether both contain the same paths, ignoring order and duplicates.
- */
-function sameAdditionalRoots(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
-  const effective = (roots: readonly string[] | undefined): string[] => [...new Set(roots ?? [])].sort()
-  const a = effective(left)
-  const b = effective(right)
-  return a.length === b.length && a.every((root, index) => root === b[index])
 }
 
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'

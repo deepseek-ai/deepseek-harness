@@ -52,6 +52,12 @@ kind: "package-reference"
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
+### 注册会话的可写目录
+
+插件通过自己的所属上下文调用 `ctx.sandboxPolicy.registerWritableRoot(session, directory)`，为该活跃 Session 的 `workspace-write` 权限添加一个物理绝对目录。该方法返回原始 Cordis effect 清理函数；插件卸载或显式清理只移除该次注册。重复注册与配置授权彼此独立。将会话专用插件挂载在 Agent 的上下文下，使其 effect 也随 Agent 结束。授权前先在执行主机上准备好目录；路径检查与配置根目录相同。
+
+注册与清理影响后续策略解析及下一次模型请求中记录的上下文。其他 Session 与无 agent 调用不会获得此授权。授权不随 Session 历史保存或继承；恢复或派生的 Session 需要自行注册。已经解析策略的操作与持久进程保留原权限，包括注册已被移除的目录。启动新进程才能使用当前授权。`read-only` 仍然只读，[Windows 子进程限制](../sandbox-local/README.zh.md#known-limitations-and-deferred-work)仍然适用。
+
 ### 切换会话模式
 
 会话的模式可以在运行时通过 UI 策略控件或显式切换来更改；切换记录在会话日志中，并在该会话的下一次受限调用时生效。切换通过回放跨重启保留，每个会话保持自己的模式——两个会话绝不会看到彼此状态。切换后的会话继续以不可变的工作区 cwd 作为写入边界。

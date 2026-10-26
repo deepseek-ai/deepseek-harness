@@ -208,11 +208,25 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
  * mode outranks the session's last `sandbox/mode` event, which outranks the
  * deployment default. A session cwd is its workspace-write boundary; the
  * configured root is the fallback for agentless calls and sessions without a
- * cwd.
+ * cwd. Configured extra roots and this Session's active registrations are
+ * snapshotted together; existing operations and processes keep their policy.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
+
+/**
+ * Permit writes under one directory in this Session's future workspace-write
+ * operations. The calling context owns the effect; disposal removes only this
+ * registration. Other grants to the directory remain effective. Existing
+ * operations and persistent processes retain their resolved permissions.
+ * Grants are runtime-only and must be registered again after resume or fork.
+ * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
+ * @param directory - absolute execution-world directory; the enforcing host checks existence and rejects symlinked grants.
+ * @returns the exact Cordis effect disposer for this registration.
+ * @throws when the directory is relative or contains a NUL byte.
+ */
+registerWritableRoot(session: Session, directory: string): () => void
 
 /**
  * Read the session override without applying the deployment default.

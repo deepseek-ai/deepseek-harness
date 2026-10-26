@@ -8,14 +8,15 @@ import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountRuntime } from './setup.ts'
+import type { Config } from '../src/index.ts'
 
-async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: 'per-call' | 'persistent-in-memory' = 'persistent-in-memory') {
+async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: NonNullable<Config['executionMode']> = 'persistent-in-memory') {
   const root = await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-'))
   const cwd = join(root, 'workspace')
   await mkdir(cwd)
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, { executionMode }, { mode, workspaceRoot: cwd })
+  const { runtime } = await mountRuntime(ctx, { executionMode, scriptPersistence: executionMode === 'vm-script' }, { mode, workspaceRoot: cwd })
   const owner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))
   return { root, cwd, ctx, runtime, owner, run }
@@ -50,25 +51,33 @@ it('refuses reuse under another policy until the owner has been released', async
 })
 
 // Windows ACL rejects additional roots; its refusal is covered by sandbox-local's runner tests.
-it.skipIf(process.platform === 'win32')('requires release before changing a retained environment\'s additional writable roots', async () => {
-  const { root, cwd, runtime, owner, run } = await setup('workspace-write')
+it.skipIf(process.platform === 'win32').each(['persistent-in-memory', 'vm-script'] as const)('keeps %s directory grants until the retained process is released', async (executionMode) => {
+  const { root, cwd, runtime, owner } = await setup('workspace-write', executionMode)
   const extra = join(root, 'extra')
   await mkdir(extra)
-  expect((await run('var retained = 7; retained')).value).toBe(7)
-  const spec = runtime.resolve({
-    program: 'typeof retained',
+  const target = join(extra, 'memory.txt')
+  const roots = [extra]
+  const policy = { mode: 'workspace-write' as const, workspaceRoot: cwd, additionalWritableRoots: roots }
+  const write = (content: string, additionalWritableRoots: readonly string[] = []) => runtime.run(runtime.resolve({
+    program: `await (await import("node:fs/promises")).writeFile(${JSON.stringify(target)}, ${JSON.stringify(content)})`,
     bindings: [],
     stateOwner: owner,
-    sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra] },
-  })
-  await expect(runtime.run(spec)).rejects.toThrow('release the retained environment')
-  expect((await run('retained')).value).toBe(7)
+    sandboxPolicy: { ...policy, additionalWritableRoots },
+  }))
+
+  expect((await write('initial', roots)).error).toBeUndefined()
+  roots[0] = cwd
+  expect((await write('retained')).error).toBeUndefined()
+  expect(await readFile(target, 'utf8')).toBe('retained')
+
   await runtime.release(owner)
-  expect((await runtime.run(spec)).value).toBe('undefined')
-  const sameRoots = runtime.resolve({ ...spec, program: 'var second = 8; second', sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [extra, extra] } })
-  expect((await runtime.run(sameRoots)).value).toBe(8)
-  const changed = runtime.resolve({ ...spec, sandboxPolicy: { mode: 'workspace-write', workspaceRoot: cwd, additionalWritableRoots: [cwd] } })
-  await expect(runtime.run(changed)).rejects.toThrow('release the retained environment')
+  expect((await write('denied')).sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+  expect((await write('still denied', [extra])).sandbox).toMatchObject({ mode: 'workspace-write', denied: true })
+  expect(await readFile(target, 'utf8')).toBe('retained')
+
+  await runtime.release(owner)
+  expect((await write('renewed', [extra])).error).toBeUndefined()
+  expect(await readFile(target, 'utf8')).toBe('renewed')
 })
 
 it('fails closed when confinement is unavailable without spawning Node', async () => {

@@ -52,6 +52,12 @@ For a linked Git worktree, the caller can grant its shared Git directory with `a
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-sandbox-policy) is the exhaustive source for every accepted field and its JSDoc.
 
+### Registering a session's writable directory
+
+A plugin calls `ctx.sandboxPolicy.registerWritableRoot(session, directory)` through its owning context to add one physical absolute directory to that live Session's `workspace-write` permissions. The method returns the exact Cordis effect disposer; plugin unload or explicit disposal removes only that registration. Duplicate registrations and configured grants remain independent. Mount session-specific plugins under the Agent's context so their effects also end with the Agent. Prepare the directory on the execution host before granting it; the same path checks as configured roots apply.
+
+Registration and disposal affect subsequent policy resolutions and the next model request's logged context. Other Sessions and agentless calls receive no such grant. Grants are not saved or inherited through Session history; a resumed or forked Session needs its own registration. Already-resolved operations and persistent processes keep their original permissions, including directories whose registration has been removed. Start a new process to use the current grants. `read-only` remains read-only, and the [Windows subprocess restriction](../sandbox-local/README.md#known-limitations-and-deferred-work) still applies.
+
 ### Switching a session's mode
 
 A session's mode can be switched at runtime through a UI policy control or an explicit switch; the switch is recorded in the session log and takes effect on the session's next confined call. The switch survives restart through replay, and each session keeps its own mode — two sessions never see each other's state. A switched session keeps its immutable workspace cwd as the writable boundary.
