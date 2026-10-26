@@ -62,7 +62,7 @@ type PromptContentCandidate =
 /**
  * Whether prompt content carries non-whitespace text or an attachment.
  * @param content - submitted or edited prompt parts.
- * @returns false for content the Agent must not receive.
+ * @returns whether any part supplies ordinary prompt content.
  */
 export function hasPromptContent(content: readonly PromptContentCandidate[]): boolean {
   return content.some(part => part.type !== 'text' || part.text.trim().length > 0)

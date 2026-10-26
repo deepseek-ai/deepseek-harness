@@ -874,7 +874,7 @@ async function modelFor(ctx: Context, session: Session): Promise<AgentModel> {
 }
 
 describe('sessions.prompt synchronous rejection', () => {
-  it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
+  it('rejects whitespace-only text parts before delivery or Session events', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
