@@ -454,9 +454,11 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     await input.fill('')
     await resume.waitFor()
     await page.setViewportSize({ width: 390, height: 844 })
-    const bounds = await resume.boundingBox()
-    expect(bounds).not.toBeNull()
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+    // ResizeObserver collapses the model label after the viewport changes.
+    await expect.poll(async () => {
+      const bounds = await resume.boundingBox()
+      return bounds !== null && bounds.x + bounds.width <= 390
+    }).toBe(true)
     expect(await resume.isEnabled()).toBe(true)
     const continued = scaffold!.whenTurnSettled()
     await resume.click()
