@@ -571,7 +571,7 @@ describe('ChangedFiles card', () => {
     controller = new PresentedOpenController(), locale = en, matched = { changes, presented: [] as never[] }, summaries = servedStore(),
   ) {
     const props = openProps(controller, summaries)
-    props.openChanged.mockResolvedValue(null)
+    props.openChanged.mockResolvedValue({ kind: 'opened' })
     const openFile = vi.fn<(path: string) => void>()
     const view = render(<Deliverables {...props} matched={matched} openFile={openFile} sessionId={SessionId('child-session')} t={makeTranslate(locale)} />)
     return { props, openFile, view }
@@ -927,9 +927,9 @@ describe('plugin registration', () => {
     // The replaced connection may reach a Host that no longer serves the summaries read so far.
     expect(face.hooks.changesSummary.getSnapshot()).toEqual({})
     await face.openPresented(SessionId('child-session'), 2, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBeUndefined()
     await face.openChanged(SessionId('child-session'), 5, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBeUndefined()
     face.openChangesReview({ sessionId: SessionId('child-session'), seq: 5, turn: 3 }, 1)
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
@@ -950,7 +950,7 @@ describe('plugin registration', () => {
     await tabFace.reloadPresentedHost()
     fetcher.mockResolvedValueOnce(new Response(null, { status: 204 }))
     await tabFace.openChanged(SessionId('child-session'), 5, 1)
-    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBe('opened')
+    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBeUndefined()
     ctx.emit('connection/reset')
     expect(tabFace.hooks.changesDiff.getSnapshot()).toEqual({})
     // A turn that produced nothing yields no vocabulary at all.
@@ -1012,7 +1012,7 @@ describe('presented files', () => {
     const owner = tailOwner(deliverablesOf(value), 3, preview)
     const matched = selectDeliverables(owner)!
     const props = openProps()
-    props.openPresented.mockResolvedValue(null)
+    props.openPresented.mockResolvedValue({ kind: 'opened' })
     const view = render(<Deliverables {...props} matched={matched} openFile={owner.openFile} sessionId={SessionId('child-session')} t={makeTranslate(en)} />)
     expect(view.container.querySelectorAll('[data-presented-file]')).toHaveLength(4)
     const expand = view.getByRole('button', { name: 'Show all 8 delivered files' })
@@ -1091,7 +1091,7 @@ it('lets one delivered file span the complete row without an expansion control',
 })
 
 
-it.each(['opening', 'opened', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
+it.each(['opening', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
   const controller = new PresentedOpenController()
   controller.state.set({ 'api/present.open?sessionId=session&seq=2&index=0': phase })
   const props = openProps(controller)

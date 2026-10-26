@@ -160,7 +160,7 @@ describe('ReviewTab', () => {
       loadChangesSummary: vi.fn<ReviewInjected['loadChangesSummary']>(() => Promise.resolve()),
       loadChangesDiff: vi.fn<ReviewInjected['loadChangesDiff']>(() => Promise.resolve()),
       reloadPresentedHost: vi.fn<ReviewInjected['reloadPresentedHost']>(() => Promise.resolve()),
-      openChanged: vi.fn<ReviewInjected['openChanged']>(() => Promise.resolve(null)),
+      openChanged: vi.fn<ReviewInjected['openChanged']>(() => Promise.resolve({ kind: 'opened' })),
     }
     const sessions: SessionListState = {
       ids: [SESSION],

@@ -91,6 +91,7 @@
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare-protocol/tsconfig.client.json" },
     { "path": "./packages/experimental/session-inspector" },
+    { "path": "./packages/experimental/client-ui-forge/tsconfig.client.json" },
     { "path": "./packages/client/hmr" },
     { "path": "./packages/client/connection/tsconfig.client.json" },
     { "path": "./packages/client/file-upload/tsconfig.client.json" },

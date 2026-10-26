@@ -83,6 +83,8 @@ body {
   --dsw-static-red-600: rgb(236, 19, 19);
   --dsw-static-red-600-a08: rgb(236 19 19 / 8%);
   --dsw-static-red-900: rgb(87, 12, 12);
+  --dsw-static-violet-400: rgb(167, 139, 250);
+  --dsw-static-violet-600: rgb(124, 58, 237);
 }
 
 body[data-ds-dark-theme] {
@@ -167,6 +169,8 @@ body[data-ds-dark-theme] {
   --dsw-static-red-600: rgb(236, 19, 19);
   --dsw-static-red-600-a08: rgb(236 19 19 / 8%);
   --dsw-static-red-900: rgb(87, 12, 12);
+  --dsw-static-violet-400: rgb(167, 139, 250);
+  --dsw-static-violet-600: rgb(124, 58, 237);
 }
 
 body {
@@ -259,6 +263,7 @@ body {
   --dsw-alias-file-diff-deleted-bg: rgb(252, 230, 226);
   --dsw-alias-file-diff-deleted-gutter: rgb(253, 236, 233);
   --dsw-alias-file-diff-deleted-marker: rgb(186, 39, 35);
+  --dsw-alias-state-done-primary: var(--dsw-static-violet-600);
   --dsw-alias-state-error-primary: var(--dsw-static-red-600);
   --dsw-alias-state-error-secondary: var(--dsw-static-red-400);
   --dsw-alias-state-idle-primary: var(--dsw-static-neutral-300);
@@ -382,6 +387,7 @@ body[data-ds-dark-theme] {
   --dsw-alias-file-diff-deleted-bg: rgb(60, 31, 27);
   --dsw-alias-file-diff-deleted-gutter: rgb(40, 19, 14);
   --dsw-alias-file-diff-deleted-marker: rgb(250, 66, 62);
+  --dsw-alias-state-done-primary: var(--dsw-static-violet-400);
   --dsw-alias-state-error-primary: var(--dsw-static-red-400);
   --dsw-alias-state-error-secondary: var(--dsw-static-red-400);
   --dsw-alias-state-idle-primary: var(--dsw-static-neutral-600);

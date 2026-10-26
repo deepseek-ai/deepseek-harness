@@ -1,0 +1,12 @@
+- listitem:
+  - img "变更请求状态：需要处理"
+  - link "Add the pull request panel":
+    - /url: https://github.com/octo/demo/pull/7
+  - text: "#7 feat → main"
+  - button "在浏览器中打开"
+  - button "复制变更请求链接"
+  - 'button "从本会话移除 #7"'
+  - 'button "收起 #7" [expanded]'
+  - button "检查 1 项失败 · 1 项通过"
+  - text: 评审 等待评审 · 1 条未解决讨论 合并 无冲突
+  - 'button "查看 #7 的变更：新增 128 行，删除 14 行"': 变更 +128 −14

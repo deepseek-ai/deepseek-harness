@@ -1,0 +1,551 @@
+/* Forge tab body: one scrolling column with the checkout row on top and the
+   Session's change request cards below, at the sidebar's 13px row size. */
+.root {
+  --forge-fill: var(--dsw-static-neutral-50);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow-y: auto;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 20px;
+}
+
+:global(body[data-ds-dark-theme]) .root {
+  --forge-fill: var(--dsw-static-neutral-850);
+}
+
+/* Loading and disconnected states of a panel without state yet. */
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  text-align: center;
+}
+
+.disconnected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.checkout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.checkout:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+/* The worktree the Session works in is gone. */
+.checkout[data-missing],
+.checkout[data-missing] .checkoutBranch {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.checkoutName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.checkoutIcon {
+  flex: none;
+}
+
+.checkoutBranch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkoutNote {
+  flex: none;
+  margin-left: auto;
+}
+
+/* Smaller than the card actions, with negative block margins, so the row keeps the height of its text;
+   the descendant selector outranks `.iconButton`, which this button also carries. */
+.checkout .checkoutCopy {
+  width: 24px;
+  height: 24px;
+  margin: -3px -4px -3px 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 2px 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-primary);
+}
+
+.bannerDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.bannerCommand {
+  max-width: 100%;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.bannerAction {
+  flex: none;
+}
+
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyHint {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+/* Glyph, title link with the number line below it, then the expanded card's
+   open, copy, and remove buttons and the expansion toggle. */
+.changeHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 8px 10px 14px;
+}
+
+.changeHead > .glyph {
+  margin: 3px 10px 0 0;
+}
+
+/* The buttons center on the title's first line. */
+.changeHead > .iconButton {
+  margin-top: -3px;
+}
+
+.headText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.changeTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.change:not([data-expanded]) .changeTitle {
+  -webkit-line-clamp: 1;
+}
+
+@media (hover: hover) {
+  .changeTitle:hover {
+    color: var(--dsw-alias-label-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.changeTitle:focus-visible,
+.rowButton:focus-visible,
+.checkoutName:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* Number line below the title: the status while collapsed, the branches while expanded. */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 1px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+/* Lifecycle glyph; drawn in the current color unless the state tints it. */
+.glyph {
+  display: inline-flex;
+  flex: none;
+}
+
+.tinted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.tinted[data-tone='open'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* Orange, because the closed glyph already takes red. */
+.tinted[data-tone='blocked'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.tinted[data-tone='merged'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+.tinted[data-tone='closed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff {
+  display: inline-flex;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.ci {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ci[data-tone='error'],
+.flag[data-flag='changesRequested'],
+.flag[data-flag='conflicting'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.flag {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.finished {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.finished[data-tone='merged'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+/* Read failure or unsupported host below the head, with its one action. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 10px 33px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Expanded facts, one row each: an icon under the glyph, the label, the value,
+   and a chevron on a row that opens something. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 16px 32px minmax(0, 1fr) 12px;
+  align-items: center;
+  column-gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+}
+
+.rowWide {
+  grid-column: 2 / 4;
+}
+
+.rowButton {
+  cursor: pointer;
+}
+
+.rowButton[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .rowButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rowChevron {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowValue[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rowValue[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.rowValue[data-tone='merged'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+.rowValue[data-tone='closed'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The checks menu anchors to the whole row. */
+.checksAnchor {
+  display: block;
+}
+
+.checksList {
+  min-width: 280px;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.checkTime {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.checkGlyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pass {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.fail {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.running {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The action of an open change request below its rows. */
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 14px 12px;
+}
+
+.primaryAction {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* A merge method row: its name with the note on what it does below. */
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.methodNote {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.titleIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.titleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
