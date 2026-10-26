@@ -95,6 +95,11 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |
 | [`worktree`](worktree/README.md) | Creates a named Git worktree and changes the calling Session directory | `ctx.worktrees` |
+| [`forge`](forge/README.md) | Code host provider registry with shared change request polling | `ctx.forge` |
+| [`forge-github`](forge-github/README.md) | GitHub provider that reads pull requests through the host GitHub CLI | registers a provider on `ctx.forge` |
+| [`forge-session`](forge-session/README.md) | Binds change requests to the Sessions that created, pushed, or tracked them | `ctx.forgeSession` |
+| [`client-ui-forge`](client-ui-forge/README.md) | GUI panel for a Session's Git checkout, worktrees, and bound pull requests | `ctx.forgePanel` |
+| [`forge-bundle`](forge-bundle/README.md) | Default-disabled pull request and worktree panel composition | — |
 
 -----
 
@@ -103,6 +108,7 @@ Promotion requires a named product role, documented public behavior and limitati
 
 - [Experimental publication reference](../../scripts/experimental-package-policy.ts) — public defaults and private exceptions.
 - [Worktrees](../../docs/subsystems/worktrees.md) — explicit branch and checkout creation.
+- [Forges](../../docs/subsystems/forge.md) — change request providers, status polling, Session bindings, and the panel.
 - [Computer use](../../docs/subsystems/computer-use.md) — desktop provider choices.
 - [Browser use](../../docs/subsystems/browser-use.md) — browser provider choices and Session ownership.
 - [Agent Teams subsystem](../../docs/subsystems/agent-team.md) — durable Team types and the `ctx.agentTeams` service API.

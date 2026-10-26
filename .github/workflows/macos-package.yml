@@ -1,34 +1,18 @@
-name: Package Desktop · macOS
+name: Package Desktop · macOS · Apple Silicon
 
 on:
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
+        type: string
+        default: master
+        required: true
       preset:
         description: '打包环境：选择机器上的 test 或 production 配置；同时决定后续发布环境'
         type: choice
         options: [test, production]
         default: test
-        required: true
-      zip_compression_level:
-        description: 'ZIP 压缩等级：只影响 ZIP 和自动升级下载，不影响 DMG；3 打包较快，7 压缩更强'
-        type: choice
-        options: ['3', '7']
-        default: '3'
-        required: true
-      skip_notarization:
-        description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
-        type: boolean
-        default: false
-        required: true
-      test_release_id:
-        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
-        type: string
-        default: ''
-        required: false
-      source_ref:
-        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
-        type: string
-        default: master
         required: true
       update_channel:
         description: '升级通道：nightly 或 latest（须为稳定版本）；自动更新不会切换通道'
@@ -47,6 +31,22 @@ on:
         type: string
         default: ''
         required: false
+      test_release_id:
+        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
+        type: string
+        default: ''
+        required: false
+      compression_level:
+        description: 'ZIP 压缩等级：只影响 ZIP 和自动升级下载，不影响 DMG；3 打包较快，7 压缩更强'
+        type: choice
+        options: ['3', '7']
+        default: '3'
+        required: true
+      skip_notarization:
+        description: '跳过公证和 stapling：仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请勿勾选'
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
@@ -63,7 +63,9 @@ jobs:
       run:
         shell: bash
     env:
-      PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: ${{ inputs.zip_compression_level }}
+      DSH_DESKTOP_TARGET_PLATFORM: darwin
+      DSH_DESKTOP_TARGET_ARCH: arm64
+      PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL: ${{ inputs.compression_level }}
       PACKAGE_SKIP_NOTARIZATION: ${{ inputs.skip_notarization }}
       PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
       PACKAGE_VERSION_MODE: ${{ inputs.version_mode }}

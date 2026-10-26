@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-09-session-change-request-bindings.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-09-session-change-request-bindings.md
+/agent-note-session-change-request-bindings:
+  en: 89ec58adddf53fec
+  zh: 919e8557d9923fdb
+/agent-note-session-change-request-bindings/problem:
+  en: e736740546fb8219
+  zh: 46a16a7a633716ec
+/agent-note-session-change-request-bindings/decision:
+  en: 2bbd058f4edc8bb5
+  zh: 5cc12bb0aa0864e2
+/agent-note-session-change-request-bindings/alternatives-considered:
+  en: 15fdaef4e432fc72
+  zh: 8d36c859bd89f403
+/agent-note-session-change-request-bindings/consequences:
+  en: a2960e50ec52c9b6
+  zh: fd23f4fe1137787d

@@ -415,7 +415,11 @@ describe('session.history projections block', () => {
       .toBe(false)
 
     seedMessages(session, 1)
-    const changed = await iterator.next()
+    let changed = await iterator.next()
+    while (!changed.done && changed.value.type === 'projection' && changed.value.key !== 'sessionListMetadata') {
+      expect(changed.value.key).not.toBe('test/internal-count')
+      changed = await iterator.next()
+    }
     expect(changed).toMatchObject({
       done: false,
       value: { type: 'projection', key: 'sessionListMetadata' },
@@ -743,11 +747,12 @@ describe('Session control projection frames', () => {
     iterable: AsyncIterable<SessionControlFrame>,
     count: number,
     abort: AbortController,
+    keys: readonly string[],
   ): Promise<SessionControlFrame[]> {
     const frames: SessionControlFrame[] = []
     for await (const frame of iterable) {
       frames.push(frame)
-      if (frames.filter(candidate => candidate.type === 'projection').length >= count) abort.abort()
+      if (frames.filter(candidate => candidate.type === 'projection' && keys.includes(candidate.key)).length >= count) abort.abort()
     }
     return frames
   }
@@ -761,7 +766,7 @@ describe('Session control projection frames', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 5, abort)
+    const collected = collect(stream, 5, abort, ['test/last-user', 'sessionListMetadata'])
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)

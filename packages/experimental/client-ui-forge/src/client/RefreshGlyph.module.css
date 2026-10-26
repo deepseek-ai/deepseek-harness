@@ -1,0 +1,22 @@
+.glyph {
+  display: inline-flex;
+}
+
+.glyph[data-turning] {
+  animation: forge-refresh-turn 1s linear infinite;
+}
+
+@keyframes forge-refresh-turn {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion dims the glyph instead; the dim still fires the iteration events that end a turn. */
+@media (prefers-reduced-motion: reduce) {
+  .glyph[data-turning] {
+    animation-name: forge-refresh-dim;
+  }
+}
+
+@keyframes forge-refresh-dim {
+  50% { opacity: 0.4; }
+}

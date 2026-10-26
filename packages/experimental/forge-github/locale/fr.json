@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Demandes de modification GitHub",
+    "description": "Lisez les demandes de modification GitHub pour le registre forge via la CLI GitHub sur l'hôte."
+  }
+}

@@ -108,6 +108,14 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       'packages/session/session-persistence-jsonl/src/lease.ts',
       // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
       'packages/experimental/cua-macos/src/shared-native.ts',
+      // The GitHub CLI runner's suite stands in for `gh` with POSIX shell
+      // scripts and skips on Windows: the Linux and macOS lanes hold its
+      // per-file 100%, while the provider suite pins its callers everywhere.
+      'packages/experimental/forge-github/src/gh.ts',
+      // The panel's Git failure and environment cases stand in for `git` with
+      // POSIX shell scripts and skip on Windows: the Linux and macOS lanes hold
+      // its per-file 100%, while its real-Git cases run everywhere.
+      'packages/experimental/client-ui-forge/src/git.ts',
     ]
   : []
 
@@ -349,6 +357,9 @@ export default defineConfig({
         // The access entry imports its generated Remote contribution, which exists only in lib;
         // the Web snapshot exercises the built entry, while source tests cover mountAccess.
         'packages/api/remote-access/src/client/index.ts',
+        // The forge panel entry imports its generated Remote contribution, which exists only in lib;
+        // forge-panel.e2e.ts exercises the built entry, while source tests cover mountForgePanel.
+        'packages/experimental/client-ui-forge/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',

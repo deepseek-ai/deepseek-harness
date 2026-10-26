@@ -19,11 +19,20 @@
   padding-right: 48px;
 }
 
-/* Narrow settings panel: the 48px gutter separates the label from its control
-   across a wide row and only squeezes the label here. */
 @media (max-width: 767px) {
-  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .rowText {
+  /* The wide-row gutter squeezes labels beside steppers in narrow browser panels. */
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .row:not(.stacked) .rowText {
     padding-right: 16px;
+  }
+
+  .stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stacked .rowText {
+    flex: none;
+    padding-right: 0;
   }
 }
 
