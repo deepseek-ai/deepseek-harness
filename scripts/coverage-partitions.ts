@@ -153,7 +153,7 @@ const FILE_TIMES_NAME = '.coverage-times.json'
 
 /**
  * The instrumented inventory: every file plus the Vitest project it belongs
- * to (`thread-safe`, `process-bound`, or `vm-modules`). Preserving the per-project split
+ * to (`thread-safe` or `process-bound`). Preserving the per-project split
  * matters because the projects are mutually exclusive: a file's own project
  * must run it exactly once, so a partition config cannot hand the whole
  * partition list to every project.
@@ -179,9 +179,8 @@ export function parseFileInventory(output: string, root: string): InstrumentedIn
   for (const value of entries) {
     const entry: unknown = value
     if (entry === null || typeof entry !== 'object' || !('file' in entry) || typeof entry.file !== 'string'
-      || !('projectName' in entry)
-      || (entry.projectName !== 'thread-safe' && entry.projectName !== 'process-bound' && entry.projectName !== 'vm-modules')) {
-      throw new Error('coverage inventory requires a file and its thread-safe, process-bound, or vm-modules project')
+      || !('projectName' in entry) || (entry.projectName !== 'thread-safe' && entry.projectName !== 'process-bound')) {
+      throw new Error('coverage inventory requires a file and its thread-safe or process-bound project')
     }
     const file = relative(root, entry.file).split(sep).join('/')
     if (files.has(file)) throw new Error(`coverage inventory lists ${file} more than once`)
@@ -429,22 +428,17 @@ function partitionWeight(files: readonly string[], weights: ReadonlyMap<string, 
  * repository root (Vite resolves the relative include patterns against it).
  * Each project keeps only the files that belong to it: the projects are
  * mutually exclusive, so handing the whole partition list to every project
- * would run files more than once.
+ * would run plain files twice (once per project).
  */
 function partitionConfigSource(
   files: readonly string[],
   projectOf: ReadonlyMap<string, string>,
 ): string {
-  const filesByProject: Record<string, string[]> = {}
-  for (const file of files) {
-    const project = projectOf.get(file) ?? 'thread-safe'
-    const projectFiles = filesByProject[project] ??= []
-    projectFiles.push(file.split('\\').join('/'))
-  }
+  const threadSafe = JSON.stringify(files.filter(file => projectOf.get(file) !== 'process-bound').map(file => file.split('\\').join('/')))
+  const processBound = JSON.stringify(files.filter(file => projectOf.get(file) === 'process-bound').map(file => file.split('\\').join('/')))
   return [
     "import base from '../../vitest.config.ts'",
     "import { coverageForkPool } from '../../scripts/coverage-fork-diagnostics.ts'",
-    `const filesByProject = ${JSON.stringify(filesByProject)}`,
     'export default {',
     '  ...base,',
     '  test: {',
@@ -454,7 +448,7 @@ function partitionConfigSource(
     '      test: {',
     '        ...project.test,',
     '        pool: coverageForkPool,',
-    '        include: filesByProject[project.test.name] ?? [],',
+    '        include: project.test.name === \'process-bound\' ? ' + processBound + ' : ' + threadSafe + ',',
     '      },',
     '    })),',
     '  },',

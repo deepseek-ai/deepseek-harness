@@ -169,10 +169,8 @@ const processBoundTests = [
   'packages/llm/llm-pi-ai/tests/adapter.spec.ts',
   'packages/boot/app-boot/tests/app-boot.spec.ts',
   'packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts',
+  'packages/ptc-runtime/ptc-runtime-node/tests/imports.spec.ts',
 ]
-
-// Custom VM import callbacks require a Node startup flag; scope it to their owning suites.
-const vmModulesTests = ['packages/ptc-runtime/ptc-runtime-node/tests/imports.spec.ts']
 
 // Claude Code's test-kit module names, served by the mods bridge's test support so the example mods' tests import them unchanged.
 const claudeCodeTestingAliases = {
@@ -191,7 +189,7 @@ export default defineConfig({
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
-    // One coverage invocation aggregates all projects. Every suite forks for
+    // One coverage invocation aggregates both projects. Every suite forks for
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
@@ -212,7 +210,6 @@ export default defineConfig({
           exclude: [
             ...platformUnsupportedTests,
             ...processBoundTests,
-            ...vmModulesTests,
             ...coverageExemptExcludes,
           ],
         },
@@ -222,31 +219,14 @@ export default defineConfig({
         resolve: { alias: claudeCodeTestingAliases },
         test: {
           name: 'process-bound',
-          execArgv: vitestExecArgv,
-          pool: 'forks',
-          ...laneTestBudget,
-          setupFiles: [
-            './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
-          ],
-          include: processBoundTests,
-          exclude: [
-            ...platformUnsupportedTests,
-            ...coverageExemptExcludes,
-          ],
-        },
-      },
-      {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
-        resolve: { alias: claudeCodeTestingAliases },
-        test: {
-          name: 'vm-modules',
+          // Runner import tests require VM modules; the missing-flag test stays in thread-safe.
           execArgv: [...vitestExecArgv, '--experimental-vm-modules'],
           pool: 'forks',
           ...laneTestBudget,
           setupFiles: [
             './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
           ],
-          include: vmModulesTests,
+          include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
             ...coverageExemptExcludes,

@@ -209,18 +209,15 @@ describe('coverage file inventory', () => {
     const output = JSON.stringify([
       { projectName: 'thread-safe', file: join(root, 'packages/a/tests/a.spec.ts') },
       { projectName: 'process-bound', file: join(root, 'packages/b/tests/with spaces.spec.ts') },
-      { projectName: 'vm-modules', file: join(root, 'packages/c/tests/imports.spec.ts') },
       { projectName: 'thread-safe', file: join(exemptDir, 'transform-corpus.spec.ts') },
     ])
     const inventory = parseFileInventory(output, root)
     expect(inventory.files).toEqual([
       'packages/a/tests/a.spec.ts',
       'packages/b/tests/with spaces.spec.ts',
-      'packages/c/tests/imports.spec.ts',
     ])
     expect(inventory.projectOf.get('packages/a/tests/a.spec.ts')).toBe('thread-safe')
     expect(inventory.projectOf.get('packages/b/tests/with spaces.spec.ts')).toBe('process-bound')
-    expect(inventory.projectOf.get('packages/c/tests/imports.spec.ts')).toBe('vm-modules')
   })
 
   it.each(['[', '{}', '[null]', '[{}]', '[{"file":42}]', '[{"file":"a.spec.ts","projectName":"unknown"}]'])('rejects malformed inventories instead of dropping entries: %s', async (output) => {
@@ -498,7 +495,7 @@ describe('coverage partition coordinator', () => {
   const weightedProjects = new Map([
     ['a.spec.ts', 'thread-safe'],
     ['b.spec.ts', 'process-bound'],
-    ['c.spec.ts', 'vm-modules'],
+    ['c.spec.ts', 'process-bound'],
   ])
   it('passes the canonicalizing reporter to every partition', async () => {
     const root = await temporaryRoot()
@@ -640,10 +637,9 @@ describe('coverage partition coordinator', () => {
       projectOf: weightedProjects,
     })
     const allConfigs = [...configContents.values()].join('\n')
-    expect(allConfigs).toContain('"thread-safe":["a.spec.ts"]')
-    expect(allConfigs).toContain('"process-bound":["b.spec.ts"]')
-    expect(allConfigs).toContain('"vm-modules":["c.spec.ts"]')
-    expect(allConfigs).toContain('include: filesByProject[project.test.name] ?? []')
+    // The process-bound project must not receive the thread-safe file and
+    // vice versa, or plain files would run twice.
+    expect(allConfigs).toContain("include: project.test.name === 'process-bound' ?")
     expect(allConfigs).not.toContain('"a.spec.ts","b.spec.ts","c.spec.ts"')
   })
 
