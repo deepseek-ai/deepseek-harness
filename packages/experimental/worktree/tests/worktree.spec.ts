@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
@@ -561,11 +561,13 @@ it('does not remove a registration when its directory reappears during restorati
   const resolve = ctx.fs.resolve.bind(ctx.fs)
   let targetReads = 0
   const probe = vi.spyOn(ctx.fs, 'resolve').mockImplementation(async (path, options) => {
-    if (path === created.path && ++targetReads === 2) await mkdir(created.path)
+    // Git records Windows worktree paths with forward slashes.
+    if (normalize(path) === normalize(created.path) && ++targetReads === 2) await mkdir(created.path)
     return resolve(path, options)
   })
   try {
     await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow('worktree path already exists')
+    expect(targetReads).toBe(2)
     expect(await git(root, 'worktree', 'list', '--porcelain')).toContain(`worktree ${created.path.split(sep).join('/')}`)
   } finally { probe.mockRestore() }
 })
