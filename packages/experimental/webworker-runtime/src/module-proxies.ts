@@ -15,9 +15,6 @@
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/module-proxies
  */
 
-/** Process module aliases supplied by Worker Host assembly after installing its global. */
-export const PROCESS_MODULE_SPECIFIERS = ['node:process', 'process'] as const
-
 /**
  * Module proxy table — the ONLY platform fork of the worker host. Keys are
  * exact module specifiers; the native system package's Landlock entry stays

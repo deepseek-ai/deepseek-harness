@@ -30,7 +30,6 @@ import type { HostConnectionHandle, PeerScope } from '@deepseek-ai/dsh-client-co
 import type { AlsCausality } from './polyfill/async-context/als-runtime.ts'
 import { join } from './module-system/posix-path.ts'
 import { installProcessGlobal } from './node/globals/process.ts'
-import { PROCESS_MODULE_SPECIFIERS } from './module-proxies.ts'
 import type { RequestListener } from './transport/synthetic-http.ts'
 import { TunnelServer, type TunnelPort } from './transport/tunnel.ts'
 import { inflateImage, inflateImageStream } from './storage/image-gzip.ts'
@@ -209,7 +208,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       const staticModules: Record<string, StaticModuleFactory> = { ...options.staticModules }
       // Read at require time, not here: the table entry then answers whichever
       // global `installProcessGlobal` left in place, in this role's order.
-      for (const key of PROCESS_MODULE_SPECIFIERS) {
+      for (const key of ['node:process', 'process']) {
         staticModules[key] ??= (): unknown => (globalThis as { process?: unknown }).process
       }
       const loader = new WorkerModuleLoader({

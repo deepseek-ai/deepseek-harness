@@ -23,7 +23,7 @@ The VFS image packer: turns one shipped profile's bundles and the installation's
 <a id="use-this-package"></a>
 ## Use this package
 
-The public npm package exposes `packVfsImage` and `packVfsOverlay` through its library entry. Callers supply the profile name, the package roster, the installation manifest, package directories, and the resolution root; no profile layer is installed and no composed configuration is packed — the worker composes the bundle layers at boot. An optional `homePatch` is written to `home/cordis.patch.yml`, the home layer the image's app-boot reads. The runtime's library entry supplies the module-proxy and replacement tables used during packing, including the `process` and `node:process` aliases that Worker Host assembly supplies from its installed global.
+The public npm package exposes `packVfsImage` and `packVfsOverlay` through its library entry. Callers supply the profile name, the package roster, the installation manifest, package directories, and the resolution root; no profile layer is installed and no composed configuration is packed — the worker composes the bundle layers at boot. An optional `homePatch` is written to `home/cordis.patch.yml`, the home layer the image's app-boot reads. The runtime's library entry supplies the module-proxy and replacement tables used during packing.
 
 The packer owns the internal `dsh.configTrees` declaration, its validation, and source directory resolution in [`src/repository.ts`](src/repository.ts). This field is not part of the public plugin manifest API.
 

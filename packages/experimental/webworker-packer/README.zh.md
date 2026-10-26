@@ -23,7 +23,7 @@ VFS 镜像打包器：把一份随附 profile 的 bundle 和安装提供的 opti
 <a id="use-this-package"></a>
 ## 使用本包
 
-公开 npm 包通过库入口导出 `packVfsImage` 和 `packVfsOverlay`。调用方提供 profile 名称、包 roster、安装 manifest、包目录和解析根目录；本包不安装 profile 层，也不打包合成配置——worker 在启动时合成各 bundle 层。可选的 `homePatch` 写入 `home/cordis.patch.yml`，即镜像中 app-boot 读取的 home 层。运行时的库入口提供打包所用的模块代理表与替换表，其中包括 Worker Host 装配根据已安装的全局对象提供的 `process` 和 `node:process` 别名。
+公开 npm 包通过库入口导出 `packVfsImage` 和 `packVfsOverlay`。调用方提供 profile 名称、包 roster、安装 manifest、包目录和解析根目录；本包不安装 profile 层，也不打包合成配置——worker 在启动时合成各 bundle 层。可选的 `homePatch` 写入 `home/cordis.patch.yml`，即镜像中 app-boot 读取的 home 层。运行时的库入口提供打包所用的模块代理表与替换表。
 
 打包器在 [`src/repository.ts`](src/repository.ts) 中拥有内部 `dsh.configTrees` 声明、校验和源目录解析。该字段不属于公共插件 manifest API。
 
