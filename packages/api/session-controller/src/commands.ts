@@ -316,14 +316,14 @@ export class SessionCommandController {
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
     if (request.content.length === 0) {
       try {
-        return await agent.runMaintenance(async () => {
+        return await agent.runMaintenance(() => {
           const inbox = agent.inbox
           if (request.mode !== 'queue' || this.continuation.stateOf(agent.session).ending === null
             || inbox.nextTurn.length > 0 || inbox.nextStep.some(message => message.source.kind === 'user')) {
             throw new RemoteError('session/agent-busy', 'generation continuation is unavailable', { reason: 'NO_CONTINUABLE_FAILURE_OR_PENDING_INPUT' })
           }
           agent.followup(createUserMessage({ content: [], source }))
-          return { accepted: true as const }
+          return Promise.resolve({ accepted: true as const })
         })
       } catch (error: unknown) {
         if (remoteErrorOf(error) !== undefined) throw error
