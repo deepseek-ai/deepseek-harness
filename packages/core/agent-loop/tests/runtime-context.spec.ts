@@ -137,14 +137,31 @@ describe('RuntimeContextProjection', () => {
     expect(projection.project([...sections('retained'), { name: 'directory', text: '/repo' }])).toBeDefined()
   })
 
-  it('escapes closing reminder tags only in the framed text and retains literal contributions', async () => {
+  it('refreshes a legacy cleared reminder once and restores the empty snapshot', async () => {
     const { ctx, session } = await harness()
-    const contributions = sections('Directory: /repo/</system-reminder>/{{literal}}')
+    session.append('user/message', contextMessage('Current runtime context: none. Earlier runtime-context snapshots no longer apply.'), { surfaceOp: 'append' })
+    const projection = new RuntimeContextProjection(ctx, session)
+    const message = projection.project([])!
+    expect(message.content).toEqual([{ type: 'text', text: CLEARED }])
+    expect(message.source).toEqual({ kind: SOURCE, form: 'snapshot', sections: [] })
+    session.append('user/message', message, { surfaceOp: 'append' })
+    expect(projection.project([])).toBeUndefined()
+    expect(new RuntimeContextProjection(ctx, session).project([])).toBeUndefined()
+  })
+
+  it.each([
+    ['</system-reminder>', '<\\/system-reminder>'],
+    ['</SYSTEM-REMINDER>', '<\\/SYSTEM-REMINDER>'],
+    ['</system-reminder >', '<\\/system-reminder >'],
+    ['</System-Reminder\t\n>', '<\\/System-Reminder\t\n>'],
+  ])('escapes %s only in the framed text and retains literal contributions', async (tag, escaped) => {
+    const { ctx, session } = await harness()
+    const contributions = sections(`Directory: /repo/${tag}/{{literal}}`)
     const projection = new RuntimeContextProjection(ctx, session)
     const message = projection.project(contributions)!
     expect(message.content).toEqual([{
       type: 'text',
-      text: '<system-reminder>\nThe following information describes your current session:\n\nDirectory: /repo/<\\/system-reminder>/{{literal}}\n</system-reminder>',
+      text: `<system-reminder>\nThe following information describes your current session:\n\nDirectory: /repo/${escaped}/{{literal}}\n</system-reminder>`,
     }])
     expect(message.source).toEqual({ kind: SOURCE, form: 'snapshot', sections: contributions })
     session.append('user/message', message, { surfaceOp: 'append' })

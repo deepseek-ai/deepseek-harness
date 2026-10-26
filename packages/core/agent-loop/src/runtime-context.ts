@@ -168,7 +168,8 @@ export class RuntimeContextProjection {
     const intro = this.retained === undefined
       ? 'The following information describes your current session:'
       : 'The following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.'
-    const body = sections.map(section => section.text).join('\n\n').replaceAll('</system-reminder>', '<\\/system-reminder>')
+    const body = sections.map(section => section.text).join('\n\n')
+      .replace(/<\/system-reminder\s*>/gi, tag => `<\\${tag.slice(1)}`)
     const snapshot = sections.length === 0
       ? CLEARED
       : `<system-reminder>\n${intro}\n\n${body}\n</system-reminder>`
