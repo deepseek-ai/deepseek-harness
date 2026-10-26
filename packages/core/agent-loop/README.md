@@ -146,9 +146,9 @@ The package-level contract is enough for most consumers; read these when you nee
 
 -----
 
-<a id="model-experience"></a>
 Empty ordinary input remains an identified inbox command, so it can wake a new turn while adding no `user/message` to the model surface. It passes normal pre-step admission; a rejected or removed input does not authorize a model request. Turn and step endings retain their normal success, failure, and cancellation handling.
 
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Complete conversation request

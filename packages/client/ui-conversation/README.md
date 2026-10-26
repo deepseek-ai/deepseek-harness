@@ -193,7 +193,7 @@ The selector must be a pure function of the owner currency. Its non-null return 
 
 #### What the model sees
 
-The play action starts a new request from committed Session history. Its empty input is a durable inbox command, not a model-visible user message; it adds no localized or hidden continuation instruction. Pending injected context follows ordinary admission.
+The play action starts a new request from committed Session history. Its `content: []` input is a durable inbox command, not a model-visible user message; it adds no localized or hidden continuation instruction. Pending injected context follows ordinary admission.
 
 #### Token effect
 

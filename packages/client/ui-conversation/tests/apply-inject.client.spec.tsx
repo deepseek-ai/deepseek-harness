@@ -234,7 +234,7 @@ describe('Conversation inject API', () => {
     expect(source.getSnapshot()).toBe(5)
     composer.continueGeneration!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
-    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([{ type: 'text', text: '继续' }])
+    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
     expect(notified).toHaveBeenCalledTimes(3)
   })
 

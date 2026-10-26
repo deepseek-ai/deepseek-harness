@@ -387,6 +387,7 @@ export class SessionInputShell implements SessionInput {
    * out from the machine; this method only feeds the event. Lock entry
    * (adjudicating/submitting/sending) force-closes the transient layers: the
    * popup dismisses and the menu tracks frozen.
+   * @param allowEmpty - explicitly admit empty continuation input through the default sink.
    */
   submit(mode: InputSubmitMode = 'queue', source?: 'click' | 'enter', allowEmpty = false): void {
     if (this.disposed) return
