@@ -237,13 +237,20 @@ export default defineConfig({
       },
       {
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        resolve: { alias: claudeCodeTestingAliases },
         test: {
           name: 'vm-modules',
           execArgv: [...vitestExecArgv, '--experimental-vm-modules'],
           pool: 'forks',
           ...laneTestBudget,
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
+          setupFiles: [
+            './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
+          ],
           include: vmModulesTests,
+          exclude: [
+            ...platformUnsupportedTests,
+            ...coverageExemptExcludes,
+          ],
         },
       },
     ],
