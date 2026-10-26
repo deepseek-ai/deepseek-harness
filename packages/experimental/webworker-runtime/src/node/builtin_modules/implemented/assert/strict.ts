@@ -1,4 +1,4 @@
-/** Shared truthiness assertions for Worker imports of `node:assert` and `node:assert/strict`. */
+/** Truthiness assertions for Worker modules importing `node:assert/strict`. */
 
 /**
  * Require a truthy value; falsy values throw `ERR_ASSERTION` or the supplied Error.

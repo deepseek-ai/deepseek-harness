@@ -131,9 +131,9 @@ Host 通过 birpc 调用子进程的 `run()` 方法；注入的绑定调用 Host
 
 ### 源代码与构建后 bootstrap
 
-源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn、birpc 与 import-meta-resolve 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
+源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn 与 birpc 依赖。构建后脚本在所有模式下都使用 `process.js`；`persistent-process.js` 委托同一个循环，供未指定程序语法的宿主默认使用 REPL。保留模式要求 `node-script` 启动方式。远端脚本部署提供对应的 `launch.bootstrapPath`。内嵌载体通过 `launch.executable` 启动私有 worker。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
-包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk、birpc 和 import-meta-resolve；源码执行导入已安装的包。
+包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk 和 birpc；源码执行导入已安装的包。
 
 <a id="runner-import-handling"></a>
 ### Runner 导入处理
@@ -146,7 +146,7 @@ handler 接收程序的动态导入；在 VM Script 中，还接收 VM 加载的
 - `{ type: 'redirect', specifier }` 使用原始属性解析并加载替换后的模块标识符。
 - `{ type: 'module', exports }` 将自有、可枚举的字符串属性暴露为模块导出，包括名为 `default` 的属性。
 
-默认导入和重定向导入相对于实际导入文件解析；替换后的模块标识符不会再次进入 handler。VM Script 使用 Node ESM 解析器，沿用 runner 当前启用的条件和标志，通过 `SourceTextModule` 在 Script context 内加载 `.mjs` 文件以及 `type: module` 包中的 `.js` 文件。其静态依赖、再导出和稍后的动态导入都调用同一个支持异步决策的 handler。每个求值器按解析后的 URL 缓存文件模块，包括模块与 handler 失败；静态导入只绑定一次。若模块的链接或求值因先前求值结束而失败，后续求值会重新加载该模块，成功求值的模块仍保留身份。模块保留 `import.meta.url`、`filename`、`dirname`、`resolve()` 和 `main: false`。其他格式使用 Node 加载器；未提供 handler 时，所有导入也使用 Node 加载器。handler 抛出值或拒绝会使导入该依赖的模块图失败，不会回退；无关模块图仍可使用。VM Script 在调用 handler 前拒绝 source 阶段导入，并拒绝 VM 加载的 ESM 上的导入属性。AsyncFunction 和 Node REPL 保留 Node 原生依赖加载与 source 阶段规则。
+默认导入和重定向导入相对于实际导入文件解析；替换后的模块标识符不会再次进入 handler。VM Script 使用 Node ESM 解析器，沿用 runner 当前启用的条件和标志，通过 `SourceTextModule` 在 Script context 内加载 `.mjs` 文件以及 Node 解析结果标记为 `module` 的 `.js` 文件。其静态依赖、再导出和稍后的动态导入都调用同一个支持异步决策的 handler。每个求值器按解析后的 URL 缓存文件模块，包括模块与 handler 失败；静态导入只绑定一次。若模块的链接或求值因先前求值结束而失败，后续求值会重新加载该模块，成功求值的模块仍保留身份。模块保留 `import.meta.url`、`filename`、`dirname`、`resolve()` 和 `main: false`。其他格式使用 Node 加载器；未提供 handler 时，所有导入也使用 Node 加载器。handler 抛出值或拒绝会使导入该依赖的模块图失败，不会回退；无关模块图仍可使用。VM Script 在调用 handler 前拒绝 source 阶段导入，并拒绝 VM 加载的 ESM 上的导入属性。AsyncFunction 和 Node REPL 保留 Node 原生依赖加载与 source 阶段规则。
 
 导出值可以是 runner 内的任意对象：原型、私有字段、闭包、循环引用和同步方法都保持正常行为。一个 exports 对象在每个求值器中标识一个模块；名称和值只捕获一次，引用的对象仍可修改。返回不同的 exports 对象会创建另一个模块。每次动态导入以及链接时的每个静态请求都会调用 handler。模块求值失败也会针对该 exports 对象缓存。可调用的 `then` 导出在 AsyncFunction 和 VM Script 中遵循 JavaScript 动态导入的 Promise 同化规则；Node REPL 会拒绝由此产生的非模块值，因此在 REPL 中需使用其他导出名。
 

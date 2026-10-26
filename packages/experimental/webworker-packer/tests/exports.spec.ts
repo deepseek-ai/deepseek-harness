@@ -67,17 +67,3 @@ it('rejects a missing runtime target beside a types condition', (test) => {
   const options = fixture(test, { types: './lib/index.d.ts', default: './lib/missing.js' })
   expect(() => packVfsImage(options)).toThrow('cannot resolve')
 })
-
-it.for(['node:assert', 'assert', 'node:process', 'process', 'node:v8', 'v8'])(
-  'packs a workspace runtime import supplied by the Worker: %s', (specifier, test) => {
-    const options = fixture(test, { types: './lib/index.d.ts' }, `export { default } from '${specifier}'`)
-    const result = packVfsImage(options)
-    expect(result.missing).toEqual([])
-    expect(Object.keys(result.files)).toContain(`node_modules/${SUBJECT}/lib/index.js`)
-  },
-)
-
-it('rejects a workspace runtime import of an unsupported Node builtin', (test) => {
-  const options = fixture(test, { types: './lib/index.d.ts' }, "import 'node:inspector'")
-  expect(() => packVfsImage(options)).toThrow('no static module is registered for "node:inspector"')
-})

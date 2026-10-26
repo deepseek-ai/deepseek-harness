@@ -4,8 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { types } from 'node:util'
-import { getPackageType } from 'import-meta-resolve/lib/package-json-reader.js'
-import { registerHooks, type ImportAttributes } from 'node:module'
+import { registerHooks, type ImportAttributes, type ResolveFnOutput } from 'node:module'
 import type { ProgramImportHandler } from '../evaluators/types.ts'
 import { ImportEvaluationEndedError } from './evaluation-ended.ts'
 
@@ -113,8 +112,9 @@ export class VmModuleImportLoader {
       /* v8 ignore next -- The runner supplies the closed ProgramImportResult union. */
       default: return assertNever(result)
     }
-    const url = new URL(resolveImport(specifier, referrer))
-    if (isSourceModule(url)) {
+    const resolved = resolveImport(specifier, referrer)
+    const url = new URL(resolved.url)
+    if (isSourceModule(url, resolved.format)) {
       if (Object.keys(attributes).length) throw new TypeError(`PTC ESM imports do not accept import attributes: ${url.href}`)
       return this.file(url)
     }
@@ -158,7 +158,7 @@ export class VmModuleImportLoader {
         meta.filename = filename
         meta.dirname = dirname(filename)
         meta.main = false
-        meta.resolve = (specifier: string) => resolveImport(specifier, url.href)
+        meta.resolve = (specifier: string) => resolveImport(specifier, url.href).url
       },
       importModuleDynamically: this.callback(url.href),
     }) }
@@ -209,21 +209,25 @@ export class VmModuleImportLoader {
 }
 
 /** Resolve with the native loader's conditions and flags while retaining the importing filename. */
-function resolveImport(specifier: string, parentURL: string): string {
+function resolveImport(specifier: string, parentURL: string): ResolveFnOutput {
   const marker = 'dsh-ptc:resolve'
+  let format: ResolveFnOutput['format']
   const hooks = registerHooks({
     resolve(request, context, nextResolve) {
-      return request === marker ? nextResolve(specifier, { ...context, parentURL }) : nextResolve(request, context)
+      if (request !== marker) return nextResolve(request, context)
+      const resolved = nextResolve(specifier, { ...context, parentURL })
+      format = resolved.format
+      return resolved
     },
   })
-  try { return import.meta.resolve(marker) }
+  try { return { url: import.meta.resolve(marker), format } }
   finally { hooks.deregister() }
 }
 
 /** Explicit file ESM stays in the evaluator; other formats retain Node's loader. */
-function isSourceModule(url: URL): boolean {
+function isSourceModule(url: URL, format: ResolveFnOutput['format']): boolean {
   if (url.protocol !== 'file:') return false
   const extension = extname(fileURLToPath(url))
   if (extension === '.mjs') return true
-  return extension === '.js' && getPackageType(url) === 'module'
+  return extension === '.js' && format === 'module'
 }

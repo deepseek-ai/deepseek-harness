@@ -394,8 +394,7 @@ function sweepImage(
   const loader = new WorkerModuleLoader({
     vfs,
     root,
-    // The Worker Host supplies process from its installed global rather than MODULE_PROXIES.
-    staticModules: Object.fromEntries([...Object.keys(MODULE_PROXIES), 'node:process', 'process'].map(name => [name, stub])),
+    staticModules: Object.fromEntries(Object.keys(MODULE_PROXIES).map(name => [name, stub])),
     staticModulePrefixes: Object.fromEntries(Object.keys(MODULE_PROXY_PREFIXES).map(name => [name, stub])),
   })
 

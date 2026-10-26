@@ -53,8 +53,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "acorn": "^8.18.0",
     "acorn-walk": "^8.3.5",
-    "birpc": "4.2.0",
-    "import-meta-resolve": "4.2.0"
+    "birpc": "4.2.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

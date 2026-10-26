@@ -19,7 +19,7 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
     await cp(new URL(`../src/${name}/`, import.meta.url), join(directory, name), { recursive: true })
   }
   await mkdir(join(directory, 'node_modules'))
-  for (const name of ['acorn', 'acorn-walk', 'import-meta-resolve']) {
+  for (const name of ['acorn', 'acorn-walk']) {
     await cp(dirname(fileURLToPath(import.meta.resolve(`${name}/package.json`))), join(directory, 'node_modules', name), { recursive: true })
   }
   await cp(dirname(dirname(fileURLToPath(import.meta.resolve('birpc')))), join(directory, 'node_modules/birpc'), { recursive: true })

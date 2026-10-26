@@ -13169,9 +13169,6 @@ importers:
       birpc:
         specifier: 4.2.0
         version: 4.2.0
-      import-meta-resolve:
-        specifier: 4.2.0
-        version: 4.2.0
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

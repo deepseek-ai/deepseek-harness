@@ -96,6 +96,22 @@ it('intercepts ESM package imports, re-exports, redirects and retained dynamic i
   }
 })
 
+it('uses the nearest package scope to distinguish JavaScript ESM from native CommonJS', async () => {
+  const fixture = await moduleFixture({
+    'package.json': '{"type":"module"}',
+    'entry.mjs': 'import { value } from "./esm/index.js"; import common from "./common/index.js"; import untyped from "./untyped/index.js"; import dependency from "./node_modules/native/index.js"; export const values = [value, common, untyped, dependency]',
+    'esm/index.js': 'export { value } from "runner:value"',
+    'common/package.json': '{"type":"commonjs"}',
+    'common/index.js': 'module.exports = 17',
+    'untyped/package.json': '{}',
+    'untyped/index.js': 'module.exports = 18',
+    'node_modules/native/index.js': 'module.exports = 19',
+  })
+  const e = evaluator('script', ({ specifier }) => specifier === 'runner:value'
+    ? { type: 'module', exports: { value: 42 } } : { type: 'default' })
+  expect(await e.expression(`(await import(${JSON.stringify(fixture.url('entry.mjs'))})).values`)).toEqual([42, 17, 18, 19])
+})
+
 it('shares an ESM evaluation while concurrent imports wait for its top-level await', async () => {
   const fixture = await moduleFixture({
     'entry.mjs': 'export { answer } from "./shared.mjs"',

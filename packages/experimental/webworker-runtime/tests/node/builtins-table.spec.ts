@@ -80,20 +80,6 @@ describe('module identity through the loader', () => {
     expect(() => repl.start()).toThrow(expect.objectContaining({ code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' }))
   })
 
-  it('resolves V8 imports for image loading and refuses native startup snapshot queries', () => {
-    const require = loaderRequire()
-    const v8 = require('node:v8') as typeof import('../../src/node/builtin_modules/mock/v8.ts')
-    expect(require('v8')).toBe(v8)
-    expect(v8.__esModule).toBe(true)
-    expect(v8.default.startupSnapshot).toBe(v8.startupSnapshot)
-    const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(() => v8.startupSnapshot.isBuildingSnapshot()).toThrow(expect.objectContaining({
-      code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM',
-      message: 'web-preview: node:v8.startupSnapshot.isBuildingSnapshot is not available in the worker host',
-    }))
-    expect(reported).toHaveBeenCalledWith('web-preview: node:v8.startupSnapshot.isBuildingSnapshot is not available in the worker host')
-  })
-
   it('exposes async and synchronous resolution through the Cordis internal seam', async () => {
     const vfs = new MemoryVfs()
     vfs.seedDirectory('/dsh/node_modules/example')

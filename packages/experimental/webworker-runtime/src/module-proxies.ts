@@ -44,8 +44,6 @@ export const MODULE_PROXIES: Record<string, string> = {
   // Sync-stack AsyncLocalStorage semantics.
   'node:async_hooks': './node/builtin_modules/implemented/async_hooks.ts',
   // Real implementations over browser primitives.
-  'node:assert': './node/builtin_modules/implemented/assert/strict.ts',
-  'assert': './node/builtin_modules/implemented/assert/strict.ts',
   'node:assert/strict': './node/builtin_modules/implemented/assert/strict.ts',
   'assert/strict': './node/builtin_modules/implemented/assert/strict.ts',
   'node:util': './node/builtin_modules/implemented/util.ts',
@@ -71,8 +69,6 @@ export const MODULE_PROXIES: Record<string, string> = {
   'stream/promises': './node/builtin_modules/implemented/stream/promises.ts',
   'node:vm': './node/builtin_modules/mock/vm.ts',
   'node:repl': './node/builtin_modules/mock/repl.ts',
-  'node:v8': './node/builtin_modules/mock/v8.ts',
-  'v8': './node/builtin_modules/mock/v8.ts',
   'node:worker_threads': './node/builtin_modules/mock/worker_threads.ts',
   'node:sqlite': './node/builtin_modules/mock/sqlite.ts',
   // External npm replacements, named after the package each stands in for.
