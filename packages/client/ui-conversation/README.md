@@ -76,9 +76,9 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits a normal user message in the current interface language; drafts and attachments keep the Send action. Continued requests retain committed history and use the existing submission lifecycle.
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history without adding a user message. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
 
-The Host requires `sessionProjections` and publishes `conversationContinuation`; eligibility is restored from Session history independently of the browser's loaded history pages.
+The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
 
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
@@ -189,19 +189,19 @@ The selector must be a pure function of the owner currency. Its non-null return 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Manual continuation message
+### Manual continuation request
 
 #### What the model sees
 
-The play action submits one ordinary user message using the interface language selected at the click: Chinese `继续`, English/French/Portuguese `continue`, Japanese `続けて`, Spanish `continúa`, German `weiter`, or Russian `продолжай`. The admitted message is stored in the Session log and included in subsequent model history; the action does not reconstruct text from the failed attempt.
+The play action starts a new request from committed Session history. Its empty input is a durable inbox command, not a model-visible user message; it adds no localized or hidden continuation instruction. Pending injected context follows ordinary admission.
 
 #### Token effect
 
-Each continuation admitted into model history adds its short localized text and the ordinary user-message overhead. The exact token count depends on the model tokenizer. A submission refused or failed before admission adds no continuation text to model history.
+The action adds no continuation text or empty user-message overhead. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
 
 #### KV Cache effect
 
-The continuation message extends retained history without replacing earlier messages or prompt sections. It preserves an already-reusable prefix; provider cache availability, reuse policy, and eviction remain outside this package's control.
+The control input does not alter model history. Prefix reuse still depends on the current model, prompt, tools, injected context, and provider cache policy.
 
 ## Known Limitations and Deferred Work
 

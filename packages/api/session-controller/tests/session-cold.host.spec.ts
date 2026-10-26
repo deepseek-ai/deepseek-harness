@@ -924,7 +924,6 @@ describe('sessions.prompt synchronous rejection', () => {
     })
     const initialEvents = session.snapshotEvents()
     const rejectedContent: readonly SessionPromptRequest['content'][] = [
-      [],
       [{ type: 'text', text: '' }],
       [{ type: 'text', text: ' \t\n' }, { type: 'text', text: '' }],
     ]

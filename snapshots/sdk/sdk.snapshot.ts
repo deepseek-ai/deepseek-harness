@@ -485,11 +485,23 @@ function modelFromSession(log: string): { provider: string; model: string } {
 function turnActions(log: string): TurnAction[] {
   const actions: TurnAction[] = []
   let current: TurnAction | undefined
+  let emptyQueued = false
   for (const record of records(log)) {
+    if (record.type === 'agent/inbox/spliced') {
+      const data = record.data as JsonObject | undefined
+      if (data?.target === 'next-turn' && Array.isArray(data.inserted)) {
+        emptyQueued ||= data.inserted.some(value => {
+          const message = value as JsonObject
+          return (message.source as JsonObject | undefined)?.kind === 'user'
+            && Array.isArray(message.content) && message.content.length === 0
+        })
+      }
+    }
     if (record.type === 'turn/start') {
       const data = record.data as JsonObject | undefined
       if (typeof data?.turn !== 'number') throw new Error('SDK snapshot turn/start has no turn')
-      current = { turn: data.turn }
+      current = { turn: data.turn, ...emptyQueued ? { content: [] } : {} }
+      emptyQueued = false
       continue
     }
     if (record.type === 'user/message' && current !== undefined && current.content === undefined) {
@@ -768,7 +780,8 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           session = await harness.resumeSession(sessionId)
           expect(session.id).toBe(sessionId)
         }
-        const result = await session.run(materializeInput(action.content, scenario, cwd, liveSessions), {
+        const input = materializeInput(action.content, scenario, cwd, liveSessions)
+        const result = await session.run(input, {
           onNotification: (notification) => {
             notifications.push(notification)
             observe(notification)
@@ -1117,6 +1130,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         } } })
       }
       if (scenario.name === 'tool-scheduler-recovery') {
+        expect(records(ordered[0]!.content).filter(event => event.type === 'user/message'
+          && (event.data['source'] as { kind: string }).kind === 'user')).toHaveLength(1)
         expect(results).toHaveLength(2)
         const events = results.flatMap(result => result.events)
         expect(results[1]?.finalResponse, JSON.stringify(events.filter(event => event.type === 'turn/end')))

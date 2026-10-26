@@ -1,5 +1,5 @@
 /** Constant-size continuation eligibility over the complete durable Session. */
-import type {} from '../continuation-types.ts'
+import type {} from './types.ts'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { brandNumber } from '@deepseek-ai/dsh-brand'
@@ -15,27 +15,35 @@ const stateSchema = z.object({
   admitted: z.boolean(),
   failedAttempt: z.boolean(),
   ending: endingSchema,
+  continuing: z.boolean(),
 })
 
-type ContinuationState = z.infer<typeof stateSchema>
+/** Recoverable manual-continuation facts, including an accepted empty input awaiting its turn. */
+export type ContinuationState = z.infer<typeof stateSchema>
 
-const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending: null }
+const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending: null, continuing: false }
 
-/** Eligibility requires admitted human input and a failed settlement in the last request step. */
+/** Eligibility requires admitted human work and a failed settlement in the last request step. */
 export const continuationProjectionDefinition = {
   key: 'conversationContinuation',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema,
   init: (): ContinuationState => EMPTY,
   apply: (state, event) => {
     switch (event.type) {
+      case 'agent/inbox/spliced':
+        if (state.continuing && event.data.target === 'next-turn' && event.data.outcome === 'canceled'
+          && event.data.start === 0 && (event.data.removedCount ?? 0) > 0) return { ...state, continuing: false }
+        return state.ending !== null && !state.continuing && event.data.target === 'next-turn'
+          && event.data.inserted.some(message => message.source.kind === 'user' && message.content.length === 0)
+          ? { ...state, continuing: true } : state
       case 'turn/start':
-        return EMPTY
+        return state.continuing ? { ...EMPTY, admitted: true } : EMPTY
       case 'step/start':
       case 'assistant/message':
         return state.failedAttempt ? { ...state, failedAttempt: false } : state
       case 'user/message':
-        return !state.admitted && event.surfaceOp === 'append' && event.data.source.kind === 'user'
+        return !state.admitted && event.surfaceOp === 'append' && event.data.source.kind === 'user' && event.data.content.length > 0
           ? { ...state, admitted: true } : state
       case 'assistant/attempt':
         return state.failedAttempt ? state : { ...state, failedAttempt: true }

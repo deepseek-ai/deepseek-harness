@@ -57,7 +57,6 @@
       "turn/start",
       "agent/inbox/spliced",
       "step/start",
-      "user/message",
       "assistant/message",
       "step/end",
       "turn/end"
@@ -65,7 +64,6 @@
     "notificationMethods": [
       "session.event",
       "session.status",
-      "session.event",
       "session.event",
       "session.event",
       "session.event",

@@ -8,7 +8,7 @@ import type {
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { TextBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -16,6 +16,8 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
+    /** Eligible latest failed turn/end for an empty prompt, or null. */
+    conversationContinuation: SessionSeq | null
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
     /**
@@ -317,11 +319,11 @@ export interface SessionForkValue {
 
 /** Session prompt request. */
 export interface SessionPromptRequest {
-  /** Client-minted identity persisted on the exact accepted user message. */
+  /** Client-minted identity persisted on the accepted inbox input, including empty continuation. */
   readonly requestId: SessionRequestId
   readonly sessionId: SessionId
   readonly mode: 'queue' | 'steer'
-  /** At least one non-whitespace text part or attachment. */
+  /** Non-whitespace text or attachments; an empty array continues an eligible failed idle Session. */
   readonly content: readonly PromptContentPart[]
   readonly clientTimeZone?: string
 }

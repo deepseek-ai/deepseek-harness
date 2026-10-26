@@ -113,7 +113,6 @@ RESTART_SECOND_SESSION_ID = "process-two"
 RESUME_PROMPT = "Continue the first Python SDK session after restarting the runtime."
 RESUME_TEXT = "RESUMED_PROCESS_OK"
 RECOVERY_PROMPT = "Run three todo updates; the scheduler will reject the second call."
-RECOVERY_CONTINUE_PROMPT = "Continue after the scheduler failure without repeating any tools."
 RECOVERY_TEXT = "SCHEDULER_RECOVERY_OK"
 RECOVERY_SESSION_ID = "scheduler-recovery"
 RECOVERY_CALL_IDS = ("scheduler-complete", "scheduler-fail", "scheduler-unstarted")
@@ -348,7 +347,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         block.get("text")
         for block in latest.get("content", [])
         if isinstance(block, dict) and block.get("type") == "text"
-        and block.get("text") in {RECOVERY_PROMPT, RECOVERY_CONTINUE_PROMPT}
+        and block.get("text") == RECOVERY_PROMPT
     ), None)
     if recovery_prompt == RECOVERY_PROMPT:
         assert_advertised_tool(body, "todo_write")
@@ -358,7 +357,9 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
             chunks.extend({**chunk, "index": index} for chunk in call[1:-2])
         chunks.extend(call[-2:])
         return chunks
-    if recovery_prompt == RECOVERY_CONTINUE_PROMPT:
+    if any(block.get("tool_use_id") == RECOVERY_CALL_IDS[-1]
+           for message in messages for block in message.get("content", [])
+           if isinstance(block, dict) and block.get("type") == "tool_result"):
         results = [
             block for message in messages
             for block in message.get("content", [])
@@ -1909,7 +1910,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
 
         with connect() as harness:
             failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID)
-            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID)
+            continued = harness.run([], session_id=RECOVERY_SESSION_ID)
         results = [failed, continued]
         if [result.finish_reason for result in results] != ["error", "completed"]:
             outcomes = [

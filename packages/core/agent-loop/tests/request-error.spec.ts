@@ -1,5 +1,5 @@
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -32,6 +32,31 @@ function fail(message: string, code: string): () => never {
 }
 
 describe('agent/request-error', () => {
+  it('continues repeated failures through empty followups with balanced turns and one admitted user message', async () => {
+    const adapter = new MockAdapter([fail('busy', 'SERVER'), fail('still busy', 'SERVER'), textResponse('done')])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
+    const agent = await ctx.agentLoop.create(SessionId('empty-continuation'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'original task' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    for (let index = 0; index < 2; index++) {
+      agent.followup(createUserMessage({ content: [], source: { kind: 'user' } }))
+      await agent.whenIdle()
+    }
+    expect(adapter.requests).toHaveLength(3)
+    for (const request of adapter.requests) {
+      expect(request.messages.filter(message => message.role === 'user').map(message => message.content))
+        .toEqual([[{ type: 'text', text: 'original task' }]])
+    }
+    const events = agent.session.snapshotEvents()
+    expect(events.filter(event => event.type === 'user/message')).toHaveLength(1)
+    expect(events.flatMap(event => event.type === 'turn/start' || event.type === 'turn/end'
+      ? [`${event.type}:${event.data.turn}`] : []))
+      .toEqual(['turn/start:1', 'turn/end:1', 'turn/start:2', 'turn/end:2', 'turn/start:3', 'turn/end:3'])
+    expect(events.flatMap(event => event.type === 'turn/end' ? [event.data.reason.kind] : []))
+      .toEqual(['error', 'error', 'completed'])
+  })
+
   it('does not offer middleware failures to request recovery', async () => {
     const adapter = new MockAdapter([textResponse('unused')])
     const ctx = await harness(adapter)

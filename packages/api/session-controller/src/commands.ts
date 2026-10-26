@@ -1,5 +1,8 @@
 /** Session commands whose activation policy is explicit at each Remote method. */
 
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import { continuationProjectionDefinition, type ContinuationState } from './continuation.ts'
+
 import { modelAvailable } from './catalog.ts'
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -83,6 +86,13 @@ function latestCompletedPrefixBoundary(events: readonly SessionEvent[]): Session
 
 /** Implements Session business commands delegated by the Session Controller Remote service. */
 export class SessionCommandController {
+  private continuation!: ProjectionHandle<ContinuationState>
+
+  /** Register complete-history empty-prompt eligibility. @returns when command admission is ready. */
+  async initialize(): Promise<void> {
+    this.continuation = await this.ctx.sessionProjections.register(continuationProjectionDefinition)
+  }
+
   /**
    * @param ctx - Host context carrying Agent, model, attachment, title, and Workspace services.
    * @param agents - sole owner of create, resume, and Agent composition.
@@ -304,6 +314,22 @@ export class SessionCommandController {
   async prompt(request: SessionPromptRequest, source: MessageSource): Promise<SessionPromptValue> {
     const agent = await this.resolveAgent(request.sessionId)
     if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
+    if (request.content.length === 0) {
+      try {
+        return await agent.runMaintenance(async () => {
+          const inbox = agent.inbox
+          if (request.mode !== 'queue' || this.continuation.stateOf(agent.session).ending === null
+            || inbox.nextTurn.length > 0 || inbox.nextStep.some(message => message.source.kind === 'user')) {
+            throw new RemoteError('session/agent-busy', 'generation continuation is unavailable', {})
+          }
+          agent.followup(createUserMessage({ content: [], source }))
+          return { accepted: true as const }
+        })
+      } catch (error: unknown) {
+        if (remoteErrorOf(error) !== undefined) throw error
+        throw new RemoteError('session/agent-busy', 'generation continuation was not accepted', { reason: String(error) })
+      }
+    }
     const admission = resolvePromptFileReceipts(
       request.content,
       receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
@@ -547,6 +573,9 @@ function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
   if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true
   // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   return agent.session.snapshotEvents().some((event) => {
+    if (event.type === 'agent/inbox/spliced') {
+      return event.data.inserted.some(message => message.content.length === 0 && matches(message))
+    }
     if (event.type !== 'user/message') return false
     const source = event.data.source
     return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId

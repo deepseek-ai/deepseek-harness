@@ -29,7 +29,7 @@ import { createUserMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEventWindow } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
-import { continuationTurn } from './continuation-fixture.ts'
+import { continuationTurn } from '../../../api/session-controller/tests/continuation-fixture.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -165,7 +165,7 @@ async function bench(renderQuote = false) {
 }
 
 describe('Conversation inject API', () => {
-  it.each([['zh', '继续'], ['en', 'continue']])('submits one continuation in the current %s locale', async (locale, message) => {
+  it.each(['zh', 'en'])('submits empty continuation input in the %s locale', async (locale) => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
@@ -181,7 +181,7 @@ describe('Conversation inject API', () => {
     composer.continueGeneration!(SessionSeq(5))
     expect(composer.keyboard!.snapshot.phase).toBe('sending')
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
-    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([{ type: 'text', text: message }])
+    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([])
     expect(b.sessionFake.prompt.mock.calls[0]?.[1]).toBe('queue')
     pending.resolve({ ok: true, value: { accepted: true } })
     await vi.waitFor(() => { expect(composer.keyboard!.snapshot.phase).toBe('plain') })
@@ -322,7 +322,7 @@ describe('Conversation inject API', () => {
     },
   )
 
-  it.each(['refused', 'failed'] as const)('retains a visible editable continuation draft when submission is %s', async (outcome) => {
+  it.each(['refused', 'failed'] as const)('keeps continuation input empty and exposes submission failure when %s', async (outcome) => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
     await b.runtime.sessions.setProjection(ROOT, 'conversationContinuation', SessionSeq(5))
@@ -335,11 +335,11 @@ describe('Conversation inject API', () => {
     else b.sessionFake.prompt.mockRejectedValueOnce(new Error('connection lost'))
     composer.continueGeneration!(SessionSeq(5))
     await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce(); expect(composer.keyboard!.snapshot.phase).toBe('plain') })
-    expect(composer.keyboard!.snapshot.draft).toBe('继续')
+    expect(composer.keyboard!.snapshot.draft).toBe('')
     if (outcome === 'refused') expect(b.runtime.sessions.binding(ROOT)!.session.getSnapshot().promptError?.error.message).toBe('request refused')
     else expect(composer.hooks.notices.getSnapshot()).toMatchObject({ level: 'error', text: 'connection lost' })
     composer.continueGeneration!(SessionSeq(5))
-    expect(b.sessionFake.prompt).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledTimes(2) })
   })
 
   it('renders literal quote text through the actual Factory and keyed node registration', async () => {

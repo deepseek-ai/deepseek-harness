@@ -6,28 +6,28 @@ English | [中文](2026-10-26-manual-generation-continuation.zh.md)
 
 ## Problem
 
-Users need another turn after a model request fails. A browser page can omit the failed turn's start; streaming must not repeatedly copy loaded history.
+Users need another request after a model failure without inserting an artificial instruction. Browser paging can omit the failed turn's start, and streaming must not repeatedly copy history.
 
 ## Decision
 
-The play action submits localized ordinary user text through the existing composer, retaining admission, logging, failure drafts, and telemetry. No resume RPC, AgentLoop change, or Session event format is introduced.
+The play action submits `content: []` through the existing Session prompt API. AgentLoop retains the identified inbox input and starts a new balanced turn, but omits the empty ordinary input from model-visible `user/message` events. The original failed turn remains closed.
 
-The fixed-size Host projection `conversationContinuation` recovers from complete Session history. Eligibility requires admitted ordinary input and a failed attempt, independently of the browser's 500-message page.
+The Session API owns the fixed-size `conversationContinuation` projection and shares its value with the browser. Admission requires an eligible failure, true idle ownership, and no pending human input. An accepted empty input carries the admitted work into its next turn, preserving eligibility if that request also fails.
 
-The six-code manual allowlist remains independent of [automatic retry policy](../../../../packages/llm/llm-retry/README.md). Pending [injected context](../architecture/2026-07-24-separate-context-injection-from-turn-execution.md) in `next-step` accompanies the new waking message; pending ordinary user submissions prevent duplicates.
+The six-code manual allowlist stays independent of provider retry policy. Non-waking injected context accompanies the request. Durable inbox receipts retain request-id deduplication after the empty input is claimed; no new Remote operation or Session event format is required.
 
 ## Alternatives considered
 
-**Window scanning or entries caching.** Each revision can materialize a fresh window; caching cannot recover unloaded facts.
+**Localized or hidden continuation text.** Adds model-visible instructions and changes retained history.
 
-**Use provider retryableCodes.** Deployment retry policies could expose authentication or other unsuitable errors as UI actions.
+**A separate resume operation.** The existing prompt and inbox already carry identified control input and own wakeup.
 
-**Add a resume RPC.** Ordinary submission already owns wakeup, admission, error reporting, and history.
+**Keep the failed turn waiting for a click.** Changes failure settlement, idle status, cancellation, and model-selection semantics.
 
 ## Consequences
 
-Host activation requires `sessionProjections`; custom compositions follow the [upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.3/conversation-continuation-projection/guide.md). Fixed-size state avoids Client history scans without introducing a second submission lifecycle.
+Ordinary empty-draft Enter remains inert. The explicit action reuses submission state and error reporting without an echo or generated draft. Pre-step rejection and cleared batches still prevent model calls.
 
 ## Verification
 
-Tests cover checkpoint recovery, long-turn paging, injected context, refusal and retained drafts, and zero Client event-window reads. The recorded Web scenario exercises failure followed by continuation.
+Unit and assembled scenarios cover repeated failure, request deduplication, injected context, balanced turns, retained tools, one original user message, and zero Client event-window reads.

@@ -25,7 +25,6 @@ import type { ComposerBlocks } from '../contract/composer-blocks.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
-import type {} from '../../continuation-types.ts'
 import { reportMessageSubmission } from './submission-analytics.ts'
 import { readConversationDraft } from '../stores.ts'
 
@@ -239,7 +238,7 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * Submit localized continuation text through the ordinary composer. Stale
+   * Submit empty continuation input through the ordinary composer. Stale
    * failures, active work, and drafts keep their current input unchanged.
    * @param id - retained ordinary Session identity.
    * @param ending - failure the displayed button addresses.
@@ -256,8 +255,7 @@ export class InputHub implements SessionInputResolver {
       || input.draft.trim() !== '' || input.attachmentIds.length > 0
       || (inbox?.['next-turn'].length ?? 0) > 0
       || this.conversation().blocks.storeFor(id).getSnapshot() !== undefined) return
-    shell.setDraft(this.t('input.continueMessage'))
-    shell.submit('queue', 'click')
+    shell.submit('queue', 'click', true)
   }
 
   /**
@@ -304,7 +302,9 @@ export class InputHub implements SessionInputResolver {
     signal: AbortSignal,
     accept: () => void,
   ): Promise<SubmitOutcome> {
-    if (text === '' && attachmentIds.length === 0) return Promise.resolve({ kind: 'success' })
+    if (text === '' && attachmentIds.length === 0) {
+      return session.prompt([], mode, signal).then(result => result.ok ? { kind: 'success' } : { kind: 'error' })
+    }
     return this.conversation().sendSession(session, text, attachmentIds, mode, signal, accept)
   }
 

@@ -119,6 +119,8 @@ Details: the [sequence diagram](agent-lifecycle.md), the [tool pipeline](tool-ex
 
 [`ctx.tools.execute()`](subsystems/tools.md) receives raw batches and concurrency limits.
 
+An identified empty ordinary input starts a new turn from committed history without creating a model-visible user message. It remains logged in the inbox, passes normal pre-step admission, and closes through the same turn and step lifecycle.
+
 ## Session log
 
 The session log is the source of the context the model sees. `deriveMessages()` projects model history from it. Each `assistant/message` embeds the exact compact timed stream that produced its assembled content; `assistant/attempt` retains settled failed, retried, cancelled, and stream-error attempts without adding model history. Fork, resume, transcripts, telemetry, and persistence all derive from these durable settlements, while live UI incrementality comes from `agent/assistant-stream`; a hard process loss before settlement leaves no durable attempt stream ([decision](../.agents/notes/implemented/architecture/2026-09-01-v2-embedded-assistant-streams.md)).

@@ -388,7 +388,7 @@ export class SessionInputShell implements SessionInput {
    * (adjudicating/submitting/sending) force-closes the transient layers: the
    * popup dismisses and the menu tracks frozen.
    */
-  submit(mode: InputSubmitMode = 'queue', source?: 'click' | 'enter'): void {
+  submit(mode: InputSubmitMode = 'queue', source?: 'click' | 'enter', allowEmpty = false): void {
     if (this.disposed) return
     const timestamp = Date.now()
     let state: MessageSubmissionState | undefined
@@ -409,6 +409,7 @@ export class SessionInputShell implements SessionInput {
     }
     this.dispatchRun({
       type: 'enter',
+      ...allowEmpty ? { allowEmpty: true } : {},
       mode,
       draft: this.projection.clipboardText,
       occurrences: [...this.projection.occurrences],
@@ -726,6 +727,10 @@ export class SessionInputShell implements SessionInput {
     })
     const send = (text: string): void => {
       if (this.dead(attempt)) return
+      if (text === '' && draft !== '' && attachmentIds.length === 0) {
+        this.settleSink(attempt, Promise.resolve({ kind: 'success' }))
+        return
+      }
       this.settleSink(attempt, this.deps.defaultSink(text, attachmentIds, mode, attempt.signal, () => { this.acceptSink(attempt) }))
     }
     if (!(prompt instanceof Promise)) { send(prompt); return }

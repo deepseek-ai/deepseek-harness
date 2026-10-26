@@ -460,7 +460,7 @@ export class ReactLoopAgent implements Agent {
               this.session.append('user/message', context, { surfaceOp: 'append' })
               contextAdmitted = true
             }
-          } else {
+          } else if (message.source.kind !== 'user' || message.content.length > 0) {
             this.session.append('user/message', message, { surfaceOp: 'append' })
           }
         }

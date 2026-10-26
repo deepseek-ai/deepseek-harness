@@ -530,7 +530,7 @@ export interface ComposerBarInjected {
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
   /**
-   * Submit a localized continuation message for the displayed failure.
+   * Submit empty continuation input for the displayed failure.
    * @param ending - sequence of the displayed failed turn/end.
    */
   continueGeneration: ((ending: SessionSeq) => void) | undefined

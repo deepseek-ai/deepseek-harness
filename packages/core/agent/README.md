@@ -151,6 +151,8 @@ The package-level contract is enough for most consumers; read these when you nee
 -----
 
 <a id="model-experience"></a>
+An ordinary `followup` with `content: []` is an explicit request to start a new turn from committed history. It retains the identified inbox receipt and normal lifecycle without creating a model-visible user message. A pre-step rejection or a decision rewritten to an empty batch still prevents the request.
+
 ## Model Experience
 
 ### User, steering, and injected messages

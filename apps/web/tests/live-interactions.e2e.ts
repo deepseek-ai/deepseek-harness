@@ -414,7 +414,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
 
-  it.skipIf(MODE === 'record')('continues after transient retries exhaust through a localized user message', async () => {
+  it.skipIf(MODE === 'record')('continues after transient retries exhaust without another user message', async () => {
     // A whole-script replacement: three throw entries cover the first request
     // plus both budgeted retries (patches cannot reach past the one-call
     // derived script). The scenario-owned policy keeps exhaustion fast and
@@ -477,7 +477,9 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(sessionEvents.some(event => event.type === 'user/message' && event.data.source.kind === 'plan-mode')).toBe(true)
     const userMessages = sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
       ? [event.data.content] : [])
-    expect(userMessages).toEqual([[{ type: 'text', text: PROMPT }], [{ type: 'text', text: 'continue' }]])
+    expect(userMessages).toEqual([[{ type: 'text', text: PROMPT }]])
+    expect(sessionEvents.filter(event => event.type === 'turn/start')).toHaveLength(2)
+    expect(sessionEvents.filter(event => event.type === 'turn/end')).toHaveLength(2)
     expect(await resume.count()).toBe(0)
     await page.setViewportSize({ width: 1440, height: 900 })
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'continued.expected.md'),

@@ -1,6 +1,5 @@
 /** Browser Conversation assemble core, React adapter, shell, input, and text projection plugin. */
 export type {} from './user-text/session-reference-rule.ts'
-export type {} from '../continuation-types.ts'
 
 /** Declaration-merged node payloads; IDs also identify the corresponding keyed renderer. */
 export interface UserTextDataMap {

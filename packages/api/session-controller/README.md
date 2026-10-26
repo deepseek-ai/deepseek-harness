@@ -111,6 +111,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 Blockquotes travel as ordinary prompt text without quote metadata. Local submission echoes and durable messages use the same text rendering rules; queue edits replace content while retaining prompt correlation.
 
 <a id="model-experience"></a>
+An empty `prompt.content` array requests a new turn only for an eligible failed, idle ordinary Session in queue mode. Pending human input prevents admission; non-waking injected context is retained. `conversationContinuation` supplies the shared six-code manual policy, independently of provider retry configuration. The input is logged through the inbox for request-id deduplication, but creates no model-visible user message. Whitespace-only text parts remain invalid.
+
 ## Model Experience
 
 None, as invoked Agent commands own any model-visible effect.

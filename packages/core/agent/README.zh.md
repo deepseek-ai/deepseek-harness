@@ -151,6 +151,8 @@ await handle.agent.whenIdle()
 -----
 
 <a id="model-experience"></a>
+普通 `followup` 的 `content: []` 明确请求基于已提交历史启动新轮次。它保留带身份的 inbox 回执和正常生命周期，不生成模型可见的用户消息。pre-step 拒绝或改写为空批次的决策仍会阻止请求。
+
 ## 模型体验
 
 ### 用户、steering 与注入消息

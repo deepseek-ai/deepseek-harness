@@ -5,9 +5,9 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session/types'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import * as plugin from '../src/index.ts'
-import { continuationProjectionDefinition as definition } from '../src/host/continuation.ts'
-import { paginate } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
+
+import { continuationProjectionDefinition as definition } from '../src/continuation.ts'
+import { paginate } from '../src/history.ts'
 import { continuationTurn as turn } from './continuation-fixture.ts'
 
 const failed = (code: string): TurnEndReason => ({ kind: 'error', error: { code, message: code } })
@@ -86,7 +86,7 @@ it('publishes a complete-log result independently of the visible page and releas
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  const fiber = await ctx.plugin(plugin)
+  const fiber = await ctx.sessionProjections.register(definition)
   const session = ctx.sessions.create(SessionId('continued'))
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBeNull()
   const history: SessionEvent[] = []
@@ -111,7 +111,7 @@ it('publishes a complete-log result independently of the visible page and releas
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBe(ending)
   expect(changed.mock.calls.map(([, key, value]) => [key, value])).toEqual([['conversationContinuation', null], ['conversationContinuation', ending]])
   expect(ctx.sessionProjections.checkpoint(session).conversationContinuation)
-    .toEqual({ ver: 1, seq: ending, val: { admitted: false, failedAttempt: false, ending } })
+    .toEqual({ ver: 2, seq: ending, val: { admitted: false, failedAttempt: false, ending, continuing: false } })
   session.append('turn/start', { turn: 2 })
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBeNull()
   expect(changed).toHaveBeenCalledTimes(3)
@@ -124,10 +124,10 @@ it('restores valid, absent and outdated checkpoints through the registry', async
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(plugin)
+  await ctx.sessionProjections.register(definition)
   const session = ctx.sessions.create(SessionId('restored'))
   const log = events(failed('SERVER'))
-  const checkpoint = { conversationContinuation: { ver: 1, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
+  const checkpoint = { conversationContinuation: { ver: 2, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
   const restore = (rows: typeof checkpoint | Record<string, never>, tail: readonly SessionEvent[], base: number) =>
     ctx.sessionProjections.restore(rows, tail, SessionLogOffset(base), session.header, session.inheritedEventCount)
   expect(restore(checkpoint, log.slice(3), 3).snapshot.values.conversationContinuation).toBe(5)
@@ -136,4 +136,33 @@ it('restores valid, absent and outdated checkpoints through the registry', async
   expect(restore(outdated, log, 0).snapshot.values.conversationContinuation).toBe(5)
   expect(() => restore(outdated, log.slice(3), 3)).toThrow('re-read from seq 0')
   expect(() => restore({}, log.slice(3), 3)).toThrow('re-read from seq 0')
+})
+
+it('carries admitted work through an empty continuation and retires a canceled queued control', async () => {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
+  const handle = await ctx.sessionProjections.register(definition)
+  const session = ctx.sessions.create(SessionId('empty-repeat'))
+  for (const event of events(failed('SERVER'))) {
+    if (event.type === 'user/message') session.append(event.type, event.data, { surfaceOp: 'append' })
+    else if (event.type === 'turn/start') session.append(event.type, event.data)
+    else if (event.type === 'step/start' || event.type === 'step/end') session.append(event.type, event.data)
+    else if (event.type === 'assistant/attempt') session.append(event.type, event.data)
+    else if (event.type === 'turn/end') session.append(event.type, event.data)
+  }
+  const input = createUserMessage({ content: [], source: { kind: 'user' } })
+  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [input] })
+  expect(handle.stateOf(session).continuing).toBe(true)
+  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [], outcome: 'canceled' })
+  expect(handle.stateOf(session).continuing).toBe(false)
+  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [input] })
+  session.append('turn/start', { turn: 2 })
+  expect(handle.stateOf(session).admitted).toBe(true)
+  session.append('step/start', { turn: 2, step: 1 })
+  session.append('assistant/attempt', { turn: 2, step: 1, stream: [] })
+  session.append('step/end', { turn: 2, step: 1 })
+  const ending = session.append('turn/end', { turn: 2, reason: failed('SERVER') }).seq
+  expect(handle.stateOf(session).ending).toBe(ending)
 })

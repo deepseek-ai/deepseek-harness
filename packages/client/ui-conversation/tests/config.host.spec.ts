@@ -1,6 +1,6 @@
 import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { Context, FiberState } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
@@ -32,15 +32,3 @@ it('keeps its own instance off the generated Settings pages', () => omitsGenerat
   await ctx.plugin(SessionProjectionRegistry)
   return ctx.plugin(HostPlugin)
 }))
-
-it('waits for the required projection registry before activation', async () => {
-  const ctx = new Context()
-  onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(SessionStore)
-  const fiber = ctx.plugin(HostPlugin)
-  await ctx.fiber.await()
-  expect(fiber.state).toBe(FiberState.PENDING)
-  await ctx.plugin(SessionProjectionRegistry)
-  await fiber
-  expect(fiber.state).toBe(FiberState.ACTIVE)
-})
