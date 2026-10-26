@@ -139,10 +139,10 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
     const fileImage = { type: 'image', source: { type: 'file', file_id: 'file-api-snapshot-1' } }
     const offloadedImage = `[image omitted to fit request image limits; ${attachmentId}.${normalizedAccess}]`
     const imageHandle = `Image ${attachmentId}; request preview 1x1px.${normalizedAccess}`
-    const runtimeContext = (cwd: string): string => 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
+    const runtimeContext = (cwd: string): string => '<system-reminder>\nCurrent runtime context.\n\n'
       + `Current working directory: ${JSON.stringify(cwd)}.\n\n`
       + 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\n'
-      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).'
+      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n</system-reminder>'
     const messages = requests[0]?.messages as { content?: unknown }[] | undefined
     const offloaded = messages?.find(message => JSON.stringify(message.content).includes('[image omitted'))
     expect(offloaded?.content).toEqual([
