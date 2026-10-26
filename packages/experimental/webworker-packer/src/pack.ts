@@ -24,7 +24,7 @@ import {
   lowerModuleSource, MemoryVfs, packTar, WorkerModuleLoader,
   DEFAULT_ROOT, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_LAZY_DIRECTORY, IMAGE_MANIFEST_PATH,
   IMAGE_OVERLAY_DIRECTORIES,
-  MODULE_PROXIES, MODULE_PROXY_PREFIXES, REPLACED_EXTERNAL_PACKAGES,
+  MODULE_PROXIES, MODULE_PROXY_PREFIXES, PROCESS_MODULE_SPECIFIERS, REPLACED_EXTERNAL_PACKAGES,
   type ImageLazyArchive, type ImageManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import picomatch from 'picomatch'
@@ -394,7 +394,7 @@ function sweepImage(
   const loader = new WorkerModuleLoader({
     vfs,
     root,
-    staticModules: Object.fromEntries(Object.keys(MODULE_PROXIES).map(name => [name, stub])),
+    staticModules: Object.fromEntries([...Object.keys(MODULE_PROXIES), ...PROCESS_MODULE_SPECIFIERS].map(name => [name, stub])),
     staticModulePrefixes: Object.fromEntries(Object.keys(MODULE_PROXY_PREFIXES).map(name => [name, stub])),
   })
 

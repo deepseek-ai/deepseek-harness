@@ -52,7 +52,7 @@ describe('Worker strict assertions', () => {
     expect(assert.ok).toBe(ok)
   })
 
-  it.each(['node:assert/strict', 'assert/strict'])('resolves and executes a lowered default import from %s', (specifier) => {
+  it.each(['node:assert', 'assert', 'node:assert/strict', 'assert/strict'])('resolves and executes a lowered default import from %s', (specifier) => {
     const vfs = new MemoryVfs()
     vfs.seedDirectory('/dsh')
     const loader = new WorkerModuleLoader({ vfs, root: '/dsh', staticModules: createNodeBuiltins() })

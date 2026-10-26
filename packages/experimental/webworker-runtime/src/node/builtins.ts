@@ -49,6 +49,7 @@ import * as nodeNet from './builtin_modules/mock/net.ts'
 import * as nodeSqlite from './builtin_modules/mock/sqlite.ts'
 import * as nodeVm from './builtin_modules/mock/vm.ts'
 import * as nodeRepl from './builtin_modules/mock/repl.ts'
+import * as nodeV8 from './builtin_modules/mock/v8.ts'
 import * as nodeWorkerThreads from './builtin_modules/mock/worker_threads.ts'
 import * as systemFlock from './external_packages/node-addon-system-flock.ts'
 import * as koffi from './external_packages/koffi.ts'
@@ -67,6 +68,7 @@ import type { StaticModuleFactory } from '../module-system/module-loader.ts'
 
 /** Builtin modules, keyed with and without the `node:` prefix. */
 const BUILTINS: Record<string, StaticModuleFactory> = {
+  assert: () => nodeAssertStrict,
   'assert/strict': () => nodeAssertStrict,
   async_hooks: () => nodeAsyncHooks,
   buffer: () => nodeBuffer,
@@ -94,6 +96,7 @@ const BUILTINS: Record<string, StaticModuleFactory> = {
   url: () => nodeUrl,
   util: () => nodeUtil,
   'util/types': () => nodeUtilTypes,
+  v8: () => nodeV8,
   vm: () => nodeVm,
   worker_threads: () => nodeWorkerThreads,
   zlib: () => nodeZlib,
