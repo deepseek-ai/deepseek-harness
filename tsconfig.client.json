@@ -29,6 +29,8 @@
     "packages/experimental/*/src/css-modules.d.ts",
     "packages/client/*/tests/**/*.ts",
     "packages/client/*/tests/**/*.tsx",
+    // Shared Session event data has no Host Context augmentation.
+    "packages/api/session-controller/tests/continuation-fixture.ts",
     "benchmarks/**/*.client.ts",
     "benchmarks/**/*.client.tsx",
     "benchmarks/support/**/*.ts",
