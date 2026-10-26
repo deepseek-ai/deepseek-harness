@@ -15,7 +15,7 @@ Use the target returned by spawn_teammate or list_agents for send_message and in
 
 Check the [exit code: N] marker on every bash result; investigate failures before moving on.
 
-Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.
 
 Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.
 
