@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
+import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   type SessionProjectionMap, type SessionSummary,
@@ -453,16 +453,17 @@ interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected>
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
   withBoard?: boolean
+  renderFooter?: () => ReactNode
 }
 
 type CatalogDropdownProps = CatalogDropdownSharedProps & (
-  | ({
+  | {
     /** Descendant-count control. */
     variant: 'count'
     currentSessionId?: never
     displayTitle?: never
     openTitle?: never
-  } & Partial<Pick<PropsRenderSlots<'conversation.session.header.actions.subagent.footer'>, 'renderSlot'>>)
+  }
   | {
     /** Current-title sibling switcher. */
     variant: 'switcher'
@@ -803,7 +804,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
                 t={t}
               />
             </div>
-            {props.variant === 'count' && props.renderSlot?.('conversation.session.header.actions.subagent.footer', {})}
+            {props.renderFooter?.()}
           </div>
         </MenuSurface>
       ), document.body)}
@@ -844,7 +845,7 @@ function RootCatalogAction({
       rootSessionId={sessionId}
       variant="count"
       withBoard={footerAvailable && teamEnabled}
-      renderSlot={renderSlot}
+      renderFooter={() => renderSlot('conversation.session.header.actions.subagent.footer', {})}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}
       openChild={openChild}
