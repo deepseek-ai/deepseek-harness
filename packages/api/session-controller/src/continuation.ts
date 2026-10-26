@@ -33,7 +33,7 @@ export const continuationProjectionDefinition = {
     switch (event.type) {
       case 'agent/inbox/spliced':
         if (state.continuing && event.data.target === 'next-turn' && event.data.outcome === 'canceled'
-          && event.data.start === 0 && (event.data.removedCount ?? 0) > 0) return { ...state, continuing: false }
+          && event.data.start === 0) return { ...state, continuing: false }
         return state.ending !== null && !state.continuing && event.data.target === 'next-turn'
           && event.data.inserted.some(message => message.source.kind === 'user' && message.content.length === 0)
           ? { ...state, continuing: true } : state
