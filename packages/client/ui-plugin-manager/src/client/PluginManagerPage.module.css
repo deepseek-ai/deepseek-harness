@@ -392,6 +392,11 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* A card's reason lines start under its title: the head's padding, the icon, and the gap after it. */
+.card > .reason {
+  padding: 0 8px 8px calc(8px + 48px + 14px);
+}
+
 .packageImage {
   object-fit: contain;
 }

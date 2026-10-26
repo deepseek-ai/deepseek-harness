@@ -547,9 +547,11 @@ export class PluginManager extends TypertRemoteService {
         }
         version = info.version
         const listedByDefault = info.dsh?.bundle?.listedByDefault
+        // The launcher ignores this display field, so an invalid value is reported beside the bundle's rows instead of replacing them.
+        let listingError: ManagementError | undefined
         if (listedByDefault !== undefined) {
-          if (typeof listedByDefault !== 'boolean') throw new Error('dsh.bundle.listedByDefault must be a boolean')
-          listing = { listedByDefault }
+          if (typeof listedByDefault !== 'boolean') listingError = { code: 'operation-error', diagnostic: 'dsh.bundle.listedByDefault must be a boolean' }
+          else listing = { listedByDefault }
         }
         const compatibility = evaluatePluginCompatibility(info, exemptions)
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
@@ -559,7 +561,7 @@ export class PluginManager extends TypertRemoteService {
         try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
         catch (error) { platformError = managementError(error) }
         if (platformError?.code === 'unsupported-platform') listing = { listedByDefault: false }
-        const error = platformError ?? targetError
+        const error = platformError ?? targetError ?? listingError
         bundles.push({ name, official, availability, ...listing, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },

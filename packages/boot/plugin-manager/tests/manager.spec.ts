@@ -435,8 +435,10 @@ it('projects each bundle\'s default GUI listing without changing its selection, 
   }
   manifest.dsh.bundle.listedByDefault = 'hidden'
   writeFileSync(path, JSON.stringify(manifest))
+  // The launcher ignores the field, so the running layer keeps its live row beside the diagnostic.
   expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({ enabled: true,
-    error: { diagnostic: 'dsh.bundle.listedByDefault must be a boolean' } })
+    error: { code: 'operation-error', diagnostic: 'dsh.bundle.listedByDefault must be a boolean' },
+    rows: [{ rowId: 'managed', entryId: 'include:managed' }] })
 })
 
 it('names where each installed bundle comes from as a spec pnpm installs', async () => {
