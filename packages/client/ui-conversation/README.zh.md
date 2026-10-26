@@ -76,7 +76,9 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
-普通 Session 的输入框在空草稿且空闲时，若最新一轮以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 或 `STREAM_CLOSED` 结束，会提供播放图标按钮。失败轮次必须包含已提交的用户输入和已落盘的模型请求尝试，且起始事件已加载。点击后按当前界面语言提交一条普通用户消息（中文为“继续”，英文为“continue”）；存在草稿或附件时保留发送按钮。继续请求保留已提交历史，并沿用现有提交流程。
+普通 Session 的输入框在空草稿且空闲时，若最新一轮以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 或 `STREAM_CLOSED` 结束，会提供播放图标按钮。失败轮次必须包含已进入模型历史的普通用户输入和已落盘的失败模型请求尝试。点击后按当前界面语言提交一条普通用户消息；存在草稿或附件时保留发送按钮。继续请求保留已提交历史，并沿用现有提交流程。
+
+Host 需要 `sessionProjections`，并发布 `conversationContinuation`；继续资格从 Session 历史恢复，不受浏览器已加载历史分页的影响。
 
 composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输入框聚焦策略](../ui-primitives/README.zh.md#use-this-package)。识别出的手机和平板需要点击输入框；桌面设备保留自动聚焦。在这些移动设备上，提交清空正在聚焦的草稿后，焦点移到不接受文字输入的 composer 卡片，收起键盘并保留键盘导航位置。被拒绝的提交、保留的新草稿文字，以及已经聚焦的其他控件均保留原有焦点。移动端键盘平移页面时，[Lexical 补丁](../../../patches/lexical@0.49.0.patch)让光标滚动计算与 DOM 几何使用同一坐标系。
 
@@ -187,11 +189,19 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为本包渲染浏览器状态，并通过 Session Controller API 发送用户确认提交的输入，而不构造模型请求。
+### 手动继续消息
+
+#### 模型看到什么
+
+播放按钮按点击时选中的界面语言提交一条普通用户消息：中文为 `继续`，英语、法语和葡萄牙语为 `continue`，日语为 `続けて`，西班牙语为 `continúa`，德语为 `weiter`，俄语为 `продолжай`。已准入的消息写入 Session 日志并进入后续模型历史；该操作不从失败尝试中重建文本。
+
+#### Token 影响
+
+每条进入模型历史的继续消息增加其本地化短文本和普通用户消息的封装开销。准确 token 数取决于模型 tokenizer。在准入前被拒绝或失败的提交不会向模型历史添加继续文本。
 
 #### KV Cache 影响
 
-无；Conversation 组装和浏览器输入状态不会改变提供方侧的 prompt cache。
+继续消息在保留历史后追加，不替换更早的消息或 prompt section。它保留原本可复用的前缀；提供方缓存的可用性、复用策略和淘汰规则不由本包控制。
 
 ## 已知限制与暂缓事项
 
@@ -199,6 +209,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 - **只有已注册 target 可以渲染**——除已注册的 `chat` 偏好外，shell 刻意不提供隐式 fallback target。
 - **Factory occurrence 继承渲染位置的 Session**——`conversation.content` 不接受独立寻址的 Session；该能力需要单独的 Session provider。
+- **手动继续使用固定产品白名单**——支持的失败码独立于提供方可配置的 `retryableCodes`；修改自动重试策略不会扩展或缩小此操作的范围。即使默认策略不重试 `STREAM_CLOSED`，用户仍可明确发起新轮次。该错误码也可能表示协议违规，因此再次请求不保证能够恢复。
 
 
 <a id="dev-note"></a>

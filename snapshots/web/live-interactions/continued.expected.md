@@ -19,7 +19,7 @@
 - status:
   - text: This turn failedupstream 503
   - code: SERVER
-- text: continue {{clock}}
+- text: plan Plan mode on. Use /plan off to leave. plan Plan mode off. continue {{clock}}
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"

@@ -1,5 +1,5 @@
 /** Admitted input and a settled turn for manual-continuation tests. */
-import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session/types'
@@ -10,7 +10,7 @@ import type { TurnEndReason } from '@deepseek-ai/dsh-session/types'
  * @param number - turn number and corresponding event offset.
  * @returns ordered durable entries.
  */
-export function continuationTurn(reason: TurnEndReason, number = 1): SessionLiveEventEntry[] {
+export function continuationTurn(reason: TurnEndReason, number = 1): { type: 'event'; event: SessionEvent }[] {
   const offset = (number - 1) * 6
   return [
     { type: 'event', event: { type: 'turn/start', seq: SessionSeq(offset), time: 0, data: { turn: number } } },

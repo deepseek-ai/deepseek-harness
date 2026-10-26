@@ -76,7 +76,9 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted user input, a settled model attempt, and a loaded start. Clicking submits a normal user message in the current interface language (`继续` in Chinese, `continue` in English); drafts and attachments keep the Send action. Continued requests retain committed history and use the existing submission lifecycle.
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits a normal user message in the current interface language; drafts and attachments keep the Send action. Continued requests retain committed history and use the existing submission lifecycle.
+
+The Host requires `sessionProjections` and publishes `conversationContinuation`; eligibility is restored from Session history independently of the browser's loaded history pages.
 
 The composer uses the shared [text-input focus policy](../ui-primitives/README.md#use-this-package) on mount, Session switching, and unlock. Identified phones and tablets require tapping the input; desktop devices retain automatic focus. On these mobile devices, a submission that empties the focused draft moves focus to the non-text composer card, dismissing the keyboard while retaining its navigation position. Rejected submissions, retained newer draft text, and another control already holding focus preserve focus. The [Lexical patch](../../../patches/lexical@0.49.0.patch) keeps caret scrolling in the same coordinate system as DOM geometry when a mobile keyboard pans the page.
 
@@ -187,11 +189,19 @@ The selector must be a pure function of the owner currency. Its non-null return 
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package renders browser state and sends user-admitted inputs through Session Controller APIs without constructing model requests.
+### Manual continuation message
+
+#### What the model sees
+
+The play action submits one ordinary user message using the interface language selected at the click: Chinese `继续`, English/French/Portuguese `continue`, Japanese `続けて`, Spanish `continúa`, German `weiter`, or Russian `продолжай`. The admitted message is stored in the Session log and included in subsequent model history; the action does not reconstruct text from the failed attempt.
+
+#### Token effect
+
+Each continuation admitted into model history adds its short localized text and the ordinary user-message overhead. The exact token count depends on the model tokenizer. A submission refused or failed before admission adds no continuation text to model history.
 
 #### KV Cache effect
 
-None; Conversation assembly and browser input state do not alter provider-side prompt caching.
+The continuation message extends retained history without replacing earlier messages or prompt sections. It preserves an already-reusable prefix; provider cache availability, reuse policy, and eviction remain outside this package's control.
 
 ## Known Limitations and Deferred Work
 
@@ -199,6 +209,7 @@ None; Conversation assembly and browser input state do not alter provider-side p
 
 - **Only registered targets can render** — the shell deliberately has no implicit fallback target beyond the registered `chat` preference.
 - **Factory occurrences inherit their render-position Session** — `conversation.content` does not accept an independently addressed Session; that requires a separate Session-provider capability.
+- **Manual continuation uses a fixed product allowlist** — the supported failure codes are independent of the provider's configurable `retryableCodes`; changing automatic retry policy does not expand or reduce this action. `STREAM_CLOSED` permits an explicit new user turn even when the default policy does not retry it. That code can also identify a protocol violation, so another request is not guaranteed to recover.
 
 
 <a id="dev-note"></a>

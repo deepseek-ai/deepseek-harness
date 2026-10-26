@@ -535,7 +535,7 @@ export interface ComposerBarInjected {
    */
   continueGeneration: ((ending: SessionSeq) => void) | undefined
   hooks: {
-    /** Latest transient failure with admitted user input and a loaded turn start. */
+    /** Host-projected latest eligible failure, excluding pending human steering. */
     continuation: ObservableSnapshot<SessionSeq | undefined>
     /** Readable sequence while the fixed Stop command is registered. */
     stopShortcut: ObservableSnapshot<readonly string[]>

@@ -29,6 +29,7 @@ export const zh = {
   'input.stop': '停止生成',
   'input.send': '发送消息',
   'input.continue': '继续生成',
+  // Model-visible text, durably logged when admitted as an ordinary user message.
   'input.continueMessage': '继续',
   'input.sending': '正在发送消息',
   'input.send.queue': '排队发送',

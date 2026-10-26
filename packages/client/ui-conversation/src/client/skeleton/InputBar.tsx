@@ -366,8 +366,8 @@ export const InputBar = memo(function InputBar({
   // message waits for the Host.
   const primaryStops = running && subagent === null && !sending && (empty || blocked !== undefined)
   const primaryContinues = !running && subagent === null && empty && continuation !== undefined
-    && historyOpen && !submissionPending && (input?.queue.length ?? 0) === 0
-    && !disabled && input.phase === 'plain' && continueGeneration !== undefined
+    && historyOpen && !submissionPending && !disabled && input.queue.length === 0
+    && input.phase === 'plain' && continueGeneration !== undefined
   // Disabled native buttons may omit mouseleave; their tooltip must close from state.
   const primaryDisabled = primaryStops ? stopAction === undefined
     : (!primaryContinues && empty) || disabled || machineBusy || uploadsPending
@@ -389,7 +389,7 @@ export const InputBar = memo(function InputBar({
       return
     }
     if (primaryContinues) {
-      if (!primaryDisabled) continueGeneration(continuation)
+      continueGeneration(continuation)
       return
     }
     if (keyboard === undefined) return // absent machine: the button is disabled

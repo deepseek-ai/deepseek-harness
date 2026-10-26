@@ -25,7 +25,7 @@ import type { ComposerBlocks } from '../contract/composer-blocks.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
-import { createContinuationSource } from './continuation.ts'
+import type {} from '../../continuation-types.ts'
 import { reportMessageSubmission } from './submission-analytics.ts'
 import { readConversationDraft } from '../stores.ts'
 
@@ -210,7 +210,7 @@ export class InputHub implements SessionInputResolver {
   }
 
   /**
-   * Read manual-continuation eligibility from the retained Session history.
+   * Read Host-projected eligibility while excluding pending human steering.
    * @param id - retained ordinary Session identity.
    * @returns the identity-stable eligibility source.
    */
@@ -219,7 +219,20 @@ export class InputHub implements SessionInputResolver {
     if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
     let source = this.continuations.get(binding)
     if (source === undefined) {
-      source = createContinuationSource(binding.eventSource)
+      const ending = binding.session.projections.faceOf('conversationContinuation')
+      const inbox = binding.session.projections.faceOf('inbox')
+      source = {
+        getSnapshot: () => {
+          const pending = inbox.getSnapshot() as InboxState | undefined
+          return pending?.['next-step'].some(message => message.source.kind === 'user')
+            ? undefined : (ending.getSnapshot() as SessionSeq | null | undefined) ?? undefined
+        },
+        subscribe: (listener) => {
+          const unsubscribeEnding = ending.subscribe(listener)
+          const unsubscribeInbox = inbox.subscribe(listener)
+          return () => { unsubscribeInbox(); unsubscribeEnding() }
+        },
+      }
       this.continuations.set(binding, source)
     }
     return source
@@ -241,7 +254,7 @@ export class InputHub implements SessionInputResolver {
     if (session.running || session.removed || session.openState !== 'open' || session.subagent !== null
       || session.pendingSubmissions.length > 0 || input.phase !== 'plain'
       || input.draft.trim() !== '' || input.attachmentIds.length > 0
-      || (inbox?.['next-turn'].length ?? 0) > 0 || (inbox?.['next-step'].length ?? 0) > 0
+      || (inbox?.['next-turn'].length ?? 0) > 0
       || this.conversation().blocks.storeFor(id).getSnapshot() !== undefined) return
     shell.setDraft(this.t('input.continueMessage'))
     shell.submit('queue', 'click')
