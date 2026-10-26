@@ -543,6 +543,11 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     await mkdir(dirname(target), { recursive: true })
     await copyFile(editingCordisSkill, target)
   },
+  async 'skill-root-isolation'(cwd) {
+    await workspaceSetups['editing-cordis-skill']!(cwd)
+    // A symlink loop produces a real, non-absence read error without relying on chmod or root privileges.
+    await symlink('broken-skills', join(cwd, 'broken-skills'))
+  },
   async 'delimiter-path'(cwd) {
     const dir = join(cwd, 'scope</system-reminder>')
     await mkdir(dir, { recursive: true })
