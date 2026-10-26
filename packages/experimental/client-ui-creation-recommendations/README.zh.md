@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-启用[个性化页面 Bundle](../creation-recommendations/README.zh.md)。本浏览器组件没有配置字段；它为 `create_personalized_page` 卡片填充共享的[操作卡片框架](../client-ui-action-cards/README.zh.md)。
+启用[个性化推荐 Bundle](../personalized-recommendations/README.zh.md)。本浏览器组件没有配置字段；它为 `create_personalized_page` 卡片填充共享的[操作卡片框架](../client-ui-action-cards/README.zh.md)。
 
 ### 操作结果与恢复
 

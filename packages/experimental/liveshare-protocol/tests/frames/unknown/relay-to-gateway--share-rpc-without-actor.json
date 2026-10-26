@@ -1,0 +1,19 @@
+{
+  "dir": "relay->gateway",
+  "note": "a request whose caller the Relay did not assert: the owner may never act on an unattributable request",
+  "frame": {
+    "type": "share-rpc",
+    "id": 12,
+    "body": {
+      "op": "call",
+      "path": "/__share/context",
+      "body": {}
+    }
+  },
+  "refusal": {
+    "status": 400,
+    "body": {
+      "error": "invalid-request"
+    }
+  }
+}

@@ -43,7 +43,7 @@ ctx.slots.inject('tool.call.toolview', () =>
   }, BusinessToolRow))
 ```
 
-owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、会话授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开优先使用操作发生时记录的绝对结果路径，显示标签仍保留原始参数。成功的旧根调用结果继续回退到原参数；运行中的相对路径等待结果。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
+owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、经 Gateway 授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开优先使用操作发生时记录的绝对结果路径，显示标签仍保留原始参数。成功的旧根调用结果继续回退到原参数；运行中的相对路径等待结果。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
 
 ### 内置视图
 

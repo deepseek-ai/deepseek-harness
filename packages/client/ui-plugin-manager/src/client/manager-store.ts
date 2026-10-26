@@ -94,6 +94,8 @@ export interface PackageRow {
   readonly enabled: boolean
   /** The entry's fiber phase, null without a live fiber. */
   readonly phase: PluginInfo['fiberPhase']
+  /** Current startup failure projected by the Host inventory. */
+  readonly diagnostic?: string
   /** Why the Host refuses to switch the row, when it does. */
   readonly readOnlyReason?: ReadOnlyReason
 }
@@ -113,7 +115,7 @@ export interface PackageView {
   readonly meta?: PluginLocalizedMeta
   /** Whether the profile declares this dependency; availability separately describes its readable files. */
   readonly installed: boolean
-  /** GUI listing before explicit selection or profile installation; omission means true. */
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   readonly listedByDefault?: boolean
   /** Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts. */
   readonly source?: string
@@ -127,7 +129,7 @@ export interface PackageView {
   readonly enabled: boolean
   /** Why the Host refuses to switch the bundle off or remove it, when it does. */
   readonly readOnlyReason?: ReadOnlyReason
-  /** Why the Host cannot read the bundle, when it cannot. */
+  /** Why the Host cannot read or enable the bundle. */
   readonly error?: ManagementError
   readonly rows: readonly PackageRow[]
 }
@@ -547,6 +549,7 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
       moduleName: row.moduleName,
       enabled: live?.enabled ?? false,
       phase: live?.fiberPhase ?? null,
+      ...live?.diagnostic === undefined ? {} : { diagnostic: live.diagnostic },
       ...row.meta === undefined ? {} : { meta: row.meta },
       ...row.entryId === undefined ? {} : { entryId: row.entryId },
       ...live?.readOnlyReason === undefined ? {} : { readOnlyReason: live.readOnlyReason },

@@ -6,7 +6,7 @@ import css from './MessageImage.module.css'
 
 export type { MessageImageLabels } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
-/** Loads a session-authorized durable image URL and may expose a cached URL synchronously. */
+/** Loads a Gateway-authorized durable image URL and may expose a cached URL synchronously. */
 export type ImageLoader = ((attachment: ImageAttachmentRef) => Promise<string>) & {
   peek?: (attachment: ImageAttachmentRef) => string | undefined
 }
@@ -62,7 +62,7 @@ function dimensionsOf(image: MessageImageSpec): { readonly width: number; readon
  * List thumbnails use status icons with localized tooltips and accessible names.
  *
  * @param props.image - the durable reference to load, or the local preview to display.
- * @param props.load - session-authorized URL loader for the durable arm.
+ * @param props.load - Gateway-authorized URL loader for the durable arm.
  * @param props.variant - lone image, cropped gallery tile, or uncropped list thumbnail.
  * @param props.labels - resolved strings (tooltip, loading, retry, lightbox).
  * @returns the bounded thumbnail button, or the retry control on failure.

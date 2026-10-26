@@ -25,7 +25,7 @@ An experiment can offer one optional action below an answer, such as creating a 
 <a id="use-this-package"></a>
 ## Use this package
 
-The [Personalized pages](../creation-recommendations/README.md) and [Plugin recommendations](../plugin-recommendations/README.md) bundles each insert this service and its [browser half](../client-ui-action-cards/README.md); enabling either bundle enables both. The service has one configuration field:
+The [Personalized recommendations](../personalized-recommendations/README.md) bundle inserts this service and its [browser half](../client-ui-action-cards/README.md). The service has one configuration field:
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -125,7 +125,6 @@ The notice is appended after the request's other new context and never rewrites 
 - Only one card is offered per turn across all kinds. A later card of any kind replaces every unstarted earlier card, so a second kind's card replaces an unstarted card of the first.
 - Refusal reasons of user actions are plain strings by design: the service defines `closing`, `not-live-root`, `unknown`, `unavailable`, `access-denied` and `read-only`, each kind adds its own, and a browser body names the reasons it knows and treats others as unavailable.
 - Each kind validates `details` on both sides, with its Host schema when the model proposes and before each action, and with its browser body's own schema, so the two schemas change together.
-- The Personalized pages and Plugin recommendations bundles both insert the rows of this service and its browser half, and with both enabled the Loader keeps one entry per row id. Two optional bundles cannot yet share a dependency row addressably: while both are enabled, the Plugins page cannot address the two shared rows (`action-cards`, `client-ui-action-cards`), so they cannot be switched or configured individually. Use the bundle switches; `queuedMessageLimit` can then be changed only in the profile's `cordis.patch.yml`.
 
 <a id="dev-note"></a>
 ### Dev Note

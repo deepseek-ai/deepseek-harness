@@ -65,8 +65,10 @@ interface SessionEventMap {
    * The rendered system prompt on the model-visible surface. The loop appends
    * the first one as surface node 0 before the step's first `user/message`.
    * A prepared in-history route can append nonempty changes in a continuing
-   * series. An incapable route or new series normalizes text to the first system
-   * node. Normalization empties nonempty later nodes, then rewrites the head if
+   * series. An incapable route, or a new series whose effective text differs,
+   * normalizes text to the first system node; a series start whose latest
+   * surviving node already holds the rendering leaves it in place.
+   * Normalization empties nonempty later nodes, then rewrites the head if
    * needed, through logged per-node replacements. An empty rendering always
    * clears all active system nodes, leaving no older instructions model-visible.
    * Empty later nodes are dormant and project to no message; an empty head with
@@ -683,7 +685,7 @@ Everything else (`turn/*`, `step/*`, `assistant/attempt`, plugin-owned `llm/retr
 
 `ctx.sessions.create(id, { seed, meta })` is the low-level replay/fork primitive. For ordinary live-session forks, `SessionStore` exposes one policy API:
 
-- `fork(source, boundary?, childSessionId?)` accepts a live `Session` object or live `SessionId`, selects source events through the inclusive `SessionSeq` boundary (default: current last event), requires the selected prefix to end outside an open turn, then creates a live child session with deep-cloned seed events, `parentSession`, `isSeeded: true`, the exact `inheritedEventCount`, and inherited `cwd`.
+- `fork(source, boundary?, childSessionId?)` accepts a live `Session` object or live `SessionId`, selects source events through the inclusive `SessionSeq` boundary (default: current last event), closes any open tail, then creates an independent live session with deep-cloned seed events, `isSeeded: true`, the exact `inheritedEventCount`, and inherited `cwd`, without `parentSession`.
 
 An explicit `boundary` lets callers fork from any stable between-turn position, including a previous `turn/end` or a later standalone log-only event, even if the source has newer events or an open current turn. The API rejects a prefix that ends inside an open turn instead of clipping silently. `dsh-subagent-fork-in-process` keeps its completed-prefix clipping because tool-time delegation usually starts while the parent turn is open; ordinary session branching should make the requested boundary explicit.
 
@@ -838,14 +840,6 @@ Host service backing the generated `ctx.remote.session` namespace.
 resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
 
 /**
- * Inspect one attached or persisted Session without activating its Agent.
- * @param sessionId - durable Session identity.
- * @param signal - optional caller cancellation for persistence reads.
- * @returns the current attached state or persisted header and event prefix.
- */
-inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<SessionInspection>
-
-/**
  * Read all visible Session rows without resuming an Agent.
  * @param _request - reserved empty list request.
  * @param signal - cancellation for persistence reads and summary generation.
@@ -944,8 +938,8 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('prompt') async prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>
 
 /**
- * Read one image proven reachable from the addressed Session log.
- * @param request - Session and attachment identities used for authorization.
+ * Read one image from the attachment store after gateway authorization.
+ * @param request - image reference and gateway permission scope; Session existence is not checked.
  * @returns the durable attachment reference and base64-encoded bytes.
  */
 @Remote('attachment') attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue>
@@ -966,11 +960,51 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 
 /**
  * Read one cold-safe, message-aligned Session history page.
- * @param request - durable address, backward cursor, and page budget.
+ * @param request - durable address, optional fixed cut, backward cursor, and page budget.
  * @param signal - cancellation for persistence reads.
- * @returns one chronological page.
+ * @returns one chronological page with its inclusive cursor.
  */
-@Remote({ name: 'page', resources: { session: addressedSession } }) page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>
+@Remote events(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage>
+
+/**
+ * Subscribe to Session events without reading a snapshot.
+ * @param request - Session address.
+ * @param signal - subscription cancellation.
+ * @returns readiness and subsequent events, without a snapshot.
+ */
+@Remote({ mode: 'stream' }) observeEvent(request: SessionObserveEventRequest, signal: AbortSignal): AsyncIterable<SessionEventFrame>
+
+/**
+ * Subscribe to sparse Session projection changes.
+ * @param request - target Session.
+ * @param signal - subscription cancellation.
+ * @returns readiness and sparse projection changes.
+ */
+@Remote({ mode: 'stream' }) observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame>
+
+/**
+ * Read passive Session state.
+ * @param request - target Session.
+ * @param signal - read cancellation.
+ * @returns current passive state.
+ */
+@Remote state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState>
+
+/**
+ * Subscribe to complete Session state replacements.
+ * @param request - target Session.
+ * @param signal - subscription cancellation.
+ * @returns complete passive state replacements.
+ */
+@Remote({ mode: 'stream' }) observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState>
+
+/**
+ * Wait for Session quiescence or pending input with bounded assistant output.
+ * @param request - Session, wait bounds and output window.
+ * @param signal - caller cancellation.
+ * @returns stopping state and bounded assistant output.
+ */
+@Remote wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue>
 
 /**
  * Follow one Session log from its opening or resume cursor.
@@ -979,7 +1013,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @returns a complete opening snapshot followed by gap-free durable event
  *   frames and optional cursorless assistant-stream frames.
  */
-@Remote({ mode: 'stream', resources: { session: addressedSession } }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>
+@Remote({ mode: 'stream' }) follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame>
 
 /**
  * Read exact projections, returning cached hints only when migration is required.
@@ -987,7 +1021,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * @param signal - cancellation for the Session read.
  * @returns a sequenced baseline, cached hints when migration is deferred, or null when absent.
  */
-@Remote('projections') async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
+@Remote('projections') projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue>
 
 /**
  * Stream a complete live-control baseline followed by replacement frames.
@@ -997,7 +1031,7 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote({ mode: 'stream' }) async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame>
 ```
 
-Types: [SessionId](core.md) · [SessionInspection](persistence.md) · [SessionSearchRequest](session-query.md)
+Types: [SessionId](core.md) · [SessionSearchRequest](session-query.md)
 
 Source: [`packages/api/session-controller/src/index.ts`](../../packages/api/session-controller/src/index.ts)
 
@@ -1128,7 +1162,7 @@ get(id: SessionId): Session | undefined
 list(): Session[]
 
 /**
- * Create a live child session from an exact prefix of a live source.
+ * Create an independent live session from an exact prefix of a live source.
  * `boundary` is an inclusive source event seq; omitted means the source's
  * current last event. An open tail receives synthetic tool results and
  * step/turn closers with the forked cause. Closed steps and turns remain

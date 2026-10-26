@@ -1,7 +1,7 @@
-.panels { display: grid; gap: 24px; margin: 18px 0; font-size: 13px; }
+.panels { display: grid; gap: 32px; margin: 0; font-size: 13px; }
 .panel { display: grid; gap: 12px; min-width: 0; }
-.card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md); }
-.card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l1); }
+.card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
+.card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
 .panel h3 { margin: 0; font-size: 14px; font-weight: 500; }
 .panel h4 { margin: 0; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); }

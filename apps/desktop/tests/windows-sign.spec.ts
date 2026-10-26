@@ -317,7 +317,9 @@ describe('Windows token signing', () => {
       'C:\\release\\setup.exe',
       ['token-secret'],
     )
-    expect(failure.message).toBe('Windows release signing failed for C:\\release\\setup.exe (exit 1): provider rejected <redacted>')
+    expect(failure.message).toContain('Windows release signing failed for C:\\release\\setup.exe (exit 1): provider rejected <redacted>')
+    expect(failure.message).toContain('After replacing the UKey')
+    expect(failure.message).toContain('does not establish device lock status')
     expect(failure.message).not.toContain('token-secret')
     expect(failure).not.toHaveProperty('cause')
     expect(failure).not.toHaveProperty('cmd')

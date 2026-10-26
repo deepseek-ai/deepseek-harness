@@ -78,7 +78,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 ### 设计理念
 
-本插件是轻量的展示适配器：[`HarnessSdkJsonRpcServer`](src/server.ts) 负责协议方法与通知，传输与具名协议类型来自 `dsh-sdk-protocol`，与客户端 SDK 共享。它订阅会话、agent 与 subagent 生命周期事件，并把它们作为协议通知转发；只有当服务在生命周期建立快照时记录的 `local` 标志为 true 时才转发 subagent 完成事件——提供方名称、子级 id 与持久化谱系均不能证明本地性。
+本插件是轻量的展示适配器：[`HarnessSdkJsonRpcServer`](src/server.ts) 负责协议方法与通知，传输与具名协议类型来自 `dsh-sdk-protocol`，与客户端 SDK 共享。它订阅会话、agent 与 subagent 生命周期事件，并把它们作为协议通知转发；只有当服务在生命周期建立快照时记录的 `local` 标志为 true 时才转发 subagent 完成事件——提供方名称、子级 id 与持久化谱系均不能证明本地性。 `subagent.started` 要求 `origin: subagent` 和直接创建者 ID；普通 fork（包括保留父 ID 的历史会话）不产生此通知。
 
 ### 源码地图
 

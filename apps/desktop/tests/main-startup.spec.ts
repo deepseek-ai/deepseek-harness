@@ -1,9 +1,11 @@
+import { parsePluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+import type { DesktopHostProcess } from '../src/host-process.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
 import { DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
@@ -12,6 +14,7 @@ import { DesktopHostFatalError, DesktopHostUncleanExitError } from '../src/host-
 import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
+import { runOperationReportJob } from '../src/operation-report-job.ts'
 
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
@@ -20,11 +23,12 @@ const fileDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), inst
 vi.mock('../src/file-drag.ts', () => ({ installDesktopFileDrag: () => { fileDrag.install(); return fileDrag.dispose } }))
 
 vi.mock('../src/web-document.ts', () => ({ authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn() }))
+vi.mock('../src/operation-report-job.ts', () => ({ runOperationReportJob: vi.fn(async () => ({ appended: false, timedOut: false, cancelled: false })) }))
 // Report persistence has its own unit tests; here it resolves within microtasks so the fatal
 // dialog never outlives the test that triggered it.
 vi.mock('../src/crash-report.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/crash-report.ts')>(),
-  writeCrashReport: vi.fn(async () => 'desktop-test-logs/crash-test.log'),
+  writeCrashReport: vi.fn<(...args: unknown[]) => Promise<string | undefined>>(),
   pruneCrashReports: vi.fn(async () => {}),
 }))
 
@@ -164,6 +168,8 @@ const harness = await vi.hoisted(async () => {
       readonly inspectPort?: number, readonly environment?: NodeJS.ProcessEnv, readonly onFailure?: (error: Error) => void,
       readonly primaryRuntime?: string,
       readonly packageManager?: { pnpm: string; nodeBin: string },
+      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
+      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -427,9 +433,10 @@ beforeEach(() => {
   harness.reset()
   const userData = mkdtempSync(join(tmpdir(), 'dsh-main-user-data-'))
   onTestFinished(() => { rmSync(userData, { recursive: true, force: true }) })
-  harness.app.getPath.mockImplementation(name => name === 'userData' ? userData : `desktop-test-${name}`)
+  harness.app.getPath.mockImplementation(name => name === 'userData' ? userData : join(userData, `desktop-test-${name}`))
+  vi.mocked(writeCrashReport).mockResolvedValue(join(harness.app.getPath('logs'), 'crash-test.log'))
   harness.dialog.showMessageBox.mockImplementation((options: { title?: string }) => {
-    if (options.title !== en.startupFailed) return Promise.resolve({ response: 1 })
+    if (options.title !== en.startupFailed && options.title !== zh.startupFailed) return Promise.resolve({ response: 1 })
     harness.dialogShown.resolve()
     return new Promise(() => {})
   })
@@ -954,7 +961,7 @@ describe('desktop main startup', () => {
     expect(window.setBackgroundColor).not.toHaveBeenCalled()
   })
 
-  it('follows the Windows primary document language and palette without trusting other frames', async () => {
+  it('follows confirmed language and primary document palette without trusting other frames', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -963,10 +970,12 @@ describe('desktop main startup', () => {
     const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
     listener({ ...event, senderFrame: { url: 'dsh-app://app/' } }, 'zh-CN', '#ffffff', '#000000')
     expect(window.setTitleBarOverlay).not.toHaveBeenCalled()
+    harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.localeChanged)![1](event, 'zh')
     listener(event, 'zh-CN', 'rgb(249, 250, 251)', '#0f1115')
     expect(window.setTitleBarOverlay).toHaveBeenCalledWith({ color: 'rgb(249, 250, 251)', symbolColor: '#0f1115' })
     window.webContents.emit('context-menu', {}, { isEditable: false, selectionText: 'text', editFlags: { canCopy: true } })
     expect(harness.menu.buildFromTemplate).toHaveBeenLastCalledWith([{ role: 'copy', enabled: true, label: '复制', accelerator: '' }])
+    harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.localeChanged)![1](event, 'en')
     listener(event, 'en', '#1b1b1c', '#f9fafb')
     window.webContents.emit('context-menu', {}, { isEditable: false, selectionText: 'text', editFlags: { canCopy: true } })
     expect(harness.menu.buildFromTemplate).toHaveBeenLastCalledWith([{ role: 'copy', enabled: true, label: 'Copy', accelerator: '' }])
@@ -979,7 +988,30 @@ describe('desktop main startup', () => {
     window.webContents.mainFrame.url = 'dsh-app://unowned/index.html'
     listener(event, 'zh-CN', '#fff', '#000')
     expect(window.setTitleBarOverlay).not.toHaveBeenCalled()
-    expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
+    expect(harness.menu.setApplicationMenu).toHaveBeenCalledTimes(3)
+  })
+
+  it('retains cached Chinese for a Host startup crash after the loading page reports English', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const directory = join(harness.app.getPath('userData'), 'desktop')
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'locale-cache'), 'zh-CN\n')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    const appearance = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.windowsAppearance)![1]
+    appearance({ sender: window.webContents, senderFrame: window.webContents.mainFrame }, 'en', '#fff', '#000')
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    const host = harness.hosts[0]!
+    const failure = new DesktopHostFatalError('test plugin failed', 'missing required services')
+    host.onFailure!(failure)
+    host.ready.reject(failure)
+    await host.stopping.promise
+    host.exited.resolve()
+    await harness.dialogShown.promise
+    expect(vi.mocked(writeCrashReport).mock.calls[0]![1].app.locale).toBe('zh-CN')
+    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).message).toBe(zh.fatalSummary)
   })
 
   it('maps Windows caption menus to localized native commands and rejects foreign popup requests', async () => {
@@ -989,6 +1021,7 @@ describe('desktop main startup', () => {
     const window = harness.windows[0]!
     const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame }
     const appearance = harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.windowsAppearance)![1]
+    harness.ipcOn.mock.calls.find(([channel]) => channel === DESKTOP_IPC.localeChanged)![1](event, 'zh')
     appearance(event, 'zh-CN', '#fff', '#000')
     const handler = harness.handlers.get(DESKTOP_IPC.windowsMenu)!
     const foreignEvent = { ...event, sender: {} }
@@ -2206,8 +2239,8 @@ describe('desktop main startup', () => {
     handler(event, 'client mount failed')
     await harness.dialogShown.promise
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('client mount failed')
-    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('desktop-test-logs/crash-test.log')
-    expect(writeCrashReport).toHaveBeenCalledWith('desktop-test-logs', expect.objectContaining({ source: 'web-boot', phase: 'startup' }))
+    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain(join(harness.app.getPath('logs'), 'crash-test.log'))
+    expect(writeCrashReport).toHaveBeenCalledWith(harness.app.getPath('logs'), expect.objectContaining({ source: 'web-boot', phase: 'startup' }))
     expect(window.urls).toEqual(['dsh-app://app/'])
   })
 
@@ -2221,7 +2254,7 @@ describe('desktop main startup', () => {
     window.webContents.emit('did-fail-load', {}, -2, 'failed', 'dsh-app://app/', true)
     await harness.dialogShown.promise
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('Desktop page failed to load')
-    expect(writeCrashReport).toHaveBeenCalledWith('desktop-test-logs', expect.objectContaining({ source: 'renderer' }))
+    expect(writeCrashReport).toHaveBeenCalledWith(harness.app.getPath('logs'), expect.objectContaining({ source: 'renderer' }))
   })
 
   it('offers all recovery choices when resources fail before the Host starts', async () => {
@@ -2230,7 +2263,7 @@ describe('desktop main startup', () => {
     harness.prepared.reject(new Error('runtime resources missing'))
     await harness.dialogShown.promise
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('runtime resources missing')
-    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).buttons).toEqual(['Exit', 'Restart', 'Disable third-party plugins, back up profile patch, and restart'])
+    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).buttons).toEqual(['Exit', 'Restart', 'Disable third-party plugins, back up profile patch, and restart', 'Get diagnostic report'])
     expect(harness.windows[0]!.urls).toEqual(['dsh-app://app/'])
   })
 
@@ -2270,6 +2303,20 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(0)
   })
 
+  it('writes operation history under the instance userData instead of the shared logs directory', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    const record = parsePluginOperationRecord({ runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8', transportDropped: 0,
+      operation: { id: 'c254ab28-97c9-4382-95e6-2db9c66f98c9', time: '2026-10-20T00:00:00.000Z',
+        reason: 'bundle', phase: 'started', target: 'test', stage: 'enable' } })!
+    harness.hosts[0]!.onPluginOperation!(record)
+    const file = join(harness.app.getPath('userData'), 'plugin-operations', 'operations.jsonl')
+    await vi.waitFor(() => { expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(record) })
+    expect(existsSync(join(harness.app.getPath('logs'), 'plugin-operations'))).toBe(false)
+  })
+
   it('writes the Host\'s own diagnostic into a startup-phase crash report when the Host reports a fatal error before ready', async () => {
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -2285,11 +2332,15 @@ describe('desktop main startup', () => {
     host.exited.resolve()
     await harness.dialogShown.promise
     const [directory, report] = vi.mocked(writeCrashReport).mock.calls[0]!
-    expect(directory).toBe('desktop-test-logs')
+    expect(directory).toBe(harness.app.getPath('logs'))
     expect(report.source).toBe('host')
     expect(report.phase).toBe('startup')
     expect(report.error).toBeInstanceOf(DesktopHostFatalError)
     expect(report.hostDiagnostic).toBe(diagnostic)
+    expect(runOperationReportJob).toHaveBeenCalledWith({
+      reportPath: join(harness.app.getPath('logs'), 'crash-test.log'), directory: join(harness.app.getPath('userData'), 'plugin-operations'),
+      limits: { bytes: 65536, recordBytes: 4096, records: 100, outputBytes: 65536 }, journal: null,
+    }, { timeoutMs: 500, cancellationGraceMs: 100 }, expect.any(AbortSignal))
     expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('profile has no cordis.yml')
   })
 
@@ -2312,7 +2363,7 @@ describe('desktop main startup', () => {
     await host.stopping.promise
     expect(writeCrashReport).toHaveBeenCalledOnce()
     const [directory, report] = vi.mocked(writeCrashReport).mock.calls[0]!
-    expect(directory).toBe('desktop-test-logs')
+    expect(directory).toBe(harness.app.getPath('logs'))
     expect(report.source).toBe('host')
     expect(report.phase).toBe('running')
     expect(report.error).toBeInstanceOf(Error)
@@ -2324,7 +2375,76 @@ describe('desktop main startup', () => {
     await harness.quitCompleted.promise
   })
 
-  it.each([0, 1, 2])('waits for Host exit before recovery action %s', async (response) => {
+  it.each([{ rejectCleanup: false, stuck: false }, { rejectCleanup: true, stuck: false },
+    { rejectCleanup: true, stuck: true }])('waits for the diagnostic Worker (policy rejects=$rejectCleanup, stuck=$stuck)', async ({ rejectCleanup, stuck }) => {
+    harness.embeddedPolicy = { origin: 'https://policy.example.com', authentication: 'feishu-test',
+      allowedAuthOrigins: ['https://login.example.com'], allowedPageOrigins: ['https://downloads.example.com'] }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockImplementation(async () =>
+      Response.json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })))
+    let finishReport!: () => void
+    let reportSignal: AbortSignal | undefined
+    let workerExited = false
+    const report = new Promise<{ appended: boolean; timedOut: boolean; cancelled: boolean }>((resolve) => {
+      finishReport = () => { workerExited = true; resolve({ appended: false, timedOut: false, cancelled: true }) }
+    })
+    vi.mocked(runOperationReportJob).mockImplementationOnce((_input, _options, signal) => {
+      reportSignal = signal
+      return report
+    })
+    let finishPolicy!: () => void
+    let failPolicy!: (error: Error) => void
+    const policy = new Promise<void>((resolve, reject) => { finishPolicy = resolve; failPolicy = reject })
+    testAuth.dispose.mockImplementationOnce(() => policy)
+    const failure = new Error('policy Session storage cleanup failed')
+    const host = await readyForUpdate()
+    let quitCompleted = false
+    void harness.quitCompleted.promise.then(() => { quitCompleted = true })
+    try {
+      const window = harness.windows[0]!
+      window.webContents.emit('render-process-gone', {}, { reason: 'crashed' })
+      await harness.dialogShown.promise
+      expect(runOperationReportJob).toHaveBeenCalledOnce()
+      host.exited.resolve()
+      window.emit('session-end', { reasons: ['shutdown'] })
+      harness.app.quit()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(testAuth.dispose).toHaveBeenCalledOnce()
+      expect(reportSignal?.aborted).toBe(true)
+      expect(quitCompleted).toBe(false)
+      if (rejectCleanup) failPolicy(failure)
+      else finishPolicy()
+      await vi.advanceTimersByTimeAsync(0)
+      if (rejectCleanup) expect(console.error).toHaveBeenCalledWith(failure)
+      expect(workerExited).toBe(false)
+      expect(quitCompleted).toBe(false)
+      if (stuck) {
+        await vi.advanceTimersByTimeAsync(499)
+        expect(quitCompleted).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(workerExited).toBe(false)
+        expect(console.error).toHaveBeenCalledWith('dsh desktop: operation report Worker has not exited; continuing shutdown')
+      } else {
+        finishReport()
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(quitCompleted).toBe(true)
+    } finally {
+      finishPolicy()
+      finishReport()
+      host.exited.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      await harness.quitCompleted.promise
+    }
+  })
+
+  it.each([{ response: 0, stuck: false }, { response: 1, stuck: false }, { response: 2, stuck: false },
+    { response: 0, stuck: true }])('waits for Host exit and bounds Worker cleanup for recovery $response (stuck=$stuck)', async ({ response, stuck }) => {
+    let finishReport!: (result: { appended: boolean; timedOut: boolean; cancelled: boolean }) => void
+    let reportSignal: AbortSignal | undefined
+    vi.mocked(runOperationReportJob).mockImplementationOnce(async (_input, _options, signal) => {
+      reportSignal = signal
+      return new Promise((resolve) => { finishReport = resolve })
+    })
     harness.dialog.showMessageBox.mockResolvedValue({ response, checkboxChecked: false })
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -2338,7 +2458,16 @@ describe('desktop main startup', () => {
     expect(harness.app.relaunch).not.toHaveBeenCalled()
     expect(harness.disableAllPlugins).not.toHaveBeenCalled()
     host.exited.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reportSignal?.aborted).toBe(true)
+    expect(harness.app.quit).not.toHaveBeenCalled()
+    if (stuck) await vi.advanceTimersByTimeAsync(500)
+    else finishReport({ appended: false, timedOut: false, cancelled: true })
     await harness.quitCompleted.promise
+    if (stuck) {
+      expect(console.error).toHaveBeenCalledWith('dsh desktop: operation report Worker has not exited; continuing shutdown')
+      finishReport({ appended: false, timedOut: false, cancelled: true })
+    }
     expect(harness.app.relaunch).toHaveBeenCalledTimes(response === 0 ? 0 : 1)
     expect(harness.disableAllPlugins).toHaveBeenCalledTimes(response === 2 ? 1 : 0)
     if (response === 2) {

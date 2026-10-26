@@ -126,7 +126,7 @@ export type MessageImageLoader = ((attachment: ImageAttachmentRef) => Promise<st
 export interface MessageImagesOwnerProps {
   /** Durable references or submission-echo previews in source order. */
   images: readonly MessageImageSource[]
-  /** Session-authorized image URL loader for the durable arm. */
+  /** Gateway-authorized image URL loader for the durable arm. */
   loadImage: MessageImageLoader
   /** Horizontal placement inside the owning record. */
   align: 'start' | 'end'
@@ -237,13 +237,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         hideChrome: boolean
       }
     }
-    /** Optional replacement for one Session breadcrumb title. */
+    /** Optional replacement for one Session breadcrumb title; overlays must portal because the title area clips overflow. */
     'conversation.session.header.lineage': {
       kind: 'single'
       scope: 'session'
       owner: ConversationHeaderLineageOwnerProps
     }
-    /** Title-adjacent Session actions in ascending order. */
+    /** Title-adjacent Session actions in ascending order; overflow is clipped and faded before the utilities, so overlays must portal. */
     'conversation.session.header.actions': {
       kind: 'list'
       scope: 'session'

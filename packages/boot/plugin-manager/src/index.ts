@@ -21,8 +21,9 @@ import {
   readPluginMeta, readProfileManifest, resolveBundleDir, loadOverlayPatches, composeEntries,
   readProfilePatches, bundlePatchPaths,
   evaluatePluginCompatibility, readProfileCompatibility, readProfileVersionExemptions,
-  setProfileVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
+  setProfileVersionExemption, validatePluginVersionExemption, PROFILE_COMPATIBILITY_FILENAME,
   getDshRuntimeVersion, ResolutionRestartRequired,
+  assertBundlePlatform, UnsupportedBundlePlatformError,
 } from '@deepseek-ai/dsh-app-boot'
 import { OPTIONAL_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, PROTECTED_PLUGINS } from '@deepseek-ai/dsh-official-bundles'
 import type {} from '@deepseek-ai/dsh-hmr'
@@ -43,6 +44,7 @@ import type {
   PackageResult, PluginChange, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallProgress, PluginInstallRequestId,
   PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginUpdateStep, PluginVersion, PluginVersionList, Registry,
   RegistryAttempt, UpdateBundleOptions,
+  PluginOperation, PluginOperationId,
 } from './types.ts'
 export type * from './types.ts'
 export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts'
@@ -106,6 +108,7 @@ function messageOf(error: unknown): string { return error instanceof Error ? err
 
 /** An expected refusal keeps its code; anything else becomes an operation error carrying its exact diagnostic. */
 function managementError(error: unknown): ManagementError {
+  if (error instanceof UnsupportedBundlePlatformError) return { code: 'unsupported-platform' }
   if (!(error instanceof ManagementFailure)) return { code: 'operation-error', diagnostic: messageOf(error) }
   return { code: error.code, ...error.incompatible === undefined ? {} : { incompatible: error.incompatible } }
 }
@@ -276,6 +279,28 @@ function parsedForRegistry(spec: string): ParsedInstallSpec {
   }
 }
 
+/** Only registry package names are retained before installation resolves its target. */
+function installOperationTarget(spec: string): string | null {
+  let parsed: ParsedInstallSpec
+  try { parsed = parseInstallSpec(spec) }
+  catch (_error) { return null /* Invalid specs remain private; installation owns their refusal. */ }
+  return parsed.kind === 'registry' ? parsed.name : null
+}
+
+/** Exemption facts use canonical package identity, never the raw request or installed version. */
+function exemptionOperationIdentity(packageVersion: string, runtimeVersion: string): Pick<PluginOperation, 'target' | 'version'> {
+  try { validatePluginVersionExemption(packageVersion, runtimeVersion) }
+  catch (_error) { return { target: null } /* The operation still owns validation failure reporting. */ }
+  const separator = packageVersion.lastIndexOf('@')
+  return { target: installOperationTarget(packageVersion.slice(0, separator)),
+    version: diagnosticVersion(packageVersion.slice(separator + 1)) }
+}
+
+/** Unusable file metadata must not discard the rest of an operation record. */
+function diagnosticVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 128 ? value : undefined
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Persistent management of the current profile's composition and packages. */
@@ -430,7 +455,7 @@ export class PluginManager extends TypertRemoteService {
     return this.change(result => this.configure(async () => {
       await setProfileVersionExemption(this.profile.dir, packageVersion, runtimeVersion, enabled, acceptRisk === true)
       Object.assign(result, await this.reload())
-    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle')
+    }), { stage: 'enable', target: packageVersion, enabled }, 'bundle', exemptionOperationIdentity(packageVersion, runtimeVersion))
   }
 
   /** Read current plugins, including why a row cannot be changed through the profile patch.
@@ -492,9 +517,14 @@ export class PluginManager extends TypertRemoteService {
       }
       const catalogMeta = offered === undefined ? {} : { meta: offered.meta }
       if (offered !== undefined && !installed && !shipped) {
+        let platformError: ManagementError | undefined
+        try { assertBundlePlatform(offered.platforms, process.platform) }
+        catch (error) { platformError = managementError(error) }
+        const error = platformError ?? targetError ?? (enabled ? { code: 'not-bundle' as const } : undefined)
         bundles.push({ name, official, availability: 'missing', ...catalogMeta, ...target, enabled, installed, optional,
+          ...platformError?.code === 'unsupported-platform' ? { listedByDefault: false } : {},
           removable: enabled, rows: [], overrides: [],
-          ...targetError !== undefined ? { error: targetError } : enabled ? { error: { code: 'not-bundle' } } : {} })
+          ...error === undefined ? {} : { error } })
         continue
       }
       // Installation-owned copies remain protected even if a profile also declares their names.
@@ -525,13 +555,18 @@ export class PluginManager extends TypertRemoteService {
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
         const meta = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
+        let platformError: ManagementError | undefined
+        try { assertBundlePlatform(info.dsh?.bundle?.platforms, process.platform) }
+        catch (error) { platformError = managementError(error) }
+        if (platformError?.code === 'unsupported-platform') listing = { listedByDefault: false }
+        const error = platformError ?? targetError
         bundles.push({ name, official, availability, ...listing, ...target, ...(version === undefined ? {} : { version }),
           ...(info.description === undefined || info.description === '' ? {} : { description: info.description }),
           ...meta === undefined ? {} : { meta },
           ...sourceOf(info.name), enabled, installed, optional, removable: removable && readOnlyReason === undefined,
           ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
           ...this.declaredRows(name, info),
-          ...targetError === undefined ? {} : { error: targetError } })
+          ...error === undefined ? {} : { error } })
       } catch (error) {
         if (enabled || installed || optional || offered !== undefined) {
           bundles.push({ name, official, availability, ...listing, ...catalogMeta, ...target, ...(version === undefined ? {} : { version }),
@@ -1126,6 +1161,7 @@ export class PluginManager extends TypertRemoteService {
       const metadata = bundleManifest(name, this.profile.dir, this.profile.installAnchor)
       if (metadata === undefined) throw new ManagementFailure('not-bundle')
       if (enabled) {
+        assertBundlePlatform(metadata.dsh?.bundle?.platforms, process.platform)
         const compatibility = evaluatePluginCompatibility(metadata, readProfileVersionExemptions(this.profile.dir))
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         this.bundleRows(name)
@@ -1213,30 +1249,86 @@ export class PluginManager extends TypertRemoteService {
     operation: (result: ChangeResult) => Promise<ChangeResult['application'] | void>,
     request: Pick<ChangeResult, 'stage' | 'target' | 'enabled'>,
     reason: PluginChange['reason'],
+    identity?: Pick<PluginOperation, 'target' | 'version'>,
   ): Promise<ChangeResult> {
-    return withFileLock(join(this.profile.dir, 'package.json'), async () => {
-      this.abort.signal.throwIfAborted()
-      const before = this.diskState()
-      const result: ChangeResult = { ...request, changed: false,
-        ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
-      try {
-        const outcome = await operation(result)
-        if (outcome !== undefined) result.application = outcome
-        // A reload that waits for a restart leaves the change saved but not applied.
-        else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
-      } catch (error) {
-        if (error instanceof InstallCancelledError) {
-          result.application = 'cancelled'
-        } else {
-          result.application = 'failed'
-          result.error = managementError(error)
+    const id = randomUUID() as PluginOperationId
+    const target = identity === undefined ? this.operationTarget(reason, request.target) : identity.target
+    const version = identity === undefined ? this.operationVersion(reason, reason === 'plugin' ? request.target : target) : identity.version
+    const facts = { id, reason, stage: request.stage,
+      target,
+      ...version === undefined ? {} : { version },
+      ...request.enabled === undefined ? {} : { enabled: request.enabled } }
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'started' })
+    let settled: ChangeResult
+    try {
+      settled = await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+        this.abort.signal.throwIfAborted()
+        const before = this.diskState()
+        const result: ChangeResult = { ...request, changed: false,
+          ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }
+        try {
+          const outcome = await operation(result)
+          if (outcome !== undefined) result.application = outcome
+          // A reload that waits for a restart leaves the change saved but not applied.
+          else if (result.application === 'applied' && result.restartReason !== undefined) result.application = 'restart-required'
+        } catch (error) {
+          if (error instanceof InstallCancelledError) {
+            result.application = 'cancelled'
+          } else {
+            result.application = 'failed'
+            result.error = managementError(error)
+          }
         }
-      }
-      if (result.application !== 'restart-required') delete result.restartReason
-      result.changed = before !== this.diskState()
-      this.ownerContext.emit('plugin-manager/changed', { reason })
-      return result
-    }, { waitMs: this.lockWaitMs })
+        if (result.application !== 'restart-required') delete result.restartReason
+        result.changed = before !== this.diskState()
+        this.ownerContext.emit('plugin-manager/changed', { reason })
+        return result
+      }, { waitMs: this.lockWaitMs })
+    } catch (error) {
+      this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'unknown' })
+      throw error
+    }
+    const refusedVersion = reason === 'install'
+      ? settled.error?.incompatible?.find(plugin => plugin.name === facts.target)?.version
+      : undefined
+    const observedVersion = diagnosticVersion(settled.version ?? refusedVersion)
+    this.reportOperation({ ...facts, time: new Date().toISOString(), phase: 'settled',
+      stage: settled.stage, target: settled.bundle === undefined ? facts.target : installOperationTarget(settled.bundle),
+      application: settled.application, changed: settled.changed,
+      ...observedVersion === undefined ? {} : { version: observedVersion },
+      ...settled.error === undefined ? {} : { errorCode: settled.error.code },
+      ...settled.restartReason === undefined ? {} : { restartReason: settled.restartReason } })
+    return settled
+  }
+
+  private reportOperation(operation: PluginOperation): void {
+    void this.ownerContext.parallel('plugin-manager/operation', operation).catch((_error: unknown) => {
+      // All subscribers run; diagnostic failures cannot change the management result.
+      console.error('dsh plugin-manager: operation diagnostic delivery failed')
+    })
+  }
+
+  private operationTarget(reason: PluginChange['reason'], target: string): string | null {
+    if (reason !== 'plugin') {
+      const name = installOperationTarget(target)
+      return reason === 'install' || name === target ? name : null
+    }
+    return target.length <= 256 && [...this.ctx.loader.entries()].some(entry => entry.id === target) ? target : null
+  }
+
+  /** Read the request-time package version without preventing recovery from damaged metadata. */
+  private operationVersion(reason: PluginChange['reason'], target: string | null): string | undefined {
+    if (reason === 'install' || target === null) return undefined
+    try {
+      if (reason !== 'plugin') return diagnosticVersion(bundleManifest(target, this.profile.dir, this.profile.installAnchor)?.version)
+      const entry = [...this.ctx.loader.entries()].find(row => row.id === target)
+      const source = entry?.parent.tree.ctx.baseUrl
+      if (entry === undefined || source === undefined) return undefined
+      return diagnosticVersion(this.ownerContext.get('pluginPackages')?.packageOf(entry.options.name, source)?.version)
+    } catch (_error) {
+      // Disabling or removing a broken package must not depend on diagnostic metadata being readable.
+      return undefined
+    }
   }
 
   private diskState(): string {

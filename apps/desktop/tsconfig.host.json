@@ -36,6 +36,9 @@
       "path": "../../packages/client/product-analytics/tsconfig.host.json"
     },
     {
+      "path": "../../packages/boot/plugin-manager"
+    },
+    {
       "path": "../../packages/util/file-drag"
     }
   ],

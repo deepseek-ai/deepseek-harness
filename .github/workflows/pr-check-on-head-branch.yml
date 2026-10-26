@@ -1,0 +1,84 @@
+name: Policy
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, review_requested, auto_merge_enabled, labeled]
+permissions:
+  contents: read
+concurrency:
+  group: pr-check-on-head-branch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  master:
+    name: Master Change
+    # Each check runs only while its repository variable is neither empty nor `off`; otherwise the job is skipped.
+    if: ${{ vars.MERGE_POLICY_MASTER_DIFF != '' && vars.MERGE_POLICY_MASTER_DIFF != 'off' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      base_sha: ${{ steps.check.outputs.base_sha }}
+      since: ${{ steps.check.outputs.since }}
+    steps:
+      # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - id: check
+        uses: deepseek-harness/deepseek-harness-check@master
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_MASTER_DIFF }}
+        with:
+          check: master-diff
+          base-branch: ${{ github.event.pull_request.base.ref }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+  pre-merge:
+    name: Pre-Merge Check
+    needs: master
+    if: ${{ vars.MERGE_POLICY_PRE_MERGE != '' && vars.MERGE_POLICY_PRE_MERGE != 'off' && needs.master.result == 'success' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 60
+    # This job installs and compiles the pull request: it reads contents only and receives no secret.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Merge the checked base-branch commit
+        env:
+          BASE_SHA: ${{ needs.master.outputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SINCE: ${{ needs.master.outputs.since }}
+        run: |
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$SINCE" =~ ^[0-9]+$ ]] || { echo "::error::the master diff check reported no base commit"; exit 1; }
+          git fetch --no-tags --no-write-fetch-head --shallow-since="$SINCE" origin "$HEAD_SHA" "$BASE_SHA"
+          git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com merge --no-ff --no-edit -m "Merge $BASE_SHA into $HEAD_SHA" "$BASE_SHA"
+
+      - uses: pnpm/action-setup@v5.0.0
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Run the pre-merge command
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+        run: |
+          if ! bash -euxo pipefail -c 'pnpm install --frozen-lockfile && pnpm exec tsx scripts/compile-referenced-projects.ts host-contracts && pnpm exec tsx scripts/compile-referenced-projects.ts client'; then
+            if [ "$CHECK_MODE" = block ]; then exit 1; fi
+            echo "::warning title=Pre-Merge Check::the merged tree does not install or compile; this check does not block"
+          fi

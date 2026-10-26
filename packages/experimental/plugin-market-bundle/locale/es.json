@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Índices de complementos personalizados",
-    "description": "Agrega una pestaña Descubrir a Complementos para explorar e instalar paquetes desde los índices de complementos que agregue.",
+    "description": "Añade la pestaña “Descubrir” a “Complementos”, donde puede explorar e instalar complementos de los índices de complementos que agregue.",
     "detail": "docs/DETAIL.md"
   }
 }

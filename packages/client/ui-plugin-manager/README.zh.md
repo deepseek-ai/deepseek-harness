@@ -41,6 +41,8 @@ kind: "package-reference"
 
 首次读取列表时，页面显示一条较短的分组标题占位和四行骨架卡片，沿用真实卡片的行、图标和文字间距，操作区域留白。骨架使用与 Session 搜索相同的透明度呼吸动效，在减少动态效果模式下保持静止。无障碍加载文案和读取时机不变；刷新时保留已有列表，安装及组件加载仍使用各自的状态提示。
 
+组合包不支持 DSH Host 的操作系统时，卡片和详情页会显示原因，关闭状态的开关不可启用；已选中的组合包仍可关闭。[插件管理器](../../boot/plugin-manager/README.zh.md#use-this-package)对直接请求执行同一限制。
+
 **刷新**按钮在悬停或键盘聚焦 500 毫秒后显示提示。它重新读取列表，再依次检查每个可更新组合包的新版本；读取失败时不做检查。手动刷新期间，按钮显示旋转加载指示并保持禁用，直到所有待处理读取和这些检查结束且至少经过 400 毫秒，避免加载指示一闪而过；重复刷新请求会被忽略，已有列表保持可见。成功不显示 toast。已有列表时，手动刷新失败保留缓存内容并显示失败 toast，即使已离开插件页也能看到；再次选择该按钮即可重试。在首次成功读取列表之前，失败仍原位显示提示与**重试**。后台读取不显示刷新按钮的加载指示。
 
 ### 安装一个组合包
@@ -108,6 +110,8 @@ ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
 
 行页只在某个 `plugins.row.config` 条目点名这一行时存在，因此给行的贡献渲染在该配置打开的页面上。
 
+组件列表和详情页显示 Host 清单中的当前启动诊断。重新打开页面后仍能看到原因，组件恢复后诊断消失。组件列表与来源信息默认使用 l2 分割线，Computer Use 详情页使用 l3。
+
 ### 页面标签页
 
 其他插件向 `plugins.tab` 列表 slot 注册条目，即可在页面自带的**已安装**标签页之后添加一个标签页；条目的 `label` 为标签页命名，`order` 决定其位置。至少存在一个条目时，标签页显示在页头下方；在组合包、行或官方插件的页面上隐藏。离开**插件**后，所选标签页保持不变；所选标签页的条目被移除时，回到**已安装**。页面渲染所选条目以代替自身的分组，并在此时隐藏自身的刷新和添加按钮。owner props 提供 `install({ spec, registry?, title, version })` 和 `openPackage(name)`。`install` 用于用户已在标签页中确认的版本：安装对话框在检查界面打开，不显示 spec 表单，在以较小等宽字显示的 spec 上方用 `title` 和 `version` 标明插件，并在进度和结果界面保持该名称，完成后显示已安装的版本；只在这一次安装中首先使用 `registry`，且从不记住它；被拒绝后提供**重试**；如果有隐藏中的安装任务，则改为重新打开该任务。`openPackage` 切换到**已安装**，并在该标签页列出该组合包时打开其页面，该页面的返回按钮回到打开它的标签页；页面不列出的组合包（例如内置 profile 组合包）只打开「已安装」列表。已确认的安装不提供 GitHub 镜像恢复，因为该恢复会重新打开 spec 表单；其返回按钮用于取消正在进行的安装。[`ui-plugin-market`](../ui-plugin-market/README.zh.md) 在这里贡献**发现**标签页。
@@ -144,7 +148,7 @@ Host 入口通过生成的 Remote 接口暴露 `pluginRegistryProbe.fastest()`�
 
 页面的 `main` 注册把 `plugins.item`、`plugins.bundle.config` 与 `plugins.row.config` 声明为子 slot，因此它们与页面同生，注册方的 `ctx.slots.inject` 会等到它们出现。`configLedgerSource` 把三份账本投影成一个可观察对象——按账本顺序排列、标签按当前语言解析的官方条目，以及组合包与行的键——在账本或语言变化前保持缓存；页面把它作为 `useConfigLedger` 绑在 store 旁边，自身从不点名任何可配置插件。注册拥有的导航 store 选择主列表、完整的实验性插件列表、某个组合包、某个官方插件或组合包的某一行；切换离开插件面板时重置为列表，React 重新挂载则保留所选目标。新的注册从主列表开始。安装后的高亮仅在当前页面有对应卡片时滚动定位，不改变所选页面。其他 Client 插件经 `ctx.get` 或 `ctx.inject` 以可选方式读取 `pluginNavigation`，调用其 `openBundle(packageName)` 即可打开组合包详情，不改变当前 Session；把它写进插件的 `inject` 会让该插件在无权限的页面上一直等待。首次读取清单期间保留导航目标；组合包不存在时显示列表。注册与做出它的浏览器半侧同生共死。`dsh-client-modules` 只把一个包的浏览器半侧挂在说明符恰为包名的那一行 Loader 行上，所以组合包为自己或任一行注册的页面，都会在那一行被关闭时一起消失；需要在其他行关闭时仍保留页面的子插件，应作为独立的包发布。 卡片和详情页仅为 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md#plugin-manager-lists) 中 `EXPERIMENTAL_BUNDLES` 名单内的包显示实验性标签，包名前缀不决定标签。
 
-`plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。Client 插件可订阅只读的 `ctx.pluginChanges.bundle(packageName)`，在组合包或其组件行变更期间暂停查询。通知先于管理请求发出，页面关闭后仍会更新；订阅方在卸载时释放观察。`plugins.bundle.activation` 在用户从列表显式启用后提供 Bundle 自有引导，并传入关闭引导和打开详情的回调。仅列出已启用的 Bundle 不会触发引导。
+`plugins.bundle.config` 以 npm 包名为 key，提供 Bundle 详情配置。Client 插件可订阅只读的 `ctx.pluginChanges.bundle(packageName)`，在组合包或其组件行变更期间暂停查询。通知先于管理请求发出，页面关闭后仍会更新；订阅方在卸载时释放观察。`plugins.bundle.activation` 在用户从列表或详情页显式启用后提供 Bundle 自有引导，并传入关闭引导和打开详情的回调。仅列出已启用的 Bundle 不会触发引导。
 
 </details>
 

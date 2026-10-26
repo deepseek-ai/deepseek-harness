@@ -17,7 +17,7 @@ import {
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
+  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, experimentalBundleDescription, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
@@ -842,14 +842,14 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
-    expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
+    expect(await panel.getByText(experimentalBundleDescription('inspector-profile', 'zh'), { exact: true }).count()).toBe(1)
     const bundles = await scaffold.ctx.pluginManager.listBundles()
     expect(bundles.some(bundle => bundle.name === '@deepseek-ai/dsh-experimental-terminal-bundle')).toBe(true)
     expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
       .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
-    for (const name of ['@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
+    for (const name of ['@deepseek-ai/dsh-cua-bundle', '@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
       expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
         .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
       expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
@@ -863,10 +863,8 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-voice-input-bundle', 1],
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
-      ['@deepseek-ai/dsh-creation-recommendations', 1],
-      ['@deepseek-ai/dsh-plugin-recommendations', 1],
+      ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
-      ['@deepseek-ai/dsh-cua-bundle', 1],
       ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
@@ -1098,7 +1096,7 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
     const packageName = panel.locator('[data-plugin-name]')
     expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-    expect(await panel.getByText('启用团队协作、团队工具、成员列表和共享任务看板。').count()).toBe(1)
+    expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'zh')).count()).toBe(1)
     const child = panel.locator('[data-plugin-row]', { hasText: 'tool-agent-team' })
     await child.getByText('团队工具', { exact: true }).waitFor()
     expect(await child.getByText('为智能体提供成员协调、消息通信和共享任务管理工具。', { exact: true }).count()).toBe(1)
@@ -1106,7 +1104,7 @@ describe('web e2e: plugin manager', () => {
       await setLanguage('en')
       await panel.getByRole('heading', { name: 'Agent teams', exact: true }).waitFor()
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-      expect(await panel.getByText('Enable team collaboration, team tools, the member roster, and the shared task board.').count()).toBe(1)
+      expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'en')).count()).toBe(1)
       await child.getByText('Team tools', { exact: true }).waitFor()
       expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()

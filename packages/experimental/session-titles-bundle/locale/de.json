@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Konversationsfolgende Titel",
-    "description": "Aktualisieren Sie die Sitzungstitel, wenn neue menschliche Eingabeaufforderungen eintreffen.",
+    "description": "Erstellt den Titel einer Sitzung aus all Ihren Nachrichten und aktualisiert ihn, wenn sich die Hauptaufgabe ändert, statt ihn nur aus der ersten Nachricht zu bilden.",
     "detail": "docs/DETAIL.md"
   }
 }

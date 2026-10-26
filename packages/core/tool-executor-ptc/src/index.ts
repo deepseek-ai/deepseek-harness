@@ -1,5 +1,6 @@
 /** PTC execution plugin for the mounting Agent, preset, or deployment scope. @module */
 import type { Context } from '@deepseek-ai/cordis'
+import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { RUN_CODE_NAME, ToolNotFoundError, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecutor, ToolModelInput, ToolPromptSection, ToolBatchInput, ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
@@ -13,7 +14,7 @@ const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call
 const SDK_RENDERERS = {
   typescript: renderToolsSdk,
   python: renderToolsSdkPy,
-} satisfies Record<PtcSdkLanguage, (schemas: readonly ToolSdkSchema[], programFormat: 'function-body' | 'repl') => string>
+} satisfies Record<PtcSdkLanguage, (schemas: readonly ToolSdkSchema[], programFormat: PtcProgramFormat) => string>
 
 /** Runs programs whose nested tool calls use the shared guarded invocation pipeline. */
 export class PtcExecutor implements ToolExecutor {

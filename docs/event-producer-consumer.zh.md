@@ -7,6 +7,8 @@
 
 本矩阵展示哪些包会派发各个 harness 自有事件，以及哪些包会监听这些事件。事件之间存在多对多关系，因此密集的关系数据以表格而非一张大型关系图呈现。接收方和事件名称类型还涵盖有意绕过 `ctx.emit` 的内含派发位置，例如 subagent 生命周期封装。
 
+应用级监听者不在本包矩阵范围内。Desktop Host 通过 [`installOperationDiagnostics`](../apps/desktop-host/src/operation-diagnostics.ts) 订阅 `plugin-manager/operation`，并向壳转发有界记录。
+
 <!-- BEGIN GENERATED event-producer-consumer:events -->
 | Event | Mode | Declared in | Dispatchers | Listeners |
 | --- | --- | --- | --- | --- |
@@ -23,12 +25,12 @@
 | `agent/request-error` | `waterfall` | [`packages/core/agent/src/runtime-types.ts:389`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`waterfall`) | [`compaction-basic`](../packages/compaction/compaction-basic), [`compaction-image-offload`](../packages/compaction/compaction-image-offload), [`llm-retry`](../packages/llm/llm-retry) |
 | `agent/status` | `emit` | [`packages/core/agent/src/runtime-types.ts:309`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`emit`) | [`acp`](../packages/acp/acp), `agent-team`, [`compaction-basic`](../packages/compaction/compaction-basic), [`goal-round-driver`](../packages/goal/goal-round-driver), `server`, `session-controller` |
 | `agent/turn-stopping` | `serial` | [`packages/core/agent/src/runtime-types.ts:417`](../packages/core/agent/src/runtime-types.ts) | [`agent-loop`](../packages/core/agent-loop) (`serial`) | [`hooks-claude-code`](../packages/experimental/hooks-claude-code), [`hooks-codex`](../packages/experimental/hooks-codex), [`workspace-changes`](../packages/deliverables/workspace-changes) |
-| `api-session/activity` | `emit` | [`packages/api/session-controller/src/types.ts:600`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/added` | `emit` | [`packages/api/session-controller/src/types.ts:580`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/error` | `emit` | [`packages/api/session-controller/src/types.ts:607`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/removed` | `emit` | [`packages/api/session-controller/src/types.ts:586`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `api-session/status` | `emit` | [`packages/api/session-controller/src/types.ts:593`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
-| `app-boot/config-reload` | `emit` | [`packages/boot/app-boot/src/index.ts:53`](../packages/boot/app-boot/src/index.ts) | [`app-boot`](../packages/boot/app-boot) (`emit`) | [`settings`](../packages/settings/settings) |
+| `api-session/activity` | `emit` | [`packages/api/session-controller/src/types.ts:689`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/added` | `emit` | [`packages/api/session-controller/src/types.ts:669`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/error` | `emit` | [`packages/api/session-controller/src/types.ts:696`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/removed` | `emit` | [`packages/api/session-controller/src/types.ts:675`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `api-session/status` | `emit` | [`packages/api/session-controller/src/types.ts:682`](../packages/api/session-controller/src/types.ts) | `session-controller` (`emit`) | `remotes` |
+| `app-boot/config-reload` | `emit` | [`packages/boot/app-boot/src/index.ts:55`](../packages/boot/app-boot/src/index.ts) | [`app-boot`](../packages/boot/app-boot) (`emit`) | [`settings`](../packages/settings/settings) |
 | `approval/request` | `waterfall` | [`packages/interaction/user-approval/src/types.ts:87`](../packages/interaction/user-approval/src/types.ts) | [`user-approval`](../packages/interaction/user-approval) (`waterfall`) | [`acp`](../packages/acp/acp), `remotes`, `server` |
 | `authorization/settled` | `emit` | [`packages/credentials/authorization/src/index.ts:57`](../packages/credentials/authorization/src/index.ts) | [`authorization`](../packages/credentials/authorization) (`events.dispatch`) | - |
 | `commands/change` | `emit` | [`packages/interaction/commands/src/types.ts:89`](../packages/interaction/commands/src/types.ts) | [`commands`](../packages/interaction/commands) (`events.dispatch`) | `remotes` |
@@ -57,10 +59,11 @@
 | `llm/adapters-updated` | `emit` | [`packages/llm/llm/src/types.ts:23`](../packages/llm/llm/src/types.ts) | [`llm`](../packages/llm/llm) (`events.dispatch`) | [`acp`](../packages/acp/acp), `remotes` |
 | `llm/stream` | `waterfall` | [`packages/llm/llm/src/index.ts:75`](../packages/llm/llm/src/index.ts) | [`llm`](../packages/llm/llm) (`waterfall`) | [`llm-replay`](../packages/test-support/llm-replay), [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), [`session-title`](../packages/session/session-title) |
 | `permission-presets/catalog-changed` | `emit` | [`packages/interaction/permission-presets/src/types.ts:48`](../packages/interaction/permission-presets/src/types.ts) | [`permission-presets`](../packages/interaction/permission-presets) (`events.dispatch`) | `remotes` |
-| `plugin-manager/changed` | `emit` | [`packages/boot/plugin-manager/src/types.ts:394`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
-| `plugin-manager/install-log` | `emit` | [`packages/boot/plugin-manager/src/types.ts:400`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
-| `plugin-manager/install-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:407`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
-| `plugin-manager/update-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:414`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
+| `plugin-manager/changed` | `emit` | [`packages/boot/plugin-manager/src/types.ts:427`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
+| `plugin-manager/install-log` | `emit` | [`packages/boot/plugin-manager/src/types.ts:433`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
+| `plugin-manager/install-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:440`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
+| `plugin-manager/operation` | `parallel` | [`packages/boot/plugin-manager/src/types.ts:419`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`parallel`) | - |
+| `plugin-manager/update-state` | `emit` | [`packages/boot/plugin-manager/src/types.ts:447`](../packages/boot/plugin-manager/src/types.ts) | [`plugin-manager`](../packages/boot/plugin-manager) (`emit`) | `remotes` |
 | `plugin-market/changed` | `emit` | [`packages/boot/plugin-market/src/types.ts:168`](../packages/boot/plugin-market/src/types.ts) | [`plugin-market`](../packages/boot/plugin-market) (`emit`) | `remotes` |
 | `schedule/changed` | `emit` | [`packages/schedule/schedule/src/types.ts:484`](../packages/schedule/schedule/src/types.ts) | [`schedule`](../packages/schedule/schedule) (`emit`) | `remotes` |
 | `schedule/resolve-agent` | `waterfall` | [`packages/schedule/schedule/src/index.ts:74`](../packages/schedule/schedule/src/index.ts) | [`schedule`](../packages/schedule/schedule) (`waterfall`) | `server` |
@@ -107,7 +110,7 @@
 | `internal/service` | - | `gateway` |
 | `internal/status` | - | [`agent`](../packages/core/agent), `inspector`, `translator`, [`web`](../packages/web/web) |
 | `internal/update` | - | [`app-boot`](../packages/boot/app-boot) |
-| `loader/volatile-update` | - | [`cua`](../packages/experimental/cua), [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
+| `loader/volatile-update` | - | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-deepseek-api-key`](../packages/llm/llm-deepseek-api-key), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`plugin-market`](../packages/boot/plugin-market), `product-analytics`, `speech-to-text` |
 | `slots/changed` | `ui-renderer` (`emit`) | - |
 <!-- END GENERATED event-producer-consumer:undeclared -->
 

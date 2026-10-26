@@ -10,7 +10,7 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
 
-`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, update eligibility (`updatable`), optional resolution error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
+`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, update eligibility (`updatable`), optional resolution or unsupported-platform error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
 
 `InstallBundleOptions.saveExact` passes `--save-exact` to the shared package installer. `InstallBundleOptions.enabled` defaults to true. False installs without selecting the bundle layer. `approvedBuilds` grants persistent script permission to the supplied pending package names before installation. `registry` names the registry asked first; absent, the configured one.
 
@@ -559,6 +559,23 @@ An installation moved between its Host phases. `installing` is announced once pe
  * @param progress - the installation's request id and phase, with the attempt while installing.
  */
 'plugin-manager/install-state'(progress: PluginInstallProgress): void
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-manageroperation--parallel"></a>
+
+#### `plugin-manager/operation` — parallel
+
+One manager invocation started or ended; subscribers run independently without delaying management.
+
+```ts cordis-catalog
+/**
+ * One manager invocation started or ended; subscribers run independently without delaying management.
+ * @mode parallel
+ * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+ */
+'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
 ```
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)

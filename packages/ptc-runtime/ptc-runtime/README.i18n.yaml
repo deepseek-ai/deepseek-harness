@@ -9,17 +9,17 @@
   en: cced8c691b58657a
   zh: 3da9cdf76a1a07ff
 /deepseek-ai-dsh-ptc-runtime/summary:
-  en: b04917e62d63c7ff
-  zh: 12cb9f38cbf8ee3f
+  en: 6bf8184a933be9fa
+  zh: 19fe0bb198744a77
 /deepseek-ai-dsh-ptc-runtime/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-ptc-runtime/use-this-package:
-  en: 7e5ebf7420c13af4
-  zh: 9ad1e056e794ca4a
+  en: 346f62bbfd0e6d9d
+  zh: bf86b2d7a26e8193
 /deepseek-ai-dsh-ptc-runtime/use-this-package/run-a-program:
-  en: c856760ebc15d59e
-  zh: dc093083b29794e0
+  en: aa58e5977dc6c33b
+  zh: cfa416436582b1cc
 /deepseek-ai-dsh-ptc-runtime/use-this-package/choose-a-backend:
   en: fc0d515f0c3664f3
   zh: 0a1b646b5cf92232
@@ -33,8 +33,8 @@
   en: 686d570f5e669fa4
   zh: 2075cf27c30f251a
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/design-concept:
-  en: 9f0055e22a1595a5
-  zh: 0aa3ceb9dd145128
+  en: ea0b622628e418c6
+  zh: 230d7f9ef73513a7
 /deepseek-ai-dsh-ptc-runtime/understand-the-implementation/service-api:
   en: 1d7a792c9a78a517
   zh: b49bddf18c259edc
@@ -51,8 +51,8 @@
   en: a77e68bc4f5e66d9
   zh: 101a57bcad581668
 /deepseek-ai-dsh-ptc-runtime/model-experience:
-  en: 5506904c50c1ee20
-  zh: f0ffa9f4f08b20cf
+  en: 711163291bdd8157
+  zh: 4e05f1e7c60058a0
 /deepseek-ai-dsh-ptc-runtime/model-experience/kv-cache-effect:
   en: 40294c1c31b74824
   zh: 081cebc2e2650f03

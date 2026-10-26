@@ -76,7 +76,7 @@ jobs:
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |
-          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1')) {
+          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/scripts/start-windows-packaging-runner.ps1', 'apps/desktop/scripts/windows-runner-network.ps1', 'apps/desktop/scripts/run-windows-runner-network-process.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1', 'apps/desktop/tests/windows-runner-network.ps1', 'apps/desktop/tests/windows-runner-network-process.ps1')) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$parseErrors)
@@ -85,6 +85,15 @@ jobs:
       - name: Verify windowless Windows runner launcher
         shell: pwsh
         run: ./apps/desktop/tests/windows-runner-launcher.ps1
+      - name: Verify Windows packaging priority inheritance
+        shell: pwsh
+        run: ./apps/desktop/tests/windows-packaging-priority.ps1
+      - name: Verify Windows runner network supervision
+        shell: pwsh
+        run: |
+          ./apps/desktop/tests/windows-runner-network.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./apps/desktop/tests/windows-runner-network-process.ps1
       - name: Run Windows observational gates on built artifacts
         id: observational
         continue-on-error: true

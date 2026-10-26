@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Pages personnalisées",
-    "description": "Planifiez une page personnalisée dans la conversation lorsque les fonctionnalités existantes ne répondent pas à un besoin précis. Cliquez sur Créer pour générer un plugin indépendant que vous pouvez continuer à utiliser ou supprimer."
+    "description": "Propose sous la réponse une page ou un petit outil à conserver ; après un clic sur Créer, il est généré en arrière-plan sous forme de page de plugin que vous pouvez interrompre, annuler et restaurer. La génération prend quelques minutes et consomme beaucoup de jetons."
   }
 }

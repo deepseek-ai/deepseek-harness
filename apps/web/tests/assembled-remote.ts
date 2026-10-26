@@ -288,8 +288,11 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
   })
   mock.unary('session/attachment', (request: unknown) => {
     request = recordValue(request, 'request')
-    const attachmentId = recordString(request, 'attachmentId')
-    return attachments.get(attachmentId) ?? {
+    const attachment = recordValue(request, 'attachment')
+    const attachmentId = recordString(attachment, 'attachmentId')
+    const stored = attachments.get(attachmentId)
+    if (stored !== undefined) return ok({ attachment, data: recordString(recordValue(stored, 'value'), 'data') })
+    return {
       ok: false,
       error: {
         code: 'session/attachment-invalid',

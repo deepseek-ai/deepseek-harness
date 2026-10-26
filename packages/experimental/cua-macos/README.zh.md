@@ -45,7 +45,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
-| `allowedApps` | `[]` | 当前配置档的动态应用授权，绑定可执行文件路径和已验证的代码签名要求。 |
+| `allowedApps` | `[]` | 旧的已签名应用许可，只导入 profile 存储一次。 |
 | `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
@@ -67,7 +67,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 Agent 销毁和插件卸载会取消并等待完整工具调用，包括图像接入检查和附件存储。已经开始的图像写入必须结束后，销毁才会返回；已取消的调用不会返回成功截图。
 
-CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用授权。首次选择应用时询问用户，可选择本会话允许、拒绝；签名可验证的应用还可保存长期授权。会话许可按会话和应用身份保存在内存中，Agent 或 helper 重建后仍可复用，重启 DSH 或关闭 Computer Use 后失效。已签名应用的身份由规范化可执行文件路径和代码签名指定要求组成；签名不可验证的应用仍绑定进程实例。拒绝后，同一会话不会反复询问。撤销与长期许可的保存共用队列，在队列内读取并移除许可，然后使相关 Agent 连接失效并等待原生清理完成，不自动重放输入。同一 Agent 连接中的其他应用也需要重新选择，其他应用的会话许可和长期许可仍可复用。设计理由见[应用授权决策](../../../.agents/notes/implemented/architecture/2026-09-26-cua-application-consent.zh.md)。这些检查的范围是 CUA 调用。persistent PTC 与已授权的 shell 仍按各自执行权限运行。
+CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用授权。首次选择应用时询问用户，可选择本会话允许、拒绝；签名可验证的应用还可保存长期授权。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。已签名应用的身份由规范化可执行文件路径和代码签名指定要求组成；签名不可验证的应用仍绑定进程实例。拒绝后，同一会话不会反复询问。撤销与长期许可的保存共用队列，在队列内读取并移除许可，然后使相关 Agent 连接失效并等待原生清理完成，不自动重放输入。同一 Agent 连接中的其他应用也需要重新选择，其他应用的会话许可和长期许可仍可复用。设计理由见[应用授权决策](../../../.agents/notes/implemented/architecture/2026-09-26-cua-application-consent.zh.md)。这些检查的范围是 CUA 调用。persistent PTC 与已授权的 shell 仍按各自执行权限运行。
 
 原始 `getState` 操作返回经过校验的状态字段，以及按本次披露选项生成的完整文本。原生 helper 还返回供原生检查使用的结构化元素诊断数组；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 

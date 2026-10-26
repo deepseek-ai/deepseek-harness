@@ -1295,6 +1295,9 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
           for (const clause of assertions.runtimeContext.includes) expect(system).not.toContain(clause)
         }
       }
+      if (scenario.name === 'serial-created') {
+        expect(observedMethods.has('subagent.started')).toBe(false)
+      }
       if (ordered.length > 1 && assertions.dshSdkChild === undefined) {
         expect(observedMethods.has('subagent.started')).toBe(true)
         expect(observedMethods.has('subagent.finished')).toBe(true)

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron desktop shell for a bundled dsh runtime and external plugins",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "private": true,
   "license": "MIT",
   "author": {
@@ -84,6 +84,8 @@
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
+    "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "zod": "4.4.3",
     "@deepseek-ai/dsh-util-file-drag": "workspace:*"
   }
 }

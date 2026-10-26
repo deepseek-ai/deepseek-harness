@@ -176,6 +176,30 @@ it('keeps body ancestors through pane moves, floating, raising and docking', () 
   expect(body.closest('[data-dockkit-host]')).toBe(host)
 })
 
+it('does not re-render a docked or floating body while a float gesture redraws the layout', () => {
+  const controller = seededController()
+  controller.setExpanded(true)
+  const tab = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
+  controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+  controller.floatTab(tab, { x: 100, y: 80, width: 300, height: 200 })
+  const h = mounted(controller, { keepMounted: () => true })
+  const renderTab = vi.fn(h.callbacks.renderTab)
+  h.redraw({ callbacks: { ...h.callbacks, renderTab } })
+  const rendered = renderTab.mock.calls.length
+  expect(rendered).toBeGreaterThan(0)
+  const floating = controller.getSnapshot().state.floats[0]!
+  fireEvent.pointerDown(h.node(`[data-dockkit-float="${floating}"] [data-dockkit-float-grip]`),
+    { pointerId: 3, button: 0, clientX: 150, clientY: 90 })
+  for (const x of [170, 190, 210]) fireEvent.pointerMove(window, { pointerId: 3, clientX: x, clientY: 90 })
+  expect(h.node(`[data-dockkit-float="${floating}"]`).style.left).toBe('160px')
+  expect(renderTab).toHaveBeenCalledTimes(rendered)
+  fireEvent.pointerUp(window, { pointerId: 3, clientX: 210, clientY: 90 })
+  // A new renderer is how an embedder refreshes its bodies.
+  const next = vi.fn(h.callbacks.renderTab)
+  h.redraw({ callbacks: { ...h.callbacks, renderTab: next } })
+  expect(next).toHaveBeenCalledTimes(rendered)
+})
+
 it('unmounts unretained bodies and restores focus to their replacement strip', () => {
   const controller = seededController()
   controller.setExpanded(true)
@@ -269,4 +293,87 @@ it('keeps a superseding gesture marker when an older follower detaches', () => {
   expect(element.dataset.dockkitPointer).toBe('2')
   second()
   expect(element.dataset.dockkitPointer).toBeUndefined()
+})
+
+/**
+ * Give each element its own `scrollLeft`, starting at 0, and log every
+ * assignment with the inline `scroll-behavior` it ran under: `auto` jumps,
+ * empty leaves the stylesheet's glide.
+ */
+function stubScrollLeft() {
+  const offsets = new WeakMap<Element, number>()
+  const writes: (readonly [number, string])[] = []
+  const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft')
+  Object.defineProperty(Element.prototype, 'scrollLeft', {
+    configurable: true,
+    get(this: Element) { return offsets.get(this) ?? 0 },
+    set(this: HTMLElement, value: number) {
+      offsets.set(this, value)
+      writes.push([value, this.style.scrollBehavior])
+    },
+  })
+  const restore = (): void => {
+    if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, 'scrollLeft')
+    else Object.defineProperty(Element.prototype, 'scrollLeft', descriptor)
+  }
+  return { offsets, writes, restore }
+}
+
+it('continues a selected tab\'s strip from its pane\'s last offset and jumps on a first placement', () => {
+  const { writes, restore } = stubScrollLeft()
+  const rect = (left: number, width: number): DOMRect => ({
+    left, right: left + width, top: 0, bottom: 28, x: left, y: 0, width, height: 28, toJSON: () => ({}),
+  })
+  // The chip box spans 0..200; the seeded chip sits at 40..130 and the opened one where `openedAt` says.
+  const controller = seededController()
+  const seeded = getPane(controller.getSnapshot().state, controller.getSnapshot().state.activePaneId).activeTabId
+  if (seeded === undefined) throw new Error('expected the seeded tab')
+  const opened = controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+  let openedAt = 250
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this.hasAttribute('data-dockkit-strip-tabs')) return rect(0, 200)
+    if (this.getAttribute('data-dockkit-tab') === opened) return rect(openedAt, 90)
+    if (this.hasAttribute('data-dockkit-tab')) return rect(40, 90)
+    return rect(0, 0)
+  })
+  try {
+    const h = mounted(controller)
+    // The first strip has no recorded offset: it jumps to the chip.
+    expect(writes).toEqual([[164, 'auto']])
+    // The seeded tab's new strip starts where the previous one stood, where its chip is in view.
+    fireEvent.click(h.node(`[data-dockkit-tab="${seeded}"]`))
+    expect(writes.slice(1)).toEqual([[164, 'auto']])
+    // Back on the opened tab, now 30 past the left edge: restored, then glided the rest.
+    openedAt = -30
+    fireEvent.click(h.node(`[data-dockkit-tab="${opened}"]`))
+    expect(writes.slice(2)).toEqual([[164, 'auto'], [164 - 30 - 24, '']])
+  } finally {
+    restore()
+  }
+})
+
+it('places a selected tab\'s strip moved to another pane from that pane\'s last offset', () => {
+  // jsdom lays every chip and box out at 0x0, so only restores write offsets here.
+  const { offsets, writes, restore } = stubScrollLeft()
+  try {
+    const controller = seededController()
+    controller.setExpanded(true)
+    const moved = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
+    controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+    const h = mounted(controller)
+    act(() => { controller.splitPane(); h.redraw() })
+    const state = controller.getSnapshot().state
+    const split = getNode(state, state.rootId)
+    if (split.kind !== 'split') throw new Error('expected a split')
+    const target = getPane(state, split.children[1]!).id
+    act(() => { controller.focusTab(moved); h.redraw() })
+    offsets.set(h.node(`[data-dockkit-strip-tabs="${target}"]`), 70)
+    writes.length = 0
+    act(() => { controller.placeTab(moved, target, 0); h.redraw() })
+    expect(h.node(`[data-dockkit-strip-tabs="${target}"] [data-dockkit-tab="${moved}"]`).getAttribute('aria-selected')).toBe('true')
+    // The moved strip takes the target pane's 70; the source pane's next strip restores the 0 the moved one left there.
+    expect([...writes].sort((x, y) => x[0] - y[0])).toEqual([[0, 'auto'], [70, 'auto']])
+  } finally {
+    restore()
+  }
 })

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-hmr",
   "description": "Coordinated module and profile configuration hot reload",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

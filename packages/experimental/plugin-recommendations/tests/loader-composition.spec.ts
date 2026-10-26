@@ -33,7 +33,7 @@ class Model extends LlmAdapter {
   }
 }
 
-it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
+it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-recommendations-'))
   let owner: Context | undefined
   onTestFinished(async () => { await owner?.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
@@ -41,8 +41,7 @@ it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through 
   const anchor = join(home, 'package.json')
   const name = '@deepseek-ai/dsh-experimental-session-search'
   await writeFile(anchor, JSON.stringify({ name: 'installation', dependencies: { [name]: '1.0.0' } }))
-  // The Personalized pages bundle inserts the same card-service row; the Loader keeps one entry for the id.
-  initProfile(dir, scenario === 'shared-rows' ? ['fixture-base', 'fixture-pages'] : ['fixture-base'])
+  initProfile(dir, ['fixture-base'])
   async function bundle(root: string, name: string, patch: string) {
     const path = join(root, 'node_modules', name)
     await mkdir(path, { recursive: true })
@@ -54,7 +53,6 @@ it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through 
     return path
   }
   await bundle(dir, 'fixture-base', await readFile(new URL('./fixtures/cordis.yml', import.meta.url), 'utf8'))
-  await bundle(dir, 'fixture-pages', JSON.stringify([{ insert: [{ id: 'action-cards', name: 'cordis:actionCards' }] }]))
   const plugin = await bundle(home, name, JSON.stringify([{ insert: [{ id: 'recommendation-probe', name: './plugin.mjs' }] }]))
   await writeFile(join(plugin, 'plugin.mjs'), 'export function apply(ctx) { ctx.provide("recommendationProbe", true) }\n')
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
@@ -109,17 +107,6 @@ it.each(['normal', 'consumer-unload', 'shared-rows'] as const)('enables through 
     expect((await ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
     expect(model.requests).toHaveLength(0)
     return
-  }
-  if (scenario === 'shared-rows') {
-    // The composed configuration holds the shared row twice, so the Plugins page cannot address it; the bundles still switch.
-    const shared = async () => (await ctx.pluginManager.listPlugins()).find(plugin => plugin.moduleName === 'cordis:actionCards')
-    expect((await shared())?.readOnlyReason).toBe('unaddressable')
-    const service = [...ctx.loader.entries()].find(entry => entry.options.id === 'action-cards')?.fiber
-    expect((await ctx.pluginManager.setBundleEnabled('fixture-pages', false)).application).toBe('applied')
-    expect((await shared())?.readOnlyReason).toBeUndefined()
-    expect([...ctx.loader.entries()].find(entry => entry.options.id === 'action-cards')?.fiber).toBe(service)
-    expect((await ctx.pluginManager.setBundleEnabled('fixture-pages', true)).application).toBe('applied')
-    expect((await shared())?.readOnlyReason).toBe('unaddressable')
   }
   const enabled = { callId, action: ACTION, phase: 'enabled' }
   expect(await ctx.actionCards.act(agent, callId, 'enable')).toEqual({ status: 'settled', decision: enabled })

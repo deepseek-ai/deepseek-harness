@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { InboxState, InboxTarget } from '@deepseek-ai/dsh-agent/types'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
@@ -315,16 +315,16 @@ export class Session implements SessionFace {
   }
 
   /**
-   * Resolve one image referenced by this session into browser-consumable bytes.
-   * @param attachmentId - opaque id found in the folded session log.
-   * @returns the authenticated reference and decoded bytes.
+   * Resolve one stored image into browser-consumable bytes using this Session's gateway permission scope.
+   * @param attachment - complete image reference from the folded session log.
+   * @returns the supplied reference after storage verification, and decoded bytes.
    */
   async readAttachment(
-    attachmentId: AttachmentIdType,
+    attachment: ImageAttachmentRef,
   ): Promise<RemoteResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>> {
     const result = await this.remote.session.attachment({
       sessionId: this.sessionId,
-      attachmentId,
+      attachment,
     })
     if (!result.ok) return result
     const binary = atob(result.value.data)

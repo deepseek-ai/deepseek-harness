@@ -862,7 +862,7 @@ describe('subagent catalogs', () => {
           childSessionId: S2,
           mode: 'continuable',
         },
-        assistantStream: true,
+        activate: true, assistantStream: true,
         maxMessages: 500,
         turnWindow: { minMessages: 50, minTurns: 2 },
       },
@@ -958,7 +958,7 @@ describe('subagent catalogs', () => {
     if (source === 'control') {
       manager.handleControlFrame({ type: 'baseline', value: { projections: { [S1]: baseline } } })
     } else {
-      mock.stream(FOLLOW, followScript(ok({ records: [], hasMore: false, projections: baseline })))
+      mock.stream(FOLLOW, followScript(ok({ cursor: baseline.asOfSeq, records: [], hasMore: false, projections: baseline })))
       await session.open()
     }
 
@@ -983,7 +983,7 @@ describe('subagent catalogs', () => {
       if (source === 'control') {
         manager.handleControlFrame({ type: 'baseline', value: { projections: { [S1]: baseline } } })
       } else {
-        mock.stream(FOLLOW, followScript(ok({ records: [], hasMore: false, projections: baseline })))
+        mock.stream(FOLLOW, followScript(ok({ cursor: baseline.asOfSeq, records: [], hasMore: false, projections: baseline })))
         await manager.get(S1).open()
       }
       response.resolve(ok({ kind: 'migration-required', values: {
@@ -1261,7 +1261,8 @@ describe('remaining branches', () => {
 
     expect(remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: S1, atSeq: 7, ...permission })
     expect(remote.session.follow).not.toHaveBeenCalled()
-    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, parentSessionId: S1 })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2 })
+    expect(manager.getListSnapshot().items[0]).not.toHaveProperty('parentSessionId')
   })
 
   it('reconciles a fork child published before workspace attachment fails', async ({ mock, remote }) => {
@@ -1273,13 +1274,12 @@ describe('remaining branches', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'session/workspace-attach-failed' } })
     expect(manager.getListSnapshot().items).toEqual([expect.objectContaining({
       sessionId: S2,
-      parentSessionId: S1,
       blank: true,
     })])
 
-    manager.handleSessionAdded(summary(S2, { blank: true, parentSessionId: S1 }))
+    manager.handleSessionAdded(summary(S2, { blank: true }))
     expect(manager.getListSnapshot().items[0]?.blank).toBe(true)
-    manager.handleSessionAdded(summary(S2, { blank: false, parentSessionId: S1 }))
+    manager.handleSessionAdded(summary(S2, { blank: false }))
     expect(manager.getListSnapshot().items[0]?.blank).toBe(false)
   })
 
@@ -1545,6 +1545,7 @@ describe('connected generation', () => {
 
   it('refreshes query baselines without rebuilding independently resumed Session sources', async ({ mock, remote, start }) => {
     mock.stream(FOLLOW, followScript(ok({
+      cursor: 5,
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
       hasMore: false,
       modelSelection: { provider: 'deepseek-official', model: 'deepseek-chat' },

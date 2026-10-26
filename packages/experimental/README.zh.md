@@ -42,6 +42,7 @@ kind: "package-group"
 | [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.zh.md) | 个性化页面卡片正文、位置选择和撤销 | — |
 | [`plugin-recommendations`](plugin-recommendations/README.zh.md) | 在对话中针对明确需求推荐官方插件 | `ctx.pluginRecommendations` |
 | [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.zh.md) | 官方插件卡片正文：目录文本与启用 | — |
+| [`personalized-recommendations`](personalized-recommendations/README.zh.md) | 默认禁用的个性化页面、插件推荐及其操作卡片组合 | — |
 | [`tool-session-query`](tool-session-query/README.zh.md) | 按工作区授权的模型会话搜索、追踪与事件读取 | — |
 | [`session-search`](session-search/README.zh.md) | 可选实验性全局会话搜索工具 | — |
 | [`ralph-bundle`](ralph-bundle/README.zh.md) | 带隔离 workflow 引擎的可选重复委派 | — |
@@ -65,6 +66,7 @@ kind: "package-group"
 | [`api-speech-to-text`](api-speech-to-text/README.zh.md) | 带认证的临时转写 Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.zh.md) | 麦克风录音与版本检查后的草稿插入 | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.zh.md) | 默认禁用的可选自定义插件索引：索引服务和「发现」标签页 | — |
+| [`liveshare-protocol`](liveshare-protocol/README.zh.md) | owner bundle 与 Relay 共用的线路帧与身份契约 | — |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 协作、工具与 Web UI 组合包 | — |
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间直接消息与持久共享任务板 | `ctx.agentTeams` |

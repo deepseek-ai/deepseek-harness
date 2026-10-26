@@ -1209,7 +1209,7 @@ async function assertReplaySession(
   let expectedPath = fixturePath
   const userPrompts = fixtureUserPrompts(expected)
   const candidates = sessions.filter((session) => {
-    if (session.header.parentSession !== undefined) return false
+    if (session.header.origin === 'subagent' || session.header.isSeeded) return false
     const actual = session.snapshotEvents().flatMap((event) => {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return []
       const text = event.data.content.filter(block => block.type === 'text').map(block => block.text).join('')

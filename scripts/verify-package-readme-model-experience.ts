@@ -32,6 +32,7 @@ interface SentenceContract {
 const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   'packages/util/file-drag': 'The package resolves export names and declares native file operations; it does not construct model input.',
   'packages/core/scope': 'The package is a model-agnostic registration and lifecycle primitive; model-facing consumers own any context selection.',
+  'packages/experimental/liveshare-protocol': 'The package only defines wire frames and identity values that its consumers exchange; it registers nothing model-facing.',
   'packages/util/brand': 'The package only constructs plain string values and registers nothing model-facing.',
   'packages/util/home-paths': 'The package only resolves harness-owned host paths; model-facing consumers own any rendered use.',
   'packages/util/launch-environment': 'The package only resolves host environment values; model-facing consumers own any rendered use.',
@@ -59,6 +60,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/client-ui-action-cards': { kind: 'indirect', reason: 'Card actions go to the Host card service, which owns the logged tool, decisions and status notice.' },
   'packages/experimental/client-ui-creation-recommendations': { kind: 'indirect', reason: 'The page card body starts a Creator through the Host page kind; the Host owns its logged task.' },
   'packages/experimental/client-ui-plugin-recommendations': { kind: 'indirect', reason: 'The plugin card body enables through the Host plugin kind; the Host card service owns the logged tool, decisions and status notice.' },
+  'packages/experimental/personalized-recommendations': { kind: 'indirect', reason: 'The bundle composes the card service and both card kinds; their packages own the skills, the logged tool and the status notice.' },
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },
   'packages/host/product-telemetry-otel': { kind: 'none', reason: 'The plugin exports explicit analytics records without contributing model context.' },

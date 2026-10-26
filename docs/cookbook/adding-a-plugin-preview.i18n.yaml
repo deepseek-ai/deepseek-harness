@@ -3,17 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/adding-a-plugin-preview.md
 /cookbook-add-a-plugin-feature-preview:
-  en: c37096cd3cdb886c
-  zh: fc6850d68c638898
+  en: a0db5c6e164abfa1
+  zh: 792c831c20a41e5d
 /cookbook-add-a-plugin-feature-preview/1-decide-whether-an-image-helps:
-  en: ee84f52d834cbccf
-  zh: 7bf3a425a231b5e6
+  en: 0b401d0094e3b8ae
+  zh: d9eaedfaf8be012e
 /cookbook-add-a-plugin-feature-preview/2-draw-one-fixed-size-svg:
   en: 3a28640aa605dce8
   zh: c5336958f92b5a70
-/cookbook-add-a-plugin-feature-preview/3-put-it-at-the-top-of-the-detail-document:
-  en: 17e2ace32a89c419
-  zh: c635a890e86a41ec
+/cookbook-add-a-plugin-feature-preview/3-make-it-the-detail-document:
+  en: ad09702c601e05a6
+  zh: ae03649d34ab08b1
 /cookbook-add-a-plugin-feature-preview/4-page-behavior:
   en: 20ce358cb110104c
   zh: abb8d72fed81f3c8

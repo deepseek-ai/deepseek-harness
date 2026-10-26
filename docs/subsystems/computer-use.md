@@ -85,10 +85,10 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async enablePersistentPtc(): Promise<void>
 
 /**
- * Read application decisions without waiting for the native helper.
- * @returns Saved grants and refused applications with their persistence owner.
+ * Read fresh stored application decisions without issuing a native request.
+ * @returns Saved grants, refused applications and durable-storage availability.
  */
-@Remote applications(): CuaApplicationState
+@Remote applications(): Promise<CuaApplicationState>
 
 /**
  * Inspect system privileges independently of application decisions and icons.

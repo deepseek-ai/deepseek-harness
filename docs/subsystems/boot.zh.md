@@ -10,7 +10,7 @@
 
 `PluginInfo` 包含模块标识、实际启停状态、fiber 阶段和可选的展示 `meta`，以及唯一的 `patchId` 或 `readOnlyReason`。
 
-`BundleInfo.official` 标识项目维护的随附可选组合包和按需目录项，独立于安装状态。`availability` 表示可读取的安装随附包、profile 包或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 记录 profile 的依赖声明。按需条目的 `installTarget` 包含 Host 生成的精确 spec 和版本。`BundleInfo` 还包含包名、可选的安装版本、组合层选择状态、删除可用性、更新资格（`updatable`）、可选的解析错误；由 profile 自身依赖提供、且安装不提供的组合包还带有 `source`，即该依赖在 `pnpm add` 中可用的 spec。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
+`BundleInfo.official` 标识项目维护的随附可选组合包和按需目录项，独立于安装状态。`availability` 表示可读取的安装随附包、profile 包或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 记录 profile 的依赖声明。按需条目的 `installTarget` 包含 Host 生成的精确 spec 和版本。`BundleInfo` 还包含包名、可选的安装版本、组合层选择状态、删除可用性、更新资格（`updatable`）、可选的解析错误或平台不支持错误；由 profile 自身依赖提供、且安装不提供的组合包还带有 `source`，即该依赖在 `pnpm add` 中可用的 spec。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
 
 `InstallBundleOptions.saveExact` 向共享包安装器传入 `--save-exact`。`InstallBundleOptions.enabled` 默认为 true，false 表示安装但不选择组合包层。`approvedBuilds` 在安装前向指定的待审批包名授予持久脚本权限。`registry` 指定首先询问的注册表；缺省为配置的那个。
 
@@ -559,6 +559,23 @@ An installation moved between its Host phases. `installing` is announced once pe
  * @param progress - the installation's request id and phase, with the attempt while installing.
  */
 'plugin-manager/install-state'(progress: PluginInstallProgress): void
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-manageroperation--parallel"></a>
+
+#### `plugin-manager/operation` — parallel
+
+One manager invocation started or ended; subscribers run independently without delaying management.
+
+```ts cordis-catalog
+/**
+ * One manager invocation started or ended; subscribers run independently without delaying management.
+ * @mode parallel
+ * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+ */
+'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
 ```
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)

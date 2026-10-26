@@ -531,7 +531,7 @@ describe('Chat inject API', () => {
 
     const loaded = await injected.loadImage(ATTACHMENT)
     expect(loaded).toEqual(expect.any(String))
-    expect(b.session.readAttachment).toHaveBeenCalledWith(ATTACHMENT.attachmentId)
+    expect(b.session.readAttachment).toHaveBeenCalledWith(ATTACHMENT)
     expect(injected.loadImage.peek?.(ATTACHMENT)).toBe(loaded)
     await b.runtime.dispose()
   })

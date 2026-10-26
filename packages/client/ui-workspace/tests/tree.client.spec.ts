@@ -184,26 +184,26 @@ describe('Session ordering', () => {
     expect(saved).toEqual(['saved-archive', 'saved-plain', 'saved-pin'])
   })
 
-  it('inserts new forks before their saved source while preserving saved positions', () => {
+  it('appends new forks by recency while preserving saved positions', () => {
     const sessions = list(
       summary('source', 1), summary('other', 2),
       { ...summary('older-fork', 3), parentId: sid('source') },
       { ...summary('newer-fork', 4), parentId: sid('source') },
     )
     const order = reconcileManualOrder(sessions.ids, ['other', 'source'], sessions.byId)
-    expect(order).toEqual(['other', 'older-fork', 'newer-fork', 'source'])
+    expect(order).toEqual(['other', 'source', 'newer-fork', 'older-fork'])
     expect(reconcileManualOrder(sessions.ids, ['source', 'other', 'older-fork', 'newer-fork'], sessions.byId))
       .toEqual(['source', 'other', 'older-fork', 'newer-fork'])
   })
 
-  it('places nested new forks before their parents even when catalog recency differs', () => {
+  it('orders unsaved nested forks by recency regardless of historical sources', () => {
     const sessions = list(
       summary('source', 1), summary('other', 2),
       { ...summary('parent', 4), parentId: sid('source') },
       { ...summary('child', 3), parentId: sid('parent') },
     )
     expect(reconcileManualOrder(sessions.ids, ['source', 'other'], sessions.byId))
-      .toEqual(['child', 'parent', 'source', 'other'])
+      .toEqual(['source', 'other', 'parent', 'child'])
   })
 
   it('appends forks with absent or self-referencing parents without duplicating rows', () => {
@@ -229,7 +229,7 @@ describe('Session ordering', () => {
         sessions, mode === 'workspace' ? [workspace('alpha', order)] : [], state, noAttention,
         view([mode === 'workspace' ? 'alpha' : UNGROUPED_KEY], order),
       )[0]!.sessions
-    expect(rows.map(row => row.id)).toEqual(['source', 'other-pin', 'fork', 'ordinary'])
+    expect(rows.map(row => row.id)).toEqual(['source', 'other-pin', 'ordinary', 'fork'])
   })
 
   it('keeps archive filtering out of complete flat membership', () => {

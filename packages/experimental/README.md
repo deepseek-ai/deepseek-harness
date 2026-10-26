@@ -42,6 +42,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.md) | Personalized page card body with location selection and undo | — |
 | [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | `ctx.pluginRecommendations` |
 | [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.md) | Official plugin card body with catalog text and enabling | — |
+| [`personalized-recommendations`](personalized-recommendations/README.md) | Default-disabled bundle of personalized pages, plugin recommendations and their action cards | — |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
 | [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |
 | [`ralph-bundle`](ralph-bundle/README.md) | Optional repeated delegation with an isolated workflow engine | — |
@@ -65,6 +66,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`api-speech-to-text`](api-speech-to-text/README.md) | Authenticated transient transcription Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.md) | Microphone capture and guarded draft insertion | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.md) | Default-disabled optional custom plugin indexes: the index service and the Discover tab | — |
+| [`liveshare-protocol`](liveshare-protocol/README.md) | Wire frames and the identity contract shared by the owner bundle and the Relay | — |
 | [`voice-input-bundle`](voice-input-bundle/README.md) | Default-disabled optional voice input composition | — |
 | [`agent-team-profile`](agent-team-profile/README.md) | Agent Teams collaboration, tools, and Web UI bundle | — |
 | [`agent-team`](agent-team/README.md) | Named teammates with direct messages and a durable shared task board | `ctx.agentTeams` |

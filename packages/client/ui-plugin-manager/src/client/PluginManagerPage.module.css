@@ -1577,6 +1577,11 @@ label.registryOption {
   border-bottom: 0;
 }
 
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .facts div,
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .row {
+  border-bottom-color: var(--dsw-alias-border-l3);
+}
+
 .rowLine {
   display: flex;
   align-items: center;

@@ -214,7 +214,6 @@
     "e929814f19128d947cc0188ecfe39833ffd5cf3f2c7155ddfef94ba9740d2bfd": 1
   },
   "packages/api/session-controller/tests/commands-queue-attachment.host.spec.ts": {
-    "8204ecbe96e5e470dde7a6dad4f8a0e6809c30bd8095af16a3a5d378e6c6c0c7": 4,
     "e9721557773cba96e50cea1b0c6737991a9fb2490bcd83e934311e46310d8b68": 1
   },
   "packages/api/session-controller/tests/control-queue.host.spec.ts": {
@@ -555,9 +554,6 @@
     "bd4e8147a13bee681bd192d1558f4a79de23d5edeafb616e8acccd725465ef98": 1,
     "e01c2c40d53d557b621628de47a0a6677e11b4f151fbefd865c97be99a7b6c48": 1,
     "e69e0ec4368790661e1f7cae5c2059f757c213f0ebb0bd40ec23af982bc73d20": 1
-  },
-  "packages/client/ui-plan/tests/plan-resource.client.spec.ts": {
-    "fa53d5cd55d87b522c83a98968e3a2bf933b1cc1b84d2f009e79d6c702099786": 1
   },
   "packages/client/ui-primitives/tests/highlight-viewport.client.spec.tsx": {
     "6061de0a1e01547eb1abf9d4e1b5fa79fda112fa35dda980775491123413dcce": 1

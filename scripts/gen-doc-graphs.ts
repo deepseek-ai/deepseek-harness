@@ -1522,6 +1522,8 @@ function renderEventRelations(pkgs: Pkg[], events: readonly EventEntry[]): strin
   lines.push(
     'This matrix shows which packages dispatch each harness-owned event and which packages listen to it. Events are many-to-many, so the dense relation data is presented as a table rather than one large graph. Receiver and event-name types also cover contained dispatch sites that deliberately bypass `ctx.emit`, such as subagent lifecycle containment.',
     '',
+    'Application listeners are outside this package matrix. Desktop Host subscribes to `plugin-manager/operation` through [`installOperationDiagnostics`](../apps/desktop-host/src/operation-diagnostics.ts) and forwards bounded records to the shell.',
+    '',
   )
   const rows = ['| Event | Mode | Declared in | Dispatchers | Listeners |', '| --- | --- | --- | --- | --- |']
   for (const event of [...events].sort((a, b) => a.name.localeCompare(b.name))) {

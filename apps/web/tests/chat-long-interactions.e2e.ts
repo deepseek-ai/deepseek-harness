@@ -307,15 +307,17 @@ describe('web e2e: long Chat interaction contract', () => {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
       .toBe(expectedUserText)
 
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await turnTailRow.hover()
     await turnTailRow.getByRole('button', { name: 'Branch into a new conversation', exact: true }).click()
     await expect.poll(
-      () => scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === SessionId(SESSION_ID)),
+      () => scaffold.ctx.agents.list().find(agent => !existing.has(agent.id)),
       { timeout: 15_000 },
     ).toBeDefined()
     const child = scaffold.ctx.agents.list()
-      .find(agent => agent.session.header.parentSession === SessionId(SESSION_ID))
+      .find(agent => !existing.has(agent.id))
     if (child === undefined) throw new Error('message branch did not create a child session')
+    expect(child.session.header.parentSession).toBeUndefined()
     expect(child.session.inheritedEventCount).toBe(boundary.seq + 1)
     expect(child.session.snapshotEvents().some(event => carries(event, branchAssistantMarker))).toBe(true)
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(BRANCH_TURN + 1)))).toBe(false)

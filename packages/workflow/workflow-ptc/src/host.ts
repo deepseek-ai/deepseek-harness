@@ -288,7 +288,11 @@ export class PtcWorkflowRun implements WorkflowRun {
         throw new Error(`workflow runtime cannot enforce the ${this.policy.mode} file policy`)
       }
       const outcome = await this.runtime.run(this.runtime.resolve({
-        program: this.runtime.programFormat === 'repl' ? `await (async () => {\n${PROGRAM}\n})()` : PROGRAM,
+        program: {
+          'function-body': PROGRAM,
+          repl: `await (async () => {\n${PROGRAM}\n})()`,
+          script: `(async () => {\n${PROGRAM}\n})()`,
+        }[this.runtime.programFormat],
         bindings: [{ global: 'workflowHost', functions: this.bindings() }],
         cwd,
         ...this.runtime.sandboxMode === undefined ? {} : { sandboxPolicy: this.policy },

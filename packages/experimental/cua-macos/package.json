@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-cua-macos",
   "description": "macOS native provider for shared Computer Use application and window objects",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -85,7 +85,10 @@
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-config-editor": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
-    "@deepseek-ai/cordis-plugin-timer": "workspace:~"
+    "@deepseek-ai/cordis-plugin-timer": "workspace:~",
+    "@deepseek-ai/dsh-storage": "workspace:*",
+    "@deepseek-ai/dsh-storage-json": "workspace:*",
+    "@deepseek-ai/dsh-storage-domain": "workspace:*"
   },
   "scripts": {
     "build:native": "swift build --package-path native --configuration release"

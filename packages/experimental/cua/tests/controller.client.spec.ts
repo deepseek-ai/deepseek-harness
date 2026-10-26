@@ -9,7 +9,7 @@ import { PermissionController } from '../src/client/controller.ts'
 
 const value: CuaSystemPermissionState = { accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
-  allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+  allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']
 function fixture() {
   const actions = {

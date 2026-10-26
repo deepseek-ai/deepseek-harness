@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
 import { recordPackagingEvent } from './packaging-run.mjs'
 import { inspectSignaturesBatched } from './windows-signature-batch.mjs'
+import { packagingStep } from './packaging-step.mjs'
 
 /**
  * Read Windows trust, timestamp and signer identity using the engine's bundled modules, without accessing the private key.
@@ -52,17 +53,32 @@ export async function preserveWindowsRuntimeSignature(path, options) {
 /**
  * Enumerate Windows code without following links or treating foreign .node files as PE binaries.
  * @param {string} root - Owned, materialized runtime directory.
- * @returns {Promise<string[]>} Sorted real PE files; rejects links and malformed Windows executable files.
+ * @returns {Promise<string[]>} Sorted real PE files; eight bounded readers reject links or malformed executables and drain open handles before failure.
  */
 export async function windowsRuntimeCode(root) {
-  const rootStat = await lstat(root)
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Windows code: expected a real directory')
+  return packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'windows:enumerate-code', async () => {
+    const candidates = []
+    async function collect(directory) {
+      const rootStat = await lstat(directory)
+      if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error('Windows code: expected a real directory')
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name)
+        if (entry.isSymbolicLink()) throw new Error(`Windows code: directory links are not signable: ${path}`)
+        if (entry.isDirectory()) await collect(path)
+        else if (entry.isFile()) candidates.push(path)
+      }
+    }
+    await collect(root)
+    return inspectPortableExecutables(candidates)
+  })
+}
+
+/** Close every active file before returning a sorted inventory or the first inspection failure. */
+async function inspectPortableExecutables(candidates) {
   const files = []
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    const path = join(root, entry.name)
-    if (entry.isSymbolicLink()) throw new Error(`Windows code: directory links are not signable: ${path}`)
-    if (entry.isDirectory()) { files.push(...await windowsRuntimeCode(path)); continue }
-    if (!entry.isFile()) continue
+  let next = 0
+  let failure
+  async function inspect(path) {
     const file = await open(path, 'r')
     let portableExecutable = false
     let windowsCandidate = false
@@ -80,11 +96,26 @@ export async function windowsRuntimeCode(root) {
     if (portableExecutable) files.push(path)
     else if (windowsCandidate || ['.exe', '.dll', '.pyd'].includes(extname(path).toLowerCase())) throw new Error(`Windows code: invalid PE file: ${path}`)
   }
+  async function worker() {
+    while (failure === undefined && next < candidates.length) {
+      const path = candidates[next++]
+      try { await inspect(path) }
+      catch (error) { failure ??= { error } }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(8, candidates.length) }, worker))
+  if (failure !== undefined) throw failure.error
   return files.sort()
 }
 
 /** Drain each public-key verification batch before signing or reporting a failure. */
 async function inspectWindowsCode(files, inspect) {
+  return packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'windows:inspect-signatures',
+    () => inspectWindowsCodeBatch(files, inspect))
+}
+
+/** Complete bounded inspections without allowing callers to proceed past an active failed batch. */
+async function inspectWindowsCodeBatch(files, inspect) {
   if (inspect === inspectWindowsRuntimeSignature) return inspectSignaturesBatched(files)
   const signatures = []
   for (let offset = 0; offset < files.length; offset += 4) {
@@ -101,7 +132,7 @@ async function inspectWindowsCode(files, inspect) {
  * Preserve valid signatures and sign unsigned PE files with a supervised signer.
  * @param {string} root - Owned final runtime directory.
  * @param {import('./windows-runtime-signature.mjs').WindowsCodeSigningOptions} options - Supervised signer, certificate identity, audit sink.
- * @returns {Promise<void>} Resolves after bounded cache restores and sequential hardware signing, each with verification; failures drain active restores before rejecting.
+ * @returns {Promise<void>} Resolves after bounded cache restores, batched target verification and sequential hardware signing; failures drain active work before rejecting.
  */
 export async function signWindowsCode(root, options) {
   const inspect = options.inspect ?? inspectWindowsRuntimeSignature
@@ -116,12 +147,15 @@ export async function signWindowsCode(root, options) {
     else if (signature.status !== 'Valid') throw new Error(`Windows code: refusing ${signature.status} signature: ${path}`)
   }
   options.record({ type: 'windows-code-signing-plan', files: files.length, unsigned: unsigned.length })
-  async function verifySigned(path) {
-    const signature = await inspect(path)
-    if (signature.status !== 'Valid' || !signature.timestamped || signature.thumbprint?.toUpperCase() !== options.thumbprint.toUpperCase()) {
-      throw new Error(`Windows code: signing verification failed: ${path}`)
+  async function verifySigned(paths) {
+    const verified = await inspectWindowsCode(paths, inspect)
+    for (const [index, path] of paths.entries()) {
+      const signature = verified[index]
+      if (signature.status !== 'Valid' || !signature.timestamped || signature.thumbprint?.toUpperCase() !== options.thumbprint.toUpperCase()) {
+        throw new Error(`Windows code: signing verification failed: ${path}`)
+      }
+      options.record({ type: 'windows-code-signature-verified', path, ...signature })
     }
-    options.record({ type: 'windows-code-signature-verified', path, ...signature })
   }
   const restored = new Set()
   if (options.cache) {
@@ -132,7 +166,6 @@ export async function signWindowsCode(root, options) {
         const path = unsigned[next++]
         try {
           if (await options.cache.restore({ path, hash: 'sha256', isNest: false })) {
-            await verifySigned(path)
             restored.add(path)
           }
         } catch (error) { failure ??= { error } }
@@ -140,11 +173,12 @@ export async function signWindowsCode(root, options) {
     }
     await Promise.all(Array.from({ length: Math.min(options.cache.concurrency, unsigned.length) }, worker))
     if (failure !== undefined) throw failure.error
+    await verifySigned(unsigned.filter(path => restored.has(path)))
   }
   for (const path of unsigned) {
     if (restored.has(path)) continue
     await options.sign({ path, hash: 'sha256', isNest: false })
-    await verifySigned(path)
+    await verifySigned([path])
   }
 }
 

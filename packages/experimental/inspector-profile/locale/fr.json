@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Outils de développement",
-    "description": "Inspectez et déboguez les données brutes de session, les messages de discussion groupés et le backend NodeJS.",
+    "description": "Pour le dépannage : consultez dans « Journal de session » ce que DSH a enregistré pour une session, et déboguez le backend de DSH dans Chrome DevTools.",
     "detail": "docs/DETAIL.md"
   }
 }

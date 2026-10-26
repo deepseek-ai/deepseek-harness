@@ -69,6 +69,8 @@ export interface DshEnginesManifest {
 
 /** The configuration layer exported by a bundle package. */
 export interface DshBundleManifest {
+  /** Supported Node Host platform names; omission allows every operating system. */
+  platforms?: string[]
   /** One patch file path, or an ordered list applied in sequence, each relative to the declaring package root. */
   patch: string | string[]
   /** Show the bundle in GUI lists before the profile enables or installs it; omission means true. */

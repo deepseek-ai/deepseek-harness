@@ -120,6 +120,13 @@ it('hands a custom page the shared configuration form of its entry', () => {
 })
 
 describe('packageView', () => {
+  it('carries the current inventory failure into a component row', () => {
+    const plugins = PLUGINS.map(plugin => plugin.entryId === ROW_ENTRY
+      ? { ...plugin, fiberPhase: 'failed' as const, diagnostic: 'native preparation unavailable' } : plugin)
+    expect(packageView(BUNDLE, plugins).rows[0]?.diagnostic).toBe('native preparation unavailable')
+    expect(packageView(BUNDLE, PLUGINS).rows[0]?.diagnostic).toBeUndefined()
+  })
+
   it('joins a bundle with the entries its rows run as', () => {
     expect(packageView(BUNDLE, PLUGINS)).toEqual({
       name: 'dsh-better-sidebar', version: '0.16.0', description: 'A sidebar.', source: 'dsh-better-sidebar@^0.16.0',

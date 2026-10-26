@@ -1403,6 +1403,11 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcProgramFormat",
+      "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcRunRequest",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },

@@ -17,6 +17,7 @@ import {
 } from '@deepseek-ai/dsh-app-boot'
 import { OPTIONAL_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG } from '@deepseek-ai/dsh-official-bundles'
 import PluginManager, { type Config, type PluginChange, type PluginInstallLogChunk, type PluginInstallProgress, type PluginInstallRequestId } from '../src/index.ts'
+import type { PluginEntryId, PluginOperation } from '../src/types.ts'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -90,6 +91,40 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
   }
   return { ctx, dir, manager: ctx.pluginManager, bundle, profile, stopHmr, overlays, connection }
 }
+
+it.each(['live', 'startup'] as const)('refuses an unsupported bundle before saving or applying it with %s reload', async (reload) => {
+  const { manager, dir, ctx } = await fixture(reload, false, undefined, {}, undefined, (dir) => {
+    const path = join(dir, 'node_modules/extra/package.json')
+    writeFileSync(path, JSON.stringify({ name: 'extra', version: '1.0.0', description: 'Platform-limited bundle',
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh = { profile: { bundles: ['core'] } }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  })
+  const before = readFileSync(join(dir, 'package.json'), 'utf8')
+  const patchBefore = readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')
+  expect((await manager.listBundles()).find(row => row.name === 'extra')).toMatchObject({
+    enabled: false, installed: true, listedByDefault: false, description: 'Platform-limited bundle', error: { code: 'unsupported-platform' },
+  })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: false, application: 'failed', error: { code: 'unsupported-platform' } })
+  expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  expect(ctx.get('managedProbe')).toBeUndefined()
+  expect(readFileSync(join(dir, 'cordis.patch.yml'), 'utf8')).toBe(patchBefore)
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: false })
+})
+
+it('allows supported bundle activation and permits deselecting an unsupported saved bundle', async () => {
+  const { manager, dir } = await fixture()
+  const path = join(dir, 'node_modules/extra/package.json')
+  const metadata = readProfileManifest('test', join(dir, 'node_modules/extra'))
+  metadata.dsh = { bundle: { patch: './cordis.patch.yml', platforms: [process.platform] } }
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+  expect(await manager.setBundleEnabled('extra', true)).toMatchObject({ changed: true, application: 'applied' })
+  metadata.dsh.bundle!.platforms = [process.platform === 'darwin' ? 'win32' : 'darwin']
+  writeFileSync(path, JSON.stringify(metadata))
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'applied' })
+})
 
 it.each(['network', 'timeout'] as const)('stops a GitHub %s before pnpm and attributes it to the repository', async (kind) => {
   const { manager, dir, connection } = await fixture()
@@ -518,6 +553,112 @@ it.each([
     name: 'unnamed', version: '1.0.0', source: 'unnamed@1.0.0', enabled: false, installed: true, official: false, availability: 'profile', optional: false, removable: true, updatable: true,
     rows: [], overrides: [], ...expected,
   })
+})
+
+it('correlates diagnostic operation starts with persisted toggle results', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setBundleEnabled('extra', false)
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
+  expect(facts).toHaveLength(2)
+  expect(facts[0]).toMatchObject({ phase: 'started', reason: 'bundle', target: 'extra', enabled: false, version: '1.0.0' })
+  expect(facts[1]).toMatchObject({ id: facts[0]!.id, phase: 'settled', changed: true, application: 'restart-required', version: '1.0.0' })
+  await manager.setBundleEnabled('extra', true)
+  expect(facts[2]!.id).not.toBe(facts[0]!.id)
+})
+
+it.each(['{', ...[null, 12, {}, 'x'.repeat(129)].map(version => JSON.stringify({ version, dsh: { bundle: { patch: './cordis.patch.yml' } } }))])('retains an observed version for a refused removal and leaves damaged metadata unknown: %s', async (manifest) => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.removeBundle('extra')).toMatchObject({ application: 'failed', error: { code: 'stop-profile' } })
+  expect(facts).toEqual([
+    expect.objectContaining({ phase: 'started', reason: 'remove', version: '1.0.0' }),
+    expect.objectContaining({ phase: 'settled', reason: 'remove', version: '1.0.0', application: 'failed' }),
+  ])
+  writeFileSync(join(dir, 'node_modules', 'extra', 'package.json'), manifest)
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
+  expect(facts[2]).not.toHaveProperty('version')
+  expect(facts[3]).not.toHaveProperty('version')
+})
+
+it('excludes raw install specs and error diagnostics from operation facts', async () => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.installBundle('--https://user:secret@example.invalid/private?token=secret')
+  expect(facts).toHaveLength(2)
+  expect(facts[1]).toMatchObject({ phase: 'settled', target: null, application: 'failed', errorCode: 'invalid-spec' })
+  expect(JSON.stringify(facts)).not.toMatch(/secret|example|diagnostic|packageResult/)
+})
+
+it('keeps credential-bearing tarball addresses out of failed installation facts', async () => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const install = vi.spyOn(operations, 'runProfilePnpm').mockRejectedValue(new Error('private download failed'))
+  onTestFinished(() => { install.mockRestore() })
+  expect(await manager.installBundle('https://user:secret@example.invalid/private/archive.tgz'))
+    .toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  expect(facts.map(event => event.target)).toEqual([null, null])
+  expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private|archive/)
+})
+
+it.each(['bundle', 'remove', 'plugin'] as const)('excludes credential-bearing targets from %s diagnostics', async (reason) => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const target = 'https://user:secret@example.invalid/private?token=secret'
+  if (reason === 'bundle') await manager.setBundleEnabled(target, false)
+  else if (reason === 'remove') await manager.removeBundle(target)
+  else await manager.setPluginEnabled(target as PluginEntryId, false)
+  expect(facts).toHaveLength(2)
+  expect(facts.map(event => event.target)).toEqual([null, null])
+  expect(JSON.stringify(facts)).not.toMatch(/user|secret|example|private/)
+})
+
+it.each(['extra@9.9.9', ' extra', 'extra '])('does not attribute a non-name target %j to an installed bundle', async (target) => {
+  const { manager, ctx } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setBundleEnabled(target, false)
+  await manager.removeBundle(target)
+  expect(facts).toHaveLength(4)
+  for (const event of facts) {
+    expect(event.target).toBeNull()
+    expect(event).not.toHaveProperty('version')
+  }
+})
+
+it('reports unknown outcomes when profile inspection rejects before a result exists', async () => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const patch = join(dir, 'cordis.patch.yml')
+  rmSync(patch, { force: true })
+  mkdirSync(patch)
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toThrow()
+  expect(facts.map(event => event.phase)).toEqual(['started', 'unknown'])
+  expect(facts[1]!.id).toBe(facts[0]!.id)
+  expect(facts[1]).not.toHaveProperty('changed')
+})
+
+it.each(['throw', 'reject'])('delivers diagnostics to later subscribers when an earlier subscriber fails: %s', async (failure) => {
+  const { manager, ctx, dir } = await fixture('startup')
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  onTestFinished(() => { errors.mockRestore() })
+  ctx.on('plugin-manager/operation', () => {
+    if (failure === 'reject') return Promise.reject(new Error('diagnostic sink unavailable'))
+    throw new Error('diagnostic sink unavailable')
+  })
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.setBundleEnabled('extra', false)).toMatchObject({ changed: true, application: 'restart-required' })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain('extra')
+  expect(facts.map(event => event.phase)).toEqual(['started', 'settled'])
+  await vi.waitFor(() => { expect(errors).toHaveBeenCalledWith('dsh plugin-manager: operation diagnostic delivery failed') })
 })
 
 it('turns a plugin off and on without leaving a patch override the bundle already implies', async () => {
@@ -1560,6 +1701,8 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, true)).toMatchObject({ changed: false, application: 'failed' })
   expect(manager.listVersionExemptions()).toEqual({ exemptions: {}, warnings: [] })
   expect(existsSync(join(dir, 'compatibility.json'))).toBe(false)
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, true, true)).toMatchObject({
     changed: true, application: mode === 'live' ? 'applied' : 'restart-required',
   })
@@ -1572,21 +1715,31 @@ it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and p
   if (mode === 'live') expect(managed()?.fiber?.state).toBe(2)
   else expect(managed()).toBeUndefined()
   expect(await manager.setVersionExemption('extra@1.0.0', runtime, false)).toMatchObject({ changed: true })
+  expect(facts.map(({ phase, target, version }) => ({ phase, target, version }))).toEqual([
+    { phase: 'started', target: 'extra', version: '1.0.0' },
+    { phase: 'settled', target: 'extra', version: '1.0.0' },
+    { phase: 'started', target: 'extra', version: '1.0.0' },
+    { phase: 'settled', target: 'extra', version: '1.0.0' },
+  ])
   expect(manager.listVersionExemptions()).toEqual({ exemptions: {}, warnings: [] })
   expect(JSON.parse(readFileSync(join(dir, 'compatibility.json'), 'utf8'))).toEqual({})
   if (mode === 'live') expect(managed()).toBeUndefined()
 })
 
-it('reports a package run refused for compatibility as a typed refusal', async () => {
-  const { manager } = await fixture()
+it.each(['dsh-x', 'dsh-x@^2.0.0'])('retains the refused package identity for %s', async (spec) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
   const incompatible = [{ name: 'dsh-x', version: '2.0.0', runtimeVersion: getDshRuntimeVersion(), requirements: { '@deepseek-ai/dsh': '999.0.0' } }]
   const install = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue({
     exitCode: 1, output: 'dsh: installation rejected', truncated: false, logPath: 'pnpm.log', kind: 'unknown', incompatible,
   })
   onTestFinished(() => { install.mockRestore() })
-  const result = await manager.installBundle('dsh-x')
+  const result = await manager.installBundle(spec)
   expect(result).toMatchObject({ application: 'failed', changed: false, error: { code: 'incompatible-version', incompatible } })
   expect(install).toHaveBeenCalledTimes(1)
+  expect(facts[0]).toMatchObject({ phase: 'started', target: 'dsh-x' })
+  expect(facts[1]).toMatchObject({ phase: 'settled', target: 'dsh-x', version: '2.0.0', errorCode: 'incompatible-version' })
 })
 
 it.each([false, true])('rechecks installed bundle peers before accepting a disabled installation (exempted=%s)', async (exempted) => {
@@ -1613,7 +1766,6 @@ it.each([false, true])('rechecks installed bundle peers before accepting a disab
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['core', 'extra'])
 })
 
-
 it('lists absent Official entries offline without resolving their packages or consulting registries', async () => {
   const { manager } = await fixture()
   const resolve = vi.spyOn(operations, 'bundleManifest')
@@ -1629,6 +1781,30 @@ it('lists absent Official entries offline without resolving their packages or co
     expect(resolve.mock.calls.some(([name]) => name === entry.packageName)).toBe(false)
   }
   expect(registry).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('applies offline platform admission to an uninstalled Official bundle (selected=%s)', async (selected) => {
+  const entry = OFFICIAL_ON_DEMAND_CATALOG[0]!
+  const previous = Object.getOwnPropertyDescriptor(entry, 'platforms')
+  onTestFinished(() => {
+    if (previous === undefined) Reflect.deleteProperty(entry, 'platforms')
+    else Object.defineProperty(entry, 'platforms', previous)
+  })
+  Object.defineProperty(entry, 'platforms', { configurable: true, value: [process.platform === 'darwin' ? 'linux' : 'darwin'] })
+  const { manager, dir } = await fixture('startup')
+  if (selected) {
+    const manifest = readProfileManifest('test', dir)
+    manifest.dsh!.profile!.bundles!.push(entry.packageName)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
+  }
+  expect((await manager.listBundles()).find(bundle => bundle.name === entry.packageName)).toMatchObject({
+    installed: false, availability: 'missing', enabled: selected, listedByDefault: false,
+    error: { code: 'unsupported-platform' },
+  })
+  if (selected) {
+    expect(await manager.setBundleEnabled(entry.packageName, false)).toMatchObject({ changed: true, enabled: false })
+    expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(entry.packageName)
+  }
 })
 
 it('distinguishes an unreadable profile dependency from an absent catalog selection', async () => {
@@ -2055,4 +2231,53 @@ it('installs over the running version without HMR and reports the restart', asyn
   })
   expect(steps).toEqual(['checking', 'installing'])
   expect(pnpm.mock.calls.map(call => call[1])).toEqual([['add', 'extra@1.2.0', '--save-exact']])
+})
+
+it.each(['extra@^1.0.0', ' extra@1.0.0 ', 'https://user:secret@example.com/pkg'])('omits invalid exemption identity for %s', async (input) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.setVersionExemption(input, getDshRuntimeVersion(), true, true)).toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBeNull()
+    expect(fact.version).toBeUndefined()
+  }
+  expect(JSON.stringify(facts)).not.toContain(input)
+  expect(JSON.stringify(facts)).not.toContain('secret')
+})
+
+it.each(['disable', 'enable', 'remove'] as const)('retains exact uninstalled bundle names when attempting %s', async (operation) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  const result = operation === 'remove' ? await manager.removeBundle('absent')
+    : await manager.setBundleEnabled('absent', operation === 'enable')
+  if (operation !== 'disable') expect(result.application).toBe('failed')
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBe('absent')
+    expect(fact.version).toBeUndefined()
+  }
+})
+
+it.each(['extra', '@scope/extra'])('records the exemption version independently of installed metadata for %s', async (name) => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  await manager.setVersionExemption(`${name}@2.0.0`, getDshRuntimeVersion(), false)
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) expect(fact).toMatchObject({ target: name, version: '2.0.0', enabled: false })
+})
+
+it('omits exemption identity when only the runtime version is invalid', async () => {
+  const { manager, ctx } = await fixture()
+  const facts: PluginOperation[] = []
+  ctx.on('plugin-manager/operation', (event) => { facts.push(event) })
+  expect(await manager.setVersionExemption('extra@1.0.0', '^1.0.0', true, true)).toMatchObject({ application: 'failed' })
+  expect(facts).toHaveLength(2)
+  for (const fact of facts) {
+    expect(fact.target).toBeNull()
+    expect(fact.version).toBeUndefined()
+  }
 })

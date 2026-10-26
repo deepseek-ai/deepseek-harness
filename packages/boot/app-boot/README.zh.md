@@ -53,7 +53,9 @@ profile 导入插件前，DSH 会将其声明的 DSH 版本要求与 `getDshRunt
 
 检查只发生在 DSH 自己持有的组合入口，改写的是启动器自己的那份组合：profile 的 patch 层、依赖清单与组合包列表都不会改变。`prepareProfilePatches` 在启动器的空 profile 根之上组合，并在挂载根 Include 时以及每次 profile 重新组合时执行，因此被拒绝的插件永远不会导入其模块；`prepareProfileEntries` 对 preset 行做同样的事。被拒绝的普通行会变成游离的 `disabled: true` 行；原生 group 保持挂载，其被拒绝的子行不会加载；若某个原生 Include 会到达被拒绝的插件，则整体省略该 Include，因为它的文件不会被改写。被策略拒绝的行在 profile 中保留其配置的 `disabled` 值，每次拒绝都会报告包名、版本与风险。组合包本身不是行，因此 `loadProfileDirectory` 在启动和每次重新组合加载 profile 的组合包层时，检查每个组合包自己声明的 DSH 版本要求；没有豁免的不兼容组合包会像无法读取的组合包一样被跳过，并列入 `skippedBundles`。这些入口不覆盖其他嵌入方通过自己的 `ctx.plugin` 调用挂载的插件。会话中直接改文件的两类编辑只在下一次重新组合或启动时才被判定：正在运行的插件自己的 `package.json` DSH 版本要求，以及 Loader 自己读取的入口清单文件（如启动器的根配置或嵌套的 `cordis:include` 文件）。`--dump-config` 报告的是配置出的组合，因此被拒绝的插件行仍会出现在其中，而被拒绝的组合包不提供任何行；`--dump-config-schema` 会导入每个组合模块以读取其 schema，请只对已经信任其插件的 profile 运行。
 
-精确版本豁免保存在 profile 自己的 `compatibility.json` 中，而不是 `package.json`，因此写豁免不会触及依赖清单、组合包列表或 Cordis patch 文件。它把精确的 `package-name@version` 键映射到精确 DSH 运行时版本列表；插件升级和 DSH 升级都不继承授权。文件缺失表示没有豁免。文件损坏绝不会阻止 profile 启动：读取器接受的记录仍然生效，每条被拒绝的记录会与插件拒绝信息一起输出到 stderr，此后该文件被视为只读，因此授予或撤销会拒绝执行并要求用户手工修复，而不是覆盖用户的内容。[插件管理器](../plugin-manager/README.zh.md#version-compatibility-and-exemptions)负责每次变更所需的授权、撤销与风险确认。
+精确版本豁免保存在 profile 自己的 `compatibility.json` 中，而不是 `package.json`，因此写豁免不会触及依赖清单、组合包列表或 Cordis patch 文件。它把精确的 `package-name@version` 键映射到精确 DSH 运行时版本列表；插件升级和 DSH 升级都不继承授权。文件缺失表示没有豁免。文件损坏绝不会阻止 profile 启动：读取器接受的记录仍然生效，每条被拒绝的记录会与插件拒绝信息一起输出到 stderr，此后该文件被视为只读，因此授予或撤销会拒绝执行并要求用户手工修复，而不是覆盖用户的内容。[插件管理器](../plugin-manager/README.zh.md#version-compatibility-and-exemptions)负责每次变更所需的授权、撤销与风险确认。`validatePluginVersionExemption(packageVersion, runtimeVersion)` 校验规范的精确身份而不授予权限；身份非法时抛出错误。
+
+组合包可以用 `dsh.bundle.platforms` 声明非空的 Node Host 平台名称列表，例如 `["darwin"]`。启动器在读取组合包 patch 前验证此声明。Host 不受支持时会跳过整个配置层，保留已保存的选择，并通过 `skippedBundles` 报告原因；其他配置层继续生效。省略此字段时允许所有平台。值必须是 Node 平台名，`macos` 等别名无效。浏览器所在机器的平台不决定 Host 是否受支持。
 
 你的机器本地偏好同样位于 harness home 中：
 
@@ -143,7 +145,9 @@ Loader 结算后，app-boot 在仅 optional 条目未激活时输出警告。如
 - **单一 rejection 检查点。** `inactiveEntries` 把折入启动诊断的确切原因保持到下一个进程级 rejection 检查点可见，使 `installFailLoud` 能合并 Loader 的重复通知，而所有无关的未处理 rejection 仍然致命。
 - **两阶段失败标签。** 除启动审计失败外，`boot()` 区分 `host preparation failed`（`prepare` 在任何配置树条目挂载前抛出）与 `plugin tree failed to load`，并追加最深层插件错误的堆栈。插件诊断保留嵌套原因和聚合错误中的各项失败；原因链出现循环时会停止遍历，但不会替换原始错误。
 
-启动错误还保留未激活条目的元数据和原始启动警告、错误记录，不保留 Loader tree。其 `entries` 和 `startup` 字段不可枚举：直接访问和完整诊断报告保留这些字段，常规错误检查输出则省略它们。只有等待条目时没有 `cause`；存在已记录错误时，`AggregateError` 保留其原始值。收集器在 Loader 挂载前通过 logger 收集导入错误，因为这些导入尚无 failed Fiber。启动结算后会移除临时 exporter。
+启动错误还保留未激活条目的元数据和原始启动警告、错误记录，不保留 Loader tree。其 `entries`、`startup` 和 `composition` 字段不可枚举：直接访问和完整诊断报告保留这些字段，常规错误检查输出则省略它们。只有等待条目时没有 `cause`；存在已记录错误时，`AggregateError` 保留其原始值。收集器在 Loader 挂载前通过 logger 收集导入错误，因为这些导入尚无 failed Fiber。启动结算后会移除临时 exporter。
+
+包导出 `StartupCompositionDiagnostic`、`StartupPluginState` 和 `StartupServiceState`，供消费者按名引用。释放前，`composition` 捕获最多 256 个配置插件条目和 256 个缺失服务观测，并记录省略数量。条目包含模块、可取得的包版本、状态和 Loader 来源 URL，不含配置值。已注册提供者包含其状态及作用域是否与消费者一致。提供者列表为空表示归属未知：被禁用或失败的插件可能从未注册服务。Loader 来源不代表最后修改该条目的 overlay。元数据查询失败时版本标为未知；快照失败保留原始启动错误。
 
 ### Helper 行为
 

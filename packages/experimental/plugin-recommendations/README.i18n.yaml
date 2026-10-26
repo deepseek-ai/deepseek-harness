@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/plugin-recommendations/README.md
 /:
-  en: 74f11064759209bf
-  zh: 694dc0dc26dacd3b
+  en: c34591bc4458dc55
+  zh: 7672f17a222f287e
 /deepseek-ai-dsh-plugin-recommendations:
   en: f7efb269a445d68e
   zh: 171930b415e131f7
@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 59094206ec49ad20
 /deepseek-ai-dsh-plugin-recommendations/use-this-package:
-  en: 8e26a2013becb72f
-  zh: 37f5cf1e56588ec2
+  en: 79fde2c706fbaf14
+  zh: 42eb78e5ea7f0ed8
 /deepseek-ai-dsh-plugin-recommendations/use-this-package/outcomes-and-recovery:
   en: 3b07d58a6bc4394a
   zh: 5d64630582c8da80
@@ -33,17 +33,17 @@
   en: 79e932b35e50619a
   zh: 821b4d95d6ce1d22
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/what-the-model-sees:
-  en: 5526f467498a8458
-  zh: 9495ede65dbc6771
+  en: 64cc3b2eff7bec02
+  zh: 9f5bab103219e352
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/token-effect:
-  en: 9849eee72560906e
-  zh: d64a2f5b1e33f249
+  en: b70f0604f4a70ef9
+  zh: e369c6a42092f9c4
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/kv-cache-effect:
   en: e6575a3adcaa7d1c
   zh: e5323a4571ecc8aa
 /deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work:
-  en: 054c9961595232a9
-  zh: 2de8775f30a34ea1
+  en: 8506b8b41b36450a
+  zh: 439deb24f6cd0f77
 /deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

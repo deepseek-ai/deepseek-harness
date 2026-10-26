@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-recommendations",
   "description": "Official plugin suggestions with explicit user activation and persistent conversation decisions",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
@@ -33,7 +33,6 @@
       "types": "./lib/typert.remote-client.d.ts",
       "default": "./lib/typert.remote-client.js"
     },
-    "./cordis.patch.yml": "./cordis.patch.yml",
     "./skills/*.md": "./skills/*.md"
   },
   "license": "MIT",
@@ -64,7 +63,6 @@
     "icon.svg",
     "locale/*.json",
     "lib/index.js",
-    "cordis.patch.yml",
     "skills/*.md",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
@@ -73,10 +71,5 @@
     "lib/typert.remote-client.js",
     "lib/typert.remote-client.d.ts"
   ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
   "icon": "./icon.svg"
 }

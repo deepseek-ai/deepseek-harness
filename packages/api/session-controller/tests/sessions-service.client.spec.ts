@@ -12,7 +12,7 @@ import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/s
 import { ClientSessions, SessionCreateError, SessionForkError } from '../src/client/sessions/service.ts'
 import { scopeOf } from '../src/client/scope.ts'
 import type {
-  SessionAssistantStreamBaseline, SessionFollowFrame, SessionFollowRequest,
+  SessionAssistantStreamBaseline, SessionFollowFrame, SessionFollowRequest, SessionHistoryRecord,
 } from '../src/types.ts'
 import { FOLLOW, err, followScript, sessionWorld } from './remote/session.client.ts'
 
@@ -174,7 +174,7 @@ describe('scope tree', () => {
   it('opens a conversation from follow projections without a second projection request', async ({ bench }) => {
     const b = bench()
     b.mock.stream(FOLLOW, followScript(ok({
-      records: [], hasMore: false,
+      cursor: 0, records: [], hasMore: false,
       projections: { asOfSeq: 0, values: { subagentCatalog: [{
         id: sid('child'), createdAt: 1, mode: 'one-shot',
       }] } },
@@ -277,7 +277,7 @@ describe('scope tree', () => {
   it('replaces an active assistant baseline on reconnect without duplicate chunks', async ({ bench }) => {
     const b = bench()
     const attemptId = LlmAttemptId('reconnect-attempt')
-    let records: never[] = []
+    let records: SessionHistoryRecord[] = []
     let assistantStreamBaseline: SessionAssistantStreamBaseline = {
       revision: 2,
       activeAttempt: {
@@ -287,7 +287,7 @@ describe('scope tree', () => {
       },
     }
     b.mock.stream(FOLLOW, followScript(
-      () => ok({ records, hasMore: false }),
+      () => ok({ cursor: records.at(-1)?.event.seq ?? -1, records, hasMore: false }),
       { assistantStream: () => assistantStreamBaseline },
     ))
     await feedList(b, [{ id: 's1' }])
@@ -361,6 +361,7 @@ describe('scope tree', () => {
       },
     }
     const history = ok({
+      cursor: priorMessage.event.seq,
       records: [priorMessage] as never[],
       hasMore: false,
     })
@@ -437,7 +438,7 @@ describe('scope tree', () => {
         surfaceOp: 'append' as const,
       },
     }
-    let records = [prior] as never[]
+    let records: SessionHistoryRecord[] = [prior]
     let assistantStreamBaseline: SessionAssistantStreamBaseline = {
       revision: 2,
       activeAttempt: {
@@ -450,7 +451,7 @@ describe('scope tree', () => {
       },
     }
     b.mock.stream(FOLLOW, followScript(
-      () => ok({ records, hasMore: false }),
+      () => ok({ cursor: records.at(-1)?.event.seq ?? -1, records, hasMore: false }),
       { assistantStream: () => assistantStreamBaseline },
     ))
     await feedList(b, [{ id: 's1' }])
@@ -1002,10 +1003,10 @@ describe('fork', () => {
     expect(b.svc.binding(sid('child'))).toBeUndefined()
     expect(b.svc.retainInfo(sid('child')).getSnapshot().referenceCount).toBe(0)
     await Promise.resolve()
+    expect(b.svc.list.getSnapshot().byId[sid('child')]).not.toHaveProperty('parentId')
     expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({
       title: childTitle,
       displayTitle: childTitle,
-      parentId: 'source',
     })
   })
 

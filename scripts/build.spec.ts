@@ -60,7 +60,17 @@ describe('repository build CLI', () => {
 })
 
 describe('repository build steps', () => {
-  it('keeps artifact steps in serial dependency order', () => {
+  it.each(['complete', 'check', 'typecheck'] as const)('gives Host compilers an 8 GiB heap in %s scope', (scope) => {
+    const gates = buildGates(root, scope)
+    for (const gate of gates.filter(gate => gate.id === 'host-src' || gate.id === 'host-check')) {
+      expect(gate.args[0]).toBe('--max-old-space-size=8192')
+    }
+    for (const gate of gates.filter(gate => gate.id === 'client-src' || gate.id === 'client-check')) {
+      expect(gate.args.some(arg => arg.startsWith('--max-old-space-size'))).toBe(false)
+    }
+  })
+
+  it('finishes Host and Desktop readers before Client compilation rewrites shared outputs', () => {
     expect(graph(buildGates(root, 'artifacts'))).toEqual(artifactGraph)
   })
 

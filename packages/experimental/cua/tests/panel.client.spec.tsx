@@ -13,7 +13,7 @@ import { en, zh } from '../src/client/locales.ts'
 afterEach(() => { cleanup(); vi.useRealTimers() })
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: { accessibility: false, screenRecording: true,
   helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
-allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
   return { system: { value: value.system, busy: false, error: null },
