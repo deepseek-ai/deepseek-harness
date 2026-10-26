@@ -41,7 +41,7 @@ Three rows set the text font (interface and conversation text), the code font (c
 
 ### Registering a theme
 
-A composition can register a third-party theme id with alias-token overrides through `ctx.theme`; the override layer folds into the active snapshot's tokens in registration order. Removing one never overwrites the last durable built-in preference. Third-party theme ids remain an in-process extension and do not cross the built-in settings schema.
+A composition can register a third-party theme id with alias-token overrides through `ctx.theme`; the override layer folds into the active snapshot's tokens in registration order. A theme can also replace product icons: `ThemeDefinition.icons` maps ui-primitives `ICON_SYMBOLS` ids to complete SVG documents. The plugin keeps one hidden icon sprite at the start of `body` whose `<symbol>` children follow the active theme's replacements and fall back to the defaults, so a replacement may be multi-color and may paint with `currentColor` or `--dsw-*` variables that follow the palette. Replacement markup is trusted like the registering plugin's code. `register` rejects unknown ids, documents without a well-formed SVG-namespace `<svg>` root and `viewBox`, `<style>` or `<script>` elements, which would apply to the whole document, and element ids that do not start with `<symbol id>-`. The root's `width`, `height`, `class`, and `aria-hidden` are ignored because the use site sizes the icon. Gradients and other paint servers resolve their stops in the sprite, so they follow palette tokens but not use-site color overrides. Removing one never overwrites the last durable built-in preference. Third-party theme ids remain an in-process extension and do not cross the built-in settings schema.
 
 ### Pre-plugin palette
 
@@ -136,6 +136,7 @@ These limits define the theme extension surface and the color authority; they ar
 
 - **Third-party themes are an extension point, not a product** — registering one means overriding same-named alias variables; no validation exists that an override set is complete.
 - **The token sheets are the sole color authority** — values absent from the design system are deliberately not appended; the nearest semantic token wins, and design-owner-approved additions enter as a static step plus a semantic alias in the same change.
+- **Only product icons are replaceable** — `ThemeDefinition.icons` covers the ui-primitives product icon set; file-type, plugin, site, and brand artwork still render fixed inline SVG.
 
 <a id="dev-note"></a>
 ### Dev Note

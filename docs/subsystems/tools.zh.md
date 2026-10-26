@@ -177,6 +177,50 @@ interface ToolRestriction {
 }
 ```
 
+## 条件准入 — 步骤拥有的准入集合
+
+注册可以携带 `when` 条件。AgentLoop 为每个拟议步骤以捕获的模型选择调用一次 `ctx.tools.resolve()`；返回的集合决定该步骤的工具声明、执行器分区以及批次中的每次调用，包括 PTC 程序的子调用。`ctx.tools.executable()` 在执行时应用集合，没有集合时排除条件注册。同名替换或新的限制会阻止尚未开始的调用使用已准入的注册，步骤的批次结束后循环释放集合。
+
+```ts type-equiv
+/** Inputs for a tool's step-time activation condition. */
+interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+```
+
+```ts type-equiv
+/** Lifecycle-owned conditions for a registered tool. */
+interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+```
+
+```ts type-equiv
+/** One step's admitted registrations, also used by nested PTC calls. */
+interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+```
+
 ## 执行器与原始调用批次
 
 `ctx.tools.execute()` 把完整的原始模型调用批次委托给最近作用域的执行器。服务在每个批次开始时选择当前提供者；提示词组装仅返回模型输入。`agent` 在独立服务调用中不存在；`log` 在模型步骤之外的程序调用（例如初始化钩子）中不存在。有 Agent 而没有 `log` 时，调用仍受该 Agent 的工具作用域约束，但不记录根调用／结果事件。工具自身的事件仍可使用 Agent 的 Session。
@@ -202,6 +246,11 @@ interface ToolBatchInput {
    * Undefined for standalone calls outside an Agent, such as a service invocation.
    */
   readonly agent?: Agent
+  /**
+   * Step admission for every call in the batch, including program subcalls.
+   * Undefined admits only unconditional registrations.
+   */
+  readonly toolSet?: ResolvedToolSet
   /**
    * Committed model step receiving root call/result events; requires `agent`.
    * Undefined when `agent` is absent or for calls outside a model response, such
@@ -288,6 +337,8 @@ interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
+  readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
    * mode sets this on SDK sub-dispatches so commit-style observers can wait for
@@ -594,9 +645,10 @@ Concrete tool registry and scoped executor dispatcher.
  * Register globally or in the calling agent scope. Scoped tools shadow
  * globals; duplicates within one layer and the reserved `run_code` name fail.
  * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
+ * @param options - optional step-time activation condition.
  * @returns the exact disposer that unregisters the tool.
  */
-register(definition: ToolDefinition): () => void
+register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void
 
 /**
  * Restrict global tools for the calling agent scope. Empty filters, unknown
@@ -614,24 +666,46 @@ restrict(filter: ToolRestriction): () => void
  * actually executed.
  * @param name - the tool name as registered.
  * @param scope - the viewing scope (the agent); omitted = the global view.
+ * @param toolSet - step admission; omit only to inspect registered definitions.
  * @returns the definition the scope resolves, or undefined when none is visible.
  */
-get(name: string, scope?: ScopeKey): ToolDefinition | undefined
+get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+
+/**
+ * Resolve the definition a call may execute. With a step's admitted set, the
+ * set decides; without one, conditional registrations are unavailable.
+ * @param name - the tool name as registered.
+ * @param scope - the calling agent; omitted = the global view.
+ * @param toolSet - step admission, or omitted for a call outside a model step.
+ * @returns the executable definition, or undefined when the call must fail as `UNKNOWN_TOOL`.
+ */
+executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+
+/**
+ * Resolve conditions once for this step without changing shared registrations.
+ * Cancellation or a rejected condition publishes no partial selection. Removed
+ * registrations cannot be restored by a late condition result.
+ * @param context - preparing agent, captured model selection, and cancellation.
+ * @returns the complete selection; the caller disposes it after its tool batch settles.
+ */
+async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>
 
 /**
  * Read the visible capability definitions for descriptions and program bindings.
  * @param scope - viewing Agent or preset; omitted selects the global view.
- * @returns definitions after scoped shadowing and restrictions.
+ * @param toolSet - step admission; omit only to inspect registered definitions.
+ * @returns definitions after scoped shadowing and restrictions, limited to the step's admission when given.
  */
-definitions(scope?: ScopeKey): readonly ToolDefinition[]
+definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[]
 
 /**
  * Project visible definitions onto the allowlisted model-facing schema fields,
  * excluding execution and presentation callbacks.
  * @param scope - the viewing scope (the agent); omitted = the global view.
+ * @param toolSet - step admission, or omitted for registered-definition inspection.
  * @returns one deep-cloned schema per visible tool.
  */
-schemas(scope?: ScopeKey): ToolSchema[]
+schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]
 
 /**
  * Provide the executor for the calling scope; an unscoped contribution is the deployment default.

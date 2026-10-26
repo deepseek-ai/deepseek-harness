@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ferramenta de Iteração Ralph",
+    "description": "Execute novos subagentes rodada por rodada em torno do mesmo objetivo, transmitindo um breve relatório da rodada anterior."
+  }
+}

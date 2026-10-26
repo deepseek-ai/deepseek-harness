@@ -69,13 +69,13 @@ export async function executeToolFixture(ctx: Context, input: ToolExecutionInput
 /**
  * Run one raw call through the selected executor without root Session logging.
  * @param ctx - context owning the selected executor.
- * @param input - JSON arguments and optional Agent supplying scoped tools and tool context.
+ * @param input - JSON arguments, optional Agent supplying scoped tools and tool context, and optional step admission.
  * @returns the single settled result.
  * @internal
  */
 export async function executeModelToolFixture(
   ctx: Context,
-  input: Pick<ToolExecutionInput, 'callId' | 'name' | 'arguments' | 'signal' | 'agent'>,
+  input: Pick<ToolExecutionInput, 'callId' | 'name' | 'arguments' | 'signal' | 'agent' | 'toolSet'>,
 ): Promise<ToolExecutionResult> {
   const args = JSON.stringify(input.arguments)
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify returns undefined for non-JSON fixture arguments
@@ -84,6 +84,7 @@ export async function executeModelToolFixture(
     calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: args }],
     signal: input.signal,
     ...input.agent === undefined ? {} : { agent: input.agent },
+    ...input.toolSet === undefined ? {} : { toolSet: input.toolSet },
   })
   const outcome = batch.results[0]
   if (outcome === undefined) throw new Error('Executor omitted the model tool fixture result')

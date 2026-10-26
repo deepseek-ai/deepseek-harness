@@ -50,7 +50,7 @@ const LISTING: MarketSearchResult = {
   fetchedAt: 1,
   total: 6,
   nextOffset: null,
-  title: { en: 'Alpha market', zh: '甲市场' },
+  title: { en: 'Alpha index', zh: '甲索引' },
   metadata: {
     categories: { tools: { title: 'Tools' }, themes: { title: 'Themes' } },
     labels: { official: { title: 'Official' }, beta: { title: 'Beta' } },
@@ -231,7 +231,7 @@ describe('DiscoverSection', () => {
     expect(screen.getByText(en.emptyIndex)).toBeTruthy()
   })
 
-  it('sorts by publish date, a market sort key, either direction, and back to the index order', () => {
+  it('sorts by publish date, an index sort key, either direction, and back to the index order', () => {
     const { actions, answer } = renderTab()
     openMenu(/^Sort: Default order/)
     pick(en.sortPublished)
@@ -256,7 +256,7 @@ describe('DiscoverSection', () => {
     answer(INITIAL_QUERY)
     openMenu(/^Sort: Default order/)
     expect(screen.queryByRole('menuitem', { name: en.switchToAscending })).toBeNull()
-    for (const name of [/^Sort:/, en.filter, /^Switch plugin market/]) {
+    for (const name of [/^Sort:/, en.filter, /^Switch plugin index/]) {
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
       expect(screen.queryByRole('menu')).toBeNull()
       openMenu(name)
@@ -264,17 +264,17 @@ describe('DiscoverSection', () => {
     }
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
-    openMenu(/^Switch plugin market/)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
+    openMenu(/^Switch plugin index/)
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('switches markets and opens source management from the market menu', () => {
+  it('switches indexes and opens source management from the index menu', () => {
     const { actions } = renderTab()
-    openMenu('Switch plugin market, currently Alpha market')
+    openMenu('Switch plugin index, currently Alpha index')
     pick('b.example')
     expect(actions.select).toHaveBeenCalledWith(B)
-    openMenu(/^Switch plugin market/)
+    openMenu(/^Switch plugin index/)
     pick(en.manageSources)
     expect(actions.toggleSources).toHaveBeenCalledOnce()
   })
@@ -287,7 +287,7 @@ describe('DiscoverSection', () => {
     expect(detail.getByRole('status', { name: en.detailLoading })).toBeTruthy()
     expect(detail.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
     expect(detail.getByText('dsh-a')).toBeTruthy()
-    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha market']) expect(detail.getByText(value)).toBeTruthy()
+    for (const value of ['Jane', 'dsh-a@1.0.0', 'https://r.example/', 'Tools', 'Official', 'Beta', 'Alpha index']) expect(detail.getByText(value)).toBeTruthy()
     const homepage = detail.getByRole('link', { name: 'https://example.com/alpha#readme' })
     expect([homepage.getAttribute('href'), homepage.getAttribute('target'), homepage.getAttribute('rel')])
       .toEqual(['https://example.com/alpha#readme', '_blank', 'noopener noreferrer'])
@@ -420,14 +420,14 @@ describe('DiscoverSection', () => {
     expect(screen.getByRole('status', { name: en.loading })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.refresh }).hasAttribute('disabled')).toBe(true)
     set({ listing: { url: B, query: INITIAL_QUERY, status: 'ready', value: { ...LISTING, url: B, entries: [], total: 0 }, answered: INITIAL_QUERY, failure: null } })
-    expect(screen.getByRole('button', { name: 'Switch plugin market, currently b.example' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Switch plugin index, currently b.example' })).toBeTruthy()
   })
 
   it('manages sources in a dialog with the trust notice and each refusal', () => {
     const { actions, set } = renderTab({ editing: true, draft: 'https://c.example/index.json', indexes: [{ url: A, title: LISTING.title }, { url: B, error: 'HTTP 404' }] })
     const dialog = within(screen.getByRole('dialog', { name: en.sourcesTitle }))
     expect(dialog.getByText(en.sourcesTrust)).toBeTruthy()
-    expect(dialog.getByText('Alpha market')).toBeTruthy()
+    expect(dialog.getByText('Alpha index')).toBeTruthy()
     expect(dialog.getByText(B)).toBeTruthy()
     expect(dialog.getByText('HTTP 404')).toBeTruthy()
     fireEvent.click(dialog.getByRole('button', { name: `Remove ${B}` }))
@@ -453,7 +453,7 @@ describe('DiscoverSection', () => {
 
   it('renders the Chinese copy and dates', () => {
     renderTab({}, zh)
-    expect(screen.getByRole('button', { name: '切换插件市场，当前为 甲市场' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '切换插件索引，当前为 甲索引' })).toBeTruthy()
     expect(card('dsh-a').getByText('甲')).toBeTruthy()
     expect(card('dsh-a').getByText(/^1\.0\.0 · Jane · 2026年9月/)).toBeTruthy()
     expect(card('dsh-b').getByText(zh.statusInstalled)).toBeTruthy()

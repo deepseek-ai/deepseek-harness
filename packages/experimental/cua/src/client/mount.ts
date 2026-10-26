@@ -12,7 +12,7 @@ import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
 import { PermissionPanel, PermissionSetup, PermissionToast } from './PermissionPanel.tsx'
-import { en, ja, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type CuaPermissionLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -33,7 +33,7 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
-    ctx.effect(() => ctx.locale.register(NS, { en, zh, ja }))
+    ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
     const controller = new PermissionController(ctx.remote.cuaAccess)
     const face = controller.face()
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
@@ -63,9 +63,6 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)
-    ctx.effect(() => ctx.remote.$on('settings/document-updated', (namespace) => {
-      if (namespace === controller.state.getSnapshot().applications.value?.settingsNamespace) face.refresh()
-    }))
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
       name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => settings,
     }, PermissionPanel))

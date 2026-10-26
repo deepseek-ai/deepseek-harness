@@ -12,15 +12,10 @@
 - paragraph: partial
 - status: Deep diving
 - text: Deep diving for {{duration}} ···
-- list:
-  - listitem:
-    - text: Queue item to remove
-    - status: Sending…
-    - button "Edit queued message" [disabled]
-    - button "Remove queued message" [disabled]
-    - button "Steer queued message" [disabled]
-- textbox "Message or run a task, / commands, @ files or sessions"
+- textbox "Message or run a task, / commands, @ files or sessions":
+  - paragraph: Queue item to remove
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Stop generating"
+- button "Sending message" [disabled]

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Agent teams",
-    "description": "Enable team collaboration, team tools, the member roster, and the shared task board.",
+    "description": "Lets the agent you talk to split a job among named teammates, track it on a shared task board, and report back with their results.",
     "detail": "docs/DETAIL.md"
   }
 }

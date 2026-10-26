@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interfaz de archivos del espacio de trabajo",
+    "description": "Proporciona lectura de archivos del espacio de trabajo, listado de directorios y actualizaciones de información de archivos."
+  }
+}

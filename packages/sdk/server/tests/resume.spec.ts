@@ -167,7 +167,9 @@ describe('SDK persisted session resume', () => {
       { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
     ])
     expect(second.adapter.requests).toHaveLength(0)
-    expect(second.events).toEqual([])
+    expect(second.events).toEqual([
+      { sessionId: 'saved-session', event: restored.snapshotEvents().at(-1) },
+    ])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })
     await second.server.wait({ sessionId: 'saved-session' })
     expect(second.events.length).toBeGreaterThan(0)

@@ -36,7 +36,7 @@ export interface IncompatiblePlugin {
 
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'unsupported-platform' | 'operation-error'
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
@@ -83,7 +83,7 @@ export interface BundleInfo {
   meta?: PluginLocalizedMeta
   /** Untranslated `description` of this bundle's package manifest. */
   description?: string
-  /** GUI listing before explicit selection or profile installation; omission means true. */
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   listedByDefault?: boolean
   /** Selected in the profile manifest; a load error means its layer was skipped. */
   enabled: boolean
@@ -170,7 +170,7 @@ export interface ChangeResult {
   bundle?: string
   /** The installed bundle's manifest version, when declared; pnpm's `minimumReleaseAge` can make it older than the newest release. */
   version?: string
-  /** Exact package names awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
+  /** Exact `allowBuilds` keys awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
   pendingBuilds?: string[]
   /** Package script permissions saved before this installation attempt. */
   approvedBuilds?: string[]
@@ -382,8 +382,41 @@ export interface PluginChange {
   readonly reason: 'plugin' | 'bundle' | 'install' | 'remove'
 }
 
+/** Identifies one manager invocation, including time spent waiting for its profile lock. */
+export type PluginOperationId = Branded<'PluginOperationId'>
+
+/** Management facts for diagnostic consumers; recent operations do not establish a crash's cause. */
+export type PluginOperation = {
+  readonly id: PluginOperationId
+  readonly time: string
+  readonly reason: PluginChange['reason']
+  /** Known entry id or parsed registry package name; unrecognized targets and raw specs are omitted. */
+  readonly target: string | null
+  readonly stage: ChangeResult['stage']
+  readonly enabled?: boolean | undefined
+  /** Request-time or resolved package version; absence means unusable or unavailable, never the latest registry version. */
+  readonly version?: string | undefined
+} & (
+  | { readonly phase: 'started' }
+  | {
+    readonly phase: 'settled'
+    readonly application: ChangeResult['application']
+    readonly changed: boolean
+    readonly errorCode?: ManagementError['code'] | undefined
+    readonly restartReason?: RestartReason | undefined
+  }
+  /** An exception escaped the operation result; persisted or applied changes cannot be inferred. */
+  | { readonly phase: 'unknown' }
+)
+
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /**
+     * One manager invocation started or ended; subscribers run independently without delaying management.
+     * @mode parallel
+     * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+     */
+    'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
     /**
      * The profile's plugins, bundles, or composition changed: a manager
      * operation completed. A patch generation applied outside the manager,

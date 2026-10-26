@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistencia del registro de sesión",
+    "description": "Guarde el registro de la sesión como un archivo JSONL local para recuperarlo y leerlo más adelante."
+  }
+}

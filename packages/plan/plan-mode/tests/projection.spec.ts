@@ -116,6 +116,17 @@ describe('plan projection unit', () => {
     expect(bench.values().plan).toEqual({ active: false, pending: true })
   })
 
+  it('records that plan mode was entered and keeps the record after leaving', async () => {
+    const bench = await harness(true)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ entered: false })
+    commitPlanMode(bench.session, false, 0)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ entered: false })
+    commitPlanMode(bench.session, true, 1)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ active: true, entered: true })
+    commitPlanMode(bench.session, false, 2)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ active: false, entered: true })
+  })
+
   it('freezes the active state across a request/header into activeAtLastHeader', async () => {
     const bench = await harness(true)
     commitPlanMode(bench.session, true, 0)

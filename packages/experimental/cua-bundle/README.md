@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It is off by default; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
+Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It is off by default and hidden from the default plugin lists until enabled or separately installed; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Enable macOS Computer Use from Plugins for existing and new PTC sessions. Window
 <a id="use-this-package"></a>
 ## Use this package
 
-This workflow targets developers running macOS Web or unpackaged Desktop from source. Open Plugins, select More beside Experimental plugins, then open Computer Use and enable the switch. The permission page identifies the responsible application reported by macOS when the optional system query is available. Request access and enable that application in System Settings; follow the application named by macOS if it differs from the detected source. For Web, run these commands from the repository root:
+This workflow targets developers running macOS Web or unpackaged Desktop from source. In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-cua-bundle`, choose **Install**, then **Enable now**. DSH enables its shipped copy without downloading another one. Enabled bundles remain in Plugins, where you can open Computer Use to manage permissions or switch it off. Switching off hides its card again unless the profile separately installed it. The permission page identifies the responsible application reported by macOS when the optional system query is available. Request access and enable that application in System Settings; follow the application named by macOS if it differs from the detected source. For Web, run these commands from the repository root:
 
 ```sh
 pnpm run build
@@ -33,15 +33,15 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling from the plugin list offers setup guidance when system permissions need attention; enabling from its detail page displays the permission controls directly. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through Add plugin, a visible card, or its detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
-Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain. Session-only application decisions end with provider disposal.
+Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
-Computer Use requires a macOS DSH Host. On other operating systems, installation omits the optional macOS provider and the bundle skips its Loader entry. Shared CUA logic and the permission-page entry remain available, but Computer Use operations require the provider. A browser on another operating system can connect to a supported Mac Host.
+Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; shared CUA and Client packages remain in the installation. Other Hosts hide the bundle from default plugin lists and model recommendations and refuse enablement before saving settings. Explicit profile dependencies and saved selections remain visible for management. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
 
-If preparation fails, the saved selection remains and CUA operations stay unavailable. Read the Host startup diagnostic, correct its cause, then restart DSH.
+If preparation fails, the saved selection remains and CUA operations stay unavailable. Refresh or reopen the plugin page to read the component diagnostic, correct its cause, then restart DSH.
 
-Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use the existing profile configuration; session decisions remain in memory across turns and connections until DSH restarts or Computer Use is disabled. Revoke access on the same page.
+Explicit activation runs a read-only permission check, which may start a helper without opening a system dialog. Open the [permission page](../cua/README.md) for system requests, settings navigation and automatic refresh. Tasks ask separately before accessing an application. Saved application decisions use profile-scoped domain storage. Conversation decisions survive turns, connections, DSH restarts and Computer Use disablement without applying to another conversation. Revoke access on the same page.
 
 -----
 
@@ -51,7 +51,7 @@ Explicit activation runs a read-only permission check, which may start a helper 
 <details>
 <summary>Maintainer details</summary>
 
-The bundle patch mounts the native provider and permission UI with `agentPreset: ptc`. Existing Agent scopes register the tools without changing preset documents. The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked. [CUA](../cua/README.md) owns registration and disposal.
+The bundle patch mounts the native provider and permission UI with `agentPreset: ptc`. Using the exported `cordis.patch.yml` directly as an overlay bypasses bundle admission; its row-level condition skips the optional macOS provider on other Hosts. Shared entries alone do not provide computer control. Existing Agent scopes register the tools without changing preset documents. The detail-page action uses the existing settings form to save `agent-preset-registry.selectedDefault: ptc` only when clicked. [CUA](../cua/README.md) owns registration and disposal.
 
 </details>
 
@@ -86,7 +86,7 @@ CUA activation and removal change the PTC SDK and system guidance; subsequent re
 <a id="known-limitations-and-deferred-work"></a>
 
 - Source Web and Desktop share permission controls on macOS. Packaged Desktop helper distribution, signing, and permission attribution are deferred.
-- PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart. Saving or revoking application grants while another HMR transaction unloads the provider can block; queued-write cancellation is a separate pending lifecycle fix.
+- PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart.
 
 <a id="dev-note"></a>
 ### Dev Note

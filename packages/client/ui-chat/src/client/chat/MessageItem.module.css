@@ -19,26 +19,6 @@
      conversation column, where the axis variable is absent. */
   max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%);
 }
-.bubble {
-  /* Figma's 525px cap held as a share of the width axis (525/748 ≈ 0.702) so
-     the bubble widens with a user-dragged or adaptive column; percentage
-     keeps narrow windows sane. */
-  max-width: 100%;
-  background: var(--dsw-specific-bubble);
-  border-radius: var(--dsw-radius-xl);
-  /* 42px single-line bubble at the default size: 22 line + 10 vertical
-     padding each side; the Settings font-size preference moves size and line
-     height together through the body-published axis. */
-  padding: 10px 16px;
-  font-size: var(--dsh-content-font-size, 14px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-primary);
-  /* The projected user text is inline runs; the bubble owns wrapping so a
-     decorated single-line message stays one line. */
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .referenceSummary {
   color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);

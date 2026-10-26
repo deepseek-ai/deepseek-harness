@@ -1,6 +1,10 @@
 /** Experimental package identities, publication policy, and retained npm names. */
 
-/** Explicit npm identities retained across experimental classification and package-role moves. */
+/**
+ * Experimental packages whose npm names omit the experimental prefix, by directory: identities retained across
+ * experimental classification and package-role moves, and packages named without the prefix so that leaving
+ * experimental status keeps their names.
+ */
 export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, string>> = {
   'packages/experimental/cua': '@deepseek-ai/dsh-cua',
   'packages/experimental/cua-bundle': '@deepseek-ai/dsh-cua-bundle',
@@ -14,6 +18,13 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/hooks-codex': '@deepseek-ai/dsh-hooks-codex',
   'packages/experimental/webhook': '@deepseek-ai/dsh-webhook',
   'packages/experimental/webhook-github': '@deepseek-ai/dsh-webhook-github',
+  'packages/experimental/action-cards': '@deepseek-ai/dsh-action-cards',
+  'packages/experimental/client-ui-action-cards': '@deepseek-ai/dsh-client-ui-action-cards',
+  'packages/experimental/creation-recommendations': '@deepseek-ai/dsh-creation-recommendations',
+  'packages/experimental/client-ui-creation-recommendations': '@deepseek-ai/dsh-client-ui-creation-recommendations',
+  'packages/experimental/plugin-recommendations': '@deepseek-ai/dsh-plugin-recommendations',
+  'packages/experimental/client-ui-plugin-recommendations': '@deepseek-ai/dsh-client-ui-plugin-recommendations',
+  'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** npm namespace for experimental packages without retained-name exceptions. */

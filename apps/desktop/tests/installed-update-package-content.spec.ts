@@ -55,6 +55,8 @@ async function fixture(body: (context: {
     await prepareInstalledUpdateBootstrap(manifest)
     const source = join(root, 'source')
     await mkdir(join(source, 'lib'), { recursive: true })
+    await mkdir(join(source, 'lib/welcome'), { recursive: true })
+    await writeFile(join(source, 'lib/welcome/design-platform.css'), 'body { --fixture-token: white; }\n')
     await mkdir(join(source, 'renderer'))
     for (const name of ['main.js', 'preload-app.cjs', 'preload-mandatory.cjs', 'preload-update-dialog.cjs']) {
       await writeFile(join(source, 'lib', name), '// inert fixture\n')
@@ -104,7 +106,7 @@ describe('installed update archive contents', () => {
   it.each(versions)('reads real ASAR and runtime inventories for %s without claiming installation', async (version) => {
     await fixture(async ({ manifest, payload }) => {
       expect(await verifyInstalledUpdatePackageContent(manifest, version, payload, publisher)).toMatchObject({
-        version, applicationFiles: 7, dependenciesFrozen: false, installed: false,
+        version, applicationFiles: 8, dependenciesFrozen: false, installed: false,
         resignedExecutables: [join(payload, 'resources/app.asar.unpacked/dsh/tool.exe')],
       })
     }, version)

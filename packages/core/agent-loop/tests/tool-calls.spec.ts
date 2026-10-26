@@ -163,7 +163,7 @@ describe('tool-call scheduler: grouping and barriers', () => {
     expect(order).toEqual(['r-start-A1', 'r-end-A1', 'w-A2', 'r-start-A3', 'r-end-A3'])
   })
 
-  it('reclassifies pending calls after an exclusive barrier replaces their tool', async () => {
+  it('rejects pending calls whose original registration was replaced', async () => {
     const adapter = new MockAdapter([
       multiCall([
         { id: 'c1', name: 'replace', args: { id: '0' } },
@@ -194,17 +194,13 @@ describe('tool-call scheduler: grouping and barriers', () => {
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
-    await until(() => replacement.started.length === 1)
-    await new Promise(r => setTimeout(r, 5))
-    expect(replacement.started).toEqual(['1'])
-    replacement.release('1')
-    await until(() => replacement.started.length === 2)
-    expect(replacement.started).toEqual(['1', '2'])
-    replacement.release('2')
     await waitForIdle(ctx, agent)
+    expect(replacement.started).toEqual([])
+    expect(events(agent).filter(event => event.type === 'tool/result').slice(1).map(event => event.data.error?.code))
+      .toEqual(['UNKNOWN_TOOL', 'UNKNOWN_TOOL'])
   })
 
-  it('stops replenishing when a result observer makes the next call exclusive', async () => {
+  it('drains started calls and rejects unstarted calls after replacement', async () => {
     const adapter = new MockAdapter([
       multiCall([
         { id: 'c1', name: 'x', args: { id: '1' } },
@@ -232,10 +228,9 @@ describe('tool-call scheduler: grouping and barriers', () => {
     await new Promise(r => setTimeout(r, 5))
     expect(replacement.started).toEqual([])
     initial.release('2')
-    await until(() => replacement.started.length === 1)
-    expect(replacement.started).toEqual(['3'])
-    replacement.release('3')
     await waitForIdle(ctx, agent)
+    expect(replacement.started).toEqual([])
+    expect(events(agent).filter(event => event.type === 'tool/result').at(-1)?.data.error?.code).toBe('UNKNOWN_TOOL')
   })
 })
 

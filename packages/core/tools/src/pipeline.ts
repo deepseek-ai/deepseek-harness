@@ -10,12 +10,15 @@ import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@dee
 import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
 import type { ToolsService } from './index.ts'
-import type { ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
+import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
 
 /** Executor-owned lookup and restrictions applied before extensible execution policy. */
 export interface ToolExecutionSource {
-  /** Override registry lookup for executor-owned capabilities; omitted uses the retained registry. */
-  get?(name: string, scope?: ScopeKey): ToolDefinition | undefined
+  /**
+   * Override registry lookup for executor-owned capabilities; omitted uses the
+   * retained registry's executable lookup, which applies the call's step admission.
+   */
+  get?(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
   /** Reject an otherwise visible invocation before policy; omitted permits it. */
   reject?(name: string, nested: boolean): Error | undefined
 }
@@ -64,12 +67,16 @@ export class ToolExecutionPipeline {
     this.tools = ctx.tools
   }
 
-  private get(name: string, scope?: ScopeKey): ToolDefinition | undefined {
-    return this.source.get === undefined ? this.tools.get(name, scope) : this.source.get(name, scope)
+  private get(name: string, scope: ScopeKey | undefined, toolSet: ResolvedToolSet | undefined): ToolDefinition | undefined {
+    return this.source.get === undefined
+      ? this.tools.executable(name, scope, toolSet)
+      : this.source.get(name, scope, toolSet)
   }
 
-  private resolveExecution(name: string, scope: ScopeKey | undefined, nested: boolean): ToolDefinition | undefined {
-    const tool = this.get(name, scope)
+  private resolveExecution(
+    name: string, scope: ScopeKey | undefined, nested: boolean, toolSet: ResolvedToolSet | undefined,
+  ): ToolDefinition | undefined {
+    const tool = this.get(name, scope, toolSet)
     return tool !== undefined && this.source.reject?.(name, nested) === undefined ? tool : undefined
   }
 
@@ -96,7 +103,7 @@ export class ToolExecutionPipeline {
    * @returns the fail-closed scheduling mode.
    */
   executionMode(exec: ToolExecutionInput): ToolExecutionMode {
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
     if (!tool?.isConcurrencySafe) return { kind: 'exclusive' }
     try {
       const concurrencySafe: unknown = tool.isConcurrencySafe(exec.arguments)
@@ -116,7 +123,7 @@ export class ToolExecutionPipeline {
     const parent = exec.parent
     const signal = exec.signal
     // Executor refusals precede extensible policy; unknown tools retain dispatch-stage handling.
-    const visible = this.get(name, agent)
+    const visible = this.get(name, agent, exec.toolSet)
     const rejection = visible === undefined ? undefined : this.source.reject?.(name, parent !== undefined)
     const rejected = rejection !== undefined
     const concludingExecutions = this.concludingExecutions
@@ -127,6 +134,7 @@ export class ToolExecutionPipeline {
       name,
       signal,
       ...agent !== undefined ? { agent } : {},
+      ...exec.toolSet !== undefined ? { toolSet: exec.toolSet } : {},
       ...parent !== undefined ? { parent } : {},
       ...exec.schema !== undefined ? { schema: exec.schema } : {},
       deferContext(context: UserMessage): void {
@@ -261,7 +269,7 @@ export class ToolExecutionPipeline {
     }
     exec.signal = signal
     try {
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
       if (!tool) throw new ToolNotFoundError(exec.name)
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)
@@ -501,7 +509,7 @@ export class ToolExecutionPipeline {
       if (result.isError) {
         throw new TypeError('tools/post-execute cannot replace the value of a failed result')
       }
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
       if (tool === undefined) throw new ToolNotFoundError(exec.name)
       const replaced = this.createSuccessResult(exec, tool, decision.value)
       return this.markCanonical(exec, {
@@ -570,7 +578,7 @@ export class ToolExecutionPipeline {
         ...result.additionalContexts !== undefined ? { additionalContexts: result.additionalContexts } : {},
       })
     }
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
+    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
     if (tool === undefined) throw new ToolNotFoundError(exec.name)
     const normalized = this.createSuccessResult(exec, tool, result.value)
     return this.markCanonical(exec, {

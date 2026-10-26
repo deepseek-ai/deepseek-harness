@@ -59,6 +59,8 @@ On a loopback browser, the shell renders **Open configuration file** only when t
 
 The onboarding ledger projects in ascending order and mounts exactly one step at a time. Registrants own durable completion, capability readiness, copy, mutations, and their visible wrapper, so independently registered flows cannot stack and the shell does not become a second configuration fact source. Visible steps own their dialog chrome and app-root `inert` lifecycle.
 
+Access: the settings shell and the `settings.open` shortcut are registered only while the current Peer may call `settings/describe`. The owner always has access.
+
 -----
 
 <a id="understand-the-implementation"></a>

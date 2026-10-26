@@ -63,6 +63,15 @@ ctx.tools.register(defineTool({
 
 The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, author-only `json`, and exact-one `oneOf`; `InferValue` preserves exact types through 16 container levels before widening to `JsonValue`. A raw JSON Schema (`JsonSchemaNode`) is the wire-level counterpart shared with subagents, workflows, and MCP.
 
+<a id="conditional-tools"></a>
+### Conditional tools
+
+`register(definition, { when })` evaluates a synchronous or asynchronous condition once for each model step. The condition receives `{ agent, modelSelection, signal }`; `modelSelection` is the provider, model, and reasoning effort that step preparation captured for every request attempt in the step, the same value as `AssembleContext.modelSelection`. False omits the tool from the executor's description, PTC bindings, and execution. A thrown condition fails step preparation as `TOOL_ACTIVATION_FAILED`; it is not treated as ordinary unavailability. Conditions must observe cancellation and must not change registrations or perform tool work.
+
+`resolve({ agent, modelSelection, signal })` returns a step-owned `ResolvedToolSet`. Pass it as `toolSet` to prompt assembly and the step's `ctx.tools.execute()` batch, then dispose it after the batch settles; retries in the step reuse it. Executors apply the batch's set to every call, including PTC program subcalls. Registrations stay effect-owned; each selection admits only the original registration in its exact agent scope. Disposal, new restrictions, or same-name replacement prevent unstarted calls from using it; after cancellation, calls settle with the shared pipeline's cancellation results. Started operations retain their cooperative cancellation obligations. Conditional calls in a batch without a resolved set return `UNKNOWN_TOOL`.
+
+`get(name, scope, toolSet)`, `definitions(scope, toolSet)`, and `schemas(scope, toolSet)` inspect an admitted set; omitting `toolSet` inspects registered definitions without evaluating conditions. `executable(name, scope, toolSet)` is the execution lookup: it applies the set, and without one it excludes conditional registrations. Executor descriptions and sections receive the same selection as `AssembleContext.toolSet`. A presentation transform cannot add or remove callable tools.
+
 ### Select an executor
 
 Mount one executor in the deployment, preset, or Agent scope. The nearest scope selects the provider; duplicate providers in one scope fail. Native exposes visible capabilities directly; PTC exposes `run_code` and a generated SDK. Executor registration and disposal do not emit `tools/change`; prompt assemblies and batches resolve the current executor when they run.

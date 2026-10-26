@@ -298,6 +298,8 @@ export interface PerformanceUsageInjected {
 
 /** Business callbacks injected into the Chat view. */
 export interface ChatViewInjected {
+  /** File preparation and failure callbacks owned by the file-drag plugin. */
+  readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions
   /** Dispatch one gesture to the Conversation plugin registry. */
   dispatchInteraction: (gesture: TextInteractionGesture) => string | null
   hooks: {

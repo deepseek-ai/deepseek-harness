@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { QuoteSelectionAction } from './QuoteSelection.tsx'
 import { QuotedUserText } from './QuotedUserText.tsx'
 import { quoteRule } from './quote-rule.ts'
-import { en, ja, NS, zh, type MessageQuotesKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type MessageQuotesKey } from './locales.ts'
 
 export type {} from './quote-rule.ts'
 
@@ -30,7 +30,7 @@ export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
  * @param ctx - Client root context owning every Quote contribution.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja }), 'message-quotes: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'message-quotes: dictionaries')
   ctx.effect(() => ctx.uiConversation.userText.register(quoteRule), 'message-quotes: UserText rule')
   ctx.effect(() => ctx.uiConversation.interactions.register({
     id: 'quote',

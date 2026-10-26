@@ -14,11 +14,11 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
-import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
+import type { PtcRunFailure, PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
+import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
@@ -141,6 +141,7 @@ async function executeCall(ctx: Context, input: ToolExecutionInput): Promise<Too
     calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: JSON.stringify(input.arguments) }],
     signal: input.signal,
     ...input.agent === undefined ? {} : { agent: input.agent },
+    ...input.toolSet === undefined ? {} : { toolSet: input.toolSet },
   })
   return batch.results[0]!.result
 }
@@ -198,6 +199,51 @@ it('logs detached frozen nested metadata without changing the binding value or l
 })
 
 describe('mode-aware wire contribution', () => {
+  it('shares conditional admission with SDK bindings and rejects a replaced cached binding', async () => {
+    const { ctx, runtime, systemPrompt } = await setup({ mode: 'ptc' })
+    try {
+      const agent = { ctx, session: Session.create(SessionId('conditional-ptc')) } as Agent
+      let active = false
+      const execute = vi.fn(async () => 'done')
+      const definition = defineTool({
+        name: 'conditional', description: 'Available on selected requests.', parameters: {},
+        output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+        execute,
+      })
+      const unregister = ctx.tools.register(definition, { when: () => active })
+      for (const enabled of [false, true]) {
+        active = enabled
+        const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
+        try {
+          const assembly = await systemPrompt.assemble({ scope: agent, agent, toolSet })
+          const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+          expect(sdk.includes('conditional:')).toBe(enabled)
+          runtime.behavior = async (request) => {
+            const functions = request.bindings[0]!.functions
+            expect(Object.keys(functions)).toEqual(enabled ? ['conditional'] : [])
+            if (enabled) {
+              expect(await functions.conditional!({})).toBe('done')
+              unregister()
+              ctx.tools.register(definition, { when: () => true })
+              await expect(functions.conditional!({})).rejects.toThrow('unknown tool "conditional"')
+            }
+            return { logs: [] }
+          }
+          const result = await executeCall(ctx, {
+            agent, toolSet, signal: testToolSignal, callId: ToolCallId('conditional-program'),
+            name: RUN_CODE_NAME, arguments: { code: 'program', description: 'Check conditional bindings' },
+          })
+          expect(result).toMatchObject({ isError: false })
+        } finally {
+          toolSet.dispose()
+        }
+      }
+      expect(execute).toHaveBeenCalledTimes(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('waits for its runtime and follows runtime withdrawal and replacement', async () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
@@ -321,7 +367,7 @@ describe('mode-aware wire contribution', () => {
     expect(sdk).toContain('deep_output: string | null')
   })
 
-  it('treats expert assembly output as authoritative in mode ptc', async () => {
+  it('keeps PTC declarations owned by the registry during presentation transforms', async () => {
     const mode = 'ptc'
     const { ctx, systemPrompt } = await setup({ mode })
     registerEcho(ctx)
@@ -330,13 +376,13 @@ describe('mode-aware wire contribution', () => {
       return {
         ...assembly,
         sections: assembly.sections.filter(section => section.name !== 'tools:sdk'),
-        tools: assembly.tools.filter(tool => tool.name !== RUN_CODE_NAME),
+        tools: [],
       }
     }, { prepend: true })
 
     const assembly = await systemPrompt.assemble()
     expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
-    expect(assembly.tools.some(tool => tool.name === RUN_CODE_NAME)).toBe(false)
+    expect(assembly.tools.some(tool => tool.name === RUN_CODE_NAME)).toBe(true)
   })
 
   it('lets one scope shadow the default SDK section in mode ptc', async () => {
@@ -1556,7 +1602,9 @@ describe('the run_code dispatch bridge', () => {
 
   it('aborting the outer signal aborts the in-flight sub-dispatch and abandons queued ones', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     const seen: string[] = []
+    const entered = Promise.withResolvers<undefined>()
     let sawAbort = false
     ctx.tools.register(defineContentToolFixture({
       name: 'slow',
@@ -1565,8 +1613,8 @@ describe('the run_code dispatch bridge', () => {
       async execute(args, exec) {
         seen.push(args.id)
         await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 500)
-          exec.signal.addEventListener('abort', () => { sawAbort = true; clearTimeout(timer); resolve() }, { once: true })
+          exec.signal.addEventListener('abort', () => { sawAbort = true; resolve() }, { once: true })
+          entered.resolve(undefined)
         })
         return [{ type: 'text' as const, text: args.id }]
       },
@@ -1575,7 +1623,8 @@ describe('the run_code dispatch bridge', () => {
     runtime.behavior = async (request) => {
       const tools = request.bindings[0]!.functions
       const calls = [tools.slow!({ id: 'first' }).catch(() => 'rejected'), tools.slow!({ id: 'second' }).catch(() => 'rejected')]
-      setTimeout(() => { controller.abort('user-cancel') }, 50)
+      await entered.promise
+      controller.abort('user-cancel')
       await Promise.all(calls)
       // A real runtime would be terminated by the abort; the fake honors the
       // contract by reporting the abort as the run failure.
@@ -1583,7 +1632,7 @@ describe('the run_code dispatch bridge', () => {
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toContain('code run failed (abort)')
+    expect(result.error).toEqual({ message: 'tool call aborted', info: { name: 'AbortError', code: TOOL_ABORTED } })
     expect(seen).toEqual(['first'])
     expect(sawAbort).toBe(true)
   })
@@ -1997,6 +2046,60 @@ describe('the run_code dispatch bridge', () => {
     })
     expect((result.content[0] as { text: string }).text).toBe('Error: tool call aborted')
     expect(calls).toEqual([])
+  })
+
+  describe.each(['typescript', 'python'])('%s caller cancellation', (language) => {
+    it.each<AgentCancelCause | undefined>([
+      { kind: 'user' },
+      { kind: 'parent' },
+      { kind: 'hook', reason: 'policy stopped the turn' },
+      { kind: 'disposed' },
+      undefined,
+    ])('maps reason %j to the native tool abort result', async (cause) => {
+      const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language } })
+      onTestFinished(async () => { await ctx.fiber.dispose() })
+      const controller = new AbortController()
+      runtime.behavior = async (request) => {
+        if (cause === undefined) controller.abort()
+        else controller.abort(cause)
+        expect(request.signal?.reason).toBe(controller.signal.reason)
+        const reason: unknown = request.signal?.reason
+        const message = reason instanceof Error ? reason.message : String(reason)
+        return { logs: [], error: { kind: 'abort', message } }
+      }
+
+      const result = await runCode(ctx, 'program', { signal: controller.signal })
+
+      expect(result).toEqual({
+        content: [{ type: 'text', text: 'Error: tool call aborted' }],
+        isError: true,
+        error: {
+          message: 'tool call aborted',
+          info: { name: 'AbortError', code: TOOL_ABORTED },
+        },
+      })
+    })
+  })
+
+  it.each<[boolean, PtcRunFailure]>([
+    [false, { kind: 'abort', message: 'sandbox mode changed' }],
+    [true, { kind: 'worker-exit', message: 'managed process cleanup failed' }],
+    [true, { kind: 'timeout', message: 'execution deadline reached' }],
+  ])('keeps runtime failure details with caller cancellation %s: %j', async (cancelled, failure) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const controller = new AbortController()
+    runtime.behavior = async () => {
+      if (cancelled) controller.abort({ kind: 'user' })
+      return { logs: ['got this far'], error: failure }
+    }
+
+    const result = await runCode(ctx, 'program', { signal: controller.signal })
+
+    expect(result.error).toEqual({
+      message: `code run failed (${failure.kind}): ${failure.message}\nCaptured output:\ngot this far`,
+      info: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' },
+    })
   })
 
   it('a tool/ptc-dispatch event never derives a model message', () => {

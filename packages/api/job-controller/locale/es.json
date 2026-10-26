@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interfaz de observación de tareas en segundo plano",
+    "description": "Proporcionar continuamente el estado y la salida de las tareas en segundo plano al cliente."
+  }
+}

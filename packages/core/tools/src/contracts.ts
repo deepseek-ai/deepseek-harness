@@ -1,7 +1,8 @@
 /** Tool definitions and invocation data shared by registries and executors. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { JsonSchemaNode } from './json-schema.ts'
@@ -100,6 +101,53 @@ export interface ToolDefinition extends ToolSchema {
   presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined
 }
 
+/** Inputs for a tool's step-time activation condition. */
+export interface ToolActivationContext {
+  /** Agent preparing the step. */
+  readonly agent: Agent
+  /** Provider, model, and optional reasoning effort captured for the step. */
+  readonly modelSelection: Readonly<ModelSelection>
+  /** Cancellation of step preparation; asynchronous conditions must observe it. */
+  readonly signal: AbortSignal
+}
+
+/** Lifecycle-owned conditions for a registered tool. */
+export interface ToolRegistrationOptions {
+  /**
+   * Decide whether the step's requests may call the tool. Omission enables
+   * it. False excludes it from both declarations and dispatch; rejection fails
+   * step preparation. Conditions must not mutate registrations or start tool work.
+   * @param context - preparing agent, captured model selection, and cancellation signal.
+   * @returns whether the tool participates in this step.
+   */
+  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
+}
+
+/** One step's admitted registrations, also used by nested PTC calls. */
+export interface ResolvedToolSet {
+  /** Close admission after the step's tool batch settles. */
+  dispose(): void
+  /**
+   * Read admitted registrations that remain visible in their original scope.
+   * @param scope - exact requesting agent; another scope is never admitted.
+   * @returns original definitions excluding removed or restricted registrations.
+   */
+  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+}
+
+/** Failure to determine a tool's step-time availability. */
+export class ToolActivationError extends HarnessError {
+  /**
+   * Preserve a condition failure without treating it as normal unavailability.
+   * @param name - tool whose condition rejected.
+   * @param cause - underlying condition failure.
+   */
+  constructor(name: string, cause: unknown) {
+    super(`cannot resolve availability of tool "${name}"`, 'TOOL_ACTIVATION_FAILED', { cause })
+    this.name = 'ToolActivationError'
+  }
+}
+
 /** The completed outcome handed to {@link ToolDefinition.presentResult}. */
 export interface ToolResult {
   /** The final model-facing content (or the rendered error text on failure). */
@@ -137,6 +185,8 @@ export interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
+  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
+  readonly toolSet?: ResolvedToolSet
   /**
    * Opaque token of the enclosing transport execution, when one exists. PTC
    * mode sets this on SDK sub-dispatches so commit-style observers can wait for

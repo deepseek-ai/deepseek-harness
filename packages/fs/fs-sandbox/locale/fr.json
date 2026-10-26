@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Accès au bac à sable de fichiers",
+    "description": "Limitez la portée de l’écriture et de la modification des fichiers en fonction du mode d’autorisation actuel."
+  }
+}

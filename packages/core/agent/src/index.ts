@@ -102,17 +102,18 @@ export interface CreateAgentOptions {
   readonly signal?: AbortSignal
   /**
    * Creation-time composition of the agent's scoped world. The factory awaits
-   * setup after minting `agentCtx` but BEFORE inserting or announcing either
-   * the session or agent, so observers can never see a partially configured
-   * world. Setup may return an {@link AgentSetupCommit}; the factory invokes its
+   * setup after minting `agentCtx`, entering the SessionStore, and completing
+   * `session/created`. The Session
+   * accepts live events during setup; the Agent remains outside its registry
+   * until setup completes. Agent creation is announced after setup. Setup may return an {@link AgentSetupCommit}; the factory invokes its
    * synchronous `commit()` after every setup await settles and immediately
    * before registry publication. This lets mutable provisioning revalidate at
    * the exact publication boundary. Everything registered through `agentCtx`
    * (scoped tools, prompt sections/variables, `restrict()`, listeners, awaited
-   * child plugins) exists before `session/created`, `agent/created`,
+   * child plugins) exists before `agent/created`,
    * and the first prompt assembly. A setup
    * throw/rejection, commit throw, or owner disposal rolls the scope back
-   * without publishing either id.
+   * without announcing Agent creation. Already committed Session events remain stored.
    *
    * **Setup composes, it never drives**: the callback is trusted same-process
    * code and receives the full scoped context, so this is a contract rather
@@ -136,12 +137,12 @@ export interface ResumeAgentOptions {
   readonly signal?: AbortSignal
   /**
    * Resume-time composition of the agent's fresh scoped world. Persistence is
-   * loaded first; the factory then mints `agentCtx` and awaits setup while the
-   * reconstructed session and agent remain unpublished. The callback has the
+   * loaded first; the factory then enters and announces the reconstructed Session and awaits
+   * setup in the fresh `agentCtx` before registering the Agent. The callback has the
    * same trusted composition-only contract and optional synchronous
    * publication commit as {@link CreateAgentOptions.setup}: all registrations
-   * exist before either creation announcement, and rejection, commit failure,
-   * or owner disposal rolls the transaction back without publishing either id.
+   * exist before Agent creation is announced, and rejection, commit failure,
+   * or owner disposal unwinds the transaction while preserving pending inbox input.
    */
   readonly setup?: AgentSetup
 }
@@ -174,13 +175,16 @@ export interface AgentHandle {
 export interface AgentFactory {
   /**
    * Create a new agent on a caller-supplied session id. Async because creation
-   * awaits unpublished setup, invokes its optional synchronous commit, inserts
-   * both session and agent, announces session creation, and awaits serial
+   * enters and announces the Session, awaits setup and its optional synchronous commit,
+   * inserts the Agent, and awaits serial
    * `agent/created` listeners before releasing queued work. The sequence is
    * rollback-covered, but notifications delivered before a later listener
    * failure remain observable; every agent or session creation announcement
    * that began is paired by `agent/disposed` or `session/disposed` during
-   * rollback. The owner disposes the resolved handle to stop/drain,
+   * rollback. Once Agent initialization begins, failures reject after its
+   * scope and acquired write handle finish cleanup. Cancellation during
+   * persistence acquisition may reject before a late handle is available to close.
+   * The owner disposes the resolved handle to stop/drain,
    * unregister, remove the session, and unwind the scope.
    * The registry passes a context carrying the `create()` caller's fiber and
    * scope as `ownerCtx`. The implementation attaches the unpublished
@@ -196,7 +200,7 @@ export interface AgentFactory {
    * persisted session for write, reads and repairs the log, publishes it, and
    * awaits the optional unpublished setup transaction; must be called after
    * `ctx.sessionPersistence` exists (consumers inject `sessionPersistence`).
-   * Publication follows the same setup-commit and ordered boundary as
+   * Initialization cleanup and publication follow the same timing as
    * {@link createAgent}.
    * @param ownerCtx - caller-bound context that owns load, setup, and the live handle.
    * @param options - persisted identity, configuration, optional live parent, and setup.

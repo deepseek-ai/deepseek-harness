@@ -21,7 +21,7 @@ describe.skipIf(MODE === 'record')('web e2e: native and Client locale preference
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
   const reported: string[] = []
-  let languages = ['fr-FR', 'zh-CN', 'en-US']
+  let languages = ['it-IT', 'zh-CN', 'en-US']
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold()

@@ -1,0 +1,9 @@
+version: 1
+scenario: web-search-unconfigured
+profile: headless
+composition: web-search-unconfigured
+recording: live
+header:
+  class: web-search-unconfigured
+  pin: true
+  toolSchemasSource: web-fetch

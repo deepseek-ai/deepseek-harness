@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH-Prozess-Sandbox",
+    "description": "Erstellen Sie Sandbox-Befehle für Remote-POSIX-Prozesse über den gemeinsam genutzten SSH-Helfer."
+  }
+}

@@ -23,6 +23,7 @@ const ERROR_STEPS: Record<ManagementError['code'], string> = {
   'bundle-in-use': 'Call list_plugins, disable the entries from other layers that still use this bundle, then retry.',
   'stale-approval': 'Call install_bundle again without approvedBuilds to read the current pendingBuilds.',
   'incompatible-version': 'Install a version compatible with the running DSH. A version exemption needs the user\'s explicit acceptance of crash and data-loss risk.',
+  'unsupported-platform': 'This bundle cannot run on the current Host platform; ask the user to use a supported Host.',
   'operation-error': 'Report the diagnostic to the user; retry only after its cause is addressed.',
 }
 

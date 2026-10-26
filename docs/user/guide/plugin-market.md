@@ -1,10 +1,10 @@
-# Plugin markets
+# Plugin indexes
 
 English | [中文](plugin-market.zh.md)
 
 ## Summary
 
-A plugin market is one JSON index file that lists installable DSH bundles with their titles, icons, authors, and versions. Turn on the experimental **Custom plugin markets** bundle to browse markets in a **Discover** tab on the Plugins page and install a listed version after a confirmation. To publish a market, write or generate an index file and serve it, together with its icon files, from any static host.
+A plugin index is one JSON file that lists installable DSH bundles with their titles, icons, authors, and versions. Turn on the experimental **Custom plugin indexes** bundle to browse indexes in a **Discover** tab on the Plugins page and install a listed version after a confirmation. To publish an index, write or generate an index file and serve it, together with its icon files, from any static host.
 
 ## Table of Contents
 
@@ -18,20 +18,20 @@ A plugin market is one JSON index file that lists installable DSH bundles with t
 <a id="turn-on"></a>
 ## Turn on Discover
 
-Open **Plugins**, find **Custom plugin markets** under **Experimental plugins**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
+Open **Plugins**, find **Custom plugin indexes** under **Experimental plugins**, and switch it on. A **Discover** tab appears next to **Installed**, and Creator mode gains the read-only `plugin_market` tool. Switching the bundle off removes both again.
 
-DSH ships no index source. Select **Discover**, choose **Add index source**, and enter the URL of an index file. A URL must use `http:` or `https:` and must not contain a user name, password, or `#` fragment. Anyone on the network path can change an `http:` index, including the install specs it lists, so use `https:` for a market reached over a network you do not control. Each source belongs to the current profile.
+DSH ships no index source. Select **Discover**, choose **Add index source**, and enter the URL of an index file. A URL must use `http:` or `https:` and must not contain a user name, password, or `#` fragment. Anyone on the network path can change an `http:` index, including the install specs it lists, so use `https:` for an index reached over a network you do not control. Each source belongs to the current profile.
 
 <a id="browse-and-install"></a>
 ## Browse and install
 
-The market menu at the left of the toolbar switches between sources and opens **Manage index sources…**, where each source shows its last error. Search matches names, authors, keywords, and titles, descriptions, categories, and labels in every language, and tolerates typos; results come in best-match order until you choose another. The **Labels** menu, category pills, and **Sort** menu use the categories, labels, and sort keys that the market declares, and **Publish date** sorts by each plugin's latest version.
+The index menu at the left of the toolbar switches between sources and opens **Manage index sources…**, where each source shows its last error. Search matches names, authors, keywords, and titles, descriptions, categories, and labels in every language, and tolerates typos; results come in best-match order until you choose another. The **Labels** menu, category pills, and **Sort** menu use the categories, labels, and sort keys that the index declares, and **Publish date** sorts by each plugin's latest version.
 
 Each card shows the plugin's recommended version: the highest version compatible with the running DSH that is not a prerelease, or the highest compatible prerelease when the plugin lists no version without a prerelease tag. **Install** opens a confirmation with that version's source: the npm package and registry, or the Git repository, commit, and directory. Confirming starts the normal plugin installation, including its compatibility and registry checks; nothing is installed without that confirmation.
 
 Select a card to open its page. The **Versions** list shows every listed version with its compatibility and offers **Install** for any version DSH accepts, including older releases and prereleases. A card that shows **Installed**, **Update available**, or **Provided by DSH** opens the installed bundle instead.
 
-Markets are third-party content. A market chooses each plugin's title, description, icon, author, and source; DSH checks the file format but not those claims. Add only sources you trust, and check the source in the confirmation before installing.
+Indexes are third-party content. An index chooses each plugin's title, description, icon, author, and source; DSH checks the file format but not those claims. Add only sources you trust, and check the source in the confirmation before installing.
 
 <a id="publish-an-index"></a>
 ## Publish an index
@@ -109,10 +109,10 @@ Text fields marked `LocalizedText` are a string or an object of strings keyed by
 | Index field | Required | Meaning |
 |---|---|---|
 | `format` | yes | `1`. |
-| `title`, `description` | `title` only | Market name and description, `LocalizedText`. |
+| `title`, `description` | `title` only | Index name and description, `LocalizedText`. |
 | `metadata.categories`, `metadata.labels` | no | Objects mapping an id to `{ "title": LocalizedText }`. |
 | `metadata.sortKeys` | no | Object mapping an id to `{ "title": LocalizedText, "order": "asc" \| "desc" }`; `order` is the initial direction. |
-| `plugins` | yes | Plugins in the market's default order. |
+| `plugins` | yes | Plugins in the index's default order. |
 
 | Plugin field | Required | Meaning |
 |---|---|---|
@@ -140,7 +140,7 @@ DSH installs an npm version as `name@version`, asking `registry` first when pres
 ## Further Exploration
 
 - [Discover tab reference](../../../packages/client/ui-plugin-market/README.md) describes the tab's controls and states.
-- [Plugin market service](../../../packages/boot/plugin-market/README.md) covers fetch limits, caching, and the `plugin_market` tool.
+- [Plugin index service](../../../packages/boot/plugin-market/README.md) covers fetch limits, caching, and the `plugin_market` tool.
 - [Index validator](../../../packages/util/plugin-market-index/README.md) is the library generators can use to check an index before publishing it.
 
 ## Dev Note

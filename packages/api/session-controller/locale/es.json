@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "interfaz de control de sesión",
+    "description": "Proporciona capacidades de lectura de sesiones, control de ejecución y actualización de estado a los clientes."
+  }
+}

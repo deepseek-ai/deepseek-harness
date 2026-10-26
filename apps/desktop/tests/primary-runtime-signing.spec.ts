@@ -65,32 +65,84 @@ it('bounds overlapping cache restores and verifies all hits before serial hardwa
   expect(sign.mock.calls.map(([request]) => request.path)).toEqual(['c.exe', 'd.exe'].map(name => join(root, name)))
 })
 
-it.each(['restore', 'verification', 'audit'])('drains active cache restores after %s failure without dispatching more work', async (failure) => {
+it('drains active cache restores after failure without dispatching more work', async () => {
   const root = await fixture(['a.exe', 'b.exe', 'c.exe'])
   const entered = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
   const failed = Promise.withResolvers<undefined>()
-  const restored = new Set<string>()
   const calls: string[] = []
   const sign = vi.fn(async () => {})
   let settled = false
   const operation = signWindowsCode(root, { thumbprint, sign,
-    record: (event) => {
-      if (failure === 'audit' && 'type' in event && event.type === 'windows-code-signature-verified') {
-        failed.resolve(undefined)
-        throw new Error('audit failed')
-      }
-    },
-    inspect: async (path) => {
-      if (!restored.has(path)) return unsigned
-      if (failure === 'verification' && path.endsWith('a.exe')) { failed.resolve(undefined); throw new Error('verification failed') }
-      return valid
-    },
+    record: () => {},
+    inspect: async () => unsigned,
     cache: { concurrency: 2, restore: async ({ path }) => {
       calls.push(path)
       if (path.endsWith('b.exe')) { entered.resolve(undefined); await release.promise; return false }
       await entered.promise
-      if (failure === 'restore') { failed.resolve(undefined); throw new Error('restore failed') }
+      failed.resolve(undefined)
+      throw new Error('restore failed')
+    } },
+  }).then(() => { settled = true; return undefined }, (error: unknown) => { settled = true; return error })
+  try {
+    await Promise.race([failed.promise, operation])
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(settled).toBe(false)
+    expect(sign).not.toHaveBeenCalled()
+  } finally { release.resolve(undefined); await operation }
+  expect(await operation).toEqual(new Error('restore failed'))
+  expect(calls).toEqual(['a.exe', 'b.exe'].map(name => join(root, name)))
+  expect(sign).not.toHaveBeenCalled()
+})
+
+it.each(['trust', 'timestamp', 'certificate', 'audit'])('rejects restored target %s failures before hardware signing', async (failure) => {
+  const root = await fixture(['a.exe', 'b.exe', 'miss.exe'])
+  const restored = new Set<string>()
+  let restores = 0
+  const sign = vi.fn(async () => {})
+  await expect(signWindowsCode(root, { thumbprint, sign,
+    record: (event) => {
+      if (failure === 'audit' && 'type' in event && event.type === 'windows-code-signature-verified') throw new Error('audit failed')
+    },
+    inspect: async (path) => {
+      if (!restored.has(path)) return unsigned
+      expect(restores).toBe(3)
+      return {
+        ...valid,
+        ...(failure === 'trust' ? { status: 'HashMismatch' } : {}),
+        ...(failure === 'timestamp' ? { timestamped: false } : {}),
+        ...(failure === 'certificate' ? { thumbprint: 'B'.repeat(40) } : {}),
+      }
+    },
+    cache: { concurrency: 2, restore: async ({ path }) => {
+      restores++
+      if (path.endsWith('miss.exe')) return false
+      restored.add(path)
+      return true
+    } },
+  })).rejects.toThrow(failure === 'audit' ? 'audit failed' : 'signing verification failed')
+  expect(restores).toBe(3)
+  expect(sign).not.toHaveBeenCalled()
+})
+
+it('drains failed restored-target inspection before returning and never signs misses', async () => {
+  const root = await fixture(['a.exe', 'b.exe', 'miss.exe'])
+  const entered = Promise.withResolvers<undefined>()
+  const failed = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const restored = new Set<string>()
+  const sign = vi.fn(async () => {})
+  let settled = false
+  const operation = signWindowsCode(root, { thumbprint, sign, record: () => {},
+    inspect: async (path) => {
+      if (!restored.has(path)) return unsigned
+      if (path.endsWith('b.exe')) { entered.resolve(undefined); await release.promise; return valid }
+      await entered.promise
+      failed.resolve(undefined)
+      throw new Error('verification failed')
+    },
+    cache: { concurrency: 2, restore: async ({ path }) => {
+      if (path.endsWith('miss.exe')) return false
       restored.add(path)
       return true
     } },
@@ -101,8 +153,7 @@ it.each(['restore', 'verification', 'audit'])('drains active cache restores afte
     expect(settled).toBe(false)
     expect(sign).not.toHaveBeenCalled()
   } finally { release.resolve(undefined); await operation }
-  expect(await operation).toEqual(new Error(`${failure} failed`))
-  expect(calls).toEqual(['a.exe', 'b.exe'].map(name => join(root, name)))
+  expect(await operation).toEqual(new Error('verification failed'))
   expect(sign).not.toHaveBeenCalled()
 })
 

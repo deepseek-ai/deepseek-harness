@@ -131,26 +131,29 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
       .toBe(await card.locator('svg').evaluate(icon => icon.innerHTML))
     await expect.poll(() => changes.evaluate(element => element.isConnected
       ? element.getBoundingClientRect().height : undefined), { timeout: 10_000 }).toBe(62)
-    const appearance = await page.evaluate(() => {
+    // Earlier locator reads do not guarantee both cards remain mounted when the
+    // turn tail updates. Observe their presence and styles in one browser task.
+    await expect.poll(() => page.evaluate(() => {
+      const presentedCard = document.querySelector('[data-presented-file]')
+      const changedCard = document.querySelector('[data-changed-files]')
+      if (presentedCard === null || changedCard === null) return null
       const previous = document.body.getAttribute('data-ds-dark-theme')
       try {
         return [false, true].map((dark) => {
           document.body.toggleAttribute('data-ds-dark-theme', dark)
-          const cards = ['[data-presented-file]', '[data-changed-files]'].map((selector) => {
-            const card = document.querySelector(selector)!
+          const appearance = [presentedCard, changedCard].map((card) => {
             const tile = card.querySelector('svg')!.parentElement!
             return { fill: getComputedStyle(tile).backgroundColor, tileBorder: getComputedStyle(tile).border,
               cardBorder: getComputedStyle(card).border }
           })
-          return { fills: cards.map(card => card.fill), matchingTiles: cards[0]!.tileBorder === cards[1]!.tileBorder,
-            matchingCards: cards[0]!.cardBorder === cards[1]!.cardBorder }
+          return { fills: appearance.map(card => card.fill), matchingTiles: appearance[0]!.tileBorder === appearance[1]!.tileBorder,
+            matchingCards: appearance[0]!.cardBorder === appearance[1]!.cardBorder }
         })
       } finally {
         if (previous === null) document.body.removeAttribute('data-ds-dark-theme')
         else document.body.setAttribute('data-ds-dark-theme', previous)
       }
-    })
-    expect(appearance).toEqual([
+    }), { timeout: 10_000 }).toEqual([
       { fills: ['color(srgb 1 1 1 / 0.5)', 'color(srgb 1 1 1 / 0.5)'], matchingTiles: true, matchingCards: true },
       { fills: ['color(srgb 1 1 1 / 0.05)', 'color(srgb 1 1 1 / 0.05)'], matchingTiles: true, matchingCards: true },
     ])

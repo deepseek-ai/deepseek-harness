@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Páginas personalizadas",
+    "description": "Propõe, abaixo da resposta, uma página ou uma pequena ferramenta para manter; depois que você clica em Criar, ela é gerada em segundo plano como uma página de plug-in que você pode cancelar, desfazer e restaurar. A geração leva alguns minutos e consome muitos tokens."
+  }
+}

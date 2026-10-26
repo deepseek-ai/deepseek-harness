@@ -130,7 +130,7 @@ describe('plan mode through the agent loop', () => {
     expect(log.some(event => event.type === 'user/message' && event.data.source.kind !== 'user')).toBe(false)
   })
 
-  it('a user flip between turns lands at the boundary: one notice and a replaced system node with stable tool schemas', async () => {
+  it('a user flip between turns lands at the boundary: one notice and an added exit tool', async () => {
     const adapter = new MockAdapter([
       textResponse('First turn, default mode.'),
       textResponse('Second turn, plan mode.'),
@@ -142,7 +142,7 @@ describe('plan mode through the agent loop', () => {
     await waitForIdle(ctx, agent)
     expect(planActive(ctx, agent)).toBe(false)
     const first = findEvent(agent.session.snapshotEvents(), 'request/header')
-    expect(first.data.header.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
+    expect(first.data.header.tools?.map(tool => tool.name)).toEqual(['read', 'write'])
     const firstSystem = findEvent(agent.session.snapshotEvents(), 'system/message')
     expect(systemText(agent)).not.toContain(PLAN_CONFIG.section)
 
@@ -166,10 +166,10 @@ describe('plan mode through the agent loop', () => {
     expect(second?.sourceEventSeqs).toEqual([firstSystem.seq])
     expect(agent.session.surface.nodes[0]).toBe(second?.seq)
     expect(systemText(agent)).toContain('plan mode')
-    expect(log.filter(event => event.type === 'request/header').map(event => event.data.reason)).toEqual(['initial', 'series'])
+    expect(log.filter(event => event.type === 'request/header').map(event => event.data.reason)).toEqual(['initial', 'change'])
     const secondHeader = findEvent(log, 'request/header', 'last')
     expect(secondHeader.data.header.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
-    expect(secondHeader.data.header.tools).toEqual(first.data.header.tools)
+    expect(secondHeader.data.header.tools).not.toEqual(first.data.header.tools)
   })
 
   it('a mode flip at error settlement waits until the step after a same-step retry', async () => {
@@ -207,7 +207,7 @@ describe('plan mode through the agent loop', () => {
 
     expect(adapter.requests).toHaveLength(3)
     expect(requestSystem(adapter.requests[2])).toContain(PLAN_CONFIG.section)
-    expect(adapter.requests[2]?.tools).toEqual(adapter.requests[0]?.tools)
+    expect(adapter.requests[2]?.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode', 'read', 'write'])
     const log = agent.session.snapshotEvents()
     const planMode = findEvent(log, 'plan/mode')
     const firstEnd = log.find(event => event.type === 'step/end'

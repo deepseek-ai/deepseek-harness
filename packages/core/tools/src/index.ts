@@ -9,8 +9,18 @@ import './events.ts'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { projectToolSchema } from './schema.ts'
 import { assertSupportedJsonSchema } from './json-schema.ts'
-import { RUN_CODE_NAME } from './contracts.ts'
-import type { ToolDefinition, ToolRestriction, ToolExecution, ToolGuard } from './contracts.ts'
+import { RUN_CODE_NAME, ToolActivationError } from './contracts.ts'
+import type {
+  ToolDefinition, ToolRestriction, ToolExecution, ToolGuard,
+  ResolvedToolSet, ToolActivationContext, ToolRegistrationOptions,
+} from './contracts.ts'
+
+declare module '@deepseek-ai/dsh-system-prompt' {
+  interface AssembleContext {
+    /** Step-owned tool selection; absent when inspecting registered definitions. */
+    toolSet?: ResolvedToolSet
+  }
+}
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -31,10 +41,18 @@ interface CompiledToolRestriction {
   readonly deny?: ReadonlySet<string>
 }
 
+/** One registered definition and its step-time activation condition. */
+interface ToolRegistration {
+  readonly definition: ToolDefinition
+  readonly when: ToolRegistrationOptions['when']
+}
+
 /** One scope's complete registry view, derived in a single layer traversal. */
 interface ToolView {
   /** Visible definitions after restrictions, scoped shadowing, and inherited restrictions. */
   readonly visible: ReadonlyMap<string, ToolDefinition>
+  /** Registrations behind {@link visible}, keyed by the same names. */
+  readonly registrations: ReadonlyMap<string, ToolRegistration>
   /** Pre-restriction capability names used by prompt-order validation. */
   readonly knownNames: ReadonlySet<string>
   /** Current global names that a scoped restriction may name. */
@@ -43,7 +61,7 @@ interface ToolView {
 
 /** One scope's complete tool-registry contribution. */
 class ToolLayer implements ScopeLayer {
-  readonly tools: NamedEntries<ToolDefinition>
+  readonly tools: NamedEntries<ToolRegistration>
   readonly restrictions = new AnonymousEntries<CompiledToolRestriction>()
 
   constructor(scope: ScopeKey | undefined) {
@@ -92,11 +110,10 @@ export class ToolsService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'tools')
-    ctx.systemPrompt.tools(({ scope }) => {
+    ctx.systemPrompt.tools(({ scope, toolSet }) => {
       const executor = this.selectExecutor(scope)
-      const view = this.view(scope)
-      const description = executor.describe([...view.visible.values()])
-      return { ...description, knownNames: description.knownNames ?? [...view.knownNames] }
+      const description = executor.describe(this.definitions(scope, toolSet))
+      return { ...description, knownNames: description.knownNames ?? [...this.view(scope).knownNames] }
     })
   }
 
@@ -105,9 +122,10 @@ export class ToolsService extends Service {
    * Register globally or in the calling agent scope. Scoped tools shadow
    * globals; duplicates within one layer and the reserved `run_code` name fail.
    * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
+   * @param options - optional step-time activation condition.
    * @returns the exact disposer that unregisters the tool.
    */
-  register(definition: ToolDefinition): () => void {
+  register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void {
     const name = definition.name
     const output = (definition as Partial<ToolDefinition>).output
     if (output === undefined || typeof output !== 'object'
@@ -129,7 +147,7 @@ export class ToolsService extends Service {
     }
     return this.layers.effect(
       this.ctx,
-      layer => layer.tools.insert(name, definition),
+      layer => layer.tools.insert(name, { definition, when: options.when }),
       { label: 'tools.register()' },
     )
   }
@@ -181,26 +199,31 @@ export class ToolsService extends Service {
   private view(scope?: ScopeKey): ToolView {
     const layers = this.layers.chainLayers(scope)
     const own = this.layers.peek(scope)
-    const inherited = new Map<string, ToolDefinition>(this.layers.global.tools.entries())
+    const inherited = new Map(this.layers.global.tools.entries())
     for (const layer of layers) {
       if (layer === own) continue
-      for (const [name, definition] of layer.tools.entries()) inherited.set(name, definition)
+      for (const [name, registration] of layer.tools.entries()) inherited.set(name, registration)
     }
     const visible = new Map<string, ToolDefinition>()
+    const registrations = new Map<string, ToolRegistration>()
     const knownNames = new Set<string>()
     const restrictableNames = new Set<string>()
-    for (const [name, definition] of inherited) {
+    for (const [name, registration] of inherited) {
       knownNames.add(name)
       restrictableNames.add(name)
-      if (layers.every(layer => layer.admits(name))) visible.set(name, definition)
-    }
-    if (own !== undefined) {
-      for (const [name, definition] of own.tools.entries()) {
-        knownNames.add(name)
-        visible.set(name, definition)
+      if (layers.every(layer => layer.admits(name))) {
+        visible.set(name, registration.definition)
+        registrations.set(name, registration)
       }
     }
-    return { visible, knownNames, restrictableNames }
+    if (own !== undefined) {
+      for (const [name, registration] of own.tools.entries()) {
+        knownNames.add(name)
+        visible.set(name, registration.definition)
+        registrations.set(name, registration)
+      }
+    }
+    return { visible, registrations, knownNames, restrictableNames }
   }
 
   /**
@@ -210,29 +233,88 @@ export class ToolsService extends Service {
    * actually executed.
    * @param name - the tool name as registered.
    * @param scope - the viewing scope (the agent); omitted = the global view.
+   * @param toolSet - step admission; omit only to inspect registered definitions.
    * @returns the definition the scope resolves, or undefined when none is visible.
    */
-  get(name: string, scope?: ScopeKey): ToolDefinition | undefined {
-    return this.view(scope).visible.get(name)
+  get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined {
+    return toolSet === undefined ? this.view(scope).visible.get(name) : toolSet.view(scope).get(name)
+  }
+
+  /**
+   * Resolve the definition a call may execute. With a step's admitted set, the
+   * set decides; without one, conditional registrations are unavailable.
+   * @param name - the tool name as registered.
+   * @param scope - the calling agent; omitted = the global view.
+   * @param toolSet - step admission, or omitted for a call outside a model step.
+   * @returns the executable definition, or undefined when the call must fail as `UNKNOWN_TOOL`.
+   */
+  executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined {
+    if (toolSet !== undefined) return toolSet.view(scope).get(name)
+    const view = this.view(scope)
+    return view.registrations.get(name)?.when === undefined ? view.visible.get(name) : undefined
+  }
+
+  /**
+   * Resolve conditions once for this step without changing shared registrations.
+   * Cancellation or a rejected condition publishes no partial selection. Removed
+   * registrations cannot be restored by a late condition result.
+   * @param context - preparing agent, captured model selection, and cancellation.
+   * @returns the complete selection; the caller disposes it after its tool batch settles.
+   */
+  async resolve(context: ToolActivationContext): Promise<ResolvedToolSet> {
+    const { agent, signal } = context
+    signal.throwIfAborted()
+    const view = this.view(agent)
+    const admitted = new Map<string, ToolDefinition>()
+    for (const [name, definition] of view.visible) {
+      const registration = view.registrations.get(name)
+      let enabled: boolean
+      try {
+        enabled = registration?.when === undefined || await registration.when(context)
+      } catch (cause: unknown) {
+        signal.throwIfAborted()
+        throw new ToolActivationError(name, cause)
+      }
+      signal.throwIfAborted()
+      if (enabled) admitted.set(name, definition)
+    }
+    let closed = false
+    return Object.freeze({
+      dispose: () => { closed = true },
+      view: (scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition> => {
+        const visible = new Map<string, ToolDefinition>()
+        if (closed || scope !== agent) return visible
+        const current = this.view(agent)
+        for (const [name, definition] of admitted) {
+          if (current.visible.get(name) === definition
+            && current.registrations.get(name) === view.registrations.get(name)) {
+            visible.set(name, definition)
+          }
+        }
+        return visible
+      },
+    })
   }
 
   /**
    * Read the visible capability definitions for descriptions and program bindings.
    * @param scope - viewing Agent or preset; omitted selects the global view.
-   * @returns definitions after scoped shadowing and restrictions.
+   * @param toolSet - step admission; omit only to inspect registered definitions.
+   * @returns definitions after scoped shadowing and restrictions, limited to the step's admission when given.
    */
-  definitions(scope?: ScopeKey): readonly ToolDefinition[] {
-    return [...this.view(scope).visible.values()]
+  definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[] {
+    return toolSet === undefined ? [...this.view(scope).visible.values()] : [...toolSet.view(scope).values()]
   }
 
   /**
    * Project visible definitions onto the allowlisted model-facing schema fields,
    * excluding execution and presentation callbacks.
    * @param scope - the viewing scope (the agent); omitted = the global view.
+   * @param toolSet - step admission, or omitted for registered-definition inspection.
    * @returns one deep-cloned schema per visible tool.
    */
-  schemas(scope?: ScopeKey): ToolSchema[] {
-    return [...this.view(scope).visible.values()].map(definition => projectToolSchema(definition, true))
+  schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[] {
+    return this.definitions(scope, toolSet).map(definition => projectToolSchema(definition, true))
   }
   /**
    * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
@@ -252,9 +334,9 @@ export class ToolsService extends Service {
           name: section.name,
           order: section.order,
           ...section.interpolate === undefined ? {} : { interpolate: section.interpolate },
-          text: ({ scope }) => {
+          text: ({ scope, toolSet }) => {
             if (this.selectExecutor(scope) !== executor) return ''
-            return typeof section.text === 'function' ? section.text(this.definitions(scope)) : section.text
+            return typeof section.text === 'function' ? section.text(this.definitions(scope, toolSet)) : section.text
           },
         })
       }

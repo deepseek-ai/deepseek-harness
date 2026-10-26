@@ -135,8 +135,8 @@ it('dispatches through the current Agent scope after prompt listeners rebuild th
   ])
   const ctx = await setup(adapter)
   ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
-    const { sections, contexts, tools, variables } = await next()
-    return { sections, contexts, tools, variables }
+    const { sections, contexts, variables } = await next()
+    return { sections, contexts, variables }
   })
   const presetKey = { preset: 'first' }
   const preset = await scoped(ctx, presetKey)

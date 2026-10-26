@@ -59,6 +59,8 @@ PTC 执行器公开保留的 `run_code` 传输以及按所加载运行时语言�
 
 成功且包含图片的子调用结果会成为延后的 user-message 上下文，其 `source.kind` 为 `ptc-mode`。其他 additional context 保留其生产工具的归属。
 
+调用方取消且运行时报告 `abort` 时，`run_code` 等待清理完成，并返回原生工具的取消结果：`AbortError` / `ABORTED`，内容为 `Error: tool call aborted`。Agent 在 `turn/end` 中记录具体取消原因，包括 hook 的理由。其他运行时失败保留 `CODE_RUN_FAILED` 及其诊断，即使调用方同时取消。取消可能丢弃保留的运行时状态，也不会撤销已完成的工具操作。
+
 当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限以及运行时使用说明。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。schema 提示模型使用当前用户的语言撰写理由。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。 保留状态的 PTC 环境遵循会话文件策略。PTC 观察已提交的 Session 模式变化，并立即取消所有 Node 模式下受影响的调用。后续 PTC 调用等待这些调用的嵌套工具清理后，再解析最新策略。运行时负责进程失效和清理，权限设置保持同步。单次提权省略状态所有者，在临时环境中执行；普通调用仍可访问原环境的变量。
 
 - [`src/index.ts`](src/index.ts) — 配置校验和作用域注册；工具描述和批次执行。

@@ -51,9 +51,6 @@ function stubAgentForSession(session: Session, suppliedCtx?: Context): StubAgent
   if (existing !== undefined) return existing
   const id = session.id
   const agentCtx = suppliedCtx ?? isolatedInboxCtx
-  if (suppliedCtx === undefined) {
-    agentCtx.sessions.enter(session)
-  }
   const inbox = createInboxStub()
   const agent: Agent = {
     id,
@@ -244,7 +241,7 @@ describe('GoalService creation and replay', () => {
       roundsStarted: 1,
       activation: 'disarmed',
     })
-    expect(child.session.header.parentSession).toBe(parent.session.id)
+    expect(child.session.header.parentSession).toBeUndefined()
     expect(child.session.header.isSeeded).toBe(true)
     expect(child.session.inheritedEventCount).toBe(parent.session.seq)
   })

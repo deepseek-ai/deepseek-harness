@@ -4,7 +4,7 @@ import { externalTestParent } from '../../../subagent/subagent/tests/external-ac
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context, FiberState } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-instructions'
 import { compactCheckpointSource, CompactionId } from '@deepseek-ai/dsh-compaction'
 import LlmRuntime, {
@@ -142,6 +142,7 @@ async function harness(
     yield (await ctx.plugin(LlmRuntime)).dispose
     yield (await ctx.plugin(SessionStore)).dispose
     yield (await ctx.plugin(SessionProjectionRegistry)).dispose
+    yield (await ctx.plugin(AgentRegistry)).dispose
     yield (await ctx.plugin(SystemPrompt, {})).dispose
     yield (await ctx.plugin(ToolRuntime)).dispose
     yield (await ctx.plugin(NativeToolExecutor)).dispose
@@ -965,9 +966,16 @@ describe('native review request', () => {
         ? 'Auto review denied tool "probe"'
         : `Auto review denied tool "probe": ${item.expectedReason}`)
       expect(displayReasons.at(-1)).toEqual(item.expectedReason === undefined
-        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。', ja: '自動認可レビューがこの呼び出しを拒否しました。' }
+        ? { en: 'Auto review denied this call.', zh: 'Auto review 拒绝了此调用。', ja: '自動認可レビューがこの呼び出しを拒否しました。',
+          es: 'Auto review ha denegado esta llamada.', fr: 'Auto review a refusé cet appel.',
+          de: 'Auto review hat diesen Aufruf abgelehnt.', ru: 'Auto review отклонила этот вызов.', pt: 'Auto review negou esta chamada.' }
         : { en: `Auto review denied this call: ${item.expectedReason}`, zh: `Auto review 拒绝了此调用：${item.expectedReason}`,
-          ja: `自動認可レビューがこの呼び出しを拒否しました：${item.expectedReason}` })
+          ja: `自動認可レビューがこの呼び出しを拒否しました：${item.expectedReason}`,
+          es: `Auto review ha denegado esta llamada: ${item.expectedReason}`,
+          fr: `Auto review a refusé cet appel : ${item.expectedReason}`,
+          de: `Auto review hat diesen Aufruf abgelehnt: ${item.expectedReason}`,
+          ru: `Auto review отклонила этот вызов: ${item.expectedReason}`,
+          pt: `Auto review negou esta chamada: ${item.expectedReason}` })
     }
 
     expect(probe.runs()).toBe(2)
@@ -1756,6 +1764,7 @@ describe('cancellation and integration teardown', () => {
     await invalid.plugin(LlmRuntime)
     await invalid.plugin(SessionStore)
     await invalid.plugin(SessionProjectionRegistry)
+    await invalid.plugin(AgentRegistry)
     await invalid.plugin(SystemPrompt, {})
     await invalid.plugin(ToolRuntime)
     await invalid.plugin(NativeToolExecutor)

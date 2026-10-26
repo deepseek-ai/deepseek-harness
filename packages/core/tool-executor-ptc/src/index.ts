@@ -31,7 +31,7 @@ export class PtcExecutor implements ToolExecutor {
       { name: 'tools:sdk', order: ctx.systemPrompt.getSectionOrder('TOOLS_SDK'), text: tools => this.renderSdk(tools), interpolate: false },
     ]
     this.pipeline = new ToolExecutionPipeline(ctx, {
-      get: (name, scope) => name === RUN_CODE_NAME ? this.requirePtcTransport() : tools.get(name, scope),
+      get: (name, scope, toolSet) => name === RUN_CODE_NAME ? this.requirePtcTransport() : tools.executable(name, scope, toolSet),
       reject: (name, nested) => !nested && name !== RUN_CODE_NAME
         ? new ToolNotFoundError(name, `only \`${RUN_CODE_NAME}\` is callable directly — call \`${name}\` from inside a \`${RUN_CODE_NAME}\` program instead`)
         : undefined,

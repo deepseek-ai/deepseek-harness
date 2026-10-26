@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Sitzungssuche",
+    "description": "Fragen Sie nach früherer Arbeit, etwa „Wie haben wir letzte Woche das Pool-Leck behoben?“, und der Agent durchsucht Ihre früheren Sitzungen aus demselben Arbeitsverzeichnis, um zu antworten.",
+    "detail": "docs/DETAIL.md"
+  }
+}

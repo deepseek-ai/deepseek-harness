@@ -162,6 +162,7 @@ function renderTab(
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
+    createHeaderRef: vi.fn(() => vi.fn()),
     useStore: bindSnapshotSelector(navigation), actions: navigation.actions,
     ...standard,
     t,
@@ -240,10 +241,13 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
     setTabs([{ id: 'discover', label: 'Discover' }])
     expect(screen.getByRole('tab', { name: en.installedTab }).getAttribute('aria-selected')).toBe('true')
+    // The tabs stay in the pinned page head with the title; the tab panel scrolls in the page body.
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     expect(navigation.getSnapshot().tab).toBe('discover')
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(screen.getByRole('tab', { name: 'Discover' }).id)
+    expect(screen.getByRole('tabpanel').closest('[data-plugin-body]')).not.toBeNull()
     expect(document.querySelector('[data-plugin-group="bundles"]')).toBeNull()
     expect(screen.queryByRole('button', { name: en.refresh })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Discover install' }))
@@ -275,6 +279,22 @@ describe('PluginManagerPage', () => {
     set({ highlight: 'dsh-better-sidebar' })
     expect(navigation.getSnapshot().tab).toBe('discover')
     expect(screen.getByRole('tabpanel', { name: 'Discover' })).toBeTruthy()
+  })
+
+  it('keeps the header controls in the scrolling page without remounting them', () => {
+    const { setTabs, props, hidePage } = renderTab({ packages: [pkg()] })
+    const bar = document.querySelector('[data-plugin-bar]')
+    const body = document.querySelector('[data-plugin-body]')!
+    const refresh = screen.getByRole('button', { name: en.refresh })
+    expect(bar?.parentElement).toBe(body)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
+    setTabs([{ id: 'discover', label: 'Discover' }])
+    expect(screen.getByRole('tablist').closest('header')?.closest('[data-plugin-bar]')).toBe(bar)
+    act(() => { body.scrollTop = 160; fireEvent.scroll(body) })
+    expect(screen.getByRole('button', { name: en.refresh })).toBe(refresh)
+    expect(props.createHeaderRef).toHaveBeenCalledTimes(1)
+    hidePage()
+    expect(document.querySelector('[data-plugin-bar]')).toBeNull()
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
@@ -817,6 +837,27 @@ describe('PluginManagerPage', () => {
     expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-agent-team-profile', true)
   })
 
+  it('keeps the persisted selection while marking a failed component as a problem', () => {
+    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
+    expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
+    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
+  })
+
+  it('shows Computer Use permission guidance on the experimental plugins page', () => {
+    const description = 'Review application access before use.'
+    const { actions } = renderTab({ packages: [pkg({
+      name: '@deepseek-ai/dsh-cua-bundle', enabled: false, optional: true, installed: false,
+      meta: { title: 'Computer Use', description },
+    })] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByText(en.statusBeta)).toBeTruthy()
+    expect(screen.getByText(description)).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-cua-bundle', true)
+  })
+
   it.each([
     ['@deepseek-ai/dsh-experimental-agent-team-profile', true],
     ['@deepseek-ai/dsh-experimental-auto-review', true],
@@ -1159,6 +1200,7 @@ describe('PluginManagerPage', () => {
     })
 
     it.each([
+      '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-session-search',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@acme/shipped-exploration',
@@ -1189,6 +1231,33 @@ describe('PluginManagerPage', () => {
       expect(card()).not.toBeNull()
     })
 
+    it.each([en, zh])('hides unsupported CUA by default and retains installed or selected entries for management', (dict) => {
+      const name = '@deepseek-ai/dsh-cua-bundle'
+      const entry = pkg({ name, installed: false, enabled: false, optional: true, listedByDefault: false,
+        error: { code: 'unsupported-platform' } })
+      const other = pkg({ name: '@deepseek-ai/dsh-experimental-session-titles-bundle', installed: false, optional: true, enabled: false })
+      const { actions, set, setLanguage } = renderTab({ packages: [other, entry] })
+      setLanguage(dict)
+      const card = () => document.querySelector(`[data-plugin-package="${name}"]`)
+      expect(card()).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: dict.moreAction }))
+      expect(card()).toBeNull()
+      for (const availability of ['profile', 'missing'] as const) {
+        const installed = { ...entry, installed: true, availability, installTarget: { spec: `${name}@1.0.0`, version: '1.0.0' } }
+        set({ packages: [other, installed] })
+        expect(card()).not.toBeNull()
+        expect(screen.getByText(dict.reasonUnsupportedPlatform)).toBeTruthy()
+        expect(screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })).toHaveProperty('disabled', true)
+      }
+      set({ packages: [other, { ...entry, enabled: true }] })
+      fireEvent.click(screen.getByRole('button', { name: dict.openDetail.replace('{name}', name) }))
+      const toggle = screen.getByRole('switch', { name: dict.enableToggle.replace('{name}', name) })
+      expect(toggle).toHaveProperty('disabled', false)
+      expect(screen.getByText(`${dict.reasonLabel}: ${dict.reasonUnsupportedPlatform}`)).toBeTruthy()
+      fireEvent.click(toggle)
+      expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith(name, false)
+    })
+
     it.each([en, zh])('keeps disabled CUA on the secondary page with experimental labels', (dict) => {
       const name = '@deepseek-ai/dsh-cua-bundle'
       const entry = (enabled: boolean) => pkg({ name, official: true, enabled, meta: { title: 'Computer Use' } })
@@ -1217,8 +1286,10 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeTruthy()
     })
 
-    it('returns from package details to the secondary page and retains it across React remounts', () => {
-      const name = '@deepseek-ai/dsh-experimental-session-titles-bundle'
+    it.each([
+      '@deepseek-ai/dsh-experimental-session-titles-bundle',
+      '@deepseek-ai/dsh-personalized-recommendations',
+    ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
       expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
@@ -1233,9 +1304,11 @@ describe('PluginManagerPage', () => {
       expect(document.querySelector(`[data-plugin-package="${name}"]`)).toBeNull()
     })
 
-    it('pins a bundle the profile picks onto the main list, in its full-list place', () => {
+    it.each([
+      '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-personalized-recommendations',
+    ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
-      const first = '@deepseek-ai/dsh-experimental-tool-worktree'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'
       const entry = (name: string, enabled: boolean): PackageView => pkg({ name, official: true, enabled })
       const b = renderTab({ packages: [entry(second, true), entry(team, true), entry(first, false)] })
@@ -1489,6 +1562,11 @@ describe('PluginManagerPage', () => {
     expect(within(detail).getByText(`${en.reasonLabel}: ${en.reasonIncompatibleVersionUnnamed} ${en.reasonIncompatibleInstalled}`)).toBeTruthy()
     fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
     expect(document.querySelector('[data-plugin-detail]')).toBeNull()
+    set({ packages: [pkg({ enabled: false, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByText(en.reasonUnsupportedPlatform)).toBeTruthy()
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', true)
+    set({ packages: [pkg({ enabled: true, error: { code: 'unsupported-platform' } })] })
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'dsh-better-sidebar') })).toHaveProperty('disabled', false)
     // A bundle that leaves the list drops back to the cards.
     const { version: _version, ...unversioned } = pkg()
     set({ packages: [unversioned] })
@@ -1530,7 +1608,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')
@@ -2512,7 +2590,6 @@ it('supplies the accepted entry values and atomic mutation action to a custom pl
   expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['count'], value: 3 }], 7)
 })
 
-
 describe('on-demand Official bundles', () => {
   const name = '@deepseek-ai/dsh-subagent-codex'
   const title = 'Codex subagent'
@@ -2619,6 +2696,28 @@ describe('on-demand Official bundles', () => {
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
 })
+
+it('uses the same activation guidance from a package detail switch', () => {
+  const name = 'dsh-better-sidebar'
+  const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onDismiss}>Finish setup</button>,
+    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+  set({ packages: [pkg()], busy: [name] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  set({ busy: [] })
+  fireEvent.click(screen.getByText('Finish setup'))
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  set({ packages: [pkg({ enabled: false })] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+})
+
 
 it('keeps bundle configuration mounted while its operation is pending', () => {
   const name = 'dsh-better-sidebar'

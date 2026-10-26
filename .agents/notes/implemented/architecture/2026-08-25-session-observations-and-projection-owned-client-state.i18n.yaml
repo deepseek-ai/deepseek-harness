@@ -15,17 +15,17 @@
   en: 480284ae1a6ce210
   zh: d42c72ada9f019f8
 /agent-note-session-observations-and-projection-owned-client-state/decision/observation-is-the-point-read-unit:
-  en: fac92f8547482a49
-  zh: 60240c47fbe4611f
+  en: 283136ae36512767
+  zh: e342b446c77ae300
 /agent-note-session-observations-and-projection-owned-client-state/decision/source-resolution-and-lifetime:
-  en: e550ae9892474276
-  zh: fb6a2d9e91ebd4d9
+  en: bced4b90cb03525d
+  zh: b0c1ca4bf1064f89
 /agent-note-session-observations-and-projection-owned-client-state/decision/projection-execution-boundary:
-  en: 148de86941b90f41
-  zh: c065a8e96e28b9d7
+  en: b3b235fa0250868a
+  zh: 0bb5eedf14cdafee
 /agent-note-session-observations-and-projection-owned-client-state/decision/read-audiences:
-  en: 888f62659f4d868d
-  zh: e74491e8c85046ee
+  en: e394e9480340f69c
+  zh: 7eea994ee9fa380d
 /agent-note-session-observations-and-projection-owned-client-state/decision/replayable-client-facts-are-projection-owned:
   en: efded09f0cd30a8e
   zh: 5e16580a39ff3359
@@ -48,11 +48,11 @@
   en: 8d699dfc22ab5c5f
   zh: 8dcd9fc6bd1594db
 /agent-note-session-observations-and-projection-owned-client-state/verification:
-  en: df17217023668428
-  zh: 88f7da4deffc6bf9
+  en: 29f364d1031b7d85
+  zh: 2b193ceb52fb0406
 /agent-note-session-observations-and-projection-owned-client-state/alternatives-considered:
-  en: a25138b4298cda16
-  zh: 92799a9bd8867d47
+  en: 90574351058d5d8c
+  zh: 6aa514cf47495ed2
 /agent-note-session-observations-and-projection-owned-client-state/consequences:
   en: e1f8bd8fa68de603
   zh: 5afcd06f2611bc1e

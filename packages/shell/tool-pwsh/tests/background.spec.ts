@@ -297,7 +297,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     const jobId = ctx.jobs.list()[0]?.id
     expect(jobId).toMatch(/^pwsh-[0-9a-f]{16}$/)
     expect(body).toContain(`moved to background job ${jobId}]`)
-    expect(body).toContain('read newer output with job_output, stop it with job_kill')
+    expect(body.endsWith(`moved to background job ${jobId}]`)).toBe(true)
 
     const jobs = ctx.jobs
     const job = jobs.list()[0]
@@ -547,9 +547,7 @@ describe('foreground commands as jobs (pwsh)', () => {
 describe('renderPwshPromoted', () => {
   it('pins the promoted text with and without pre-promotion output', () => {
     expect(renderPwshPromoted({ jobId: 'pwsh-7', timeoutMs: 120_000, output: '' })).toBe(
-      '[still running after 120000ms; moved to background job pwsh-7]\n'
-      + 'The command keeps running in the background. You will be notified when it finishes; '
-      + 'read newer output with job_output, stop it with job_kill.',
+      '[still running after 120000ms; moved to background job pwsh-7]',
     )
     expect(renderPwshPromoted({ jobId: 'pwsh-7', timeoutMs: 250, output: 'partial' }))
       .toContain('partial\n[still running after 250ms; moved to background job pwsh-7]')

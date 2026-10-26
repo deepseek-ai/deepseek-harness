@@ -118,6 +118,9 @@
       "path": "../product-analytics/tsconfig.client.json"
     },
     {
+      "path": "../ui-file-drag"
+    },
+    {
       "path": "../../core/tool-executor-ptc"
     }
   ],

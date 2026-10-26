@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Exécution du bac à sable PowerShell",
+    "description": "Exécutez les commandes PowerShell dans le cadre des autorisations sandbox actuelles."
+  }
+}

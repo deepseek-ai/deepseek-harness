@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。默认关闭，关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。默认关闭，启用或单独安装前不在默认插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。打开“插件”，点击“实验性插件”旁的“更多”，再打开 Computer Use 并启用。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
+本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。在「插件 → 添加插件」中输入 `@deepseek-ai/dsh-cua-bundle`，点击「安装」，再点击「立即启用」。DSH 会启用随应用提供的副本，无需重新下载。已启用的组合包保留在插件页，可打开 Computer Use 管理权限或将其关闭。关闭后卡片再次隐藏，除非该 profile 单独安装了它。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -33,15 +33,15 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。从插件列表启用时，系统权限未就绪会显示设置引导；从详情页启用后直接显示权限控件。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过「添加插件」、可见卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
-关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。会话级应用授权随提供方卸载而失效。
+关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
-Computer Use 要求 DSH Host 运行在 macOS 上。其他系统安装时跳过可选的 macOS 提供方，组合包也不加载该提供方。共享 CUA 逻辑和权限页入口仍保留，Computer Use 操作需要提供方才能使用。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
-准备失败时，已保存的选择保留，CUA 操作不可用。查看 Host 的启动诊断，修复原因后重启 DSH。
+准备失败时，已保存的选择保留，CUA 操作不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
 
-显式启用会进行只读权限检查，可能启动 helper，但不会打开系统授权弹窗。[权限页面](../cua/README.zh.md) 提供系统申请入口、设置跳转和自动检测。任务访问应用前会单独询问用户。长期应用授权保存在现有 profile 配置中，会话授权保存在内存中，跨 turn 和连接复用，重启 DSH 或关闭 Computer Use 后失效。可以在同一页面撤销授权。
+显式启用会进行只读权限检查，可能启动 helper，但不会打开系统授权弹窗。[权限页面](../cua/README.zh.md) 提供系统申请入口、设置跳转和自动检测。任务访问应用前会单独询问用户。应用授权保存在按 profile 隔离的存储域中。会话授权跨 turn、连接、DSH 重启和 Computer Use 启停保留，只在原对话中生效。可以在同一页面撤销授权。
 
 -----
 
@@ -51,7 +51,7 @@ Computer Use 要求 DSH Host 运行在 macOS 上。其他系统安装时跳过�
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 
@@ -86,7 +86,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 源码 Web 与 Desktop 共用 macOS 权限控件。桌面安装包的 helper 分发、签名和权限归属留待后续处理。
-- PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。保存或撤销应用授权与另一次卸载提供方的 HMR 同时发生时可能阻塞；排队写入取消另行修复。
+- PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>
 ### 开发备注

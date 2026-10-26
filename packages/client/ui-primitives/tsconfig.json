@@ -19,6 +19,9 @@
     },
     {
       "path": "../../util/workspace-path"
+    },
+    {
+      "path": "../../util/file-drag"
     }
   ]
 }

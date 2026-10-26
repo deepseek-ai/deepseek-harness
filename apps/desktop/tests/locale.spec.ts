@@ -1,14 +1,34 @@
+import { SHIPPED_LOCALE_IDS } from '../../../scripts/shipped-locales.ts'
 import { describe, expect, it } from 'vitest'
-import { en, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, ja, zh } from '../src/locale.ts'
+import { en, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale, ja, zh, es, fr, de, ru, pt } from '../src/locale.ts'
 
 describe('desktop locale dictionaries', () => {
-  it('ships the same key set in English, Chinese, and Japanese', () => {
+  it('ships baseline and Japanese keys and falls back for unsupported languages', () => {
     expect(Object.keys(zh)).toEqual(Object.keys(en))
     expect(Object.keys(ja)).toEqual(Object.keys(en))
     expect(resolveDesktopLocale('JA-jp')).toEqual({ id: 'ja', messages: ja })
     expect(resolveDesktopLocale('zh-Hans-CN').messages).toEqual(zh)
     expect(resolveDesktopLocale('en-US').messages).toEqual(en)
-    expect(resolveDesktopLocale('fr-FR').messages).toEqual(en)
+    expect(resolveDesktopLocale('it-IT').messages).toEqual(en)
+  })
+
+  it.each([
+    ['es', 'es-MX', es], ['fr', 'fr-CA', fr], ['de', 'de-DE', de],
+    ['ru', 'ru-RU', ru], ['pt', 'pt-BR', pt],
+  ] as const)('resolves %s, preserves placeholders, and honors saved preferences', (id, tag, messages) => {
+    expect(resolveDesktopLocale(tag.toUpperCase())).toEqual({ id, messages })
+    expect(resolveDesktopStartupLocale(id, ['zh-CN']).id).toBe(id)
+    expect(resolveDesktopStartupLocale(null, ['it-IT', tag, 'en-US']).id).toBe(id)
+    expect(Object.keys(messages)).toEqual(Object.keys(en))
+    for (const key of Object.keys(en) as (keyof typeof en)[]) {
+      const placeholders = (text: string): string[] => (text.match(/\{\w+\}/gu) ?? []).sort()
+      expect(placeholders(messages[key]), key).toEqual(placeholders(en[key]))
+    }
+  })
+
+  it.each(SHIPPED_LOCALE_IDS)('resolves every shipped language %s without fallback', (id) => {
+    expect(resolveDesktopLocale(id).id).toBe(id === 'zh' ? 'zh-CN' : id)
+    expect(resolveDesktopStartupLocale(null, [id]).id).toBe(id === 'zh' ? 'zh-CN' : id)
   })
 
   it('formats named values without consuming unknown placeholders', () => {

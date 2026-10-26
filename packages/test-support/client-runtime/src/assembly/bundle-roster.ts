@@ -23,7 +23,10 @@ import { exactPackageSpecifier, parseDshClient } from '@deepseek-ai/dsh-client-m
 import * as yaml from 'js-yaml'
 import { ClientRoster, type ClientRosterRow } from './roster.ts'
 
-/** The `web` profile's bundle layers, in the order `dsh --profile web` applies them (app-boot `PROFILE_TEMPLATES.web`). */
+/**
+ * The `web` profile's bundle layers, in the order `dsh --profile web` applies them
+ * (`PROFILE_TEMPLATES.web` in `@deepseek-ai/dsh-official-bundles`).
+ */
 export const WEB_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
 
 interface PackageManifest {

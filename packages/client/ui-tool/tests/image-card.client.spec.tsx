@@ -7,7 +7,7 @@
 // text that stays readable when the attachment slot renders nothing.
 //
 // The image card differs from every other card in one load-bearing way: its bytes
-// are a session-authorized attachment, so the row cannot draw them itself. It
+// are a Gateway-authorized attachment, so the row cannot draw them itself. It
 // renders through the tool-owned `tool.call.images` slot, and an empty slot must
 // still leave the path and image size visible.
 
@@ -107,7 +107,7 @@ const stubRenderSlot = (): PropsRenderSlots<'tool.call.images'>['renderSlot'] =>
   )) as unknown as PropsRenderSlots<'tool.call.images'>['renderSlot']
 )
 
-/** Session-authorized loader stand-in; the stub gallery never resolves it. */
+/** Authenticated loader stand-in; the stub gallery never resolves it. */
 const loadImage: MessageImageLoader = vi.fn(() => Promise.reject(new Error('not used')))
 
 describe('imageCardModel', () => {

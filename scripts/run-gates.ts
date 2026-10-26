@@ -279,6 +279,17 @@ function ciBuildGate(id = 'build', options: Partial<Gate> = {}): Gate {
   })
 }
 
+/**
+ * Emit the artifacts every artifact consumer reads, without the aggregate
+ * test and script type checks that the master lanes own.
+ */
+function ciArtifactBuildGate(id = 'build', options: Partial<Gate> = {}): Gate {
+  return pnpmScript(id, 'build:artifacts', {
+    ...options,
+    env: { ...options.env, [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
+  })
+}
+
 function pnpmExec(id: string, args: string[], options: Partial<Gate> = {}): Gate {
   return {
     id,
@@ -392,8 +403,8 @@ function ciSharedStaticGates(): Gate[] {
 function i18nGates(includeDictionaries: boolean): Gate[] {
   return [
     pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
-    pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'Japanese plugin metadata' }),
-    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts'], { label: 'locale dictionaries' })] : [],
+    pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'plugin locale metadata' }),
+    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts', 'scripts/shipped-locales.spec.ts', 'packages/client/locale/tests/apply.client.spec.ts'], { label: 'locale dictionaries' })] : [],
   ]
 }
 
@@ -530,7 +541,6 @@ function ciConsumerGates(): Gate[] {
   // writer starts; `after` preserves the web diagnostic even if a reader fails.
   const buildArtifactReaders = [
     'publint',
-    'lint-and-duplication',
     'snapshot',
     'expected-output',
     'doc-typecheck',
@@ -538,16 +548,12 @@ function ciConsumerGates(): Gate[] {
     'built-bin-smoke',
   ]
   return [
-    ciBuildGate(),
+    ciArtifactBuildGate(),
     pnpmScript('node-compat', 'check:node-compat', {
       label: 'Node compatibility',
       env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
     }),
     pnpmScript('publint', 'publint', { needs: builtTree }),
-    pnpmScript('lint-and-duplication', 'check:ci:lint:contracts-ready', {
-      label: 'lint and duplication',
-      needs: builtTree,
-    }),
     snapshotGate(builtTree),
     expectedOutputGate(builtTree),
     webSnapshotGate(builtTree, buildArtifactReaders),
@@ -873,6 +879,7 @@ function docSyncLeafGates(options: {
       'website/tests/mermaid-viewer.spec.ts',
       'website/tests/image-viewer.spec.ts',
       'website/tests/code-groups.spec.ts',
+      'website/tests/table-filter.spec.ts',
       'website/tests/page-markdown-actions.spec.ts', 'website/tests/raw-markdown.spec.ts',
     ], {
       label: 'documentation site checks',

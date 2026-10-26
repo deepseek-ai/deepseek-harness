@@ -29,6 +29,7 @@ it.each([false, true])('settles startup after parent IPC disconnect (boot failur
   writeFileSync(join(root, 'package.json'), '{"type":"module"}')
   writeFileSync(join(modules, 'dsh-app-boot', 'package.json'), '{"type":"module","exports":"./index.js"}')
   writeFileSync(join(modules, 'dsh-app-boot', 'index.js'), `
+    export class StartupError extends Error {}
     export const loadProfileDirectory = () => ({ skippedBundles: [] });
     export const reportSkippedBundles = () => {};
     export const loadLayeredEnv = () => ({});
@@ -64,7 +65,11 @@ it.each([false, true])('settles startup after parent IPC disconnect (boot failur
     const boot = await new Promise<{
       packageManager: { command: string; args: string[]; env: Record<string, string> }
     }>((resolve, reject) => {
-      child.once('message', resolve)
+      child.on('message', (message) => {
+        if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'booting' && 'packageManager' in message) {
+          resolve(message as { packageManager: { command: string; args: string[]; env: Record<string, string> } })
+        }
+      })
       child.once('error', reject)
       child.once('exit', (code) => { reject(new Error(`Host exited before booting: ${String(code)} ${stderr}`)) })
     })

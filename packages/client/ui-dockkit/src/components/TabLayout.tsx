@@ -3,11 +3,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MutableRefObject, ReactNode } from 'react'
 import clsx from 'clsx'
 import type { DockIntents } from '../contract/adapter.ts'
-import type { LayoutState, PaneNode, TabId, TabRecord } from '../contract/types.ts'
+import type { LayoutState, PaneId, PaneNode, TabId, TabRecord } from '../contract/types.ts'
 import { findTabPane, floatRect, getNode, getPane } from '../engine/tree.ts'
 import type { SizePreview } from './PaneTree.tsx'
 import type { PaneCallbacks } from './render.ts'
-import { FloatHeader, useFloatGestures } from './FloatLayer.tsx'
+import { FloatHeader, floatStyle, useFloatGestures } from './FloatLayer.tsx'
+import { TabBody } from './TabBody.tsx'
 import { PaneDropHints, TabPanel, TabStrip } from './TabPanel.tsx'
 import css from './dockkit.module.css'
 
@@ -32,10 +33,12 @@ interface TabHostProps extends LayoutProps {
   readonly column: number
   readonly floats: ReturnType<typeof useFloatGestures>
   readonly focusRequest: MutableRefObject<{ readonly tabId: TabId; readonly origin: Element | null } | undefined>
+  /** Chip-box offsets by pane, read and recorded by each selected tab's strip. */
+  readonly offsets: Map<PaneId, number>
 }
 
 /** A tab's ancestors stay identical across selection, pane moves and floating. */
-function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRequest, keepMounted,
+function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRequest, offsets, keepMounted,
   active = true }: TabHostProps): ReactNode {
   const floating = pane.host === 'float'
   const selected = floating || pane.activeTabId === tab.id
@@ -73,7 +76,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
     return () => { element.removeEventListener('focus', focus, true) }
   }, [visible, floating, floats, pane.id, state.activePaneId, callbacks])
   const lifted = floating && floats.preview?.paneId === pane.id ? floats.preview.rect : undefined
-  const rect = floating ? lifted ?? floatRect(pane) : undefined
+  const rect = floating ? floats.rectOf(pane.id, floatRect(pane)) : undefined
   const depth = lifted === undefined ? state.floats.indexOf(pane.id) + 1 : state.floats.length + 1
   return (
     <div className={clsx(css.tabCell, floating && css.floatingCell)} hidden={!selected}
@@ -87,19 +90,17 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
         data-dockkit-float={floating ? pane.id : undefined}
         data-dockkit-float-active={floating && state.activePaneId === pane.id || undefined}
         data-dockkit-column={!floating ? column : undefined}
-        style={rect === undefined ? undefined : {
-          left: rect.x, top: `max(var(--dsh-dockkit-float-top, 0px), ${rect.y}px)`, width: rect.width, height: rect.height,
-        }}
+        style={rect === undefined ? undefined : floatStyle(rect, lifted !== undefined)}
         onPointerDown={() => { if (floating) floats.raise(pane.id) }}
         onClick={() => { if (!floating && state.activePaneId !== pane.id) callbacks.onFocusPane(pane.id) }}>
         <div className={css.tabHostHeader}>
           {selected && (floating
             ? <FloatHeader paneId={pane.id} tab={tab} labels={callbacks.labels} intents={intents}
               renderTabTitle={callbacks.renderTabTitle} canCloseTab={callbacks.canCloseTab} drag={floats.drag} />
-            : <TabStrip state={state} pane={pane} callbacks={callbacks} />)}
+            : <TabStrip state={state} pane={pane} callbacks={callbacks} offsets={offsets} />)}
         </div>
         <div ref={body} className={clsx(css.tabHostBody, floating ? css.floatBody : css.paneBody)}>
-          {visited && (retained || (active && selected)) ? callbacks.renderTab(tab) : null}
+          {visited && (retained || (active && selected)) ? <TabBody tab={tab} renderTab={callbacks.renderTab} /> : null}
           {!floating && <PaneDropHints pane={pane} callbacks={callbacks} />}
         </div>
         {floating && <div className={css.floatResize} data-dockkit-float-resize={pane.id}
@@ -118,6 +119,8 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
 export function TabLayout(props: LayoutProps): ReactNode {
   const { state, callbacks, preview } = props
   const focusRequest = useRef<{ readonly tabId: TabId; readonly origin: Element | null }>()
+  // Each pane's strip remounts under the newly selected tab's host.
+  const [offsets] = useState(() => new Map<PaneId, number>())
   const tabCallbacks: PaneCallbacks = {
     ...callbacks,
     onFocusTab: (tabId) => {
@@ -142,7 +145,7 @@ export function TabLayout(props: LayoutProps): ReactNode {
       {Object.values(state.tabs).sort((a, b) => a.id.localeCompare(b.id)).map((tab) => {
         const pane = findTabPane(state, tab.id)
         return <TabHost key={tab.id} {...props} callbacks={tabCallbacks} tab={tab} pane={pane}
-          column={panes.findIndex(candidate => candidate.id === pane.id)} floats={floats} focusRequest={focusRequest} />
+          column={panes.findIndex(candidate => candidate.id === pane.id)} floats={floats} focusRequest={focusRequest} offsets={offsets} />
       })}
       {panes.filter(pane => pane.tabs.length === 0).map(pane => (
         <div key={pane.id} className={css.emptyTabHost} data-dockkit-empty style={{ gridColumn: panes.indexOf(pane) * 2 + 1, gridRow: 1 }}>

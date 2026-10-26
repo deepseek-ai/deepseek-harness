@@ -26,6 +26,7 @@
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
+          - button "调整模型顺序 1"
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: private-preview

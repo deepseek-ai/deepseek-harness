@@ -121,9 +121,10 @@ describe('next-step input during a background result wait', () => {
       })
       await settled.promise
       unsubscribe()
-      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBe('final output')
-      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBeUndefined()
+      // The settlement's notice carries the result inline, so the registry has nothing left to hand out.
       expect(h.agent.inbox.nextStep).toHaveLength(1)
+      expect(JSON.stringify(h.agent.inbox.nextStep[0]!.content)).toContain('Output:\\nfinal output')
+      expect(h.ctx.jobs.read(h.id, h.agent.id).result).toBeUndefined()
     } finally { await h.dispose() }
   })
 

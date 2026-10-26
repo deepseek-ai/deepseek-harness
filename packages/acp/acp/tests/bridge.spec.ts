@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -388,6 +388,22 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.listSessions({ cursor: 'not-a-cursor' })).rejects.toThrow(/cursor is invalid/)
   })
 
+  it.each([false, true])('resumes an ordinary fork with legacy parent metadata=%s', async (legacy) => {
+    harness = await makeBridgeHarness()
+    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+    const id = SessionId('ordinary-fork')
+    const writer = await harness.ctx.sessionPersistence.create({
+      version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: true,
+      cwd: process.cwd(), ...(legacy ? { parentSession: SessionId('source') } : {}),
+    }, { inheritedEventCount: SessionLogOffset(0) })
+    try {
+      await writer.append([{ type: 'session/end-seed', seq: SessionSeq(0), time: 1, data: { inherited: true } }])
+    } finally { await writer.close() }
+    await expect(harness.client.listSessions({})).resolves.toMatchObject({ sessions: [{ sessionId: id }] })
+    await harness.client.resumeSession({ sessionId: id, cwd: process.cwd() })
+    expect(harness.ctx.agents.get(id)?.session.header.parentSession).toBe(legacy ? 'source' : undefined)
+  })
+
   it('filters non-resumable headers and canonical missing workspaces', async () => {
     harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
@@ -411,6 +427,7 @@ describe('automation-only ACP bridge', () => {
     await expect(harness.client.listSessions({ cwd: 'relative' })).rejects.toThrow(/absolute path/)
     await expect(harness.client.listSessions({ cwd: '/missing/filter' })).resolves.toEqual({
       sessions: [
+        { sessionId: 'fork', cwd: '/missing/filter' },
         { sessionId: 'valid-a', cwd: '/missing/filter' },
         { sessionId: 'valid-b', cwd: '/missing/filter' },
       ],

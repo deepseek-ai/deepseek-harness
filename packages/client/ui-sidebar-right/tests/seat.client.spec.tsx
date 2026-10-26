@@ -557,6 +557,33 @@ describe('RightbarSeat presentation', () => {
     expect(h.frame.closeRightbar).toHaveBeenCalled()
   })
 
+  it('marks the panel as opening from the opening render until its slide ends', async () => {
+    const h = await mountSeat()
+    const panel = element(h.view.container, '[data-sidebar-right-panel]')
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    h.open()
+    // The tab the opening seeds mounts under the mark, so it starts at the closed position.
+    const host = element(h.view.container, "[data-dockkit-host='dock']")
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    fireEvent.transitionEnd(host)
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    act(() => { h.actions.splitPane(SESSION) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    fireEvent.click(element(h.view.container, '[data-sidebar-right-toggle]'))
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    act(() => { h.actions.setExpanded(SESSION, true) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    // Closing before the slide ends clears the mark.
+    fireEvent.click(element(h.view.container, '[data-sidebar-right-toggle]'))
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+    // Leaving the screen cancels the slide, so returning shows the items in place.
+    act(() => { h.actions.setExpanded(SESSION, true) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(true)
+    act(() => { h.runtime.panelInfo.set({ activePanelId: 'other-panel' as MainPanelId }) })
+    act(() => { h.runtime.panelInfo.set({ activePanelId: null }) })
+    expect(panel.hasAttribute('data-sidebar-right-opening')).toBe(false)
+  })
+
   it('fills the viewport without replacing the content tree or releasing the wide track', async () => {
     const h = await mountSeat()
     const tab = h.open()

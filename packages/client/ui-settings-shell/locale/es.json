@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configuración de ejecución de comandos",
+    "description": "Configure el tiempo de espera de ejecución del comando y el límite de longitud de salida."
+  }
+}

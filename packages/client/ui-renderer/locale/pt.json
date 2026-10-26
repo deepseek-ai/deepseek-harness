@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Renderização de interface",
+    "description": "Monte os componentes de interface fornecidos por cada plug-in no aplicativo."
+  }
+}

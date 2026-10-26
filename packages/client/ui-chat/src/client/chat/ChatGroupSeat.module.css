@@ -100,7 +100,7 @@
 }
 
 .body {
-  --dsh-chat-flow-gap: 6px;
+  --dsh-chat-flow-gap: 4px;
   max-height: min(400px, 50vh);
   overflow-y: auto;
   overscroll-behavior-y: auto;
@@ -146,7 +146,7 @@
 }
 .content > * { flex-shrink: 0; }
 .content > :not([hidden]):not(:empty) ~ :not([hidden]):not(:empty) {
-  margin-top: var(--dsh-chat-flow-gap, 6px);
+  margin-top: var(--dsh-chat-flow-gap, 4px);
 }
 .expandedBody {
   max-height: none;

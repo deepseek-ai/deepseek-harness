@@ -23,18 +23,7 @@
 }
 
 .dragPreview {
-  position: fixed;
-  top: 0;
-  /* WebKit fills transparent snapshot pixels white, including rounded corners. */
   background: var(--dsw-specific-sidebar-fill);
-  pointer-events: none;
-}
-
-.dragPreview > :first-child {
-  box-sizing: border-box;
-  margin: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .searchResultRow {

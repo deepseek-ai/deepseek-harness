@@ -44,7 +44,7 @@ function entry(
 }
 
 describe('target-neutral Conversation apply wiring', () => {
-  it('hands every Session header the same persisted View pins', async () => {
+  it('hands every Session header the same in-memory View pins without restoring saved choices', async () => {
     localStorage.setItem('dsh.slot.manual-order.conversation.view.v1', JSON.stringify({ unpinned: ['trajectory'] }))
     try {
       const b = await bench()
@@ -56,10 +56,10 @@ describe('target-neutral Conversation apply wiring', () => {
       const inject = header.inject as (sessionId: SessionId) => PinHooks
       const injected = inject(SID)
       const first = injected.hooks.entryPins
-      expect(first.getSnapshot()).toEqual(['trajectory'])
+      expect(first.getSnapshot()).toEqual([])
       expect(inject('session-2' as SessionId).hooks.entryPins).toBe(first)
       injected.setPinned('timeline', false)
-      expect(first.getSnapshot()).toEqual(['trajectory', 'timeline'])
+      expect(first.getSnapshot()).toEqual(['timeline'])
       const actions = injected.hooks.entryActions
       const changed = vi.fn()
       actions.subscribe(changed)

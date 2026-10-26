@@ -65,6 +65,8 @@ describe('modern MCP connections', () => {
     expect(names.toSorted()).toEqual([
       'list_mcp_resource_templates', 'list_mcp_resources', 'mcp__fixture__ping', 'read_mcp_resource',
     ])
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    onTestFinished(() => { debug.mockRestore() })
     for (const [name, expected] of [
       ['list_mcp_resources', { resources: [] }],
       ['list_mcp_resource_templates', { resourceTemplates: [] }],
@@ -75,6 +77,8 @@ describe('modern MCP connections', () => {
       })
       expect(result).toMatchObject({ isError: false, value: expected })
     }
+    // console.debug writes stdout, which the ACP profile reserves for JSON-RPC.
+    expect(debug).not.toHaveBeenCalled()
     const read = await executeToolFixture(ctx, {
       name: 'read_mcp_resource', arguments: { server: 'fixture', uri: 'memo://readme' },
       callId: ToolCallId('unsupported-resource-read'), signal: new AbortController().signal,

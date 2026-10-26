@@ -2,7 +2,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
-import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, unsupportedModel, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -25,7 +25,7 @@ async function fakeAgent(ctx: Context, rawId: string): Promise<Agent> {
   const session = Session.create(id)
   const agent: Agent = {
     id, options: {}, session, model: unsupportedModel(),
-    inbox: unsupportedInbox(),
+    inbox: createInboxStub(),
     status: 'idle',
     ctx: scope.ctx,
     send: () => {},

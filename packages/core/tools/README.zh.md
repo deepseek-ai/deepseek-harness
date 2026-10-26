@@ -63,6 +63,15 @@ ctx.tools.register(defineTool({
 
 统一 schema DSL 支持 `string`、`number`、`integer`、`boolean`、`null`、`array`、`object`、仅供作者使用的 `json` 与恰好匹配一个分支的 `oneOf`；`InferValue` 在 16 层容器内保留精确类型，之后加宽为 `JsonValue`。原始 JSON Schema（`JsonSchemaNode`）是与 subagent、工作流和 MCP 共享的协议级对应类型。
 
+<a id="conditional-tools"></a>
+### 条件工具
+
+`register(definition, { when })` 为每个模型步骤计算一次同步或异步条件。条件接收 `{ agent, modelSelection, signal }`；`modelSelection` 是步骤准备时为该步骤所有请求尝试捕获的提供方、模型与推理强度，与 `AssembleContext.modelSelection` 相同。返回 false 会从执行器的描述、PTC 绑定和执行集合中排除工具。条件抛错会以 `TOOL_ACTIVATION_FAILED` 中止步骤准备，不会被当成正常不可用。条件必须响应取消，不得改变注册或执行工具操作。
+
+`resolve({ agent, modelSelection, signal })` 返回步骤拥有的 `ResolvedToolSet`。将它作为 `toolSet` 传给提示词组装以及该步骤的 `ctx.tools.execute()` 批次，批次结束后释放；同一步骤内的重试复用它。执行器把批次的集合应用到每次调用，包括 PTC 程序的子调用。注册仍由 effect 持有；每份集合只准入原 agent scope 中的原注册。注销、新的限制或同名替换会阻止尚未开始的调用继续使用它；取消之后，调用以共享 pipeline 的取消结果结束。已经开始的操作保留协作取消义务。批次没有已解析集合时，条件工具调用返回 `UNKNOWN_TOOL`。
+
+`get(name, scope, toolSet)`、`definitions(scope, toolSet)` 和 `schemas(scope, toolSet)` 读取已准入集合；省略 `toolSet` 时只查看已注册定义，不计算条件。`executable(name, scope, toolSet)` 是执行时的查找：它应用集合，没有集合时排除条件注册。执行器的描述与分区通过 `AssembleContext.toolSet` 接收同一集合。展示变换不能增删可调用工具。
+
 ### 选择执行器
 
 在部署、预设或 Agent 作用域中挂载一个执行器。最近的作用域决定提供者，同一作用域的重复提供者会报错。原生执行器直接公开可见能力；PTC 执行器公开 `run_code` 和生成的 SDK。执行器注册和卸载不触发 `tools/change`；提示词组装和批次执行在运行时解析当前执行器。

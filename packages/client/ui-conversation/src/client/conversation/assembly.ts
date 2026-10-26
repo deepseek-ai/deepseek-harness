@@ -266,9 +266,9 @@ export class UiConversation extends Service {
   }
 
   /**
-   * Resolve one session-authorized durable image URL, cached per Session so
+   * Resolve one Gateway-authorized durable image URL, cached per Session so
    * every Conversation target shares one read and one browser URL.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference from a session event.
    * @returns browser URL valid until the Session binding is released.
    */
@@ -278,7 +278,7 @@ export class UiConversation extends Service {
 
   /**
    * Read a cached durable image URL synchronously when one is available.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference from a session event.
    * @returns current preview or canonical URL, if cached.
    */
@@ -290,7 +290,7 @@ export class UiConversation extends Service {
    * Adopt an already-displayable URL for one durable reference (see
    * HistoricalImageCache.seed): the transcript node then renders it without a
    * byte round-trip.
-   * @param sessionId - Session authorization and lifetime scope.
+   * @param sessionId - Session binding that owns the cached URL lifetime.
    * @param attachment - Durable image reference the URL displays.
    * @param url - browser URL to adopt.
    * @returns whether the cache took URL ownership.

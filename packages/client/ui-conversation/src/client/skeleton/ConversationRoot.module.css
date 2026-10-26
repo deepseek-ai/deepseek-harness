@@ -81,12 +81,29 @@
   padding-inline-start: max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - 20px));
 }
 
+/* Header actions do not shrink, so on a narrow row they overflow the cluster.
+   The cluster clips them, hit testing included, so the next control keeps
+   every click. The trailing padding spans the gap before that control and
+   holds the fade: content that fits ends before it, and only overflowing
+   content reaches it. The 4px block and start padding, offset by negative
+   margins, keeps focus rings inside the clip. `clip` rather than `hidden`
+   keeps the cluster from becoming a scroll container that focus could scroll. */
 .titleCluster {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  --title-cluster-fade: 20px;
+  margin: -4px calc(-1 * var(--title-cluster-fade)) -4px -4px;
+  padding: 4px var(--title-cluster-fade) 4px 4px;
+  overflow: clip;
+  mask-image: linear-gradient(to left, transparent calc(0.3 * var(--title-cluster-fade)), #000 var(--title-cluster-fade));
+}
+
+/* Without utilities the corner's 8px margin is the gap the fade spans. */
+.titleCluster:has(+ .headerUtilities:empty) {
+  --title-cluster-fade: 8px;
 }
 
 /* The auto grid column collapses with an empty or CSS-hidden occupant.
@@ -198,6 +215,9 @@
   z-index: 1;
   display: flex;
   gap: 16px 20px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   align-items: flex-start;
   flex-wrap: wrap;
   margin-top: 10px;
@@ -212,12 +232,20 @@
   min-height: 25px;
 }
 
-/* The 16px text line retains 9px below it. The active bar reaches 1px past
-   the tab box to sit over the header rule. */
+/* The 16px text line retains 9px below it. The press target extends 10px
+   above the text into the strip's top margin and 10px to each side, matching
+   the inline padding of the Sidebar tab chips (ui-dockkit `.tab`); negative
+   margins keep the layout box at its 25px row and text width. The active bar
+   spans the text and reaches 1px past the tab box to sit over the header
+   rule. */
 .tab {
+  --dsh-tab-hit-inline: 10px;
+
   position: relative;
-  min-height: 25px;
-  padding: 0 0 9px;
+  box-sizing: border-box;
+  min-height: 35px;
+  margin: -10px calc(-1 * var(--dsh-tab-hit-inline)) 0;
+  padding: 10px var(--dsh-tab-hit-inline) 9px;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -230,9 +258,9 @@
 .tab::after {
   content: '';
   position: absolute;
-  right: 0;
+  right: var(--dsh-tab-hit-inline);
   bottom: -1px;
-  left: 0;
+  left: var(--dsh-tab-hit-inline);
   height: 2px;
   border-radius: 2px;
   background: transparent;
@@ -261,6 +289,10 @@
   padding: 0;
   color: var(--dsw-alias-label-secondary);
 }
+
+.viewsMoreActive { color: var(--dsw-alias-state-business-primary); }
+
+.tabLabel { display: block; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .viewsMore[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);

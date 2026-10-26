@@ -157,8 +157,10 @@ describe('QuoteNode composer lifecycle', () => {
     shell.insertQuote(quote)
     shell.paste('answer')
     shell.submit('queue')
-    expect(sink).toHaveBeenCalledWith('> selected source text\n\nanswer', [], 'queue', expect.any(AbortSignal))
-    expect(shell.snapshot.draft).toBe('')
+    expect(sink).toHaveBeenCalledWith(
+      '> selected source text\n\nanswer', [], 'queue', expect.any(AbortSignal), expect.any(Function),
+    )
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('') })
     shell.editor.getEditorState().read(() => { expect($getRoot().getTextContent()).toBe('') })
   })
 
@@ -167,10 +169,10 @@ describe('QuoteNode composer lifecycle', () => {
     shell.insertQuote('first')
     shell.insertQuote('second')
     shell.submit('queue')
-    expect(sink).toHaveBeenCalledWith('> first\n\n> second', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('> first\n\n> second', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 
-  it('restores the complete rich document when an optimistic send fails', async () => {
+  it('keeps the complete rich document in the editor when a send fails', async () => {
     let settle!: (outcome: { kind: 'error'; text: string }) => void
     const { shell, sink } = bench()
     sink.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve }))
@@ -179,24 +181,27 @@ describe('QuoteNode composer lifecycle', () => {
     const submitted = shell.draftSnapshot
 
     shell.submit('queue')
-    expect(shell.snapshot.draft).toBe('')
+    expect(shell.snapshot.phase).toBe('sending')
+    expect(shell.draftSnapshot).toEqual(submitted)
     settle({ kind: 'error', text: 'retry' })
 
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual(submitted) })
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
+    expect(shell.draftSnapshot).toEqual(submitted)
     expect(quoteKeys(shell)).toHaveLength(1)
     expect(shell.notices.getSnapshot()).toMatchObject({ level: 'error', text: 'retry' })
   })
 
-  it('mirrors optimistic successful-send clearing through the Session lifetime', async () => {
+  it('mirrors the cleared draft through the Session lifetime once the Host accepts it', async () => {
     let settle!: (outcome: { kind: 'success' }) => void
     const { shell, sink } = bench()
     sink.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve }))
     const mirrored: DraftSnapshot[] = []
     shell.bindDraftPersistence((document) => { mirrored.push(document) })
     shell.insertQuote(quote)
+    const submitted = shell.draftSnapshot
     shell.submit('queue')
-    expect(mirrored.at(-1)).toEqual({ text: '', references: [] })
+    expect(mirrored.at(-1)).toEqual(submitted)
     settle({ kind: 'success' })
-    expect(mirrored.at(-1)).toEqual({ text: '', references: [] })
+    await vi.waitFor(() => { expect(mirrored.at(-1)).toEqual({ text: '', references: [] }) })
   })
 })
