@@ -32,7 +32,7 @@ import type { Scope } from '@deepseek-ai/dsh-scope'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
-import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import { ToolActivationError, ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
 import type { ResolvedToolSet } from '@deepseek-ai/dsh-tools'
@@ -290,7 +290,7 @@ export class ReactLoopAgent implements Agent {
         'agent/pre-step', { messages: claimed, ...position, signal, modelSelection: selection },
         (): Promise<PreStepDecision> => {
           const sections = renderContextSections(assembly)
-          const context = this.runtimeContext.project(joinContextSections(sections), sections)
+          const context = this.runtimeContext.project(sections)
           return Promise.resolve<PreStepDecision>({
             kind: 'enter',
             messages: context === undefined ? claimed : [...claimed, context],
@@ -440,7 +440,7 @@ export class ReactLoopAgent implements Agent {
         ...assembleContextFor(this, signal), modelSelection: decision.selection,
       })
       const sections = renderContextSections(currentContext)
-      const context = this.runtimeContext.project(joinContextSections(sections), sections)
+      const context = this.runtimeContext.project(sections)
       signal.throwIfAborted()
       const startsRequestSeries = firstAttempt && decision.startsRequestSeries === true
       const commits = this.systemPrompt.project(renderedPrompt, {
