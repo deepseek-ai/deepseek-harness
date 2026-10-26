@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-26-read-guidance-line-ranges.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-26-read-guidance-line-ranges.md
+/agent-note-read-guidance-names-shell-readers-and-line-ranges:
+  en: 1926710614598539
+  zh: b0106d4a6a2d648d
+/agent-note-read-guidance-names-shell-readers-and-line-ranges/problem:
+  en: 0b8dc80eb5a32bfb
+  zh: e3a5588a330af784
+/agent-note-read-guidance-names-shell-readers-and-line-ranges/decision:
+  en: 34f18307f7ad87af
+  zh: 21c466c6ce6c598d
+/agent-note-read-guidance-names-shell-readers-and-line-ranges/alternatives-considered:
+  en: a18ff1df8c97931c
+  zh: fd071b1b02755285
+/agent-note-read-guidance-names-shell-readers-and-line-ranges/verification:
+  en: 08557f13c54f2912
+  zh: a0ae60861df1aea8
+/agent-note-read-guidance-names-shell-readers-and-line-ranges/consequences:
+  en: d92130932f757899
+  zh: 011b8b66de41cf06
