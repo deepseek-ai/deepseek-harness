@@ -2,7 +2,7 @@
  * DSH_COVERAGE_TEST_TIMEOUT_MS reaches every inline Vitest project through the
  * root config (coverageTestTimeoutOptions owns the rule and why a CLI flag
  * cannot carry it). A budget below the fixture's waits must end all three
- * inside both projects; unset must keep Vitest's defaults, under which the
+ * inside every project; unset must keep Vitest's defaults, under which the
  * fixture's per-test and hook waits pass and its poll ends at the 1000 ms
  * default; a malformed value must fail at config load.
  */
@@ -18,6 +18,7 @@ const root = resolve(import.meta.dirname, '..')
 const vitestCli = fileURLToPath(new URL('../node_modules/vitest/vitest.mjs', import.meta.url))
 const fixture = 'scripts/fixtures/lane-test-budget.fixture.ts'
 const fixtureLine = /lane-test-budget\.fixture\.ts \((\d+) tests(?: \| (\d+) failed)?\)/g
+const projectNames = ['thread-safe', 'process-bound', 'vm-modules'] as const
 
 /** One spawned Vitest run takes a few seconds; a hung child must not hold the worker. */
 const CHILD_TIMEOUT_MS = 60_000
@@ -81,18 +82,17 @@ function fixtureSummaries(output: string): Array<[number, number]> {
 }
 
 describe('lane test budget', () => {
-  it('ends per-test, hook, and expect.poll waits in both inline projects', { timeout: 90_000 }, () => {
+  it('ends per-test, hook, and expect.poll waits in every inline project', { timeout: 90_000 }, () => {
     const { status, output } = runFixture('200')
 
-    expect(output).toMatch(/\|thread-safe\| scripts\/fixtures\/lane-test-budget\.fixture\.ts/)
-    expect(output).toMatch(/\|process-bound\| scripts\/fixtures\/lane-test-budget\.fixture\.ts/)
-    expect(fixtureSummaries(output)).toEqual([[3, 3], [3, 3]])
-    expect(output.match(/Test timed out in 200ms\./g)).toHaveLength(2)
-    expect(output.match(/Hook timed out in 200ms\./g)).toHaveLength(2)
-    expect(output.match(/Matcher did not succeed in time\./g)).toHaveLength(2)
+    for (const name of projectNames) expect(output).toContain(`|${name}| ${fixture}`)
+    expect(fixtureSummaries(output)).toEqual(projectNames.map(() => [3, 3]))
+    expect(output.match(/Test timed out in 200ms\./g)).toHaveLength(projectNames.length)
+    expect(output.match(/Hook timed out in 200ms\./g)).toHaveLength(projectNames.length)
+    expect(output.match(/Matcher did not succeed in time\./g)).toHaveLength(projectNames.length)
     // At most ~20 attempts fit into the 200 ms budget; the target is 10 000.
     const polled = [...output.matchAll(/expected (\d+) to be greater than 10000/g)].map(([, count]) => Number(count))
-    expect(polled).toHaveLength(2)
+    expect(polled).toHaveLength(projectNames.length)
     for (const count of polled) expect(count).toBeLessThan(100)
     expect(status).toBe(1)
   })
@@ -103,11 +103,12 @@ describe('lane test budget', () => {
     // 600 ms waits pass under the 5000 ms per-test and 10 000 ms hook defaults;
     // the poll case ends at the 1000 ms default and can only take longer
     // under load, never less.
-    expect(fixtureSummaries(output)).toEqual([[3, 1], [3, 1]])
-    expect(output.match(/Matcher did not succeed in time\./g)).toHaveLength(2)
+    for (const name of projectNames) expect(output).toContain(`|${name}| ${fixture}`)
+    expect(fixtureSummaries(output)).toEqual(projectNames.map(() => [3, 1]))
+    expect(output.match(/Matcher did not succeed in time\./g)).toHaveLength(projectNames.length)
     expect(output).not.toMatch(/Test timed out in|Hook timed out in/)
     const pollDurations = [...output.matchAll(/× expect\.poll budget (\d+)ms/g)].map(([, ms]) => Number(ms))
-    expect(pollDurations).toHaveLength(2)
+    expect(pollDurations).toHaveLength(projectNames.length)
     for (const ms of pollDurations) expect(ms).toBeGreaterThanOrEqual(1000)
     expect(status).toBe(1)
   })

@@ -999,7 +999,7 @@ describe('CI workflow', () => {
     const config = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8')
 
     expect(config).not.toContain("pool: process.platform === 'win32' ? 'threads' : 'forks'")
-    expect(config.match(/pool: 'forks'/g)).toHaveLength(2)
+    expect(config.match(/pool: 'forks'/g)).toHaveLength(3)
   })
 
   it('applies the lane test budget inside every Vitest project', () => {
@@ -1009,7 +1009,7 @@ describe('CI workflow', () => {
     const config = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8')
 
     expect(config).toContain('const laneTestBudget = coverageTestTimeoutOptions(process.env[COVERAGE_TEST_TIMEOUT_ENV])')
-    expect(config.match(/^ {10}\.\.\.laneTestBudget,$/gm)).toHaveLength(2)
+    expect(config.match(/^ {10}\.\.\.laneTestBudget,$/gm)).toHaveLength(3)
   })
 })
 
