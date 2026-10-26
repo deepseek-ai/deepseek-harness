@@ -12,8 +12,8 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 const SOURCE = 'runtime-context'
-const INITIAL = '<system-reminder>\nCurrent runtime context.\n\nretained\n</system-reminder>'
-const UPDATED = '<system-reminder>\nCurrent runtime context. This snapshot supersedes earlier runtime-context snapshots, including any retained in a compaction summary.\n\nnext\n</system-reminder>'
+const INITIAL = '<system-reminder>\nThe following information describes your current session:\n\nretained\n</system-reminder>'
+const UPDATED = '<system-reminder>\nThe following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.\n\nnext\n</system-reminder>'
 const CLEARED = '<system-reminder>\nCurrent runtime context: none. Earlier runtime-context snapshots no longer apply.\n</system-reminder>'
 
 function sections(text: string) {
@@ -144,7 +144,7 @@ describe('RuntimeContextProjection', () => {
     const message = projection.project(contributions)!
     expect(message.content).toEqual([{
       type: 'text',
-      text: '<system-reminder>\nCurrent runtime context.\n\nDirectory: /repo/<\\/system-reminder>/{{literal}}\n</system-reminder>',
+      text: '<system-reminder>\nThe following information describes your current session:\n\nDirectory: /repo/<\\/system-reminder>/{{literal}}\n</system-reminder>',
     }])
     expect(message.source).toEqual({ kind: SOURCE, form: 'snapshot', sections: contributions })
     session.append('user/message', message, { surfaceOp: 'append' })

@@ -153,7 +153,7 @@ loop 在发布工厂前等待 inbox 与轮次边界注册完成，并将句柄�
 
 #### 模型看到什么
 
-每个步骤中，循环会发送会话的派生消息与可见工具 schema。非空的 `system/message` 节点承载提示词，最新一条是有效版本；空渲染文本会从派生历史中清除所有提示词版本。它提供 `provider` 与 `model` 变量值。工作目录服务通过用户上下文提供当前目录。 请求头始终记录当前有效工具。将其名称与前一请求头比较后，添加和移除合并为一条 `developer/message`，不依赖模型能力；添加记录引用新请求头。请求还携带 `Session.toolHistory()`，供 LLM 运行时构造提供方声明。 运行时上下文以 `<system-reminder>` 包装的 user 消息呈现。首份快照以 `Current runtime context.` 开头；后续快照增加 `This snapshot supersedes earlier runtime-context snapshots, including any retained in a compaction summary.`。循环比较日志 `source.sections` 中有序的名称与文本，不依赖提醒文案。贡献未变化时不再注入；压缩移除保留的快照后会重新注入提醒，恢复会话后也如此。有效集合变空时，在同一包装内发送 `Current runtime context: none. Earlier runtime-context snapshots no longer apply.`，并记录空的 sections。候选消息只有提交后才计入历史。消息文本会转义字面的提醒结束标签，日志中的 sections 则保留原始文本。
+每个步骤中，循环会发送会话的派生消息与可见工具 schema。非空的 `system/message` 节点承载提示词，最新一条是有效版本；空渲染文本会从派生历史中清除所有提示词版本。它提供 `provider` 与 `model` 变量值。工作目录服务通过用户上下文提供当前目录。 请求头始终记录当前有效工具。将其名称与前一请求头比较后，添加和移除合并为一条 `developer/message`，不依赖模型能力；添加记录引用新请求头。请求还携带 `Session.toolHistory()`，供 LLM 运行时构造提供方声明。 运行时上下文以 `<system-reminder>` 包装的 user 消息呈现。首份快照以 `The following information describes your current session:` 开头；后续快照以 `The following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.` 开头。循环比较日志 `source.sections` 中有序的名称与文本，不依赖提醒文案。贡献未变化时不再注入；压缩移除保留的快照后会重新注入提醒，恢复会话后也如此。有效集合变空时，在同一包装内发送 `Current runtime context: none. Earlier runtime-context snapshots no longer apply.`，并记录空的 sections。候选消息只有提交后才计入历史。消息文本会转义字面的提醒结束标签，日志中的 sections 则保留原始文本。
 
 #### Token 影响
 

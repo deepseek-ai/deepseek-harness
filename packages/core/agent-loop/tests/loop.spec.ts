@@ -696,7 +696,7 @@ describe('agent loop', () => {
     expect(contextEvents()).toHaveLength(1)
     expect(contextEvents()[0]?.data.content).toEqual([{
       type: 'text',
-      text: '<system-reminder>\nCurrent runtime context.\n\nMode: read-only.\n</system-reminder>',
+      text: '<system-reminder>\nThe following information describes your current session:\n\nMode: read-only.\n</system-reminder>',
     }])
 
     send(agent, 'unchanged')
@@ -815,7 +815,7 @@ describe('agent loop', () => {
       await agent.whenIdle()
       const users = adapter.requests[0]?.messages.filter(message => message.role === 'user') ?? []
       expect(users.map(message => message.source?.kind)).toEqual(['runtime-context', 'user'])
-      expect(users[0]?.content).toEqual([{ type: 'text', text: '<system-reminder>\nCurrent runtime context.\n\nafter\n</system-reminder>' }])
+      expect(users[0]?.content).toEqual([{ type: 'text', text: '<system-reminder>\nThe following information describes your current session:\n\nafter\n</system-reminder>' }])
       expect(users[1]?.content).toEqual([{ type: 'text', text: 'accepted user' }])
       expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(2)
     } finally {
@@ -981,7 +981,7 @@ describe('agent loop', () => {
     expect(runtimeContexts).toHaveLength(2)
     expect(runtimeContexts[1]?.data.content).toEqual([{
       type: 'text',
-      text: '<system-reminder>\nCurrent runtime context. This snapshot supersedes earlier runtime-context snapshots, including any retained in a compaction summary.\n\nMode: read-only.\n</system-reminder>',
+      text: '<system-reminder>\nThe following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.\n\nMode: read-only.\n</system-reminder>',
     }])
   })
 

@@ -88,7 +88,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       ...closingContent,
       {
         type: 'text',
-        text: '<system-reminder>\nCurrent runtime context.\n\n'
+        text: '<system-reminder>\nThe following information describes your current session:\n\n'
           + `Current working directory: ${JSON.stringify(process.cwd())}.\n</system-reminder>`,
       },
     ]

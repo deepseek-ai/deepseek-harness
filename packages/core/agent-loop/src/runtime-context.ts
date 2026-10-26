@@ -165,13 +165,13 @@ export class RuntimeContextProjection {
     const previous = this.retained?.sections
     if (this.retained === undefined && sections.length === 0) return
     if (previous !== undefined && deepEqualJson(previous, sections)) return
-    const supersession = this.retained === undefined
-      ? ''
-      : ' This snapshot supersedes earlier runtime-context snapshots, including any retained in a compaction summary.'
+    const intro = this.retained === undefined
+      ? 'The following information describes your current session:'
+      : 'The following information describes your current session. It replaces earlier versions of this context, including any retained in conversation summaries.'
     const body = sections.map(section => section.text).join('\n\n').replaceAll('</system-reminder>', '<\\/system-reminder>')
     const snapshot = sections.length === 0
       ? CLEARED
-      : `<system-reminder>\nCurrent runtime context.${supersession}\n\n${body}\n</system-reminder>`
+      : `<system-reminder>\n${intro}\n\n${body}\n</system-reminder>`
     return createUserMessage({
       content: [{ type: 'text', text: snapshot }],
       source: { kind: SOURCE, form: 'snapshot', sections },
