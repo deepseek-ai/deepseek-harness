@@ -78,6 +78,10 @@ const ABSENT_NOTICES = {
   getSnapshot: (): InputNotice | null => null,
   subscribe: () => () => {},
 }
+const ABSENT_CONTINUATION = {
+  getSnapshot: () => undefined,
+  subscribe: () => () => {},
+}
 const ABSENT_BLOCK = {
   getSnapshot: (): ComposerBlock | undefined => undefined,
   subscribe: () => () => {},
@@ -482,7 +486,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           retryFileUpload: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
+          continueGeneration: undefined,
           hooks: {
+            continuation: ABSENT_CONTINUATION,
             stopShortcut,
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
@@ -561,7 +567,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
             })
           },
         stop: () => { stop(sessionId) },
+        continueGeneration: (ending) => { inputHub.continueGeneration(sessionId, ending) },
         hooks: {
+          continuation: inputHub.continuation(sessionId),
           stopShortcut,
           busyEnter: submissionPolicy.busyEnter,
           fileUploads: conversation.fileUploads,

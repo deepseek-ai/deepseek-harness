@@ -25,7 +25,7 @@ import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-ses
 import type { ContextPressureProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
@@ -81,6 +81,7 @@ interface BenchOptions {
   }
   draft?: string
   running?: boolean
+  continuation?: SessionSeq
   subagent?: Exclude<SessionSnapshot['subagent'], null>
   disabled?: boolean
   inert?: boolean
@@ -161,6 +162,8 @@ function bench(over?: BenchOptions) {
   if (over?.draft !== undefined && over.draft !== '') shell.setDraft(over.draft)
   if (over?.attachments !== undefined) shell.addAttachments(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
+  const continueGeneration = vi.fn()
+  const continuation = createSnapshotStore<SessionSeq | undefined>(over?.continuation)
   const removeAttachment = vi.fn((id: DraftAttachmentId) => { shell.removeAttachment(id) })
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const busyEnter = createSnapshotStore<'queue' | 'steer'>(over?.busyEnter ?? 'queue')
@@ -215,6 +218,8 @@ function bench(over?: BenchOptions) {
     }),
     toggleCommandMenu: over?.toggleCommandMenu ?? vi.fn(),
     useBusyEnter: bindSnapshotSelector(busyEnter),
+    continueGeneration,
+    useContinuation: bindSnapshotSelector(continuation),
     useStopShortcut: bindSnapshotSelector(stopShortcut),
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
@@ -252,19 +257,44 @@ function bench(over?: BenchOptions) {
   const plainMessageDraft = sendableDraft && !uploadsPending && !(over?.draft?.trimStart().startsWith('/') ?? false)
   const primaryLabel = primaryStops
     ? '停止生成'
-    : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
-      ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
-      : '发送消息'
+    : over?.continuation !== undefined && !sendableDraft && over.running !== true && over.subagent === undefined && !composerLocked
+      ? '继续生成'
+      : over?.running === true && steeringAvailable && !composerLocked && plainMessageDraft
+        ? (over.busyEnter === 'steer' ? '插话发送' : '排队发送')
+        : '发送消息'
   const button = view.container.querySelector<HTMLButtonElement>(`button[aria-label="${primaryLabel}"]`)!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
     view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeAttachment, slotCalls,
-    menuLauncher, busyEnter, stopShortcut,
+    menuLauncher, busyEnter, stopShortcut, continuation, continueGeneration,
     steerQueue: over?.steerQueue,
     get placeholder() { return placeholderOf(view.container) },
     get inputDisabled() { return textarea.getAttribute('aria-disabled') === 'true' },
   }
 }
+
+it('offers the play action only for an empty, idle composer with an eligible failure', async () => {
+  const b = bench({ continuation: 2 as SessionSeq })
+  expect(b.button.disabled).toBe(false)
+  expect(b.button.querySelector('svg')).not.toBeNull()
+  fireEvent.click(b.button)
+  expect(b.continueGeneration).toHaveBeenCalledExactlyOnceWith(2)
+  expect(b.sink).not.toHaveBeenCalled()
+  await act(async () => { b.shell.setDraft('A new instruction') })
+  const send = b.view.getByRole('button', { name: '发送消息' })
+  fireEvent.click(send)
+  await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledOnce() })
+  expect(b.sink.mock.calls[0]?.[0]).toBe('A new instruction')
+  expect(b.continueGeneration).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { running: true }, { attachments: [{ kind: 'image' as const, id: 'image' as DraftAttachmentId, file: new File([], 'x.png'), previewUrl: 'blob:test' }] },
+  { blocked: { reason: 'Select a model' } }, { subagent: CONTINUABLE_CHILD }, { deniedEndpoints: ['session/prompt'] },
+])('keeps the continue action unavailable with %j', (options) => {
+  const b = bench({ ...options, continuation: 2 as SessionSeq })
+  expect(b.view.queryByRole('button', { name: '继续生成' })).toBeNull()
+})
 
 function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]): ComposerAttachmentsOwnerProps {
   for (let i = slotCalls.length - 1; i >= 0; i -= 1) {

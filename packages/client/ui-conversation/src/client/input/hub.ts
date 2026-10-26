@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {
   ISessions, SessionBinding, SessionFace,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
@@ -25,6 +25,7 @@ import type { ComposerBlocks } from '../contract/composer-blocks.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
+import { createContinuationSource } from './continuation.ts'
 import { reportMessageSubmission } from './submission-analytics.ts'
 import { readConversationDraft } from '../stores.ts'
 
@@ -57,6 +58,7 @@ interface ConversationAttachmentFace {
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
 export class InputHub implements SessionInputResolver {
   private readonly shells = new WeakMap<SessionBinding, SessionInputShell>()
+  private readonly continuations = new WeakMap<SessionBinding, ObservableSnapshot<SessionSeq | undefined>>()
 
   /**
    * @param ctx - client root context (services resolved lazily per call — boot order stays free).
@@ -205,6 +207,44 @@ export class InputHub implements SessionInputResolver {
    */
   keyboard(id: SessionId): ComposerKeyboard {
     return this.shell(id)
+  }
+
+  /**
+   * Read manual-continuation eligibility from the retained Session history.
+   * @param id - retained ordinary Session identity.
+   * @returns the identity-stable eligibility source.
+   */
+  continuation(id: SessionId): ObservableSnapshot<SessionSeq | undefined> {
+    const binding = this.sessions().binding(id)
+    if (binding === undefined) throw new Error(`conversation.input: session "${id}" resolved no binding`)
+    let source = this.continuations.get(binding)
+    if (source === undefined) {
+      source = createContinuationSource(binding.eventSource)
+      this.continuations.set(binding, source)
+    }
+    return source
+  }
+
+  /**
+   * Submit localized continuation text through the ordinary composer. Stale
+   * failures, active work, and drafts keep their current input unchanged.
+   * @param id - retained ordinary Session identity.
+   * @param ending - failure the displayed button addresses.
+   */
+  continueGeneration(id: SessionId, ending: SessionSeq): void {
+    const binding = this.sessions().binding(id)
+    if (binding === undefined || this.continuation(id).getSnapshot() !== ending) return
+    const session = binding.session.getSnapshot()
+    const shell = this.shellFor(binding)
+    const input = shell.snapshot
+    const inbox = binding.session.projections.faceOf('inbox').getSnapshot() as InboxState | undefined
+    if (session.running || session.removed || session.openState !== 'open' || session.subagent !== null
+      || session.pendingSubmissions.length > 0 || input.phase !== 'plain'
+      || input.draft.trim() !== '' || input.attachmentIds.length > 0
+      || (inbox?.['next-turn'].length ?? 0) > 0 || (inbox?.['next-step'].length ?? 0) > 0
+      || this.conversation().blocks.storeFor(id).getSnapshot() !== undefined) return
+    shell.setDraft(this.t('input.continueMessage'))
+    shell.submit('queue', 'click')
   }
 
   /**

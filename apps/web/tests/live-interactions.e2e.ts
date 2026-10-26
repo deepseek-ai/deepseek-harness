@@ -414,15 +414,16 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
 
-  it.skipIf(MODE === 'record')('surfaces the terminal turn error after transient retries exhaust', async () => {
+  it.skipIf(MODE === 'record')('continues after transient retries exhaust through a localized user message', async () => {
     // A whole-script replacement: three throw entries cover the first request
     // plus both budgeted retries (patches cannot reach past the one-call
     // derived script). The scenario-owned policy keeps exhaustion fast and
     // jitter-free instead of walking the shared default's five backed-off
     // attempts.
     const failure: ReplayEntry = { kind: 'throw', chunks: [], message: 'upstream 503', code: 'SERVER' }
+    const derived = deriveReplayScript(parseSessionLog(await readFile(FIXTURE, 'utf8')))
     await launch(
-      () => [failure, failure, failure],
+      () => [failure, failure, failure, ...derived],
       { mode: 'normal', maxRetries: 2, retryableCodes: ['SERVER'], backoff: { initialDelayMs: 25, maxDelayMs: 50, jitterRatio: 0 } },
     )
     onTestFailed(() => saveFailureShot(page, 'web-e2e-retry-exhausted'))
@@ -443,6 +444,31 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     // context; the golden pins both.
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(RETRY_EXHAUSTED_EXPECTED, snapshot, MODE)
+    await page.reload({ waitUntil: 'load' })
+    const resume = page.getByRole('button', { name: 'Continue generating', exact: true })
+    await resume.waitFor()
+    const input = page.locator('[data-composer-input]').first()
+    await input.fill('A different instruction')
+    expect(await resume.count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Send message', exact: true }).isEnabled()).toBe(true)
+    await input.fill('')
+    await resume.waitFor()
+    await page.setViewportSize({ width: 390, height: 844 })
+    const bounds = await resume.boundingBox()
+    expect(bounds).not.toBeNull()
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+    expect(await resume.isEnabled()).toBe(true)
+    const continued = scaffold!.whenTurnSettled()
+    await resume.click()
+    await continued
+    expect(turnEndReasons(sessionEvents)).toEqual(['error', 'completed'])
+    const userMessages = sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
+      ? [event.data.content] : [])
+    expect(userMessages).toEqual([[{ type: 'text', text: PROMPT }], [{ type: 'text', text: 'continue' }]])
+    expect(await resume.count()).toBe(0)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'continued.expected.md'),
+      await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd), MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
@@ -451,7 +477,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'cancel.expected.md', 'cancel-expanded.expected.md',
       'loading.expected.md', 'running-draft.expected.md', 'error-auth.expected.md',
-      'retry.expected.md', 'retry-expanded.expected.md', 'retry-request.expected.md', 'retry-exhausted.expected.md',
+      'retry.expected.md', 'retry-expanded.expected.md', 'retry-request.expected.md', 'retry-exhausted.expected.md', 'continued.expected.md',
     ])
   })
 })

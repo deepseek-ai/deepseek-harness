@@ -407,6 +407,11 @@
   transform: translateY(-2px);
 }
 
+/* The triangle fills half its canvas; match the 14px arrow without widening the grid track. */
+.continueIcon {
+  transform: scale(1.75);
+}
+
 @media (hover: hover) {
   .primary:hover:not(:disabled) {
     background: var(--dsw-alias-button-info-hover);

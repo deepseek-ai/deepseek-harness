@@ -23,6 +23,8 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createConversationStore } from '../src/client/stores.ts'
 import type { SessionInputShell } from '../src/client/input/facade.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { continuationTurn } from './continuation-fixture.client.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -158,6 +160,50 @@ async function bench(renderQuote = false) {
 }
 
 describe('Conversation inject API', () => {
+  it.each([['zh', '继续'], ['en', 'continue']])('submits one continuation in the current %s locale', async (locale, message) => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'SERVER', message: 'busy' } }))
+    const composer = b.composerApi(ROOT)
+    expect(b.composerApi(ROOT).hooks.continuation).toBe(composer.hooks.continuation)
+    expect(composer.hooks.continuation.getSnapshot()).toBe(5)
+    b.runtime.ctx.locale.setLocale(locale)
+    const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
+    onTestFinished(() => { pending.resolve({ ok: true, value: { accepted: true } }) })
+    b.sessionFake.prompt.mockImplementationOnce(() => pending.promise)
+    composer.continueGeneration!(SessionSeq(5))
+    composer.continueGeneration!(SessionSeq(5))
+    expect(composer.keyboard!.snapshot.phase).toBe('sending')
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+    expect(b.sessionFake.prompt.mock.calls[0]?.[0]).toEqual([{ type: 'text', text: message }])
+    expect(b.sessionFake.prompt.mock.calls[0]?.[1]).toBe('queue')
+    pending.resolve({ ok: true, value: { accepted: true } })
+    await vi.waitFor(() => { expect(composer.keyboard!.snapshot.phase).toBe('plain') })
+    expect(composer.keyboard!.snapshot.draft).toBe('')
+  })
+
+  it('rechecks the addressed failure, draft, and live activity before continuing', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    await b.runtime.sessions.replaceEvents(ROOT, continuationTurn({ kind: 'error', error: { code: 'TIMEOUT', message: 'timeout' } }))
+    const composer = b.composerApi(ROOT)
+    const input = b.inputApi(ROOT)
+    composer.continueGeneration!(SessionSeq(1))
+    input.actions.setDraft('Keep my new instruction')
+    composer.continueGeneration!(SessionSeq(5))
+    expect(input.state.getSnapshot().draft).toBe('Keep my new instruction')
+    input.actions.setDraft('')
+    await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = true })
+    composer.continueGeneration!(SessionSeq(5))
+    await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.running = false })
+    await b.runtime.sessions.appendEvent(ROOT, {
+      type: 'event', event: { type: 'turn/start', seq: SessionSeq(6), time: 1, data: { turn: 2 } },
+    })
+    composer.continueGeneration!(SessionSeq(5))
+    expect(input.state.getSnapshot().draft).toBe('')
+    expect(b.sessionFake.prompt).not.toHaveBeenCalled()
+  })
+
   it('renders literal quote text through the actual Factory and keyed node registration', async () => {
     const b = await bench(true)
     onTestFinished(() => b.runtime.dispose())
