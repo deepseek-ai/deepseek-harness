@@ -3,6 +3,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { inspectRemoval } from './removal.ts'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -74,6 +75,7 @@ export class WorktreeService extends Service {
   private readonly config: ResolvedConfig
   private readonly lifetime = new AbortController()
   private readonly pending = new Set<Promise<unknown>>()
+  private readonly checkouts = new Map<string, Promise<void>>()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'worktrees')
@@ -149,13 +151,69 @@ export class WorktreeService extends Service {
   ): Promise<RestoredWorktree> {
     const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
     operationSignal.throwIfAborted()
-    const operation = this.restoreCheckout(agent, request, operationSignal, onPhase)
+    const operation = this.exclusiveCheckout(request.path, () => this.restoreCheckout(agent, request, operationSignal, onPhase))
     this.pending.add(operation)
     try {
       return await operation
     } finally {
       this.pending.delete(operation)
     }
+  }
+
+  /**
+   * Inspect a recorded checkout for non-destructive removal. Dirty, ignored, locked,
+   * detached, nested, mismatched, and missing checkouts are retained. Inspection errors reject.
+   * @param policy - resolved execution policy of the owning Session.
+   * @param request - recorded checkout identity.
+   * @param signal - cancellation of inspection.
+   * @returns whether the checkout is currently eligible; removal always inspects again.
+   */
+  canRemove(policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<boolean> {
+    return this.removal(policy, request, signal, null)
+  }
+
+  /**
+   * Remove an eligible checkout and its registration without force or branch deletion.
+   * Callers must exclude new users until settlement. A rejection can leave a partially
+   * removed directory; the branch remains available for restoration.
+   * @param policy - resolved execution policy of the owning Session.
+   * @param request - recorded checkout identity.
+   * @param signal - cancellation before or during removal.
+   * @param admit - synchronous final admission after inspection; false retains the checkout.
+   * @returns true when removed; false when inspection or admission requires retention.
+   */
+  remove(
+    policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal, admit: () => boolean = () => true,
+  ): Promise<boolean> {
+    return this.removal(policy, request, signal, admit)
+  }
+
+  private async removal(
+    policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal: AbortSignal | undefined, admit: (() => boolean) | null,
+  ): Promise<boolean> {
+    const control = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    control.throwIfAborted()
+    const operation = this.exclusiveCheckout(request.path, async () => {
+      control.throwIfAborted()
+      const run = this.gitRunner(policy, control)
+      if (!await inspectRemoval(this.ctx, this.config.directory, request, run, control)) return false
+      control.throwIfAborted()
+      if (admit !== null) {
+        if (!admit()) return false
+        await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
+      }
+      return true
+    })
+    this.pending.add(operation)
+    try { return await operation } finally { this.pending.delete(operation) }
+  }
+
+  private exclusiveCheckout<T>(path: string, body: () => Promise<T>): Promise<T> {
+    const operation = (this.checkouts.get(path) ?? Promise.resolve()).then(body)
+    const tail = operation.then(() => {}, () => {})
+    this.checkouts.set(path, tail)
+    void tail.then(() => { if (this.checkouts.get(path) === tail) this.checkouts.delete(path) })
+    return operation
   }
 
   private resolve(agent: Agent, request: CreateWorktreeRequest): WorktreeSpec {

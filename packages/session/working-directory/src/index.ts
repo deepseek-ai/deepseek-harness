@@ -15,6 +15,15 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Coordinate directory validation and publication with resource lifecycle operations.
+     * @param request - owner and requested path; null validates the current directory.
+     * @param next - perform validation and commit after competing operations settle.
+     * @mode waterfall
+     */
+    'working-directory/access'(request: { agent: Agent; path: string | null }, next: () => Promise<string>): Promise<string>
+  }
   interface Context {
     workingDirectory: WorkingDirectoryService
   }
@@ -132,7 +141,7 @@ export class WorkingDirectoryService extends Service {
    * @throws when the original project is also unavailable.
    */
   ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
-    return this.serialize(agent, signal, async (control) => {
+    return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path: null }, async () => {
       const current = this.get(agent.session)
       const target = await this.ctx.fs.resolve(current, { signal: control })
       const info = await this.ctx.fs.stat(target, control)
@@ -148,7 +157,7 @@ export class WorkingDirectoryService extends Service {
       const restored = await this.directory(original, original, control)
       this.commit(agent, restored, true, control)
       return restored
-    })
+    }))
   }
 
   /**
@@ -161,12 +170,12 @@ export class WorkingDirectoryService extends Service {
    * @throws when the requested path is not an existing directory.
    */
   set(agent: Agent, path: string, signal?: AbortSignal): Promise<string> {
-    return this.serialize(agent, signal, async (control) => {
+    return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path }, async () => {
       if (path.length === 0) throw new Error('working-directory: cd must not be empty')
       const directory = await this.directory(path, this.get(agent.session), control)
       this.commit(agent, directory, false, control)
       return directory
-    })
+    }))
   }
 
   private contextText(session: Session): string {

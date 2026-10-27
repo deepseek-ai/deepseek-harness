@@ -119,9 +119,31 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @returns the directory and whether the branch was created again.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
+
+/**
+ * Inspect a recorded checkout for non-destructive removal. Dirty, ignored, locked,
+ * detached, nested, mismatched, and missing checkouts are retained. Inspection errors reject.
+ * @param policy - resolved execution policy of the owning Session.
+ * @param request - recorded checkout identity.
+ * @param signal - cancellation of inspection.
+ * @returns whether the checkout is currently eligible; removal always inspects again.
+ */
+canRemove(policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal): Promise<boolean>
+
+/**
+ * Remove an eligible checkout and its registration without force or branch deletion.
+ * Callers must exclude new users until settlement. A rejection can leave a partially
+ * removed directory; the branch remains available for restoration.
+ * @param policy - resolved execution policy of the owning Session.
+ * @param request - recorded checkout identity.
+ * @param signal - cancellation before or during removal.
+ * @param admit - synchronous final admission after inspection; false retains the checkout.
+ * @returns true when removed; false when inspection or admission requires retention.
+ */
+remove( policy: SandboxExecutionPolicy, request: RestoreWorktreeRequest, signal?: AbortSignal, admit: () => boolean = () => true, ): Promise<boolean>
 ```
 
-Types: [Agent](core.zh.md)
+Types: [Agent](core.zh.md) · [SandboxExecutionPolicy](sandbox.zh.md)
 
 Source: [`packages/experimental/worktree/src/index.ts`](../../packages/experimental/worktree/src/index.ts)
 <!-- END GENERATED cordis-surface -->

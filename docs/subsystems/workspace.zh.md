@@ -544,7 +544,7 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
  * resolves without writing, asking, or stopping.
  * @param sessionId - The session to archive.
  * @param options - Whether running work is stopped instead of refusing.
- * @returns resolution after durability and, with `stopActivity`, after every stop request was issued.
+ * @returns resolution after durability, any stop requests, and follow-up admission.
  */
 archiveSession(sessionId: SessionId, options: ArchiveSessionOptions = {}): Promise<void>
 
@@ -619,6 +619,24 @@ Ask the composed providers what still runs for a session before it is archived. 
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
 
+<a id="workspacesession-archived--parallel"></a>
+
+#### `workspace/session-archived` — parallel
+
+Admit optional follow-up work after durable archival and any stop requests. Listener failures are logged without undoing archival. Listeners own and drain their background work.
+
+```ts cordis-catalog
+/**
+ * Admit optional follow-up work after durable archival and any stop requests.
+ * Listener failures are logged without undoing archival. Listeners own and drain their background work.
+ * @param request - newly archived Session; repeated archive requests do not dispatch.
+ * @mode parallel
+ */
+'workspace/session-archived'(request: SessionActivityRequest): Promise<void> | void
+```
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
 <a id="workspacesession-stop--parallel"></a>
 
 #### `workspace/session-stop` — parallel
@@ -641,6 +659,24 @@ Stop a session's running work because the caller archived it with `stopActivity`
  * @mode parallel
  */
 'workspace/session-stop'(request: SessionActivityRequest): Promise<void> | void
+```
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspacesession-unarchiving--parallel"></a>
+
+#### `workspace/session-unarchiving` — parallel
+
+Cancel or settle archive follow-up work before making a Session available again. A rejection retains the archived state.
+
+```ts cordis-catalog
+/**
+ * Cancel or settle archive follow-up work before making a Session available again.
+ * A rejection retains the archived state.
+ * @param request - Session about to leave the archive set.
+ * @mode parallel
+ */
+'workspace/session-unarchiving'(request: SessionActivityRequest): Promise<void> | void
 ```
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)

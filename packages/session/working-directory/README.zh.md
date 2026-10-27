@@ -33,6 +33,8 @@ kind: "package-reference"
 
 -----
 
+目录验证与发布通过 `working-directory/access` 委派，使资源所有者能够协调检出目录删除与 `ensure`、`set` 的执行。监听器必须对允许的访问调用 `next()`；拒绝时不改变已记录的目录。已有子进程保留自己的目录。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

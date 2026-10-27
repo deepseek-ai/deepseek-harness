@@ -2851,6 +2851,11 @@
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalChanges",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeWorktreeCleanup",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
     }
   ]
 }

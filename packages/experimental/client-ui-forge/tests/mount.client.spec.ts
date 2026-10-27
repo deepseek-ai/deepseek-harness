@@ -28,7 +28,8 @@ import type { NoticeSource } from '../src/client/source.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type {
-  ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+  ForgeWorktreeCleanup, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
+  ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -141,6 +142,8 @@ async function base() {
       stateStreams.push(handle)
       return handle
     }),
+    worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<ForgeWorktreeCleanup | null>> =>
+      ({ ok: true, value: null })),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
@@ -754,4 +757,69 @@ describe('mountForgePanel changes view', () => {
     expect(f.notice()).toMatchObject({ key: 'toast.promptFailed', tone: 'failure' })
     await f.dispose()
   })
+})
+
+
+describe('archive notices', () => {
+  it('uses the scheduled cleanup notice and reports a later failure', async () => {
+    const f = await fixture()
+    try {
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      const settled = Promise.withResolvers<RemoteResult<ForgeWorktreeCleanup | null>>()
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => revision === null
+        ? { ok: true, value: { revision: 1, status: 'scheduled' } }
+        : await settled.promise)
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      expect(f.notice()).toBeNull()
+      settled.resolve({ ok: true, value: { revision: 1, status: 'failed' } })
+      await vi.waitFor(() => { expect(failed).toHaveBeenCalledWith(S1, en['toast.archiveCleanupFailed']) })
+      expect(f.notice()).toBeNull()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it.each(['retained', 'removed'] as const)('leaves the ordinary archive notice for %s worktrees', async (status) => {
+    const f = await fixture()
+    try {
+      f.forgePanel.worktreeCleanup.mockResolvedValue({ ok: true, value: { revision: 1, status } })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const }))).toEqual({ text: 'fallback', tone: 'success' })
+      expect(f.notice()).toBeNull()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('uses a warning for an already failed cleanup and falls back when its result is unavailable', async () => {
+    const f = await fixture()
+    try {
+      const fallback = () => Promise.resolve({ text: 'fallback', tone: 'success' as const })
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 1, status: 'failed' } })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual({ text: en['toast.archiveCleanupFailed'], tone: 'warning' })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual(await fallback())
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce(REFUSED.failed)
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual(await fallback())
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it.each(['result', 'rejection'] as const)('contains a transport failure and ignores a late %s after unload', async (mode) => {
+    const f = await fixture()
+    try {
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 1, status: 'scheduled' } })
+        .mockRejectedValueOnce(new Error('connection lost'))
+      await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))
+      await vi.waitFor(() => { expect(warning).toHaveBeenCalledTimes(1) })
+      const completed = Promise.withResolvers<RemoteResult<ForgeWorktreeCleanup | null>>()
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 2, status: 'scheduled' } })
+        .mockImplementationOnce(async () => await completed.promise)
+      await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))
+      await f.dispose()
+      if (mode === 'result') completed.resolve({ ok: true, value: { revision: 2, status: 'failed' } })
+      else completed.reject(new Error('late connection loss'))
+      await completed.promise.catch(() => {})
+      expect(failed).not.toHaveBeenCalled()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
 })

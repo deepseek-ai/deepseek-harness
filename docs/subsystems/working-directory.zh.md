@@ -61,4 +61,28 @@ set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
 Types: [Agent](core.zh.md) · [Session](session.zh.md)
 
 Source: [`packages/session/working-directory/src/index.ts`](../../packages/session/working-directory/src/index.ts)
+
+<a id="working-directory-events"></a>
+
+### `working-directory/*` events
+
+<a id="working-directoryaccess--waterfall"></a>
+
+#### `working-directory/access` — waterfall
+
+Coordinate directory validation and publication with resource lifecycle operations.
+
+```ts cordis-catalog
+/**
+ * Coordinate directory validation and publication with resource lifecycle operations.
+ * @param request - owner and requested path; null validates the current directory.
+ * @param next - perform validation and commit after competing operations settle.
+ * @mode waterfall
+ */
+'working-directory/access'(request: { agent: Agent; path: string | null }, next: () => Promise<string>): Promise<string>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/session/working-directory/src/index.ts`](../../packages/session/working-directory/src/index.ts)
 <!-- END GENERATED cordis-surface -->

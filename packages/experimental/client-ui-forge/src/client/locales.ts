@@ -5,6 +5,8 @@ export const NS = 'forgePanel'
 
 /** Chinese copy; its keys define {@link ForgePanelKey}. */
 export const zh = {
+  'toast.archiveCleanupScheduled': '已归档，工作树将被清理',
+  'toast.archiveCleanupFailed': '已归档，工作树清理失败。分支已保留，请检查工作树。',
   'tab.title': '变更请求',
   'header.label': '本会话的变更请求',
   'header.attention': '本会话的变更请求需要处理',
@@ -211,6 +213,8 @@ export type ForgePanelKey = keyof typeof zh
 
 /** English copy with the same keys. */
 export const en: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Archived; the worktree will be cleaned up',
+  'toast.archiveCleanupFailed': 'Archived; worktree cleanup failed. The branch is retained. Check the worktree.',
   'tab.title': 'Change requests',
   'header.label': 'Change requests of this Session',
   'header.attention': 'Change requests of this Session need attention',
@@ -421,6 +425,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Japanese copy with the same keys. */
 export const ja: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'アーカイブしました。ワークツリーを削除します',
+  'toast.archiveCleanupFailed': 'アーカイブしましたが、ワークツリーの削除に失敗しました。ブランチは保持されています。ワークツリーを確認してください。',
   'list.worktree': '専用のワークツリー内',
   'list.stateChecks': '{state} · {checks}',
   'list.more': '他 {count} 件の変更リクエスト',
@@ -624,6 +630,8 @@ export const ja: Record<ForgePanelKey, string> = {
 
 /** Spanish copy with the same keys. */
 export const es: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Archivado; se eliminará el árbol de trabajo',
+  'toast.archiveCleanupFailed': 'Archivado; no se pudo eliminar el árbol de trabajo. La rama se conserva. Revisa el árbol de trabajo.',
   'list.worktree': 'En su propio árbol de trabajo',
   'list.stateChecks': '{state} · {checks}',
   'list.more': '{count} solicitudes de cambio más',
@@ -827,6 +835,8 @@ export const es: Record<ForgePanelKey, string> = {
 
 /** French copy with the same keys. */
 export const fr: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Archivé ; l’arbre de travail sera supprimé',
+  'toast.archiveCleanupFailed': 'Archivé ; échec de la suppression de l’arbre de travail. La branche est conservée. Vérifiez l’arbre de travail.',
   'list.worktree': 'Dans son propre arbre de travail',
   'list.stateChecks': '{state} · {checks}',
   'list.more': '{count} demandes de changement supplémentaires',
@@ -1030,6 +1040,8 @@ export const fr: Record<ForgePanelKey, string> = {
 
 /** German copy with the same keys. */
 export const de: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Archiviert; der Arbeitsbaum wird entfernt',
+  'toast.archiveCleanupFailed': 'Archiviert; der Arbeitsbaum konnte nicht entfernt werden. Der Branch bleibt erhalten. Prüfe den Arbeitsbaum.',
   'list.worktree': 'Im eigenen Arbeitsbaum',
   'list.stateChecks': '{state} · {checks}',
   'list.more': '{count} weitere Änderungsanfragen',
@@ -1233,6 +1245,8 @@ export const de: Record<ForgePanelKey, string> = {
 
 /** Russian copy with the same keys. */
 export const ru: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Архивировано; рабочее дерево будет удалено',
+  'toast.archiveCleanupFailed': 'Архивировано; не удалось удалить рабочее дерево. Ветка сохранена. Проверьте рабочее дерево.',
   'list.worktree': 'В собственном рабочем дереве',
   'list.stateChecks': '{state} · {checks}',
   'list.more': 'Ещё запросов на изменение: {count}',
@@ -1436,6 +1450,8 @@ export const ru: Record<ForgePanelKey, string> = {
 
 /** Portuguese copy with the same keys. */
 export const pt: Record<ForgePanelKey, string> = {
+  'toast.archiveCleanupScheduled': 'Arquivado; a árvore de trabalho será removida',
+  'toast.archiveCleanupFailed': 'Arquivado; a remoção da árvore de trabalho falhou. O ramo foi mantido. Verifique a árvore de trabalho.',
   'list.worktree': 'Na sua própria árvore de trabalho',
   'list.stateChecks': '{state} · {checks}',
   'list.more': 'Mais {count} solicitações de alteração',

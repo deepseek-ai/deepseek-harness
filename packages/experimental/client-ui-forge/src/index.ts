@@ -25,9 +25,10 @@ import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree,
-  ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
+  ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState, ForgeWorktreeCleanup, ForgeWorktreeRetention,
 } from './types.ts'
-import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
+import { WorktreeArchives } from './worktree-archive.ts'
+import { forgeWorktreeRetentionProjection, forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
 
 export type * from './types.ts'
@@ -80,6 +81,8 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly panels = new Map<Session, SessionPanel>()
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
+  private archives: WorktreeArchives | undefined
+  private retention!: ProjectionHandle<ForgeWorktreeRetention>
   private readonly patches: PatchCache
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
@@ -119,12 +122,18 @@ export class ForgePanelController extends TypertRemoteService {
       inject: ['sessionProjections'],
       apply: async (scope: Context) => {
         this.worktreeStates = await scope.sessionProjections.register(forgeWorktreeProjection)
+        this.retention = await scope.sessionProjections.register(forgeWorktreeRetentionProjection)
       },
     })
     await stateOwner
     // Inbox insertions, step proposals, and Session events read the worktree state, so they start once its reader is ready.
     this.creations = new WorktreeCreations(ctx, this.worktreeStates, this.config.worktreePrefix, (session) => {
       this.panels.get(session)?.updateWorktree()
+    })
+    const archiveOwner = ctx.inject(['workspaceRegistry', 'sessionQuery', 'worktrees'], (scope) => {
+      const archives = new WorktreeArchives(scope, this.retention)
+      this.archives = archives
+      scope.effect(() => () => { this.archives = undefined })
     })
     const inbox = ctx.on('agent/inbox/inserted', ({ agent }) => { this.holdTurn(agent) })
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
@@ -143,6 +152,7 @@ export class ForgePanelController extends TypertRemoteService {
       yield stopPanels
       yield stopStates
       yield creations.dispose
+      yield archiveOwner.dispose
     }, 'forge-panel: drain before releasing state')
   }
 
@@ -175,6 +185,17 @@ export class ForgePanelController extends TypertRemoteService {
   async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame> {
     const access = this.ctx.get('remoteAccess')
     yield* this.changeRequestStatesHub().stream(id => access === undefined || access.allows({ kind: 'session', id }), signal)
+  }
+
+  /**
+   * Read or await an archive cleanup owned by this Host lifetime.
+   * @param session - Session whose cleanup is visible to the caller.
+   * @param revision - null reads now; a matching revision waits for completion.
+   * @returns the cleanup state, or null when none exists or the revision was superseded.
+   */
+  @Remote
+  async worktreeCleanup(session: Session, revision: number | null): Promise<ForgeWorktreeCleanup | null> {
+    return await this.archives?.result(session, revision) ?? null
   }
 
   /**

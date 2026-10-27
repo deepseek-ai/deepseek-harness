@@ -84,7 +84,7 @@ export function registerToasts(
       name: 'workspace.toast', key: 'archived', locale: 'workspace', store: viewStore,
       inject: (): ArchiveToastInjected => ({
         display: (notice, t, dismiss) => ({
-          text: t('toast.archived'), tone: 'success', holdMs: 6000,
+          text: notice.message ?? t('toast.archived'), tone: notice.tone ?? 'success', holdMs: 6000,
           actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
         }),
         filterAction: archiveFilterAction,
@@ -94,7 +94,7 @@ export function registerToasts(
       name: 'workspace.toast', key: 'stoppedAndArchived', locale: 'workspace', store: viewStore,
       inject: (): ArchiveToastInjected => ({
         display: (notice, t, dismiss) => ({
-          text: t('toast.stoppedAndArchived'), tone: 'success', holdMs: 6000,
+          text: notice.message ?? t('toast.stoppedAndArchived'), tone: notice.tone ?? 'success', holdMs: 6000,
           actions: [{ label: t('toast.archivedUndo'), onClick: () => { dismiss(); actions.undoArchive(notice.sessionId) } }],
         }),
         filterAction: archiveFilterAction,

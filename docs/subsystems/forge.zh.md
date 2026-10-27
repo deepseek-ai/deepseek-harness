@@ -344,6 +344,14 @@ interface ForgeSessionWorktree {
 ```
 
 ```ts type-equiv
+/** Process-local result of one archive-triggered cleanup attempt. */
+interface ForgeWorktreeCleanup {
+  readonly revision: number
+  readonly status: 'scheduled' | 'retained' | 'removed' | 'failed'
+}
+```
+
+```ts type-equiv
 /** Payload of the `plugin:client-ui-forge/worktree` record. */
 type WorktreeRecord =
   /** Create a worktree before the Session's first step, starting from `from`, or from HEAD when it is null. */
@@ -824,6 +832,14 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
  */
 @Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
+
+/**
+ * Read or await an archive cleanup owned by this Host lifetime.
+ * @param session - Session whose cleanup is visible to the caller.
+ * @param revision - null reads now; a matching revision waits for completion.
+ * @returns the cleanup state, or null when none exists or the revision was superseded.
+ */
+@Remote async worktreeCleanup(session: Session, revision: number | null): Promise<ForgeWorktreeCleanup | null>
 
 /**
  * List the local branches that can start a worktree of the Session's current checkout.

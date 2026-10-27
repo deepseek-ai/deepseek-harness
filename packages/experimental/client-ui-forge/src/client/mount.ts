@@ -61,6 +61,22 @@ function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'forge-panel: dictionaries')
   const t = ctx.locale.bind(NS)
   const notices = createNoticeSource()
+  const lifetime = new AbortController()
+  ctx.effect(() => () => { lifetime.abort() })
+  ctx.on('workspace/archive-notice', async (sessionId, next) => {
+    const fallback = await next()
+    const result = await ctx.remote.forgePanel.worktreeCleanup(sessionId, null)
+    if (!result.ok || result.value === null) return fallback
+    const { revision, status } = result.value
+    if (status === 'failed') return { text: t('toast.archiveCleanupFailed'), tone: 'warning' }
+    if (status !== 'scheduled') return fallback
+    void ctx.remote.forgePanel.worktreeCleanup(sessionId, revision).then((completed) => {
+      if (!lifetime.signal.aborted && completed.ok && completed.value?.status === 'failed') ctx.emit('workspace/archive-followup-failed', sessionId, t('toast.archiveCleanupFailed'))
+    }).catch((error: unknown) => {
+      if (!lifetime.signal.aborted) console.warn('archive worktree cleanup result unavailable:', error)
+    })
+    return { text: t('toast.archiveCleanupScheduled'), tone: 'success' }
+  })
   const stores = new Map<SessionId, SessionStores>()
   ctx.effect(() => () => {
     for (const store of [...stores.values()]) store.release()

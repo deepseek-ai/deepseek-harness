@@ -218,6 +218,8 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 
 -----
 
+客户端 `workspace/archive-notice` 瀑布为现有归档提示提供本地化的后续文本与色调。已接纳的后台操作失败时，`workspace/archive-followup-failed` 替换该提示，并保留撤销和归档筛选操作。
+
 <a id="model-experience"></a>
 ## 模型体验
 

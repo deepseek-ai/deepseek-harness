@@ -54,6 +54,19 @@ export type WorktreeRecord =
   /** The recorded worktree was completely restored. */
   | { readonly action: 'restored' }
 
+/** Recoverable creation ownership; forks retain references without becoming creators. */
+export interface ForgeWorktreeRetention {
+  readonly state: ForgeWorktreeState
+  readonly inheritedEventCount: number
+  readonly owned: boolean
+}
+
+/** Process-local result of one archive-triggered cleanup attempt. */
+export interface ForgeWorktreeCleanup {
+  readonly revision: number
+  readonly status: 'scheduled' | 'retained' | 'removed' | 'failed'
+}
+
 /** One open worktree request. */
 export interface ForgeWorktreeRequest {
   /** Base branch, or null for HEAD of the source checkout. */

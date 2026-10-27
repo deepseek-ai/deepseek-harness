@@ -18,6 +18,8 @@ Git and directory creation use the mounted subprocess and sandbox providers with
 
 Leaving uses the shared working-directory operation and retains the checkout and branch. Failed setup can retain partial artifacts and reports their location. The service does not own a checkout registry, cleanup schedule, branch merge policy, or task association database.
 
+The [Forge UI](../../../../packages/experimental/client-ui-forge/README.md) owns archive-triggered cleanup only for checkouts its New Session option created. A Session's inherited prefix proves whether it created the checkout or merely refers to it; cwd alone never grants cleanup ownership. Cold Session inspection reads domain projections and the original sandbox policy without starting an Agent. The archive is durable before cleanup, and unarchive and directory entry wait for cleanup admission to settle. Conservative retention avoids inventing backups of ignored or untracked files: only a clean, unshared checkout is removed, its named branch remains, and uncertain inspection retains it. No startup sweep deletes previously archived worktrees.
+
 ## Alternatives considered
 
 **A separate worktree-exit tool.** Leaving is the existing working-directory operation; another exit operation would needlessly couple directory changes to Git ownership or deletion.
@@ -30,4 +32,4 @@ Leaving uses the shared working-directory operation and retains the checkout and
 
 ## Consequences
 
-The caller can continue one Session in a new checkout with a reconstructable directory change. Retention avoids deleting work on exit or a failed final publication, but callers must manage unused checkouts and branches themselves. Git and Node must be available in the filesystem provider's execution world. Submodule setup and dependency installation remain separate operations.
+The caller can continue one Session in a new checkout with a reconstructable directory change. Retention avoids deleting work on exit or a failed final publication, while consumers can reclaim eligible UI checkouts on archive without managing branch lifetime. Git and Node must be available in the filesystem provider's execution world. Submodule setup and dependency installation remain separate operations.

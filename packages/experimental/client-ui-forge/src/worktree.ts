@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { z } from 'zod'
 import type {
   ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRestoration, ForgeWorktreeState,
-  ForgeWorktreeWaiting, WorktreeRecord,
+  ForgeWorktreeWaiting, WorktreeRecord, ForgeWorktreeRetention,
 } from './types.ts'
 
 /** Plugin record type of worktree requests, withdrawals, and creations. */
@@ -66,6 +66,27 @@ export const forgeWorktreeProjection = {
     view: state => state.created !== null && state.cwd !== null && within(state.created.path, state.cwd) ? state.created : null,
   },
 } satisfies ProjectionDefinition<'forgeWorktree', ForgeWorktreeState>
+
+const retentionSchema: z.ZodType<ForgeWorktreeRetention> = z.object({
+  state: stateSchema,
+  inheritedEventCount: z.number().int().nonnegative(),
+  owned: z.boolean(),
+}).strict()
+
+/** Full UI creation facts for archive safety, including after the Session leaves its checkout. */
+export const forgeWorktreeRetentionProjection = {
+  key: 'forgeWorktreeRetention',
+  stateVersion: 1,
+  stateSchema: retentionSchema,
+  init: (header, inheritedEventCount) => ({ state: forgeWorktreeProjection.init(header), inheritedEventCount, owned: false }),
+  apply: (retention, event) => {
+    const state = apply(retention.state, event)
+    if (state === retention.state) return retention
+    const owned = retention.owned
+      || (retention.state.created === null && state.created !== null && event.seq >= retention.inheritedEventCount)
+    return { ...retention, state, owned }
+  },
+} satisfies ProjectionDefinition<'forgeWorktreeRetention', ForgeWorktreeRetention>
 
 /**
  * Whether `path` is `root` or lies below it.
