@@ -6,6 +6,17 @@ import type { InspectorRecordInput, SourceAppendFrame, SourceReplaceFrame } from
 import { INSPECTOR_PROTOCOL_VERSION } from './version.ts'
 
 const SOURCE_FRAME_OVERHEAD_BYTES = 4_096
+/** Upper bound on the JSON around one replacement state payload: array, `monotonicMs`, and a 128-code-unit escaped topic. */
+const STATE_RECORD_OVERHEAD_BYTES = 1_024
+
+/**
+ * Compute the payload budget of a source's single retained state topic.
+ * @param maxFrameBytes - Source-frame byte limit.
+ * @returns Encoded payload bytes that {@link InspectorSourceBuffer.setState} accepts when no other state topic is retained.
+ */
+export function maxStatePayloadBytes(maxFrameBytes: number): number {
+  return maxFrameBytes - SOURCE_FRAME_OVERHEAD_BYTES - STATE_RECORD_OVERHEAD_BYTES
+}
 
 /** Limits and declared topics shared by both source transports. */
 export interface InspectorSourceBufferOptions {
