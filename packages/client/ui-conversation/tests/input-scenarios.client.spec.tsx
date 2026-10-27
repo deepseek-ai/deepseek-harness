@@ -637,3 +637,37 @@ describe('scenario I: unknown /xyz + enter', () => {
     expect(b.sink).not.toHaveBeenCalled()
   })
 })
+
+describe('plugin composer prefill API', () => {
+  it('fills empty drafts, inserts at the caret, and honors replace and separator options', async () => {
+    const b = await bench()
+    expect(b.shell.prefill('')).toBe(false)
+    act(() => { expect(b.shell.prefill('Explain')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain')
+    act(() => { expect(b.shell.actions.prefill('tests')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain\ntests')
+    act(() => { expect(b.shell.prefill('next', { separator: ' ' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain\ntests next')
+    act(() => { b.shell.setDraft('Keep ') })
+    act(() => { expect(b.shell.prefill('Next')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Keep Next')
+    act(() => { expect(b.shell.prefill('Only', { mode: 'replace' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Only')
+    act(() => { expect(b.shell.prefill('Next', { separator: '' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('OnlyNext')
+    act(() => {
+      b.shell.editor.update(() => { $getRoot().selectStart() }, { discrete: true })
+    })
+    act(() => { expect(b.shell.prefill('Head')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('HeadOnlyNext')
+  })
+
+  it('reports a rejected insertion without changing the draft', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Busy') })
+    const insertText = vi.spyOn(b.shell.actions, 'insertText').mockReturnValue(false)
+    act(() => { expect(b.shell.prefill('Next')).toBe(false) })
+    expect(b.shell.snapshot.draft).toBe('Busy')
+    insertText.mockRestore()
+  })
+})

@@ -104,7 +104,7 @@ function props(
       insertQuote: () => false,
       captureInsertion: unused,
       insertText: unused,
-      setDraft: unused,
+      setDraft: unused, prefill: unused,
       persistDraft: unused,
       addAttachments: unused,
       removeAttachment: unused,

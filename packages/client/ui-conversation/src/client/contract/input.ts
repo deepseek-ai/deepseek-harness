@@ -187,6 +187,15 @@ export interface SessionInput extends InputTarget {
 
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
+  /**
+   * Write plugin-owned text into the draft in one undo step. This is the
+   * session-scope entry to the same prefill operation exposed as
+   * {@link InputActions.prefill} to slot components.
+   * @param text - text to write; an empty string is ignored.
+   * @param options - replacement mode and insertion separator.
+   * @returns whether the draft accepted the write.
+   */
+  prefill(text: string, options?: ComposerPrefillOptions): boolean
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
   addAttachments(ids: readonly DraftAttachmentId[]): boolean
   /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
@@ -249,6 +258,20 @@ export interface DraftInitializationOptions {
 /** An initialization request never waits for a React mount or a remote catalog. */
 export type DraftInitializationResult = 'applied' | 'preserved' | 'blocked'
 
+/** How a composer prefill treats existing draft text. */
+export type ComposerPrefillMode = 'insert' | 'replace'
+
+/** Options for a plugin-owned composer prefill. */
+export interface ComposerPrefillOptions {
+  /** Replace the whole draft instead of inserting at the caret; defaults to `insert`. */
+  readonly mode?: ComposerPrefillMode
+  /**
+   * Text placed before an inserted prefill when the caret follows non-whitespace.
+   * Defaults to a newline; an empty string inserts verbatim. Ignored when replacing.
+   */
+  readonly separator?: string
+}
+
 /**
  * The public input action face provided to every session-scope slot
  * component: stable-identity callbacks, mirroring the
@@ -269,6 +292,16 @@ export interface InputActions {
   insertText(text: string, span: TokenSpan): boolean
   /** Replace the whole draft with plain text, removing inline reference chips. */
   setDraft(text: string): void
+  /**
+   * Write plugin-owned text into the draft in one undo step. An empty or
+   * whitespace-only draft, or `mode: 'replace'`, replaces the draft; otherwise
+   * the text is inserted at the caret, preceded by `separator` when the caret
+   * follows non-whitespace.
+   * @param text - text to write; an empty string is ignored.
+   * @param options - replacement mode and insertion separator.
+   * @returns whether the draft accepted the write.
+   */
+  prefill(text: string, options?: ComposerPrefillOptions): boolean
   /** Write the current semantic document through the mounted persistence callback. */
   persistDraft(): void
   /** Append ordered browser-owned attachment ids; busy admission phases refuse. */

@@ -497,7 +497,7 @@ function makeHarness(
       insertQuote: () => false,
       captureInsertion: () => ({ start: 0, end: 0, draftRev: 0 }),
       insertText: () => false,
-      setDraft: () => {},
+      setDraft: () => {}, prefill: () => false,
       persistDraft: () => {},
       addAttachments: () => true,
       removeAttachment: () => {},

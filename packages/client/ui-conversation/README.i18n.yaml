@@ -12,8 +12,8 @@
   en: 8811c28013fdc6dc
   zh: 0a86edc422b38ba8
 /deepseek-ai-dsh-client-ui-conversation/table-of-contents:
-  en: eef4f18c3972ccc4
-  zh: 6be65c6ac84ce497
+  en: c1ca3d169bea2ccc
+  zh: 1892939a2ec76e1e
 /deepseek-ai-dsh-client-ui-conversation/conversation-assembly:
   en: ef43c4f149195939
   zh: 49fc6c83fd3a05ce
@@ -24,8 +24,11 @@
   en: 08cf047cee6419bd
   zh: 1f464f059753eacb
 /deepseek-ai-dsh-client-ui-conversation/temporary-composer-entries:
-  en: bb1244310f5c0382
-  zh: 824b84077432b559
+  en: 4012ba43a43b4802
+  zh: 98eb3847ba0983a0
+/deepseek-ai-dsh-client-ui-conversation/plugin-prefill-api:
+  en: cd480aebe843b5ab
+  zh: 246911fff1b14548
 /deepseek-ai-dsh-client-ui-conversation/model-experience:
   en: e0a05b73ba3e4318
   zh: dc85ab8433bb4456

@@ -19,6 +19,7 @@ Desktop product events use the optional [product analytics service](../product-a
 - [Sent user text](#sent-user-text)
 - [Shell and standard props](#shell-and-standard-props)
 - [Temporary composer entries](#temporary-composer-entries)
+- [Plugin prefill API](#plugin-prefill-api)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -181,6 +182,17 @@ The selector must be a pure function of the owner currency. Its non-null return 
 `InputActions.captureInsertion()` captures the draft selection and revision; `insertText(text, span)` inserts one undoable plain-text edit only while that revision is current and the editor permits editing. Asynchronous consumers retain rejected results for user action.
 
 `conversation.input.activity` hosts one control between the model selector and Send. Its `onActiveChange` callback expands that control across the toolbar and hides ordinary accessory controls and the context meter while preserving the editor and submit action. Closing the activity restores those controls with context details closed. The empty hero dock remains collapsed when it has no content. The occupant releases expansion on unmount and owns any activity-specific feedback.
+
+<a id="plugin-prefill-api"></a>
+## Plugin prefill API
+
+A plugin can write reviewable text into the current composer through the stable `prefill` action. Slot components receive it as `inputActions.prefill(text, options)`. A session-scope plugin resolves the same action with `ctx.conversation.input.for(actx).prefill(text, options)`.
+
+```ts
+prefill(text: string, options?: { mode?: 'insert' | 'replace'; separator?: string }): boolean
+```
+
+An empty string is ignored and returns `false`. An empty or whitespace-only draft, or `mode: 'replace'`, replaces the whole draft. Otherwise the text is inserted at the caret in one undo step, preceded by `separator` when the caret follows non-whitespace; the separator defaults to a newline and an empty separator inserts verbatim. A rejected insertion — a changed draft revision, a locked submission phase, or a disposed session — returns `false` without changing the draft. `prefill` never sends the draft.
 
 <a id="model-experience"></a>
 ## Model Experience
