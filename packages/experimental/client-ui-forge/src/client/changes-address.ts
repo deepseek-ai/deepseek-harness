@@ -98,6 +98,7 @@ export function changesDefinition(t: TranslateNS<typeof NS>): SidebarRightTabDef
   return {
     id: CHANGES_ID,
     kind: CHANGES_KIND,
+    keepMounted: true,
     patterns: [`${PREFIX}**`],
     canOpen: address => parseChangesAddress(address) !== undefined,
     title: (address) => {

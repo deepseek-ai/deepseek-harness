@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ForgePanelChangeRequest } from '../types.ts'
+import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -23,8 +23,11 @@ import { ForgeTab, type ForgeTabInjected } from './ForgeTab.tsx'
 import { ForgeTabTitle } from './ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from './HeaderButton.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
+import type { SessionListInjected } from './session-list.ts'
+import { SessionHoverForge } from './SessionHoverForge.tsx'
+import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createVisibilitySource, type PanelSource, type VisibilitySource,
+  createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates, type PanelSource, type VisibilitySource,
 } from './source.ts'
 import { numberOf } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
@@ -176,7 +179,7 @@ function registerUi(ctx: Context): void {
   const changesFace = (sessionId: SessionId): ChangesTabInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: { panel: store.panel.hooks.panel },
+      keyedHooks: { panel: visibility => visibility === 'visible' ? store.panel.hooks.panel : undefined },
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
@@ -263,6 +266,19 @@ function registerUi(ctx: Context): void {
     name: 'shell.overlay', id: 'forge-panel.toast', locale: NS,
     inject: () => ({ hooks: notices.hooks, dismiss: notices.dismiss }),
   }, ActionToast))
+  // One stream of change request states serves every Session row while any row reads it.
+  const states = createStreamSource<ForgeChangeRequestStatesFrame, ReadonlyMap<string, ForgeChangeRequestListState>>({
+    open: signal => ctx.remote.forgePanel.changeRequestStates(signal),
+    subscribeReset: listener => ctx.on('connection/reset', listener),
+  }, new Map(), foldStates)
+  ctx.effect(() => () => { states.close() }, 'forge-panel: change request states')
+  const listFace = (): SessionListInjected => ({ hooks: { states: states.observable } })
+  ctx.slots.inject('sidebar.session.row.trailing', () => ctx.slots.register({
+    name: 'sidebar.session.row.trailing', id: 'forge-panel.row', order: 10, locale: NS, inject: listFace,
+  }, SessionRowForge))
+  ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
+    name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
+  }, SessionHoverForge))
 }
 
 /**

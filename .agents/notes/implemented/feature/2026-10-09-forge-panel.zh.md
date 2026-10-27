@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个新会话选项、一张位于输入框上方的创建卡片，以及一个 toast。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务与一个隔离的 worktree 服务作为插件页中默认禁用的一个条目发布。
+[`dsh-experimental-client-ui-forge`](../../../../packages/experimental/client-ui-forge/README.zh.md) 是一个双端包。宿主端的 `forgePanel` Remote 把面板为一个 Session 展示的全部内容组装成一条流式状态；forge 注册表与绑定服务只保留各自的领域操作。客户端包括一个右侧边栏标签页、一个显示或隐藏它的 Session 标题栏按钮、一个新会话选项、一张位于输入框上方的创建卡片、一个 toast，以及[会话列表中的图标与悬浮卡片部分](2026-10-20-forge-session-list.zh.md)。所有界面都把已绑定的条目称为变更请求（forge 注册表的术语），不随代码托管平台的叫法变化。[forge 套件](../../../../packages/experimental/forge-bundle/README.zh.md)把面板、forge 注册表、GitHub 提供方、绑定服务与一个隔离的 worktree 服务作为插件页中默认禁用的一个条目发布。
 
 Remote 通过 Session 的子进程提供方、在 Session 的只读沙箱策略下检查检出，因此它读到的与 Session 命令看到的相同，且无法写入。检查读取顶层目录、Git 目录与公共 Git 目录、分支或缩写的 HEAD 提交、上游与远端，以及分支相对于其分叉点的变更规模。它在 Session 被关注时、每个 `working-directory/change`、`tool/result` 与 `sandbox/mode` 事件之后以及刷新时运行，一次只运行一个，最多再追加一次。
 
@@ -18,7 +18,7 @@ Remote 通过 Session 的子进程提供方、在 Session 的只读沙箱策略�
 
 展开的卡片可以把草稿标记为可评审，也可以合并主机现在就会合并的变更请求。forge seam 把两者作为提供方操作承载，失败时返回带类型的结果；每个快照都说明主机现在是否会为已登录用户合并该变更请求、仓库允许哪些合并方式，因此面板只提供能够成功的操作。合并带上卡片显示的 head 提交，有新提交到达后主机会拒绝。面板只操作绑定到该 Session 的变更请求。
 
-新 Session 通过请求而不是立即创建来以 worktree 开始。勾选新会话那一行中的选项（一个 `conversation.hero.options` 条目）会追加一条带基准分支的 `plugin:client-ui-forge/worktree` 记录；更换基准或取消勾选会再追加一条；用户发送之前不会改动仓库。只有创建能够成功时才提供该选项：在 `workspace-write` 下，检出及其公共 Git 目录必须位于可写根之内，这排除了本身就是链接 worktree 的项目。worktree 必须在第一条消息的这一轮开始之前就存在，这样这一轮才会在其中运行，第一次请求也已经写明新目录。消息进入 Session 的收件箱时，面板的 `agent/inbox/inserted` 监听器在这次投递唤醒 Agent 之前启动 Agent 的维护任务；Agent 会暂存唤醒直到维护任务结束，面板在维护任务内创建并进入 worktree。创建的阶段以流的形式推送给输入框上方的卡片，卡片上的“取消”停止这次尝试。尝试被停止或失败后，消息继续在收件箱中等待，卡片保留失败信息，并提供用新分支名再试一次，或“不使用工作树”：撤回请求并让消息继续。一个 `agent/pre-step` 监听器仍会在请求未完成的 Session 的第一个步骤提议中创建 worktree，因为 Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留；它把工作目录通知移入本步提议的消息，失败时这一轮结束。`forgeWorktree` 投影忽略第一个 `turn/start` 之后的请求以及第一个 `step/start` 之后的创建，因此运行中的 Session 永远不会移动。标签页顶部一行写出 Session 所在的分支。
+新 Session 通过请求而不是立即创建来以 worktree 开始。勾选新会话那一行中的选项（一个 `conversation.hero.options` 条目）会追加一条带基准分支的 `plugin:client-ui-forge/worktree` 记录；更换基准或取消勾选会再追加一条；用户发送之前不会改动仓库。只有创建能够成功时才提供该选项：在 `workspace-write` 下，检出及其公共 Git 目录必须位于可写根之内，这排除了本身就是链接 worktree 的项目。worktree 必须在第一条消息的这一轮开始之前就存在，这样这一轮才会在其中运行，第一次请求也已经写明新目录。消息进入 Session 的收件箱时，面板的 `agent/inbox/inserted` 监听器在这次投递唤醒 Agent 之前启动 Agent 的维护任务；Agent 会暂存唤醒直到维护任务结束，面板在维护任务内创建并进入 worktree。创建的阶段以流的形式推送给输入框上方的卡片，卡片上的“取消”停止这次尝试。尝试被停止或失败后，消息继续在收件箱中等待，卡片保留失败信息，并提供用新分支名再试一次，或“不使用工作树”：撤回请求并让消息继续。一个 `agent/pre-step` 监听器仍会在请求未完成的 Session 的第一个步骤提议中创建 worktree，因为 Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留；它把工作目录通知移入本步提议的消息，失败时这一轮结束。`forgeWorktree` 投影忽略第一个 `turn/start` 之后的请求以及第一个 `step/start` 之后的创建，因此运行中的 Session 永远不会移动。标签页顶部一行写出 Session 所在的分支，会话列表标出在所创建 worktree 中工作的 Session。
 
 Session 所在的 worktree 可能在 Session 之外被删除。每次检查都会确认所创建 worktree 的目录是否还在；Agent 空闲时进入的每条消息都会启动一次暂留并再确认一次，目录缺失期间消息等待、不开始这一轮。这次确认必须发生在这一轮之前：组装一个步骤的上下文时，工作目录服务会把目录已不存在的 Session 移回其项目，而这发生在任何 pre-step 监听器运行之前。“恢复”在记录的目录重新检出分支；分支也已删除时，在其基准提交重新创建分支。“在项目目录继续”把 Session 移回源检出。两者都在暂留内运行，之后放行等待中的消息。
 
@@ -67,7 +67,7 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 **把创建卡片放进对话记录。** 对话记录的节点不接受插件定义的类型；输入框上方的停靠区是最近的列表型 slot，而且它在新会话页也会渲染。
 
-**Session 行悬停分区与手动粘贴 URL 跟踪。** 二者都与标签页重复。绑定来自 `gh pr create`、操作单个变更请求的 `gh pr` 命令、推送以及检出所跟踪的分支，`track` 保留给“撤销”使用。
+**手动粘贴 URL 跟踪。** 它与 Session 自己的命令记录下的绑定重复。绑定来自 `gh pr create`、操作单个变更请求的 `gh pr` 命令、推送以及检出所跟踪的分支，`track` 保留给“撤销”使用。
 
 **在浏览器中解析补丁。** Remote 将传输不受限的补丁文本，浏览器也需要补丁解析器；宿主约束读取并只解析一次。
 

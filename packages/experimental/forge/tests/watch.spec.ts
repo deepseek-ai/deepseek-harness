@@ -131,7 +131,7 @@ describe('forge watch', () => {
 
     await vi.advanceTimersByTimeAsync(0)
     expect(updates[0]).toEqual({ key, fetchedAt: 1_000_000, failure: { code: 'not-found', message: 'missing' } })
-    await vi.advanceTimersByTimeAsync(1_999)
+    await vi.advanceTimersByTimeAsync(config.activeIntervalMs * 2 - 1)
     expect(provider.fetches).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(provider.fetches).toHaveLength(2)
@@ -189,7 +189,7 @@ describe('forge watch', () => {
 
   it('refreshes a watched change request at once, including after a terminal state', async () => {
     const provider = new FakeProvider()
-    provider.results.set(key, snapshot(ref(1), { state: 'closed' }))
+    provider.results.set(key, snapshot(ref(1), { state: 'merged' }))
     const context = await setup(provider)
     collect(context)
     await vi.advanceTimersByTimeAsync(60_000)
@@ -396,4 +396,19 @@ describe('forge watch', () => {
 
     expect(provider.fetches).toHaveLength(1)
   })
+  it('polls closed requests at the idle cadence and publishes reopening', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { state: 'closed' }))
+    const context = await setup(provider)
+    const { updates } = collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updates.at(-1)).toMatchObject({ snapshot: { state: 'closed' } })
+    provider.results.set(key, snapshot(ref(1), { state: 'open' }))
+    await vi.advanceTimersByTimeAsync(config.idleIntervalMs - 1)
+    expect(provider.fetches).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(updates.at(-1)).toMatchObject({ snapshot: { state: 'open' } })
+    expect(provider.fetches).toHaveLength(2)
+  })
+
 })

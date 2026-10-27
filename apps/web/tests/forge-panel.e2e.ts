@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session'
 import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { initialShortcutConfig, type DesktopShortcutInput, type ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
@@ -16,6 +17,12 @@ import {
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspaceZh, saveFailureShot, writeComposerDraft, ZH_BROWSER_LOCALE } from './support.ts'
+
+declare global {
+  interface Window {
+    forgeKeyboard: { readonly revision: ShortcutRevision; deliver(input: DesktopShortcutInput): void }
+  }
+}
 
 const BUNDLE = fileURLToPath(new URL('../../../packages/experimental/forge-bundle', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v4.jsonl', import.meta.url))
@@ -152,6 +159,7 @@ const PR9_REFUSAL = [
 /** Line `n` of `src/panel.ts` before (`old`) or after (`new`) pull request 7, which changes lines 2 and 15 of its 20. */
 function panelLine(n: number, side: 'old' | 'new'): string {
   if (n === 2) return side === 'old' ? 'export const n2 = 2' : 'export const n2 = \'two\''
+  if (n === 7) return 'export const n7 = "Long unchanged context stays wrapped while switching between Sessions and reviewing the same file"'
   if (n === 15) return side === 'old' ? 'export const n15 = 15' : 'export const n15 = \'fifteen\''
   return `export const n${n} = ${n}`
 }
@@ -201,7 +209,7 @@ interface PanelLaunch {
  * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup.
  * @returns the scaffold, page, and checkout.
  */
-async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' = 'normal'): Promise<PanelLaunch> {
+async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' = 'normal', desktop?: 'darwin' | 'win32'): Promise<PanelLaunch> {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
   onTestFinished(async () => {
@@ -268,6 +276,29 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE, timezoneId: 'Asia/Shanghai' })
+  if (desktop !== undefined) {
+    // Only Electron's keyboard transport is substituted; the product registry and menus remain real.
+    await page.addInitScript(({ device, config }) => {
+      const mark = () => { document.documentElement.dataset.platform = device }
+      if (document.documentElement === null) window.addEventListener('DOMContentLoaded', mark)
+      else mark()
+      const listeners = new Set<(input: DesktopShortcutInput) => void>()
+      Object.assign(window, {
+        forgeKeyboard: { revision: config.revision,
+          deliver: (input: DesktopShortcutInput) => { for (const listener of listeners) listener(input) } },
+        dshDesktop: { protocolVersion: 1,
+          shortcuts: { get: async () => config, subscribe: () => () => {}, recording: async () => {}, edit: async () => { throw new Error('Unused preference edit') } },
+          keyboard: {
+            subscribe: (listener: (input: DesktopShortcutInput) => void) => {
+              listeners.add(listener)
+              return () => { listeners.delete(listener) }
+            },
+            closeWindow: async () => {},
+          },
+        },
+      })
+    }, { device: desktop, config: { ...initialShortcutConfig(), status: 'ready' as const } })
+  }
   const tripwire = watchConsole(page)
   onTestFailed(async () => { await saveFailureShot(page, failureShot) })
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -391,6 +422,18 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const header = page.locator('[data-forge-header]')
   await expect.poll(() => header.getAttribute('aria-label'), { timeout: 20_000 }).toBe('本会话的变更请求需要处理')
   expect(await header.getAttribute('aria-pressed')).toBe('false')
+
+  // The Session row marks the worktree and its change request's state, and its hover card names both.
+  const row = page.locator(`[data-row-key="session:${sessionId}"]`)
+  await row.getByRole('img', { name: '在自己的工作树中', exact: true }).waitFor({ timeout: 20_000 })
+  await row.getByRole('img', { name: '变更请求状态：需要处理 · 检查失败', exact: true }).waitFor({ timeout: 20_000 })
+  await row.hover()
+  const rowHover = page.locator('[data-forge-session-hover]')
+  await rowHover.getByText('#7 Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
+  await compareOrRefreshGolden(join(EXPECTED, 'session-row-hover.expected.md'),
+    await captureStableAria(page, '[data-forge-session-hover]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+  await page.mouse.move(0, 0)
+  await rowHover.waitFor({ state: 'detached' })
   await header.click()
   await expect.poll(() => header.getAttribute('aria-pressed')).toBe('true')
   const panel = page.locator('[data-forge-panel]')
@@ -582,6 +625,12 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     .toEqual(['README.md', 'src/app.ts', 'src/extra.ts', 'notes.md'])
   await local.locator('[data-forge-diff-file="notes.md"]').getByText('新文件 · 未提交', { exact: true }).waitFor()
   const readme = local.locator('[data-forge-diff-file="README.md"]')
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await readme.getByRole('button', { name: '复制路径: README.md', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('README.md')
+  await page.evaluate(() => navigator.clipboard.writeText('unchanged'))
+  await readme.locator('[data-forge-path-spacer]').click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('unchanged')
   await readme.getByRole('button', { name: '6 行未变更', exact: true }).click()
   await readme.getByText('line 1', { exact: true }).first().waitFor({ timeout: 20_000 })
   await local.getByRole('button', { name: '分支', exact: true }).click()
@@ -605,6 +654,25 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await panelFile.getByRole('button', { name: '6 行未变更', exact: true }).click()
   await panelFile.getByText('export const n6 = 6', { exact: true }).first().waitFor({ timeout: 20_000 })
   await panelFile.getByRole('button', { name: '2 行未变更', exact: true }).waitFor()
+  await panelFile.getByRole('button', { name: '复制路径: src/panel.ts', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('src/panel.ts')
+  const docsFile = view.locator('[data-forge-diff-file="docs/panel.md"]')
+  await docsFile.getByRole('button', { name: '收起 panel.md', exact: true }).click()
+  await page.setViewportSize({ width: 1280, height: 500 })
+  const scrollport = view.locator('[data-forge-changes-scroll]')
+  await scrollport.evaluate((element) => { element.scrollTop = 100; element.dispatchEvent(new Event('scroll')) })
+  await panelFile.getByRole('button', { name: '复制路径: src/panel.ts', exact: true }).click()
+  const position = await scrollport.evaluate(element => element.scrollTop)
+  expect(position).toBeGreaterThan(0)
+  const originalFile = await panelFile.elementHandle()
+  await page.getByRole('button', { name: /^(?:New session|新.*会话)$/ }).last().click()
+  await expect.poll(() => view.isVisible()).toBe(false)
+  await page.locator(`[data-row-key="session:${sessionId}"]`).click()
+  await panelFile.getByText('export const n6 = 6', { exact: true }).first().waitFor({ timeout: 20_000 })
+  expect(await panelFile.evaluate((element, original) => element === original, originalFile)).toBe(true)
+  await expect.poll(() => docsFile.getAttribute('data-expanded')).toBe(null)
+  await expect.poll(() => scrollport.evaluate(element => element.scrollTop)).toBe(position)
+  await page.setViewportSize({ width: 1680, height: 1000 })
 
   // GitHub refuses the diff of pull request 9 as too large, so its view offers the web page instead of a retry.
   scaffold.ctx.forgeSession.track(session, DRAFT)
@@ -625,5 +693,34 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json', `repos/octo/demo/contents/src/panel.ts?ref=${HEAD7}`,
   ])
   expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
+
+it.skipIf(MODE === 'record').each(['darwin', 'win32'] as const)('closes diff menus when the %s desktop shortcut deactivates a retained tab', async (platform) => {
+  const { page, scaffold, project, tripwire } = await launchPanel(`web-e2e-forge-menu-${platform}`, 'normal', platform)
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), 'review this change\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  await page.locator('[data-forge-header]').click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更：1 个文件/ }).click()
+  const view = page.locator('[data-forge-changes="local"]')
+  await view.getByRole('button', { name: '复制路径: README.md', exact: true }).waitFor()
+  for (const name of ['分支', '全部 1 个文件', 'README.md 的更多操作']) {
+    await view.getByRole('button', { name, exact: true }).click()
+    await page.getByRole('menu').waitFor()
+    await page.evaluate((mac) => { window.forgeKeyboard.deliver({
+      kind: 'keyboard', frameName: '', revision: window.forgeKeyboard.revision, code: 'KeyN',
+      meta: mac, control: !mac, alt: false, shift: false, repeat: false,
+    }) }, platform === 'darwin')
+    await expect.poll(() => view.isVisible()).toBe(false)
+    await expect.poll(() => page.getByRole('menu').count()).toBe(0)
+    await page.locator(`[data-row-key="session:${sessionId}"]`).click()
+    await view.waitFor()
+    await expect.poll(() => page.getByRole('menu').count()).toBe(0)
+  }
   expect(tripwire.warnings).toEqual([])
 })

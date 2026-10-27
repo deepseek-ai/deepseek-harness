@@ -19,6 +19,27 @@ function created(number: number): string {
 }
 
 describe('forgeChangeRequests projection', () => {
+  it('shows clients every binding, hidden ones included, and keeps that view while only pending calls and pushes change', () => {
+    const session = Session.create(SessionId('client-view'))
+    const { view, viewSchema } = forgeChangeRequestsProjection.wire
+    shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'track', url: pullUrl(2) })
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(2) })
+    const bound = fold(session)
+    const seen = session.snapshotEvents().length
+    shellTurn(session, [{ callId: 'push', command: 'git push -u origin feat', output: pushOutput('feat') }])
+    // Folding only the new events on the earlier state mirrors the live drive, which compares views by reference.
+    const pushed = session.snapshotEvents().slice(seen).reduce((state, event) => apply(state, event), bound)
+
+    expect(view(bound)).toEqual([
+      { url: pullUrl(1), origin: 'created', dismissed: false },
+      { url: pullUrl(2), origin: 'tracked', dismissed: true },
+    ])
+    expect(viewSchema.parse(view(bound))).toEqual(view(bound))
+    expect(pushed.pushes).not.toBe(bound.pushes)
+    expect(view(pushed)).toBe(view(bound))
+  })
+
   it('starts empty and keeps the state reference for unrelated events', () => {
     const session = Session.create(SessionId('unrelated'))
     shellTurn(session, [

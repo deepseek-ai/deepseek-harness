@@ -2804,6 +2804,16 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeChangeRequestListState",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeChangeRequestStatesFrame",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalScope",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },

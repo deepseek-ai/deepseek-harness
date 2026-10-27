@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type { ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeState } from '../src/index.ts'
 import { CreationFailure, forgeWorktreeProjection, WORKTREE_RECORD, WorktreeCreations } from '../src/worktree.ts'
 import {
-  branches, commitAt, git, hold, notice, prompt, proposeStep, rejectionOf, repository, runtime, scratch, startStep, startTurn,
+  branches, commitAt, git, hold, notice, plainSession, prompt, proposeStep, rejectionOf, repository, runtime, scratch, startStep, startTurn,
 } from './harness.ts'
 import type { Runtime } from './harness.ts'
 
@@ -28,21 +28,53 @@ const WORKTREE: ForgeSessionWorktree = {
   path: '/work/repo/.agents/worktrees/dsh/0a1b2c3d', branch: 'dsh/0a1b2c3d', from: null, baseCommit: 'c'.repeat(40), repositoryRoot: '/work/repo',
 }
 
-/** The state before any worktree record, turn, or step. */
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, restoring: false }
+/** The state before any worktree record, turn, step, or directory change of a Session without a recorded directory. */
+const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, cwd: null, restoring: false }
 
 /** A live Session whose `forgeWorktree` state a registry folds without the panel Remote. */
-async function folded(): Promise<{ session: Session; state: () => ForgeWorktreeState }> {
+async function folded(): Promise<{ ctx: Context; session: Session; state: () => ForgeWorktreeState }> {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   const states = await ctx.sessionProjections.register(forgeWorktreeProjection)
   const session = ctx.sessions.create(SessionId('forge-worktree-projection'))
-  return { session, state: () => states.stateOf(session) }
+  return { ctx, session, state: () => states.stateOf(session) }
 }
 
 describe('forgeWorktree projection', () => {
+  it('shows clients the created worktree in the Session summary while the Session works in it', async () => {
+    const { ctx, session, state } = await folded()
+    const published: unknown[] = []
+    ctx.sessionProjections.onChanged((_session, key, value) => { if (key === 'forgeWorktree') published.push(value) })
+
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'request', from: 'main' })
+    session.append('working-directory/change', { cwd: WORKTREE.path })
+    appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
+    startTurn(session, 1)
+    startStep(session, 1)
+    session.append('working-directory/change', { cwd: join(WORKTREE.path, 'packages') })
+    const inside = [...published]
+    session.append('working-directory/change', { cwd: WORKTREE.repositoryRoot })
+    // Shares the worktree's path as a string prefix without lying below it.
+    session.append('working-directory/change', { cwd: `${WORKTREE.path}-sibling` })
+    const outside = [...published]
+    session.append('working-directory/change', { cwd: WORKTREE.path })
+    const returned = state()
+    session.append('working-directory/change', { cwd: WORKTREE.path })
+
+    expect(state()).toBe(returned)
+    expect(inside.at(-1)).toEqual(WORKTREE)
+    expect(inside.filter(value => value !== null)).toEqual([WORKTREE])
+    expect(outside.slice(inside.length)).toEqual([null])
+    expect(published.slice(outside.length)).toEqual([WORKTREE])
+    expect(ctx.sessionProjections.summaryKeys().has('forgeWorktree')).toBe(true)
+  })
+
+  it('starts from the directory the Session header records', () => {
+    expect(forgeWorktreeProjection.init(plainSession('/work/repo').header)).toEqual({ ...EMPTY, cwd: '/work/repo' })
+  })
+
   it('replays incomplete restoration until an explicit successful completion', async () => {
     const { session, state } = await folded()
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'restoring' })
@@ -112,8 +144,8 @@ describe('forgeWorktree projection', () => {
     const created = state()
     startStep(session, 1)
 
-    expect(created).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: false, restoring: false })
-    expect(state()).toEqual({ request: { from: null }, created: WORKTREE, locked: true, stepped: true, restoring: false })
+    expect(created).toEqual({ ...EMPTY, request: { from: null }, created: WORKTREE, locked: true })
+    expect(state()).toEqual({ ...EMPTY, request: { from: null }, created: WORKTREE, locked: true, stepped: true })
   })
 
   it('ignores a created worktree without an open request or after the first step starts', async () => {
@@ -134,7 +166,7 @@ describe('forgeWorktree projection', () => {
     const stepped = state()
     appendPluginRecord(session, WORKTREE_RECORD, { action: 'created', worktree: WORKTREE })
 
-    expect(stepped).toEqual({ request: { from: null }, created: null, locked: true, stepped: true, restoring: false })
+    expect(stepped).toEqual({ ...EMPTY, request: { from: null }, locked: true, stepped: true })
     expect(state()).toBe(stepped)
   })
 
@@ -244,6 +276,7 @@ describe('creating a requested worktree', () => {
     expect(worktreeOf(opened)).toEqual(created)
     expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(path)
+    expect(opened.ctx.sessionProjections.snapshot(opened.session, ['forgeWorktree']).values).toEqual({ forgeWorktree: created })
     expect(await git(path, 'symbolic-ref', '--short', 'HEAD')).toBe(branch)
     expect(await git(path, 'rev-parse', 'HEAD')).toBe(head)
     expect(opened.agent.inbox.nextStep).toEqual([notice(path)])
@@ -313,7 +346,7 @@ describe('creating a requested worktree', () => {
     const running = { phase: 'prepare', branch, from: 'later', held: false }
     expect(opened.changes).toEqual([running, running, null])
     expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' } })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' }, cwd: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })
 
@@ -469,7 +502,7 @@ describe('worktree creation at the first step proposal', () => {
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] }))
       .rejects.toMatchObject({ name: 'CreationFailure', branch: GENERATED_BRANCH, phase: 'prepare', reason: MISSING_BASE })
     const failed = opened.changes[0]?.branch
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' }, locked: true })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: 'later' }, locked: true, cwd: repo })
     expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
 
@@ -500,7 +533,7 @@ describe('worktree creation at the first step proposal', () => {
     expect(await settled).toBe(cause)
     expect(opened.changes.at(-1)).toBeNull()
     expect(opened.records).toEqual([{ action: 'request', from: null }])
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null } })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null }, cwd: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
     expect(await branches(repo)).toEqual(['main'])
   })
@@ -512,7 +545,7 @@ describe('worktree creation at the first step proposal', () => {
 
     await expect(proposeStep(opened.ctx, opened.agent, { turn: 1, step: 1, messages: [prompt('go')] }))
       .rejects.toThrow('No worktree service is mounted')
-    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null } })
+    expect(stateOf(opened)).toEqual({ ...EMPTY, request: { from: null }, cwd: repo })
     expect(opened.changes).toEqual([])
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(repo)
   })

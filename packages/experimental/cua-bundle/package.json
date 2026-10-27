@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-bundle",
   "description": "Optional macOS Computer Use and permission setup",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.1-rc.4",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

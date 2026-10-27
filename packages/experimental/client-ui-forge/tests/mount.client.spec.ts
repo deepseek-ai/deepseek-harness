@@ -21,11 +21,16 @@ import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from '../src/client/HeaderButton.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
 import { inject, mountForgePanel, TAB_ID, TAB_KIND } from '../src/client/mount.ts'
+import type { SessionListInjected } from '../src/client/session-list.ts'
+import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
+import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
 import type { NoticeSource } from '../src/client/source.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
-import type { ForgeBranches, ForgeChangeRequestDiff, ForgeLocalDiff, ForgeLocalScope, ForgePanelState } from '../src/types.ts'
-import { entry, ready, snapshot, unserved } from './client-fixtures.client.ts'
+import type {
+  ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+} from '../src/types.ts'
+import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-forge', descriptors: [] }
 const S1 = SessionId('s1')
@@ -39,17 +44,17 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, 'clipboard')
 })
 
-/** A fake `follow` stream handle the test feeds by hand. */
-function stream(signal: AbortSignal) {
-  const queue: ForgePanelState[] = []
+/** A fake `follow` or `changeRequestStates` stream handle the test feeds by hand. */
+function stream<F = ForgePanelState>(signal: AbortSignal) {
+  const queue: F[] = []
   let wake: (() => void) | undefined
   let closed = false
   const handle = {
     signal,
     disposed: vi.fn(),
-    push(state: ForgePanelState) { queue.push(state); wake?.() },
+    push(frame: F) { queue.push(frame); wake?.() },
     dispose() { handle.disposed(); closed = true; wake?.() },
-    async *[Symbol.asyncIterator](): AsyncIterator<ForgePanelState> {
+    async *[Symbol.asyncIterator](): AsyncIterator<F> {
       while (true) {
         const next = queue.shift()
         if (next !== undefined) { yield next; continue }
@@ -98,6 +103,10 @@ function isChangesFace(value: Record<string, unknown>): value is Record<string, 
   return typeof value.localDiff === 'function' && typeof value.createChangeRequest === 'function'
 }
 
+function isListFace(value: Record<string, unknown>): value is Record<string, unknown> & SessionListInjected {
+  return typeof value.hooks === 'object' && value.hooks !== null && 'states' in value.hooks
+}
+
 function isNoticeFace(value: Record<string, unknown>): value is Record<string, unknown> & Omit<NoticeSource, 'report'> {
   return typeof value.dismiss === 'function' && typeof value.hooks === 'object'
 }
@@ -120,10 +129,16 @@ async function base() {
   }
   const remote = new Remote()
   const streams: ReturnType<typeof stream>[] = []
+  const stateStreams: ReturnType<typeof stream<ForgeChangeRequestStatesFrame>>[] = []
   const forgePanel = {
     follow: vi.fn((_sessionId: SessionId, signal: AbortSignal) => {
       const handle = stream(signal)
       streams.push(handle)
+      return handle
+    }),
+    changeRequestStates: vi.fn((signal: AbortSignal) => {
+      const handle = stream<ForgeChangeRequestStatesFrame>(signal)
+      stateStreams.push(handle)
       return handle
     }),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
@@ -172,9 +187,11 @@ async function base() {
       'conversation.input.dock': { kind: 'list', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },
       'shell.overlay': { kind: 'list', scope: 'root' },
+      'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
+      'sidebar.session.row.hover': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, unmount, streams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes }
+  return { ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes }
 }
 
 async function fixture() {
@@ -190,8 +207,10 @@ async function fixture() {
   const worktreeInject = entry('conversation.hero.options', WorktreeToggle)?.inject
   const progressInject = entry('conversation.input.dock', WorktreeProgress)?.inject
   const toastInject = entry('shell.overlay', ActionToast)?.inject
+  const rowInject = entry('sidebar.session.row.trailing', SessionRowForge)?.inject
+  const hoverInject = entry('sidebar.session.row.hover', SessionHoverForge)?.inject
   assert(tabInject !== undefined && headerInject !== undefined && worktreeInject !== undefined && toastInject !== undefined)
-  assert(progressInject !== undefined && changesInject !== undefined)
+  assert(progressInject !== undefined && changesInject !== undefined && rowInject !== undefined && hoverInject !== undefined)
   const tab = (sessionId: SessionId): ForgeTabInjected => {
     const value = tabInject(sessionId as never)
     assert(isTabFace(value))
@@ -223,7 +242,12 @@ async function fixture() {
     return value
   }
   const notice = () => toast().hooks.notice.getSnapshot()
-  return { ...b, dispose, entry, tab, changes, header, worktree, progress, toast, notice }
+  const list = (place: 'row' | 'hover'): SessionListInjected => {
+    const value = (place === 'row' ? rowInject : hoverInject)(undefined as never)
+    assert(isListFace(value))
+    return value
+  }
+  return { ...b, dispose, entry, tab, changes, header, worktree, progress, toast, notice, list }
 }
 
 describe('mountForgePanel registration', () => {
@@ -250,6 +274,8 @@ describe('mountForgePanel registration', () => {
     expect(f.entry('conversation.input.dock', WorktreeProgress)).toMatchObject({ options: { id: 'forge-panel.worktree', order: 5 }, locale: NS })
     expect(f.ctx.slots.entries('conversation.input.left')).toEqual([])
     expect(f.entry('shell.overlay', ActionToast)).toMatchObject({ options: { id: 'forge-panel.toast' }, locale: NS })
+    expect(f.entry('sidebar.session.row.trailing', SessionRowForge)).toMatchObject({ options: { id: 'forge-panel.row', order: 10 }, locale: NS })
+    expect(f.entry('sidebar.session.row.hover', SessionHoverForge)).toMatchObject({ options: { id: 'forge-panel.row', order: 20 }, locale: NS })
     expect(f.notice()).toBeNull()
     await f.dispose()
   })
@@ -258,12 +284,16 @@ describe('mountForgePanel registration', () => {
     const f = await fixture()
     f.tab(S1).hooks.panel.subscribe(() => {})
     f.header(S2)
+    f.list('row').hooks.states.subscribe(() => {})
     expect(f.streams).toHaveLength(1)
+    expect(f.stateStreams).toHaveLength(1)
 
     await f.dispose()
 
     expect(f.streams[0]?.disposed).toHaveBeenCalled()
     expect(f.streams[0]?.signal.aborted).toBe(true)
+    expect(f.stateStreams[0]?.disposed).toHaveBeenCalled()
+    expect(f.stateStreams[0]?.signal.aborted).toBe(true)
     expect(f.unregisterTab).toHaveBeenCalled()
     expect(f.unmount).toHaveBeenCalledOnce()
     for (const [slot, component] of [
@@ -275,9 +305,12 @@ describe('mountForgePanel registration', () => {
       ['conversation.hero.options', WorktreeToggle],
       ['conversation.input.dock', WorktreeProgress],
       ['shell.overlay', ActionToast],
+      ['sidebar.session.row.trailing', SessionRowForge],
+      ['sidebar.session.row.hover', SessionHoverForge],
     ] as const) expect(f.entry(slot, component)).toBeUndefined()
     f.ctx.emit('connection/reset')
     expect(f.forgePanel.follow).toHaveBeenCalledOnce()
+    expect(f.forgePanel.changeRequestStates).toHaveBeenCalledOnce()
   })
 
   it('unmounts the Remote when the UI registration fails', async () => {
@@ -287,6 +320,28 @@ describe('mountForgePanel registration', () => {
     await expect(fiber).rejects.toThrow('slot failed')
     expect(b.unmount).toHaveBeenCalledOnce()
     expect(b.unregisterTab).toHaveBeenCalled()
+  })
+})
+
+describe('mountForgePanel Session list', () => {
+  it('shares one change request state stream among every Session row and hover card while any of them reads it', async () => {
+    const f = await fixture()
+    const states = f.list('row').hooks.states
+    expect(f.list('hover').hooks.states).toBe(states)
+    expect(f.forgePanel.changeRequestStates).not.toHaveBeenCalled()
+
+    const row = states.subscribe(() => {})
+    const hover = states.subscribe(() => {})
+    f.stateStreams[0]?.push({ type: 'baseline', states: [listState(1)] })
+    await vi.waitFor(() => { expect([...states.getSnapshot().state.values()]).toEqual([listState(1)]) })
+    row()
+    expect(f.stateStreams[0]?.disposed).not.toHaveBeenCalled()
+    hover()
+
+    expect(f.forgePanel.changeRequestStates).toHaveBeenCalledOnce()
+    expect(f.stateStreams[0]?.disposed).toHaveBeenCalled()
+    expect(f.stateStreams[0]?.signal.aborted).toBe(true)
+    await f.dispose()
   })
 })
 
@@ -636,7 +691,8 @@ describe('mountForgePanel changes view', () => {
   it('reads the changes of the Session through the Remote and shares its panel stream', async () => {
     const f = await fixture()
     const view = f.changes(S1)
-    expect(view.hooks.panel).toBe(f.tab(S1).hooks.panel)
+    expect(view.keyedHooks.panel('visible')).toBe(f.tab(S1).hooks.panel)
+    expect(view.keyedHooks.panel('inactive')).toBeUndefined()
     const signal = new AbortController().signal
     expect(await view.localDiff({ kind: 'staged' }, signal)).toEqual({ ok: true, value: LOCAL })
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })

@@ -234,7 +234,7 @@ export function ConversationSessionHeader({
           </div>
           {hasEntryActions && (
             <ViewsMoreMenu
-              label={currentInMore && active !== undefined ? t('session.moreViewsCurrent', { name: active.label }) : t('session.moreViews')}
+              label={t('session.moreViews')}
               current={currentInMore}
               entries={moreTabs.map(viewTab => ({
                 id: viewTab.id, label: viewTab.label,

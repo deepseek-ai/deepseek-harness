@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-forge",
   "description": "Provider-neutral change request registry with shared status polling",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.1-rc.4",
   "publishConfig": {
     "access": "public"
   },

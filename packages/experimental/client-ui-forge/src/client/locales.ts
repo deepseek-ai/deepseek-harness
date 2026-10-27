@@ -40,6 +40,9 @@ export const zh = {
   'change.state.merged': '已合并',
   'change.state.closed': '已关闭',
   'change.state.unknown': '未知',
+  'list.worktree': '在自己的工作树中',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '还有 {count} 个变更请求',
   'change.expand': '展开 {name}',
   'change.collapse': '收起 {name}',
   'change.ci.none': '没有检查',
@@ -243,6 +246,9 @@ export const en: Record<ForgePanelKey, string> = {
   'change.state.merged': 'Merged',
   'change.state.closed': 'Closed',
   'change.state.unknown': 'Unknown',
+  'list.worktree': 'In its own worktree',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '{count} more change requests',
   'change.expand': 'Expand {name}',
   'change.collapse': 'Collapse {name}',
   'change.ci.none': 'No checks',
@@ -415,6 +421,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Japanese copy with the same keys. */
 export const ja: Record<ForgePanelKey, string> = {
+  'list.worktree': '専用のワークツリー内',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '他 {count} 件の変更リクエスト',
   'tab.title': '変更リクエスト',
   'header.label': 'このセッションの変更リクエスト',
   'header.attention': 'このセッションの変更リクエストに対応が必要です',
@@ -615,6 +624,9 @@ export const ja: Record<ForgePanelKey, string> = {
 
 /** Spanish copy with the same keys. */
 export const es: Record<ForgePanelKey, string> = {
+  'list.worktree': 'En su propio árbol de trabajo',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '{count} solicitudes de cambio más',
   'tab.title': 'Solicitudes de cambio',
   'header.label': 'Solicitudes de cambio de esta sesión',
   'header.attention': 'Las solicitudes de cambio de esta sesión requieren atención',
@@ -815,6 +827,9 @@ export const es: Record<ForgePanelKey, string> = {
 
 /** French copy with the same keys. */
 export const fr: Record<ForgePanelKey, string> = {
+  'list.worktree': 'Dans son propre arbre de travail',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '{count} demandes de changement supplémentaires',
   'tab.title': 'Demandes de modification',
   'header.label': 'Demandes de modification de cette session',
   'header.attention': 'Les demandes de modification de cette session nécessitent une intervention',
@@ -1015,6 +1030,9 @@ export const fr: Record<ForgePanelKey, string> = {
 
 /** German copy with the same keys. */
 export const de: Record<ForgePanelKey, string> = {
+  'list.worktree': 'Im eigenen Arbeitsbaum',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': '{count} weitere Änderungsanfragen',
   'tab.title': 'Änderungsanfragen',
   'header.label': 'Änderungsanfragen dieser Sitzung',
   'header.attention': 'Änderungsanfragen dieser Sitzung erfordern Aufmerksamkeit',
@@ -1215,6 +1233,9 @@ export const de: Record<ForgePanelKey, string> = {
 
 /** Russian copy with the same keys. */
 export const ru: Record<ForgePanelKey, string> = {
+  'list.worktree': 'В собственном рабочем дереве',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': 'Ещё запросов на изменение: {count}',
   'tab.title': 'Запросы на изменение',
   'header.label': 'Запросы на изменение этого сеанса',
   'header.attention': 'Запросы на изменение этого сеанса требуют внимания',
@@ -1415,6 +1436,9 @@ export const ru: Record<ForgePanelKey, string> = {
 
 /** Portuguese copy with the same keys. */
 export const pt: Record<ForgePanelKey, string> = {
+  'list.worktree': 'Na sua própria árvore de trabalho',
+  'list.stateChecks': '{state} · {checks}',
+  'list.more': 'Mais {count} solicitações de alteração',
   'tab.title': 'Solicitações de alteração',
   'header.label': 'Solicitações de alteração desta sessão',
   'header.attention': 'As solicitações de alteração desta sessão precisam de atenção',

@@ -5,8 +5,8 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { BindingOrigin } from '@deepseek-ai/dsh-experimental-forge-session/types'
 import type {
-  ForgeCheckout, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree, ForgeSessionWorktree, ForgeWorktreeCreation,
-  ForgeWorktreeFailure,
+  ForgeChangeRequestListState, ForgeCheckout, ForgePanelChangeRequest, ForgePanelState, ForgePanelWorktree, ForgeSessionWorktree,
+  ForgeWorktreeCreation, ForgeWorktreeFailure,
 } from '../src/types.ts'
 
 /** Pull request reference in `octo/demo` on github.com. */
@@ -41,6 +41,21 @@ export function snapshot(number: number, overrides: Partial<ChangeRequestSnapsho
     unresolvedThreads: 0,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
+    ...overrides,
+  }
+}
+
+/** The Session list's state of {@link snapshot}: open and mergeable, with passed checks and no review. */
+export function listState(number: number, overrides: Partial<ForgeChangeRequestListState> = {}): ForgeChangeRequestListState {
+  return {
+    url: `https://github.com/octo/demo/pull/${number}`,
+    number,
+    title: `Change ${number}`,
+    state: 'open',
+    draft: false,
+    checksRollup: 'success',
+    reviewDecision: 'none',
+    mergeability: 'mergeable',
     ...overrides,
   }
 }

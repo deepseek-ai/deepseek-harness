@@ -1,4 +1,4 @@
-/** Host-only projection that folds shell results and binding records into one Session's change request bindings. */
+/** Projection that folds shell results and binding records into one Session's change request bindings, and shows clients the bindings. */
 
 import { z } from 'zod'
 import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -26,6 +26,12 @@ const bindingRecordSchema: z.ZodType<BindingRecord> = z.object({
   url: z.string().regex(/^https?:\/\/\S+$/),
 })
 
+const bindingsSchema: z.ZodType<readonly BindingState[]> = z.array(z.object({
+  url: z.string(),
+  origin: z.enum(['created', 'referenced', 'discovered', 'tracked']),
+  dismissed: z.boolean(),
+}).strict())
+
 const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
   pending: z.array(z.object({
     callId: z.string(),
@@ -33,11 +39,7 @@ const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
     pushes: z.boolean(),
     named: z.array(z.string()),
   }).strict()),
-  bindings: z.array(z.object({
-    url: z.string(),
-    origin: z.enum(['created', 'referenced', 'discovered', 'tracked']),
-    dismissed: z.boolean(),
-  }).strict()),
+  bindings: bindingsSchema,
   pushes: z.array(z.object({
     remote: z.string(),
     branch: z.string(),
@@ -55,6 +57,8 @@ const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
  * pushed. Failed tool executions bind nothing; a nonzero exit status does not
  * matter, because the URL or ref line is the evidence. `turn/end` drops calls
  * that never received a result. Binding records bind, restore, and hide URLs.
+ * Clients, including the Session summary, see the bindings; the array keeps
+ * its reference while only pending calls and pushes change.
  */
 export const forgeChangeRequestsProjection = {
   key: 'forgeChangeRequests',
@@ -62,6 +66,7 @@ export const forgeChangeRequestsProjection = {
   stateSchema,
   init: () => EMPTY,
   apply,
+  wire: { viewSchema: bindingsSchema, view: state => state.bindings },
 } satisfies ProjectionDefinition<'forgeChangeRequests', ForgeChangeRequestsState>
 
 function apply(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChangeRequestsState {

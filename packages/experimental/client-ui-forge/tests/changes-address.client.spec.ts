@@ -46,7 +46,7 @@ describe('changes addresses', () => {
 describe('changesDefinition', () => {
   it('claims and titles the addresses this package mints and leaves others named by their address', () => {
     const definition = changesDefinition(makeTranslate(en))
-    expect(definition).toMatchObject({ id: CHANGES_ID, kind: CHANGES_KIND, patterns: ['dsh-resource://forge-changes/**'] })
+    expect(definition).toMatchObject({ id: CHANGES_ID, kind: CHANGES_KIND, keepMounted: true, patterns: ['dsh-resource://forge-changes/**'] })
     const address = changesAddress({ sessionId: SESSION, source: { kind: 'change', url: URL } })
     expect(definition.canOpen?.(address)).toBe(true)
     expect(definition.title(address)).toBe('Changes in #7')

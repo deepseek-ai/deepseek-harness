@@ -32,6 +32,7 @@ describe('commandEvidence', () => {
     ['git --no-pager push --force-with-lease', pushed],
     ['cd repo && git push && gh pr create --fill', { ...created, pushes: true }],
     ['gh pr view 12 --json url', { urls: 'referenced', pushes: false, named: [] }],
+    ['gh pr view 12 --repo octo/demo --json number', { urls: 'referenced', pushes: false, named: [] }],
     [`gh pr view '${url}' --json title`, { urls: 'referenced', pushes: false, named: [url] }],
     [`gh pr edit ${url}/files --add-label bug`, { urls: 'referenced', pushes: false, named: [url] }],
     [`gh pr checkout ${url} && git push`, { urls: 'referenced', pushes: true, named: [url] }],

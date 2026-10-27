@@ -40,8 +40,8 @@ type ScopeKind = ForgeLocalScope['kind']
 
 /** Business face of the changes tab body. */
 export interface ChangesTabInjected {
-  /** Panel snapshot of the Session; the renderer binds it as `usePanel`. */
-  readonly hooks: { readonly panel: HostObservable<PanelSnapshot> }
+  /** Panel source while visible; the renderer releases the subscription for an inactive key. */
+  readonly keyedHooks: { readonly panel: (visibility: string) => HostObservable<PanelSnapshot> | undefined }
   /** Open the panel stream again after it ended. */
   readonly reconnect: () => void
   /** Read the local changes of one scope; `signal` aborts the read. */
@@ -337,8 +337,8 @@ export function ChangesTab({
   }, [signal, actions, tab.id])
   const [attempt, setAttempt] = useState(0)
   useEffect(() => tab.actions.bindCommands({ refresh: () => { setAttempt(value => value + 1) } }), [tab.actions])
-  const snapshot = usePanel(current => current)
-  const state = snapshot.state
+  const snapshot = usePanel(tab.visible ? 'visible' : 'inactive')
+  const state = snapshot?.state ?? null
   const scope = choices?.scope ?? 'branch'
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
@@ -355,7 +355,7 @@ export function ChangesTab({
   const read = version === null ? null : `${dataKey}\n${navigation.revision}\n${attempt}\n${version}`
   const [finished, setFinished] = useState<string | null>(null)
   useEffect(() => {
-    if (read === null) return
+    if (!tab.visible || read === null || read === finished) return
     const controller = new AbortController()
     void readChanges(source, scope, { localDiff, changeRequestDiff }, controller.signal).then((result) => {
       if (controller.signal.aborted) return
@@ -368,7 +368,7 @@ export function ChangesTab({
       }
     })
     return () => { controller.abort() }
-  }, [read, source, scope, dataKey, localDiff, changeRequestDiff])
+  }, [tab.visible, read, source, scope, dataKey, localDiff, changeRequestDiff])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
@@ -381,10 +381,10 @@ export function ChangesTab({
   const initial = useMemo(() => initiallyOpen(data === null ? [] : data.files), [data])
   const sections = useRef(new Map<string, HTMLElement>())
   useLayoutEffect(() => {
-    if (wanted === null || data === null) return
+    if (!tab.visible || wanted === null || data === null) return
     sections.current.get(wanted)?.scrollIntoView({ block: 'start' })
     setWanted(null)
-  }, [wanted, data])
+  }, [tab.visible, wanted, data])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A failure with its own message offers no retry; a change request's failure also offers its web page.
@@ -436,7 +436,7 @@ export function ChangesTab({
 
   let body: ReactNode
   if (data === null) {
-    if (state === null && snapshot.disconnected) {
+    if (state === null && snapshot?.disconnected) {
       body = (
         <div className={css.centered}>
           <span>{t('stream.failed')}</span>
@@ -464,12 +464,13 @@ export function ChangesTab({
     body = <div className={css.centered}>{t('diff.empty')}</div>
   } else {
     body = (
-      <div className={css.files}>
+      <div className={css.files} data-forge-changes-scroll="">
         {data.files.map((file) => {
           const path = file.path
           return (
             <DiffFile
               key={path}
+              visible={tab.visible}
               file={file}
               expanded={chosen[path] ?? initial.has(path)}
               onToggle={() => { setChosen(value => ({ ...value, [path]: !(value[path] ?? initial.has(path)) })) }}
@@ -484,6 +485,7 @@ export function ChangesTab({
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
               actions={fileActions(data, file)}
+              onCopyPath={() => { copyPath(path) }}
               sectionRef={(element) => {
                 if (element === null) sections.current.delete(path)
                 else sections.current.set(path, element)
@@ -511,15 +513,15 @@ export function ChangesTab({
         ? <LocalHeader state={state} scope={scope} createChangeRequest={createChangeRequest} t={t} />
         : <ChangeHeader url={source.url} entry={entry} openLink={openLink} t={t} />}
       <div className={css.toolbar}>
-        {source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-        <FilesMenu
+        {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
+        {tab.visible && <FilesMenu
           files={files}
           jump={(path) => {
             setChosen(value => ({ ...value, [path]: true }))
             setWanted(path)
           }}
           t={t}
-        />
+        />}
         {files.length > 0 && <span className={css.totals}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>}
         <span className={css.tools}>
           <Tooltip label={t('diff.refresh')} side="bottom">

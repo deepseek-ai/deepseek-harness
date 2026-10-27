@@ -1,23 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createNoticeSource, createPanelSource, createVisibilitySource } from '../src/client/source.ts'
+import { createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates } from '../src/client/source.ts'
 import type { PanelStream } from '../src/client/source.ts'
-import type { ForgePanelState } from '../src/types.ts'
-import { entry, ready, snapshot } from './client-fixtures.client.ts'
+import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelState } from '../src/types.ts'
+import { entry, listState, ready, snapshot } from './client-fixtures.client.ts'
 
 /** A stream the test feeds by hand. */
-function feed() {
-  const queue: ForgePanelState[] = []
+function feed<F = ForgePanelState>() {
+  const queue: F[] = []
   let wake: (() => void) | undefined
   let closed = false
   let failure: unknown
   const stream = {
     signal: undefined as AbortSignal | undefined,
     disposed: vi.fn(),
-    push(state: ForgePanelState) { queue.push(state); wake?.() },
+    push(frame: F) { queue.push(frame); wake?.() },
     fail(error: unknown) { failure = error; wake?.() },
     close() { closed = true; wake?.() },
     dispose() { stream.disposed(); closed = true; wake?.() },
-    async *[Symbol.asyncIterator](): AsyncIterator<ForgePanelState> {
+    async *[Symbol.asyncIterator](): AsyncIterator<F> {
       while (true) {
         const next = queue.shift()
         if (next !== undefined) { yield next; continue }
@@ -204,6 +204,49 @@ describe('createPanelSource', () => {
     panel.close()
     expect(streams).toHaveLength(0)
     expect(panel.hooks.panel.getSnapshot()).toEqual({ state: null, disconnected: false })
+  })
+})
+
+describe('change request states', () => {
+  it('builds states from a baseline and its changes, and lets the baseline after a transport reset replace them', async () => {
+    const streams: ReturnType<typeof feed<ForgeChangeRequestStatesFrame>>[] = []
+    const resets = new Set<() => void>()
+    const source = createStreamSource<ForgeChangeRequestStatesFrame, ReadonlyMap<string, ForgeChangeRequestListState>>({
+      open: () => {
+        const stream = feed<ForgeChangeRequestStatesFrame>()
+        streams.push(stream)
+        return stream
+      },
+      subscribeReset: (listener) => {
+        resets.add(listener)
+        return () => { resets.delete(listener) }
+      },
+    }, new Map(), foldStates)
+    const seen: (readonly ForgeChangeRequestListState[])[] = []
+    const unsubscribe = source.observable.subscribe(() => { seen.push([...source.observable.getSnapshot().state.values()]) })
+
+    streams[0]?.push({ type: 'baseline', states: [listState(1), listState(2)] })
+    streams[0]?.push({ type: 'changed', states: [listState(2, { state: 'merged' })] })
+    await vi.waitFor(() => { expect(seen).toHaveLength(2) })
+    for (const listener of [...resets]) listener()
+    streams[1]?.push({ type: 'baseline', states: [listState(3)] })
+    await vi.waitFor(() => { expect(seen).toHaveLength(3) })
+    unsubscribe()
+
+    expect(seen).toEqual([
+      [listState(1), listState(2)],
+      [listState(1), listState(2, { state: 'merged' })],
+      [listState(3)],
+    ])
+  })
+
+  it('folds a change into new states and leaves the earlier ones unchanged', () => {
+    const before = foldStates(new Map(), { type: 'baseline', states: [listState(1)] })
+
+    const after = foldStates(before, { type: 'changed', states: [listState(1, { draft: true })] })
+
+    expect([...before.values()]).toEqual([listState(1)])
+    expect([...after.values()]).toEqual([listState(1, { draft: true })])
   })
 })
 

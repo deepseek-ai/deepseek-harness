@@ -248,7 +248,7 @@ interface ForgeActionFailure {
 
 ## Session 绑定
 
-`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`gh pr view`、`gh pr edit` 与 `gh pr checkout` 调用绑定它们所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影只位于宿主侧。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
+`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`gh pr view`、`gh pr edit` 与 `gh pr checkout` 调用绑定它们所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影的客户端视图随 Session 摘要下发，列出绑定但不含其状态。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
 
 ```ts type-equiv
 /**
@@ -504,6 +504,32 @@ interface ForgeBranches {
   /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
   readonly branches: readonly string[]
 }
+```
+
+会话列表经同一个 Remote 读取。`changeRequestStates` 以流的形式推送 `ForgeChangeRequestStatesFrame`：先是一个 `baseline`，包含调用方可读的已列出 Session 所绑定的每个变更请求最近一次已知的 `ForgeChangeRequestListState`，之后是发生变化的状态。宿主用一次运行服务所有流：已加载 Session 的绑定取自 `ctx.forgeSession`，其他 Session 的绑定取自缓存的 Session 摘要而不加载它们；每个已绑定的变更请求保持订阅，已关闭的按空闲间隔轮询以检测重新打开，每次变化都会存储，因此重启后在下次轮询之前就能显示最近已知的状态。Session 摘要还带有 `forgeWorktree` 投影的客户端视图：Session 的目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。
+
+```ts type-equiv
+/**
+ * The last polled state of one change request that a listed Session binds, as
+ * the Session list shows it.
+ */
+type ForgeChangeRequestListState = Pick<
+  ChangeRequestSnapshot, 'url' | 'title' | 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'
+> & {
+  /** Change request number on its code host. */
+  readonly number: number
+}
+```
+
+```ts type-equiv
+/**
+ * One frame of `forgePanel.changeRequestStates`: the known state of every
+ * change request the reader may see first, then the states that changed or
+ * became visible since the previous frame.
+ */
+type ForgeChangeRequestStatesFrame =
+  | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
+  | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
 变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用。
@@ -784,6 +810,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns panel states in publication order.
  */
 @Remote({ mode: 'stream' }) async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState>
+
+/**
+ * Stream the last known state of every change request that a listed
+ * Session the caller may read binds: the stored states first, then each
+ * state a poll changes or a new binding reveals. Listing reads no Session
+ * log: loaded Sessions report their bindings, others the cached Session
+ * summary, and a Session without one shows nothing until it is opened.
+ * Closed requests are polled at the idle cadence so reopening is observed. The
+ * stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames in publication order.
+ * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
+ */
+@Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
  * List the local branches that can start a worktree of the Session's current checkout.

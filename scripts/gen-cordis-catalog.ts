@@ -377,6 +377,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeActionFailure: 'forge.md',
   ForgeBranches: 'forge.md',
   ForgeChangeRequestDiff: 'forge.md',
+  ForgeChangeRequestStatesFrame: 'forge.md',
   ForgeFailure: 'forge.md',
   ForgeLocalDiff: 'forge.md',
   ForgeLocalScope: 'forge.md',

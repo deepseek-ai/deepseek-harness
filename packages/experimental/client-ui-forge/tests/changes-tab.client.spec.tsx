@@ -138,7 +138,7 @@ async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 }
 
-type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'hooks'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
+type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
   readonly source?: ChangesSource
@@ -160,6 +160,28 @@ function mount(options: MountOptions = {}) {
   const navigation = createSnapshotStore<SidebarRightTabInfo['tab']['navigation']>({
     address: contentId, params: navigationParams(options.params), revision: 1,
   })
+  const visibility = createSnapshotStore(true)
+  const useVisible = bindSnapshotSelector(visibility)
+  const stops: ReturnType<typeof vi.fn>[] = []
+  const active = bindSnapshotSelector<PanelSnapshot | undefined>({
+    getSnapshot: () => panel.getSnapshot(),
+    subscribe: (listener) => {
+      const stop = vi.fn(panel.subscribe(listener))
+      stops.push(stop)
+      return stop
+    },
+  })
+  const inactive = bindSnapshotSelector<PanelSnapshot | undefined>({
+    getSnapshot: () => undefined,
+    subscribe: () => () => {},
+  })
+  function usePanel(key: string): PanelSnapshot | undefined
+  function usePanel<S>(key: string, select: (value: PanelSnapshot | undefined) => S, equal?: (left: S, right: S) => boolean): S
+  function usePanel<S>(key: string, select?: (value: PanelSnapshot | undefined) => S,
+    equal?: (left: S, right: S) => boolean): S | PanelSnapshot | undefined {
+    const useValue = key === 'visible' ? active : inactive
+    return select === undefined ? useValue(value => value) : useValue(select, equal)
+  }
   const useNavigation = bindSnapshotSelector(navigation)
   const store = createChangesStore().create()
   const aborter = new AbortController()
@@ -187,14 +209,14 @@ function mount(options: MountOptions = {}) {
       sidebar: { expanded: true, fullscreen: false },
       panel: { id: 'pane-1' as PaneId },
       tab: {
-        id: TAB, kind: CHANGES_KIND, contentId, title: 'Changes', visible: true,
+        id: TAB, kind: CHANGES_KIND, contentId, title: 'Changes', visible: useVisible(value => value),
         navigation: useNavigation(value => value), signal: aborter.signal, actions: tabActions,
       },
     }),
     sessionId: SESSION,
     useStore: hookOf(store),
     actions: store.actions,
-    usePanel: bindSnapshotSelector(panel),
+    usePanel,
     ...faces,
     t,
   }
@@ -206,7 +228,7 @@ function mount(options: MountOptions = {}) {
     return element
   }
   const paths = (): (string | null)[] => [...view.container.querySelectorAll('[data-forge-diff-file]')].map(element => element.getAttribute('data-forge-diff-file'))
-  return { view, panel, navigation, store, aborter, tabActions, unbind, faces, section, paths }
+  return { view, panel, visibility, stops, navigation, store, aborter, tabActions, unbind, faces, section, paths }
 }
 
 /** Visible texts of the rows a section draws, in order. */
@@ -355,6 +377,53 @@ describe('ChangesTab local reads', () => {
 
     m.view.unmount()
     expect(m.unbind).toHaveBeenCalledOnce()
+  })
+
+  it('releases its hidden panel subscription and coalesces inactive changes into one read on return', async () => {
+    const m = mount()
+    await settle()
+    const section = m.section('src/app.ts')
+    act(() => { m.visibility.set(false) })
+    expect(m.stops[0]).toHaveBeenCalledOnce()
+    act(() => { m.panel.set({ state: ready({ local: { base: BASE, files: [] } }), disconnected: false }) })
+    act(() => { m.panel.set({ state: ready({ local: { base: BASE, files: [{ path: 'latest.ts', additions: 1, deletions: 0, binary: false }] } }), disconnected: false }) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(1)
+    expect(m.section('src/app.ts')).toBe(section)
+    act(() => { m.visibility.set(true) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains expanded context and the file node when an unchanged tab becomes visible again', async () => {
+    const m = mount()
+    await settle()
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    await settle()
+    const before = rowTexts(section)
+    act(() => { m.visibility.set(false) })
+    await settle()
+    act(() => { m.visibility.set(true) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(1)
+    expect(m.section('src/app.ts')).toBe(section)
+    expect(rowTexts(section)).toEqual(before)
+  })
+
+  it('aborts an in-flight diff when the tab becomes hidden and retries it on return', async () => {
+    const pending = deferred<RemoteResult<ForgeLocalDiff>>()
+    const m = mount({ setup: (faces) => { faces.localDiff.mockReturnValueOnce(pending.promise) } })
+    const signal = m.faces.localDiff.mock.calls[0]![1]
+    act(() => { m.visibility.set(false) })
+    expect(signal.aborted).toBe(true)
+    pending.settle(ok(LOCAL))
+    await settle()
+    expect(m.paths()).toEqual([])
+    act(() => { m.visibility.set(true) })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenCalledTimes(2)
+    expect(m.paths()).toContain('src/app.ts')
   })
 
   it('turns the refresh glyph while shown changes are read again, leaving the first read to the centered loader', async () => {
@@ -601,6 +670,45 @@ describe('ChangesTab actions', () => {
     fireEvent.click(within(m.section(path)).getByRole('button', { name: `More actions for ${name}` }))
     return m.view.getAllByRole('menuitem').map(item => item.textContent ?? '')
   }
+
+  it.each(['local', 'change'] as const)('copies the full relative path from a %s diff header without folding the file', async (kind) => {
+    const m = mount({ source: kind === 'local' ? { kind } : { kind, url: URL7 } })
+    await settle()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: `${en['diff.copyPath']}: src/app.ts` }))
+    expect(m.faces.copyPath).toHaveBeenCalledWith('src/app.ts')
+    expect(m.section('src/app.ts').hasAttribute('data-expanded')).toBe(true)
+    expect(m.tabActions.openResource).not.toHaveBeenCalled()
+    fireEvent.click(within(m.section('docs/gone.txt')).getByRole('button', { name: 'Collapse gone.txt' }))
+    fireEvent.click(within(m.section('docs/gone.txt')).getByRole('button', { name: `${en['diff.copyPath']}: docs/gone.txt` }))
+    expect(m.faces.copyPath).toHaveBeenLastCalledWith('docs/gone.txt')
+    expect(m.section('docs/gone.txt').hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('distinguishes copy targets with the same basename by their complete paths', async () => {
+    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({
+      ...LOCAL, files: [file('src/index.ts'), file('tests/index.ts')],
+    })) } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Copy path: src/index.ts' }))
+    expect(m.faces.copyPath).toHaveBeenLastCalledWith('src/index.ts')
+    fireEvent.click(m.view.getByRole('button', { name: 'Copy path: tests/index.ts' }))
+    expect(m.faces.copyPath).toHaveBeenLastCalledWith('tests/index.ts')
+  })
+
+  it.each(['scope', 'files', 'file'] as const)('closes the %s menu on deactivation without reopening it on return', async (kind) => {
+    const m = mount()
+    await settle()
+    const section = m.section('src/app.ts')
+    if (kind === 'file') menu(m, 'src/app.ts')
+    else fireEvent.click(m.view.getByRole('button', { name: kind === 'scope' ? 'Branch' : 'All 6 files' }))
+    expect(within(document.body).getByRole('menu')).toBeTruthy()
+    act(() => { m.visibility.set(false) })
+    expect(within(document.body).queryByRole('menu')).toBeNull()
+    act(() => { m.visibility.set(true) })
+    await settle()
+    expect(within(document.body).queryByRole('menu')).toBeNull()
+    expect(m.section('src/app.ts')).toBe(section)
+  })
 
   it('copies paths and opens a local file in the sidebar', async () => {
     const m = mount()

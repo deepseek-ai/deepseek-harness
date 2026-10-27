@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-List the pull requests a Session is working on without a separate registry. A host-only projection derives bindings from the Session's own `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` shell results and from binding records. After each push, and when a caller such as the forge panel reports the branch a Session works on, the service looks up open change requests for that branch and records the unbound ones. Watching a Session polls its bound change requests through `ctx.forge`.
+List the pull requests a Session is working on without a separate registry. A projection derives bindings from the Session's own `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` shell results and from binding records. After each push, and when a caller such as the forge panel reports the branch a Session works on, the service looks up open change requests for that branch and records the unbound ones. Watching a Session polls its bound change requests through `ctx.forge`. The Session summary carries the bindings to clients.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ Binding actions are `plugin:forge-session/binding` records listed in the [experi
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The `forgeChangeRequests` projection has no client view. It keeps shell calls awaiting their first result, every binding with its dismissal state, and each pushed branch with the sequence number of the latest result that reported it. Pending calls are dropped at `turn/end`. The service reacts to a `tool/result` event by discovering exactly the pushes whose sequence number equals the event's, and refreshes watchers when the bindings array changes. Disposing the service aborts lookups and drops their results.
+The `forgeChangeRequests` projection keeps shell calls awaiting their first result, every binding with its dismissal state, and each pushed branch with the sequence number of the latest result that reported it. Pending calls are dropped at `turn/end`. Its client view, which the Session summary carries, is every binding with its URL, origin, and dismissal state in first-recorded order, and it keeps its reference while only pending calls or pushes change. The service reacts to a `tool/result` event by discovering exactly the pushes whose sequence number equals the event's, and refreshes watchers when the bindings array changes. Disposing the service aborts lookups and drops their results.
 
 | Source | Responsibility |
 |---|---|
@@ -76,7 +76,7 @@ The `forgeChangeRequests` projection has no client view. It keeps shell calls aw
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as bindings, discovery records, and polled status stay on the host; binding records never enter model requests.
+None, as bindings, discovery records, and polled status never enter model requests; clients see the bindings through the Session summary.
 
 #### KV Cache effect
 

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-personalized-recommendations",
   "description": "Personalized pages and built-in plugin recommendations offered as cards below answers",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.1-rc.4",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

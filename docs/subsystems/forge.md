@@ -248,7 +248,7 @@ interface ForgeActionFailure {
 
 ## Session bindings
 
-`ctx.forgeSession` derives each Session's bindings from its own log: `gh pr create` results bind the URLs they print, `gh pr view`, `gh pr edit`, and `gh pr checkout` calls bind the change request they act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection stays on the Host. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
+`ctx.forgeSession` derives each Session's bindings from its own log: `gh pr create` results bind the URLs they print, `gh pr view`, `gh pr edit`, and `gh pr checkout` calls bind the change request they act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection's client view, which the Session summary carries, lists the bindings without their status. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
 
 ```ts type-equiv
 /**
@@ -504,6 +504,32 @@ interface ForgeBranches {
   /** Local branch names, `current` first and then most recently committed first, at most `maxBranches`. */
   readonly branches: readonly string[]
 }
+```
+
+The Session list reads through the same Remote. `changeRequestStates` streams `ForgeChangeRequestStatesFrame` values: a `baseline` with the last known `ForgeChangeRequestListState` of every change request that a listed Session the caller may read binds, then the states that change. One Host run serves every stream; it takes the bindings of loaded Sessions from `ctx.forgeSession` and those of other Sessions from their cached Session summary without loading them, keeps each bound change request subscribed, including closed requests polled at the idle cadence to detect reopening, and stores every change, so a restart shows the last known states before the next poll. The Session summary also carries the `forgeWorktree` projection's client view: the created worktree while the Session's directory is that worktree or lies below it, else null.
+
+```ts type-equiv
+/**
+ * The last polled state of one change request that a listed Session binds, as
+ * the Session list shows it.
+ */
+type ForgeChangeRequestListState = Pick<
+  ChangeRequestSnapshot, 'url' | 'title' | 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'
+> & {
+  /** Change request number on its code host. */
+  readonly number: number
+}
+```
+
+```ts type-equiv
+/**
+ * One frame of `forgePanel.changeRequestStates`: the known state of every
+ * change request the reader may see first, then the states that changed or
+ * became visible since the previous frame.
+ */
+type ForgeChangeRequestStatesFrame =
+  | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
+  | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
 The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card.
@@ -784,6 +810,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns panel states in publication order.
  */
 @Remote({ mode: 'stream' }) async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState>
+
+/**
+ * Stream the last known state of every change request that a listed
+ * Session the caller may read binds: the stored states first, then each
+ * state a poll changes or a new binding reveals. Listing reads no Session
+ * log: loaded Sessions report their bindings, others the cached Session
+ * summary, and a Session without one shows nothing until it is opened.
+ * Closed requests are polled at the idle cadence so reopening is observed. The
+ * stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames in publication order.
+ * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
+ */
+@Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
  * List the local branches that can start a worktree of the Session's current checkout.

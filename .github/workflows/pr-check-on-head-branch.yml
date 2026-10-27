@@ -93,15 +93,26 @@ jobs:
           node-version: '24'
           package-manager-cache: false
 
-      - name: Run the pre-merge command
+      - name: Run the tree's pre-merge check
         if: steps.merge.outputs.merged == 'true'
         env:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
         run: |
-          if ! bash -euxo pipefail -c 'pnpm install --frozen-lockfile && pnpm exec tsx scripts/compile-referenced-projects.ts host-contracts && pnpm exec tsx scripts/compile-referenced-projects.ts client'; then
+          # The check names one file and knows nothing else about how the merged tree builds itself.
+          if [ ! -f scripts/pre-merge-check.ts ]; then
             if [ "$CHECK_MODE" = block ]; then
-              echo "::error title=Pre-Merge Check::the merged tree does not install or compile"
+              echo "::error title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
               exit 1
             fi
-            echo "::warning title=Pre-Merge Check::the merged tree does not install or compile; this check does not block"
+            echo "::warning title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
+            exit 0
           fi
+          if node scripts/pre-merge-check.ts; then
+            exit 0
+          fi
+          # A check that crashes reports nothing, so the step reports its exit the way the mode asks.
+          if [ "$CHECK_MODE" = block ]; then
+            echo "::error title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"
+            exit 1
+          fi
+          echo "::warning title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"
