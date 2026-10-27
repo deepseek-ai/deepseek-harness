@@ -247,7 +247,7 @@ export class HarnessSdkJsonRpcServer {
 
   /**
    * Queue one identified prompt without assigning later activity to it.
-   * @param params - target session and user content.
+   * @param params - target session and user content; an empty array queues a retry control.
    * @returns the durable message identity.
    */
   async prompt(params: SessionPromptParams): Promise<SessionPromptResult> {
@@ -263,7 +263,7 @@ export class HarnessSdkJsonRpcServer {
     this.assertLiveAgent(rec, params.sessionId)
     const message = createUserMessage({
       content,
-      source: { kind: 'user' },
+      source: { kind: content.length === 0 ? 'retry' : 'user' },
     })
     rec.handle.agent.followup(message)
     return { messageId: message.id }

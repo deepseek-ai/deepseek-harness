@@ -568,13 +568,14 @@ function resolvePromptFileReceipts(
 function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
   const matches = (message: UserMessage): boolean => {
     const source = message.source
-    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
+    return (source.kind === 'user' || source.kind === 'retry') && 'rpcId' in source && source.rpcId === requestId
   }
   if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true
   // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   return agent.session.snapshotEvents().some((event) => {
-    if (event.type === 'agent/inbox/spliced') {
-      return event.data.inserted.some(message => message.content.length === 0 && matches(message))
+    if (event.type === 'agent/retry') {
+      const source = event.data.source
+      return 'rpcId' in source && source.rpcId === requestId
     }
     if (event.type !== 'user/message') return false
     const source = event.data.source

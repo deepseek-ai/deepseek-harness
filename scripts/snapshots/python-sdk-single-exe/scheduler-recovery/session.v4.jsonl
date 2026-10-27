@@ -21,10 +21,11 @@
 {"type":"tool/result","data":{"turn":1,"step":1,"message":{"id":"interrupted-tool-result-scheduler-unstarted-19","role":"tool","toolCallId":"scheduler-unstarted","isError":true,"source":{"kind":"tool","callId":"scheduler-unstarted"},"content":[{"type":"text","text":"The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."}]},"error":{"name":"ToolNotStartedError","code":"TOOL_NOT_STARTED"}},"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":1,"step":1}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"error","error":{"message":"Snapshot scheduler preparation failed","code":"UNKNOWN"}}}}
-{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[],"source":{"kind":"user"},"role":"user","id":"{{messageId}}"}]}}
+{"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[],"source":{"kind":"retry"},"role":"user","id":"{{messageId}}"}]}}
 {"type":"turn/start","data":{"turn":2}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"removedCount":1,"inserted":[]}}
 {"type":"step/start","data":{"turn":2,"step":1}}
+{"type":"agent/retry","data":{"turn":2,"step":1,"inputId":"{{messageId}}","source":{"kind":"retry"}}}
 {"type":"assistant/message","data":{"turn":2,"step":1,"message":{"role":"assistant","content":[{"type":"text","text":"SCHEDULER_RECOVERY_OK"}],"source":{"kind":"model","provider":"deepseek-official","model":"smoke-model","replayState":{"response":{"kind":"deepseek-messages","version":1,"model":"smoke-model"},"blocks":[{"type":"text"}]}},"id":"{{messageId}}"},"usage":{"inputTokens":3,"outputTokens":3,"totalTokens":6},"stream":[{"type":"chunk","time":0,"chunk":{"type":"block-start","index":0,"blockType":"text"}},{"type":"text-chunks","time0":0,"index":0,"dt":[],"texts":["SCHEDULER_RECOVERY_OK"]},{"type":"chunk","time":0,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"SCHEDULER_RECOVERY_OK"}}},{"type":"chunk","time":0,"chunk":{"type":"usage","usage":{"inputTokens":3,"outputTokens":3,"totalTokens":6}}},{"type":"chunk","time":0,"chunk":{"type":"finish","reason":{"kind":"stop"},"replayState":{"response":{"kind":"deepseek-messages","version":1,"model":"smoke-model"},"blocks":[{"type":"text"}]}}}]},"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":2,"step":1}}
 {"type":"turn/end","data":{"turn":2,"reason":{"kind":"completed"}}}

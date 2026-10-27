@@ -25,7 +25,7 @@ async function setup() {
   return { ctx, remote, agent, adapter, request }
 }
 
-it('admits repeated empty prompts after failures without extra user messages or duplicate requests', async () => {
+it('records retry controls without user messages or duplicate requests', async () => {
   const { remote, agent, adapter, request } = await setup()
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'original task' }], source: { kind: 'user' } }))
   await agent.whenIdle()
@@ -40,7 +40,20 @@ it('admits repeated empty prompts after failures without extra user messages or 
   await agent.whenIdle()
   expect(adapter.requests).toHaveLength(3)
   const events = agent.session.snapshotEvents()
-  expect(events.filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(1)
+  const messages = events.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user' ? [event.data] : [])
+  expect(messages).toHaveLength(1)
+  const retries = events.flatMap(event => event.type === 'agent/retry' ? [event.data] : [])
+  expect(retries).toEqual([
+    { turn: 2, step: 1, inputId: expect.any(String), source: { kind: 'retry', rpcId: 'continue-1' } },
+    { turn: 3, step: 1, inputId: expect.any(String), source: { kind: 'retry', rpcId: 'continue-2' } },
+  ])
+  const controls = events.flatMap(event => event.type === 'agent/inbox/spliced' ? event.data.inserted : [])
+    .filter(message => message.source.kind === 'retry')
+  expect(retries.map(retry => retry.inputId)).toEqual(controls.map(control => control.id))
+  for (const call of adapter.requests) {
+    expect(call.messages.filter(message => message.role === 'user').map(message => message.content))
+      .toEqual([[{ type: 'text', text: 'original task' }]])
+  }
   expect(events.flatMap(event => event.type === 'turn/end' ? [event.data.reason.kind] : [])).toEqual(['error', 'error', 'completed'])
   expect(events.filter(event => event.type === 'turn/start')).toHaveLength(3)
   expect((await remote.prompt(request('after-completion'))).ok).toBe(false)

@@ -485,23 +485,15 @@ function modelFromSession(log: string): { provider: string; model: string } {
 function turnActions(log: string): TurnAction[] {
   const actions: TurnAction[] = []
   let current: TurnAction | undefined
-  let emptyQueued = false
   for (const record of records(log)) {
-    if (record.type === 'agent/inbox/spliced') {
-      const data = record.data as JsonObject | undefined
-      if (data?.target === 'next-turn' && Array.isArray(data.inserted)) {
-        emptyQueued ||= data.inserted.some(value => {
-          const message = value as JsonObject
-          return (message.source as JsonObject | undefined)?.kind === 'user'
-            && Array.isArray(message.content) && message.content.length === 0
-        })
-      }
-    }
     if (record.type === 'turn/start') {
       const data = record.data as JsonObject | undefined
       if (typeof data?.turn !== 'number') throw new Error('SDK snapshot turn/start has no turn')
-      current = { turn: data.turn, ...emptyQueued ? { content: [] } : {} }
-      emptyQueued = false
+      current = { turn: data.turn }
+      continue
+    }
+    if (record.type === 'agent/retry' && current !== undefined) {
+      current = { turn: current.turn, content: [] }
       continue
     }
     if (record.type === 'user/message' && current !== undefined && current.content === undefined) {
@@ -1132,6 +1124,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       if (scenario.name === 'tool-scheduler-recovery') {
         expect(records(ordered[0]!.content).filter(event => event.type === 'user/message'
           && (event.data['source'] as { kind: string }).kind === 'user')).toHaveLength(1)
+        expect(records(ordered[0]!.content).filter(event => event.type === 'agent/retry')).toHaveLength(1)
         expect(results).toHaveLength(2)
         const events = results.flatMap(result => result.events)
         expect(results[1]?.finalResponse, JSON.stringify(events.filter(event => event.type === 'turn/end')))

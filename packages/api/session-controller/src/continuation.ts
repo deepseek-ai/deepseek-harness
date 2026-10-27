@@ -15,30 +15,25 @@ const stateSchema = z.object({
   admitted: z.boolean(),
   failedAttempt: z.boolean(),
   ending: endingSchema,
-  continuing: z.boolean(),
 })
 
-/** Recoverable manual-continuation facts, including an accepted empty input awaiting its turn. */
+/** Recoverable manual-continuation facts over admitted user input and retry controls. */
 export type ContinuationState = z.infer<typeof stateSchema>
 
-const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending: null, continuing: false }
+const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending: null }
 
 /** Eligibility requires admitted human work and a failed settlement in the last request step. */
 export const continuationProjectionDefinition = {
   key: 'conversationContinuation',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
   init: (): ContinuationState => EMPTY,
   apply: (state, event) => {
     switch (event.type) {
-      case 'agent/inbox/spliced':
-        if (state.continuing && event.data.target === 'next-turn' && event.data.outcome === 'canceled'
-          && event.data.start === 0) return { ...state, continuing: false }
-        return state.ending !== null && !state.continuing && event.data.target === 'next-turn'
-          && event.data.inserted.some(message => message.source.kind === 'user' && message.content.length === 0)
-          ? { ...state, continuing: true } : state
       case 'turn/start':
-        return state.continuing ? { ...EMPTY, admitted: true } : EMPTY
+        return EMPTY
+      case 'agent/retry':
+        return state.admitted ? state : { ...state, admitted: true }
       case 'step/start':
       case 'assistant/message':
         return state.failedAttempt ? { ...state, failedAttempt: false } : state

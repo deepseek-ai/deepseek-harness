@@ -414,7 +414,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(tripwire.warnings).toEqual([])
   }, 120_000)
 
-  it.skipIf(MODE === 'record')('continues after transient retries exhaust without another user message', async () => {
+  it.skipIf(MODE === 'record')('continues after transient retries exhaust without another user bubble', async () => {
     // A whole-script replacement: three throw entries cover the first request
     // plus both budgeted retries (patches cannot reach past the one-call
     // derived script). The scenario-owned policy keeps exhaustion fast and
@@ -476,8 +476,11 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     expect(turnEndReasons(sessionEvents)).toEqual(['error', 'completed'])
     expect(sessionEvents.some(event => event.type === 'user/message' && event.data.source.kind === 'plan-mode')).toBe(true)
     const userMessages = sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
-      ? [event.data.content] : [])
-    expect(userMessages).toEqual([[{ type: 'text', text: PROMPT }]])
+      ? [event.data] : [])
+    expect(userMessages.map(message => message.content)).toEqual([[{ type: 'text', text: PROMPT }]])
+    expect(sessionEvents.filter(event => event.type === 'agent/retry')).toEqual([
+      expect.objectContaining({ data: expect.objectContaining({ turn: 2, step: 1, source: expect.objectContaining({ kind: 'retry' }) }) }),
+    ])
     expect(sessionEvents.filter(event => event.type === 'turn/start')).toHaveLength(2)
     expect(sessionEvents.filter(event => event.type === 'turn/end')).toHaveLength(2)
     expect(await resume.count()).toBe(0)

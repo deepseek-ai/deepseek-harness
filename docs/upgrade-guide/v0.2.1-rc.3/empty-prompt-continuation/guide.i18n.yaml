@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.3/empty-prompt-continuation/guide.md
 /:
-  en: 7a194a68f49ac09a
-  zh: 4d7bdff82c571c62
-/observe-empty-prompt-admission-through-the-inbox:
-  en: 450277479989809e
-  zh: 4b01f252faeae19c
-/observe-empty-prompt-admission-through-the-inbox/change:
-  en: e1c081d5321f3256
-  zh: a5dd5585fe4300b3
-/observe-empty-prompt-admission-through-the-inbox/migration:
-  en: 36e80226df9dcf54
-  zh: 81a9c0bd5c667470
+  en: f5e2d8120bcf97bd
+  zh: 64b692f69ec7b0d4
+/empty-prompts-and-retry-controls:
+  en: e26b58650aa8e914
+  zh: c0e5a824ec3bea40
+/empty-prompts-and-retry-controls/change:
+  en: bf69985ccd8cc89a
+  zh: b1046f8c98cbdb43
+/empty-prompts-and-retry-controls/migration:
+  en: 028f7fd6db73a36b
+  zh: b72f840db5301d6c

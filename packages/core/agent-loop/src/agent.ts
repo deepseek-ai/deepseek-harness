@@ -455,12 +455,15 @@ export class ReactLoopAgent implements Agent {
       let contextAdmitted = false
       if (firstAttempt) {
         for (const message of decision.messages) {
-          if (message.source.kind === 'runtime-context') {
+          if (message.source.kind === 'retry') {
+            if (message.content.length > 0) throw new LlmError('Retry control input must be empty', 'INVALID_REQUEST')
+            this.session.append('agent/retry', { turn, step, inputId: message.id, source: message.source })
+          } else if (message.source.kind === 'runtime-context') {
             if (context !== undefined && !contextAdmitted) {
               this.session.append('user/message', context, { surfaceOp: 'append' })
               contextAdmitted = true
             }
-          } else if (message.source.kind !== 'user' || message.content.length > 0) {
+          } else {
             this.session.append('user/message', message, { surfaceOp: 'append' })
           }
         }

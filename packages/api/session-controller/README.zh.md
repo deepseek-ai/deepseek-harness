@@ -110,7 +110,7 @@ GUI 模型选择要求确切提供方／模型对出现在可用目录中；不�
 
 Blockquote 作为普通 prompt 文本传递，不携带 quote 元数据。本地提交回显与持久消息使用同一文本渲染规则；队列编辑替换 content，同时保留 prompt 关联信息。
 
-空的 `prompt.content` 数组仅在普通 Session 空闲、最新失败符合继续条件且使用 queue 模式时请求新轮次。待消费的用户输入阻止准入，非唤醒的注入上下文保留。`conversationContinuation` 提供共用的六码手动策略，独立于提供方重试配置。输入通过 inbox 持久记录，用于 request-id 去重，但不生成模型可见的用户消息。仅含空白的文本块仍无效。
+空的 `prompt.content` 数组仅在普通 Session 空闲、最新失败符合继续条件且使用 queue 模式时请求新轮次。待消费的用户输入阻止准入，非唤醒的注入上下文保留。`conversationContinuation` 提供共用的六码手动策略，独立于提供方重试配置。输入使用 `source.kind: 'retry'` 并沿用普通 inbox 准入；Loop 接受后记录带输入身份和调用方元数据的 `agent/retry`，供去重和审计使用，不增加模型可见消息。仅含空白的文本块仍无效。
 
 <a id="model-experience"></a>
 ## 模型体验

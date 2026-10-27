@@ -55,7 +55,7 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 
 ### 驱动 agent 的对话
 
-句柄的方法把带标识的 user 角色消息路由进 agent 的收件箱。`followup()` 排队一条普通的下一个轮次提示词并唤醒驱动器；`steer()` 提交下一步输入并唤醒它；`inject()` 添加面向模型的上下文但不唤醒驱动器，因此它落在下一个被接纳的步骤中。`cancel(cause)` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；`whenIdle()` 会在整个 agent 达到完全停稳后完成。
+句柄的方法把带标识的 user 角色消息路由进 agent 的收件箱。`followup()` 排队一条普通的下一个轮次提示词并唤醒驱动器；`steer()` 提交下一步输入并唤醒它；`inject()` 添加面向模型的上下文但不唤醒驱动器，因此它落在下一个被接纳的步骤中。带 `source.kind: 'retry'` 的空输入通过同一 inbox 请求再次调用模型；内置 Loop 将接受记录为 `agent/retry`，不增加模型可见内容。普通空用户输入仍遵循普通消息准入。`cancel(cause)` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；`whenIdle()` 会在整个 agent 达到完全停稳后完成。
 
 ```text
 handle.agent.followup({
@@ -149,8 +149,6 @@ await handle.agent.whenIdle()
 - [core 分组地图](../README.zh.md)——core 各包如何组合。
 
 -----
-
-普通 `followup` 的 `content: []` 明确请求基于已提交历史启动新轮次。它保留带身份的 inbox 回执和正常生命周期，不生成模型可见的用户消息。pre-step 拒绝或改写为空批次的决策仍会阻止请求。
 
 <a id="model-experience"></a>
 ## 模型体验

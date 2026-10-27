@@ -1,19 +1,20 @@
 ---
 kind: upgrade-guide
-description: "空的普通 Agent 输入发起请求，但不产生 user/message 事件。"
+description: 空 API 和 SDK 提示词变为重试控制输入，其必读 Session 事件需要更新后的读取方。
 ---
-# 通过 inbox 观察空 prompt 准入
+
+# 空提示词与重试控制输入
 
 [English](guide.md) | 中文
 
 ## 变更
 
-普通 Agent 输入的 `content: []` 基于已提交历史启动新轮次，不再追加空的 `user/message`。带身份的输入仍保留在持久 inbox 事件中。若自定义消费者等待每条已接受输入产生用户消息，应改为观察对应 inbox 回执。Session 日志无需迁移，历史空用户消息的解释保持不变。
+Session prompt API 接受 `content: []`，在 queue 模式下继续符合条件且空闲的失败会话。SDK `session/prompt` 将空 `contentBlocks` 映射到同样的 retry 来源控制输入。接受后记录带 `turn`、`step`、`inputId` 和 `source` 的 `agent/retry`，而非 `user/message`。新轮次仍正常开启和闭合。直接使用普通空用户消息的 Agent 调用方保留原有行为。
 
-Web Session prompt 端点仅在普通 Session 空闲、最新失败符合继续条件且使用 queue 模式时接受空数组。仅含空白的文本块仍无效。
+新增必读事件及 retry 来源保留当前 Session 格式版本。更新后的读取方接受旧日志；旧读取方会拒绝包含未知必读事件的日志。见[持久化确认记录](../../../persistence-changes/2026-10-27-retry-control-input.zh.md)。
 
 ## 迁移
 
-1. 普通文本和附件输入保持不变。仅在需要再次请求模型而不添加用户文本时使用空数组。
-2. 通过 `agent/inbox/spliced` 中的输入身份匹配准入，然后观察正常轮次与状态生命周期。不要等待空的 `user/message`。
-3. 验证继续操作增加正常闭合的轮次，但不增加用户消息。内置 TypeScript 和 Python SDK 客户端已观察 inbox 回执。
+1. 打开包含重试控制输入的日志前，同时升级 Session 读取方与 SDK 运行时。
+2. 通过 `user/message` 关联空 API 或 SDK 提示词的消费方，改用持久 inbox 身份与 `agent/retry.inputId`。处理 retry 来源时，不应将其视为模型可见用户内容。
+3. 确认继续失败请求会产生正常开启并闭合的新轮次和 `agent/retry`，而派生模型历史中没有额外用户消息。

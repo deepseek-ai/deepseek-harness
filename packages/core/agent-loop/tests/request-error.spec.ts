@@ -32,15 +32,16 @@ function fail(message: string, code: string): () => never {
 }
 
 describe('agent/request-error', () => {
-  it('continues repeated failures through empty followups with balanced turns and one admitted user message', async () => {
+  it('records repeated retry controls with balanced turns and no additional model messages', async () => {
     const adapter = new MockAdapter([fail('busy', 'SERVER'), fail('still busy', 'SERVER'), textResponse('done')])
     const ctx = await harness(adapter)
     onTestFinished(() => ctx.fiber.dispose())
-    const agent = await ctx.agentLoop.create(SessionId('empty-continuation'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(SessionId('retry-controls'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'original task' }], source: { kind: 'user' } }))
     await agent.whenIdle()
-    for (let index = 0; index < 2; index++) {
-      agent.followup(createUserMessage({ content: [], source: { kind: 'user' } }))
+    const controls = Array.from({ length: 2 }, () => createUserMessage({ content: [], source: { kind: 'retry' } }))
+    for (const control of controls) {
+      agent.followup(control)
       await agent.whenIdle()
     }
     expect(adapter.requests).toHaveLength(3)
@@ -50,11 +51,34 @@ describe('agent/request-error', () => {
     }
     const events = agent.session.snapshotEvents()
     expect(events.filter(event => event.type === 'user/message')).toHaveLength(1)
+    expect(events.flatMap(event => event.type === 'agent/retry' ? [event.data] : [])).toEqual(
+      controls.map((control, index) => ({ turn: index + 2, step: 1, inputId: control.id, source: { kind: 'retry' } })),
+    )
     expect(events.flatMap(event => event.type === 'turn/start' || event.type === 'turn/end'
       ? [`${event.type}:${event.data.turn}`] : []))
       .toEqual(['turn/start:1', 'turn/end:1', 'turn/start:2', 'turn/end:2', 'turn/start:3', 'turn/end:3'])
     expect(events.flatMap(event => event.type === 'turn/end' ? [event.data.reason.kind] : []))
       .toEqual(['error', 'error', 'completed'])
+  })
+
+  it('preserves ordinary empty user input and rejects retry controls containing content', async () => {
+    const adapter = new MockAdapter([textResponse('done')])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
+    const agent = await ctx.agentLoop.create(SessionId('retry-validation'), { provider: 'mock', model: 'mock' })
+    const empty = createUserMessage({ content: [], source: { kind: 'user' } })
+    agent.followup(empty)
+    await agent.whenIdle()
+    expect(adapter.requests[0]?.messages.filter(message => message.role === 'user')).toEqual([empty])
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'must not disappear' }], source: { kind: 'retry' } }))
+    await agent.whenIdle()
+    expect(adapter.requests).toHaveLength(1)
+    const events = agent.session.snapshotEvents()
+    expect(events.filter(event => event.type === 'agent/retry')).toHaveLength(0)
+    expect(events.filter(event => event.type === 'user/message')).toMatchObject([{ data: empty }])
+    expect(events.filter(event => event.type === 'turn/end').at(-1)).toMatchObject({
+      data: { turn: 2, reason: { kind: 'error', error: { code: 'INVALID_REQUEST' } } },
+    })
   })
 
   it('does not offer middleware failures to request recovery', async () => {

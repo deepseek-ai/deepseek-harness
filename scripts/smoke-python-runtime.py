@@ -1925,6 +1925,11 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
             raise AssertionError(f"scheduler recovery expected two serialized model requests: {requests}")
         logs = read_session_logs(sessions)
         records = logs[RECOVERY_SESSION_ID]
+        prompts = [record for record in records if record.get("type") == "user/message"
+                   and record["data"]["source"].get("kind") == "user"]
+        retries = [record for record in records if record.get("type") == "agent/retry"]
+        if len(prompts) != 1 or len(retries) != 1:
+            raise AssertionError("scheduler recovery must record one original prompt and one retry control")
         calls = [record["data"]["callId"] for record in records if record.get("type") == "tool/call"]
         if calls != list(RECOVERY_CALL_IDS[:2]):
             raise AssertionError(f"scheduler recovery dispatched the unstarted call: {calls}")

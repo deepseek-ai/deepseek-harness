@@ -193,15 +193,15 @@ The selector must be a pure function of the owner currency. Its non-null return 
 
 #### What the model sees
 
-The play action starts a new request from committed Session history. Its `content: []` input is a durable inbox command, not a model-visible user message; it adds no localized or hidden continuation instruction. Pending injected context follows ordinary admission.
+The play action submits `content: []` through the existing Session prompt API as a retry control. Loop acceptance records `agent/retry` without adding a `user/message` or a chat bubble. Pending injected context follows ordinary admission; the action adds no localized or hidden continuation text.
 
 #### Token effect
 
-The action adds no continuation text or empty user-message overhead. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
+The control adds no model tokens. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
 
 #### KV Cache effect
 
-The control input does not alter model history. Prefix reuse still depends on the current model, prompt, tools, injected context, and provider cache policy.
+The control leaves model history unchanged. Prefix reuse depends on the current model, prompt, tools, injected context, and provider cache policy.
 
 ## Known Limitations and Deferred Work
 

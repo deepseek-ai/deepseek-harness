@@ -111,7 +111,7 @@ it('publishes a complete-log result independently of the visible page and releas
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBe(ending)
   expect(changed.mock.calls.map(([, key, value]) => [key, value])).toEqual([['conversationContinuation', null], ['conversationContinuation', ending]])
   expect(ctx.sessionProjections.checkpoint(session).conversationContinuation)
-    .toEqual({ ver: 2, seq: ending, val: { admitted: false, failedAttempt: false, ending, continuing: false } })
+    .toEqual({ ver: 3, seq: ending, val: { admitted: false, failedAttempt: false, ending } })
   session.append('turn/start', { turn: 2 })
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBeNull()
   expect(changed).toHaveBeenCalledTimes(3)
@@ -127,42 +127,28 @@ it('restores valid, absent and outdated checkpoints through the registry', async
   await ctx.sessionProjections.register(definition)
   const session = ctx.sessions.create(SessionId('restored'))
   const log = events(failed('SERVER'))
-  const checkpoint = { conversationContinuation: { ver: 2, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
+  const checkpoint = { conversationContinuation: { ver: 3, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
   const restore = (rows: typeof checkpoint | Record<string, never>, tail: readonly SessionEvent[], base: number) =>
     ctx.sessionProjections.restore(rows, tail, SessionLogOffset(base), session.header, session.inheritedEventCount)
   expect(restore(checkpoint, log.slice(3), 3).snapshot.values.conversationContinuation).toBe(5)
   expect(restore({}, log, 0).snapshot.values.conversationContinuation).toBe(5)
-  const outdated = { conversationContinuation: { ...checkpoint.conversationContinuation, ver: 0 } }
+  const outdated = { conversationContinuation: { ...checkpoint.conversationContinuation, ver: 2 } }
   expect(restore(outdated, log, 0).snapshot.values.conversationContinuation).toBe(5)
   expect(() => restore(outdated, log.slice(3), 3)).toThrow('re-read from seq 0')
   expect(() => restore({}, log.slice(3), 3)).toThrow('re-read from seq 0')
 })
 
-it('carries admitted work through an empty continuation and retires a canceled queued control', async () => {
-  const ctx = new Context()
-  onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
-  const handle = await ctx.sessionProjections.register(definition)
-  const session = ctx.sessions.create(SessionId('empty-repeat'))
-  for (const event of events(failed('SERVER'))) {
-    if (event.type === 'user/message') session.append(event.type, event.data, { surfaceOp: 'append' })
-    else if (event.type === 'turn/start') session.append(event.type, event.data)
-    else if (event.type === 'step/start' || event.type === 'step/end') session.append(event.type, event.data)
-    else if (event.type === 'assistant/attempt') session.append(event.type, event.data)
-    else if (event.type === 'turn/end') session.append(event.type, event.data)
+it('admits retry controls independently of empty ordinary user messages', () => {
+  const base = events(failed('SERVER'))
+  const input = base.find(event => event.type === 'user/message')!
+  const empty: SessionEvent<'user/message'> = { ...input, type: 'user/message', data: createUserMessage({
+    content: [], source: { kind: 'user' },
+  }) }
+  expect(fold(base.map(event => event === input ? empty : event)).ending).toBeNull()
+  const retry: SessionEvent<'agent/retry'> = { type: 'agent/retry', seq: empty.seq, time: empty.time,
+    data: { turn: 1, step: 1, inputId: empty.data.id, source: { kind: 'retry' } },
   }
-  const input = createUserMessage({ content: [], source: { kind: 'user' } })
-  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [input] })
-  expect(handle.stateOf(session).continuing).toBe(true)
-  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [], outcome: 'canceled' })
-  expect(handle.stateOf(session).continuing).toBe(false)
-  session.append('agent/inbox/spliced', { target: 'next-turn', start: 0, inserted: [input] })
-  session.append('turn/start', { turn: 2 })
-  expect(handle.stateOf(session).admitted).toBe(true)
-  session.append('step/start', { turn: 2, step: 1 })
-  session.append('assistant/attempt', { turn: 2, step: 1, stream: [] })
-  session.append('step/end', { turn: 2, step: 1 })
-  const ending = session.append('turn/end', { turn: 2, reason: failed('SERVER') }).seq
-  expect(handle.stateOf(session).ending).toBe(ending)
+  expect(fold(base.map(event => event === input ? retry : event)).ending).toBe(5)
+  const admitted = definition.apply(definition.init(), retry)
+  expect(definition.apply(admitted, retry)).toBe(admitted)
 })
