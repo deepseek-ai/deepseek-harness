@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-feishu-cli",
   "description": "Feishu through the official lark-cli: the CLI by its absolute path, its embedded skills, and account operations over Remote",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.4",
   "publishConfig": {
     "access": "public"
   },
