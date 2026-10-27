@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 const packageRoot = resolve(import.meta.dirname, '..')
 const bundlePath = join(packageRoot, 'lib/client.js')
 const pdfChunkPath = join(packageRoot, 'lib/client.pdf.js')
+const syncChunkCall = /(?<![\w$.])[$A-Z_a-z][\w$]*\s*\(\s*(["'`])\.\/client[^"'`/]*\.js\1\s*\)/u
 const require = createRequire(import.meta.url)
 const licenseNames = [
   'LICENSE',
@@ -58,16 +59,15 @@ describe('published document preview licenses', () => {
 
       const client = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.js'], packageRoot, task.timeout)
       const pdf = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.pdf.js'], packageRoot, task.timeout)
-      expect([...client.matchAll(/require\.async\("(\.\/client[^"/]*\.js)"\)/gu)].map(match => match[1]))
+      expect([...client.matchAll(/\.async\s*\(\s*(["'`])(\.\/client[^"'`/]*\.js)\1\s*\)/gu)].map(match => match[2]))
         .toEqual(['./client.frontmatter-fields.js', './client.pdf.js', './client.excel.js'])
-      expect(client).not.toMatch(/\brequire\("\.\/client[^"/]*\.js"\)/u)
-      expect([...pdf.matchAll(/require\("(\.\/client[^"/]*\.js)"\)/gu)].map(match => match[1]))
-        .toEqual([])
+      expect(client).not.toMatch(syncChunkCall)
+      expect(pdf).not.toMatch(syncChunkCall)
       expect(client).not.toContain('//! Bundled PDF.js license notices')
       expect(client).not.toContain('/pdfjs-dist/')
       expect(pdf).toContain('//! Bundled PDF.js license notices')
       const excel = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.excel.js'], packageRoot, task.timeout)
-      expect(excel).not.toMatch(/\brequire\("\.\/client[^"/]*\.js"\)/u)
+      expect(excel).not.toMatch(syncChunkCall)
       expect(client).not.toContain('FortuneSheet')
       expect(excel).toContain('//! Bundled spreadsheet license notices')
       expect(excel).toContain('Copyright (c) 2022 Suzhou Ruilisi Technology Co., Ltd')
@@ -78,7 +78,7 @@ describe('published document preview licenses', () => {
         expect(excel).toContain(license.split('\n').map(line => `// ${line}`).join('\n'))
       }
       const frontmatter = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.frontmatter-fields.js'], packageRoot, task.timeout)
-      expect(frontmatter).not.toMatch(/\brequire\("\.\/client[^"/]*\.js"\)/u)
+      expect(frontmatter).not.toMatch(syncChunkCall)
       let frontmatterInitialized = false
       runInNewContext(frontmatter, { window: { __ModuleLoader__: { load: (registration: {
         factory: (resolve: (specifier: string) => unknown) => { FrontmatterFields: unknown }

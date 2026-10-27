@@ -259,10 +259,30 @@ describe('client bundle package asset imports', () => {
         write: false, clean: false, exports: false, report: false, logLevel: 'silent',
       })
       const output = builds.flatMap(bundle => bundle.chunks).find(chunk => chunk.type === 'chunk' && chunk.fileName === 'client.js')
-      const code = output?.type === 'chunk' ? output.code : ''
-      expect(code).toContain(`require.asset(${JSON.stringify(WHALE_URL)})`)
-      expect(code).not.toContain('__dshPackageAsset_')
-      expect(code).toContain('"__dshPackageAsset("')
+      if (output?.type !== 'chunk') throw new Error('asset fixture client output missing')
+      type AssetRequire = ((specifier: string) => never) & { asset(reference: string): string }
+      const requests: string[] = []
+      const require: AssetRequire = Object.assign((specifier: string): never => {
+        throw new Error(`Unexpected synchronous module request: ${specifier}`)
+      }, {
+        asset(reference: string): string {
+          requests.push(reference)
+          return `resolved:${reference}`
+        },
+      })
+      const registrations: { id: string; factory(require: AssetRequire): { url: string; text: string } }[] = []
+      runInNewContext(output.code, { window: { __ModuleLoader__: { load(value: typeof registrations[number]) {
+        registrations.push(value)
+      } } } })
+      expect(registrations).toHaveLength(1)
+      const registration = registrations[0]
+      if (registration === undefined) throw new Error('asset fixture factory registration missing')
+      expect(registration.id).toBe(PACKAGE_NAME)
+      expect(requests).toEqual([])
+      const exports = registration.factory(require)
+      expect(exports.url).toBe(`resolved:${WHALE_URL}`)
+      expect(exports.text).toBe('__dshPackageAsset(')
+      expect(requests).toEqual([WHALE_URL])
     } finally {
       for (const bundle of builds) await bundle[Symbol.asyncDispose]()
     }

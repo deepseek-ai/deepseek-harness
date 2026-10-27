@@ -17,7 +17,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire, SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -27,7 +27,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import WebSocket from 'ws'
-import { REPO_ROOT, connectFreshWorkspace, newEnglishPage, probeFreePort, requireDist, saveFailureShot } from './support.ts'
+import { REPO_ROOT, newEnglishPage, probeFreePort, requireDist, saveFailureShot } from './support.ts'
 
 const WEB_SURFACE_PROMPT = fileURLToPath(new URL('./expected/web-runtime-context/web-surface-prompt.expected.md', import.meta.url))
 /** Framed user text that marks the auxiliary title request's own messages. */
@@ -284,31 +284,18 @@ async function screen(page: Page, name: string): Promise<void> {
 
 /** First column track (px string) of the frame grid. */
 async function firstTrack(page: Page): Promise<string> {
-  return (await page.locator('[class*="frame"]').evaluate(
+  return (await page.locator('[class*="frame"]').first().evaluate(
     el => getComputedStyle(el).gridTemplateColumns)).split(' ')[0]!
 }
 
 /** Last column track (details) as a number of pixels. */
 async function detailsTrack(page: Page): Promise<number> {
-  const cols = await page.locator('[class*="frame"]').evaluate(
+  const cols = await page.locator('[class*="frame"]').first().evaluate(
     el => getComputedStyle(el).gridTemplateColumns)
   return Number(cols.split(' ').pop()!.replace('px', ''))
 }
 
-// Readiness gate: `dsh web` serves every production manifest plugin; until every UI
-// plugin's client bundle exists and exports apply, the loader fail-louds and
-// the frame never appears.
-const UI_PLUGIN_DIRS = [
-  'connection', 'ui-theme', 'locale', 'ui-layout', 'ui-renderer', 'ui-session', 'ui-sidebar',
-  'ui-settings', 'ui-settings-general', 'ui-settings-models', 'ui-conversation', 'ui-approval', 'ui-chat',
-  'ui-model-selection', 'ui-user-questions', 'ui-trajectory', '../session-query/session-log-export',
-]
 const ROUND_DONE_MARKER = 'WEB_ROUND_DONE'
-const notReady = UI_PLUGIN_DIRS.filter((dir) => {
-  const bundle = join(REPO_ROOT, 'packages/client', dir, 'lib/client.js')
-  return !existsSync(bundle) || !readFileSync(bundle, 'utf8').includes('exports.apply')
-})
-if (notReady.length > 0) console.warn(`[smoke-real] skipped — client bundles not ready: ${notReady.join(', ')}`)
 
 describe('dsh web keyless CLI smoke', () => {
   it('serves a usable app from three immutable plugin batches', async () => {
@@ -686,7 +673,7 @@ describe('dsh web keyless CLI smoke', () => {
   })
 })
 
-describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke (real host, real key)', () => {
+describe.skipIf(!process.env.DEEPSEEK_API_KEY)('web smoke (real host, real key)', () => {
   let child: ChildProcess
   let sessionsDir: string
   let baseUrl: string
@@ -730,6 +717,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
     page = await newEnglishPage(browser)
     page.on('pageerror', e => pageErrors.push(String(e)))
     await page.goto(baseUrl, { waitUntil: 'load' })
+    const welcome = page.getByRole('dialog', { name: 'Preview Notice' })
+    await welcome.getByRole('button', { name: 'Continue' }).click()
+    await welcome.waitFor({ state: 'detached' })
   }, 120_000)
 
   afterAll(async () => {
@@ -747,18 +737,13 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
     onTestFailed(() => saveFailureShot(page, 'w5-cold-start'))
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     expect(await page.locator('text=Failed to load plugins').count()).toBe(0)
-    const template = await page.locator('[class*="frame"]').evaluate(el => getComputedStyle(el).gridTemplateColumns)
+    const template = await page.locator('[class*="frame"]').first().evaluate(el => getComputedStyle(el).gridTemplateColumns)
     expect(template.split(' ').length).toBe(3)
     await screen(page, '01-cold-start')
   })
 
   it('empty-state first send completes a real model round', async () => {
     onTestFailed(() => saveFailureShot(page, 'w5-first-round'))
-    // This scenario spawns its own server against a fresh $DSH_HOME with the
-    // DeepSeek credential inherited from the environment, so no onboarding
-    // step mounts and the page is immediately interactive.
-    // Fresh world: connect a Workspace so the composer starts live.
-    await connectFreshWorkspace(page, sessionsDir)
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
     const productTitle = await page.title()
@@ -839,7 +824,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
   it('sidebar drag widens the column and resets across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'w5-drag'))
     const before = await firstTrack(page)
-    const handle = page.locator('[class*="handle"]').first()
+    const handle = page.locator('[data-side="sidebar"]')
     const box = await handle.boundingBox()
     expect(box).not.toBeNull()
     await page.mouse.move(box!.x + box!.width / 2, box!.y + 300)

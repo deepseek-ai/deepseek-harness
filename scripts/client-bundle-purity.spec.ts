@@ -3,9 +3,11 @@
  * chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runInNewContext } from 'node:vm'
 import { build, type Rolldown, type TsdownBundle, type UserConfig } from 'tsdown'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { clientBundle, requestedExternals, staticLinked } from '../packages/client/tsdown.client.ts'
@@ -120,6 +122,24 @@ function dynamicImportFixture(prefix: string): string {
   return root
 }
 
+interface ClientFactoryRegistration<Value, Require> {
+  id: string
+  chunk?: string
+  factory(require: Require): Value
+}
+
+function registerClientFactory<Value, Require>(code: string): ClientFactoryRegistration<Value, Require> {
+  const registrations: ClientFactoryRegistration<Value, Require>[] = []
+  runInNewContext(code, { window: { __ModuleLoader__: { load(value: ClientFactoryRegistration<Value, Require>) {
+    registrations.push(value)
+  } } } })
+  expect(registrations).toHaveLength(1)
+  const registration = registrations[0]
+  if (registration === undefined) throw new Error('client factory registration missing')
+  expect(registration.id).toBe(REQUESTING_PACKAGE)
+  return registration
+}
+
 describe('client bundle dynamic imports', () => {
   it('keeps a dual Client browser chunk disjoint from its Node output', async () => {
     const root = dynamicImportFixture('dsh-dual-client-chunk-')
@@ -155,12 +175,188 @@ describe('client bundle dynamic imports', () => {
         write: false, clean: false, exports: false, report: false, logLevel: 'silent',
       })
       const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
-      expect(output).toContain('require.async("./client.terminal.js")')
-      expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
+      const entry = chunks.find(chunk => chunk.fileName === 'client.js')
+      const terminal = chunks.find(chunk => chunk.fileName === 'client.terminal.js')
+      if (entry === undefined || terminal === undefined) throw new Error('dynamic import fixture outputs missing')
+      type Terminal = { marker: string }
+      type Require = ((specifier: string) => never) & { async(specifier: string): Promise<Terminal> }
+      const requests: string[] = []
+      const require: Require = Object.assign((specifier: string): never => {
+        throw new Error(`Unexpected synchronous module request: ${specifier}`)
+      }, {
+        async(specifier: string): Promise<Terminal> {
+          requests.push(specifier)
+          expect(specifier).toBe('./client.terminal.js')
+          const registration = registerClientFactory<Terminal, Require>(terminal.code)
+          expect(registration.chunk).toBe('client.terminal.js')
+          return Promise.resolve(registration.factory(require))
+        },
+      })
+      const registration = registerClientFactory<{ load(): Promise<Terminal> }, Require>(entry.code)
+      expect(registration.chunk).toBeUndefined()
+      const exports = registration.factory(require)
+      expect(requests).toEqual([])
+      await expect(exports.load()).resolves.toEqual({ marker: 'terminal' })
+      expect(requests).toEqual(['./client.terminal.js'])
     } finally {
       for (const bundle of builds) await bundle[Symbol.asyncDispose]()
     }
+  })
+})
+
+interface CompressionFixtureDetails {
+  describeScore(value: number): string
+}
+
+interface CompressionFixtureEntry {
+  calculateScore(values: readonly number[]): number
+  activate(): number
+  incrementScore(value: number): number
+  decrementScore(value: number): number
+  FixtureAccumulator: { new (seed: number): { total(values: readonly number[]): number }; readonly name: string }
+  loadDetails(): Promise<CompressionFixtureDetails>
+}
+
+type CompressionFixtureRequire = ((specifier: string) => never) & {
+  async(specifier: string): Promise<CompressionFixtureDetails>
+}
+
+describe('production client bundle compression', () => {
+  it('keeps executable exports, lazy chunks, names, notices and maps while compressing production only', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-client-compression-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const directory = join(root, 'lib/types/client')
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    // Every long local contributes to a runtime result; comments and dead branches cannot earn the byte reduction.
+    const terms = Array.from({ length: 24 }, (_, index) => `intermediateContributionForInputPosition${index}`)
+    const entrySource = [
+      '/*! @license Fixture arithmetic license */',
+      'export function calculateScore(values) {',
+      ...terms.map((name, index) => `  const ${name} = values[${index}] * ${index + 1} + ${index + 2};`),
+      `  return ${terms.join(' + ')};`,
+      '}',
+      'export class FixtureAccumulator {',
+      '  constructor(seed) { this.seed = seed; }',
+      '  total(values) { return this.seed + calculateScore(values); }',
+      '}',
+      'export const activate = () => 7;',
+      'export { collisionLabel as incrementScore } from "./increment.js";',
+      'export { collisionLabel as decrementScore } from "./decrement.js";',
+      'export function loadDetails() { return import("./details.js"); }',
+      '',
+    ].join('\n')
+    const detailSource = [
+      '/*! @license Fixture detail license */',
+      'export function describeScore(value) {',
+      '  const descriptiveScorePrefix = "score";',
+      '  return descriptiveScorePrefix + ":" + value;',
+      '}',
+      '',
+    ].join('\n')
+    writeFileSync(join(directory, 'index.js'), entrySource)
+    writeFileSync(join(directory, 'details.js'), detailSource)
+    writeFileSync(join(directory, 'increment.js'), 'export function collisionLabel(value) { return value + 1; }\n')
+    writeFileSync(join(directory, 'decrement.js'), 'export function collisionLabel(value) { return value - 1; }\n')
+
+    const namesByMode = new Map<string, readonly string[]>()
+    for (const mode of ['production', 'development'] as const) {
+      const previousNodeEnv = process.env.NODE_ENV
+      const noticeBody = '// Copyright Fixture Authors\n// Permission is granted to use this fixture.'
+      let config: UserConfig | undefined
+      try {
+        process.env.NODE_ENV = mode
+        config = clientBundle(root, ['lib/types/index.js'], {
+          clientBanner: fileName => `//! Fixture banner for ${fileName}\n${noticeBody}`,
+        })({ env: { DSH_BUILD_FACE: 'client' } }).find(candidate => candidate.platform === 'browser')
+      } finally {
+        if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+        else process.env.NODE_ENV = previousNodeEnv
+      }
+      if (config === undefined) throw new Error('client config missing')
+
+      const builds = await build({
+        ...config, cwd: root, config: false, tsconfig: false,
+        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      })
+      try {
+        const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
+        expect(chunks.map(chunk => chunk.fileName).sort()).toEqual(['client.details.js', 'client.js'])
+        const entry = chunks.find(chunk => chunk.fileName === 'client.js')
+        const details = chunks.find(chunk => chunk.fileName === 'client.details.js')
+        if (entry === undefined || details === undefined) throw new Error('client fixture outputs missing')
+
+        const requests: string[] = []
+        const require: CompressionFixtureRequire = Object.assign((specifier: string): never => {
+          throw new Error(`Unexpected synchronous module request: ${specifier}`)
+        }, {
+          async(specifier: string): Promise<CompressionFixtureDetails> {
+            requests.push(specifier)
+            expect(specifier).toBe('./client.details.js')
+            const registration = registerClientFactory<CompressionFixtureDetails, CompressionFixtureRequire>(details.code)
+            expect(registration.chunk).toBe('client.details.js')
+            return Promise.resolve(registration.factory(require))
+          },
+        })
+        const registration = registerClientFactory<CompressionFixtureEntry, CompressionFixtureRequire>(entry.code)
+        expect(registration.chunk).toBeUndefined()
+        const exports = registration.factory(require)
+        const values = Array.from({ length: terms.length }, (_, index) => index * 3 - 7)
+        const expected = values.reduce((sum, value, index) => sum + value * (index + 1) + index + 2, 0)
+        expect(exports.calculateScore(values)).toBe(expected)
+        expect(new exports.FixtureAccumulator(9).total(values)).toBe(expected + 9)
+        expect(exports.incrementScore(expected)).toBe(expected + 1)
+        expect(exports.decrementScore(expected)).toBe(expected - 1)
+        expect(exports.calculateScore.name).toBe('calculateScore')
+        expect(exports.activate()).toBe(7)
+        expect(exports.activate.name).toBe('activate')
+        expect(exports.FixtureAccumulator.name).toBe('FixtureAccumulator')
+        namesByMode.set(mode, [exports.incrementScore.name, exports.decrementScore.name])
+        expect(requests).toEqual([])
+        const loaded = await exports.loadDetails()
+        expect(requests).toEqual(['./client.details.js'])
+        expect(loaded.describeScore(expected)).toBe(`score:${expected}`)
+        expect(loaded.describeScore.name).toBe('describeScore')
+
+        for (const [chunk, source, notice, name] of [
+          [entry, entrySource, 'Fixture arithmetic license', 'calculateScore'],
+          [details, detailSource, 'Fixture detail license', 'describeScore'],
+        ] as const) {
+          expect(chunk.code).toContain(`@license ${notice}`)
+          expect(chunk.code).toContain(`//! Fixture banner for ${chunk.fileName}\n${noticeBody}`)
+          expect(chunk.map?.sourcesContent).toContain(source)
+          expect(chunk.map?.mappings.length).toBeGreaterThan(0)
+          expect(chunk.code.trimEnd().endsWith(`//# sourceMappingURL=${chunk.fileName}.map`)).toBe(true)
+          if (chunk.map === null) throw new Error('client fixture source map missing')
+          const map = new SourceMap({
+            ...chunk.map, file: chunk.fileName, sourceRoot: '',
+            sourcesContent: chunk.map.sourcesContent.map(content => content ?? ''),
+          })
+          const marker = `function ${name}`
+          expect(chunk.code).toContain(marker)
+          // Rolldown maps a function declaration to the start of its export statement.
+          const generatedOffset = chunk.code.indexOf(marker)
+          const originalOffset = source.indexOf(`export ${marker}`)
+          const generatedLines = chunk.code.slice(0, generatedOffset).split('\n')
+          const originalLines = source.slice(0, originalOffset).split('\n')
+          expect(map.findEntry(generatedLines.length - 1, generatedLines.at(-1)!.length)).toMatchObject({
+            originalLine: originalLines.length - 1,
+            originalColumn: originalLines.at(-1)!.length,
+          })
+        }
+        if (mode === 'production') {
+          // These ceilings include the executable factory, loader call, legal notices and source-map reference.
+          expect(Buffer.byteLength(entry.code)).toBeLessThanOrEqual(1600)
+          expect(Buffer.byteLength(details.code)).toBeLessThanOrEqual(600)
+        } else {
+          expect(entry.code).toContain('intermediateContributionForInputPosition0')
+        }
+      } finally {
+        for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+      }
+    }
+    // Minification preserves the bundler's names, including any static-module name collision suffixes.
+    expect(namesByMode.get('production')).toEqual(namesByMode.get('development'))
   })
 })
 

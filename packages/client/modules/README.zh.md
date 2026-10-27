@@ -40,7 +40,7 @@ kind: "package-reference"
 
 ### 浏览器加载什么
 
-application combo 脚本只携带每个插件的 `client.js` 入口，并在启动时仅注册一次这些 factory；模块主体仍保持惰性，只在首次 import 或物化时运行。经 tsdown 拆分的源码 `import()` 会编译为 `require.async("./client.<name>.js")`；只有执行该表达式时，对应的带版本同级脚本才会到达。共享 combo URL 的 row 共用一个进行中的脚本任务。`<script>` 加载失败的 combo 会再请求一次；加载成功但没有注册某条 row 的 combo 绝不会重新执行，因为批量脚本按顺序注册各个包，重放会在第一个重复注册处停止。两种情况下，每条仍缺失的 row 随后加载自己的单资源 combo URL，因此一个失败的 batch 对每条缺失 row 最多花费三次请求，且不影响它已经注册的 row。模块系统按 row 记录最后一次 import 失败（传输、注册、依赖级联或 factory 执行）；Web 启动审计按条目报告该文本。HMR（热模块替换）会让一条发生变化的 row 改用带 revision 的单资源 combo URL。`<id>/client` 与裸 id 解析到同一组导出，因为插件 bundle 就是其包的客户端半侧。
+application combo 脚本只携带每个插件的 `client.js` 入口，并在启动时仅注册一次这些 factory；模块主体仍保持惰性，只在首次 import 或物化时运行。经 tsdown 拆分的源码 `import()` 会以字面量 `./client.<name>.js` 路径调用 factory loader 的 `.async` 方法；只有执行该表达式时，对应的带版本同级脚本才会到达。共享 combo URL 的 row 共用一个进行中的脚本任务。`<script>` 加载失败的 combo 会再请求一次；加载成功但没有注册某条 row 的 combo 绝不会重新执行，因为批量脚本按顺序注册各个包，重放会在第一个重复注册处停止。两种情况下，每条仍缺失的 row 随后加载自己的单资源 combo URL，因此一个失败的 batch 对每条缺失 row 最多花费三次请求，且不影响它已经注册的 row。模块系统按 row 记录最后一次 import 失败（传输、注册、依赖级联或 factory 执行）；Web 启动审计按条目报告该文本。HMR（热模块替换）会让一条发生变化的 row 改用带 revision 的单资源 combo URL。`<id>/client` 与裸 id 解析到同一组导出，因为插件 bundle 就是其包的客户端半侧。
 
 ### 插件动态组合
 
@@ -58,6 +58,8 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 ### 构建要求
 
 宿主提供的是已构建的客户端 bundle，因此启动前 `pnpm run build` 必须已产出每个 `lib/client.js`；缺失 bundle 会明确导致激活失败，并给出一条构建说明及包／路径列表。源码启动会把宿主侧导入映射到 TypeScript 源码，但仍消费这一构建后的客户端导出。本包自身不接受任何插件配置。
+
+除 `NODE_ENV=development` 外，共享 Client 预设会压缩浏览器 factory 和懒加载 chunk。压缩会保留打包生成的函数名和类名、法律声明注释、完整的包许可证声明，以及包含原始源码内容的 source map。`pnpm run dev:web` 及其 HMR 重建会继承 `NODE_ENV`；要获得未压缩产物，需显式将其设为 `development`。Host 和 Node Client 产物使用各自的预设。
 
 -----
 

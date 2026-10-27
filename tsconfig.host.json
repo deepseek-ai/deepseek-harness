@@ -62,6 +62,7 @@
     "apps/web/tests/subagent-fork-schedule.snapshot.ts",
     "apps/web/tests/live-interactions.e2e.ts",
     "apps/web/tests/question-composer.e2e.ts",
+    "apps/web/tests/question-composer-recommended.e2e.ts",
     "apps/web/tests/question-ptc.e2e.ts",
     "apps/web/tests/approval-composer.e2e.ts",
     "apps/web/tests/plan-control-row.e2e.ts",

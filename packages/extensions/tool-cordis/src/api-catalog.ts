@@ -7382,7 +7382,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ProjectionHandle',
-    declaration: 'export interface ProjectionHandle<S> {\n    stateOf(session: Session): S;\n    dispose(): Promise<void>;\n}',
+    declaration: 'export interface ProjectionHandle<S> {\n    stateOf(session: Session): S;\n    readerFor(session: Session): () => S;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'ProjectionKeySelection',

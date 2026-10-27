@@ -120,6 +120,8 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * the package without lib/index.js and the host Loader cannot import its node
  * half. The Client build consumes `lib/types` and chains those tsc maps, with
  * original source content, into the standalone plugin map.
+ * Browser factories and lazy chunks are minified unless NODE_ENV is development;
+ * minification retains bundled function/class names and legal notices.
  * @param packageDir - the package's own directory, normally the config's
  * `import.meta.dirname`. Its `package.json` name is the plugin id stamped into
  * the __ModuleLoader__.load handoff and onto the injected style tags, and the
@@ -790,6 +792,12 @@ function clientConfig(
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
+    minify: process.env.NODE_ENV === 'development' ? false : {
+      // Cordis uses function/class names for plugin and callback labels.
+      compress: { keepNames: { function: true, class: true } },
+      mangle: { keepNames: true },
+      codegen: { legalComments: 'inline' },
+    },
     // Types ship from lib/types (tsc); dts here would wrap the banner/footer into .d.cts and break parsing.
     dts: false,
     // Plugin code is fetched outside Vite's module graph, so its own bundle
@@ -927,11 +935,9 @@ function clientConfig(
         isolation.sourcePath(source, mapPath)
         return browserSourcePath(source, mapPath)
       },
-      banner: (chunk) => {
-        const registration = `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}factory: (require) => {`
-        const prefix = clientBanner?.(chunk.fileName)
-        return prefix === undefined ? registration : `${prefix}\n${registration}`
-      },
+      banner: chunk => `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}factory: (require) => {`,
+      // Full license notices may include ordinary comments that minification removes.
+      postBanner: chunk => clientBanner?.(chunk.fileName) ?? '',
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },

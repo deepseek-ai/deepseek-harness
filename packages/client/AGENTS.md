@@ -85,7 +85,7 @@ A dynamic browser half either carries a module privately or requests the shared 
 3. **Silence means a private copy.** Third-party implementation libraries outside the baseline may be bundled independently. A value reached only through `import type` is erased and creates no request.
 4. **A request has two possible suppliers.** A dynamic package supplies its own row; `PLATFORM_MODULES` supplies an exact static-table key. There is no `dsh.client.provide` alias protocol.
 5. **Validate both sides.** The dynamic build preset externalizes the baseline and rejects undeclared workspace value imports; [`verify-client-packages`](../../scripts/verify-client-packages.ts) rejects malformed or redundant requests, missing suppliers, and synchronous request cycles.
-6. **Package-local dynamic chunks are self-contained.** Source uses `import()` and the shared preset emits `require.async("./client.<name>.js")`; an entry or chunk must not retain a synchronous relative `require("./client*.js")`. Keep every static relative dependency inside its owning output chunk rather than relying on a sibling-chunk graph the runtime does not support.
+6. **Package-local dynamic chunks are self-contained.** Source uses `import()` and the shared preset calls the factory loader's `.async` method with a literal `./client.<name>.js` path; an entry or chunk must not retain a synchronous relative `require("./client*.js")`. Keep every static relative dependency inside its owning output chunk rather than relying on a sibling-chunk graph the runtime does not support.
 
 ### The module graph sits below cordis DI
 

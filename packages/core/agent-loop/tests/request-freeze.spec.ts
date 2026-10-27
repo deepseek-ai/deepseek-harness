@@ -79,7 +79,7 @@ describe('loop-owned request freezing', () => {
     const inbox = await loopCtx.sessionProjections.register(inboxProjectionDefinition)
     const model = await loopCtx.sessionProjections.register(modelSelectionProjectionDefinition)
     const agent = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
-      () => model.stateOf(session), () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
+      { modelSelection: model.readerFor(session), inbox: inbox.readerFor(session) }, ctx.agents.turnBoundaryOf(session).lastTurn)
     cleanups.push(async () => {
       agent.cancel({ kind: 'disposed' })
       await agent.whenIdle()
@@ -129,7 +129,7 @@ describe('loop-owned request freezing', () => {
     expect(freeze.mock.calls.filter(([value]) => value === userEvent.data)).toHaveLength(1)
     expect(freeze.mock.calls.filter(([value]) => value === replacement.data)).toHaveLength(1)
     const resumed = new ReactLoopAgent(loopCtx, id, { provider: 'mock', model: 'mock' }, session,
-      () => model.stateOf(session), () => inbox.stateOf(session), ctx.agents.turnBoundaryOf(session).lastTurn)
+      { modelSelection: model.readerFor(session), inbox: inbox.readerFor(session) }, ctx.agents.turnBoundaryOf(session).lastTurn)
     cleanups.push(async () => {
       resumed.cancel({ kind: 'disposed' })
       await resumed.whenIdle()

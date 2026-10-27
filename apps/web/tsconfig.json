@@ -67,6 +67,7 @@
     "tests/subagent-fork-schedule.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",
+    "tests/question-composer-recommended.e2e.ts",
     "tests/question-ptc.e2e.ts",
     "tests/approval-composer.e2e.ts",
     "tests/ptc-escalation.e2e.ts",
