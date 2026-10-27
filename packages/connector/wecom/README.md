@@ -40,10 +40,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | Row | Package | Behavior |
 |---|---|---|
-| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Puts `wecom-cli` on the private Shell PATH, registers its skills, and runs authorization checks and QR-code connection on the Host |
+| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Gives the model the absolute path of `wecom-cli`, registers its skills, and runs authorization checks and QR-code connection on the Host |
 | `ui-wecom` | [`@deepseek-ai/dsh-client-ui-wecom`](../../client/ui-wecom/README.md) | Shows the WeCom authorization section, an authorization tag, guidance after the bundle is switched on, and notices on the Plugins page |
 
-Switching the bundle off withdraws the skills, the private PATH entry, and the page. The CLI authorization stays in place.
+Switching the bundle off withdraws the skills, the path in runtime context, and the page. The CLI authorization stays in place.
 
 -----
 

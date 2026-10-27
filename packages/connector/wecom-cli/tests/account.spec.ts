@@ -1,9 +1,10 @@
 /** Authorization operations over a scripted wecom-cli: checks, QR-code connection, cancellation, and the Remote wiring. */
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WecomAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/directory.ts'
@@ -27,7 +28,7 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(ShellEnv)
+  await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
   script = {}
@@ -51,8 +52,7 @@ describe('WecomAccount', () => {
   let account: WecomAccount
 
   beforeEach(() => {
-    ctx.shellEnv.registerPath({ name: 'wecom', directories: [binDir], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
     account = new WecomAccount(cli, ctx.logger)
   })
 
@@ -167,6 +167,7 @@ describe('WeCom Remote', () => {
     expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
     expect(states[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
     expect(states.at(-1)?.account).toEqual({ state: 'unauthorized' })
+    expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'wecom-cli'))
     expect(await finished(ctx.wecom.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script[INIT] = () => {}

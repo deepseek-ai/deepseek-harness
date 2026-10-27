@@ -27,7 +27,7 @@ Each application plugin in this group is installed into a profile to use one thi
 | [`cli-account/`](cli-account/README.md) | Runs a vendor CLI by its absolute path, gives the model that path in runtime context, and runs one Host-owned account operation at a time for CLI app plugins | — |
 | [`upstream-skills/`](upstream-skills/README.md) | Downloads the upstream files that a CLI app plugin's entry skill indexes from a pinned commit of the vendor's GitHub repository, verifies and caches them, and lists the entry skill over them | — |
 | [`wecom/`](wecom/README.md) | Bundles the WeCom plugin: the `wecom-cli` Host row and its Plugins page row | — |
-| [`wecom-cli/`](wecom-cli/README.md) | Installs the official `wecom-cli` on the private Shell PATH, registers its skills, and runs the authorization operations the Plugins page drives | `ctx.wecom`; registers on `ctx.skills` and `ctx.shellEnv` |
+| [`wecom-cli/`](wecom-cli/README.md) | Installs the official `wecom-cli`, gives the model its absolute path, registers its skills, and runs the authorization operations the Plugins page drives | `ctx.wecom`; registers on `ctx.skills` and `ctx.systemPrompt` |
 
 -----
 

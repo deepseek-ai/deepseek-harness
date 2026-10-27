@@ -4740,7 +4740,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-wecom-cli`
 
-- `inject`: `skills` · `subprocess` · `shellEnv`
+- `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
 - `source`: [`packages/connector/wecom-cli/src/index.ts:31`](../packages/connector/wecom-cli/src/index.ts)
 

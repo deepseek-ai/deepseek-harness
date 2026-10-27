@@ -4,7 +4,7 @@ import { accessSync, constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
-/** The executable name the plugin resolves on its private PATH. */
+/** The name wecom-cli's guides and scripts run it by. */
 export const PROGRAM = 'wecom-cli'
 
 function platformDirectory(): string {
@@ -18,18 +18,17 @@ function platformDirectory(): string {
 }
 
 /**
- * Locate the directory holding the managed executable.
+ * Locate the managed executable.
  * @param binDir - absolute override; defaults to the `bin` of the installed `@wecom/cli-<platform>-<arch>` package.
- * @returns the bin directory containing an executable `wecom-cli`.
+ * @returns the absolute path of the executable `wecom-cli`.
  * @throws when the platform package is missing or the executable is not executable.
  */
-export function resolveCliDirectory(binDir: string | undefined): string {
-  const directory = binDir ?? platformDirectory()
-  const program = join(directory, PROGRAM)
+export function resolveCliExecutable(binDir: string | undefined): string {
+  const program = join(binDir ?? platformDirectory(), PROGRAM)
   try {
     accessSync(program, constants.X_OK)
   } catch (error) {
     throw new Error(`wecom: ${program} is not executable; reinstall the plugin or set binDir`, { cause: error })
   }
-  return directory
+  return program
 }

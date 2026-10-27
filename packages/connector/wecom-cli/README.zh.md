@@ -1,5 +1,5 @@
 ---
-description: "把官方 wecom-cli 放进私有 Shell PATH，加载其技能，并执行插件页发起的授权操作。"
+description: "把官方 wecom-cli 的绝对路径告诉模型，加载其技能，并执行插件页发起的授权操作。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[企业微信插件](../wecom/README.zh.md)的 Host 行。它安装固定版本的 `@wecom/cli`，把其 `wecom-cli` 可执行文件放进私有 Shell PATH，并注册一个 `wecom` skill，其子指南是官方企业微信技能。它的 `wecom` Remote 为[企业微信插件页面](../../client/ui-wecom/README.zh.md)检查 CLI 的授权、通过 CLI 的扫码页面绑定机器人，以及取消操作。CLI 把机器人凭据保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+本包是[企业微信插件](../wecom/README.zh.md)的 Host 行。它安装固定版本的 `@wecom/cli`，在运行时上下文中把其 `wecom-cli` 可执行文件的绝对路径告诉模型，并注册一个 `wecom` skill，其子指南是官方企业微信技能。它的 `wecom` Remote 为[企业微信插件页面](../../client/ui-wecom/README.zh.md)检查 CLI 的授权、通过 CLI 的扫码页面绑定机器人，以及取消操作。CLI 把机器人凭据保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -31,9 +31,9 @@ kind: "package-reference"
 
 ### 获得的能力
 
-插件加载后，一个 `wecom` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用文件工具打开所需的子指南（例如 `wecomcli-doc` 或 `wecomcli-message`），并在当前沙箱与审批策略下通过普通 Shell 工具运行 `wecom-cli` 命令。`wecom-cli auth show --status` 报告未授权时，agent 会请用户到插件页连接企业微信；只有用户要求在对话中完成时，才运行 CLI 自带的 `auth init`，并因为它会在工作区之外写入而申请单条命令审批。
+插件加载后，一个 `wecom` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用文件工具打开所需的子指南（例如 `wecomcli-doc` 或 `wecomcli-message`），并在当前沙箱与审批策略下通过普通 Shell 工具按这个路径运行 `wecom-cli`。`wecom-cli auth show --status` 报告未授权时，agent 会请用户到插件页连接企业微信；只有用户要求在对话中完成时，才运行 CLI 自带的 `auth init`，并因为它会在工作区之外写入而申请单条命令审批。
 
-在 Plugin Manager 中关闭该行会为后续 Shell 调用撤下 skill 与私有 PATH 条目，CLI 的授权保持不变。
+在 Plugin Manager 中关闭该行会撤下 skill，并从运行时上下文中移除这个路径，CLI 的授权保持不变。
 
 <a id="account-operations"></a>
 ### 授权操作
@@ -68,7 +68,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/wecom-cli` 是否可执行，把 `binDir` 作为提供 `wecom-cli` 的 `wecom` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并在本包的 `skills/` 目录上挂载一个名为 `wecom` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它检查 `binDir/wecom-cli` 是否可执行，在运行时上下文中把这个路径告诉模型，并在本包的 `skills/` 目录上挂载一个名为 `wecom` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是唯一的 skill：DSH 指引、子指南索引和打开方式。[`skills/wecom/guides/`](skills/wecom/guides) 原样复制自 `WecomTeam/wecom-cli` 在提交 `4c74ff2` 时的 `skills/`，因为上游只在该仓库发布这些 skill，没有放进 npm 包。文件系统提供方只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
@@ -81,7 +81,6 @@ kind: "package-reference"
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
 - [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行与账号操作。
-- [Shell 环境](../../shell/shell-env/README.zh.md)——后端 subprocess 与 Shell 工具共用的私有 PATH 贡献。
 - [Skill](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [企业微信插件](../wecom/README.zh.md)——插入本行与页面行的 bundle。
 - [企业微信插件页面](../../client/ui-wecom/README.zh.md)——发起授权操作的插件页。
@@ -109,7 +108,7 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 #### 模型看到什么
 
-`wecom` 的 `skill` 工具结果约 2,000 个字符：DSH 指引、为 15 个子指南各写一句话并保留上游分流规则的索引，以及打开子指南的方式。DSH 指引要求 agent 按名称运行插件提供的 `wecom-cli`，先请用户到插件页连接，再考虑自行运行 `auth init --noninteractive`，并以单条命令审批运行该命令；与 `wecomcli-shared` 不一致时以它为准。其资源根目录是 `skills/wecom`，因此 agent 用文件工具而不是 `skill` 工具打开 `guides/<name>/SKILL.md`，把子指南按名字提到的技能当作对应子指南，并按子指南自己的目录解析其中的相对路径。
+`wecom` 的 `skill` 工具结果约 2,000 个字符：DSH 指引、为 15 个子指南各写一句话并保留上游分流规则的索引，以及打开子指南的方式。DSH 指引要求 agent 按当前运行时上下文给出的绝对路径运行插件提供的 `wecom-cli`，先请用户到插件页连接，再考虑自行运行 `auth init --noninteractive`，并以单条命令审批运行该命令；与 `wecomcli-shared` 不一致时以它为准。其资源根目录是 `skills/wecom`，因此 agent 用文件工具而不是 `skill` 工具打开 `guides/<name>/SKILL.md`，把子指南按名字提到的技能当作对应子指南，并按子指南自己的目录解析其中的相对路径。
 
 #### Token 影响
 
@@ -119,26 +118,33 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 加载会追加一条工具结果，不改写更早的上下文。
 
-### Plugin CLIs 条目
+### CLI 路径
 
 #### 模型看到什么
 
-本行在私有 PATH 条目中声明了 `wecom-cli`，因此该行加载、且 Shell 在本 Host 上运行时，系统提示词中 [Shell 环境](../../shell/shell-env/README.zh.md#model-experience)的 Plugin CLIs 一节会列出 `` `wecom-cli` (wecom) ``。
+该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出 `binDir` 中 `wecom-cli` 的路径；`binDir` 默认是 `@wecom/cli` 安装的平台包的 `bin` 目录。第二行针对按名称调用 `wecom-cli` 的子指南脚本，例如 `build_page.py`。
+
+##### 运行时上下文条目
+
+```markdown
+WeCom CLI: run `wecom-cli` by its absolute path "<binDir>/wecom-cli"; the bare name may resolve to another installation or to none.
+Scripts in the WeCom skill call `wecom-cli` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `wecom-cli` by name yourself.
+```
 
 #### Token 影响
 
-该条目只给这一节增加几个 token；这一节本身的文字归 Shell 环境所有。
+每份运行时上下文快照中两行，约 280 个字符加上路径及其目录。
 
 #### KV Cache 影响
 
-加载或卸载该行会改变这一节的文字，provider 的缓存复用可能在第一个变化的 token 处结束。
+系统提示词不变；加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - 仅支持 macOS。其他平台未经验证，且不会定位 Windows 可执行文件名 `wecom-cli.exe`。
-- 插件要求 subprocess 运行时位于本 Host；组合中的 subprocess 运行时在别处运行（例如通过 SSH）时，插件加载失败。
+- 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `wecom-cli` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中授权会影响用户自己的终端，没有 DSH 私有机器人或机器人选择器。`wecom-cli` 无法撤销授权，因此页面和关闭插件都不会移除它。
 - 连接从 `auth init --noninteractive --no-browser` 的纯文本输出中读取扫码链接；CLI 版本改变该输出时，连接以可重试的结果失败。
 - 子指南跟随上游提交 `4c74ff2`；更新时需手动复制，之后要按新的子指南核对总入口的索引和 DSH 指引。

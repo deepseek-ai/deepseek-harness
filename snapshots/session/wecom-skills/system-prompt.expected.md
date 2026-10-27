@@ -27,8 +27,4 @@ create_goal may infer goal intent from a direct human request in any language. A
 
 Use the workflow tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.
 
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run.
-
-## Plugin CLIs
-
-In shell commands, these names run CLIs provided by enabled plugins, ahead of other installations on PATH: `wecom-cli` (wecom). To run another installation, find it with `type -a <name>` in Bash or `Get-Command -All <name>` in PowerShell, then call it by its absolute path.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.

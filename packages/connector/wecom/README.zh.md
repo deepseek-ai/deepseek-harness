@@ -40,10 +40,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.zh.md) | 把 `wecom-cli` 放进私有 Shell PATH，注册其技能，并在 Host 上执行授权检查和扫码连接 |
+| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.zh.md) | 把 `wecom-cli` 的绝对路径告诉模型，注册其技能，并在 Host 上执行授权检查和扫码连接 |
 | `ui-wecom` | [`@deepseek-ai/dsh-client-ui-wecom`](../../client/ui-wecom/README.zh.md) | 在插件页显示企业微信授权区块、授权标签、开启后的引导和提示 |
 
-关闭 bundle 会撤下技能、私有 PATH 条目和页面。CLI 的授权保持不变。
+关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的授权保持不变。
 
 -----
 

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/connector/wecom-cli/README.md
 /:
-  en: dfe1fe6b23fa06d6
-  zh: c3409f134a690b64
+  en: db64758f91c93aff
+  zh: f71eb65e58a1f1ad
 /deepseek-ai-dsh-wecom-cli:
   en: 64ada5d1b3aac000
   zh: b18083c73eabe29a
 /deepseek-ai-dsh-wecom-cli/summary:
-  en: 9489a8025deee79d
-  zh: 1414740e045cd9a1
+  en: 2c0d069987329909
+  zh: 5209d0671f3a9cf0
 /deepseek-ai-dsh-wecom-cli/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,8 +21,8 @@
   en: 4034b64f387ae470
   zh: 748eeb0414ceace4
 /deepseek-ai-dsh-wecom-cli/use-this-package/what-you-get:
-  en: 470efb04014aec86
-  zh: 3c06434a4cfb8b9c
+  en: f54a885e9b468520
+  zh: 735da355b4c9dc35
 /deepseek-ai-dsh-wecom-cli/use-this-package/authorization-operations:
   en: 7d0ec689a89b609e
   zh: 86ce0058d42f38b1
@@ -30,11 +30,11 @@
   en: 9f62785a7999eef2
   zh: 2b345355d9515d13
 /deepseek-ai-dsh-wecom-cli/understand-the-implementation:
-  en: 76ea48c4d9e1a81e
-  zh: 6a47f50c42bbc49d
+  en: 346dbcb56e8bf86b
+  zh: d0e22533635e8d13
 /deepseek-ai-dsh-wecom-cli/further-exploration:
-  en: ab2a30827085cf94
-  zh: 92eccac3d8db8ace
+  en: 981114250537a07b
+  zh: 03dbf4b65446bd89
 /deepseek-ai-dsh-wecom-cli/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -54,29 +54,32 @@
   en: 8955ac196848e69f
   zh: 54aa7db097eafd3c
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/what-the-model-sees:
-  en: 2afd3b7a0b666202
-  zh: 7a1325e3dae2d9fa
+  en: bf85dc102a255c06
+  zh: b3d5f8e93b4127b8
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/token-effect:
   en: 1ed287a86abbc585
   zh: 5d55a6fd61786866
 /deepseek-ai-dsh-wecom-cli/model-experience/loaded-skill-body/kv-cache-effect:
   en: 1f6b842a95e14ce4
   zh: 0d57cdec5e828828
-/deepseek-ai-dsh-wecom-cli/model-experience/plugin-clis-entry:
-  en: 821d3974b859741d
-  zh: 127fac5248c9a7f1
-/deepseek-ai-dsh-wecom-cli/model-experience/plugin-clis-entry/what-the-model-sees:
-  en: e8dff31661f9e1aa
-  zh: cfb6b970f4da9dfb
-/deepseek-ai-dsh-wecom-cli/model-experience/plugin-clis-entry/token-effect:
-  en: bfc2ae22042ca709
-  zh: 5919b9395c51541e
-/deepseek-ai-dsh-wecom-cli/model-experience/plugin-clis-entry/kv-cache-effect:
-  en: 6def0febc136ef06
-  zh: 12ea269eb16a0b91
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path/what-the-model-sees:
+  en: dd87bf74d7e47802
+  zh: 287c05d2a56a0c95
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path/token-effect:
+  en: 2caf581d193f3dba
+  zh: 3b5e94d4cc69ca3b
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work:
-  en: c1133f8d4a0b4400
-  zh: c4afa3136668fbb8
+  en: 2244e58042b1aa1f
+  zh: b1bcbe09720122af
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work/dev-note:
   en: 71cc23fc507e649e
   zh: 3dbd0498845467cc

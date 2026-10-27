@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
-import { resolveCliDirectory } from '../src/directory.ts'
+import { resolveCliExecutable } from '../src/directory.ts'
 
 const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
 vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
@@ -16,8 +16,8 @@ beforeEach(() => {
   fs.accessSync.mockReset()
 })
 
-it('defaults to the bin directory of the platform package that @wecom/cli installs', () => {
-  expect(resolveCliDirectory(undefined)).toBe(PACKAGE_BIN)
+it('defaults to the executable in the bin directory of the platform package that @wecom/cli installs', () => {
+  expect(resolveCliExecutable(undefined)).toBe(join(PACKAGE_BIN, 'wecom-cli'))
   expect(fs.accessSync).toHaveBeenCalledWith(join(PACKAGE_BIN, 'wecom-cli'), constants.X_OK)
 })
 
@@ -25,13 +25,13 @@ it('names the platform package @wecom/cli does not provide', () => {
   const arch = Object.getOwnPropertyDescriptor(process, 'arch')!
   Object.defineProperty(process, 'arch', { ...arch, value: 'fixture-arch' })
   onTestFinished(() => { Object.defineProperty(process, 'arch', arch) })
-  expect(() => resolveCliDirectory(undefined))
+  expect(() => resolveCliExecutable(undefined))
     .toThrow(`wecom: @wecom/cli-${process.platform}-fixture-arch is not installed; @wecom/cli has no binary for this platform, or set binDir`)
 })
 
 it('accepts a configured directory and names the missing executable with the remedy', () => {
-  expect(resolveCliDirectory('/opt/wecom/bin')).toBe('/opt/wecom/bin')
+  expect(resolveCliExecutable('/opt/wecom/bin')).toBe('/opt/wecom/bin/wecom-cli')
   fs.accessSync.mockImplementation(() => { throw new Error('EACCES') })
-  expect(() => resolveCliDirectory(PACKAGE_BIN))
+  expect(() => resolveCliExecutable(PACKAGE_BIN))
     .toThrow(`wecom: ${join(PACKAGE_BIN, 'wecom-cli')} is not executable; reinstall the plugin or set binDir`)
 })
