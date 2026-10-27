@@ -13,13 +13,11 @@
  * for the complete boundary). The intersection covers only the object's own
  * access check, so the token is also lowered to Low integrity and every
  * granted directory carries a Low no-write-up label and the ambient-delete
- * deny the `acl` module documents. The write SID is the per-WORKSPACE identity
- * ({@link workspaceWriteSid}): deterministic from the canonical workspace
- * path, so the workspace-root ACE materializes once per workspace per
- * machine and every later provision hits the exact-ACE skip — the
- * grant-reuse story the per-session random SID paid a full tree propagation
- * per session for. Each private temp directory instead receives its own SID,
- * so sibling sessions sharing a workspace cannot enter one another's temp
+ * deny the `acl` module documents. The write SID identifies the complete
+ * canonical writable-directory set ({@link workspaceWriteSid}). Standing
+ * ACEs are reusable across calls and sessions with that exact set. Each
+ * private temp directory instead receives its own SID, so sibling sessions
+ * cannot use a shared directory-set capability to enter one another's temp
  * trees. Unlike the POC, every API failure throws with the API
  * name and exact Win32 code; a child is NEVER spawned unrestricted.
  *
@@ -56,7 +54,7 @@ import { createRestrictedToken, findLogonSid, makeWellKnownSid, openCurrentProce
 import * as abi from './win32-abi.ts'
 
 export { AclWriteGrant } from './grant.ts'
-export { assertTempRootOutsideWorkspace } from './path-boundary.ts'
+export { assertPrivateTempDisjoint, assertTempRootOutsideWorkspace } from './path-boundary.ts'
 export { tempWriteSid, workspaceWriteSid } from './workspace-sid.ts'
 export { ACL_DIAGNOSIS_SKILL, registerAclDiagnosisSkill } from './acl-skill.ts'
 /** Construction options: the workspace/temp allowlists and their distinct SID identities. */
@@ -72,9 +70,9 @@ export interface AclSandboxOptions {
   /**
    * The write SID forming the workspace-write allowlist: REQUIRED under
    * workspace-write, ignored (and must be absent) under read-only. Callers
-   * derive it from the workspace via {@link workspaceWriteSid} — the identity
-   * is per workspace, not per sandbox instance, so the workspace-root ACE
-   * outlives every instance and later provisions hit the exact-ACE skip.
+   * derive it from the complete canonical writable-directory set via
+   * {@link workspaceWriteSid}. Standing ACEs outlive sandbox instances and
+   * are reusable by later executions carrying that exact set identity.
    */
   writeSid?: string
   /**
@@ -163,7 +161,7 @@ function freeSidBestEffort(
 export class AclSandbox {
   /** Absolute writable directories (constructor-validated). */
   readonly writableDirs: string[]
-  /** The workspace SID string whose ACEs form the workspace allowlist. */
+  /** The directory-set SID whose ACEs form the writable allowlist. */
   readonly writeSid: string | undefined
   /** The private temp directory's write SID (workspace-write with temp only). */
   readonly tempWriteSid: string | undefined
@@ -194,7 +192,7 @@ export class AclSandbox {
     this.writeSid = options.writeSid
     this.tempWriteSid = options.tempWriteSid
     if (this.mode === 'workspace-write' && this.writeSid === undefined) {
-      throw new Error('AclSandbox workspace-write requires a write SID — derive it from the workspace via workspaceWriteSid()')
+      throw new Error('AclSandbox workspace-write requires a write SID — derive it from the writable directories via workspaceWriteSid()')
     }
     if (this.mode === 'workspace-write' && this.tempDirOption === undefined) {
       throw new Error('AclSandbox workspace-write requires an explicit private temp directory or null')
@@ -256,7 +254,7 @@ export class AclSandbox {
       // manageDacls: false — the caller (the sandbox seam's grant) already
       // materialized the ACEs; this instance must neither add nor remove any.
       // When this instance owns the DACLs, writableDir ACEs are STANDING (the
-      // per-workspace reuse cache — dispose() never revokes them, or the next
+      // directory-set reuse cache — dispose() never revokes them, or the next
       // provision would re-propagate the whole tree) and the temp ACE is
       // REVOCABLE (dispose() removes it before the private directory is
       // deleted; the ambient temp root is never granted).

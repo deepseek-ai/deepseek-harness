@@ -1,7 +1,7 @@
 /**
  * Server-side write-grant materialization. The sandbox seam holds one
- * standing workspace grant per workspace and one revocable temp grant per
- * live session/workspace pair. Workspace identities survive by deterministic
+ * standing grant per writable-directory set and one revocable temp grant per
+ * live session/workspace pair. Directory-set identities survive by deterministic
  * derivation and their standing ACE; temp identities derive from random
  * private paths and are deliberately new after a restart.
  *
@@ -91,7 +91,8 @@ export class AclWriteGrant {
    * Grant the write ACE, the ambient-delete deny, and the Low mandatory label
    * on one directory (idempotent: an already-standing exact ACE, deny, and
    * label skip the eager full-tree re-propagation — see {@link grantWrite})
-   * and record the path for {@link dispose} unless it is standing. The path is
+   * and record the path once for {@link dispose} unless it is standing. Repeated
+   * calls recheck the ACE so a recreated directory receives its grant. The path is
    * recorded BEFORE the grant: a post-apply throw (a LocalFree failure after
    * SetNamedSecurityInfoW succeeded) must still revoke it, and revoking an
    * ungranted path is a no-op merge. Callers treat a throw as a failed
@@ -103,7 +104,8 @@ export class AclWriteGrant {
    *   dispose — the temp-directory lifecycle).
    */
   add(path: string, standing = false): void {
-    ;(standing ? this.standingPaths : this.revocablePaths).push(path)
+    const paths = standing ? this.standingPaths : this.revocablePaths
+    if (!paths.includes(path)) paths.push(path)
     grantWrite(this.api, path, this.sidPtr, this.lowLabelSidPtr, this.worldSidPtr)
   }
 

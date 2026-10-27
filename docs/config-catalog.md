@@ -2926,7 +2926,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-sandbox-local`
 
-- `source`: [`packages/sandbox/sandbox-local/src/index.ts:45`](../packages/sandbox/sandbox-local/src/index.ts)
+- `source`: [`packages/sandbox/sandbox-local/src/index.ts:39`](../packages/sandbox/sandbox-local/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config. All optional — `static Config` supplies the defaults. */

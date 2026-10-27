@@ -19,6 +19,23 @@ describe('workspaceWriteSid', () => {
     expect(first).toMatch(/^S-1-4-\d+-\d+$/u)
   })
 
+  it('uses the same identity for reordered and duplicated writable-directory sets', () => {
+    const workspace = 'C:\\repo'
+    const memory = 'C:\\memory'
+    const cache = 'C:\\cache'
+    const sid = workspaceWriteSid(workspace, [memory, cache])
+    expect(workspaceWriteSid(workspace, [cache, workspace, memory, cache])).toBe(sid)
+    expect(workspaceWriteSid(memory, [workspace, cache])).toBe(sid)
+    expect(workspaceWriteSid(workspace, [workspace])).toBe(workspaceWriteSid(workspace))
+    expect(sid).not.toBe(workspaceWriteSid(workspace))
+    expect(sid).not.toBe(workspaceWriteSid(workspace, [memory]))
+  })
+
+  it('keeps path boundaries distinct when their concatenated text matches', () => {
+    expect(workspaceWriteSid('C:\\a', ['C:\\bC:\\c']))
+      .not.toBe(workspaceWriteSid('C:\\aC:\\b', ['C:\\c']))
+  })
+
   it('derives distinct identities for distinct workspaces', () => {
     expect(workspaceWriteSid('C:\\Users\\agent\\repo-a')).not.toBe(workspaceWriteSid('C:\\Users\\agent\\repo-b'))
   })

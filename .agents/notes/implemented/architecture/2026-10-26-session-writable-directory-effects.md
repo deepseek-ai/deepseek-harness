@@ -16,6 +16,8 @@ Registration disposal affects subsequent operations, not already-resolved calls 
 
 Missing, non-directory, and symlinked extra paths stop execution with `SandboxInvalidRootError`, which identifies the path and its problem. Silently skipping a path would hide an invalid grant and let execution proceed with permissions different from those requested. Registration checks path spelling; enforcement validates the physical directory on each call without retaining an earlier resolution. Symlinks remain disallowed, keeping configured and plugin grants under the same validation rules.
 
+Windows standing ACL grants use one deterministic SID per complete sorted, deduplicated canonical directory set. Each new execution resolves or creates that exact set's grant entry; changing the set never broadens the SID of a process already running. Reusing only the workspace identity would accumulate extra-directory authority across Sessions and after disposal. JSON encoding preserves directory boundaries in the hash input; singleton sets retain their existing SID. Standing ACEs remain reusable, while private temp grants keep their separate per-session/workspace identity and lifetime.
+
 ## Alternatives considered
 
 **Shared mutable extra roots.** Enabling memory in one Session would also authorize unrelated Sessions using the same service.
@@ -26,4 +28,4 @@ Missing, non-directory, and symlinked extra paths stop execution with `SandboxIn
 
 ## Consequences
 
-Independent registrations for the same directory survive another owner's disposal. Removing a registration cannot revoke overlapping configured or workspace access. A running process may retain a removed grant, or lack a newly added grant; a new process uses the current policy. Windows subprocess confinement retains its existing unsupported-extra-roots error. Focused coverage checks Session isolation, duplicate ownership, plugin unload, filesystem denial and mutation, request context, and retained PTC launch permissions.
+Independent registrations for the same directory survive another owner's disposal. Removing a registration cannot revoke overlapping configured or workspace access. A running process may retain a removed grant, or lack a newly added grant; a new process uses the current policy. Focused coverage checks Session isolation, duplicate ownership, plugin unload, filesystem denial and mutation, request context, and retained PTC launch permissions.

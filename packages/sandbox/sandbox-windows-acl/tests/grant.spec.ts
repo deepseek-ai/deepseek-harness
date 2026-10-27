@@ -8,7 +8,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -53,11 +53,26 @@ describe.skipIf(!isWin32)('AclWriteGrant (server-side materialization)', () => {
     // grant stays exactly one ACE (the reuse across sessions/restarts).
     grant.add(dir)
     grant.add(standingDir, true)
+    expect(grant.paths).toEqual([standingDir, dir])
     expect(icaclsText(dir)).toContain('S-1-4-9000-77')
     expect(icaclsText(standingDir)).toContain('S-1-4-9000-77')
     grant.dispose()
     expect(icaclsText(dir)).not.toContain('S-1-4-9000-77')
     expect(icaclsText(standingDir)).toContain('S-1-4-9000-77')
+  })
+
+  it('restores a standing ACE on a recreated directory without duplicating its tracked path', () => {
+    const dir = scratch()
+    const grant = AclWriteGrant.create('S-1-4-9000-80')
+    try {
+      grant.add(dir, true)
+      rmSync(dir, { recursive: true })
+      mkdirSync(dir)
+      expect(icaclsText(dir)).not.toContain(grant.writeSid)
+      grant.add(dir, true)
+      expect(icaclsText(dir)).toContain(grant.writeSid)
+      expect(grant.paths).toEqual([dir])
+    } finally { grant.dispose() }
   })
 
   it('two grants with different SIDs coexist and revoke independently', () => {
