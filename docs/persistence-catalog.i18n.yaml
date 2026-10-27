@@ -21,8 +21,8 @@
   en: 9188862058c6986b
   zh: 9188862058c6986b
 /session-persistence-event-catalog/events/agent/agent-inbox-spliced-log-only:
-  en: 9ae614c041a27169
-  zh: 8d669dd582b88f79
+  en: b647f3f80ec8b407
+  zh: d5e43856cfd85ddb
 /session-persistence-event-catalog/events/agent/agent-retry-log-only:
   en: 559e0484e8ae8904
   zh: 8967a336e5aef50c
@@ -144,8 +144,8 @@
   en: 9edf4ef31e60e880
   zh: 9edf4ef31e60e880
 /session-persistence-event-catalog/events/model/model-selection-log-only:
-  en: 404c54b08c088438
-  zh: eb86ed4e7d0e9228
+  en: 608081c311c1bf13
+  zh: bcd14effec5f6c78
 /session-persistence-event-catalog/events/permission:
   en: 19917bc5438e60af
   zh: 19917bc5438e60af
@@ -1545,8 +1545,8 @@
   en: 930d9c64fe39857d
   zh: 65cd07dc3c7789db
 /session-persistence-event-catalog/resolved-persistence-types/inserted-outcome-removedcount-start:
-  en: 4edbaf2329a66619
-  zh: 7d29428252d9d84f
+  en: 473f9e6ab2b776dc
+  zh: ce701e3ff6ab63ab
 /session-persistence-event-catalog/resolved-persistence-types/interrupted-message-step-stream:
   en: 8e86cd838e3e4a49
   zh: f5fec2a8adf1f3cc

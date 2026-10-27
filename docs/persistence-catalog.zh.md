@@ -188,7 +188,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/core/agent/src/types.ts:119`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:124`](../packages/core/agent/src/types.ts)
 
 <a id="agentretry--log-only"></a>
 
@@ -196,7 +196,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /** An admitted retry control, correlated with its durable inbox input; never enters model history. */
-'agent/retry': { turn: number; step: number; inputId: MessageId; source: Extract<MessageSource, { kind: 'retry' }> }
+'agent/retry': {
+  turn: number
+  step: number
+  inputId: MessageId
+  source: Extract<MessageSource, { kind: 'retry' }>
+}
 ```
 
 类型：[MessageSource](subsystems/core.zh.md)
@@ -716,7 +721,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'model/selection': ModelSelection
 ```
 
-来源：[`packages/core/agent/src/types.ts:130`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:135`](../packages/core/agent/src/types.ts)
 
 ### `permission/*`
 
@@ -6470,7 +6475,7 @@ SHA-256: `2a668a48dec1739752123d67c3bc254412d6743dbe3347365e0ed83a542f2bc3`
 
 SHA-256: `c66c6c3b411abf46c1f9b99e0019c10c1b6d13ee716a4b5e88f7e1b65feb3039`
 
-来源：[`packages/core/agent/src/types.ts:119`](../packages/core/agent/src/types.ts)
+来源：[`packages/core/agent/src/types.ts:124`](../packages/core/agent/src/types.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|

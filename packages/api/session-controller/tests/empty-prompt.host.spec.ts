@@ -43,9 +43,10 @@ it('records retry controls without user messages or duplicate requests', async (
   const messages = events.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user' ? [event.data] : [])
   expect(messages).toHaveLength(1)
   const retries = events.flatMap(event => event.type === 'agent/retry' ? [event.data] : [])
-  expect(retries).toEqual([
-    { turn: 2, step: 1, inputId: expect.any(String), source: { kind: 'retry', rpcId: 'continue-1' } },
-    { turn: 3, step: 1, inputId: expect.any(String), source: { kind: 'retry', rpcId: 'continue-2' } },
+  expect(retries).toHaveLength(2)
+  expect(retries).toMatchObject([
+    { turn: 2, step: 1, source: { kind: 'retry', rpcId: 'continue-1' } },
+    { turn: 3, step: 1, source: { kind: 'retry', rpcId: 'continue-2' } },
   ])
   const controls = events.flatMap(event => event.type === 'agent/inbox/spliced' ? event.data.inserted : [])
     .filter(message => message.source.kind === 'retry')

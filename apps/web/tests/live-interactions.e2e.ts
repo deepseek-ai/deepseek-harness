@@ -478,9 +478,9 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     const userMessages = sessionEvents.flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
       ? [event.data] : [])
     expect(userMessages.map(message => message.content)).toEqual([[{ type: 'text', text: PROMPT }]])
-    expect(sessionEvents.filter(event => event.type === 'agent/retry')).toEqual([
-      expect.objectContaining({ data: expect.objectContaining({ turn: 2, step: 1, source: expect.objectContaining({ kind: 'retry' }) }) }),
-    ])
+    const retries = sessionEvents.filter(event => event.type === 'agent/retry')
+    expect(retries).toHaveLength(1)
+    expect(retries[0]?.data).toMatchObject({ turn: 2, step: 1, source: { kind: 'retry' } })
     expect(sessionEvents.filter(event => event.type === 'turn/start')).toHaveLength(2)
     expect(sessionEvents.filter(event => event.type === 'turn/end')).toHaveLength(2)
     expect(await resume.count()).toBe(0)

@@ -186,7 +186,7 @@ Sources: [`packages/core/session/src/types.ts:439`](../packages/core/session/src
 }
 ```
 
-Source: [`packages/core/agent/src/types.ts:119`](../packages/core/agent/src/types.ts)
+Source: [`packages/core/agent/src/types.ts:124`](../packages/core/agent/src/types.ts)
 
 <a id="agentretry--log-only"></a>
 
@@ -194,7 +194,12 @@ Source: [`packages/core/agent/src/types.ts:119`](../packages/core/agent/src/type
 
 ```ts persistence-catalog
 /** An admitted retry control, correlated with its durable inbox input; never enters model history. */
-'agent/retry': { turn: number; step: number; inputId: MessageId; source: Extract<MessageSource, { kind: 'retry' }> }
+'agent/retry': {
+  turn: number
+  step: number
+  inputId: MessageId
+  source: Extract<MessageSource, { kind: 'retry' }>
+}
 ```
 
 Types: [MessageSource](subsystems/core.md)
@@ -714,7 +719,7 @@ Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src
 'model/selection': ModelSelection
 ```
 
-Source: [`packages/core/agent/src/types.ts:130`](../packages/core/agent/src/types.ts)
+Source: [`packages/core/agent/src/types.ts:135`](../packages/core/agent/src/types.ts)
 
 ### `permission/*`
 
@@ -6468,7 +6473,7 @@ Sources: [`packages/core/agent/src/types.ts:113`](../packages/core/agent/src/typ
 
 SHA-256: `c66c6c3b411abf46c1f9b99e0019c10c1b6d13ee716a4b5e88f7e1b65feb3039`
 
-Sources: [`packages/core/agent/src/types.ts:119`](../packages/core/agent/src/types.ts)
+Sources: [`packages/core/agent/src/types.ts:124`](../packages/core/agent/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|

@@ -1930,6 +1930,13 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         retries = [record for record in records if record.get("type") == "agent/retry"]
         if len(prompts) != 1 or len(retries) != 1:
             raise AssertionError("scheduler recovery must record one original prompt and one retry control")
+        retry_id = retries[0]["data"]["inputId"]
+        queued_retry_ids = [message.get("id") for record in records
+                            if record.get("type") == "agent/inbox/spliced"
+                            for message in record["data"]["inserted"]
+                            if message.get("source", {}).get("kind") == "retry"]
+        if not isinstance(retry_id, str) or queued_retry_ids != [retry_id]:
+            raise AssertionError("scheduler recovery lost the retry control's durable inbox identity")
         calls = [record["data"]["callId"] for record in records if record.get("type") == "tool/call"]
         if calls != list(RECOVERY_CALL_IDS[:2]):
             raise AssertionError(f"scheduler recovery dispatched the unstarted call: {calls}")
@@ -1946,6 +1953,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         replacements = [
             *snapshot_directory_replacements(root, "{{cwd}}"),
             (RECOVERY_SESSION_ID, "{{parent}}"),
+            (retry_id, "{{messageId}}"),
         ]
         result_value = [{
             "session_id": result.session_id,
