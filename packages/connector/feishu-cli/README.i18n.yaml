@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/connector/feishu-cli/README.md
 /:
-  en: 0bbfd7fae267c1b8
-  zh: 092306f28066721b
+  en: 2535147264719299
+  zh: 4d1d44a26566d4c1
 /deepseek-ai-dsh-feishu-cli:
   en: f2f13a80da6d47d4
   zh: 11d81fb7e8536625
 /deepseek-ai-dsh-feishu-cli/summary:
-  en: 681cbca2c4b59d4a
-  zh: 2c1b6e0684f46ba1
+  en: 00b12266d2a0f744
+  zh: dfa09e21f6f19f20
 /deepseek-ai-dsh-feishu-cli/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -21,8 +21,8 @@
   en: ea4a9f7480fa1d0b
   zh: dcfafc2fe85b09aa
 /deepseek-ai-dsh-feishu-cli/use-this-package/what-you-get:
-  en: bfabaec2ff545deb
-  zh: 99b3751827824c47
+  en: 9d569e4985f0cb50
+  zh: 8b4d403d63ae7616
 /deepseek-ai-dsh-feishu-cli/use-this-package/account-operations:
   en: 21b806690bb289f6
   zh: 08465992827a0e3c
@@ -30,11 +30,11 @@
   en: 6e777c8d3e50258e
   zh: 6622a5fa0f2b0775
 /deepseek-ai-dsh-feishu-cli/understand-the-implementation:
-  en: e651d13a563e0c9c
-  zh: 057298883ca67d8d
+  en: 796e562005463d41
+  zh: 1be570f8158483e0
 /deepseek-ai-dsh-feishu-cli/further-exploration:
-  en: 7e35dc90875131f5
-  zh: efd7e120fa838949
+  en: fcf26946d254f126
+  zh: 31f194af698606d9
 /deepseek-ai-dsh-feishu-cli/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -71,21 +71,24 @@
 /deepseek-ai-dsh-feishu-cli/model-experience/loaded-skill-body/kv-cache-effect:
   en: 1f6b842a95e14ce4
   zh: 0d57cdec5e828828
-/deepseek-ai-dsh-feishu-cli/model-experience/plugin-clis-entry:
-  en: 821d3974b859741d
-  zh: 127fac5248c9a7f1
-/deepseek-ai-dsh-feishu-cli/model-experience/plugin-clis-entry/what-the-model-sees:
-  en: 58aaf1dca9314ce6
-  zh: d332e365935d0459
-/deepseek-ai-dsh-feishu-cli/model-experience/plugin-clis-entry/token-effect:
-  en: bfc2ae22042ca709
-  zh: 5919b9395c51541e
-/deepseek-ai-dsh-feishu-cli/model-experience/plugin-clis-entry/kv-cache-effect:
-  en: 6def0febc136ef06
-  zh: 12ea269eb16a0b91
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path/what-the-model-sees:
+  en: 2cd16539b955e69a
+  zh: e6b5971dae75d84b
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path/token-effect:
+  en: 2952585b710ffd05
+  zh: 6e93e58b6256d534
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
 /deepseek-ai-dsh-feishu-cli/known-limitations-and-deferred-work:
-  en: 033f1bf2f5857ec1
-  zh: 2d8f9cd4fc147e31
+  en: 3806fa58c1987177
+  zh: 6f41143f206e5b9e
 /deepseek-ai-dsh-feishu-cli/known-limitations-and-deferred-work/dev-note:
   en: ae8a15329b9dc2d8
   zh: bec9872542b38b58

@@ -3,6 +3,8 @@ scenario: feishu-skills
 profile: headless
 composition: feishu-skills
 recording: authored
+replay:
+  override: true
 platform: posix
 header:
   class: skill

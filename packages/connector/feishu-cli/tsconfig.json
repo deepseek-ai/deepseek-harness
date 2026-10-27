@@ -24,9 +24,6 @@
       "path": "../../typert/protocol"
     },
     {
-      "path": "../../shell/shell-env"
-    },
-    {
       "path": "../../skill/skill"
     },
     {
@@ -34,6 +31,9 @@
     },
     {
       "path": "../cli-account"
+    },
+    {
+      "path": "../../core/system-prompt"
     }
   ]
 }

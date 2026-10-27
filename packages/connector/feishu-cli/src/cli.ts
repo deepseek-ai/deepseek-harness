@@ -5,24 +5,23 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
 
-/** The executable name the plugin resolves on its private PATH. */
+/** The name lark-cli's guides run it by. */
 export const PROGRAM = 'lark-cli'
 
 /**
- * Locate the directory holding the managed executable.
+ * Locate the managed executable.
  * @param binDir - absolute override; defaults to the installed `@larksuite/cli` package.
- * @returns the bin directory containing an executable `lark-cli`.
+ * @returns the absolute path of the executable `lark-cli`.
  * @throws when the executable is missing.
  */
-export function resolveCliDirectory(binDir: string | undefined): string {
-  const directory = binDir ?? join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin')
-  const program = join(directory, PROGRAM)
+export function resolveCliExecutable(binDir: string | undefined): string {
+  const program = join(binDir ?? join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin'), PROGRAM)
   try {
     accessSync(program, constants.X_OK)
   } catch (error) {
     throw new Error(`feishu: ${program} is not executable; approve the @larksuite/cli install script or set binDir`, { cause: error })
   }
-  return directory
+  return program
 }
 
 function commandLine(args: readonly string[]): string {

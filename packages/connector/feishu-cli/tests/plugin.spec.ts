@@ -1,7 +1,8 @@
 import { readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Feishu from '../src/index.ts'
 import { byArguments, CATALOG, createBinDir, ScriptedSubprocess } from './harness.ts'
@@ -26,7 +27,7 @@ describe('Feishu plugin', () => {
     ctx = new Context()
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(ShellEnv)
+    await ctx.plugin(SystemPrompt)
     subprocess = ctx.subprocess as ScriptedSubprocess
     binDir = await createBinDir()
     warnings = []
@@ -39,6 +40,7 @@ describe('Feishu plugin', () => {
   })
 
   const load = async (): Promise<string> => (await ctx.skills.get('feishu'))?.content ?? ''
+  const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
   it('lists one feishu skill without running lark-cli', async () => {
     await ctx.plugin(Feishu, { ...CONFIG, binDir })
@@ -66,6 +68,7 @@ describe('Feishu plugin', () => {
     expect(sections.indexOf('## Opening a guide')).toBeGreaterThan(guides)
     expect(content).toContain('open one with `lark-cli skills read <name>` in the Host Shell, not with the skill tool')
     expect(content).toContain('without the leading `../`: `lark-cli skills read lark-foo/...`')
+    expect(subprocess.lookups.map(lookup => lookup.command)).toEqual([join(binDir, 'lark-cli')])
   })
 
   it('renders the lark-cli 1.0.97 guide index below the tool-result pruning threshold', async () => {
@@ -100,13 +103,6 @@ describe('Feishu plugin', () => {
     await expect(load()).rejects.toThrow('lark-cli skills list --json returned an unexpected catalog')
   })
 
-  it('refuses to load without a Host subprocess runtime', () => {
-    subprocess.host = false
-
-    expect(() => new Feishu(ctx, { ...CONFIG, binDir })).toThrow('feishu: lark-cli and its default account are local to this Host')
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBeUndefined()
-  })
-
   it('terminates the catalog read when the lookup is cancelled', async () => {
     const lookup = new AbortController()
     subprocess.respond = () => { lookup.abort(new Error('lookup cancelled')) }
@@ -116,10 +112,13 @@ describe('Feishu plugin', () => {
     await vi.waitFor(() => { expect(subprocess.processes[0]?.terminated).toBe(true) })
   })
 
-  it('withdraws the private PATH and the skill on disposal after owned processes exit, without a warning', async () => {
+  it('withdraws the runtime context and the skill on disposal after owned processes exit, without a warning', async () => {
     subprocess.respond = (process) => { process.holdExit = true }
     const fiber = await ctx.plugin(Feishu, { ...CONFIG, binDir })
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBe(binDir)
+    expect(await runtimeContext()).toEqual([{
+      name: 'feishu:cli',
+      text: `Feishu CLI: run \`lark-cli\` by its absolute path "${join(binDir, 'lark-cli')}"; the bare name may resolve to another installation or to none.`,
+    }])
     const loading = expect(load()).rejects.toThrow()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
 
@@ -131,7 +130,7 @@ describe('Feishu plugin', () => {
     await disposal
     await loading
 
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBeUndefined()
+    expect(await runtimeContext()).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
     expect(warnings).toEqual([])
   })

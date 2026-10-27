@@ -78,13 +78,8 @@ export class ScriptedProcess implements SubprocessHandle {
 export class ScriptedSubprocess extends SubprocessRuntime {
   readonly lookups: Array<{ command: string; env: Readonly<Record<string, string>> | undefined }> = []
   readonly processes: ScriptedProcess[] = []
-  host = true
   lookup: (signal?: AbortSignal) => Promise<string> = () => Promise.resolve('/fixture/bin/lark-cli')
   respond: (process: ScriptedProcess) => void | Promise<void> = (process) => { process.reply({ stdout: '{}' }) }
-
-  override get runsOnHost(): boolean {
-    return this.host
-  }
 
   override resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string> {
     this.lookups.push({ command, env })

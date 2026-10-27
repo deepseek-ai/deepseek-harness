@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { resolveCliDirectory } from '../src/cli.ts'
+import { resolveCliExecutable } from '../src/cli.ts'
 
 const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
 vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
@@ -13,14 +13,14 @@ beforeEach(() => {
   fs.accessSync.mockReset()
 })
 
-it('defaults to the installed @larksuite/cli bin directory', () => {
-  expect(resolveCliDirectory(undefined)).toBe(PACKAGE_BIN)
+it('defaults to the executable in the installed @larksuite/cli bin directory', () => {
+  expect(resolveCliExecutable(undefined)).toBe(join(PACKAGE_BIN, 'lark-cli'))
   expect(fs.accessSync).toHaveBeenCalledWith(join(PACKAGE_BIN, 'lark-cli'), constants.X_OK)
 })
 
 it('accepts a configured directory and names the missing executable with the install remedy', () => {
-  expect(resolveCliDirectory('/opt/lark/bin')).toBe('/opt/lark/bin')
+  expect(resolveCliExecutable('/opt/lark/bin')).toBe('/opt/lark/bin/lark-cli')
   fs.accessSync.mockImplementation(() => { throw new Error('EACCES') })
-  expect(() => resolveCliDirectory(PACKAGE_BIN))
+  expect(() => resolveCliExecutable(PACKAGE_BIN))
     .toThrow(`feishu: ${join(PACKAGE_BIN, 'lark-cli')} is not executable; approve the @larksuite/cli install script or set binDir`)
 })

@@ -175,6 +175,7 @@ flowchart TD
     pkg_client_ui_directory_picker_native["client-ui-directory-picker-native"]
     pkg_client_ui_dockkit["client-ui-dockkit"]
     pkg_client_ui_entry_customization["client-ui-entry-customization"]
+    pkg_client_ui_feishu["client-ui-feishu"]
     pkg_client_ui_file_drag["client-ui-file-drag"]
     pkg_client_ui_goal["client-ui-goal"]
     pkg_client_ui_input_trigger["client-ui-input-trigger"]
@@ -534,6 +535,10 @@ flowchart TD
   pkg_hmr --> pkg_cmdline
   pkg_cli_account --> pkg_subprocess
   pkg_cli_account --> pkg_system_prompt
+  pkg_feishu_cli --> pkg_skill
+  pkg_feishu_cli --> pkg_subprocess
+  pkg_feishu_cli --> pkg_system_prompt
+  pkg_feishu_cli --> pkg_typert_protocol
   pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_computer_use_cua_driver_mcp --> pkg_computer_use
   pkg_experimental_forge_github --> pkg_experimental_forge
@@ -1562,6 +1567,7 @@ flowchart TD
 | [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native) | `client` | — |
 | [`client-ui-dockkit`](../packages/client/ui-dockkit) | `client` | — |
 | [`client-ui-entry-customization`](../packages/client/ui-entry-customization) | `client` | — |
+| [`client-ui-feishu`](../packages/client/ui-feishu) | `client` | — |
 | [`client-ui-file-drag`](../packages/client/ui-file-drag) | `client` | — |
 | [`client-ui-goal`](../packages/client/ui-goal) | `client` | — |
 | [`client-ui-input-trigger`](../packages/client/ui-input-trigger) | `client` | — |
@@ -1685,6 +1691,7 @@ flowchart TD
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths) |
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
 | [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
+| [`feishu-cli`](../packages/connector/feishu-cli) | `connector` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
 | [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp) | `experimental` | [`computer-use`](../packages/computer-use/computer-use) |
 | [`experimental-forge-github`](../packages/experimental/forge-github) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`subprocess`](../packages/subprocess/subprocess) |

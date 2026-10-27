@@ -40,10 +40,10 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.zh.md) | 把 `lark-cli` 放进私有 Shell PATH，注册其内嵌技能，并在 Host 上执行账号检查、连接和退出登录 |
+| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.zh.md) | 把 `lark-cli` 的绝对路径告诉模型，注册其内嵌技能，并在 Host 上执行账号检查、连接和退出登录 |
 | `ui-feishu` | [`@deepseek-ai/dsh-client-ui-feishu`](../../client/ui-feishu/README.zh.md) | 在插件页显示飞书账号区块、连接标签、开启后的连接引导和连接提示 |
 
-关闭 bundle 会撤下技能、私有 PATH 条目和页面。CLI 的配置与登录保持不变。
+关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的配置与登录保持不变。
 
 -----
 

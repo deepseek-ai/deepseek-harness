@@ -40,10 +40,10 @@ pnpm blocks the `@larksuite/cli` install script, which downloads and verifies th
 
 | Row | Package | Behavior |
 |---|---|---|
-| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.md) | Puts `lark-cli` on the private Shell PATH, registers its embedded skills, and runs account checks, connection, and sign-out on the Host |
+| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.md) | Gives the model the absolute path of `lark-cli`, registers its embedded skills, and runs account checks, connection, and sign-out on the Host |
 | `ui-feishu` | [`@deepseek-ai/dsh-client-ui-feishu`](../../client/ui-feishu/README.md) | Shows the Feishu account section, a connection tag, guidance after the bundle is switched on, and connection notices on the Plugins page |
 
-Switching the bundle off withdraws the skills, the private PATH entry, and the page. The CLI configuration and sign-in stay in place.
+Switching the bundle off withdraws the skills, the path in runtime context, and the page. The CLI configuration and sign-in stay in place.
 
 -----
 

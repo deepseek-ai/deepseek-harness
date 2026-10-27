@@ -1,5 +1,5 @@
 ---
-description: "把官方飞书 lark-cli 放到私有 Shell PATH 上，加载其内嵌 skill，并执行插件页发起的账号操作。"
+description: "把官方飞书 lark-cli 的绝对路径告诉模型，加载其内嵌 skill，并执行插件页发起的账号操作。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[飞书插件](../feishu/README.zh.md)的 Host 行。它安装固定版本的 `@larksuite/cli`，把其 `lark-cli` 可执行文件放到私有 Shell PATH 上，并注册一个 `feishu` skill，为该 CLI 内嵌的子指南提供索引。它的 `feishu` Remote 为[飞书插件页面](../../client/ui-feishu/README.zh.md)检查 CLI 默认账号、通过 CLI 的浏览器流程关联应用并登录、退出登录以及取消操作。CLI 把凭据保存在默认配置中，用户自己的终端也共用这份配置。仅支持 macOS。
+本包是[飞书插件](../feishu/README.zh.md)的 Host 行。它安装固定版本的 `@larksuite/cli`，在运行时上下文中把其 `lark-cli` 可执行文件的绝对路径告诉模型，并注册一个 `feishu` skill，为该 CLI 内嵌的子指南提供索引。它的 `feishu` Remote 为[飞书插件页面](../../client/ui-feishu/README.zh.md)检查 CLI 默认账号、通过 CLI 的浏览器流程关联应用并登录、退出登录以及取消操作。CLI 把凭据保存在默认配置中，用户自己的终端也共用这份配置。仅支持 macOS。
 
 ## 目录
 
@@ -31,9 +31,9 @@ kind: "package-reference"
 
 ### 获得的能力
 
-插件加载后，一个 `feishu` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用 `lark-cli skills read` 打开所需的子指南（例如 `lark-doc` 或 `lark-shared`），并在当前沙箱与审批策略下通过普通 Shell 工具运行 `lark-cli` 命令。命令报告缺少应用配置或登录时，agent 会请用户到插件页连接飞书；只有用户要求在对话中完成时，才按 CLI 自带的流程配置和登录。保存登录状态的命令会在工作区之外写入，因此会申请单条命令审批。
+插件加载后，一个 `feishu` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用 `lark-cli skills read` 打开所需的子指南（例如 `lark-doc` 或 `lark-shared`），并在当前沙箱与审批策略下通过普通 Shell 工具按这个路径运行 `lark-cli`。命令报告缺少应用配置或登录时，agent 会请用户到插件页连接飞书；只有用户要求在对话中完成时，才按 CLI 自带的流程配置和登录。保存登录状态的命令会在工作区之外写入，因此会申请单条命令审批。
 
-在 Plugin Manager 中关闭该行会为后续 Shell 调用撤下 `feishu` skill 与私有 PATH 条目，CLI 配置与登录保持不变。
+在 Plugin Manager 中关闭该行会撤下 `feishu` skill，并从运行时上下文中移除这个路径，CLI 配置与登录保持不变。
 
 <a id="account-operations"></a>
 ### 账号操作
@@ -70,7 +70,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它要求 subprocess 运行时位于本 Host，检查 `binDir/lark-cli` 是否可执行，把 `binDir` 作为提供 `lark-cli` 的 `feishu` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它检查 `binDir/lark-cli` 是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`src/skills.ts`](src/skills.ts) 列出 `feishu` skill 时不运行 CLI。每次加载运行 `lark-cli skills list --json`，依次放入 DSH 指引、由每个子指南名称与描述组成的索引，以及打开子指南及其引用文件的说明；目录读取失败时本次加载失败，下次加载会重新读取目录。子指南内嵌在二进制中，因此 skill 的资源基址是 opaque 类型。
 
@@ -82,8 +82,7 @@ kind: "package-reference"
 ## 进一步探索
 
 - [Connector 包](../README.zh.md)——这个应用插件所属的分组。
-- [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行与账号操作。
-- [Shell 环境](../../shell/shell-env/README.zh.md)——后端 subprocess 与 Shell 工具共用的私有 PATH 贡献。
+- [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行、CLI 路径上下文与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [飞书插件](../feishu/README.zh.md)——插入本行与页面行的 bundle。
 - [飞书插件页面](../../client/ui-feishu/README.zh.md)——发起账号操作的插件页。
@@ -125,7 +124,7 @@ Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base,
 ```markdown
 # Feishu in DSH
 
-Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` by name in the Host Shell; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user's own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.
+Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` in the Host Shell by the absolute path that the current runtime context gives for it, not by name; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user's own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.
 
 When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Open the lark-shared guide and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.
 
@@ -152,26 +151,32 @@ Read a file that a guide references, such as `references/...`, with `lark-cli sk
 
 加载会追加一条工具结果，不改写更早的上下文。
 
-### Plugin CLIs 条目
+### CLI 路径
 
 #### 模型看到什么
 
-本行在私有 PATH 条目中声明了 `lark-cli`，因此该行加载、且 Shell 在本 Host 上运行时，系统提示词中 [Shell 环境](../../shell/shell-env/README.zh.md#model-experience)的 Plugin CLIs 一节会列出 `` `lark-cli` (feishu) ``。
+该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出 `binDir` 中 `lark-cli` 的路径；`binDir` 默认是已安装的 `@larksuite/cli` 包的 `bin` 目录。
+
+##### 运行时上下文条目
+
+```markdown
+Feishu CLI: run `lark-cli` by its absolute path "<binDir>/lark-cli"; the bare name may resolve to another installation or to none.
+```
 
 #### Token 影响
 
-该条目只给这一节增加几个 token；这一节本身的文字归 Shell 环境所有。
+每份运行时上下文快照中一行，约 110 个字符加上路径。
 
 #### KV Cache 影响
 
-加载或卸载该行会改变这一节的文字，provider 的缓存复用可能在第一个变化的 token 处结束。
+系统提示词不变；加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - 仅支持 macOS。其他平台未经验证，且不会定位 Windows 可执行文件名 `lark-cli.exe`。
-- 插件要求 subprocess 运行时位于本 Host；组合中的 subprocess 运行时在别处运行（例如通过 SSH）时，插件加载失败。
+- 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `lark-cli` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出会影响用户自己的终端，没有 DSH 私有账号或账号选择器。插件不提供解绑操作；关闭插件会保留配置与登录。
 - 登录从 `lark-cli auth login --json` 的事件中读取设备授权链接和完成结果；CLI 版本改变这些事件时，连接以可重试的结果失败。
 - 在文件沙箱下，普通命令中的 token 刷新可能被拒绝，此时需要单条命令审批。

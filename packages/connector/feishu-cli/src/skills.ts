@@ -13,7 +13,7 @@ const Catalog = z.object({
 
 const GUIDANCE = [
   '# Feishu in DSH',
-  'Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` by name in the Host Shell; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user\'s own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.',
+  'Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` in the Host Shell by the absolute path that the current runtime context gives for it, not by name; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user\'s own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.',
   'When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Open the lark-shared guide and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.',
   'Commands that save sign-in state, such as `auth login --device-code` and `config init`, write outside the workspace and use up their one-time authorization even when the save is denied: on the first attempt, set the Shell tool\'s `sandbox_permissions` to the narrowest mode that can write outside the workspace, with a `justification`. Run other commands in the existing sandbox and set `sandbox_permissions` only when a credential, lock, log, or cache write is denied.',
   'Do not install another lark-cli or run `lark-cli update`.',

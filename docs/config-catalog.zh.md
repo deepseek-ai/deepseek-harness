@@ -1545,7 +1545,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-feishu-cli`
 
-- `inject`: `skills` · `subprocess` · `shellEnv`
+- `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
 - `source`: [`packages/connector/feishu-cli/src/index.ts:30`](../packages/connector/feishu-cli/src/index.ts)
 
@@ -4855,6 +4855,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-native` | — | [`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-entry-customization` | — | [`packages/client/ui-entry-customization/src/index.ts`](../packages/client/ui-entry-customization/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-feishu` | — | [`packages/client/ui-feishu/src/index.ts`](../packages/client/ui-feishu/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-file-drag` | — | [`packages/client/ui-file-drag/src/index.ts`](../packages/client/ui-file-drag/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-goal` | — | [`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-input-trigger` | — | [`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts) |

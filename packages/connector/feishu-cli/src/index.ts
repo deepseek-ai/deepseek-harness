@@ -1,5 +1,5 @@
 /**
- * Feishu plugin: puts the managed lark-cli on the private Shell PATH, registers
+ * Feishu plugin: tells the model the managed lark-cli's absolute path, registers
  * its embedded skills, and serves the Plugins page's account operations over
  * Remote. The CLI's default account is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-feishu
@@ -7,13 +7,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { FeishuAccount } from './account.ts'
-import { PROGRAM, resolveCliDirectory } from './cli.ts'
+import { PROGRAM, resolveCliExecutable } from './cli.ts'
 import { FeishuSkillProvider } from './skills.ts'
 import type { FeishuState } from './types.ts'
 
@@ -31,23 +31,21 @@ export type Config = CliAccountConfig
 
 /** Registers the CLI and skills, and owns the account operations the Plugins page drives. */
 export default class Feishu extends TypertRemoteService {
-  static inject = ['skills', 'subprocess', 'shellEnv']
+  static inject = ['skills', 'subprocess', 'systemPrompt']
   static Config: z<Config> = CliAccountConfig
 
   private readonly account: FeishuAccount
 
   /**
-   * @param ctx - Context carrying the skill registry, subprocess runtime, and Shell environment.
+   * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
    * @param config - CLI location and command deadline.
-   * @throws when the subprocess runtime does not run on this Host or `lark-cli` is not executable.
+   * @throws when `lark-cli` is not executable.
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'feishu')
-    if (!ctx.subprocess.runsOnHost) {
-      throw new Error('feishu: lark-cli and its default account are local to this Host; mount a Host subprocess runtime')
-    }
-    ctx.shellEnv.registerPath({ name: 'feishu', directories: [resolveCliDirectory(config.binDir)], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
+    const executable = resolveCliExecutable(config.binDir)
+    registerCliPathContext(ctx, { name: 'feishu:cli', product: 'Feishu', program: PROGRAM, executable })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
     this.account = new FeishuAccount(cli, ctx.logger)
     ctx.effect(() => () => this.account.dispose())
     ctx.skills.registerProvider(control => new FeishuSkillProvider(cli, control))

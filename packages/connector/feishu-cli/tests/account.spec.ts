@@ -1,9 +1,10 @@
 /** Account operations over a scripted lark-cli: checks, app linking, sign-in, sign-out, cancellation, and the Remote wiring. */
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FeishuAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/cli.ts'
@@ -30,7 +31,7 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(ShellEnv)
+  await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
   script = {}
@@ -54,8 +55,7 @@ describe('FeishuAccount', () => {
   let account: FeishuAccount
 
   beforeEach(() => {
-    ctx.shellEnv.registerPath({ name: 'feishu', directories: [binDir], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
     account = new FeishuAccount(cli, ctx.logger)
   })
 
