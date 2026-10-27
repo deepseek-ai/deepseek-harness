@@ -3,6 +3,7 @@
 import { MessageChannel } from 'node:worker_threads'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
+import { resolveInspectorOptions } from '../src/host/bridge/controller.ts'
 import { HostBridgePublisher } from '../src/host/bridge/publisher.ts'
 import { inspectorId } from '../src/shared/bridge/ids.ts'
 import { InspectorSourceBuffer, maxStatePayloadBytes, type InspectorSourceBufferOptions } from '../src/shared/bridge/buffer.ts'
@@ -89,6 +90,14 @@ describe('Inspector source buffer', () => {
     records.setState(topic, payload, -Number.MAX_VALUE)
     const frame = JSON.stringify(records.replacement(sourceId, generation))
     expect(new TextEncoder().encode(frame).byteLength).toBeLessThanOrEqual(maxFrameBytes)
+  })
+
+  it('rejects a source-frame limit that leaves no state payload budget at option resolution', () => {
+    const smallest = 5_121
+    expect(maxStatePayloadBytes(smallest)).toBe(1)
+    expect(resolveInspectorOptions({ maxSourceFrameBytes: smallest, maxBodyChunkBytes: 1 }).maxSourceFrameBytes).toBe(smallest)
+    expect(() => resolveInspectorOptions({ maxSourceFrameBytes: smallest - 1, maxBodyChunkBytes: 1 }))
+      .toThrow('maxSourceFrameBytes cannot carry a Cordis tree snapshot')
   })
 
   it('retains every pruned Cordis snapshot whose collector uses the state budget', async (test) => {
