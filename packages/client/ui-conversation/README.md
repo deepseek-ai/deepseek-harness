@@ -190,7 +190,7 @@ A plugin can write reviewable text into the current composer through the stable 
 
 The exported `ComposerPrefillOptions` type and `InputActions.prefill` signature are defined in the [input contracts](src/client/contract/input.ts).
 
-An empty string is ignored and returns `false`. An empty or whitespace-only draft, or `mode: 'replace'`, replaces the whole draft. Otherwise the text is inserted at the caret in one undo step, preceded by `separator` when the caret follows non-whitespace; the separator defaults to a newline and an empty separator inserts verbatim. A rejected insertion — a changed draft revision, a locked submission phase, or a disposed session — returns `false` without changing the draft. `prefill` never sends the draft.
+An empty string is ignored and returns `false`. An empty or whitespace-only draft, or `mode: 'replace'`, replaces the whole draft only while the composer is in the plain phase and the session is live; that replacement is its own undo step. Otherwise the text replaces the current selection in one undo step, preceded by `separator` when the editor text before the selection ends in non-whitespace; the separator defaults to a newline and an empty separator inserts verbatim. A rejected write — a non-plain replacement, a changed draft revision, a locked submission phase, or a disposed session — returns `false` without changing the draft. `prefill` never sends the draft.
 
 <a id="model-experience"></a>
 ## Model Experience

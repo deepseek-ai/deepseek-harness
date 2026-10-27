@@ -671,3 +671,49 @@ describe('plugin composer prefill API', () => {
     insertText.mockRestore()
   })
 })
+
+describe('plugin composer prefill API guards and history', () => {
+  it('makes a replacement its own undo step', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Old') })
+    act(() => { expect(b.shell.prefill('New', { mode: 'replace' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('New')
+    act(() => { b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined) })
+    await act(async () => {})
+    expect(b.shell.snapshot.draft).toBe('Old')
+  })
+
+  it('refuses replacement while sending and after disposal', async () => {
+    const sending = await bench()
+    act(() => { sending.shell.setDraft('Sent') })
+    act(() => { sending.shell.submit() })
+    expect(sending.shell.snapshot.phase).toBe('sending')
+    act(() => { expect(sending.shell.prefill('New', { mode: 'replace' })).toBe(false) })
+
+    const disposed = await bench()
+    act(() => { disposed.shell.setDraft('Keep') })
+    disposed.shell.dispose()
+    act(() => { expect(disposed.shell.prefill('New', { mode: 'replace' })).toBe(false) })
+    act(() => { expect(disposed.shell.prefill('New')).toBe(false) })
+  })
+
+  it('checks the separator against detect coordinates around a reference chip', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('@res') })
+    const accepted = b.shell.insertReference({
+      source: 'reference',
+      ref: '@[Research](dsh-session:InNvdXJjZSI)',
+      label: 'Research',
+      clipboardText: '@[Research](dsh-session:InNvdXJjZSI)',
+    }, {
+      start: 0,
+      end: 4,
+      draftRev: b.shell.snapshot.draftRev,
+    })
+    expect(accepted).toBe(true)
+    const afterChip = b.shell.snapshot.draft
+    expect(afterChip.endsWith(' ')).toBe(true)
+    act(() => { expect(b.shell.prefill('Next')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe(`${afterChip}Next`)
+  })
+})

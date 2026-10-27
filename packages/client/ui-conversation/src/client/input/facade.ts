@@ -248,12 +248,14 @@ export class SessionInputShell implements SessionInput {
   prefill(text: string, options: ComposerPrefillOptions = {}): boolean {
     if (text.length === 0) return false
     if ((options.mode ?? 'insert') === 'replace' || this.snapshot.draft.trim() === '') {
-      this.setDraft(text)
+      if (this.snapshot.phase !== 'plain' || this.disposed) return false
+      this.cancelCommandRestore()
+      this.draftEditor.replaceDraft(text)
       return true
     }
     const span = this.actions.captureInsertion()
     const separator = options.separator ?? '\n'
-    const preceding = this.snapshot.draft.slice(0, span.start)
+    const preceding = this.projection.detectText.slice(0, span.start)
     const prefix = separator.length > 0 && span.start > 0 && !/\s$/.test(preceding) ? separator : ''
     return this.actions.insertText(`${prefix}${text}`, span)
   }

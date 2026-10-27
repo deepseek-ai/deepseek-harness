@@ -206,6 +206,21 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Replace the whole draft as one independent undo step. Unlike the seed
+   * {@link setDraft}, this edit carries a history boundary so the user can
+   * undo the plugin prefill without undoing an earlier seed or edit.
+   * @param text - the full next draft.
+   */
+  replaceDraft(text: string): void {
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0 && this.projection.quotes.length === 0) return
+    this.applyEdit(() => {
+      $getRoot().clear()
+      $appendParagraphs(clean)
+    }, PASTE_TAG)
+  }
+
+  /**
    * Add plain text after the current draft as new paragraphs, keeping its text
    * and references; an empty draft takes the text as its whole content.
    * Placeholder-sanitized; the caret lands at the end; merged into history

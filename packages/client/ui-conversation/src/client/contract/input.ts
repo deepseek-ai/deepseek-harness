@@ -294,12 +294,15 @@ export interface InputActions {
   setDraft(text: string): void
   /**
    * Write plugin-owned text into the draft in one undo step. An empty or
-   * whitespace-only draft, or `mode: 'replace'`, replaces the draft; otherwise
-   * the text is inserted at the caret, preceded by `separator` when the caret
-   * follows non-whitespace.
+   * whitespace-only draft, or `mode: 'replace'`, replaces the draft only while
+   * the session is live and the composer is in the plain phase; otherwise the
+   * current selection is replaced by an insertion at the selection, preceded
+   * by `separator` when the editor text before it ends in non-whitespace.
+   * Replacement edits are independent undo steps.
    * @param text - text to write; an empty string is ignored.
    * @param options - replacement mode and insertion separator.
-   * @returns whether the draft accepted the write.
+   * @returns whether the draft accepted the write; false for an empty string,
+   * a non-plain replacement, a changed draft revision, or a disposed session.
    */
   prefill(text: string, options?: ComposerPrefillOptions): boolean
   /** Write the current semantic document through the mounted persistence callback. */

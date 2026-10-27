@@ -190,7 +190,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 导出的 `ComposerPrefillOptions` 类型和 `InputActions.prefill` 签名定义在[输入接口](src/client/contract/input.ts)中。
 
-空字符串会被忽略并返回 `false`。草稿为空或只有空白，或者使用 `mode: 'replace'` 时，会替换整个草稿；否则在光标处插入一次可撤销的编辑，若光标前一字符不是空白，则先插入 `separator`。`separator` 默认是换行，传空字符串时原样插入。草稿版本已变、提交阶段锁定或 Session 已释放时，插入会被拒绝并返回 `false`，草稿保持不变。`prefill` 不会发送草稿。
+空字符串会被忽略并返回 `false`。草稿为空或只有空白，或者使用 `mode: 'replace'` 时，只有在 Composer 处于 plain 阶段且 Session 仍存活时才替换整个草稿；这次替换本身就是独立的撤销步骤。否则文本会替换当前选区，作为一次可撤销编辑；若选区前的编辑器文本末尾不是空白，则先插入 `separator`。`separator` 默认是换行，传空字符串时原样插入。非 plain 阶段的替换、草稿版本已变、提交阶段锁定或 Session 已释放时，写入会被拒绝并返回 `false`，草稿保持不变。`prefill` 不会发送草稿。
 
 <a id="model-experience"></a>
 ## 模型体验
