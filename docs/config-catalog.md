@@ -1231,7 +1231,7 @@ export interface InspectorOptions {
   readonly maxJournalBytes?: number
   /** Maximum active and completed fetch requests retained by the Worker. */
   readonly maxRetainedRequests?: number
-  /** Maximum encoded bytes accepted in one source transport frame. */
+  /** Maximum encoded bytes accepted in one source transport frame; values below 5121 leave no Cordis snapshot budget and fail. */
   readonly maxSourceFrameBytes?: number
   /** Maximum observation records accepted in one source batch. */
   readonly maxSourceRecordsPerFrame?: number
