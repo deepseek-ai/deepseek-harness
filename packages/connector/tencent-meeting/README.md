@@ -40,10 +40,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | Row | Package | Behavior |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Puts `tmeet` on the private Shell PATH, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Gives the model the absolute path of `tmeet`, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
 | `ui-tencent-meeting` | [`@deepseek-ai/dsh-client-ui-tencent-meeting`](../../client/ui-tencent-meeting/README.md) | Shows the Tencent Meeting account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page |
 
-Switching the bundle off withdraws the skill, the private PATH entry, and the page. The CLI sign-in stays in place.
+Switching the bundle off withdraws the skill, the path in runtime context, and the page. The CLI sign-in stays in place.
 
 -----
 

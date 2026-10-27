@@ -1,9 +1,10 @@
 /** Account operations over a scripted tmeet: status text, sign-in, sign-out, cancellation, and the Remote wiring. */
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TencentMeetingAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/directory.ts'
@@ -41,7 +42,7 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(ShellEnv)
+  await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
   script = {}
@@ -65,8 +66,7 @@ describe('TencentMeetingAccount', () => {
   let account: TencentMeetingAccount
 
   beforeEach(() => {
-    ctx.shellEnv.registerPath({ name: 'tencent-meeting', directories: [binDir], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
     account = new TencentMeetingAccount(cli, ctx.logger)
   })
 
@@ -196,6 +196,7 @@ describe('Tencent Meeting Remote', () => {
     expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
     expect(states[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
     expect(states.at(-1)?.account).toEqual({ state: 'signed-out' })
+    expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'tmeet'))
     expect(await finished(ctx.tencentMeeting.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script[LOGIN] = () => {}

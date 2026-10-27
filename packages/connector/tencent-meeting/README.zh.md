@@ -40,10 +40,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 放进私有 Shell PATH，注册其技能，并在 Host 上运行账号检查、登录和退出登录 |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 的绝对路径告诉模型，注册其技能，并在 Host 上运行账号检查、登录和退出登录 |
 | `ui-tencent-meeting` | [`@deepseek-ai/dsh-client-ui-tencent-meeting`](../../client/ui-tencent-meeting/README.zh.md) | 在插件页显示腾讯会议账号区块、连接标签、开启 bundle 后的引导以及提示 |
 
-关闭本 bundle 会撤回技能、私有 PATH 条目和页面。CLI 的登录会保留。
+关闭本 bundle 会撤回技能、运行时上下文中的路径和页面。CLI 的登录会保留。
 
 -----
 

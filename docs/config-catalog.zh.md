@@ -3802,7 +3802,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tencent-meeting-cli`
 
-- `inject`: `skills` · `subprocess` · `shellEnv`
+- `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
 - `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:32`](../packages/connector/tencent-meeting-cli/src/index.ts)
 

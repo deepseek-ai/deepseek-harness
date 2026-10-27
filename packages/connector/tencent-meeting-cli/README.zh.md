@@ -1,5 +1,5 @@
 ---
-description: "把官方 tmeet 放进私有 Shell PATH，加载其技能，并执行插件页发起的账号操作。"
+description: "把官方 tmeet 的绝对路径告诉模型，加载其技能，并执行插件页发起的账号操作。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，把其平台可执行文件以 `tmeet` 的名字链接进私有 Shell PATH，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`。它的 `tencentMeeting` Remote 为[腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md)检查 CLI 的登录、通过 CLI 的授权页面登录、退出登录，以及取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，在运行时上下文中把其平台可执行文件的绝对路径告诉模型，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`。它的 `tencentMeeting` Remote 为[腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md)检查 CLI 的登录、通过 CLI 的授权页面登录、退出登录，以及取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -31,9 +31,9 @@ kind: "package-reference"
 
 ### 你会得到
 
-插件加载后，技能目录中会多一个 `tencent-meeting` skill。Agent 用 `skill` 工具加载它，用文件工具打开 `tmeet-skill` 子指南及其参考文件，并在当前沙箱和审批策略下通过普通 Shell 工具运行 `tmeet` 命令。命令报告未登录或登录过期时，Agent 会请用户在插件页面连接腾讯会议；只有用户要求在对话中完成时，它才运行 `tmeet auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。
+插件加载后，技能目录中会多一个 `tencent-meeting` skill。Agent 用 `skill` 工具加载它，用文件工具打开 `tmeet-skill` 子指南及其参考文件，并在当前沙箱和审批策略下通过普通 Shell 工具按这个路径运行 `tmeet`。命令报告未登录或登录过期时，Agent 会请用户在插件页面连接腾讯会议；只有用户要求在对话中完成时，它才运行 `tmeet auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。
 
-在 Plugin Manager 中关闭该行，之后的 Shell 调用就不再有这个 skill 和私有 PATH 条目。CLI 的登录会保留。
+在 Plugin Manager 中关闭该行会撤下这个 skill，并从运行时上下文中移除这个路径。CLI 的登录会保留。
 
 <a id="account-operations"></a>
 ### 账号操作
@@ -54,7 +54,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `binDir` | Harness 主目录下的一个缓存目录，其中链接当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet` 的绝对目录 |
+| `binDir` | 不设置，此时运行当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet` 的绝对目录 |
 | `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
 
 登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。tmeet 自身在 5 分钟后停止等待授权。
@@ -69,7 +69,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.tencentMeeting` 的 Remote 服务。它要求 Host subprocess 运行时，解析 `tmeet` 所在目录，把该目录作为 `tencent-meeting` PATH 贡献注册到 [Shell 环境](../../shell/shell-env/README.zh.md)，并在本包的 `skills/` 目录上挂载一个名为 `tencent-meeting` 的[文件系统 skill provider](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，并把它以 `tmeet` 的名字链接到 `$DSH_HOME/cache/tencent-meeting/<hash>/`，其中 hash 是可执行文件路径 SHA-256 的前 16 位十六进制数。每次加载都会原子地替换该链接，因此不同路径的安装不会共用一个链接。[CLI 账号库](../cli-account/README.zh.md)在私有 PATH 上运行每条命令，使后端与 Shell 使用同一个可执行文件，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.tencentMeeting` 的 Remote 服务。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并在本包的 `skills/` 目录上挂载一个名为 `tencent-meeting` 的[文件系统 skill provider](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
 
 [`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是唯一的 skill：DSH 指引、子指南索引，以及打开子指南的方式。[`skills/tencent-meeting/guides/tmeet-skill/`](skills/tencent-meeting/guides/tmeet-skill) 是 `TencentCloud/tencentmeeting-cli` 标签 `v1.0.18`（提交 `e631b35`）中 `skills/tmeet-skill/` 的 `SKILL.md` 和 `references/` 的原样副本，因为上游只在该仓库中发布这个 skill，npm 包里没有。其中的 `scripts/agent_init.py` 用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计，没有复制。文件系统 provider 只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
 
@@ -82,7 +82,6 @@ kind: "package-reference"
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
 - [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
-- [Shell 环境](../../shell/shell-env/README.zh.md) — 后端子进程与 Shell 工具共用的私有 PATH 贡献。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [腾讯会议插件](../tencent-meeting/README.zh.md) — 插入本行和页面行的 bundle。
 - [腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md) — 发起账号操作的插件页。
@@ -110,7 +109,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-`tencent-meeting` 的 `skill` 工具结果约 1,200 个字符：DSH 指引、一句话的 `tmeet-skill` 子指南索引，以及打开方式。DSH 指引要求 Agent 按名称运行插件提供的 `tmeet`，跳过子指南的安装检查和 `agent_init.py` 步骤，在自己运行 `tmeet auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；两者不一致时以 DSH 指引为准。它的资源目录是 `skills/tencent-meeting`，因此 Agent 用文件工具而不是 `skill` 工具打开 `guides/tmeet-skill/SKILL.md`，并以子指南自己的目录解析其中的相对路径。
+`tencent-meeting` 的 `skill` 工具结果约 1,200 个字符：DSH 指引、一句话的 `tmeet-skill` 子指南索引，以及打开方式。DSH 指引要求 Agent 按当前运行时上下文给出的绝对路径运行插件提供的 `tmeet`，跳过子指南的安装检查和 `agent_init.py` 步骤，在自己运行 `tmeet auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；两者不一致时以 DSH 指引为准。它的资源目录是 `skills/tencent-meeting`，因此 Agent 用文件工具而不是 `skill` 工具打开 `guides/tmeet-skill/SKILL.md`，并以子指南自己的目录解析其中的相对路径。
 
 #### Token 影响
 
@@ -120,29 +119,34 @@ kind: "package-reference"
 
 加载会追加一条工具结果，不会改写之前的上下文。
 
-### Plugin CLIs 条目
+### CLI 路径
 
 #### 模型看到的内容
 
-本行在私有 PATH 条目中声明了 `tmeet`，因此该行加载、且 Shell 在本 Host 上运行时，系统提示词中 [Shell 环境](../../shell/shell-env/README.zh.md#model-experience)的 Plugin CLIs 一节会列出 `` `tmeet` (tencent-meeting) ``。
+该行加载期间，[CLI 账号库](../cli-account/README.zh.md#model-experience)添加一条必需的运行时上下文，给出可执行文件的路径：`binDir` 中的 `tmeet`，或者默认使用当前平台已安装的 `@tencentcloud/tmeet` 可执行文件，例如 `dist/tmeet-macOS-AppleSilicon`。
+
+##### 运行时上下文条目
+
+```markdown
+Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
+```
 
 #### Token 影响
 
-该条目只给这一节增加几个 token；这一节本身的文字归 Shell 环境所有。
+每份运行时上下文快照中一行，约 115 个字符加上路径。
 
 #### KV Cache 影响
 
-加载或卸载该行会改变这一节的文字，provider 的缓存复用可能在第一个变化的 token 处结束。
+系统提示词不变；加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS。Linux 未经验证，Windows 没有可链接的可执行文件。
-- 插件要求本机 Host 上的 subprocess 运行时；当组合中的 subprocess 运行时在别处运行（例如通过 SSH）时，插件加载会失败。
+- 仅支持 macOS。Linux 未经验证，Windows 没有对应的可执行文件。
+- 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `tmeet` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，没有 DSH 专用的账号，也没有账号选择。
 - 账号状态来自 tmeet 1.0.18 `auth status` 的纯文本输出，登录链接来自它的 `authorize url:` 行；改变这些文本的 CLI 版本会使检查或登录失败，并给出可重试的结果。服务端没有返回用户名的账号会显示为待确认。
-- 移除插件后，Harness 缓存中仍会留下它的链接目录。
 - 子指南对应上游标签 `v1.0.18`；更新它需要手工复制，之后要对照新的子指南检查入口的索引和 DSH 指引。
 
 <a id="dev-note"></a>

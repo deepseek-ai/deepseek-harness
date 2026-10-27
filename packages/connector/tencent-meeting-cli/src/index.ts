@@ -1,5 +1,5 @@
 /**
- * Tencent Meeting plugin: puts the managed tmeet on the private Shell PATH, registers its skill, and serves the
+ * Tencent Meeting plugin: tells the model the managed tmeet's absolute path, registers its skill, and serves the
  * Plugins page's account operations over Remote. The CLI's default sign-in is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-tencent-meeting-cli
  */
@@ -8,14 +8,14 @@
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { TencentMeetingAccount } from './account.ts'
-import { PROGRAM, resolveCliDirectory } from './directory.ts'
+import { PROGRAM, resolveCliExecutable } from './directory.ts'
 import type { TencentMeetingState } from './types.ts'
 /* jscpd:ignore-end */
 
@@ -33,23 +33,21 @@ export type Config = CliAccountConfig
 
 /** Registers the CLI and its skill, and owns the account operations the Plugins page drives. */
 export default class TencentMeeting extends TypertRemoteService {
-  static inject = ['skills', 'subprocess', 'shellEnv']
+  static inject = ['skills', 'subprocess', 'systemPrompt']
   static Config: z<Config> = CliAccountConfig
 
   private readonly account: TencentMeetingAccount
 
   /**
-   * @param ctx - Context carrying the skill registry, subprocess runtime, and Shell environment.
+   * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
    * @param config - CLI location and command deadline.
-   * @throws when the subprocess runtime does not run on this Host or `tmeet` cannot be made executable on the PATH.
+   * @throws when this platform has no packaged `tmeet` or `tmeet` is not executable.
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'tencentMeeting')
-    if (!ctx.subprocess.runsOnHost) {
-      throw new Error('tencent-meeting: tmeet and its default sign-in are local to this Host; mount a Host subprocess runtime')
-    }
-    ctx.shellEnv.registerPath({ name: 'tencent-meeting', directories: [resolveCliDirectory(config.binDir)], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
+    const executable = resolveCliExecutable(config.binDir)
+    registerCliPathContext(ctx, { name: 'tencent-meeting:cli', product: 'Tencent Meeting', program: PROGRAM, executable })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
     this.account = new TencentMeetingAccount(cli, ctx.logger)
     ctx.effect(() => () => this.account.dispose())
     ctx.plugin(SkillFilesystem, {

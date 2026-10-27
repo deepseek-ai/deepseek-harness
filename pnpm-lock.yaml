@@ -111,6 +111,12 @@ importers:
       '@deepseek-ai/dsh-subagent-dsh-sdk':
         specifier: workspace:*
         version: link:packages/subagent/subagent-dsh-sdk
+      '@deepseek-ai/dsh-tencent-meeting':
+        specifier: workspace:*
+        version: link:packages/connector/tencent-meeting
+      '@deepseek-ai/dsh-tencent-meeting-cli':
+        specifier: workspace:*
+        version: link:packages/connector/tencent-meeting-cli
       '@deepseek-ai/dsh-tool-executor-native':
         specifier: workspace:*
         version: link:packages/core/tool-executor-native
@@ -7357,9 +7363,6 @@ importers:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*
         version: link:../cli-account
-      '@deepseek-ai/dsh-home-paths':
-        specifier: workspace:*
-        version: link:../../util/home-paths
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../skill/skill-filesystem
@@ -7376,15 +7379,15 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-shell-env':
-        specifier: workspace:*
-        version: link:../../shell/shell-env
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol

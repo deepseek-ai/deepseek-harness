@@ -24,19 +24,16 @@
       "path": "../../typert/protocol"
     },
     {
-      "path": "../../shell/shell-env"
-    },
-    {
       "path": "../../skill/skill"
     },
     {
       "path": "../../subprocess/subprocess"
     },
     {
-      "path": "../../util/home-paths"
+      "path": "../cli-account"
     },
     {
-      "path": "../cli-account"
+      "path": "../../core/system-prompt"
     }
   ]
 }

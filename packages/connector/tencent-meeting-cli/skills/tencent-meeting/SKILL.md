@@ -7,7 +7,7 @@ description: 腾讯会议插件：通过 tmeet 使用腾讯会议的会议创建
 
 ## DSH 指引
 
-- 在面向用户的回复中，把这项集成称为“腾讯会议插件”。`tmeet` 由腾讯会议插件安装并加入 Host Shell 的 PATH，直接按名称运行。不要执行 `npm install -g @tencentcloud/tmeet`，也不要用其他方式另装或升级 `tmeet`。
+- 在面向用户的回复中，把这项集成称为“腾讯会议插件”。`tmeet` 由腾讯会议插件安装，按当前 runtime context 给出的绝对路径运行，不要直接按名称运行。不要执行 `npm install -g @tencentcloud/tmeet`，也不要用其他方式另装或升级 `tmeet`。
 - `tmeet` 的登录保存在这台电脑的默认配置目录，与用户自己终端里的 `tmeet` 共用。除非用户要求，不要执行 `tmeet auth logout`。
 - 首次运行 `tmeet` 业务命令前，先读 `tmeet-skill` 子指南。本节与该子指南冲突时以本节为准：跳过它“安装与初始化”一节的安装检查；跳过运行 `scripts/agent_init.py` 的要求，DSH 不提供这个脚本，`tmeet` 不依赖它。
 - 命令提示未登录或需要重新登录（例如 `user config is empty`、`user identity expired`、`refresh token failed`）时，先请用户在「插件」中打开腾讯会议插件页面，点击“连接腾讯会议”并完成授权；用户完成后再继续。只有用户要求在本次对话中完成登录时，才执行 `tmeet auth login --no-browser`：它先输出授权链接，再最多等待 5 分钟，把链接完整告诉用户。它会把登录凭据写到工作区之外，保存被拒绝时这次授权也会作废：第一次运行就把 Shell 工具的 `sandbox_permissions` 设为能写工作区之外的最窄模式，并填写 `justification`。

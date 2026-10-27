@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tencent-meeting-cli",
-  "description": "Tencent Meeting through the official tmeet: the CLI on the Shell PATH, its skill, and account operations over Remote",
+  "description": "Tencent Meeting through the official tmeet: the CLI by its absolute path, its skill, and account operations over Remote",
   "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
@@ -46,7 +46,6 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-cli-account": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
@@ -54,16 +53,16 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   }
 }
