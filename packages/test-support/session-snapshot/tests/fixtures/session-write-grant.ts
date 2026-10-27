@@ -10,14 +10,18 @@ export const name = 'session-write-grant'
 export const inject = ['sandboxPolicy']
 
 /**
- * Grant one directory until the first tool result, before the next request.
+ * Grant directories until the first tool result, before the next request.
  * @param ctx - fixture lifetime and policy service.
  */
 export function apply(ctx: Context): void {
   ctx.on('agent/created', ({ agent }) => {
-    const dispose = ctx.sandboxPolicy.registerWritableRoot(agent.session, join(process.cwd(), 'extra'))
+    const extra = join(process.cwd(), 'extra')
+    const disposers = [extra, join(extra, 'missing'), join(extra, 'keep.txt')]
+      .map(directory => ctx.sandboxPolicy.registerWritableRoot(agent.session, directory))
     ctx.on('session/event', (session, event) => {
-      if (session === agent.session && event.type === 'tool/result') dispose()
+      if (session === agent.session && event.type === 'tool/result') {
+        for (const dispose of disposers) dispose()
+      }
     })
   })
 }

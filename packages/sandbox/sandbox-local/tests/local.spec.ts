@@ -436,8 +436,13 @@ describe('the windows-acl probe (runner invocation contract)', () => {
       probeWindowsAcl: () => true,
       windowsAclRunnerArgs: ['node', 'windows-acl-runner.js'],
     })
+    const extra = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-extra-acl-')))
+    tempDirs.push(extra)
+    const file = join(extra, 'file.txt')
+    writeFileSync(file, 'file')
     try {
-      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: ['/extra'] }))
+      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: [join(extra, 'missing'), file] })).resolves.toBeDefined()
+      await expect(sandbox.confine(['true'], { ...WW, additionalWritableRoots: [extra] }))
         .rejects.toThrow('Windows ACL confinement does not support additional writable directories')
       await expect(sandbox.confine(['true'], { ...RO, additionalWritableRoots: ['/extra'] })).resolves.toBeDefined()
     } finally {

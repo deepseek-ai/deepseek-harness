@@ -2985,7 +2985,7 @@ export interface Config {
    * (default: none). The supervisor names them explicitly; there is no
    * automatic repository or gitfile discovery. Entries are execution-world
    * paths: this service validates absoluteness and detaches the list, while
-   * the enforcing host rejects missing, non-directory, or symlinked paths. They grant nothing under
+   * the enforcing host skips missing or non-directory paths and rejects symlinked directories. They grant nothing under
    * `read-only`.
    */
   additionalWritableRoots?: string[]

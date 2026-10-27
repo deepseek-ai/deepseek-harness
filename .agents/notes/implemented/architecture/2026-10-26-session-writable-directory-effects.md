@@ -14,6 +14,8 @@ The sandbox-policy service owns effect-scoped directory registrations keyed by l
 
 Registration disposal affects subsequent operations, not already-resolved calls or running processes. This deliberately permits persistent terminals and PTC environments to retain their launch grants until they stop. The requirement is to update ongoing Sessions' future executions without coordinating process cancellation or losing retained state. This narrows the different-policy reuse restriction in the [retained PTC sandbox decision](2026-10-08-persistent-ptc-sandbox.md) for additional directories only; mode-change invalidation and one-time escalation cleanup remain unchanged.
 
+Missing and non-directory extra paths grant nothing for that execution, so an optional plugin directory cannot block unrelated workspace operations. Enforcement checks them again on each call; a directory created later becomes eligible without re-registration. Symlinked directories remain rejected.
+
 ## Alternatives considered
 
 **Shared mutable extra roots.** Enabling memory in one Session would also authorize unrelated Sessions using the same service.

@@ -55,8 +55,8 @@ interface SandboxExecutionPolicy {
   workspaceRoot: string
   /**
    * Extra physical absolute directories `workspace-write` may also write under.
-   * Absence means none. The enforcing host rejects missing, non-directory, and
-   * symlinked entries on each call. Remote paths are checked on the remote host.
+   * Absence means none. The enforcing host skips missing and non-directory entries
+   * and rejects symlinked directories on each call. Remote paths are checked on the remote host.
    * These grant nothing under `read-only` or `danger-full-access`.
    */
   additionalWritableRoots?: readonly string[]
@@ -222,7 +222,7 @@ resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
  * operations and persistent processes retain their resolved permissions.
  * Grants are runtime-only and must be registered again after resume or fork.
  * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
- * @param directory - absolute execution-world directory; the enforcing host checks existence and rejects symlinked grants.
+ * @param directory - absolute execution-world path; execution skips it unless it is a directory and rejects symlinked directories.
  * @returns the exact Cordis effect disposer for this registration.
  * @throws when the directory is relative or contains a NUL byte.
  */

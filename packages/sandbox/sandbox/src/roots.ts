@@ -27,17 +27,19 @@ export class SandboxInvalidRootError extends HarnessError {
   }
 }
 
-/** Reject mutable path aliases before they can redirect an explicit grant. */
-function additionalRoot(path: string): string {
+/** Resolve existing directories without allowing mutable aliases to redirect grants. */
+function additionalRoot(path: string): string | undefined {
   let physical: string
   let directory: boolean
   try {
     physical = realpathSync.native(path)
     directory = statSync(physical).isDirectory()
   } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
     throw new SandboxInvalidRootError(path, `cannot read the directory: ${String(error)}`)
   }
-  if (!directory) throw new SandboxInvalidRootError(path, 'expected an existing directory')
+  if (!directory) return undefined
   if (physical !== resolve(path)) {
     throw new SandboxInvalidRootError(path, `use the physical directory path ${JSON.stringify(physical)}; symlinked grants are not supported`)
   }
@@ -69,7 +71,7 @@ export function canonicalPath(path: string): string {
 
 /**
  * The workspace-owned writable roots — the policy's workspace root plus its
- * explicit extra directories, as a canonical, deduplicated allow-list. Both
+ * existing extra directories, as a canonical, deduplicated allow-list. Both
  * the workspace and every extra root must be granted together by every
  * backend; this is the one derivation of that set, kept separate from the
  * platform temp policy each backend documents for itself (Seatbelt and the fs
@@ -77,11 +79,12 @@ export function canonicalPath(path: string): string {
  * grants).
  * @param policy - the file-effect policy to derive the allow-list from.
  * @returns the canonical workspace-owned roots; empty under `read-only`.
- * @throws {SandboxInvalidRootError} An extra root is missing, is not a directory, or uses a symlink.
+ * @throws {SandboxInvalidRootError} An extra root cannot be inspected or uses a symlink; missing and non-directory entries are skipped.
  */
 export function workspaceWritableRoots(policy: SandboxExecutionPolicy): string[] {
   if (policy.mode !== 'workspace-write') return []
-  return [...new Set([canonicalPath(policy.workspaceRoot), ...(policy.additionalWritableRoots ?? []).map(additionalRoot)])]
+  const additional = (policy.additionalWritableRoots ?? []).map(additionalRoot).filter(root => root !== undefined)
+  return [...new Set([canonicalPath(policy.workspaceRoot), ...additional])]
 }
 
 /**

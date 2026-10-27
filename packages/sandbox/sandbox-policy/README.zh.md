@@ -48,15 +48,15 @@ kind: "package-reference"
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用或没有 cwd 的会话所用的绝对回退根目录；相对值在加载时拒绝。普通 agent 调用使用会话的不可变 cwd |
 | `additionalWritableRoots` | `[]` | 在 `workspace-write` 下额外允许写入的显式物理绝对目录；其他受限模式不授予这些目录的写权限 |
 
-对于关联的 Git worktree，调用方可通过 `additionalWritableRoots` 授予共享 Git 目录的写权限。调用方必须显式选择该目录；策略不会读取 Git 文件或授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机拒绝不存在的路径、文件和符号链接根目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
+对于关联的 Git worktree，调用方可通过 `additionalWritableRoots` 授予共享 Git 目录的写权限。调用方必须显式选择该目录；策略不会读取 Git 文件或授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机在每次调用时跳过不存在或不是目录的路径；这些路径在该次执行中不授予权限。它拒绝符号链接目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
 ### 注册会话的可写目录
 
-插件通过自己的所属上下文调用 `ctx.sandboxPolicy.registerWritableRoot(session, directory)`，为该活跃 Session 的 `workspace-write` 权限添加一个物理绝对目录。该方法返回原始 Cordis effect 清理函数；插件卸载或显式清理只移除该次注册。重复注册与配置授权彼此独立。将会话专用插件挂载在 Agent 的上下文下，使其 effect 也随 Agent 结束。授权前先在执行主机上准备好目录；路径检查与配置根目录相同。
+插件通过自己的所属上下文调用 `ctx.sandboxPolicy.registerWritableRoot(session, directory)`，为该活跃 Session 的 `workspace-write` 权限添加一个物理绝对目录。该方法返回原始 Cordis effect 清理函数；插件卸载或显式清理只移除该次注册。重复注册与配置授权彼此独立。将会话专用插件挂载在 Agent 的上下文下，使其 effect 也随 Agent 结束。目录尚不存在时也可以注册；当它在执行主机上成为目录后，后续执行便会授予权限。路径检查与配置根目录相同。
 
-注册与清理影响后续策略解析及下一次模型请求中记录的上下文。其他 Session（包括子 agent 的 Session）与无 agent 调用不会获得此授权。授权不随 Session 历史保存或继承；恢复或派生的 Session 需要自行注册。已经解析策略的操作与持久进程保留原权限，包括注册已被移除的目录。启动新进程才能使用当前授权。`read-only` 仍然只读。在 Windows 上，额外授权会使新的 `workspace-write` 子进程约束失败，即使命令不访问这些目录；参见 [sandbox-local](../sandbox-local/README.zh.md#known-limitations-and-deferred-work)。
+注册与清理影响后续策略解析及下一次模型请求中记录的上下文。其他 Session（包括子 agent 的 Session）与无 agent 调用不会获得此授权。授权不随 Session 历史保存或继承；恢复或派生的 Session 需要自行注册。已经解析策略的操作与持久进程保留原权限，包括注册已被移除的目录。启动新进程才能使用当前授权。`read-only` 仍然只读。在 Windows 上，已存在的额外目录会使新的 `workspace-write` 子进程约束失败，即使命令不访问这些目录；参见 [sandbox-local](../sandbox-local/README.zh.md#known-limitations-and-deferred-work)。
 
 ### 切换会话模式
 

@@ -117,6 +117,18 @@ describe('workspace-write containment', () => {
     expect(await readFile(path, 'utf8')).toBe('updated')
   })
 
+  it('ignores non-directory grants without blocking workspace or granted-directory writes', async () => {
+    const file = join(outside, 'file.txt')
+    await writeFile(file, 'file')
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace,
+      additionalWritableRoots: [outside, join(base, 'missing'), file, join(file, 'child')] }
+    for (const directory of [workspace, outside]) {
+      const path = join(directory, 'allowed.txt')
+      await fs.writeText(await target(path), 'allowed', undefined, undefined, policy)
+      expect(await readFile(path, 'utf8')).toBe('allowed')
+    }
+  })
+
   it('rejects an extra directory replaced by a symlink to an ungranted sibling', async () => {
     const extra = join(workspace, 'extra')
     await mkdir(extra)

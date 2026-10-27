@@ -100,7 +100,7 @@ kind: "package-reference"
 
 ### 可写根目录
 
-`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，并拒绝不存在、不是目录或经过符号链接解析的额外路径。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
+`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，跳过不存在或不是目录的额外路径，并拒绝经过符号链接解析的目录。每次执行都会重新检查这些路径。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
 
 </details>
 
