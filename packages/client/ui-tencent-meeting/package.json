@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-tencent-meeting",
   "description": "Tencent Meeting plugin page: connect, check, and sign out of the Tencent Meeting account from the Plugins page",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.4",
   "publishConfig": {
     "access": "public"
   },
