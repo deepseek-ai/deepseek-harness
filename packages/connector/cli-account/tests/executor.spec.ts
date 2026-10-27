@@ -9,6 +9,7 @@ import { PROGRAM, createBinDir, ScriptedSubprocess, type ScriptedProcess } from 
 
 const MAX_OUTPUT_BYTES = 1_048_576
 const STDERR_TAIL_BYTES = 4096
+const DRAIN_AFTER_EXIT_MS = 2_000
 
 /** Write each chunk but the last as its own read, then finish the command with the last one on stderr. */
 async function writeStderr(process: ScriptedProcess, chunks: readonly string[]): Promise<void> {
@@ -34,6 +35,7 @@ describe('CliCommandExecutor', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     await ctx.fiber.dispose()
     await rm(binDir, { recursive: true, force: true })
   })
@@ -78,6 +80,27 @@ describe('CliCommandExecutor', () => {
 
     await expect(executor().run(['auth', 'status'], AbortSignal.timeout(5_000)))
       .rejects.toThrow(`fixture-cli auth status output exceeded ${String(MAX_OUTPUT_BYTES)} bytes`)
+  })
+
+  it('stops reading pipes a descendant keeps open 2 seconds after the command exits', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    subprocess.respond = (process) => {
+      process.holdPipes = true
+      process.reply({ stdout: '{"ok":true}\n', stderr: 'progress\n' })
+      setTimeout(() => { process.write('stderr', 'late\n') }, DRAIN_AFTER_EXIT_MS / 2)
+    }
+    let settled = false
+    const running = executor().run(['auth', 'status'], new AbortController().signal).finally(() => { settled = true })
+
+    await vi.advanceTimersByTimeAsync(DRAIN_AFTER_EXIT_MS - 1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(running).resolves.toEqual({ exitCode: 0, stdout: '{"ok":true}\n', stderr: 'progress\nlate\n' })
+    const [process] = subprocess.processes
+    expect(process?.stdout.destroyed).toBe(true)
+    expect(process?.stderr.destroyed).toBe(true)
+    expect(process?.terminated).toBe(true)
   })
 
   it('reports output lines while the command runs and keeps the last 4 KiB of stderr', async () => {
@@ -137,6 +160,32 @@ describe('CliCommandExecutor', () => {
     expect(lines).toEqual(['stderr:4096:eee', 'stderr:26:htt', 'stderr:4095:汉汉汉'])
   })
 
+  it('rejects with what onLine throws only after terminating the command and stopping its readers', async () => {
+    const failure = new Error('unreadable line')
+    const events: string[] = []
+    subprocess.respond = async (process) => {
+      process.holdPipes = true
+      process.write('stderr', 'progress\npartial')
+      await vi.waitFor(() => { expect(events).toEqual(['stderr:progress']) })
+      process.write('stdout', 'unreadable\n')
+    }
+    const running = executor().run(['auth', 'login'], new AbortController().signal, {
+      onLine: (stream, line) => {
+        if (stream === 'stdout') throw failure
+        events.push(`${stream}:${line}`)
+      },
+    }).finally(() => { events.push('settled') })
+
+    await expect(running).rejects.toBe(failure)
+    await new Promise((resolve) => { setImmediate(resolve) })
+
+    expect(events).toEqual(['stderr:progress', 'stderr:partial', 'settled'])
+    const [process] = subprocess.processes
+    expect(process?.stdout.destroyed).toBe(true)
+    expect(process?.stderr.destroyed).toBe(true)
+    expect(process?.terminated).toBe(true)
+  })
+
   it.each([
     ['three-byte characters in one read', ['汉'.repeat(5000)], '汉'.repeat(1365)],
     ['three-byte characters across reads', ['汉'.repeat(2000), '汉'.repeat(3000)], '汉'.repeat(1365)],
@@ -186,6 +235,20 @@ describe('CliCommandExecutor', () => {
     subprocess.respond = () => { caller.abort(new Error('caller left')) }
 
     await expect(executor().run(['auth', 'login'], caller.signal)).rejects.toThrow('caller left')
+    expect(subprocess.processes[0]?.terminated).toBe(true)
+  })
+
+  it('rejects a cancelled command 2 seconds after its exit when a descendant keeps the pipes open', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const caller = new AbortController()
+    subprocess.respond = (process) => {
+      process.holdPipes = true
+      caller.abort(new Error('caller left'))
+    }
+
+    const rejected = expect(executor().run(['auth', 'login'], caller.signal)).rejects.toThrow('caller left')
+    await vi.advanceTimersByTimeAsync(DRAIN_AFTER_EXIT_MS)
+    await rejected
     expect(subprocess.processes[0]?.terminated).toBe(true)
   })
 

@@ -4,7 +4,7 @@
  */
 
 import { homedir } from 'node:os'
-import type { Readable } from 'node:stream'
+import { addAbortSignal, type Readable } from 'node:stream'
 import type { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
@@ -13,6 +13,7 @@ const STDERR_TAIL_BYTES = 4096
 const MAX_OUTPUT_BYTES = 1_048_576
 const AUTHORIZATION_TIMEOUT_MS = 600_000
 const TERMINATE_GRACE_MS = 2_000
+const DRAIN_AFTER_EXIT_MS = 2_000
 const TIMEOUT_CODE = 'CLI_ACCOUNT_TIMEOUT'
 
 /** The program a plugin runs and its deadline for commands that do not wait for the user. */
@@ -39,7 +40,8 @@ export interface CliRunOptions {
   /**
    * Receives each output line, without its terminator, as the command writes it, and the unterminated rest at exit.
    * `\n`, `\r\n`, and a lone `\r` each end a line, so a line the CLI redraws with `\r` arrives when written. A line
-   * longer than its stream's limit, 1 MiB for stdout and 4 KiB for stderr in UTF-8 bytes, is skipped.
+   * longer than its stream's limit, 1 MiB for stdout and 4 KiB for stderr in UTF-8 bytes, is skipped. Every call
+   * happens before `run` settles.
    */
   readonly onLine?: (stream: 'stdout' | 'stderr', line: string) => void
 }
@@ -115,28 +117,34 @@ function utf8Tail(text: string, maxBytes: number): string {
 }
 
 /**
- * Drain one pipe, report its lines when observed, and keep the head up to `maxBytes` or, for a tail, the last
- * `maxBytes`, counted in UTF-8 bytes.
+ * Drain one pipe until it ends or `cut` aborts, report its lines when observed, and keep the head up to `maxBytes`
+ * or, for a tail, the last `maxBytes`, counted in UTF-8 bytes.
  */
 async function readStream(
   stream: Readable | undefined, name: 'stdout' | 'stderr', maxBytes: number, keep: 'head' | 'tail',
-  onLine: CliRunOptions['onLine'],
+  onLine: CliRunOptions['onLine'], cut: AbortSignal,
 ): Promise<StreamText> {
   const result: StreamText = { text: '', overflowed: false }
   /* v8 ignore next -- pipe-mode stdio always yields both streams. */
   if (stream === undefined) return result
   const lines = onLine === undefined ? undefined : splitLines(maxBytes, (line) => { onLine(name, line) })
   let headBytes = 0
+  addAbortSignal(cut, stream)
   stream.setEncoding('utf8')
-  for await (const chunk of stream as AsyncIterable<string>) {
-    lines?.push(chunk)
-    if (keep === 'tail') {
-      result.text = utf8Tail(result.text + chunk, maxBytes)
-    } else if (!result.overflowed) {
-      headBytes += Buffer.byteLength(chunk)
-      if (headBytes > maxBytes) result.overflowed = true
-      else result.text += chunk
+  try {
+    for await (const chunk of stream as AsyncIterable<string>) {
+      lines?.push(chunk)
+      if (keep === 'tail') {
+        result.text = utf8Tail(result.text + chunk, maxBytes)
+      } else if (!result.overflowed) {
+        headBytes += Buffer.byteLength(chunk)
+        if (headBytes > maxBytes) result.overflowed = true
+        else result.text += chunk
+      }
     }
+  } catch (error) {
+    // A cut stops reading on purpose; the output read before it is kept.
+    if (!cut.aborted) throw error
   }
   lines?.end()
   return result
@@ -158,7 +166,9 @@ export class CliCommandExecutor {
   ) {}
 
   /**
-   * Run one command to process exit and return its output whatever the exit code.
+   * Run one command to process exit and return its output whatever the exit code. Its pipes are read until they close,
+   * at most until 2 seconds after the subprocess runtime reports the exit, so the result does not wait for a descendant
+   * that inherited them to close them; what the descendant writes after that is dropped.
    * @param args - native arguments without the executable.
    * @param signal - caller cancellation; an abort rejects with its reason after the process exits.
    * @param options - the deadline choice and an observer for output lines.
@@ -216,16 +226,30 @@ export class CliCommandExecutor {
       stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
       graceMs: TERMINATE_GRACE_MS, signal,
     })
-    const stdout = readStream(handle.stdout, 'stdout', MAX_OUTPUT_BYTES, 'head', onLine)
-    const stderr = readStream(handle.stderr, 'stderr', STDERR_TAIL_BYTES, 'tail', onLine)
+    const cut = new AbortController()
+    const readers = [
+      readStream(handle.stdout, 'stdout', MAX_OUTPUT_BYTES, 'head', onLine, cut.signal),
+      readStream(handle.stderr, 'stderr', STDERR_TAIL_BYTES, 'tail', onLine, cut.signal),
+    ] as const
+    const output = Promise.all(readers)
+    let drain: ReturnType<typeof setTimeout> | undefined
     try {
-      const [outcome, out, err] = await Promise.all([handle.done, stdout, stderr])
+      // A reader failure, such as an `onLine` throw, stops waiting for the exit.
+      const outcome = await Promise.race([handle.done, output.then(() => handle.done)])
+      // A descendant that inherited the pipes can keep them open after the exit, so reading stops DRAIN_AFTER_EXIT_MS later.
+      drain = setTimeout(() => { cut.abort() }, DRAIN_AFTER_EXIT_MS)
+      const [out, err] = await output
       signal.throwIfAborted()
       if (outcome.signal !== null) throw new Error(`${this.commandLine(args)} exited with ${outcome.signal}`)
       if (out.overflowed) throw new Error(`${this.commandLine(args)} output exceeded ${String(MAX_OUTPUT_BYTES)} bytes`)
       return { exitCode: outcome.exitCode, stdout: out.text, stderr: err.text }
     } finally {
+      clearTimeout(drain)
       handle.terminate()
+      // A failure can leave a reader running, possibly on a pipe a descendant keeps open; stop it so that every
+      // `onLine` call precedes the result.
+      cut.abort()
+      await Promise.allSettled(readers)
       await handle.waitForExit()
     }
   }

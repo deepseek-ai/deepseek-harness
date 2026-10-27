@@ -34,6 +34,8 @@ export class ScriptedProcess implements SubprocessHandle {
   readonly done: Promise<SubprocessOutcome>
   terminated = false
   holdExit = false
+  /** Keep both pipes open after exit and termination, as a descendant outside the managed range that inherited them does. */
+  holdPipes = false
   private readonly outcome = Promise.withResolvers<SubprocessOutcome>()
   private readonly exit = Promise.withResolvers<boolean>()
 
@@ -63,6 +65,7 @@ export class ScriptedProcess implements SubprocessHandle {
   }
 
   private close(): void {
+    if (this.holdPipes) return
     if (!this.stdout.writableEnded) this.stdout.end()
     if (!this.stderr.writableEnded) this.stderr.end()
   }
