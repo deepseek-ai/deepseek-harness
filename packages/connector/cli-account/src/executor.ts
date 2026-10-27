@@ -1,11 +1,7 @@
-/**
- * Bounded execution of one CLI program on the private Shell PATH through a Host subprocess runtime, with subprocess
- * lifetime ownership.
- */
+/** Bounded execution of one CLI executable through a subprocess runtime, with subprocess lifetime ownership. */
 
 import { homedir } from 'node:os'
 import { addAbortSignal, type Readable } from 'node:stream'
-import type { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 
@@ -18,8 +14,10 @@ const TIMEOUT_CODE = 'CLI_ACCOUNT_TIMEOUT'
 
 /** The program a plugin runs and its deadline for commands that do not wait for the user. */
 export interface CliCommandExecutorOptions {
-  /** Executable name looked up on the private Shell PATH. */
+  /** Name the CLI's guides run it by, used in diagnostics. */
   readonly program: string
+  /** Absolute path of the executable. */
+  readonly executable: string
   /** Deadline in milliseconds, including executable lookup. */
   readonly commandTimeoutMs: number
 }
@@ -150,18 +148,13 @@ async function readStream(
   return result
 }
 
-/**
- * Runs one plugin's CLI program and owns each command until its process exits. Its subprocess runtime must run on the
- * Host (`runsOnHost`): the Shell environment adds the private PATH only for a Host runtime, so on another runtime the
- * program would resolve against that runtime's own PATH.
- */
+/** Runs one plugin's CLI program and owns each command until its process exits. */
 export class CliCommandExecutor {
   private readonly lifetime = new AbortController()
   private readonly running = new Set<Promise<CliCommandResult>>()
 
   constructor(
     private readonly subprocess: SubprocessRuntime,
-    private readonly shellEnv: ShellEnvRegistry,
     private readonly options: CliCommandExecutorOptions,
   ) {}
 
@@ -218,11 +211,10 @@ export class CliCommandExecutor {
   }
 
   private async collect(args: readonly string[], signal: AbortSignal, onLine: CliRunOptions['onLine']): Promise<CliCommandResult> {
-    const env = this.shellEnv.prepareEnvironment(this.subprocess)
-    const program = await this.subprocess.resolveExecutable(this.options.program, env, signal)
+    const executable = await this.subprocess.resolveExecutable(this.options.executable, undefined, signal)
     signal.throwIfAborted()
     const handle = this.subprocess.spawn({
-      argv: [program, ...args], cwd: homedir(), env,
+      argv: [executable, ...args], cwd: homedir(),
       stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
       graceMs: TERMINATE_GRACE_MS, signal,
     })

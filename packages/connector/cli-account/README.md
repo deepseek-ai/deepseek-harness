@@ -1,5 +1,5 @@
 ---
-description: "Run a third-party CLI that keeps the user's account from a CLI app plugin: bounded commands on the private Shell PATH and one Host-owned account operation at a time for the Plugins page."
+description: "Run a third-party CLI that keeps the user's account from a CLI app plugin: bounded commands by the CLI's absolute path, runtime context that gives the model that path, and one Host-owned account operation at a time for the Plugins page."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-CLI app plugins such as Feishu and WeCom use this library to run their vendor CLI and to check, connect, and cancel the account their Plugins page shows. `CliCommandExecutor` runs one command on the private Shell PATH with a deadline, an output limit, and line callbacks. `CliAccountRuntime` runs one account operation at a time, offers authorization links only on trusted hosts, cancels only in the phases the plugin declares, and streams the account view. Each plugin keeps its own commands, parsing, and account states.
+CLI app plugins such as Feishu and WeCom use this library to run their vendor CLI and to check, connect, and cancel the account their Plugins page shows. `CliCommandExecutor` runs one command by the CLI's absolute path with a deadline, an output limit, and line callbacks, and `registerCliPathContext` gives the model the same path in runtime context. `CliAccountRuntime` runs one account operation at a time, offers authorization links only on trusted hosts, cancels only in the phases the plugin declares, and streams the account view. Each plugin keeps its own commands, parsing, and account states.
 
 ## Table of Contents
 
@@ -27,19 +27,19 @@ CLI app plugins such as Feishu and WeCom use this library to run their vendor CL
 
 ### When to use it
 
-Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The executor requires a subprocess runtime that runs on the Host (`runsOnHost`), because the Shell environment adds the private PATH only there; on another runtime the program would resolve against that runtime's own PATH. The plugin's Plugins page mirrors the view with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
+Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin's Plugins page mirrors the view with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
 
 ### Entry point
 
-A plugin subclasses the runtime, runs each command through its control, and serves the runtime's methods over its own Remote:
+A plugin states its CLI path in runtime context, subclasses the runtime, runs each command through its control, and serves the runtime's methods over its own Remote:
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import { CliAccountRuntime, CliCommandExecutor, exitFailure, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
-import type {} from '@deepseek-ai/dsh-shell-env'
+import { CliAccountRuntime, CliCommandExecutor, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
 declare const ctx: Context
+const executable = '/opt/vendor/bin/vendor-cli'
 
 class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 'in' }, 'check', never> {
   protected async perform(_kind: 'check', control: CliOperationControl<never, 'status'>, signal: AbortSignal): Promise<void> {
@@ -49,14 +49,19 @@ class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 
   }
 }
 
+registerCliPathContext(ctx, { name: 'vendor:cli', product: 'Vendor', program: 'vendor-cli', executable })
 const account = new Account({
   name: 'vendor', logger: ctx.logger, account: { state: 'unchecked' }, check: 'check', cancellable: [],
   authorizationHosts: ['vendor.example'], classify: exitFailure,
-  cli: new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: 'vendor-cli', commandTimeoutMs: 30_000 }),
+  cli: new CliCommandExecutor(ctx.subprocess, { program: 'vendor-cli', executable, commandTimeoutMs: 30_000 }),
 })
 ```
 
-`account.start(kind)` returns the operation id and throws while another operation runs. `account.follow(signal)` yields the current `CliAccountView`, starting a check when no operation runs, then each changed view. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts) and [`src/executor.ts`](src/executor.ts) are authoritative.
+`account.start(kind)` returns the operation id and throws while another operation runs. `account.follow(signal)` yields the current `CliAccountView`, starting a check when no operation runs, then each changed view. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts), [`src/executor.ts`](src/executor.ts), and [`src/context.ts`](src/context.ts) are authoritative.
+
+### Runtime context
+
+`registerCliPathContext(ctx, cli)` registers one required runtime-context entry that tells the model to run `cli.program` by `cli.executable`, the path the executor runs. With `scripts`, it also tells the model to prefix only the commands that run the skill's scripts with `PATH="<executable directory>:$PATH"`, which changes PATH for that command only, and never to export PATH or run `cli.program` by name. With `ready`, the entry contributes nothing while `ready()` returns false. The text is never interpolated, and disposing the plugin removes the entry. [Model Experience](#model-experience) shows the text.
 
 ### Commands, links, and failures
 
@@ -83,12 +88,13 @@ Plugins with no other fields use `CliAccountConfig` as their `Config`:
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The runtime owns the operation lifecycle and the plugin owns the meaning of each command. One active operation holds its abort controller, phase, and link; the runtime builds the view from them and notifies followers on every change, and a follower that reads late sees only the latest view. The executor prepares the private PATH environment for the subprocess runtime, resolves the program in it, and spawns with that environment, so the backend and the Shell use the same executable.
+The runtime owns the operation lifecycle and the plugin owns the meaning of each command. One active operation holds its abort controller, phase, and link; the runtime builds the view from them and notifies followers on every change, and a follower that reads late sees only the latest view. The executor verifies the configured absolute path through the subprocess runtime and spawns it without adding environment variables; the runtime context names the same path, so the plugin and the model's Shell commands run the same executable.
 
 | File | Role |
 |---|---|
 | [`src/executor.ts`](src/executor.ts) | Bounded command execution and process ownership |
 | [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and the follow stream |
+| [`src/context.ts`](src/context.ts) | The runtime-context entry that names the executable path |
 | [`src/types.ts`](src/types.ts) | The generic Remote view types |
 | [`src/index.ts`](src/index.ts) | The entry module and the shared config fields |
 
@@ -101,7 +107,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 
 - [Connector packages](../README.md) — the group this library and the CLI app plugins belong to.
 - [CLI plugin page pieces](../../client/ui-cli-account/README.md) — the browser half that mirrors the view.
-- [Shell environment](../../shell/shell-env/README.md) — private PATH contributions shared by backend subprocesses and Shell tools.
+- [System prompt](../../core/system-prompt/README.md) — the registry that orders and renders runtime context.
 - [Subprocess](../../subprocess/subprocess/README.md) — the runtime that resolves and spawns the CLI.
 
 -----
@@ -109,11 +115,26 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the library registers nothing model-facing; each plugin owns the skills its CLI needs.
+### CLI path
+
+#### What the model sees
+
+One required runtime-context entry, at context order 220, for each plugin that calls `registerCliPathContext` and whose `ready` is absent or returns true; it stays when optional runtime context is off. The second line appears only with `scripts`. The placeholders come from the call, and the quoted values are JSON strings.
+
+##### Runtime-context entry
+
+```markdown
+<Product> CLI: run `<program>` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
+Scripts in the <Product> skill call `<program>` by name; prefix only the commands that run them with PATH="<executable directory>:$PATH", and never export PATH or run `<program>` by name yourself.
+```
+
+#### Token effect
+
+One or two lines in each runtime-context snapshot for each registering plugin. A changed path, or an entry that appears or disappears, adds one snapshot.
 
 #### KV Cache effect
 
-None; this package neither assembles nor sends a provider request.
+The path is runtime context rather than system prompt, so the cached prompt prefix is the same for every installation path; a change appends one runtime-context snapshot after it.
 
 ## Known Limitations and Deferred Work
 
@@ -122,6 +143,7 @@ None; this package neither assembles nor sends a provider request.
 - The 10-minute deadline for commands that wait for the user and the 1 MiB stdout limit are fixed; a CLI whose sign-in waits longer fails with a retryable result.
 - Authorization hosts match their subdomains too; a plugin cannot restrict links to one exact host.
 - `exitFailure` classifies by exit code alone; a plugin whose CLI reports structured errors writes its own allowlisting classifier.
+- The runtime context asks the model to run the CLI by its absolute path but cannot enforce it; a command that names the CLI by bare name runs whatever installation PATH resolves, or fails.
 
 <a id="dev-note"></a>
 ### Dev Note

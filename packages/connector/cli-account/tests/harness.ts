@@ -1,8 +1,5 @@
-/** Scripted CLI processes and a temporary bin directory for CLI account specs. */
+/** Scripted CLI processes for CLI account specs. */
 
-import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
@@ -15,6 +12,9 @@ import type {
 
 /** The executable name every spec runs. */
 export const PROGRAM = 'fixture-cli'
+
+/** The absolute path every spec configures and every lookup verifies. */
+export const EXECUTABLE = '/fixture/bin/fixture-cli'
 
 /** Output and exit facts one scripted command reports. */
 export interface CliReply {
@@ -84,13 +84,8 @@ export class ScriptedProcess implements SubprocessHandle {
 export class ScriptedSubprocess extends SubprocessRuntime {
   readonly lookups: Array<{ command: string; env: Readonly<Record<string, string>> | undefined }> = []
   readonly processes: ScriptedProcess[] = []
-  host = true
-  lookup: (signal?: AbortSignal) => Promise<string> = () => Promise.resolve('/fixture/bin/fixture-cli')
+  lookup: (signal?: AbortSignal) => Promise<string> = () => Promise.resolve(EXECUTABLE)
   respond: (process: ScriptedProcess) => void | Promise<void> = (process) => { process.reply({ stdout: '{}' }) }
-
-  override get runsOnHost(): boolean {
-    return this.host
-  }
 
   override resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string> {
     this.lookups.push({ command, env })
@@ -112,15 +107,4 @@ export class ScriptedSubprocess extends SubprocessRuntime {
   override spawnTerminal(): Promise<never> {
     throw new Error('CLI account commands never allocate a terminal')
   }
-}
-
-/**
- * Create a temporary directory holding an executable placeholder named {@link PROGRAM}.
- * @returns the absolute bin directory.
- */
-export async function createBinDir(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-cli-account-bin-'))
-  await writeFile(join(directory, PROGRAM), '')
-  await chmod(join(directory, PROGRAM), 0o755)
-  return directory
 }

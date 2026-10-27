@@ -1,5 +1,5 @@
 ---
-description: "让 CLI 应用插件运行保管用户账号的第三方 CLI：在私有 Shell PATH 上执行有上限的命令，并为插件页在 Host 上一次执行一个账号操作。"
+description: "让 CLI 应用插件运行保管用户账号的第三方 CLI：按 CLI 的绝对路径执行有上限的命令，用运行时上下文把这个路径告诉模型，并为插件页在 Host 上一次执行一个账号操作。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-飞书、企业微信等 CLI 应用插件用这个库运行各自厂商的 CLI，并检查、连接和取消插件页显示的账号。`CliCommandExecutor` 在私有 Shell PATH 上运行一条命令，带截止时间、输出上限和逐行回调。`CliAccountRuntime` 一次执行一个账号操作，只在受信任的主机上提供授权链接，只在插件声明的阶段允许取消，并流式推送账号视图。每个插件保留各自的命令、解析和账号状态。
+飞书、企业微信等 CLI 应用插件用这个库运行各自厂商的 CLI，并检查、连接和取消插件页显示的账号。`CliCommandExecutor` 按 CLI 的绝对路径运行一条命令，带截止时间、输出上限和逐行回调；`registerCliPathContext` 在运行时上下文中把同一路径告诉模型。`CliAccountRuntime` 一次执行一个账号操作，只在受信任的主机上提供授权链接，只在插件声明的阶段允许取消，并流式推送账号视图。每个插件保留各自的命令、解析和账号状态。
 
 ## 目录
 
@@ -27,19 +27,19 @@ kind: "package-library"
 
 ### 何时使用
 
-在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。执行器要求 subprocess runtime 运行在 Host 上（`runsOnHost`），因为 Shell 环境只在 Host 上加入私有 PATH；在其他 runtime 上，程序会按该 runtime 自己的 PATH 查找。插件的插件页用 [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.zh.md) 镜像这个视图。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
+在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。插件的插件页用 [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.zh.md) 镜像这个视图。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
 
 ### 入口
 
-插件继承运行时，通过 control 运行每条命令，并在自己的 Remote 上提供运行时的方法：
+插件在运行时上下文中声明 CLI 路径，继承运行时，通过 control 运行每条命令，并在自己的 Remote 上提供运行时的方法：
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import { CliAccountRuntime, CliCommandExecutor, exitFailure, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
-import type {} from '@deepseek-ai/dsh-shell-env'
+import { CliAccountRuntime, CliCommandExecutor, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
 declare const ctx: Context
+const executable = '/opt/vendor/bin/vendor-cli'
 
 class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 'in' }, 'check', never> {
   protected async perform(_kind: 'check', control: CliOperationControl<never, 'status'>, signal: AbortSignal): Promise<void> {
@@ -49,14 +49,19 @@ class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 
   }
 }
 
+registerCliPathContext(ctx, { name: 'vendor:cli', product: 'Vendor', program: 'vendor-cli', executable })
 const account = new Account({
   name: 'vendor', logger: ctx.logger, account: { state: 'unchecked' }, check: 'check', cancellable: [],
   authorizationHosts: ['vendor.example'], classify: exitFailure,
-  cli: new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: 'vendor-cli', commandTimeoutMs: 30_000 }),
+  cli: new CliCommandExecutor(ctx.subprocess, { program: 'vendor-cli', executable, commandTimeoutMs: 30_000 }),
 })
 ```
 
-`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.follow(signal)` 先产出当前的 `CliAccountView`，没有操作在运行时启动一次检查，之后产出每次变化后的视图。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts) 和 [`src/executor.ts`](src/executor.ts) 中的契约为准。
+`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.follow(signal)` 先产出当前的 `CliAccountView`，没有操作在运行时启动一次检查，之后产出每次变化后的视图。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts)、[`src/executor.ts`](src/executor.ts) 和 [`src/context.ts`](src/context.ts) 中的契约为准。
+
+### 运行时上下文
+
+`registerCliPathContext(ctx, cli)` 注册一条必需的运行时上下文，让模型按 `cli.executable` 运行 `cli.program`，这正是执行器运行的路径。传入 `scripts` 时，它还让模型只在运行 skill 脚本的命令前加上 `PATH="<可执行文件所在目录>:$PATH"`，只改变这一条命令的 PATH，并且不要导出 PATH，也不要按名称运行 `cli.program`。传入 `ready` 时，`ready()` 返回 false 期间这条上下文不贡献任何内容。文本从不做变量插值，插件释放时这条上下文随之移除。文本见[模型体验](#model-experience)。
 
 ### 命令、链接与失败
 
@@ -83,12 +88,13 @@ const account = new Account({
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-运行时负责操作的生命周期，插件负责每条命令的含义。进行中的操作持有自己的中止控制器、阶段和链接；运行时据此生成视图，并在每次变化时通知订阅者，读取较慢的订阅者只会看到最新的视图。执行器为 subprocess runtime 准备带私有 PATH 的环境，在其中查找程序，并用同一环境启动它，因此后端和 Shell 使用同一个可执行文件。
+运行时负责操作的生命周期，插件负责每条命令的含义。进行中的操作持有自己的中止控制器、阶段和链接；运行时据此生成视图，并在每次变化时通知订阅者，读取较慢的订阅者只会看到最新的视图。执行器通过 subprocess runtime 校验配置的绝对路径，启动时不添加环境变量；运行时上下文给出同一路径，因此插件和模型的 Shell 命令运行同一个可执行文件。
 
 | 文件 | 职责 |
 |---|---|
 | [`src/executor.ts`](src/executor.ts) | 有上限的命令执行与进程归属 |
 | [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与订阅流 |
+| [`src/context.ts`](src/context.ts) | 给出可执行文件路径的运行时上下文 |
 | [`src/types.ts`](src/types.ts) | 泛型 Remote 视图类型 |
 | [`src/index.ts`](src/index.ts) | 入口模块与共用配置字段 |
 
@@ -101,7 +107,7 @@ const account = new Account({
 
 - [Connector 包](../README.zh.md)——这个库和 CLI 应用插件所属的分组。
 - [CLI 插件页组件](../../client/ui-cli-account/README.zh.md)——镜像视图的浏览器一半。
-- [Shell 环境](../../shell/shell-env/README.zh.md)——后端 subprocess 与 Shell 工具共用的私有 PATH 贡献。
+- [System prompt](../../core/system-prompt/README.zh.md)——排序并渲染运行时上下文的注册表。
 - [Subprocess](../../subprocess/subprocess/README.zh.md)——查找并启动 CLI 的运行时。
 
 -----
@@ -109,11 +115,26 @@ const account = new Account({
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为这个库不注册任何面向模型的内容；CLI 需要的 skill 由各插件自己负责。
+### CLI 路径
 
-#### KV 缓存影响
+#### 模型看到什么
 
-无；本包既不组装也不发送提供方请求。
+每个调用 `registerCliPathContext` 且未传 `ready` 或 `ready` 返回 true 的插件，在上下文顺序 220 处有一条必需的运行时上下文；关闭可选运行时上下文时它仍然保留。第二行只在传入 `scripts` 时出现。占位符取自调用参数，引号内的值是 JSON 字符串。
+
+##### 运行时上下文条目
+
+```markdown
+<Product> CLI: run `<program>` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
+Scripts in the <Product> skill call `<program>` by name; prefix only the commands that run them with PATH="<executable directory>:$PATH", and never export PATH or run `<program>` by name yourself.
+```
+
+#### Token 影响
+
+每个注册的插件在每份运行时上下文快照中占一到两行。路径变化，或这条上下文出现、消失时，追加一份快照。
+
+#### KV Cache 影响
+
+路径属于运行时上下文而不是系统提示词，因此缓存的提示词前缀与安装路径无关；变化时在其后追加一份运行时上下文快照。
 
 ## 已知限制与后续工作
 
@@ -122,6 +143,7 @@ const account = new Account({
 - 等待用户的命令的 10 分钟截止时间和 1 MiB 的 stdout 上限是固定的；登录等待更久的 CLI 会以可重试的结果失败。
 - 授权主机同时匹配其子域名；插件无法把链接限制在一个确切的主机上。
 - `exitFailure` 只按退出码分类；CLI 会输出结构化错误的插件，要自己编写按白名单取值的分类函数。
+- 运行时上下文要求模型按绝对路径运行 CLI，但无法强制；按名称运行 CLI 的命令会运行 PATH 解析到的任意安装，或者失败。
 
 <a id="dev-note"></a>
 ### 开发备注

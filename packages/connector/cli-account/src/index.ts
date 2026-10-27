@@ -1,12 +1,14 @@
 /**
- * Shared Host mechanism of CLI app plugins: run a third-party CLI that owns the user's account on the private Shell PATH,
- * and run one account operation at a time for the Plugins page. Each plugin keeps its own commands, parsing, and states.
+ * Shared Host mechanism of CLI app plugins: run a third-party CLI that owns the user's account by its absolute path, tell
+ * the model that path in runtime context, and run one account operation at a time for the Plugins page. Each plugin keeps
+ * its own commands, parsing, and states.
  * @module @deepseek-ai/dsh-cli-account
  */
 
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 
+export { registerCliPathContext, type CliPathContext } from './context.ts'
 export { CliCommandExecutor, type CliCommandExecutorOptions, type CliCommandResult, type CliRunOptions } from './executor.ts'
 export { CliAccountRuntime, exitFailure, type CliAccountRuntimeOptions, type CliOperationControl } from './runtime.ts'
 export type * from './types.ts'

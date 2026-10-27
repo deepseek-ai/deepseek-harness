@@ -1,11 +1,9 @@
-import { rm } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
 import { CliAccountRuntime, exitFailure, type CliOperationControl } from '../src/runtime.ts'
 import type { CliAccountView, CliCommandFailure, CliOperationId } from '../src/types.ts'
-import { PROGRAM, createBinDir, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
+import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 interface Account { readonly state: 'unchecked' | 'signed-out' | 'signed-in' }
 type Kind = 'check' | 'connect'
@@ -27,19 +25,15 @@ class FixtureAccount extends CliAccountRuntime<Account, Kind, Phase, Failure> {
 
 let ctx: Context
 let subprocess: ScriptedSubprocess
-let binDir: string
 let account: FixtureAccount
 
 beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(ShellEnv)
   subprocess = ctx.subprocess as ScriptedSubprocess
-  binDir = await createBinDir()
-  ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir], programs: [PROGRAM] })
   account = new FixtureAccount({
     name: 'fixture',
-    cli: new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 }),
+    cli: new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: EXECUTABLE, commandTimeoutMs: 5_000 }),
     logger: ctx.logger,
     account: { state: 'unchecked' },
     check: 'check',
@@ -52,7 +46,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await account.dispose()
   await ctx.fiber.dispose()
-  await rm(binDir, { recursive: true, force: true })
 })
 
 const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'error').map((message): unknown => message.args)

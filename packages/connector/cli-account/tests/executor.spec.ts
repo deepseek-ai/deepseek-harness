@@ -1,11 +1,8 @@
-import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { delimiter } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
-import { PROGRAM, createBinDir, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
+import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
 const MAX_OUTPUT_BYTES = 1_048_576
 const STDERR_TAIL_BYTES = 4096
@@ -23,42 +20,35 @@ async function writeStderr(process: ScriptedProcess, chunks: readonly string[]):
 describe('CliCommandExecutor', () => {
   let ctx: Context
   let subprocess: ScriptedSubprocess
-  let binDir: string
 
   beforeEach(async () => {
     ctx = new Context()
     await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(ShellEnv)
     subprocess = ctx.subprocess as ScriptedSubprocess
-    binDir = await createBinDir()
-    ctx.shellEnv.registerPath({ name: 'fixture', directories: [binDir], programs: [PROGRAM] })
   })
 
   afterEach(async () => {
     vi.useRealTimers()
     await ctx.fiber.dispose()
-    await rm(binDir, { recursive: true, force: true })
   })
 
   const executor = (commandTimeoutMs = 5_000) =>
-    new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs })
+    new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: EXECUTABLE, commandTimeoutMs })
 
-  it('finds the program on the prepared private PATH, spawns it with that environment, and returns its output', async () => {
+  it('verifies the executable by its absolute path, spawns it without an environment, and returns its output', async () => {
     subprocess.respond = (process) => { process.reply({ stdout: 'authorized\n', stderr: 'progress\n', exitCode: 2 }) }
 
     await expect(executor().run(['auth', 'status'], AbortSignal.timeout(5_000)))
       .resolves.toEqual({ exitCode: 2, stdout: 'authorized\n', stderr: 'progress\n' })
 
-    const [lookup] = subprocess.lookups
-    expect(lookup?.command).toBe(PROGRAM)
-    expect(lookup?.env?.PATH?.split(delimiter)[0]).toBe(binDir)
+    expect(subprocess.lookups).toEqual([{ command: EXECUTABLE, env: undefined }])
     const [process] = subprocess.processes
     expect(process?.spec).toMatchObject({
-      argv: ['/fixture/bin/fixture-cli', 'auth', 'status'],
+      argv: [EXECUTABLE, 'auth', 'status'],
       cwd: homedir(),
       stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
     })
-    expect(process?.spec.env).toBe(lookup?.env)
+    expect(process?.spec.env).toBeUndefined()
     expect(process?.terminated).toBe(true)
   })
 

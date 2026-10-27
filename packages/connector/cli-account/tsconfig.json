@@ -21,10 +21,10 @@
       "path": "../../util/timeout"
     },
     {
-      "path": "../../shell/shell-env"
+      "path": "../../subprocess/subprocess"
     },
     {
-      "path": "../../subprocess/subprocess"
+      "path": "../../core/system-prompt"
     }
   ]
 }
