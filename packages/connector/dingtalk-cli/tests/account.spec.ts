@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DingtalkAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/release.ts'
@@ -39,7 +39,7 @@ beforeEach(async () => {
   ctx = new Context()
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(ScriptedSubprocess)
-  await ctx.plugin(ShellEnv)
+  await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   home = await mkdtemp(join(tmpdir(), 'dsh-dingtalk-home-'))
   vi.stubEnv('DSH_HOME', home)
@@ -70,8 +70,7 @@ describe('DingtalkAccount', () => {
   let release: { installed: () => boolean; install: (signal: AbortSignal) => Promise<void> }
 
   beforeEach(() => {
-    ctx.shellEnv.registerPath({ name: 'dingtalk', directories: [binDir], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: 5_000 })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
     release = { installed: () => true, install: vi.fn(() => Promise.resolve()) }
     account = new DingtalkAccount(cli, ctx.logger, release)
   })
@@ -231,6 +230,7 @@ describe('DingTalk Remote', () => {
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
     await vi.waitFor(() => { expect(ctx.dingtalk).toBeDefined() })
     await vi.waitFor(() => { expect(commands()).toEqual([STATUS]) })
+    expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'dws'))
 
     const states: DingtalkState[] = []
     const leave = new AbortController()

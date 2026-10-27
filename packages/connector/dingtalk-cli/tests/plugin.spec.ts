@@ -1,10 +1,10 @@
-/** The DingTalk Host row: one entry skill, a Host-only subprocess runtime, and disposal of its PATH and skills. */
+/** The DingTalk Host row: one entry skill, the dws path in runtime context once installed, and disposal of both. */
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
-import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
+import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Dingtalk from '../src/index.ts'
 import { DWS_RELEASE } from '../src/release.ts'
@@ -24,7 +24,7 @@ describe('DingTalk plugin', () => {
     ctx = new Context()
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(ScriptedSubprocess)
-    await ctx.plugin(ShellEnv)
+    await ctx.plugin(SystemPrompt)
     subprocess = ctx.subprocess as ScriptedSubprocess
     subprocess.respond = (process) => { process.reply({ stdout: '{"success": true, "authenticated": false, "message": "未登录"}\n' }) }
     home = await mkdtemp(join(tmpdir(), 'dsh-dingtalk-home-'))
@@ -41,6 +41,8 @@ describe('DingTalk plugin', () => {
     await rm(skillsDir, { recursive: true, force: true })
   })
 
+  const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
+
   it('publishes one dingtalk entry skill whose guides resolve from its base directory', async () => {
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
 
@@ -48,7 +50,7 @@ describe('DingTalk plugin', () => {
     expect(catalog.map(skill => `${skill.provider}/${skill.source}/${skill.name}`)).toEqual(['dingtalk/bundled/dingtalk'])
 
     const entry = await ctx.skills.get('dingtalk')
-    expect(entry?.content).toContain('`dws` 由钉钉插件下载并加入 Host Shell 的 PATH')
+    expect(entry?.content).toContain('`dws` 由钉钉插件下载，按当前 runtime context 给出的绝对路径运行，不要直接按名称运行')
     expect(entry?.content).toContain('不要运行 `dws skill setup`')
     expect(entry?.resourceBase?.kind).toBe('directory')
     const base = entry?.resourceBase?.kind === 'directory' ? entry.resourceBase.path : ''
@@ -57,10 +59,11 @@ describe('DingTalk plugin', () => {
     expect(await ctx.skills.get('dingtalk-shared')).toBeUndefined()
   })
 
-  it('lists the skill once a check publishes its root after the catalog was read', async () => {
+  it('lists the skill and gives the dws path once a check publishes the skill root after the catalog was read', async () => {
     // The load-time check fails at once: nothing listens on this loopback port.
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, releaseUrls: ['https://127.0.0.1:1/download'] })
     expect(await ctx.skills.list()).toEqual([])
+    expect(await runtimeContext()).toEqual([])
 
     await mkdir(join(home, 'cache', 'dingtalk', `dws-skills-${DWS_RELEASE.version}`, 'dingtalk-shared'), { recursive: true })
     await vi.waitFor(() => { ctx.dingtalk.check() })
@@ -71,23 +74,21 @@ describe('DingTalk plugin', () => {
     await vi.waitFor(() => {
       expect(subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))).toEqual(['auth status --format json'])
     })
+    expect((await runtimeContext()).map(section => section.name)).toEqual(['dingtalk:cli'])
   })
 
-  it('refuses to load without a Host subprocess runtime', () => {
-    subprocess.host = false
-
-    expect(() => new Dingtalk(ctx, { ...CONFIG, binDir, skillsDir })).toThrow('dingtalk: dws and its sign-in are local to this Host')
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBeUndefined()
-  })
-
-  it('withdraws the private PATH and skills on disposal', async () => {
+  it('gives the dws path and the script PATH prefix in runtime context, and withdraws them and the skills on disposal', async () => {
     const fiber = await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBe(binDir)
+    expect(await runtimeContext()).toEqual([{
+      name: 'dingtalk:cli',
+      text: `DingTalk CLI: run \`dws\` by its absolute path "${join(binDir, 'dws')}"; the bare name may resolve to another installation or to none.\n`
+        + `Scripts in the DingTalk skill call \`dws\` by name; prefix only the commands that run them with PATH="${binDir}:$PATH", and never export PATH or run \`dws\` by name yourself.`,
+    }])
     expect(await ctx.skills.list()).not.toEqual([])
 
     await fiber.dispose()
 
-    expect(ctx.shellEnv.getPathPrefix(ctx.subprocess)).toBeUndefined()
+    expect(await runtimeContext()).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
   })
 })

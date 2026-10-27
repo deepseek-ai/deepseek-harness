@@ -1,19 +1,20 @@
 /**
- * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, puts dws on the
- * private Shell PATH, registers the `dingtalk` skill once its root is published, and serves the Plugins page's account
- * operations over Remote. The CLI's sign-in is shared with the user's own terminal.
+ * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, tells the model
+ * dws's absolute path once both are installed, registers the `dingtalk` skill once its root is published, and serves
+ * the Plugins page's account operations over Remote. The CLI's sign-in is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-dingtalk-cli
  */
 
 /* jscpd:ignore-start -- CLI app plugins compose the same kit, Remote, and skill-loading imports. */
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { DingtalkAccount } from './account.ts'
 import { DwsRelease, PROGRAM } from './release.ts'
 import type { DingtalkState } from './types.ts'
@@ -38,7 +39,7 @@ export interface Config extends CliAccountConfig {
 
 /** Registers the CLI and its skill, and owns the account operations the Plugins page drives. */
 export default class Dingtalk extends TypertRemoteService {
-  static inject = ['skills', 'subprocess', 'shellEnv']
+  static inject = ['skills', 'subprocess', 'systemPrompt']
   static Config: z<Config> = z.intersect([
     CliAccountConfig,
     z.object({
@@ -53,19 +54,19 @@ export default class Dingtalk extends TypertRemoteService {
   private readonly account: DingtalkAccount
 
   /**
-   * @param ctx - Context carrying the skill registry, subprocess runtime, and Shell environment.
+   * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
    * @param config - dws and skills locations, download prefixes, and command deadline.
-   * @throws when the subprocess runtime does not run on this Host, `binDir` holds no executable `dws`, `skillsDir` is not
-   *   a directory, the pinned release has no archive for this platform, or the skill root cannot be written.
+   * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the pinned release has no archive for
+   *   this platform, or the skill root cannot be written.
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'dingtalk')
-    if (!ctx.subprocess.runsOnHost) {
-      throw new Error('dingtalk: dws and its sign-in are local to this Host; mount a Host subprocess runtime')
-    }
     const release = new DwsRelease(config, ctx.logger)
-    ctx.shellEnv.registerPath({ name: 'dingtalk', directories: [release.directory], programs: [PROGRAM] })
-    const cli = new CliCommandExecutor(ctx.subprocess, ctx.shellEnv, { program: PROGRAM, commandTimeoutMs: config.commandTimeoutMs })
+    const executable = join(release.directory, PROGRAM)
+    registerCliPathContext(ctx, {
+      name: 'dingtalk:cli', product: 'DingTalk', program: PROGRAM, executable, scripts: true, ready: () => release.installed(),
+    })
+    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
     this.account = new DingtalkAccount(cli, ctx.logger, release)
     ctx.effect(() => () => this.account.dispose())
     // Watched: the first download publishes the root after the catalog may have been listed.

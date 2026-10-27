@@ -1,4 +1,4 @@
-/** The pinned dws release the plugin installs into the DSH cache: the executable for the private PATH and the upstream skills. */
+/** The pinned dws release the plugin installs into the DSH cache: the executable and the upstream skills. */
 
 import { createHash, randomUUID } from 'node:crypto'
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -10,7 +10,7 @@ import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { unzipSync } from 'fflate'
 import { x as extract } from 'tar'
 
-/** The executable name the plugin resolves on its private PATH. */
+/** The name dws's guides and scripts run it by. */
 export const PROGRAM = 'dws'
 
 /** The packaged skill entry that every skill root carries. */
@@ -65,7 +65,7 @@ export interface DwsReleaseOptions {
 
 /** Locates dws and the `dingtalk` skill, and installs from the pinned release whichever is missing. */
 export class DwsRelease {
-  /** The directory registered on the private PATH: `binDir`, or `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. */
+  /** The directory holding `dws`: `binDir`, or `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. */
   readonly directory: string
   /**
    * The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>`: a copy of the packaged `dingtalk/SKILL.md` and a

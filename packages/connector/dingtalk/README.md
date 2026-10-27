@@ -40,10 +40,10 @@ The bundle has no install script to approve. When the plugin loads, the `dingtal
 
 | Row | Package | Behavior |
 |---|---|---|
-| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.md) | Downloads `dws` and its skills, puts `dws` on the private Shell PATH, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
+| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.md) | Downloads `dws` and its skills, gives the model the absolute path of `dws`, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
 | `ui-dingtalk` | [`@deepseek-ai/dsh-client-ui-dingtalk`](../../client/ui-dingtalk/README.md) | Shows the DingTalk account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page |
 
-Switching the bundle off withdraws the skill, the private PATH entry, and the page. The CLI sign-in and the downloaded assets stay in place.
+Switching the bundle off withdraws the skill, the path in runtime context, and the page. The CLI sign-in and the downloaded assets stay in place.
 
 -----
 

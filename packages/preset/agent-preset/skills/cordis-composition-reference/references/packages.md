@@ -143,7 +143,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-dingtalk-cli` | yes | DingTalk through the official dws: the CLI on the Shell PATH, its skills, and account operations over Remote |
+| `@deepseek-ai/dsh-dingtalk-cli` | yes | DingTalk through the official dws: the CLI by its absolute path, its skills, and account operations over Remote |
 
 ## context
 

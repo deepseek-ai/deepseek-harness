@@ -1,5 +1,5 @@
 ---
-description: "Install the pinned official dws and its skills into the DSH cache, put dws on the private Shell PATH, load its skill, and run the account operations the Plugins page drives."
+description: "Install the pinned official dws and its skills into the DSH cache, give the model the absolute path of dws, load its skill, and run the account operations the Plugins page drives."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It downloads the official DingTalk Workspace CLI, `dws`, and the official DingTalk skills from one pinned release into the DSH cache, puts `dws` on the private Shell PATH, and registers one `dingtalk` skill whose guides are those skills. Its `dingtalk` Remote checks the CLI's sign-in, signs in through the CLI's browser authorization page, signs out the current account, and cancels, for the [DingTalk plugin page](../../client/ui-dingtalk/README.md). The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It downloads the official DingTalk Workspace CLI, `dws`, and the official DingTalk skills from one pinned release into the DSH cache, gives the model the absolute path of `dws` in runtime context, and registers one `dingtalk` skill whose guides are those skills. Its `dingtalk` Remote checks the CLI's sign-in, signs in through the CLI's browser authorization page, signs out the current account, and cancels, for the [DingTalk plugin page](../../client/ui-dingtalk/README.md). The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -27,15 +27,15 @@ This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It
 
 ### Add it to a profile
 
-Install the [DingTalk plugin bundle](../dingtalk/README.md), which inserts this package as the `dingtalk` row. The package has no install script. When the row loads, it downloads two assets of dws release 1.0.64: the archive for the computer's platform, 16 to 18 MB, and `dws-skills.zip`, 3.3 MB. Each comes from GitHub Releases, or from the official Gitee mirror when GitHub fails; the row verifies its size and SHA-256 and keeps it in `$DSH_HOME/cache/dingtalk/`. `dws` is missing from the Shell PATH, and the `dingtalk` skill from the catalog, until those downloads finish. On a platform the release has no archive for, the row fails to load and names the platform; set `binDir` to use another `dws`. With both `binDir` and `skillsDir` set, the row downloads nothing.
+Install the [DingTalk plugin bundle](../dingtalk/README.md), which inserts this package as the `dingtalk` row. The package has no install script. When the row loads, it downloads two assets of dws release 1.0.64: the archive for the computer's platform, 16 to 18 MB, and `dws-skills.zip`, 3.3 MB. Each comes from GitHub Releases, or from the official Gitee mirror when GitHub fails; the row verifies its size and SHA-256 and keeps it in `$DSH_HOME/cache/dingtalk/`. The runtime context gives no `dws` path, and the catalog has no `dingtalk` skill, until those downloads finish. On a platform the release has no archive for, the row fails to load and names the platform; set `binDir` to use another `dws`. With both `binDir` and `skillsDir` set, the row downloads nothing.
 
 Signing in needs a DingTalk account that belongs to an organization whose administrator has turned on CLI access in the DingTalk developer console. Until then, the user can request access on the authorization page.
 
 ### What you get
 
-After the downloads finish, one `dingtalk` skill joins the skill catalog. The agent loads it with the `skill` tool, opens the guide for the product at hand, such as `dingtalk-calendar` or `dingtalk-doc`, with the file tools, and runs `dws` commands through the ordinary Shell tools under the current sandbox and approval policy. When a command reports a missing or expired sign-in, the agent asks the user to connect DingTalk on the plugin page; it runs `dws auth login --no-browser` only when the user asks to finish it in the conversation, and requests `sandbox_permissions` with a `justification` on the first attempt because the command writes outside the workspace.
+After the downloads finish, one `dingtalk` skill joins the skill catalog. The agent loads it with the `skill` tool, opens the guide for the product at hand, such as `dingtalk-calendar` or `dingtalk-doc`, with the file tools, and runs `dws` by its path through the ordinary Shell tools under the current sandbox and approval policy, with `dws`'s directory first on PATH for a command that runs a guide's script. When a command reports a missing or expired sign-in, the agent asks the user to connect DingTalk on the plugin page; it runs `dws auth login --no-browser` only when the user asks to finish it in the conversation, and requests `sandbox_permissions` with a `justification` on the first attempt because the command writes outside the workspace.
 
-Turning the row off in Plugin Manager withdraws the skill and the private PATH entry for later Shell calls. The CLI sign-in and the downloaded assets stay in place.
+Turning the row off in Plugin Manager withdraws the skill and the path from runtime context. The CLI sign-in and the downloaded assets stay in place.
 
 <a id="account-operations"></a>
 ### Account operations
@@ -73,11 +73,11 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-di
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.dingtalk`. It requires a Host subprocess runtime, registers the `dws` directory with [Shell environment](../../shell/shell-env/README.md) as the `dingtalk` PATH contribution, mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `dingtalk` over the skill root that `src/release.ts` publishes, and starts one check so that a session without a browser also finds `dws` and the skill. The provider omits the default roots and watches the skill root, because the first download publishes it after the catalog may already have been listed. The npm package `dingtalk-workspace-cli` is not used: its install script copies the official skills into `~/.agents/skills`, which the default skill provider scans, and into other agents' skill directories, so they would outlive the plugin. dws embeds the same skills, but `dws skill setup` writes only into such agent directories.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.dingtalk`. It gives the path of `dws` to the model in runtime context while `dws` and the skills are installed, mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `dingtalk` over the skill root that `src/release.ts` publishes, and starts one check so that a session without a browser also finds `dws` and the skill. The provider omits the default roots and watches the skill root, because the first download publishes it after the catalog may already have been listed. The npm package `dingtalk-workspace-cli` is not used: its install script copies the official skills into `~/.agents/skills`, which the default skill provider scans, and into other agents' skill directories, so they would outlive the plugin. dws embeds the same skills, but `dws skill setup` writes only into such agent directories.
 
 [`src/release.ts`](src/release.ts) pins the release version, the archive for each platform, and `dws-skills.zip`, each with the name, size, and SHA-256 from the release's `checksums.txt`. It downloads whichever asset is missing, refuses a response whose `Content-Length` differs before reading the body, and verifies the digest. It extracts the platform archive with `tar`, and the `multi/` entries and root `LICENSE` and `NOTICE` of the skills archive with `fflate`, into a sibling staging directory, refusing a skills entry whose path has an empty, `.`, or `..` segment or a backslash; it publishes each result by rename, and a directory another process published first is kept. Each failed source logs a warning. The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>/` holds a copy of the packaged entry at `dingtalk/SKILL.md` and a `dingtalk/guides` symbolic link to the skills directory. The digest covers the entry and the link target, so a published root never changes, and the root is published synchronously at load when the skills directory already exists.
 
-The [CLI account library](../cli-account/README.md) runs each command on the private PATH, so the backend and the Shell use the same executable, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the dws commands, prepares the release before a check's first command, reads the authorization link from the stderr lines of `auth login`, and parses the `auth status` JSON. It keeps the signed-in account's ids on the Host for sign-out; the Remote view carries only names. Disposal cancels the active operation, aborts running commands and downloads, and settles after their processes exit.
+The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the dws commands, prepares the release before a check's first command, reads the authorization link from the stderr lines of `auth login`, and parses the `auth status` JSON. It keeps the signed-in account's ids on the Host for sign-out; the Remote view carries only names. Disposal cancels the active operation, aborts running commands and downloads, and settles after their processes exit.
 
 [`skills/dingtalk/SKILL.md`](skills/dingtalk/SKILL.md) is the only skill: the DSH guidance, an index of the 16 guides, and how to open them. The guides are the `multi/` tree of `dws-skills.zip` in release `v1.0.64`, which the upstream installer uses by default; its `mono/` alternative is one entry that repeats the same content. The filesystem provider discovers only `<root>/<name>/SKILL.md`, so the guides are not separate skills. Guides refer to one another by relative paths such as `../dingtalk-shared/SKILL.md`, which resolve because the guides keep their sibling layout, and run their helper scripts from their own `scripts/` directories. Where the DSH guidance and a guide disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `dws` instead of installing or upgrading one, does not run `dws skill setup`, and sends sign-in to the plugin page.
 
@@ -90,7 +90,6 @@ The [CLI account library](../cli-account/README.md) runs each command on the pri
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
-- [Shell environment](../../shell/shell-env/README.md) — private PATH contributions shared by backend subprocesses and Shell tools.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [DingTalk plugin](../dingtalk/README.md) — the bundle that inserts this row and the page row.
 - [DingTalk plugin page](../../client/ui-dingtalk/README.md) — the Plugins page that drives the account operations.
@@ -118,7 +117,7 @@ The catalog is fixed for one plugin version. Loading or unloading the plugin, or
 
 #### What the model sees
 
-A `skill` tool result for `dingtalk` contains about 2,100 characters: the DSH guidance, a one-sentence index entry for each of the 16 guides, and how to open them. The DSH guidance tells the agent to run the plugin's `dws` by name without installing or upgrading another, not to run `dws skill setup`, to ask the user to connect on the plugin page before running `dws auth login --no-browser` itself, to request `sandbox_permissions` for that command from its first attempt, and to tell the user that an organization administrator must turn on CLI access when dws reports it off; it takes precedence over the guides where they disagree. Its resource base is the `dingtalk` directory of the skill root in the DSH cache, so the agent opens `guides/<name>/SKILL.md` with the file tools rather than the `skill` tool and resolves each guide's relative paths and scripts against that guide's own directory.
+A `skill` tool result for `dingtalk` contains about 2,100 characters: the DSH guidance, a one-sentence index entry for each of the 16 guides, and how to open them. The DSH guidance tells the agent to run the plugin's `dws` by the absolute path from the current runtime context without installing or upgrading another, not to run `dws skill setup`, to ask the user to connect on the plugin page before running `dws auth login --no-browser` itself, to request `sandbox_permissions` for that command from its first attempt, and to tell the user that an organization administrator must turn on CLI access when dws reports it off; it takes precedence over the guides where they disagree. Its resource base is the `dingtalk` directory of the skill root in the DSH cache, so the agent opens `guides/<name>/SKILL.md` with the file tools rather than the `skill` tool and resolves each guide's relative paths and scripts against that guide's own directory.
 
 #### Token effect
 
@@ -128,26 +127,33 @@ Each load adds the entry body to the retained tool history. A guide's `SKILL.md`
 
 Loading appends a tool result and does not rewrite earlier context.
 
-### Plugin CLIs entry
+### CLI path
 
 #### What the model sees
 
-The row declares `dws` with its private PATH entry, so the [Shell environment](../../shell/shell-env/README.md#model-experience) Plugin CLIs section of the system prompt lists `` `dws` (dingtalk) `` while the row is loaded and the shell runs on this Host.
+While the row is loaded and both `dws` and the skills are installed, the [CLI account library](../cli-account/README.md#model-experience) adds one required runtime-context entry with the path of `dws` in `binDir`, which defaults to `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. The second line covers the guide scripts that call `dws` by name.
+
+##### Runtime-context entry
+
+```markdown
+DingTalk CLI: run `dws` by its absolute path "<binDir>/dws"; the bare name may resolve to another installation or to none.
+Scripts in the DingTalk skill call `dws` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `dws` by name yourself.
+```
 
 #### Token effect
 
-The entry adds a few tokens to that section; the section's own text belongs to Shell environment.
+Two lines of about 270 characters plus the path and its directory in each runtime-context snapshot.
 
 #### KV Cache effect
 
-Loading or unloading the row changes the section text, and provider cache reuse may end at the first changed token.
+The system prompt does not change; finishing the installation, loading or unloading the row, or a changed path appends one runtime-context snapshot.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - Only macOS is supported. The pinned Linux archives are unverified, and Windows has no pinned archive.
-- The plugin requires a subprocess runtime on this Host and fails to load when the composition's subprocess runtime runs elsewhere, such as over SSH.
+- Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `dws` fails because the path does not exist there.
 - The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal and other programs that run dws on this computer, and there is no DSH-private account or account picker.
 - Sign-in from the plugin page needs a browser on the computer that runs DSH, because the CLI's authorization callback listens on `127.0.0.1`.
 - The plugin sets no `DWS_CHANNEL`, and it is unverified with organizations that restrict CLI access to registered channels.

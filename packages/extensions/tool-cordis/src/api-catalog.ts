@@ -5661,6 +5661,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CheckState = \'pending\' | \'success\' | \'failure\' | \'neutral\' | \'skipped\' | \'cancelled\';',
   },
   {
+    name: 'CliAccountView',
+    declaration: 'export interface CliAccountView<Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly account: Account;\n    readonly operation?: CliOperation<Kind, Phase>;\n    readonly result?: CliOperationResult<Kind, Failure>;\n}',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
   },

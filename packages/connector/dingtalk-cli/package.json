@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-dingtalk-cli",
-  "description": "DingTalk through the official dws: the CLI on the Shell PATH, its skills, and account operations over Remote",
+  "description": "DingTalk through the official dws: the CLI by its absolute path, its skills, and account operations over Remote",
   "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
@@ -56,16 +56,16 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-shell-env": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   }
 }

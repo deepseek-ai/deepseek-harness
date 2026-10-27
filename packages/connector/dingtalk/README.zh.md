@@ -40,10 +40,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 放进私有 Shell PATH，注册其技能，并在 Host 上执行账号检查、登录和退出登录 |
+| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其技能，并在 Host 上执行账号检查、登录和退出登录 |
 | `ui-dingtalk` | [`@deepseek-ai/dsh-client-ui-dingtalk`](../../client/ui-dingtalk/README.zh.md) | 在插件页上显示钉钉账号区块、连接标签、开启 bundle 后的引导和提示 |
 
-关闭 bundle 会撤下技能、私有 PATH 条目和页面。CLI 的登录和已下载的资产会保留。
+关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的登录和已下载的资产会保留。
 
 -----
 

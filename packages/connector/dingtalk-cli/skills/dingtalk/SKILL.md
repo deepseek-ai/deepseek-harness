@@ -7,7 +7,7 @@ description: 钉钉插件：通过 dws 使用钉钉的日程与会议室、待�
 
 ## DSH 指引
 
-- 在面向用户的回复中，把这项集成称为“钉钉插件”。`dws` 由钉钉插件下载并加入 Host Shell 的 PATH，直接按名称运行。不要用 npm、官方安装脚本或 `dws upgrade` 另装或升级 `dws`，也不要运行 `dws skill setup` 把技能装进 Agent 目录。
+- 在面向用户的回复中，把这项集成称为“钉钉插件”。`dws` 由钉钉插件下载，按当前 runtime context 给出的绝对路径运行，不要直接按名称运行。不要用 npm、官方安装脚本或 `dws upgrade` 另装或升级 `dws`，也不要运行 `dws skill setup` 把技能装进 Agent 目录。
 - `dws` 的登录保存在这台电脑的 `~/.dws` 和系统钥匙串，与用户自己终端里的 `dws` 共用。除非用户要求，不要执行 `dws auth logout`。
 - 本节与子指南冲突时以本节为准。
 - 命令报告未登录或登录失效时（例如 `dws auth status --format json` 返回 `authenticated: false`），先请用户在「插件」中打开钉钉插件页面，点击“连接钉钉”并完成授权；用户完成后再继续。只有用户要求在本次对话中完成登录时，才执行 `dws auth login --no-browser`：它在 stderr 输出授权链接，再最多等待 6 分钟，把链接完整告诉用户；授权回调地址是 `127.0.0.1`，用户必须在这台电脑的浏览器中打开链接。它会把凭据写到工作区之外，保存被拒绝时这次授权也会作废：第一次运行就把 Shell 工具的 `sandbox_permissions` 设为能写工作区之外的最窄模式，并填写 `justification`。
