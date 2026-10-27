@@ -51,12 +51,12 @@ changes:
 <a id="compatibility"></a>
 ## Compatibility
 
-Updated readers continue accepting older logs with no retry controls. Older readers reject the unknown required agent/retry event before treating a retry as ordinary user content. The retry discriminator also distinguishes queued controls from ordinary empty user messages. API and both SDK consumers are updated together; the current Session format version is retained because event and source discriminators prevent unsafe interpretation.
+Updated readers preserve older logs and ordinary empty user-message admission. Older readers refuse the new required agent/retry event before append or tail repair. A queued control predating acceptance still has the existing identified empty UserMessage representation; an older Loop can consume it using its ordinary empty-input behavior, retaining inbox identity and adding no user text. API and both SDK consumers recognize retry controls and the acceptance event together. The current Session format version is retained; mixed ordinary messages and retry events remain readable by the updated reader.
 
 <a id="verification"></a>
 ## Verification
 
-Source review confirms controls retain existing inbox and turn lifecycle while agent/retry has no model-surface operation. Regression coverage covers repeated retry, input-id correlation, balanced turns, ordinary empty messages, non-empty retry rejection, deduplication, checkpoint replay, browser behavior, and both SDK recovery recordings. Execution is pending post-push validation.
+Focused AgentLoop, Agent, Session API, and SDK-server tests passed: 91 files, 1806 tests, with 100% statements, branches, functions, and lines for agent.ts and continuation.ts. Browser continuation replay and TypeScript/Python SDK scheduler-recovery replay passed; assertions retain one original user message, correlate retry input identity, preserve tool results, and close new turns normally. Current-event and native-source admission tests cover unknown required-event refusal without mutation and preservation of extensible source metadata. Build, aggregate checks, and typed lint passed. doc-sync passed 42 gates; its remaining repository-reference failure is the unchanged python/sdk/uv.lock:113 commit hash.
 
 <a id="dev-note"></a>
 ## Dev Note
