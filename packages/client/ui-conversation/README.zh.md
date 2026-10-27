@@ -188,9 +188,7 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 
 插件可以通过稳定的 `prefill` 操作把可检查的文本写入当前 Composer。Slot 组件收到的是 `inputActions.prefill(text, options)`；Session 作用域的插件通过 `ctx.conversation.input.for(actx).prefill(text, options)` 解析同一个操作。
 
-```ts
-prefill(text: string, options?: { mode?: 'insert' | 'replace'; separator?: string }): boolean
-```
+导出的 `ComposerPrefillOptions` 类型和 `InputActions.prefill` 签名定义在[输入接口](src/client/contract/input.ts)中。
 
 空字符串会被忽略并返回 `false`。草稿为空或只有空白，或者使用 `mode: 'replace'` 时，会替换整个草稿；否则在光标处插入一次可撤销的编辑，若光标前一字符不是空白，则先插入 `separator`。`separator` 默认是换行，传空字符串时原样插入。草稿版本已变、提交阶段锁定或 Session 已释放时，插入会被拒绝并返回 `false`，草稿保持不变。`prefill` 不会发送草稿。
 

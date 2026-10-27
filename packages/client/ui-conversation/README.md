@@ -188,9 +188,7 @@ The selector must be a pure function of the owner currency. Its non-null return 
 
 A plugin can write reviewable text into the current composer through the stable `prefill` action. Slot components receive it as `inputActions.prefill(text, options)`. A session-scope plugin resolves the same action with `ctx.conversation.input.for(actx).prefill(text, options)`.
 
-```ts
-prefill(text: string, options?: { mode?: 'insert' | 'replace'; separator?: string }): boolean
-```
+The exported `ComposerPrefillOptions` type and `InputActions.prefill` signature are defined in the [input contracts](src/client/contract/input.ts).
 
 An empty string is ignored and returns `false`. An empty or whitespace-only draft, or `mode: 'replace'`, replaces the whole draft. Otherwise the text is inserted at the caret in one undo step, preceded by `separator` when the caret follows non-whitespace; the separator defaults to a newline and an empty separator inserts verbatim. A rejected insertion — a changed draft revision, a locked submission phase, or a disposed session — returns `false` without changing the draft. `prefill` never sends the draft.
 
