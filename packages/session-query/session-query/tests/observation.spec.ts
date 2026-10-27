@@ -792,7 +792,7 @@ describe('SessionObservationReader cold projections', () => {
 })
 
 describe('domain inspection', () => {
-  it('reads a cold Session through its projection without attaching it, and releases a failed getter', async () => {
+  it('reads a cold Session through its projection without attaching it', async () => {
     const ctx = await readerContext()
     try {
       await ctx.plugin(SessionProjectionRegistry)
@@ -815,6 +815,35 @@ describe('domain inspection', () => {
       const abort = new AbortController()
       abort.abort(new Error('cancelled inspection'))
       await expect(reader.inspect(meta.id, session => session.id, abort.signal)).rejects.toMatchObject({ code: 'SESSION_QUERY_ABORTED' })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each(['return', 'throw'] as const)('releases a cold inspection after the getter completes with %s', async (outcome) => {
+    const ctx = await readerContext()
+    try {
+      const first = header('inspect-first')
+      const second = header('inspect-second')
+      const store = new Map([first, second].map(meta => [meta.id, { header: meta, events: [], revision: 'r1' }]))
+      const counters = { stat: 0, open: 0, read: 0 }
+      ctx.provide('sessionPersistence', stubPersistence(store, counters))
+      const reader = new SessionObservationReader(ctx, 1)
+      const result = reader.inspect(first.id, (session) => {
+        if (outcome === 'throw') throw new Error('getter failed')
+        return session.id
+      })
+      if (outcome === 'throw') await expect(result).rejects.toThrow('getter failed')
+      else expect(await result).toBe(first.id)
+
+      // With capacity one, an inspection that releases its lease can be evicted by the next read.
+      {
+        using observation = await reader.read(second.id, { projectionMode: 'none' })
+        expect(observation.header.id).toBe(second.id)
+      }
+      {
+        using observation = await reader.read(first.id, { projectionMode: 'none' })
+        expect(observation.header.id).toBe(first.id)
+      }
+      expect(counters.read).toBe(3)
     } finally { await ctx.fiber.dispose() }
   })
 

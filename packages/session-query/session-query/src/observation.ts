@@ -1,6 +1,5 @@
 /** Shared live/prepared observations for Session page and lifecycle consumers. */
 
-import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId , SessionLogOffset as SessionLogOffsetType , SessionSeqCursor } from '@deepseek-ai/dsh-session'
@@ -79,7 +78,6 @@ interface PreparedEntry {
  */
 export class SessionObservationReader {
   private readonly cache = new Map<SessionId, PreparedEntry>()
-  private readonly retainedSessions = new WeakMap<SessionObservation, Session>()
 
   /**
    * @param ctx - context carrying Session and optional persistence/projection services.
@@ -99,11 +97,13 @@ export class SessionObservationReader {
    * @returns the getter's detached value.
    */
   async inspect<T>(sessionId: SessionId, read: (session: Session) => T, signal?: AbortSignal): Promise<T> {
-    using observation = await this.read(sessionId, { projectionMode: 'none', ...signal === undefined ? {} : { signal } })
-    const session = this.retainedSessions.get(observation)
-    assert(session !== undefined, 'An observation lease retains its Session')
-    signal?.throwIfAborted()
-    return read(session)
+    const { observation, session } = await this.acquire(sessionId, { projectionMode: 'none', ...signal === undefined ? {} : { signal } })
+    try {
+      signal?.throwIfAborted()
+      return read(session)
+    } finally {
+      observation[Symbol.dispose]()
+    }
   }
 
   /**
@@ -117,23 +117,33 @@ export class SessionObservationReader {
     sessionId: SessionId,
     options: SessionObservationOptions = {},
   ): Promise<SessionObservation> {
+    return (await this.acquire(sessionId, options)).observation
+  }
+
+  /** Pair a live or prepared Session with the observation lease that retains it. */
+  private async acquire(
+    sessionId: SessionId,
+    options: SessionObservationOptions,
+  ): Promise<{ observation: SessionObservation; session: Session }> {
     const { signal, projectionMode = 'all' } = options
     for (;;) {
       throwIfObservationAborted(signal)
       const live = this.ctx.sessions.get(sessionId)
-      if (live !== undefined) return this.live(live, projectionMode)
+      if (live !== undefined) return { observation: this.live(live, projectionMode), session: live }
       const persistence = this.ctx.get('sessionPersistence')
       if (persistence === undefined) throw notFound(sessionId)
 
       const snapshot = await this.statSource(persistence, sessionId, signal)
       const attachedDuringStat = this.ctx.sessions.get(sessionId)
-      if (attachedDuringStat !== undefined) return this.live(attachedDuringStat, projectionMode)
+      if (attachedDuringStat !== undefined) {
+        return { observation: this.live(attachedDuringStat, projectionMode), session: attachedDuringStat }
+      }
       let entry = this.cachedEntry(persistence.identity, sessionId, snapshot.revision)
       if (entry === undefined) {
         const loaded = await this.loadSource(persistence, sessionId, signal)
         throwIfObservationAborted(signal)
         const attached = this.ctx.sessions.get(sessionId)
-        if (attached !== undefined) return this.live(attached, projectionMode)
+        if (attached !== undefined) return { observation: this.live(attached, projectionMode), session: attached }
         // The handle marks persisted events as adoptable; synthetic closers
         // are owned by this read, so the combined seed needs no copy.
         const seed = loaded.events
@@ -176,7 +186,7 @@ export class SessionObservationReader {
           { cause: error },
         )
       }
-      return this.preparedLease(sessionId, entry, projections)
+      return { observation: this.preparedLease(sessionId, entry, projections), session: entry.session }
     }
   }
 
@@ -266,7 +276,7 @@ export class SessionObservationReader {
     entry.refs += 1
     const lease = (): SessionObservation => {
       let disposed = false
-      const observation: SessionObservation = {
+      return {
         source: 'prepared',
         header: entry.session.header,
         inheritedEventCount: entry.session.inheritedEventCount,
@@ -286,8 +296,6 @@ export class SessionObservationReader {
           if (entry.refs === 0) this.evictPastCapacity()
         },
       }
-      this.retainedSessions.set(observation, entry.session)
-      return observation
     }
     return lease()
   }
@@ -314,7 +322,7 @@ export class SessionObservationReader {
     }
     const lease = (): SessionObservation => {
       let disposed = false
-      const observation: SessionObservation = {
+      return {
         source: 'live',
         header: session.header,
         inheritedEventCount: session.inheritedEventCount,
@@ -331,8 +339,6 @@ export class SessionObservationReader {
         },
         [Symbol.dispose]: () => { disposed = true },
       }
-      this.retainedSessions.set(observation, session)
-      return observation
     }
     return lease()
   }
