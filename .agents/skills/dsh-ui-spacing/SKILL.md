@@ -19,4 +19,6 @@ When wrapping, metadata, subgroups or independent actions increase complexity, i
 
 Judge actual whitespace at normal size, including padding, line-height, glyph whitespace and borders. CSS margin ratios alone do not establish grouping; explanatory labels need one unambiguous owner. For example, declared 16px/8px margins can still leave a heading closer to the preceding content once line-height and container padding are included; compare the rendered gaps rather than adopting that pair as a rule.
 
+When matching two visible gaps, name both pairs of endpoints and include each container’s padding, border and text line box. Equal visible gaps may require unequal margins. A control’s painted edge and a text glyph’s edge are different endpoints; keep that choice stable through review.
+
 Reuse page spacing and [style tokens](../../../docs/web-styling.md), preserve [alignment](../dsh-ui-alignment/SKILL.md) axes, and consult [cases](../../../docs/ui-design-review-cases.md#grouping) for uncertain judgments. This skill defines no numeric scale.

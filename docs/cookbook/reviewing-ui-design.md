@@ -12,6 +12,8 @@ Use this cookbook for explicitly requested comprehensive reviews and for evidenc
 
 Check the complete icon box, including intentional internal whitespace, text columns and gaps before judging the drawn contour. Hit targets are not icon boxes; do not align each glyph’s painted pixels independently. See the [alignment principle](../ui-design-review-cases.md#alignment).
 
+Check associated icons and text against the [same-foreground rule](../../.agents/skills/dsh-ui-icons/SKILL.md#placement-and-use), including submenu values with chevrons and search placeholders with magnifiers. Compare rendered color and opacity in both themes; preserve semantic exceptions.
+
 ## Table of Contents
 
 - [1. Define the page or modal in scope](#proposition)
@@ -28,7 +30,7 @@ Check the complete icon box, including intentional internal whitespace, text col
 
 Identify the user task and affected page or modal. Record scope when several regions, consumers or design choices need coordination; a straightforward local change needs no separate plan. For an explicitly requested comprehensive review, enumerate the requested pages/modals and relevant states. Do not present local inspection as a whole-page result.
 
-Use the [judgment priorities](../ui-design-review-cases.md#judgment) across that scope: alignment and spatial grouping first, then density, hierarchy, states, component choice, icon optics and geometry. Express each finding as an observable relationship, such as content appearing closer to the next group than to its own label. Follow the user’s requested order and authorization; a full review can identify multiple related defects, and existing implementation authorization does not require renewed approval for routine adjustments.
+Use the [judgment priorities](../ui-design-review-cases.md#judgment) across that scope: alignment and spatial grouping first, then density, hierarchy, states, component choice, icon optics and geometry. Express each finding as an observable relationship, such as content appearing closer to the next group than to its own label. Follow the user’s requested order and authorization; a full review can identify multiple related defects, and permission to implement routine adjustments does not replace the [required designer/product review](../../.agents/skills/dsh-client-ui-ux/SKILL.md#design-review-escalation).
 
 Read the [client UI skill](../../.agents/skills/dsh-client-ui-ux/SKILL.md) and the applicable architecture before editing. Use the [responsive skill](../../.agents/skills/dsh-responsive-ui/SKILL.md) for width and input changes, the [style reference](../web-styling.md) for tokens, and the [radius standard](../ui-radius.md) for corner geometry. This workflow adds review and evidence steps, not another set of visual tokens.
 
@@ -55,6 +57,8 @@ Apply the [minimum checks](../../.agents/skills/dsh-client-ui-ux/SKILL.md#minimu
 Inspect the affected result at the normal application entry point. Reuse an instance serving the current implementation; do not restart or rebuild solely for each small edit. Follow the relevant task path and use computed styles when needed to distinguish layout defects from content, loading or unfinished animation.
 
 For ordinary changes, a finding needs its location, visible problem, correction and verification. Add source ownership, alternatives and conditions that would invalidate the correction when they affect the decision. Prioritize visible or shared defects; differing source numbers alone do not justify standardization.
+
+When diagnosing spacing, record layout boxes, margins, padding, line boxes and visible glyph edges separately. State whether a close control aligns by its button edge or icon box, and check trigger/menu text insets across their different icon sizes. An annotation of visible whitespace is not a measured CSS margin.
 
 ### Reconcile the baseline across the whole interface
 
@@ -98,7 +102,7 @@ For complex findings, explain the compared objects, intended relationship, suppo
 
 Preserve a recoverable starting version and relevant captures when a comparison is requested or needed to assess a broader change or regression risk. Routine local changes do not require an extra source snapshot or before image. When retaining a baseline, include existing uncommitted work rather than assuming `HEAD` represents the visible application, and record the source identity and capture conditions.
 
-When captures are needed, save the baseline images and their conditions in a local evidence directory.
+When captures are needed, save images and their conditions in `.ui-review/` at the checkout root or another explicitly selected local directory. The repository ignores `.ui-review/` for generated evidence; review tools can remain installed outside the checkout.
 
 Use a scene map for comprehensive reviews or multi-state comparisons that need it; simple changes can be checked directly at the affected position. Include expanded rows, dialogs and relevant loading/disabled states when they affect the claim. A collapsed parent does not cover hidden controls. Use safe fixture data for destructive or unavailable states instead of changing a user's real task just for a screenshot.
 
@@ -144,6 +148,8 @@ Use the [UI change workflow](../../.agents/skills/dsh-client-ui-ux/SKILL.md#requ
 For a formal comparison report, use before on the left and after on the right. Add non-obscuring annotations only when helpful, on the after image, and retain originals; a removable overlay is useful for interactive reports. Choose a readable narrow-screen presentation rather than requiring a special report interface. Ordinary handoffs may use simple labeled images or concise text; the original GIF requirements remain unchanged.
 
 Deduplicate cumulative summaries by location: pair the earliest reliable before image with the final implementation, retaining comparable conditions. Keep intermediate rounds only as historical evidence, not separate final results; reverted proposals are not current results. List another session's retained changes separately without claiming them. Disclose missing baselines or uncertain ownership. Record actual checks without adding repeated runs as extra coverage.
+
+For an all-changes summary, trace each claim to the cumulative diff, current owner and retained evidence. Separate net changes from behavior already in the baseline; resolve later user revisions before naming final values. Label older captures as historical when they no longer show the current result, and distinguish source-confirmed behavior from a scene inspected again. Feed reusable decisions back to their rule owner and contrasting cases, not local pixel values or an unsupported whole-product pass.
 
 <a id="further-exploration"></a>
 ## Further Exploration

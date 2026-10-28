@@ -13,9 +13,9 @@ Consult the relevant cases when a design relationship is unclear. Ordinary chang
 ## Table of Contents
 
 - [What a review must judge](#judgment)
-- [Review the entire page or modal](#whole-interface-review)
-- [Applicable DSH standards](#review-baseline)
-- [How to use examples](#case-selection)
+- [Review the entire page or modal as one unit](#whole-interface-review)
+- [Combine the applicable standards first](#review-baseline)
+- [Choose cases that expose a design decision](#case-selection)
 - [Principle examples](#case-index)
 - [1. Alignment](#alignment)
 - [2. Spatial grouping](#grouping)
@@ -39,8 +39,6 @@ DSH prioritizes alignment and spatial grouping in visual review. First identify 
 The page or modal provides the reference for composition; the [impact scope](cookbook/reviewing-ui-design.md#review-scope) determines which relationships require inspection for a change. Navigation, content, forms and actions may come from different components while sharing text axes and spacing rules. Explain exceptions through role, hierarchy or state; component ownership alone is not a design reason.
 
 The reference diagrams explain relationships; they are not implementation captures or accepted before-and-after results. The examples below explain particular principles and do not establish coverage of the page or modal under review.
-
-<a id="combined-cases"></a>
 
 <a id="whole-interface-review"></a>
 ## Review the entire page or modal as one unit
@@ -119,6 +117,8 @@ Use these examples to understand a relationship that is unclear. Apply the same 
 | [A3](#case-preview-toolbar) | Alignment between rows and compound controls |
 | [A4](#case-empty-center) | Centering a content group within its container |
 | [A5](#case-composer-controls) | Visible size and center of peer controls |
+| [A6](#case-trigger-menu-text) | Text starts across triggers and menus |
+| [A7](#case-close-control-edge) | Choosing the close-control edge |
 | [G1](#case-title-actions) | Separating content from its action group |
 | [G2](#case-team-sections) | Spacing between complex sections |
 | [G3](#case-plugin-groups) | Nested groups along the reading order |
@@ -126,6 +126,7 @@ Use these examples to understand a relationship that is unclear. Apply the same 
 | [C1](#case-search-color) | Color emphasis within one information unit |
 | [S1](#case-sidebar-state) | Persistent selection beside temporary hover |
 | [O1](#case-file-optics) | Optical alignment of different icon types |
+| [O2](#case-chevron-consumers) | Shared artwork at different consumer sizes |
 | [R1](#case-model-radius) | Radii across container and control roles |
 | [R2](#case-checkbox-radius) | Small selection controls within a form |
 | [R3](#case-automation-radius) | Justified geometry differences between roles |
@@ -176,7 +177,7 @@ The comparison below shows actual preset cards with unequal descriptions. On the
 
 **Scene and relationship.** Panel controls sit above file-display controls and an “Open in app” split button. The two rows belong to one preview header, while each row contains operations with different scopes.
 
-**Failure and correction.** Each component may be internally centered while the assembled header has unrelated right insets, heights, and group gaps. Relate the upper icon boxes to the complete lower control, preserving internal icon whitespace rather than aligning extra hit padding or an individual glyph’s painted pixels. Align peer control centers; keep display controls together and separate the external-open action. Treat the split button as one unit. Do not force its arrow onto a column intended for an unrelated panel action.
+**Failure and correction.** Each component may be internally centered while the assembled header has unrelated right insets, heights, and group gaps. Relate the upper icon boxes to the complete lower control, preserving internal icon whitespace rather than aligning extra hit padding or an individual glyph’s painted pixels. Align peer control centers; keep display controls together and separate the external-open action. Treat the split button as one unit. Reducing its outer width can equalize visible gaps while retaining the preceding icon columns; verify both segment targets and the frame’s contribution to layout. Do not force its arrow onto a column intended for an unrelated panel action.
 
 **Acceptance.** Inspect both rows with the path, tabs, and content edge visible. Repeat with a long path and a narrow pane. A row of standalone icons is not a substitute for the actual split control.
 
@@ -197,6 +198,20 @@ The comparison below shows actual preset cards with unequal descriptions. On the
 **Failure and correction.** Different base diameters plus an extra vertical translation create two unrelated anchors. Normalize the peer controls' outer geometry and remove layout compensation, then balance the plus and arrow within their slots. A thin plus and a solid arrow need not have equal painted area.
 
 **Acceptance.** Compare both bases and centers in empty, enabled, busy/stop, and narrow layouts. Review the toolbar alongside the composer outline, not as two isolated button screenshots. A reference product's unequal controls do not override an explicit DSH requirement for equal bases.
+
+<a id="case-trigger-menu-text"></a>
+### Example A6: Text starts across triggers and menus
+
+**Scene and relationship.** A permission trigger uses a larger, heavier icon than its menu rows, but their corresponding labels should start on one axis. A search prompt, result heading and option label can share a similar reading edge.
+
+**Correction and acceptance.** Sum each surface’s border, padding, leading slot and gap before adjusting it. Matching only icon sizes or outer card edges leaves different text starts. Check the assembled open menu, longer labels and narrow layouts; distinguish device-pixel rounding of portal coordinates from a whole inset mismatch.
+
+<a id="case-close-control-edge"></a>
+### Example A7: Choosing the close-control edge
+
+**Scene and relationship.** A modal has a close glyph inside a larger button and a footer action at the content edge. An icon-box edge and a button edge imply different header insets.
+
+**Correction and acceptance.** Name the intended edge before changing the shared header. If the full button aligns with the footer action, retain the icon’s internal centering instead of pulling it to that edge. An explicitly icon-aligned composition remains a distinct variant. Check short and wrapping titles, description/body combinations and footer actions, and preserve the target size.
 
 <a id="grouping"></a>
 ## 2. Spatial grouping
@@ -292,7 +307,7 @@ Typography participates in geometry: compare text starts, baselines and line box
 
 **Scene and relationship.** Compare the empty automation search with the expanded sidebar search. Both pair a magnifier with a prompt, but one makes the icon darker and the other makes the text darker.
 
-**Correction and acceptance.** Give the empty-field prompt one foreground role, including the leading icon. Compare computed color, opacity, disabled styling, and the background together; two identical color tokens can still differ after an ancestor fades one child. Test empty, typed, focused, disabled, light, and dark variants. Typed query text and an independently actionable clear button need not use the placeholder's weaker role.
+**Correction and acceptance.** Give the empty-field prompt one foreground role, including the leading icon. Compare computed color, opacity, disabled styling, and the background together; two identical color tokens can still differ after an ancestor fades one child. Test empty, typed, focused, disabled, light, and dark variants. Typed query text and an independently actionable clear button need not use the placeholder's weaker role. A submenu value and its trailing chevron also form one value: a muted model name with a darker chevron fails that relationship even when their geometry is correct.
 
 <a id="states"></a>
 ## 5. Control states
@@ -336,6 +351,13 @@ The [icon skill](../.agents/skills/dsh-ui-icons/SKILL.md) owns interface icon ro
 **Scene and relationship.** At one tree depth, compare closed/open folders, native file-type icons, generic files, and names without icons. Then compare the same pattern one level deeper.
 
 **Correction and acceptance.** Preserve the depth indent and common text start. Normalize the placement slots, then compare visible centers and perceived weight within them. Do not move the label to compensate for one glyph, or align all depths to one edge. Inspect at normal size and magnification, with selected backgrounds and long names; the magnified view diagnoses the drawing, while normal size determines whether the result balances.
+
+<a id="case-chevron-consumers"></a>
+### Example O2: Shared artwork at different consumer sizes
+
+**Scene and relationship.** A chevron appears beside a menu label and inside a larger floating button. Enlarging its drawing within the same view box changes both appearances.
+
+**Correction and acceptance.** Compare the directional family, both weights and actual consumer sizes. Keep a modest supporting glyph beside text; reduce the floating control’s icon size if needed without shrinking its button. A large glyph sheet alone does not establish balance in either composition.
 
 <a id="geometry"></a>
 ## 8. Control geometry and corner relationships
