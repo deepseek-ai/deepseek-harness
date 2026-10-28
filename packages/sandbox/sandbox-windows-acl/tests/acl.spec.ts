@@ -516,7 +516,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     const sandbox = new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' })
     try {
       await sandbox.init()
-      const grant = readDirectAces(api, dir).find(ace => ace.sid === 'S-1-4-1234-5')
+      const grant = readDirectAces(api, dir).find(ace => ace.sid === sandbox.writeSids[0])
       expect(grant).toBeDefined()
       const mask = grant?.mask ?? 0
       expect(mask).toBe(abi.GRANT_MASK)
