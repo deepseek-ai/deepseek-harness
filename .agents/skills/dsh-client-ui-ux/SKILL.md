@@ -47,7 +47,7 @@ Before restructuring components, read [client instructions](../../../packages/cl
 - **Verify every color in both light and dark mode.** An ink/background pair must stay readable under both themes before it ships. Dimmed tones are the standing counter-example: they suit decorative surfaces, but on text they routinely fall below readability in one theme — never put a dimmed color on text without checking both.
 - **Font weight tops out at 500 in feature CSS you add or change.** Do not use 600+ for emphasis; differentiate with size or ink instead. The markdown typography tokens owned by ui-theme are the standing exception.
 - **Pick font sizes from the theme typography variables when an existing role matches, otherwise from the page's existing scale.** Parallel content shares one size; never invent a size for a single element, and keep the number of distinct sizes on a page small (13px is the established row/detail size). When the page itself has no precedent, borrow the size and spacing ratios of the most similar existing page or element.
-- Apply [alignment](../dsh-ui-alignment/SKILL.md) and [icons](../dsh-ui-icons/SKILL.md) to icon/text relationships.
+- Apply [alignment](../dsh-ui-alignment/SKILL.md) to icon/text positioning and the [same-color rule](../dsh-ui-icons/SKILL.md#placement-and-use) to associated icons and text, including value chevrons and search prompts.
 
 ## Component geometry
 

@@ -66,13 +66,13 @@
   width: 100%;
 }
 
-/* The 14px close icon shares the content edge inside its 28px target. */
+/* Header controls and footer actions share the content column's trailing edge. */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 22px calc(24px - (28px - 14px) / 2) 12px 24px;
+  padding: 22px 24px 12px;
 }
 
 .title {
@@ -90,6 +90,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: transparent;

@@ -290,9 +290,9 @@ Typography participates in geometry: compare text starts, baselines and line box
 <a id="case-search-color"></a>
 ### Example C1: Color emphasis within one information unit
 
-**Scene and relationship.** Compare the empty automation search with the expanded sidebar search. Both pair a magnifier with a prompt, but one makes the icon darker and the other makes the text darker.
+**Scene and relationship.** Compare the empty automation search with the expanded sidebar search. Both pair a magnifier with a prompt, but one makes the icon darker and the other makes the text darker. A model submenu can make the same mistake by pairing a tertiary value with a primary-colored chevron.
 
-**Correction and acceptance.** Give the empty-field prompt one foreground role, including the leading icon. Compare computed color, opacity, disabled styling, and the background together; two identical color tokens can still differ after an ancestor fades one child. Test empty, typed, focused, disabled, light, and dark variants. Typed query text and an independently actionable clear button need not use the placeholder's weaker role.
+**Correction and acceptance.** Give each prompt or value one foreground role, including its associated magnifier or chevron; darkening only the text or only the icon leaves the mismatch. Compare computed color, opacity, disabled styling, and the background together; two identical color tokens can still differ after an ancestor fades one child. Test empty, typed, focused, disabled, light, and dark variants. Typed query text and an independently actionable clear button need not use the placeholder's weaker role.
 
 <a id="states"></a>
 ## 5. Control states

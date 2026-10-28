@@ -71,8 +71,6 @@ The shell declares settings.launcher for an account-owned sidebar menu and retai
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The options scrollport exposes its trailing inset as `--dsh-settings-scroll-inset`, allowing a section-owned sticky action group to cover that inset without leaving underlying content visible.
-
 The shell owns the chrome and the projections; it contributes the Coding Tools and Current version rows, while feature registrants own their additional content and copy. The panel's four seats — title, header, navigation, section — are its direct children and take their places from its grid, so one markup tree serves both the desktop rail and the mobile strip.
 
 ### Ledger projections

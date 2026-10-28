@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-设置、意见反馈和登录操作使用共享的 14px Regular 图标，描边为 1px。包内的退出登录图标采用相同的尺寸和固定描边粗细，无需单独定位内层 SVG。
+设置、意见反馈和登录操作使用共享的 14px Regular 图标，描边为 1px。包内的退出登录图标采用相同的尺寸和固定描边粗细，无需单独定位内层 SVG。 登录弹窗的关闭按钮与底部操作按钮按外框右边缘对齐，共用 24px 内缩。
 
 Desktop 与普通 Web 客户端都挂载侧边栏账号菜单、账号设置、模型引导中的登录步骤，并订阅账号状态。Desktop 主进程在系统浏览器中打开授权页面。普通 Web 客户端（以缺少 Desktop preload 桥接识别）以 `login_source` web 发起登录，并以自身 origin 作为回调 origin；它在点击登录时预先打开一个标签页，本次尝试获得授权 URL 后带上相同的 `theme` 参数导航该标签页，并在失败、过期或取消时关闭它；弹窗被拦截时仍可使用复制链接。内嵌 Platform 页面、Desktop 引导和原生设备信息读取器仅在 Desktop 中提供，因此 Web 中的 Platform 链接在新标签页打开。
 

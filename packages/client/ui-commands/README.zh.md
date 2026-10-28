@@ -50,7 +50,7 @@ composer 携带图片或通用文件提交时，只有声明了 `input.attachmen
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-弹窗选择面板撑满 composer 浮层宽度，与斜杠菜单一致。弹窗搜索框在浅／深色主题下均保持背景和边框透明。分组选项使用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 共享的 `MenuGroup` 标题与 `observeStickyMenuGroups`；普通 effect 负责异步观察，并在渲染分组变化时清理和重建观察器。菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+弹窗选择面板撑满 composer 浮层宽度，与斜杠菜单一致。弹窗搜索框在浅／深色主题下均保持透明背景，文字缩进与选项行和分组标题一致。分组选项使用 [ui-primitives](../ui-primitives/README.zh.md#understand-the-implementation) 共享的 `MenuGroup` 标题与 `observeStickyMenuGroups`；普通 effect 负责异步观察，并在渲染分组变化时清理和重建观察器。菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
 
 <details>
 <summary>实现细节——点击展开</summary>

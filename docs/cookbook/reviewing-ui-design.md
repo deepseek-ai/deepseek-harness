@@ -12,6 +12,8 @@ Use this workflow for impact-scoped UI changes and explicitly requested whole-in
 
 Check the complete icon box, including intentional internal whitespace, text columns and gaps before judging the drawn contour. Hit targets are not icon boxes; do not align each glyph’s painted pixels independently. See the [alignment principle](../ui-design-review-cases.md#alignment).
 
+Check associated icons and text against the [same-color rule](../../.agents/skills/dsh-ui-icons/SKILL.md#placement-and-use), including submenu values with chevrons and search placeholders with magnifiers. Compare rendered color and opacity in both themes; record semantic exceptions explicitly.
+
 ## Table of Contents
 
 - [1. Define the page or modal in scope](#proposition)

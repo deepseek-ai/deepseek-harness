@@ -427,7 +427,7 @@
   gap: 0;
   height: 38px;
   padding: 8px 12px;
-  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 10px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 16px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);

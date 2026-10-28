@@ -5,7 +5,7 @@
   min-width: 0;
   max-width: 220px;
   height: 28px;
-  padding: 0 4px 0 8px;
+  padding: 0 4px 0 12px;
   border: none;
   /* Rounded chip chrome, matching the sibling model trigger. */
   border-radius: var(--dsw-radius-sm);

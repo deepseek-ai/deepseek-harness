@@ -126,7 +126,7 @@
 }
 
 .sessionRow .title {
-  margin: 0 6px 0 var(--dsh-sidebar-label-gap);
+  margin: 0 12px 0 var(--dsh-sidebar-label-gap);
 }
 
 .slot {
@@ -274,7 +274,7 @@
   flex: none;
   display: none;
   align-items: center;
-  gap: 13px;
+  gap: 10px;
 }
 
 @media (hover: hover) {

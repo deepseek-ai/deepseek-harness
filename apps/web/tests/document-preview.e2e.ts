@@ -1485,7 +1485,7 @@ else process.exit(1);
     await emptyOpen.waitFor({ timeout: 15_000 })
     const prominent = unsupported.locator('[data-open-target="file"][data-size="large"]')
     expect((await prominent.boundingBox())?.height).toBe(36)
-    expect((await unsupported.locator('[data-open-path]').boundingBox())?.height).toBe(28)
+    expect((await unsupported.locator('[data-open-path]').boundingBox())?.height).toBe(24)
     await successShot(page, 'unsupported')
     sections.push([
       '## Unviewable binary', '',

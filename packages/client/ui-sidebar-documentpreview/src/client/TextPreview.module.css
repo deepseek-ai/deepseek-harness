@@ -32,6 +32,7 @@
 .externalActions {
   display: flex;
   flex: none;
+  margin-inline-start: 6px;
   margin-inline-end: 6px;
 }
 

@@ -25,7 +25,7 @@ This package provides the browser surface of the open-in-app feature. A Session-
 <a id="use-this-package"></a>
 ## Use this package
 
-The compact split control shares the document toolbar’s 28px height; the labeled large variant keeps the standard control geometry.
+The compact split control is 24px high inside the document toolbar’s 28px control row, with 24px minimum segment widths; the labeled large variant keeps the standard control geometry.
 
 Mount this plugin in the Web composition beside [`dsh-host-open-in-app`](../../host/open-in-app/README.md); the pair composes the whole feature in two cordis.yml rows and this row takes no config. The Session header grows an "Open In..." split button whenever the host probed at least one installed catalog application and the session has a known workspace directory. The document preview of [`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.md) grows its file controls whenever the Host reports a desktop through the Session Remote's `session.canOpenWorkspacePath`; removing this row removes every control at once.
 

@@ -4,6 +4,8 @@ import clsx from 'clsx'
 import {
   IconChevronDownOutlineRegular, Menu, PermissionIconAutoReviewRegular, PermissionIconFullAccessRegular,
   PermissionIconReadOnlyRegular, PermissionIconWorkspaceWriteRegular, RiskConfirmation,
+  PermissionIconAutoReviewMedium, PermissionIconFullAccessMedium,
+  PermissionIconReadOnlyMedium, PermissionIconWorkspaceWriteMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -25,16 +27,16 @@ import css from './PermissionSelect.module.css'
 /* Permission glyphs follow currentColor so the trigger and menu rows tint the
    shared product artwork with their own text color. */
 
-const permissionGlyphs = new Map<string, ReactNode>([
-  ['read-only', <PermissionIconReadOnlyRegular />],
-  ['workspace-write', <PermissionIconWorkspaceWriteRegular />],
-  [FULL_ACCESS, <PermissionIconFullAccessRegular />],
-  [AUTO_REVIEW, <PermissionIconAutoReviewRegular />],
+const permissionGlyphs = new Map<string, { menu: ReactNode; trigger: ReactNode }>([
+  ['read-only', { menu: <PermissionIconReadOnlyRegular />, trigger: <PermissionIconReadOnlyMedium /> }],
+  ['workspace-write', { menu: <PermissionIconWorkspaceWriteRegular />, trigger: <PermissionIconWorkspaceWriteMedium /> }],
+  [FULL_ACCESS, { menu: <PermissionIconFullAccessRegular />, trigger: <PermissionIconFullAccessMedium /> }],
+  [AUTO_REVIEW, { menu: <PermissionIconAutoReviewRegular />, trigger: <PermissionIconAutoReviewMedium /> }],
 ])
 
 /** Glyph for a permission option value; host-configured names outside the design set get none. */
 function permissionGlyph(value: string): ReactNode | undefined {
-  return permissionGlyphs.get(value)
+  return permissionGlyphs.get(value)?.menu
 }
 
 function permissionLabel(
@@ -180,8 +182,8 @@ export function PermissionSelect({
             disabled={locked || busy}
             onClick={() => { setOpen(!open) }}
           >
-            {permissionGlyph(currentValue) !== undefined && (
-              <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
+            {permissionGlyphs.has(currentValue) && (
+              <span className={css.triggerIcon} aria-hidden>{permissionGlyphs.get(currentValue)?.trigger}</span>
             )}
             <span className={css.triggerLabel}>{currentLabel}</span>
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>

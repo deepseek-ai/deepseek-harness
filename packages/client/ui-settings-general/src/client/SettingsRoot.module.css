@@ -242,11 +242,10 @@
 
 /* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
 .options {
-  --dsh-settings-scroll-inset: 24px;
   grid-area: options;
   min-width: 0;
   min-height: 0;
-  padding: 0 24px var(--dsh-settings-scroll-inset);
+  padding: 0 24px 24px;
   overflow-y: auto;
 }
 

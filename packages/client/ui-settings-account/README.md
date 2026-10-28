@@ -28,7 +28,7 @@ A new account-model sign-in-required event displays “Model unavailable. Please
 <a id="use-this-package"></a>
 ## Use this package
 
-Settings, feedback and sign-in actions use 14px shared Regular icons with 1px strokes. The package-local logout icon uses the same size and fixed stroke weight without a separately positioned inner SVG.
+Settings, feedback and sign-in actions use 14px shared Regular icons with 1px strokes. The package-local logout icon uses the same size and fixed stroke weight without a separately positioned inner SVG. The sign-in dialog aligns the trailing edges of its close button and footer actions with a shared 24px inset.
 
 Desktop and plain Web clients both mount the sidebar account launcher, Account settings, the sign-in step of model onboarding, and the account-state subscription. Desktop main opens the authorization page in the system browser. A plain Web client, identified by the absent Desktop preload bridge, sends `login_source` web with its own origin as the callback origin, preopens a tab during the sign-in click, navigates it to the authorization URL with the same `theme` parameter once its attempt receives one, and closes it on failure, expiry, or cancellation; a blocked popup leaves the copy-link route. Embedded Platform pages, Desktop onboarding, and the native device reader stay Desktop-only, so Web Platform links open new tabs.
 

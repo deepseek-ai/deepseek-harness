@@ -338,20 +338,6 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The provider owns a persistent action group within its scrolling editor. */
-.editor > .editorActions {
-  position: sticky;
-  bottom: calc(-1 * var(--dsh-settings-scroll-inset, 0px));
-  z-index: 2;
-  padding: 12px 0 calc(12px + var(--dsh-settings-scroll-inset, 0px));
-  background: var(--dsw-alias-bg-module-platform);
-  box-shadow: 0 -1px var(--dsw-alias-border-l2);
-}
-
-.editor :is(input, button, select) {
-  scroll-margin-block: 72px;
-}
-
 .editorActions {
   display: flex;
   justify-content: flex-end;
@@ -511,10 +497,11 @@
 }
 
 .modelList {
+  --model-row-gap: 12px;
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--model-row-gap);
 }
 
 .modelListHead {
@@ -574,7 +561,7 @@
   background: var(--dsw-alias-bg-module-platform);
 }
 
-/* Each row owns half of the 8px gap so native drops reach the insertion line. */
+/* Cover half the row gap plus the border's inward, pixel-rounded positioning edge. */
 .modelEntry::before,
 .modelEntry::after {
   content: '';
@@ -582,15 +569,15 @@
   z-index: 1;
   left: 0;
   right: 0;
-  height: 4px;
+  height: calc(var(--model-row-gap) / 2 + 1px);
 }
 
 .modelEntry::before {
-  top: -4px;
+  top: calc(-1 * (var(--model-row-gap) / 2 + 1px));
 }
 
 .modelEntry::after {
-  bottom: -4px;
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 1px));
 }
 
 .modelEntry[data-drop-target='before']::before,
@@ -615,11 +602,11 @@
 }
 
 .modelEntry[data-drop-target='before']::before {
-  top: -10px;
+  top: calc(-1 * (var(--model-row-gap) / 2 + 6px));
 }
 
 .modelEntry[data-drop-target='after']::after {
-  bottom: -10px;
+  bottom: calc(-1 * (var(--model-row-gap) / 2 + 6px));
 }
 
 /* Square, label-free affordances: the row's own inputs carry the meaning, so
