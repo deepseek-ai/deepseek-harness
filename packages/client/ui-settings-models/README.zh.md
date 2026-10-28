@@ -27,6 +27,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+分区标题与说明在提供商列表上方组成一组。模型展开字段的组间距大于标签与控件间距，模型列表操作沿用统一的控件圆角尺度。
+
 保存凭据或自定义提供方时保留已选模型。用户可在 composer 中选择可用模型。
 
 提供方列表中 DeepSeek 账号排第一，DeepSeek 排第二；第三方提供方保留目录中的相对顺序。
@@ -81,11 +83,15 @@ Models 页面包含 **DeepSeek 账号**（`deepseek-account`，英文为 **DeepS
 
 -----
 
+首次配置将标题和说明紧密成组，再以较大间距分隔密钥字段和操作区。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
 <summary>实现细节——点击展开</summary>
+
+模型标识与容量字段共用列，窄卡片中字段纵向排列。每个提供商编辑区在滚动边缘保留取消与保存操作组，聚焦控件与该操作组保持避让。
 
 页面只持有脱敏后的描述符，从不持有完整设置分区：因此每次编辑都以 `settings.mutate` 路径操作落到已存分区上——每个改动字段一次 set、每个清除字段一次 unset、删除提供商行则一次 unset。
 

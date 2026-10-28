@@ -114,6 +114,8 @@ A yellow rounded-triangle warning appears before Reload in the document toolbar 
 <details>
 <summary>Office implementation — click to expand</summary>
 
+The external-open control aligns its complete frame with the upper toolbar’s icon boxes, excluding extra hit padding and preserving whitespace within the glyphs.
+
 Office registration, loading, caching, and font notices live in `src/client/office/`. The injected Office face writes converted PDF bytes, font metadata, and failures through the declared store actions. The Office body triggers loading, binds cancellation to its lifecycle, and declares a nested PDF slot that reuses the lazy PDF body and its tab viewing state. The keyed `sidebar.right.tab.document.action` slot places renderer controls before Reload. The Office action shares the body’s store and reads only the current revision’s font metadata. Registration remains available without the Host renderer; optional `remote.officeToPdf` and `remote.workspaceFiles` injections supply conversion and freshness callbacks, and their removal restores unavailable guidance. Registrations and tab retention follow effect lifetimes. The [conversion service](../../document/office-to-pdf/README.md) owns the Host Remote methods, mounted by `api/remotes`.
 
 The Office Remote returns converted PDFs as native `Uint8Array` values through Connection's multipart binary transport. Renderers borrow retained bytes read-only and copy them before Worker transfer.

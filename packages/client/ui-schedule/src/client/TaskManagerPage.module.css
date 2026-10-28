@@ -38,11 +38,15 @@
    clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
    share one content frame at every width. */
 .pageContent {
-  max-width: 960px;
+  max-width: calc(960px + 2 * clamp(24px, 4vw, 48px));
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 /* Page title and creation actions. */
@@ -87,14 +91,13 @@
   white-space: nowrap;
 }
 
-/* The Plugins toolbar's steps: New and the bulk cleanup share one 32px
-   capsule with a 13px label. */
+/* Header actions use the standard-control radius at their compact page height. */
 .headerAction {
   height: 32px;
   font-size: 13px;
   line-height: 20px;
   padding: 0 12px;
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-md);
 }
 
 /* The mock's `.list-tools`: the one row of filter tabs, 8px between chips and
@@ -114,9 +117,7 @@
   gap: 8px 12px;
 }
 
-/* The mock's `.tab`: the filter chip's 28px box, 10px sides, 14px radius, and
-   the mock's 14px label. The selected chip takes the mock's `--hover` fill at
-   the chip's own weight instead of the atom's bordered capsule. */
+/* Filter chips use the compact-control radius and retain a stable footprint. */
 .filterTab {
   display: inline-flex;
   flex: none;
@@ -124,7 +125,7 @@
   height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
@@ -181,7 +182,7 @@
   margin: 0;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-tertiary);
   transition: border-color 0.15s;
 }
@@ -218,7 +219,7 @@
 }
 
 .searchField input::placeholder {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .searchField input:focus-visible {
@@ -249,7 +250,9 @@
 /* The mock's `#rule-list`: the catalog notices and the rows share one column
    with no box of their own. */
 .list {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 
 /* The Plugins page's `.cards` column: 2px between rows. */
@@ -272,7 +275,7 @@
   width: 100%;
   height: auto;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   text-align: left;
   white-space: normal;
 }
@@ -378,7 +381,7 @@
   gap: 9px;
   margin: 0 0 20px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-specific-sidebar-fill);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -758,7 +761,7 @@
 .retentionRule {
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -776,11 +779,9 @@
   margin-top: 28px;
 }
 
-/* The mock's `.automation-detail .form-section h3`: the `运行时间` heading is
-   13px tertiary ink, regular weight, and the mock's 20px leading. The 6px
-   lead-in nudges it off the card's rounded edge, as the hint below. */
+/* Heading and hint follow the field labels: 12px inset plus the hairline. */
 .ruleCard h3 {
-  margin: 0 0 8px 10px;
+  margin: 0 0 8px 12.5px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
   line-height: 20px;
@@ -792,7 +793,7 @@
   flex-direction: column;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
 }
 
 /* Escape-key guard around a dropdown: the wrapper takes no box of its own, so
@@ -886,7 +887,7 @@
   min-width: 0;
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   transition: background 0.15s;
 }
 
@@ -932,7 +933,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: var(--dsw-radius-md);
   outline: none;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -976,7 +977,7 @@
   padding: 5px 8px;
   margin-right: 0;
   border: none;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -1016,7 +1017,7 @@
   justify-content: center;
   min-width: 72px;
   height: 36px;
-  border-radius: 18px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
 }
 
@@ -1129,9 +1130,9 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The 6px lead-in matches the card heading above, off the rounded edge. */
+/* Share the heading and field-label column. */
 .ruleHint {
-  margin: 8px 0 0 10px;
+  margin: 8px 0 0 12.5px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
   line-height: 1.6;
@@ -1162,7 +1163,7 @@
   margin: 0;
   padding: 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 16px;
+  border-radius: var(--dsw-radius-lg);
   outline: 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -1210,7 +1211,7 @@
   gap: 12px;
   margin: 0 -8px;
   padding: 14px 8px;
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   font-size: 14px;
   line-height: 22px;
 }
@@ -1419,9 +1420,8 @@
   height: 28px;
   padding: 0 8px;
   border: 0;
-  /* The strip's icon buttons are 28px `sm` capsules (14px), so this pill keeps
-     the same corner. */
-  border-radius: 14px;
+  /* Linked-session actions share the strip's compact-control geometry. */
+  border-radius: var(--dsw-radius-sm);
   text-align: left;
 }
 
@@ -1564,4 +1564,11 @@
   .zoneSearch {
     font-size: 16px;
   }
+}
+
+.list > .empty {
+  flex: 1;
+  justify-content: center;
+  min-height: 280px;
+  box-sizing: border-box;
 }

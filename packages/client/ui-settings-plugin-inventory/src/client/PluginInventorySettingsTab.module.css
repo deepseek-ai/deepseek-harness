@@ -47,7 +47,7 @@
 .catalog {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
 }
 
 .search {
@@ -89,7 +89,7 @@
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -245,21 +245,28 @@
 .group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
-/* Every group header takes the preset switcher's 36px height, so each subtitle
-   sits the same distance below its title. */
+/* Title and description remain one group beside the independent selector. */
 .groupTitleRow {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.groupHeading {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .group + .group {
   border-top: 0.5px solid var(--dsw-alias-border-l2);
-  padding-top: 14px;
+  padding-top: 24px;
 }
 
 .headerEnd {
@@ -296,7 +303,7 @@
 .groupTitle {
   font-size: 14px;
   line-height: 22px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -304,7 +311,7 @@
   display: flex;
   flex-wrap: wrap;
   row-gap: 4px;
-  margin: -6px 0 0 20px;
+  margin: 0 0 0 20px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
@@ -505,6 +512,12 @@
 }
 
 /* iOS Safari zooms the visual viewport for a focused field under 16px. */
+@media (pointer: coarse) {
+  .search input {
+    font-size: 16px;
+  }
+}
+
 @media (pointer: coarse) {
   .search input {
     font-size: 16px;

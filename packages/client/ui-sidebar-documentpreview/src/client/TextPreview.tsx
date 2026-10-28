@@ -203,7 +203,11 @@ export function TextPreview({
       <div className={css.preview} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
         <div className={css.header}>
           <PathLabel path={displayPath} className={css.path} data-textpreview-path />
-          {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
+          {fileOwner !== undefined && (
+            <div className={css.externalActions}>
+              {renderSlot('sidebar.right.tab.document.actions', fileOwner)}
+            </div>
+          )}
         </div>
         <div className={css.body} data-textpreview-body>
           <div className={css.empty} data-textpreview-unsupported>
@@ -330,7 +334,11 @@ export function TextPreview({
           </button>
         </Tooltip>
         {/* jscpd:ignore-end */}
-        {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
+        {fileOwner !== undefined && (
+          <div className={css.externalActions}>
+            {renderSlot('sidebar.right.tab.document.actions', fileOwner)}
+          </div>
+        )}
       </div>
       <div
         ref={bindBody}

@@ -38,11 +38,10 @@
   flex: 0 0 auto;
 }
 
-/* The shared 16px glyphs render one step smaller on the exposed trigger;
-   the dropdown rows keep the full 16px. */
+/* Keep the composer mode visible beside its label. */
 .triggerIcon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .triggerLabel {

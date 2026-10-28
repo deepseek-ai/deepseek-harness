@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+紧凑分体控件与文档工具栏共用 28px 高度；带文字的大号变体保持标准控件几何。
+
 把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂进 Web 组合；这对包用两行 cordis.yml 组成完整功能，本行不接受任何配置。只要主机探测到至少一个已安装的 catalog 应用且会话有已知的 workspace 目录，会话头部就会出现 "Open In..." 分体按钮。只要 Host 通过 Session Remote 的 `session.canOpenWorkspacePath` 报告有桌面，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览就会长出文件控件；删掉这一行会一次去掉所有控件。
 
 ### 预期行为

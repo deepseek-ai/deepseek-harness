@@ -25,6 +25,8 @@ This package adds an Agent Teams action to the Web conversation header, where a 
 <a id="use-this-package"></a>
 ## Use this package
 
+The complete team panel separates members from shared tasks more than adjacent cards within either section. Section headings align with the card edges, and the panel fill follows the outer panel corners.
+
 Enable this package through [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md), which supplies the Team service, tools, and Web UI together. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 
 ### Inspect and navigate the roster

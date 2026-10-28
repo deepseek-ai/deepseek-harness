@@ -65,6 +65,8 @@ Answer-panel buttons belong to the question renderer. It composes `DisclosureRow
 <details>
 <summary>Implementation internals — click to expand</summary>
 
+The generic and Bash fallback IN/OUT cards share a label column across sections, preserving independent input and output scrolling.
+
 The package realizes one dispatch rule: atomic Tool views are keyed by wire Tool name and registered by their owning business packages; this package only renders the tree and the fallback.
 
 ### Rendering contract

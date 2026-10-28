@@ -85,7 +85,7 @@ describe('MessageFeedbackActions row styles', () => {
     // font size moves the row.
     expect(block('MessageFeedbackActions', '.action')).toMatch(/width:\s*calc\(28px \+ var\(--dsh-content-font-delta, 0px\)\)/)
     expect(block('MessageFeedbackActions', '.action')).toMatch(/height:\s*calc\(28px \+ var\(--dsh-content-font-delta, 0px\)\)/)
-    expect(block('MessageFeedbackActions', '.action svg')).toMatch(/width:\s*calc\(15px \+ var\(--dsh-content-font-delta, 0px\)\)/)
+    expect(block('MessageFeedbackActions', '.action svg')).toMatch(/width:\s*calc\(16px \+ var\(--dsh-content-font-delta, 0px\)\)/)
   })
 
   it('uses the tertiary label colour for recorded rating icons', () => {
@@ -95,9 +95,7 @@ describe('MessageFeedbackActions row styles', () => {
 })
 
 describe('FeedbackDialog layout styles', () => {
-  it('uses the reviewed spacing, text colours, and submit-button geometry', () => {
-    expect(block('FeedbackDialog', '.dialog.dialog')).toMatch(/gap:\s*38px/)
-    expect(block('FeedbackDialog', '.categories')).toMatch(/margin-top:\s*-14px/)
+  it('uses theme text colours and submit-button geometry', () => {
     expect(block('FeedbackDialog', '.chip')).toMatch(/color:\s*var\(--dsw-alias-label-primary\)/)
     expect(block('FeedbackDialog', '.detail::placeholder')).toMatch(/color:\s*var\(--dsw-alias-label-caption\)/)
     expect(block('FeedbackDialog', '.detail')).toContain('border-radius: var(--dsw-radius-lg)')

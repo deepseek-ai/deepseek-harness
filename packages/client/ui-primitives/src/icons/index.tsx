@@ -24,6 +24,12 @@ function productIcon(glyph: IconGlyph, weight: IconWeight): (props: IconProps) =
   )
 }
 
+/** Regular logout arrow and door with a fixed one-pixel stroke. */
+export const IconLogoutOutlineRegular = productIcon('logout-outline', 'regular')
+
+/** Medium logout arrow and door with a fixed 1.3px stroke. */
+export const IconLogoutOutlineMedium = productIcon('logout-outline', 'medium')
+
 /** Regular one-pixel IconNewChatOutline artwork. */
 export const IconNewChatOutlineRegular = productIcon('new-chat-outline', 'regular')
 
@@ -234,10 +240,10 @@ export const IconWarningOutlineRegular = productIcon('warning-outline', 'regular
 /** Medium IconWarningOutline artwork with a 1.3px stroke. */
 export const IconWarningOutlineMedium = productIcon('warning-outline', 'medium')
 
-/** Regular IconCheckCircleFill artwork (circled check); its fill-only geometry is weight-independent. */
+/** Regular one-pixel IconCheckCircleFill artwork. */
 export const IconCheckCircleFillRegular = productIcon('check-circle-fill', 'regular')
 
-/** Medium IconCheckCircleFill artwork; it matches Regular because the geometry is fill-only. */
+/** Medium IconCheckCircleFill artwork with a fixed 1.3px stroke. */
 export const IconCheckCircleFillMedium = productIcon('check-circle-fill', 'medium')
 
 /** Regular rounded warning triangle with an exclamation mark. */
@@ -456,10 +462,10 @@ export const IconQuestionOutlineRegular = productIcon('question-outline', 'regul
 /** Medium IconQuestionOutline artwork with a 1.3px stroke. */
 export const IconQuestionOutlineMedium = productIcon('question-outline', 'medium')
 
-/** Regular IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+/** Regular one-pixel IconInfoOutline artwork. */
 export const IconInfoOutlineRegular = productIcon('info-outline', 'regular')
 
-/** Medium IconInfoOutline artwork; its fill-only geometry is weight-independent. */
+/** Medium IconInfoOutline artwork with a fixed 1.3px stroke. */
 export const IconInfoOutlineMedium = productIcon('info-outline', 'medium')
 
 /** Regular one-pixel plugin pinwheel artwork. */
@@ -525,7 +531,7 @@ export const IconShieldOutlineMedium = productIcon('shield-outline', 'medium')
 /** Regular one-pixel IconCheckCircleOutline artwork. */
 export const IconCheckCircleOutlineRegular = productIcon('check-circle-outline', 'regular')
 
-/** Medium IconCheckCircleOutline artwork with a 1.3px stroke. */
+/** Medium IconCheckCircleOutline artwork with a fixed 1.3px stroke. */
 export const IconCheckCircleOutlineMedium = productIcon('check-circle-outline', 'medium')
 
 /** Regular one-pixel IconUnarchiveOutline artwork. */

@@ -6,7 +6,7 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 720px;
   color: var(--dsw-alias-label-primary);
 }
@@ -42,12 +42,11 @@
 
 .rows {
   list-style: none;
-  /* Extra air between the title/intro block and the first provider card. */
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 /* Provider cards share the settings material; editors use the inset module fill. */
@@ -58,7 +57,7 @@
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .rowHead {
@@ -339,10 +338,28 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* The provider owns a persistent action group within its scrolling editor. */
+.editor > .editorActions {
+  position: sticky;
+  bottom: calc(-1 * var(--dsh-settings-scroll-inset, 0px));
+  z-index: 2;
+  padding: 12px 0 calc(12px + var(--dsh-settings-scroll-inset, 0px));
+  background: var(--dsw-alias-bg-module-platform);
+  box-shadow: 0 -1px var(--dsw-alias-border-l2);
+}
+
+.editor :is(input, button, select) {
+  scroll-margin-block: 72px;
+}
+
 .editorActions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.addBlock > .editorActions {
+  margin-top: 12px;
 }
 
 .addBlock {
@@ -467,8 +484,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
+  gap: 12px;
+  padding-top: 16px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
@@ -494,9 +511,10 @@
 }
 
 .modelList {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .modelListHead {
@@ -506,7 +524,30 @@
   gap: 12px;
 }
 
+@container (max-width: 400px) {
+  .modelRow > input {
+    grid-column: 2 / 4;
+  }
+
+  .modelRow > button:nth-last-child(2) {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .modelRow > button:last-child {
+    grid-column: 5;
+    grid-row: 1;
+  }
+
+  .modelAdvanced > .modelField {
+    grid-column: 1 / -1;
+  }
+}
+
 .modelEntry {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 1fr) 28px 28px;
+  column-gap: 6px;
   position: relative;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
@@ -515,7 +556,8 @@
 
 .modelRow {
   display: grid;
-  grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: 6px;
 }
@@ -618,16 +660,17 @@
 
 .modelAdvanced {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 8px 4px 2px;
+  grid-column: 2 / 4;
+  grid-template-columns: subgrid;
+  row-gap: 16px;
+  padding: 16px 0 6px;
 }
 
 .modelField {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 4px;
+  gap: 6px;
 }
 
 .modelInputTypes {
@@ -640,7 +683,7 @@
 
 .modelInputTypes legend {
   padding: 0;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .modelInputChoices {
@@ -707,17 +750,18 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
+  gap: 6px;
+  height: 32px;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
+  margin-top: 4px;
 }
 
 @media (hover: hover) {
@@ -753,7 +797,7 @@ select.input {
 }
 
 .input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .input:disabled {
@@ -916,4 +960,16 @@ select.input {
   font-size: 13px;
   line-height: 20px;
   text-align: center;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (pointer: coarse) {
+  .input {
+    font-size: 16px;
+  }
 }

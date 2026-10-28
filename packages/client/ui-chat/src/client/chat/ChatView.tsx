@@ -259,7 +259,7 @@ export function ChatView({
             aria-label={t('chat.toBottom')}
             onClick={scroll.returnToBottom}
           >
-            <IconChevronDownOutlineRegular />
+            <IconChevronDownOutlineRegular size={20} />
           </button>
         </div>
       )}

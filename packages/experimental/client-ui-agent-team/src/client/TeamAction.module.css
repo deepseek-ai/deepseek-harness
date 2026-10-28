@@ -5,11 +5,11 @@
 .trigger {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-height: 28px;
   padding: 3px 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
@@ -61,7 +61,7 @@
   padding: 8px 2px 0;
   overflow: hidden;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-panel);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
@@ -75,7 +75,7 @@
   position: absolute;
   z-index: -1;
   inset: 0;
-  border-radius: 12px;
+  border-radius: inherit;
   background: var(--dsw-specific-menu);
   backdrop-filter: var(--dsw-menu-backdrop-filter);
 }
@@ -115,7 +115,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 16px 0 8px 4px;
+  margin: 32px 0 8px;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   font-weight: 500;
@@ -138,11 +138,11 @@
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 12px;
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   box-shadow: var(--dsw-elevation-stroke);
-  border-radius: 8px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-primary);
   text-align: left;
@@ -251,21 +251,21 @@
 .tasks {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 12px;
 }
 
 /* Empty task board: a plain description in place of the section heading,
    flush with the body's bottom padding. */
 .emptyNotice {
-  margin: 16px 0 0 4px;
+  margin: 24px 0 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
 }
 
 .task {
-  padding: 11px 13px;
+  padding: 12px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 9px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-2);
 }
 
@@ -279,7 +279,7 @@
 }
 
 .task p {
-  margin: 5px 0;
+  margin: 8px 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;

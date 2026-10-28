@@ -19,7 +19,7 @@ const css = readFileSync(fileURLToPath(new URL('../src/client/ModelsSection.modu
 const tokens = readdirSync(fileURLToPath(new URL('../../ui-theme/src/styles/', import.meta.url)))
   .filter(name => name.endsWith('.css'))
   .map(name => readFileSync(fileURLToPath(new URL(`../../ui-theme/src/styles/${name}`, import.meta.url)), 'utf8'))
-  .join('\n')
+  .join('\n') + readFileSync(fileURLToPath(new URL('../../ui-settings-general/src/client/SettingsRoot.module.css', import.meta.url)), 'utf8')
 
 /** The declarations of one top-level rule, by selector. */
 function block(selector: string): string {

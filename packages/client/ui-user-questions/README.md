@@ -61,6 +61,8 @@ The settled bubble is fully visible and has no disclosure control. Question and 
 
 -----
 
+The question card’s trailing header icon box and footer action surface share the content edge. Pager icons use that same content inset on the leading side; larger click targets extend beyond the icon boxes.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

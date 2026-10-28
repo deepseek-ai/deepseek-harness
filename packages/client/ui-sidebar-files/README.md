@@ -70,6 +70,8 @@ None; directory listings travel over the Remote and assemble no model request.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
+Each nested icon box starts on the parent label column; indentation includes the parent icon box and its text gap, retaining the icon’s internal whitespace.
+
 None.
 
 The page refresh shortcut refreshes the focused file tree through its ordinary directory reader. The reload control displays the effective binding on hover and keyboard focus.

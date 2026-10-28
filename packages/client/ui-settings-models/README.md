@@ -27,6 +27,8 @@ Desktop product events use the optional [product analytics service](../product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The section title and introduction form one group above the provider list. Expanded model fields separate adjacent field groups more than labels from their controls, and model-list actions follow the shared control-radius scale.
+
 Saving credentials or a custom provider preserves the selected model. The user can select an available model from the composer.
 
 DeepSeek Account appears first and DeepSeek second in the provider list; third-party providers retain their directory order.
@@ -81,11 +83,15 @@ The Models page includes **DeepSeek Account** (`deepseek-account`, **DeepSeek �
 
 -----
 
+Onboarding groups its title and explanation closely, then separates credential fields and the action row with larger gaps.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
 <details>
 <summary>Implementation internals — click to expand</summary>
+
+Model identity and capacity fields share columns; narrow cards stack their fields. Each provider editor keeps its cancel and save actions together at the scrolling edge, and focused controls retain clearance from that action group.
 
 The page never holds a full settings section: it holds only the REDACTED descriptor, so every edit lands as `settings.mutate` path ops against the stored section — a set per changed field, an unset per cleared one, and a single unset for a deleted provider row.
 

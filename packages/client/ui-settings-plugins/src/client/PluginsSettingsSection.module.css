@@ -3,21 +3,23 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
 }
 
 .heading {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
 }
 
 .intro {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--dsw-alias-label-tertiary);
+  line-height: 22px;
 }
 
 .tabs {
@@ -71,7 +73,7 @@
 
 .panel {
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .cards {
@@ -110,4 +112,10 @@
   font-size: 15px;
   line-height: 22px;
   font-weight: 600;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

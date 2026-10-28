@@ -57,9 +57,9 @@
   list-style: none;
 }
 
-/* Every nested level indents by one step; the root level sits under the header. */
+/* A child icon box starts on its parent text column: 16px icon plus 6px gap. */
 .level .level {
-  padding-left: 18px;
+  padding-left: calc(16px + 6px);
 }
 
 .item {

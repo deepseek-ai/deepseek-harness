@@ -478,16 +478,19 @@ export function PluginInventorySettingsTab(
           {selected !== undefined ? (
             <section className={css.group} data-plugin-scope="preset" data-preset-id={selected.id}>
               <div className={css.groupTitleRow}>
-                <button
-                  type="button"
-                  className={css.groupToggle}
-                  aria-expanded={presetEffectiveOpen}
-                  aria-controls={`${sectionId}-preset`}
-                  onClick={() => { setPresetOpen(!presetEffectiveOpen) }}
-                >
-                  <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
-                  <span className={css.groupTitle}>{t('presetTitle')}</span>
-                </button>
+                <div className={css.groupHeading}>
+                  <button
+                    type="button"
+                    className={css.groupToggle}
+                    aria-expanded={presetEffectiveOpen}
+                    aria-controls={`${sectionId}-preset`}
+                    onClick={() => { setPresetOpen(!presetEffectiveOpen) }}
+                  >
+                    <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
+                    <span className={css.groupTitle}>{t('presetTitle')}</span>
+                  </button>
+                  <p className={css.groupSub}>{t('presetSubtitle')}</p>
+                </div>
                 <div className={css.headerEnd}>
                   <Menu
                     open={switcherOpen}
@@ -516,7 +519,6 @@ export function PluginInventorySettingsTab(
                   />
                 </div>
               </div>
-              <p className={css.groupSub}>{t('presetSubtitle')}</p>
               {presetEffectiveOpen ? (
                 <div id={`${sectionId}-preset`} className={css.groupBody}>
                   {selected.broken !== undefined ? (
@@ -550,18 +552,20 @@ export function PluginInventorySettingsTab(
           {entries.length > 0 ? (
             <section className={css.group} data-plugin-scope="global">
               <div className={css.groupTitleRow}>
-                <button
-                  type="button"
-                  className={css.groupToggle}
-                  aria-expanded={globalEffectiveOpen}
-                  aria-controls={`${sectionId}-global`}
-                  onClick={() => { setGlobalOpen(!globalEffectiveOpen) }}
-                >
-                  <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
-                  <span className={css.groupTitle}>{t('globalTitle')}</span>
-                </button>
+                <div className={css.groupHeading}>
+                  <button
+                    type="button"
+                    className={css.groupToggle}
+                    aria-expanded={globalEffectiveOpen}
+                    aria-controls={`${sectionId}-global`}
+                    onClick={() => { setGlobalOpen(!globalEffectiveOpen) }}
+                  >
+                    <IconChevronDownOutlineRegular className={css.chevron} size={12} aria-hidden="true" />
+                    <span className={css.groupTitle}>{t('globalTitle')}</span>
+                  </button>
+                  <p className={css.groupSub}>{t('globalSubtitle')}</p>
+                </div>
               </div>
-              <p className={css.groupSub}>{t('globalSubtitle')}</p>
               {globalEffectiveOpen && globalCount > 0 ? (
                 <ul className={css.cards} id={`${sectionId}-global`}>
                   {filteredFailed.map(entry => globalRowCard(entry))}

@@ -1,6 +1,6 @@
 .dialog { user-select: none; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-inverted); }
 .content { display: flex; flex-direction: column; width: 100%; }
-.header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px 24px 12px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px calc(24px - (28px - 14px) / 2) 12px 24px; }
 .title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
 .close { box-sizing: border-box; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; }
 @media (hover: hover) {

@@ -292,6 +292,11 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
       if (lh > 0) y = Math.min(Math.max(y, overlayTopMargin(MARGIN, r, GAP)), vh - lh - MARGIN)
 
+      // Text-sized anchors can land between device pixels and soften the entire menu.
+      const dpr = window.devicePixelRatio
+      x = Math.round(x * dpr) / dpr
+      y = Math.round(y * dpr) / dpr
+
       setFixedPos(current => current?.left === x && current.top === y ? current : { left: x, top: y })
     }
     // First run measures the hidden pre-render (same commit as `open`), so

@@ -52,8 +52,10 @@ export function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettin
 
   return (
     <div className={css.section}>
-      <h2 className={css.heading}>{t('title')}</h2>
-      <p className={css.intro}>{t('intro')}</p>
+      <div className={css.sectionHeader}>
+        <h2 className={css.heading}>{t('title')}</h2>
+        <p className={css.intro}>{t('intro')}</p>
+      </div>
       {rows.length === 0 ? <p className={css.empty}>{t('empty')}</p> : single !== undefined ? (
         <div className={css.panel}>{renderSlot('settings.plugins.tab', {}, { only: single.id })}</div>
       ) : (

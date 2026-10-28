@@ -50,7 +50,7 @@
   flex: none;
   width: 16px;
   height: 16px;
-  margin: 3px 0 0;
+  margin: 3px 1px 0;
   accent-color: var(--dsw-alias-button-primary-fill);
   cursor: pointer;
 }
