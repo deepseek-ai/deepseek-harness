@@ -12,11 +12,22 @@ This entry owns the UI workflow, visual foundation, geometry and interaction gui
 
 Use applicable design rules for UI changes, including visible loading, error, disabled, expanded and focus states. Choose effort by impact and regression risk; ordinary development does not require a full design audit.
 
-| Change | Development checks and records |
-|---|---|
-| Local copy, icon reuse, color or spacing | Apply relevant rules, implement, inspect the affected result in context and run applicable tests. A short result and material gaps suffice; no separate plan, axis drawing, scene inventory, source snapshot or screenshot report is required by this workflow. |
-| Page layout, shared components or global styles | Briefly identify affected relationships, consumers and risk conditions. Inspect distinct affected variants, reusing justified equivalent evidence. Preserve a starting version and before/after images when needed to explain the change, investigate regression risk or satisfy the requested deliverable; these changes do not automatically require a full audit. |
-| Explicit comprehensive review | Agree the requested scope and use the [review cookbook](../../../docs/cookbook/reviewing-ui-design.md) for coverage records, findings and requested evidence. A request for a comparison alone does not expand its scope to the whole product. |
+| Change | Required inspection | Additional records |
+|---|---|---|
+| Local copy, icon reuse, color or spacing | Inspect the actual page, affected neighbors and relevant states; run applicable tests. Apply the minimum checks below. | Briefly report results and material gaps. No separate plan, axis drawing, scene inventory, source snapshot or screenshot report is required by default. |
+| Page layout, shared components or global styles | Identify affected relationships and consumers; inspect distinct affected layout, content and state variants in assembled pages. Reuse evidence only for justified equivalents. | Briefly state scope. Preserve the starting version and comparable images when requested or needed to explain broad changes or assess regression risk. |
+| Explicit comprehensive review | Cover the agreed regions and relevant states; distinguish inspected results, defects and uninspected scope. | Use the [review cookbook](../../../docs/cookbook/reviewing-ui-design.md) for coverage records, findings and supporting evidence. A comparison request alone does not require a product-wide audit. |
+
+### Minimum checks for affected UI
+
+These checks apply even to small changes; optional documentation does not make inspection optional. Open the actual page and inspect the changed element with its directly affected neighbors, rather than judging CSS or an isolated component alone.
+
+- **Color or opacity:** inspect light and dark themes, including affected foreground/background and state combinations.
+- **Layout, spacing, typography or sizing:** inspect a constrained container and long or wrapping content; check both sides of a changed breakpoint, alignment, clipping and access to actions.
+- **Interaction:** exercise the changed path and affected focus, disabled, loading, error, expanded and overlapping states. Check only states the change can affect, not every possible combination.
+- **Shared components or global styles:** trace affected consumers and inspect distinct assembled layouts and states; one isolated example cannot establish coverage.
+
+If a required scene is unavailable, state what was not checked, why and how it can be verified; a labeled production-component fixture can provide partial evidence, not an actual-page pass. Do not claim verification complete while required checks remain missing. Run the original applicable tests; source inspection and passing tests alone do not establish the rendered result.
 
 Read unchanged owners once; consult examples for uncertain judgments. Inspect relevant states and actual usage sizes, not a fixed screenshot count or every width × theme × state combination. Batch related edits and reuse a current application instance and valid evidence. Documentation-only changes and refactors with evidence of unchanged rendering need no new UI captures; state that basis.
 

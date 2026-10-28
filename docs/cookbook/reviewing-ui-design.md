@@ -47,7 +47,7 @@ Choose inspection scope from the table below. For broader changes, a few task-no
 
 A shared consumer can reuse evidence only when the relevant implementation, size, container constraints, content behavior and states are equivalent; record the grouping and its basis. Inspect uncertain cases directly. Source inspection of all consumers is not a claim to have opened every page. Expand scope when a defect recurs beyond the initial region or a fix changes adjacent relationships. Record unrelated discoveries separately instead of silently starting a product-wide redesign.
 
-Choose conditions that challenge the change: long or multiline content for sizing, both themes for color, constrained widths and affected breakpoints for layout, and concurrent states for interaction. Apply the owning responsive and behavior requirements; do not exhaust unrelated combinations or replace coverage reasoning with a fixed screenshot count. Reuse unchanged rules and valid evidence within the task, and recapture after a coherent batch of edits rather than every CSS adjustment. Read only the relevant principle sections and examples; an uncertain design decision is a reason to retrieve more detail.
+Apply the [minimum checks](../../.agents/skills/dsh-client-ui-ux/SKILL.md#minimum-checks-for-affected-ui) to each changed property: color requires both themes; layout, spacing, typography and sizing require constrained and long-content checks; interaction requires the affected path and states. These are inspection requirements, including for local edits, not a demand for a screenshot of every condition. Apply the owning responsive and behavior requirements; do not exhaust unrelated combinations or replace coverage reasoning with a fixed screenshot count. Reuse unchanged rules and valid evidence within the task, and recapture after a coherent batch of edits rather than every CSS adjustment. Read only the relevant principle sections and examples; an uncertain design decision is a reason to retrieve more detail.
 
 <a id="inspect"></a>
 ## 2. Inspect the task and its implementation
@@ -116,7 +116,7 @@ When build or hot-reload state is uncertain, create a separate application insta
 <a id="verify"></a>
 ## 5. Verify behavior and comparable images
 
-Verify the affected result in the actual application where reachable; production-component fixtures can supplement hard-to-reach states when labeled. Screenshots and comparisons are optional unless required by the selected risk or deliverable, without waiving existing GIF rules. For a comparison, match content, theme, locale, viewport, zoom, device scale, interaction state and content anchor; let fonts, data and transitions settle.
+Inspect the affected result and directly affected neighbors in the actual page. If a required scene is unavailable, report the missing check, reason and next verification; labeled production-component fixtures provide partial evidence, not an actual-page pass. Extra screenshots and comparisons are required when requested or needed to explain broad changes or assess regression risk; routine edits need no separate report. This changes recordkeeping, not the minimum inspection or existing GIF rules. For a comparison, match content, theme, locale, viewport, zoom, device scale, interaction state and content anchor; let fonts, data and transitions settle.
 
 When producing a comparison, save final captures separately and pair them with the corresponding starting scene under matching conditions.
 
