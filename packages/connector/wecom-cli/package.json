@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-wecom-cli",
   "description": "WeCom through the official wecom-cli: the CLI by its absolute path, its skills, and authorization over Remote",
-  "version": "0.2.1-rc.4",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
