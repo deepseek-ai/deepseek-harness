@@ -54,7 +54,7 @@ Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. 
 <a id="wait_agent"></a>
 ### wait_agent
 
-Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. An Agent-scoped in-memory wait signal also ends an active wait; signals are not retained for future waits. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
+Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. A tree-wide in-memory signal also ends current waits whose captured root is the same live Agent instance; signals are not retained for future waits. Unmanaged delegated Agents can still wait for their own inbox. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
@@ -72,7 +72,7 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-`ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+`ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool resolves tree membership once at entry, subscribes to the exact caller’s inbox and tree-wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement. Unexpected root lookup failures reject before subscribing.
 
 ### Delivery and signal ownership
 

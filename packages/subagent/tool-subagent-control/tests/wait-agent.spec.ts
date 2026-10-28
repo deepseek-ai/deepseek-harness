@@ -6,10 +6,11 @@ import { agentCarrier, emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentError } from '@deepseek-ai/dsh-subagent'
 import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import * as control from '../src/index.ts'
+import { bindSubagentActivation } from '../../subagent/tests/manager-internals.ts'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -87,7 +88,7 @@ describe('wait_agent', () => {
     agent.inbox.splice('next-turn', 0, 0, [input('queued')])
     other.inject(input('someone else'))
     emitAgentEvent(ctx, other, 'agent/status', { status: 'running' })
-    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
+    ctx.subagents.notifyTreeWaits(other)
     await vi.advanceTimersByTimeAsync(9_999)
     expect(returned).toBe(false)
     agent.inject(input('steering'))
@@ -97,18 +98,18 @@ describe('wait_agent', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('ends all current waits for an exact agent without retaining notifications', async () => {
+  it('ends all current waits for an exact tree root without retaining notifications', async () => {
     const { ctx, agent, other } = await setup()
     vi.useFakeTimers()
-    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+    ctx.subagents.notifyTreeWaits(agent)
     const first = await startWait(ctx, agent, { timeout_ms: 10_000 })
     const second = await startWait(ctx, agent, { timeout_ms: 10_000 })
     let returned = false
     void first.result.then(() => { returned = true })
-    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
+    ctx.subagents.notifyTreeWaits(other)
     await vi.advanceTimersByTimeAsync(9_999)
     expect(returned).toBe(false)
-    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+    ctx.subagents.notifyTreeWaits(agent)
     for (const result of await Promise.all([first.result, second.result])) {
       expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
     }
@@ -120,20 +121,88 @@ describe('wait_agent', () => {
     expect(await later.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
+  it('wakes root and scoped descendant waits while another tree keeps waiting', async () => {
+    const { ctx, agent, other } = await setup()
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('child'), meta: { origin: 'subagent', parentSession: agent.id },
+      setup: (_ctx, child) => { bindSubagentActivation(ctx, child, agent) },
+    })).agent
+    // The child-owned tool listener must receive the root signal across scopes.
+    await child.ctx.plugin(control)
+    vi.useFakeTimers()
+    const rootWait = await startWait(ctx, agent, { timeout_ms: 10_000 })
+    const childWait = await startWait(ctx, child, { timeout_ms: 10_000 })
+    const otherWait = await startWait(ctx, other, { timeout_ms: 10_000 })
+    ctx.subagents.notifyTreeWaits(agent)
+    for (const result of await Promise.all([rootWait.result, childWait.result])) {
+      expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
+    }
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await otherWait.result).toMatchObject({ isError: false, value: { timedOut: true } })
+  })
+
+  it('keeps an unmanaged delegated Agent waiting for its own inbox', async () => {
+    const { ctx, agent } = await setup()
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('unmanaged'), meta: { origin: 'subagent', parentSession: agent.id },
+    })).agent
+    vi.useFakeTimers()
+    const { result } = await startWait(ctx, child, { timeout_ms: 10_000 })
+    ctx.subagents.notifyTreeWaits(agent)
+    ctx.subagents.notifyTreeWaits(child)
+    expect(vi.getTimerCount()).toBe(1)
+    child.inject(input())
+    expect(await result).toMatchObject({ isError: false, value: { timedOut: false } })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('ignores a disposed root and its same-id replacement', async () => {
+    const { ctx, agent, handle } = await setup()
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('surviving-child'), meta: { origin: 'subagent', parentSession: agent.id },
+      setup: (_ctx, child) => { bindSubagentActivation(ctx, child, agent) },
+    })).agent
+    vi.useFakeTimers()
+    const { result } = await startWait(ctx, child, { timeout_ms: 10_000 })
+    await handle.dispose()
+    const replacement = (await ctx.agents.create({ sessionId: agent.id })).agent
+    ctx.subagents.notifyTreeWaits(agent)
+    ctx.subagents.notifyTreeWaits(replacement)
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await result).toMatchObject({ isError: false, value: { timedOut: true } })
+  })
+
+  it.each([
+    new Error('identity projection unavailable'),
+    new SubagentError('runtime unavailable', 'RUNTIME_UNAVAILABLE'),
+  ])('reports unexpected root lookup failure before subscribing: %s', async (failure) => {
+    const { ctx, agent } = await setup()
+    vi.useFakeTimers()
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
+    const { result } = await startWait(ctx, agent)
+    expect(await result).toMatchObject({ isError: true, error: { message: failure.message } })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it.each(['input', 'notification', 'timeout', 'cancel', 'dispose', 'unload'] as const)(
     'removes its notification subscription after %s',
     async (settlement) => {
       const { ctx, agent, handle, fiber } = await setup()
       vi.useFakeTimers()
-      const listeners = () => ['agent/inbox/inserted', 'agent/wait-notified', 'agent/disposed'].map(name =>
-        ctx.events.dispatch('emit', [agentCarrier(agent), name, { agent }]).length)
+      const listeners = () => [
+        ...['agent/inbox/inserted', 'agent/disposed'].map(name =>
+          ctx.events.dispatch('emit', [agentCarrier(agent), name, { agent }]).length),
+        ctx.events.dispatch('emit', ['subagent/tree-wait-notified', agent]).length,
+      ]
       const baseline = listeners()
       const controller = new AbortController()
       const { result } = await startWait(ctx, agent, { timeout_ms: 10_000 }, controller.signal)
       expect(listeners()).toEqual(baseline.map(count => count + 1))
       switch (settlement) {
         case 'input': agent.inject(input()); break
-        case 'notification': emitAgentEvent(ctx, agent, 'agent/wait-notified', {}); break
+        case 'notification': ctx.subagents.notifyTreeWaits(agent); break
         case 'timeout': await vi.advanceTimersByTimeAsync(10_000); break
         case 'cancel': controller.abort(new Error('stop waiting')); break
         case 'dispose': await handle.dispose(); break

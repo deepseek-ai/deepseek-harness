@@ -308,14 +308,6 @@ declare module '@deepseek-ai/cordis' {
      */
     'agent/status'(this: Scoped<Agent>, payload: { agent: Agent; status: AgentStatus }): void
     /**
-     * End current input waits without adding inbox content or starting the agent.
-     * This process-local signal is not retained for later waits.
-     * @param payload.agent - the exact agent whose current waits should end.
-     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
-     * @mode emit
-     */
-    'agent/wait-notified'(this: Scoped<Agent>, payload: { agent: Agent }): void
-    /**
      * One message entered the live inbox.
      * @param payload.agent - the agent whose inbox changed.
      * @param payload.message - the inserted message.
